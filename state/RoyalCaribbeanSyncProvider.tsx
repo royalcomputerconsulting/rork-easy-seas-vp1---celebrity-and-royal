@@ -12,6 +12,7 @@ import {
 } from '@/lib/royalCaribbean/types';
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
+import { injectLoyaltyExtraction } from '@/lib/royalCaribbean/step4_loyalty';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectUpcomingCruisesExtraction } from '@/lib/royalCaribbean/step2_upcoming';
 import { injectCourtesyHoldsExtraction } from '@/lib/royalCaribbean/step3_holds';
@@ -26,7 +27,8 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
   extractedBookedCruises: [],
   loyaltyData: null,
   error: null,
-  lastSyncTimestamp: null
+  lastSyncTimestamp: null,
+  syncCounts: null
 };
 
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
@@ -125,7 +127,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     setState(prev => ({
       ...prev,
-      status: 'running_step_1',
+      status: 'running_step_4',
       extractedOffers: [],
       extractedBookedCruises: [],
       error: null
@@ -134,6 +136,18 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     addLog('Starting ingestion process...', 'info');
     
     try {
+      addLog('Step 4: Navigating to loyalty status page...', 'info');
+      webViewRef.current.injectJavaScript(`
+        window.location.href = 'https://www.royalcaribbean.com/account/loyalty-status';
+        true;
+      `);
+      
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
+      
+      await new Promise(resolve => setTimeout(resolve, 8000));
+      
       setState(prev => ({ ...prev, status: 'running_step_1' }));
       addLog('Step 1: Navigating to Club Royale offers page...', 'info');
       webViewRef.current.injectJavaScript(`
@@ -173,11 +187,20 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 20000));
       
-      setState(prev => ({ 
-        ...prev, 
-        status: 'ready_to_sync',
-        lastSyncTimestamp: new Date().toISOString()
-      }));
+      setState(prev => {
+        const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
+        const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
+        
+        return {
+          ...prev, 
+          status: 'awaiting_confirmation',
+          syncCounts: {
+            offers: prev.extractedOffers.length,
+            upcomingCruises,
+            courtesyHolds
+          }
+        };
+      });
       addLog('All steps completed successfully! Ready to sync.', 'success');
       
     } catch (error) {
@@ -248,7 +271,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     rcLogger.clear();
   }, []);
 
-  const syncToApp = useCallback((coreDataContext: any) => {
+  const syncToApp = useCallback(async (coreDataContext: any) => {
     try {
       setState(prev => ({ ...prev, status: 'syncing' }));
       addLog('Syncing data to app...', 'info');
@@ -266,17 +289,25 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         coreDataContext.addBookedCruise(cruise);
       });
 
-      setState(prev => ({ ...prev, status: 'complete' }));
-      addLog(`Successfully synced ${transformedOffers.length} offers and ${transformedCruises.length} cruises to the app!`, 'success');
+      setState(prev => ({ 
+        ...prev, 
+        status: 'complete',
+        lastSyncTimestamp: new Date().toISOString()
+      }));
+      addLog('Data synced successfully to app!', 'success');
     } catch (error) {
-      addLog(`Failed to sync data: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
+      addLog(`Failed to sync data: ${error}`, 'error');
     }
   }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, addLog]);
 
+  const cancelSync = useCallback(() => {
+    setState(prev => ({ ...prev, status: 'logged_in', syncCounts: null }));
+    addLog('Sync cancelled', 'warning');
+  }, [addLog]);
+
   return {
     state,
-    setState,
     webViewRef,
     openLogin,
     runIngestion,
@@ -285,6 +316,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     exportLog,
     resetState,
     syncToApp,
+    cancelSync,
     handleWebViewMessage,
     addLog
   };

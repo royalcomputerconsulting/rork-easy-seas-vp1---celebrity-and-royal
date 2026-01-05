@@ -1,9 +1,9 @@
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
 import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -12,7 +12,6 @@ function RoyalCaribbeanSyncScreen() {
   const coreData = useCoreData();
   const {
     state,
-    setState,
     webViewRef,
     openLogin,
     runIngestion,
@@ -21,6 +20,7 @@ function RoyalCaribbeanSyncScreen() {
     exportLog,
     resetState,
     syncToApp,
+    cancelSync,
     handleWebViewMessage
   } = useRoyalCaribbeanSync();
 
@@ -47,6 +47,10 @@ function RoyalCaribbeanSyncScreen() {
       case 'running_step_3':
       case 'running_step_4':
         return '#3b82f6';
+      case 'awaiting_confirmation':
+        return '#f59e0b';
+      case 'syncing':
+        return '#3b82f6';
       case 'complete':
         return '#22c55e';
       case 'login_expired':
@@ -72,7 +76,7 @@ function RoyalCaribbeanSyncScreen() {
         return 'Extracting Courtesy Holds...';
       case 'running_step_4':
         return 'Extracting Loyalty Status...';
-      case 'ready_to_sync':
+      case 'awaiting_confirmation':
         return 'Ready to Sync';
       case 'syncing':
         return 'Syncing to App...';
@@ -100,6 +104,8 @@ function RoyalCaribbeanSyncScreen() {
         return <Loader2 size={size} color={color} />;
       case 'complete':
         return <CheckCircle size={size} color={color} />;
+      case 'awaiting_confirmation':
+        return <Clock size={size} color={color} />;
       case 'login_expired':
       case 'error':
         return <AlertCircle size={size} color={color} />;
@@ -109,8 +115,9 @@ function RoyalCaribbeanSyncScreen() {
   };
 
   const canRunIngestion = state.status === 'logged_in';
-  const canExport = state.status === 'complete';
+  const canExport = state.status === 'complete' || state.status === 'awaiting_confirmation';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
+  const showConfirmation = state.status === 'awaiting_confirmation';
 
   return (
     <>
@@ -190,41 +197,6 @@ function RoyalCaribbeanSyncScreen() {
             </Pressable>
           </View>
 
-          {state.status === 'ready_to_sync' && (
-            <View style={styles.previewContainer}>
-              <Text style={styles.previewTitle}>Ready to Sync</Text>
-              <Text style={styles.previewText}>
-                Found {state.extractedOffers.length} offer(s) and {state.extractedBookedCruises.length} booked cruise(s)
-              </Text>
-              <Text style={styles.previewQuestion}>Sync these to the app?</Text>
-              
-              <View style={styles.buttonRow}>
-                <Pressable 
-                  style={[styles.button, styles.successButton]}
-                  onPress={() => syncToApp(coreData)}
-                >
-                  <Text style={styles.buttonText}>Yes, Sync Now</Text>
-                </Pressable>
-                
-                <Pressable 
-                  style={[styles.button, styles.secondaryButton]}
-                  onPress={() => setState(prev => ({ ...prev, status: 'logged_in' }))}
-                >
-                  <Text style={styles.secondaryButtonText}>Cancel</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-
-          {state.status === 'complete' && (
-            <View style={styles.successContainer}>
-              <CheckCircle size={24} color="#22c55e" />
-              <Text style={styles.successText}>
-                Successfully synced {state.extractedOffers.length} offer(s) and {state.extractedBookedCruises.length} cruise(s) to the app!
-              </Text>
-            </View>
-          )}
-
           <View style={styles.buttonRow}>
             <Pressable 
               style={[
@@ -260,6 +232,8 @@ function RoyalCaribbeanSyncScreen() {
               </Text>
             </Pressable>
           </View>
+
+
 
           <View style={styles.buttonRow}>
             <Pressable 
@@ -314,6 +288,87 @@ function RoyalCaribbeanSyncScreen() {
           <View style={styles.errorContainer}>
             <XCircle size={20} color="#ef4444" />
             <Text style={styles.errorText}>{state.error}</Text>
+          </View>
+        )}
+
+        <Modal
+          visible={showConfirmation}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={cancelSync}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.confirmationModal}>
+              <View style={styles.confirmationHeader}>
+                <CheckCircle size={32} color="#10b981" />
+                <Text style={styles.confirmationTitle}>Data Extraction Complete</Text>
+                <Text style={styles.confirmationSubtitle}>Ready to sync to your app</Text>
+              </View>
+
+              <View style={styles.confirmationContent}>
+                <View style={styles.countCard}>
+                  <View style={styles.countIconContainer}>
+                    <Ship size={24} color="#3b82f6" />
+                  </View>
+                  <View style={styles.countInfo}>
+                    <Text style={styles.countNumber}>{state.syncCounts?.offers || 0}</Text>
+                    <Text style={styles.countLabel}>Club Royale Offers</Text>
+                  </View>
+                </View>
+
+                <View style={styles.countCard}>
+                  <View style={styles.countIconContainer}>
+                    <Calendar size={24} color="#10b981" />
+                  </View>
+                  <View style={styles.countInfo}>
+                    <Text style={styles.countNumber}>{state.syncCounts?.upcomingCruises || 0}</Text>
+                    <Text style={styles.countLabel}>Upcoming Cruises</Text>
+                  </View>
+                </View>
+
+                <View style={styles.countCard}>
+                  <View style={styles.countIconContainer}>
+                    <Clock size={24} color="#f59e0b" />
+                  </View>
+                  <View style={styles.countInfo}>
+                    <Text style={styles.countNumber}>{state.syncCounts?.courtesyHolds || 0}</Text>
+                    <Text style={styles.countLabel}>Courtesy Holds</Text>
+                  </View>
+                </View>
+              </View>
+
+              <Text style={styles.confirmationQuestion}>Do you want to sync this data to the app?</Text>
+
+              <View style={styles.confirmationButtons}>
+                <Pressable 
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={cancelSync}
+                >
+                  <Text style={styles.cancelButtonText}>No</Text>
+                </Pressable>
+
+                <Pressable 
+                  style={[styles.button, styles.confirmButton]}
+                  onPress={() => syncToApp(coreData)}
+                >
+                  <Text style={styles.buttonText}>Yes, Sync Now</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {state.status === 'complete' && state.lastSyncTimestamp && (
+          <View style={styles.successContainer}>
+            <CheckCircle size={24} color="#10b981" />
+            <View style={styles.successContent}>
+              <Text style={styles.successTitle}>Sync Complete!</Text>
+              <Text style={styles.successMessage}>
+                {state.syncCounts && (
+                  `Successfully synced ${state.syncCounts.offers} offers, ${state.syncCounts.upcomingCruises} upcoming cruises, and ${state.syncCounts.courtesyHolds} courtesy holds to your app.`
+                )}
+              </Text>
+            </View>
           </View>
         )}
       </View>
@@ -487,51 +542,121 @@ const styles = StyleSheet.create({
     color: '#fecaca',
     fontSize: 13
   },
-  previewContainer: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    padding: 20
+  },
+  confirmationModal: {
     backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 20,
-    margin: 12,
-    gap: 12,
-    borderWidth: 2,
-    borderColor: '#3b82f6'
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 500,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#334155'
   },
-  previewTitle: {
-    color: '#f1f5f9',
-    fontSize: 18,
+  confirmationHeader: {
+    alignItems: 'center' as const,
+    marginBottom: 24
+  },
+  confirmationTitle: {
+    color: '#fff',
+    fontSize: 22,
     fontWeight: '700' as const,
-    textAlign: 'center' as const
+    marginTop: 12,
+    marginBottom: 4
   },
-  previewText: {
+  confirmationSubtitle: {
+    color: '#94a3b8',
+    fontSize: 14
+  },
+  confirmationContent: {
+    gap: 12,
+    marginBottom: 24
+  },
+  countCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: '#334155'
+  },
+  countIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#1e293b',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const
+  },
+  countInfo: {
+    flex: 1
+  },
+  countNumber: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '700' as const,
+    marginBottom: 2
+  },
+  countLabel: {
+    color: '#94a3b8',
+    fontSize: 14
+  },
+  confirmationQuestion: {
     color: '#cbd5e1',
-    fontSize: 15,
-    textAlign: 'center' as const,
-    lineHeight: 22
-  },
-  previewQuestion: {
-    color: '#f1f5f9',
     fontSize: 16,
-    fontWeight: '600' as const,
     textAlign: 'center' as const,
-    marginTop: 8
+    marginBottom: 24,
+    fontWeight: '500' as const
+  },
+  confirmationButtons: {
+    flexDirection: 'row' as const,
+    gap: 12
+  },
+  cancelButton: {
+    backgroundColor: '#334155',
+    borderWidth: 1,
+    borderColor: '#475569'
+  },
+  cancelButtonText: {
+    color: '#cbd5e1',
+    fontSize: 16,
+    fontWeight: '600' as const
+  },
+  confirmButton: {
+    backgroundColor: '#059669',
+    flex: 1.5
   },
   successContainer: {
     flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+    alignItems: 'flex-start' as const,
     gap: 12,
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 20,
     margin: 12,
-    borderWidth: 2,
-    borderColor: '#22c55e'
+    padding: 16,
+    backgroundColor: '#064e3b',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#059669'
   },
-  successText: {
-    flex: 1,
-    color: '#86efac',
-    fontSize: 15,
-    fontWeight: '600' as const,
-    lineHeight: 22
+  successContent: {
+    flex: 1
+  },
+  successTitle: {
+    color: '#10b981',
+    fontSize: 16,
+    fontWeight: '700' as const,
+    marginBottom: 4
+  },
+  successMessage: {
+    color: '#6ee7b7',
+    fontSize: 13,
+    lineHeight: 18
   }
 });
 

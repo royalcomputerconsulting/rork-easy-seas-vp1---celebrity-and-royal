@@ -5,7 +5,7 @@ export type SyncStatus =
   | 'running_step_2'
   | 'running_step_3'
   | 'running_step_4'
-  | 'ready_to_sync'
+  | 'awaiting_confirmation'
   | 'syncing'
   | 'complete'
   | 'login_expired'
@@ -72,6 +72,12 @@ export type WebViewMessage =
   | { type: 'error'; message: string }
   | { type: 'complete' };
 
+export interface SyncDataCounts {
+  offers: number;
+  upcomingCruises: number;
+  courtesyHolds: number;
+}
+
 export interface RoyalCaribbeanSyncState {
   status: SyncStatus;
   currentStep: string;
@@ -82,4 +88,5 @@ export interface RoyalCaribbeanSyncState {
   loyaltyData: LoyaltyData | null;
   error: string | null;
   lastSyncTimestamp: string | null;
+  syncCounts: SyncDataCounts | null;
 }
