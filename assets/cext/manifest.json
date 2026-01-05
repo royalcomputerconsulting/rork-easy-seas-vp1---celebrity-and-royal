@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Easy Seas \u2014 Scraper (v5.6.5)",
+  "version": "5.6.5",
+  "description": "Ensures the in-app 'Scrape Website' button remains functional (wired to full scrapeOnce). Falls back to a floating Scrape Website button only when needed.",
+  "permissions": [
+    "downloads"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.celebritycruises.com/blue-chip-club/offers/*",
+        "https://www.royalcaribbean.com/club-royale/*",
+        "https://www.royalcaribbean.com/account/upcoming-cruises*"
+      ],
+      "js": [
+        "app.js",
+        "integration.js",
+        "upcoming_cruises.content.js",
+        "scraper.content.js",
+        "tableBuilder.js",
+        "tableRenderer.js",
+        "modal.js",
+        "styles.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "*.png",
+        "*.svg",
+        "icons/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,225 @@
+import { useState, useEffect, useCallback } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import createContextHook from "@nkzw/create-context-hook";
+import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
+import { Platform } from "react-native";
+
+const APP_PASSWORD = "CR101@2";
+const ADMIN_PASSWORD = "a1";
+const AUTH_KEY = "easyseas_authenticated";
+const AUTH_EMAIL_KEY = "easyseas_auth_email";
+const FRESH_START_KEY = "easyseas_fresh_start";
+const ADMIN_EMAIL = "scott.merlis1@gmail.com";
+
+interface AuthState {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  isFreshStart: boolean;
+  authenticatedEmail: string | null;
+  isAdmin: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
+  clearFreshStartFlag: () => Promise<void>;
+  getWhitelist: () => Promise<string[]>;
+  addToWhitelist: (email: string) => Promise<void>;
+  removeFromWhitelist: (email: string) => Promise<void>;
+  isEmailWhitelisted: (email: string) => Promise<boolean>;
+}
+
+export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isFreshStart, setIsFreshStart] = useState<boolean>(false);
+  const [authenticatedEmail, setAuthenticatedEmail] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+
+  const checkAuthentication = useCallback(async () => {
+    try {
+      const auth = await AsyncStorage.getItem(AUTH_KEY);
+      const email = await AsyncStorage.getItem(AUTH_EMAIL_KEY);
+      const freshStart = await AsyncStorage.getItem(FRESH_START_KEY);
+      setIsAuthenticated(auth === "true");
+      setAuthenticatedEmail(email);
+      setIsFreshStart(freshStart === "true");
+      setIsAdmin(email?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+      console.log('[AuthProvider] Loaded auth state:', { authenticated: auth === "true", email, isAdmin: email?.toLowerCase() === ADMIN_EMAIL.toLowerCase() });
+    } catch (error) {
+      console.error("[AuthProvider] Error checking authentication:", error);
+      setIsAuthenticated(false);
+      setAuthenticatedEmail(null);
+      setIsFreshStart(false);
+      setIsAdmin(false);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const initializeAuth = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      console.log('[AuthProvider] Web platform detected - clearing auth on page load');
+      await AsyncStorage.removeItem(AUTH_KEY);
+      await AsyncStorage.removeItem(AUTH_EMAIL_KEY);
+      await AsyncStorage.removeItem(FRESH_START_KEY);
+      setIsAuthenticated(false);
+      setAuthenticatedEmail(null);
+      setIsFreshStart(false);
+      setIsAdmin(false);
+      setIsLoading(false);
+      console.log('[AuthProvider] Auth cleared for web session');
+    } else {
+      await checkAuthentication();
+    }
+  }, [checkAuthentication]);
+
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
+
+
+  const getWhitelist = async (): Promise<string[]> => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.EMAIL_WHITELIST);
+      if (!stored) {
+        const defaultWhitelist = [
+          'scott.merlis1@gmail.com',
+          'scott.merlis4@gmail.com',
+          'hemispheredancer480@gmail.com',
+          'jsp22008@yahoo.com',
+          'jpence90@gmail.com',
+          'hemispheredancer480@icloud.com',
+          'scott.a.merlis1@gmail.com',
+        ];
+        await AsyncStorage.setItem(STORAGE_KEYS.EMAIL_WHITELIST, JSON.stringify(defaultWhitelist));
+        console.log('[AuthProvider] Initialized whitelist with default emails:', defaultWhitelist);
+        return defaultWhitelist;
+      }
+      return JSON.parse(stored);
+    } catch (error) {
+      console.error('[AuthProvider] Error getting whitelist:', error);
+      return [ADMIN_EMAIL];
+    }
+  };
+
+  const addToWhitelist = async (email: string): Promise<void> => {
+    try {
+      const whitelist = await getWhitelist();
+      const normalizedEmail = email.toLowerCase().trim();
+      if (!whitelist.some(e => e.toLowerCase() === normalizedEmail)) {
+        const updated = [...whitelist, normalizedEmail];
+        await AsyncStorage.setItem(STORAGE_KEYS.EMAIL_WHITELIST, JSON.stringify(updated));
+        console.log('[AuthProvider] Added to whitelist:', normalizedEmail);
+      }
+    } catch (error) {
+      console.error('[AuthProvider] Error adding to whitelist:', error);
+      throw error;
+    }
+  };
+
+  const removeFromWhitelist = async (email: string): Promise<void> => {
+    try {
+      const whitelist = await getWhitelist();
+      const normalizedEmail = email.toLowerCase().trim();
+      if (normalizedEmail === ADMIN_EMAIL.toLowerCase()) {
+        throw new Error('Cannot remove admin email from whitelist');
+      }
+      const updated = whitelist.filter(e => e.toLowerCase() !== normalizedEmail);
+      await AsyncStorage.setItem(STORAGE_KEYS.EMAIL_WHITELIST, JSON.stringify(updated));
+      console.log('[AuthProvider] Removed from whitelist:', normalizedEmail);
+    } catch (error) {
+      console.error('[AuthProvider] Error removing from whitelist:', error);
+      throw error;
+    }
+  };
+
+  const isEmailWhitelisted = async (email: string): Promise<boolean> => {
+    try {
+      const whitelist = await getWhitelist();
+      const normalizedEmail = email.toLowerCase().trim();
+      return whitelist.some(e => e.toLowerCase() === normalizedEmail);
+    } catch (error) {
+      console.error('[AuthProvider] Error checking whitelist:', error);
+      return false;
+    }
+  };
+
+  const login = async (email: string, password: string): Promise<boolean> => {
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    if (!normalizedEmail || !email.includes('@')) {
+      console.error('[AuthProvider] Invalid email format');
+      return false;
+    }
+
+    const whitelisted = await isEmailWhitelisted(normalizedEmail);
+    if (!whitelisted) {
+      console.error('[AuthProvider] Email not whitelisted:', normalizedEmail);
+      return false;
+    }
+    
+    if (password === ADMIN_PASSWORD) {
+      await AsyncStorage.setItem(AUTH_KEY, "true");
+      await AsyncStorage.setItem(AUTH_EMAIL_KEY, normalizedEmail);
+      await AsyncStorage.removeItem(FRESH_START_KEY);
+      setIsAuthenticated(true);
+      setAuthenticatedEmail(normalizedEmail);
+      setIsFreshStart(false);
+      setIsAdmin(normalizedEmail === ADMIN_EMAIL.toLowerCase());
+      console.log('[AuthProvider] Admin login successful for:', normalizedEmail);
+      return true;
+    }
+    if (password === APP_PASSWORD) {
+      const hasLaunchedBefore = await AsyncStorage.getItem(STORAGE_KEYS.HAS_LAUNCHED_BEFORE);
+      const shouldFreshStart = !hasLaunchedBefore;
+      
+      await AsyncStorage.setItem(AUTH_KEY, "true");
+      await AsyncStorage.setItem(AUTH_EMAIL_KEY, normalizedEmail);
+      
+      if (shouldFreshStart) {
+        await AsyncStorage.setItem(FRESH_START_KEY, "true");
+        setIsFreshStart(true);
+        console.log('[AuthProvider] First-time user login - will trigger fresh start');
+      } else {
+        await AsyncStorage.removeItem(FRESH_START_KEY);
+        setIsFreshStart(false);
+        console.log('[AuthProvider] Returning user login - preserving data');
+      }
+      
+      setIsAuthenticated(true);
+      setAuthenticatedEmail(normalizedEmail);
+      setIsAdmin(normalizedEmail === ADMIN_EMAIL.toLowerCase());
+      return true;
+    }
+    return false;
+  };
+
+  const logout = async () => {
+    console.log('[AuthProvider] Logging out and clearing all user data...');
+    await AsyncStorage.clear();
+    setIsAuthenticated(false);
+    setAuthenticatedEmail(null);
+    setIsFreshStart(false);
+    setIsAdmin(false);
+    console.log('[AuthProvider] Logged out - all localStorage cleared');
+  };
+
+  const clearFreshStartFlag = async () => {
+    await AsyncStorage.removeItem(FRESH_START_KEY);
+    setIsFreshStart(false);
+  };
+
+  return {
+    isAuthenticated,
+    isLoading,
+    isFreshStart,
+    authenticatedEmail,
+    isAdmin,
+    login,
+    logout,
+    clearFreshStartFlag,
+    getWhitelist,
+    addToWhitelist,
+    removeFromWhitelist,
+    isEmailWhitelisted,
+  };
+});
