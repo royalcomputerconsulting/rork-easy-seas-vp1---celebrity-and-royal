@@ -12,6 +12,7 @@ function RoyalCaribbeanSyncScreen() {
   const coreData = useCoreData();
   const {
     state,
+    setState,
     webViewRef,
     openLogin,
     runIngestion,
@@ -71,6 +72,10 @@ function RoyalCaribbeanSyncScreen() {
         return 'Extracting Courtesy Holds...';
       case 'running_step_4':
         return 'Extracting Loyalty Status...';
+      case 'ready_to_sync':
+        return 'Ready to Sync';
+      case 'syncing':
+        return 'Syncing to App...';
       case 'complete':
         return 'Complete';
       case 'login_expired':
@@ -91,6 +96,7 @@ function RoyalCaribbeanSyncScreen() {
       case 'running_step_2':
       case 'running_step_3':
       case 'running_step_4':
+      case 'syncing':
         return <Loader2 size={size} color={color} />;
       case 'complete':
         return <CheckCircle size={size} color={color} />;
@@ -104,7 +110,7 @@ function RoyalCaribbeanSyncScreen() {
 
   const canRunIngestion = state.status === 'logged_in';
   const canExport = state.status === 'complete';
-  const isRunning = state.status.startsWith('running_');
+  const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
 
   return (
     <>
@@ -184,6 +190,41 @@ function RoyalCaribbeanSyncScreen() {
             </Pressable>
           </View>
 
+          {state.status === 'ready_to_sync' && (
+            <View style={styles.previewContainer}>
+              <Text style={styles.previewTitle}>Ready to Sync</Text>
+              <Text style={styles.previewText}>
+                Found {state.extractedOffers.length} offer(s) and {state.extractedBookedCruises.length} booked cruise(s)
+              </Text>
+              <Text style={styles.previewQuestion}>Sync these to the app?</Text>
+              
+              <View style={styles.buttonRow}>
+                <Pressable 
+                  style={[styles.button, styles.successButton]}
+                  onPress={() => syncToApp(coreData)}
+                >
+                  <Text style={styles.buttonText}>Yes, Sync Now</Text>
+                </Pressable>
+                
+                <Pressable 
+                  style={[styles.button, styles.secondaryButton]}
+                  onPress={() => setState(prev => ({ ...prev, status: 'logged_in' }))}
+                >
+                  <Text style={styles.secondaryButtonText}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {state.status === 'complete' && (
+            <View style={styles.successContainer}>
+              <CheckCircle size={24} color="#22c55e" />
+              <Text style={styles.successText}>
+                Successfully synced {state.extractedOffers.length} offer(s) and {state.extractedBookedCruises.length} cruise(s) to the app!
+              </Text>
+            </View>
+          )}
+
           <View style={styles.buttonRow}>
             <Pressable 
               style={[
@@ -216,25 +257,6 @@ function RoyalCaribbeanSyncScreen() {
                 !canExport && styles.buttonTextDisabled
               ]}>
                 Export Booked
-              </Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.buttonRow}>
-            <Pressable 
-              style={[
-                styles.button, 
-                styles.successButton,
-                !canExport && styles.buttonDisabled
-              ]}
-              onPress={() => syncToApp(coreData)}
-              disabled={!canExport}
-            >
-              <Text style={[
-                styles.buttonText,
-                !canExport && styles.buttonTextDisabled
-              ]}>
-                Sync to App
               </Text>
             </Pressable>
           </View>
@@ -464,6 +486,52 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#fecaca',
     fontSize: 13
+  },
+  previewContainer: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 20,
+    margin: 12,
+    gap: 12,
+    borderWidth: 2,
+    borderColor: '#3b82f6'
+  },
+  previewTitle: {
+    color: '#f1f5f9',
+    fontSize: 18,
+    fontWeight: '700' as const,
+    textAlign: 'center' as const
+  },
+  previewText: {
+    color: '#cbd5e1',
+    fontSize: 15,
+    textAlign: 'center' as const,
+    lineHeight: 22
+  },
+  previewQuestion: {
+    color: '#f1f5f9',
+    fontSize: 16,
+    fontWeight: '600' as const,
+    textAlign: 'center' as const,
+    marginTop: 8
+  },
+  successContainer: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 20,
+    margin: 12,
+    borderWidth: 2,
+    borderColor: '#22c55e'
+  },
+  successText: {
+    flex: 1,
+    color: '#86efac',
+    fontSize: 15,
+    fontWeight: '600' as const,
+    lineHeight: 22
   }
 });
 

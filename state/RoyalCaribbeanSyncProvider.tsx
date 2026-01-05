@@ -12,7 +12,6 @@ import {
 } from '@/lib/royalCaribbean/types';
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
-import { injectLoyaltyExtraction } from '@/lib/royalCaribbean/step4_loyalty';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectUpcomingCruisesExtraction } from '@/lib/royalCaribbean/step2_upcoming';
 import { injectCourtesyHoldsExtraction } from '@/lib/royalCaribbean/step3_holds';
@@ -126,7 +125,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     setState(prev => ({
       ...prev,
-      status: 'running_step_4',
+      status: 'running_step_1',
       extractedOffers: [],
       extractedBookedCruises: [],
       error: null
@@ -135,18 +134,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     addLog('Starting ingestion process...', 'info');
     
     try {
-      addLog('Step 4: Navigating to loyalty status page...', 'info');
-      webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/account/loyalty-status';
-        true;
-      `);
-      
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
-      
-      await new Promise(resolve => setTimeout(resolve, 8000));
-      
       setState(prev => ({ ...prev, status: 'running_step_1' }));
       addLog('Step 1: Navigating to Club Royale offers page...', 'info');
       webViewRef.current.injectJavaScript(`
@@ -188,10 +175,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       setState(prev => ({ 
         ...prev, 
-        status: 'complete',
+        status: 'ready_to_sync',
         lastSyncTimestamp: new Date().toISOString()
       }));
-      addLog('All steps completed successfully!', 'success');
+      addLog('All steps completed successfully! Ready to sync.', 'success');
       
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');
@@ -263,6 +250,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
   const syncToApp = useCallback((coreDataContext: any) => {
     try {
+      setState(prev => ({ ...prev, status: 'syncing' }));
       addLog('Syncing data to app...', 'info');
 
       const transformedOffers = transformOffersToCasinoOffers(state.extractedOffers, state.loyaltyData);
@@ -278,14 +266,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         coreDataContext.addBookedCruise(cruise);
       });
 
-      addLog('Data synced successfully to app!', 'success');
+      setState(prev => ({ ...prev, status: 'complete' }));
+      addLog(`Successfully synced ${transformedOffers.length} offers and ${transformedCruises.length} cruises to the app!`, 'success');
     } catch (error) {
       addLog(`Failed to sync data: ${error}`, 'error');
+      setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
   }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, addLog]);
 
   return {
     state,
+    setState,
     webViewRef,
     openLogin,
     runIngestion,

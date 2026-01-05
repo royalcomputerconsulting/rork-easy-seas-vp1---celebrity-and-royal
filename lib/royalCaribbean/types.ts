@@ -5,6 +5,8 @@ export type SyncStatus =
   | 'running_step_2'
   | 'running_step_3'
   | 'running_step_4'
+  | 'ready_to_sync'
+  | 'syncing'
   | 'complete'
   | 'login_expired'
   | 'error';

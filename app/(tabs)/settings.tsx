@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   TextInput
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   Settings as SettingsIcon, 
@@ -75,7 +75,6 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
 
 export default function SettingsScreen() {
-  const router = useRouter();
   const { settings, updateSettings, clearLocalData, setLocalData, localData } = useAppState();
   const cruiseStore = useCruiseStore();
   const { clearAllData, cruises, bookedCruises, setCruises, setOffers, casinoOffers, setBookedCruises } = cruiseStore;
@@ -1072,16 +1071,6 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
           <View style={styles.quickActionsSection}>
             <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
             <View style={styles.quickActionsGrid}>
-              <TouchableOpacity 
-                style={styles.quickActionButton} 
-                onPress={() => router.push('/royal-caribbean-sync')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-                  <Ship size={18} color="#3b82f6" />
-                </View>
-                <Text style={styles.quickActionLabel}>RC Sync</Text>
-              </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.quickActionButton} 
                 onPress={handleExportAllData}
