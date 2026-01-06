@@ -123,7 +123,7 @@ export const STEP1_OFFERS_SCRIPT = `
           if (headingText && 
               headingText.length > 5 && 
               headingText.length < 100 &&
-              !headingText.match(/Featured Offer|View Sailing|Redeem|Trade-in|^\\$|Room for Two/i)) {
+              !headingText.match(/Featured Offer|View Sailing|Redeem|Trade-in|^\\$|Room for Two|My Offers|Club Royale|Offers/i)) {
             offerName = headingText;
             break;
           }
@@ -234,7 +234,7 @@ export const STEP1_OFFERS_SCRIPT = `
             const hasDate = text.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
             const hasNights = text.match(/\\d+\\s+NIGHT/i);
             const hasShipName = text.match(/\\w+\\s+of the Seas/i);
-            const lengthOk = text.length > 30 && text.length < 5000;
+            const lengthOk = text.length > 30 && text.length < 1000;
             const hasPortOrItinerary = text.match(/(Miami|Orlando|Fort Lauderdale|Tampa|Galveston|Port Canaveral|Port Cañaveral|Cape Liberty|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan|Bayonne|Caribbean|Mexico|Bahamas|Alaska|Hawaii|Europe)/i);
             const hasSailingInfo = hasDate && (hasNights || hasShipName || hasPortOrItinerary);
             return hasSailingInfo && lengthOk;
@@ -247,7 +247,7 @@ export const STEP1_OFFERS_SCRIPT = `
               const text = el.textContent || '';
               const hasDate = text.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
               const hasShip = text.match(/\\w+\\s+of the Seas/i);
-              const lengthOk = text.length > 20 && text.length < 1000;
+              const lengthOk = text.length > 20 && text.length < 800;
               return hasDate && hasShip && lengthOk;
             }).filter((el, idx, arr) => {
               return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
