@@ -213,11 +213,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState(prev => ({ 
         ...prev, 
         status: 'running_step_2',
-        currentUrl: 'https://www.royalcaribbean.com/account/upcoming-cruises'
+        currentUrl: 'https://www.royalcaribbean.com/Account/upcoming-cruises'
       }));
       addLog('Step 2: Navigating to upcoming cruises page...', 'info');
       webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/account/upcoming-cruises';
+        window.location.href = 'https://www.royalcaribbean.com/Account/upcoming-cruises';
         true;
       `);
       
@@ -235,11 +235,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState(prev => ({ 
         ...prev, 
         status: 'running_step_3',
-        currentUrl: 'https://www.royalcaribbean.com/account/courtesy-holds'
+        currentUrl: 'https://www.royalcaribbean.com/Account/courtesy-holds'
       }));
       addLog('Step 3: Navigating to courtesy holds page...', 'info');
       webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/account/courtesy-holds';
+        window.location.href = 'https://www.royalcaribbean.com/Account/courtesy-holds';
         true;
       `);
       
