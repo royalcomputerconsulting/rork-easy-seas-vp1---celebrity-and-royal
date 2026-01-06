@@ -69,6 +69,12 @@ export const STEP2_UPCOMING_SCRIPT = `
       const cruises = [];
       let processedCount = 0;
 
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Processing ' + cruiseCards.length + ' cruise cards...',
+        logType: 'info'
+      }));
+
       for (let i = 0; i < cruiseCards.length; i++) {
         const card = cruiseCards[i];
 
@@ -125,16 +131,21 @@ export const STEP2_UPCOMING_SCRIPT = `
             loyaltyPoints: ''
           });
         }
-
-          processedCount++;
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'progress',
-            current: processedCount,
-            total: cruiseCards.length,
-            stepName: 'Upcoming Cruises'
-          }));
-        }
+        
+        processedCount++;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'progress',
+          current: processedCount,
+          total: cruiseCards.length,
+          stepName: 'Upcoming Cruises'
+        }));
       }
+
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Finished processing cards, found ' + cruises.length + ' valid cruises',
+        logType: 'info'
+      }));
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete',
