@@ -322,11 +322,21 @@ function RoyalCaribbeanSyncScreen() {
 
                 <View style={styles.countCard}>
                   <View style={styles.countIconContainer}>
+                    <Ship size={24} color="#8b5cf6" />
+                  </View>
+                  <View style={styles.countInfo}>
+                    <Text style={styles.countNumber}>{state.syncCounts?.cruises || 0}</Text>
+                    <Text style={styles.countLabel}>Available Cruises (from Offers)</Text>
+                  </View>
+                </View>
+
+                <View style={styles.countCard}>
+                  <View style={styles.countIconContainer}>
                     <Calendar size={24} color="#10b981" />
                   </View>
                   <View style={styles.countInfo}>
                     <Text style={styles.countNumber}>{state.syncCounts?.upcomingCruises || 0}</Text>
-                    <Text style={styles.countLabel}>Upcoming Cruises</Text>
+                    <Text style={styles.countLabel}>Upcoming Booked Cruises</Text>
                   </View>
                 </View>
 
@@ -369,7 +379,7 @@ function RoyalCaribbeanSyncScreen() {
               <Text style={styles.successTitle}>Sync Complete!</Text>
               <Text style={styles.successMessage}>
                 {state.syncCounts && (
-                  `Successfully synced ${state.syncCounts.offers} offers, ${state.syncCounts.upcomingCruises} upcoming cruises, and ${state.syncCounts.courtesyHolds} courtesy holds to your app.`
+                  `Successfully synced ${state.syncCounts.offers} offers, ${state.syncCounts.cruises} available cruises, ${state.syncCounts.upcomingCruises} upcoming cruises, and ${state.syncCounts.courtesyHolds} courtesy holds to your app.`
                 )}
               </Text>
             </View>

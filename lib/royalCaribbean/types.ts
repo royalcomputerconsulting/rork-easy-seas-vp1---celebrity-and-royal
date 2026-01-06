@@ -74,6 +74,7 @@ export type WebViewMessage =
 
 export interface SyncDataCounts {
   offers: number;
+  cruises: number;
   upcomingCruises: number;
   courtesyHolds: number;
 }

@@ -1,5 +1,5 @@
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
-import { CasinoOffer, BookedCruise } from '@/types/models';
+import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 
 function parseDate(dateStr: string): string {
   if (!dateStr) return '';
@@ -20,46 +20,93 @@ function generateId(): string {
   return `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
+export interface TransformedOffersData {
+  offers: CasinoOffer[];
+  cruises: Cruise[];
+}
+
 export function transformOffersToCasinoOffers(
-  offers: OfferRow[], 
+  offerRows: OfferRow[], 
   loyaltyData: LoyaltyData | null
-): CasinoOffer[] {
-  return offers.map(offer => {
-    const casinoOffer: CasinoOffer = {
-      id: generateId(),
-      title: offer.offerName || 'Royal Caribbean Offer',
-      offerCode: offer.offerCode,
-      offerName: offer.offerName,
-      offerType: determineOfferType(offer.perks),
-      category: offer.offerType,
-      perks: offer.perks ? [offer.perks] : [],
-      
-      shipName: offer.shipName,
-      sailingDate: parseDate(offer.sailingDate),
-      itineraryName: offer.itinerary,
-      
-      roomType: offer.cabinType,
-      guestsInfo: offer.numberOfGuests,
-      guests: parseGuestCount(offer.numberOfGuests),
-      
-      expires: parseDate(offer.offerExpirationDate),
-      expiryDate: parseDate(offer.offerExpirationDate),
-      offerExpiryDate: parseDate(offer.offerExpirationDate),
-      
-      status: 'active' as const,
-      offerSource: 'royal' as const,
-      
-      freePlay: extractFreePlay(offer.perks),
-      freeplayAmount: extractFreePlay(offer.perks),
-      OBC: extractOBC(offer.perks),
-      obcAmount: extractOBC(offer.perks),
-      
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+): TransformedOffersData {
+  const offersMap = new Map<string, { offer: CasinoOffer; sailings: OfferRow[] }>();
+  const cruises: Cruise[] = [];
+  
+  for (const row of offerRows) {
+    if (!row.offerCode) continue;
     
-    return casinoOffer;
-  });
+    if (!offersMap.has(row.offerCode)) {
+      const casinoOffer: CasinoOffer = {
+        id: generateId(),
+        title: row.offerName || 'Royal Caribbean Offer',
+        offerCode: row.offerCode,
+        offerName: row.offerName,
+        offerType: determineOfferType(row.perks),
+        category: row.offerType || 'Club Royale Offer',
+        perks: row.perks ? [row.perks] : [],
+        
+        expires: parseDate(row.offerExpirationDate),
+        expiryDate: parseDate(row.offerExpirationDate),
+        offerExpiryDate: parseDate(row.offerExpirationDate),
+        
+        status: 'active' as const,
+        offerSource: 'royal' as const,
+        
+        freePlay: extractFreePlay(row.perks),
+        freeplayAmount: extractFreePlay(row.perks),
+        OBC: extractOBC(row.perks),
+        obcAmount: extractOBC(row.perks),
+        
+        cruiseIds: [],
+        
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      offersMap.set(row.offerCode, { offer: casinoOffer, sailings: [] });
+    }
+    
+    const offerData = offersMap.get(row.offerCode)!;
+    offerData.sailings.push(row);
+    
+    if (row.shipName && row.sailingDate) {
+      const cruiseId = generateId();
+      const sailDate = parseDate(row.sailingDate);
+      const nights = 7;
+      
+      const cruise: Cruise = {
+        id: cruiseId,
+        shipName: row.shipName,
+        sailDate: sailDate,
+        returnDate: calculateReturnDate(sailDate, nights),
+        departurePort: row.departurePort || '',
+        destination: row.itinerary || '',
+        nights: nights,
+        
+        cabinType: row.cabinType || 'Balcony',
+        itineraryName: row.itinerary || '',
+        
+        offerCode: row.offerCode,
+        offerValue: extractOfferValue(row.perks),
+        offerExpiry: parseDate(row.offerExpirationDate),
+        
+        guestsInfo: row.numberOfGuests || '2 Guests',
+        
+        status: 'available' as const,
+        cruiseSource: 'royal' as const,
+        
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      cruises.push(cruise);
+      offerData.offer.cruiseIds?.push(cruiseId);
+    }
+  }
+  
+  const offers = Array.from(offersMap.values()).map(({ offer }) => offer);
+  
+  return { offers, cruises };
 }
 
 export function transformBookedCruisesToAppFormat(
@@ -77,11 +124,11 @@ export function transformBookedCruisesToAppFormat(
       shipName: cruise.shipName,
       sailDate: startDate,
       returnDate: endDate,
-      departurePort: cruise.departurePort,
+      departurePort: cruise.departurePort || '',
       destination: cruise.itinerary || 'Unknown',
       nights: nights,
       
-      cabinType: cruise.cabinType,
+      cabinType: cruise.cabinType || 'Balcony',
       cabinNumber: cruise.cabinNumberOrGTY && cruise.cabinNumberOrGTY !== 'GTY' ? cruise.cabinNumberOrGTY : undefined,
       bookingId: cruise.bookingId,
       reservationNumber: cruise.bookingId,
@@ -89,8 +136,10 @@ export function transformBookedCruisesToAppFormat(
       status: cruise.status === 'Courtesy Hold' ? 'available' : 'booked',
       completionState: cruise.status === 'Upcoming' ? 'upcoming' : 'upcoming',
       
-      itineraryName: cruise.itinerary,
+      itineraryName: cruise.itinerary || '',
       itineraryRaw: cruise.itinerary ? [cruise.itinerary] : [],
+      
+      guests: 2,
       
       cruiseSource: 'royal' as const,
       
@@ -143,27 +192,34 @@ function extractOBC(perks: string): number | undefined {
   return undefined;
 }
 
-function parseGuestCount(guestsInfo: string): number | undefined {
-  if (!guestsInfo) return undefined;
-  
-  const match = guestsInfo.match(/(\d+)/);
-  if (match) {
-    return parseInt(match[1], 10);
-  }
-  
-  return undefined;
-}
-
 function calculateNights(startDate: string, endDate: string): number {
-  if (!startDate || !endDate) return 0;
+  if (!startDate || !endDate) return 7;
   
   try {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const diffTime = Math.abs(end.getTime() - start.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+    return diffDays > 0 ? diffDays : 7;
   } catch {
-    return 0;
+    return 7;
   }
+}
+
+function calculateReturnDate(startDate: string, nights: number): string {
+  if (!startDate) return '';
+  
+  try {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + nights);
+    return date.toISOString().split('T')[0];
+  } catch {
+    return '';
+  }
+}
+
+function extractOfferValue(perks: string): number {
+  const freePlay = extractFreePlay(perks);
+  const obc = extractOBC(perks);
+  return freePlay || obc || 0;
 }

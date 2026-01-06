@@ -188,6 +188,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       await new Promise(resolve => setTimeout(resolve, 8000));
       
       setState(prev => {
+        const uniqueOfferCodes = new Set(prev.extractedOffers.map(o => o.offerCode));
+        const cruisesFromOffers = prev.extractedOffers.filter(o => o.shipName && o.sailingDate).length;
         const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
         const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
         
@@ -195,7 +197,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           ...prev, 
           status: 'awaiting_confirmation',
           syncCounts: {
-            offers: prev.extractedOffers.length,
+            offers: uniqueOfferCodes.size,
+            cruises: cruisesFromOffers,
             upcomingCruises,
             courtesyHolds
           }
@@ -276,16 +279,20 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState(prev => ({ ...prev, status: 'syncing' }));
       addLog('Syncing data to app...', 'info');
 
-      const transformedOffers = transformOffersToCasinoOffers(state.extractedOffers, state.loyaltyData);
-      const transformedCruises = transformBookedCruisesToAppFormat(state.extractedBookedCruises, state.loyaltyData);
+      const { offers: transformedOffers, cruises: transformedCruises } = transformOffersToCasinoOffers(state.extractedOffers, state.loyaltyData);
+      const transformedBookedCruises = transformBookedCruisesToAppFormat(state.extractedBookedCruises, state.loyaltyData);
 
-      addLog(`Syncing ${transformedOffers.length} offers and ${transformedCruises.length} cruises`, 'info');
+      addLog(`Syncing ${transformedOffers.length} offers, ${transformedCruises.length} cruises, and ${transformedBookedCruises.length} booked cruises`, 'info');
 
       transformedOffers.forEach(offer => {
         coreDataContext.addCasinoOffer(offer);
       });
 
       transformedCruises.forEach(cruise => {
+        coreDataContext.addCruise(cruise);
+      });
+
+      transformedBookedCruises.forEach(cruise => {
         coreDataContext.addBookedCruise(cruise);
       });
 
