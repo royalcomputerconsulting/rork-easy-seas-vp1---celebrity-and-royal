@@ -36,7 +36,7 @@ export const STEP2_UPCOMING_SCRIPT = `
       console.log('[STEP2] Starting extraction');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Starting Upcoming Cruises extraction...',
+        message: '[STEP2] Starting Upcoming Cruises extraction...',
         logType: 'info'
       }));
 
@@ -294,7 +294,7 @@ export const STEP2_UPCOMING_SCRIPT = `
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: \`Extracted \${cruises.length} upcoming cruises\`,
+        message: '[STEP2] ✓ Extracted ' + cruises.length + ' upcoming cruises',
         logType: 'success'
       }));
 
@@ -302,7 +302,12 @@ export const STEP2_UPCOMING_SCRIPT = `
       console.error('[STEP2] Error:', error);
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'error',
-        message: 'Failed to extract upcoming cruises: ' + error.message
+        message: '[STEP2] Failed to extract upcoming cruises: ' + error.message
+      }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 2,
+        data: []
       }));
     }
   }

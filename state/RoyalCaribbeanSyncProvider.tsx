@@ -70,15 +70,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       console.log('Counts:', { offers: uniqueOfferCodes.size, cruises: cruisesFromOffers, upcomingCruises, courtesyHolds });
       
-      addLog(`\n========== INGESTION COMPLETE ==========`, 'success');
-      addLog(`Found ${uniqueOfferCodes.size} unique offers with ${cruisesFromOffers} sailings`, 'success');
-      addLog(`Found ${upcomingCruises} upcoming cruises`, 'success');
-      addLog(`Found ${courtesyHolds} courtesy holds`, 'success');
+      addLog('', 'success');
+      addLog('========================================', 'success');
+      addLog('✓ DATA EXTRACTION COMPLETE', 'success');
+      addLog('========================================', 'success');
+      addLog(`Offers Found: ${uniqueOfferCodes.size}`, 'success');
+      addLog(`Available Sailings: ${cruisesFromOffers}`, 'success');
+      addLog(`Upcoming Booked: ${upcomingCruises}`, 'success');
+      addLog(`Courtesy Holds: ${courtesyHolds}`, 'success');
       if (prev.loyaltyData?.crownAndAnchorLevel) {
-        addLog(`Crown & Anchor: ${prev.loyaltyData.crownAndAnchorLevel} (${prev.loyaltyData.crownAndAnchorPoints || 'N/A'} points)`, 'success');
+        addLog(`Loyalty Level: ${prev.loyaltyData.crownAndAnchorLevel} (${prev.loyaltyData.crownAndAnchorPoints || 'N/A'} points)`, 'success');
       }
-      addLog(`========================================`, 'success');
-      addLog('All data extracted successfully! Ready to sync to app.', 'success');
+      addLog('========================================', 'success');
+      addLog('Ready to preview and import to app', 'success');
       
       return {
         ...prev, 
@@ -102,7 +106,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
           return { ...prev, status: message.loggedIn ? 'logged_in' : 'not_logged_in' };
         });
-        if (!isIngestionRunning.current) {
+        if (!isIngestionRunning.current && state.status !== 'complete') {
           addLog(message.loggedIn ? 'User logged in successfully' : 'User not logged in', 'info');
         }
         break;
@@ -169,7 +173,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Ingestion completed successfully', 'success');
         break;
     }
-  }, [addLog, setProgress, checkIfAllStepsComplete]);
+  }, [addLog, setProgress, checkIfAllStepsComplete, state.status]);
 
   const openLogin = useCallback(() => {
     if (webViewRef.current) {
@@ -214,12 +218,23 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       syncCounts: null
     }));
 
-    addLog('Starting ingestion process...', 'info');
+    addLog('========================================', 'info');
+    addLog('Starting Royal Caribbean Data Sync', 'info');
+    addLog('========================================', 'info');
+    
+    webViewRef.current.injectJavaScript(`
+      if (typeof window.__stopAuthDetection === 'function') {
+        window.__stopAuthDetection();
+      }
+      true;
+    `);
     
     try {
       const timestamp = Date.now();
       
-      addLog('Step 1: Scraping Club Royale Offers page...', 'info');
+      addLog('', 'info');
+      addLog('STEP 1: Extracting Club Royale Offers & Sailings', 'info');
+      addLog('Navigating to offers page...', 'info');
       webViewRef.current.injectJavaScript(`
         window.location.href = 'https://www.royalcaribbean.com/club-royale/offers?_t=${timestamp}';
         true;
@@ -227,12 +242,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 5000));
       
-      addLog('Injecting Step 1 extraction script...', 'info');
+      addLog('Extracting offers and available sailings...', 'info');
       webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
       
       await new Promise(resolve => setTimeout(resolve, 60000));
       
-      addLog('Step 1 complete. Navigating to Account page for 10-second pause...', 'info');
+      addLog('', 'info');
+      addLog('Transitioning: Navigating to Account page...', 'info');
       const accountUrl = `https://www.royalcaribbean.com/account/`;
       webViewRef.current.injectJavaScript(`
         window.location.href = '${accountUrl}';
@@ -241,7 +257,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 10000));
       
-      addLog('Account page pause complete. Navigating to upcoming cruises...', 'info');
+      addLog('', 'info');
+      addLog('STEP 2: Extracting Upcoming Booked Cruises', 'info');
+      addLog('Navigating to upcoming cruises page...', 'info');
       const upcomingUrl = `https://www.royalcaribbean.com/account/upcoming-cruises`;
       setState(prev => ({ 
         ...prev, 
@@ -255,13 +273,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 8000));
       
-      addLog('Injecting Step 2 extraction script...', 'info');
+      addLog('Extracting upcoming cruise bookings...', 'info');
       console.log('[PROVIDER] Injecting step 2 script');
       webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
       
       await new Promise(resolve => setTimeout(resolve, 40000));
       
-      addLog('Step 2 complete. Navigating to courtesy holds page...', 'info');
+      addLog('', 'info');
+      addLog('STEP 3: Extracting Courtesy Holds', 'info');
+      addLog('Navigating to courtesy holds page...', 'info');
       const holdsUrl = `https://www.royalcaribbean.com/account/courtesy-holds`;
       setState(prev => ({ 
         ...prev, 
@@ -275,13 +295,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 8000));
       
-      addLog('Injecting Step 3 extraction script...', 'info');
+      addLog('Extracting courtesy holds...', 'info');
       webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
       
       await new Promise(resolve => setTimeout(resolve, 30000));
       
-      addLog('All steps completed! Finalizing data...', 'success');
-      addLog(`Step results - Offers: ${extractedDataRef.current.offers}, Booked: ${extractedDataRef.current.booked}`, 'info');
+      addLog('', 'info');
+      addLog('All extraction steps complete. Processing results...', 'success');
       setTimeout(() => checkIfAllStepsComplete(), 2000);
       
     } catch (error) {

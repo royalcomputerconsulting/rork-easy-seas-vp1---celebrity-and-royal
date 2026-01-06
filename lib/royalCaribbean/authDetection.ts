@@ -2,6 +2,24 @@ export const AUTH_DETECTION_SCRIPT = `
 (function() {
   let lastAuthState = null;
   let checkCount = 0;
+  let observer = null;
+  let intervalId = null;
+  let timeoutId = null;
+  
+  window.__stopAuthDetection = function() {
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
   
   function checkAuthStatus() {
     checkCount++;
@@ -83,17 +101,8 @@ export const AUTH_DETECTION_SCRIPT = `
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: isLoggedIn 
-          ? 'Authentication detected - logged in successfully' 
-          : 'Not authenticated - please log in',
-        logType: 'info'
-      }));
-    }
-    
-    if (checkCount % 5 === 0) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Auth check: ' + (isLoggedIn ? 'LOGGED IN' : 'NOT LOGGED IN') + 
-                 ' (signals: ' + accountFeatureCount + ' account features, ' + contentSignals + ' content signals)',
+          ? 'User logged in' 
+          : 'Not logged in',
         logType: 'info'
       }));
     }
@@ -108,7 +117,7 @@ export const AUTH_DETECTION_SCRIPT = `
       setTimeout(checkAuthStatus, 1500);
     }
 
-    const observer = new MutationObserver(() => {
+    observer = new MutationObserver(() => {
       checkAuthStatus();
     });
 
@@ -119,12 +128,12 @@ export const AUTH_DETECTION_SCRIPT = `
       });
     }
     
-    const intervalId = setInterval(checkAuthStatus, 3000);
+    intervalId = setInterval(checkAuthStatus, 5000);
 
-    setTimeout(() => {
-      observer.disconnect();
-      clearInterval(intervalId);
-    }, 30000);
+    timeoutId = setTimeout(() => {
+      if (observer) observer.disconnect();
+      if (intervalId) clearInterval(intervalId);
+    }, 15000);
   }
   
   initAuthDetection();

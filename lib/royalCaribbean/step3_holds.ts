@@ -33,9 +33,10 @@ export const STEP3_HOLDS_SCRIPT = `
 
   async function extractCourtesyHolds() {
     try {
+      console.log('[STEP3] Starting extraction');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Starting Courtesy Holds extraction...',
+        message: '[STEP3] Starting Courtesy Holds extraction...',
         logType: 'info'
       }));
 
@@ -181,16 +182,23 @@ export const STEP3_HOLDS_SCRIPT = `
         data: holds
       }));
 
+      console.log('[STEP3] Sending step_complete with', holds.length, 'holds');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: \`Extracted \${holds.length} courtesy holds\`,
+        message: '[STEP3] ✓ Extracted ' + holds.length + ' courtesy holds',
         logType: 'success'
       }));
 
     } catch (error) {
+      console.error('[STEP3] Error:', error);
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'error',
-        message: 'Failed to extract courtesy holds: ' + error.message
+        message: '[STEP3] Failed to extract courtesy holds: ' + error.message
+      }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 3,
+        data: []
       }));
     }
   }

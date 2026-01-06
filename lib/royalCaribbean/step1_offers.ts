@@ -39,9 +39,10 @@ export const STEP1_OFFERS_SCRIPT = `
 
   async function extractOffers() {
     try {
+      console.log('[STEP1] Starting extraction');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Starting Club Royale Offers extraction...',
+        message: '[STEP1] Starting Club Royale Offers extraction...',
         logType: 'info'
       }));
 
@@ -406,6 +407,7 @@ export const STEP1_OFFERS_SCRIPT = `
         }));
       }
 
+      console.log('[STEP1] Sending step_complete with', offers.length, 'offers');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete',
         step: 1,
@@ -414,14 +416,20 @@ export const STEP1_OFFERS_SCRIPT = `
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: \`Extracted \${offers.length} offer rows from \${offerCards.length} offers\`,
+        message: '[STEP1] ✓ Extracted ' + offers.length + ' offer rows from ' + offerCards.length + ' offers',
         logType: 'success'
       }));
 
     } catch (error) {
+      console.error('[STEP1] Error:', error);
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'error',
-        message: 'Failed to extract offers: ' + error.message
+        message: '[STEP1] Failed to extract offers: ' + error.message
+      }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 1,
+        data: []
       }));
     }
   }
