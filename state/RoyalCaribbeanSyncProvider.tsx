@@ -52,23 +52,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const stepsCompleted = useRef({ step1: false, step2: false, step3: false });
 
   const checkIfAllStepsComplete = useCallback(() => {
-    console.log('Checking if all steps complete:', stepsCompleted.current);
+    console.log('[PROVIDER] Checking if all steps complete:', stepsCompleted.current);
+    console.log('[PROVIDER] isIngestionRunning:', isIngestionRunning.current);
     
     if (!stepsCompleted.current.step1 || !stepsCompleted.current.step2 || 
         !stepsCompleted.current.step3) {
-      console.log('Not all steps complete yet');
+      console.log('[PROVIDER] Not all steps complete yet. Step1:', stepsCompleted.current.step1, 'Step2:', stepsCompleted.current.step2, 'Step3:', stepsCompleted.current.step3);
       return;
     }
 
-    console.log('All steps completed! Computing counts...');
+    console.log('[PROVIDER] ✓ All steps completed! Computing counts...');
 
     setState(prev => {
+      console.log('[PROVIDER] Current state - Offers:', prev.extractedOffers.length, 'Booked:', prev.extractedBookedCruises.length);
+      
       const uniqueOfferCodes = new Set(prev.extractedOffers.map(o => o.offerCode));
       const cruisesFromOffers = prev.extractedOffers.filter(o => o.shipName && o.sailingDate).length;
       const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
       const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
       
-      console.log('Counts:', { offers: uniqueOfferCodes.size, cruises: cruisesFromOffers, upcomingCruises, courtesyHolds });
+      console.log('[PROVIDER] ✓ Final Counts:', { offers: uniqueOfferCodes.size, cruises: cruisesFromOffers, upcomingCruises, courtesyHolds });
       
       addLog('', 'success');
       addLog('========================================', 'success');
@@ -82,7 +85,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Loyalty Level: ${prev.loyaltyData.crownAndAnchorLevel} (${prev.loyaltyData.crownAndAnchorPoints || 'N/A'} points)`, 'success');
       }
       addLog('========================================', 'success');
-      addLog('Ready to preview and import to app', 'success');
+      addLog('🎉 Ready to preview and import to app!', 'success');
+      
+      console.log('[PROVIDER] ✓ Setting status to awaiting_confirmation');
       
       return {
         ...prev, 
@@ -95,6 +100,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       };
     });
+    
+    isIngestionRunning.current = false;
+    console.log('[PROVIDER] ✓ Ingestion marked as complete');
   }, [addLog]);
 
   const handleWebViewMessage = useCallback((message: WebViewMessage) => {
@@ -120,13 +128,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
 
       case 'step_complete':
-        console.log(`Step ${message.step} completed with ${message.data.length} items`);
-        addLog(`Step ${message.step} completed with ${message.data.length} items`, 'success');
+        console.log(`[PROVIDER] Step ${message.step} completed with ${message.data.length} items`);
+        addLog(`✓ Step ${message.step} completed: ${message.data.length} items`, 'success');
+        
         if (message.step === 1) {
           extractedDataRef.current.offers = message.data.length;
           setState(prev => ({ ...prev, extractedOffers: message.data as OfferRow[] }));
           stepsCompleted.current.step1 = true;
-          console.log('Step 1 marked complete');
+          console.log('[PROVIDER] ✓ Step 1 (Offers) marked complete. Data count:', message.data.length);
         } else if (message.step === 2) {
           extractedDataRef.current.booked += message.data.length;
           setState(prev => ({
@@ -137,7 +146,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             ]
           }));
           stepsCompleted.current.step2 = true;
-          console.log('Step 2 marked complete');
+          console.log('[PROVIDER] ✓ Step 2 (Upcoming) marked complete. Data count:', message.data.length);
         } else if (message.step === 3) {
           extractedDataRef.current.booked += message.data.length;
           setState(prev => ({
@@ -148,10 +157,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             ]
           }));
           stepsCompleted.current.step3 = true;
-          console.log('Step 3 marked complete');
+          console.log('[PROVIDER] ✓ Step 3 (Courtesy Holds) marked complete. Data count:', message.data.length);
         }
         
-        setTimeout(() => checkIfAllStepsComplete(), 500);
+        console.log('[PROVIDER] Scheduling completion check in 1000ms...');
+        setTimeout(() => {
+          console.log('[PROVIDER] Running scheduled completion check...');
+          checkIfAllStepsComplete();
+        }, 1000);
         break;
 
       case 'loyalty_data':
@@ -298,11 +311,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog('Extracting courtesy holds...', 'info');
       webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 30000));
+      await new Promise(resolve => setTimeout(resolve, 20000));
       
       addLog('', 'info');
-      addLog('All extraction steps complete. Processing results...', 'success');
-      setTimeout(() => checkIfAllStepsComplete(), 2000);
+      addLog('All extraction steps initiated. Waiting for completion...', 'info');
+      
+      console.log('[PROVIDER] All steps initiated. Checking completion status...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      console.log('[PROVIDER] Final completion check...');
+      checkIfAllStepsComplete();
       
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');
