@@ -136,13 +136,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     addLog('Starting ingestion process...', 'info');
     
     try {
-      addLog('Step 1: Navigating to Club Royale offers page...', 'info');
-      webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/club-royale/offers';
-        true;
-      `);
-      
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      addLog('Step 1: Extracting offers from Club Royale page...', 'info');
+      addLog('Loading Offers Page...', 'info');
       
       webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
       
@@ -150,6 +145,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       setState(prev => ({ ...prev, status: 'running_step_2' }));
       addLog('Step 2: Navigating to upcoming cruises page...', 'info');
+      addLog('Loading Upcoming Cruises Page...', 'info');
       webViewRef.current.injectJavaScript(`
         window.location.href = 'https://www.royalcaribbean.com/account/upcoming-cruises';
         true;
@@ -163,6 +159,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       setState(prev => ({ ...prev, status: 'running_step_3' }));
       addLog('Step 3: Navigating to courtesy holds page...', 'info');
+      addLog('Loading Courtesy Holds Page...', 'info');
       webViewRef.current.injectJavaScript(`
         window.location.href = 'https://www.royalcaribbean.com/account/courtesy-holds';
         true;
@@ -176,8 +173,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       setState(prev => ({ ...prev, status: 'running_step_4' }));
       addLog('Step 4: Navigating to loyalty programs page...', 'info');
+      addLog('Loading Loyalty Status Page...', 'info');
       webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/loyalty-programs';
+        window.location.href = 'https://www.royalcaribbean.com/account/loyalty-programs';
         true;
       `);
       
