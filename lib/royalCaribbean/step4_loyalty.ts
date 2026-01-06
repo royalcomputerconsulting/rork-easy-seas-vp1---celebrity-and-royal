@@ -5,6 +5,11 @@ export const STEP4_LOYALTY_SCRIPT = `
   }
 
   async function extractLoyaltyStatus() {
+    const loyaltyData = {
+      crownAndAnchorLevel: '',
+      crownAndAnchorPoints: ''
+    };
+    
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -12,7 +17,7 @@ export const STEP4_LOYALTY_SCRIPT = `
         logType: 'info'
       }));
 
-      await wait(2000);
+      await wait(1500);
 
       const loyaltyData = {
         crownAndAnchorLevel: '',
@@ -82,17 +87,31 @@ export const STEP4_LOYALTY_SCRIPT = `
 
     } catch (error) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'error',
-        message: 'Failed to extract loyalty status: ' + error.message
+        type: 'log',
+        message: 'Error in extraction: ' + error.message,
+        logType: 'error'
+      }));
+    } finally {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 4,
+        data: [loyaltyData]
+      }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Step 4 extraction completed',
+        logType: 'info'
       }));
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', extractLoyaltyStatus);
-  } else {
-    extractLoyaltyStatus();
-  }
+  setTimeout(() => {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', extractLoyaltyStatus);
+    } else {
+      extractLoyaltyStatus();
+    }
+  }, 500);
 })();
 `;
 

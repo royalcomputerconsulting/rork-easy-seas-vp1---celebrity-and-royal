@@ -4,12 +4,12 @@ export const STEP3_HOLDS_SCRIPT = `
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async function scrollUntilComplete(maxAttempts = 10) {
+  async function scrollUntilComplete(maxAttempts = 6) {
     let previousHeight = 0;
     let stableCount = 0;
     let attempts = 0;
 
-    while (stableCount < 3 && attempts < maxAttempts) {
+    while (stableCount < 2 && attempts < maxAttempts) {
       const currentHeight = document.body.scrollHeight;
       
       if (currentHeight === previousHeight) {
@@ -20,7 +20,7 @@ export const STEP3_HOLDS_SCRIPT = `
       
       previousHeight = currentHeight;
       window.scrollBy(0, 500);
-      await wait(1000);
+      await wait(800);
       attempts++;
     }
   }
@@ -32,6 +32,10 @@ export const STEP3_HOLDS_SCRIPT = `
   }
 
   async function extractCourtesyHolds() {
+    const holds = [];
+    const startTime = Date.now();
+    const maxExecutionTime = 50000;
+    
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -39,8 +43,8 @@ export const STEP3_HOLDS_SCRIPT = `
         logType: 'info'
       }));
 
-      await wait(3000);
-      await scrollUntilComplete(15);
+      await wait(2000);
+      await scrollUntilComplete(6);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -70,6 +74,14 @@ export const STEP3_HOLDS_SCRIPT = `
       let processedCount = 0;
 
       for (let i = 0; i < holdCards.length; i++) {
+        if (Date.now() - startTime > maxExecutionTime) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Time limit reached, completing with ' + holds.length + ' holds',
+            logType: 'warning'
+          }));
+          break;
+        }
         const card = holdCards[i];
 
         const shipName = extractText(card, '[data-testid*="ship"], [class*="ship"]');
@@ -120,17 +132,31 @@ export const STEP3_HOLDS_SCRIPT = `
 
     } catch (error) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'error',
-        message: 'Failed to extract courtesy holds: ' + error.message
+        type: 'log',
+        message: 'Error in extraction: ' + error.message + ', sending what we have (' + holds.length + ' holds)',
+        logType: 'error'
+      }));
+    } finally {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 3,
+        data: holds
+      }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Step 3 extraction completed (final count: ' + holds.length + ' holds)',
+        logType: 'info'
       }));
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', extractCourtesyHolds);
-  } else {
-    extractCourtesyHolds();
-  }
+  setTimeout(() => {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', extractCourtesyHolds);
+    } else {
+      extractCourtesyHolds();
+    }
+  }, 500);
 })();
 `;
 

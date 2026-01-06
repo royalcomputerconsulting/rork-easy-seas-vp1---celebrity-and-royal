@@ -4,12 +4,12 @@ export const STEP1_OFFERS_SCRIPT = `
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async function scrollUntilComplete(container, maxAttempts = 10) {
+  async function scrollUntilComplete(container, maxAttempts = 6) {
     let previousHeight = 0;
     let stableCount = 0;
     let attempts = 0;
 
-    while (stableCount < 3 && attempts < maxAttempts) {
+    while (stableCount < 2 && attempts < maxAttempts) {
       const currentHeight = container ? container.scrollHeight : document.body.scrollHeight;
       
       if (currentHeight === previousHeight) {
@@ -26,7 +26,7 @@ export const STEP1_OFFERS_SCRIPT = `
         window.scrollBy(0, 500);
       }
       
-      await wait(1000);
+      await wait(800);
       attempts++;
     }
   }
@@ -39,6 +39,9 @@ export const STEP1_OFFERS_SCRIPT = `
 
   async function extractOffers() {
     let offersData = [];
+    const startTime = Date.now();
+    const maxExecutionTime = 50000;
+    
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -52,7 +55,7 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      await wait(1500);
+      await wait(1000);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -127,10 +130,14 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'info'
         }));
         showAllBtn.click();
-        await wait(2000);
+        await wait(1500);
       }
 
-      await scrollUntilComplete(null, 8);
+      if (Date.now() - startTime > maxExecutionTime) {
+        throw new Error('Execution time limit reached');
+      }
+
+      await scrollUntilComplete(null, 6);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -234,14 +241,14 @@ export const STEP1_OFFERS_SCRIPT = `
       
       if (offerCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'step_complete',
-          step: 1,
-          data: []
-        }));
-        window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
           message: 'No offers found on page, completing step',
           logType: 'warning'
+        }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'step_complete',
+          step: 1,
+          data: []
         }));
         return;
       }
@@ -276,12 +283,21 @@ export const STEP1_OFFERS_SCRIPT = `
           el.textContent?.match(/View Sailings?|See Sailings?/i)
         );
 
+        if (Date.now() - startTime > maxExecutionTime) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Time limit reached at card ' + (i + 1) + ', completing with ' + offersData.length + ' offers',
+            logType: 'warning'
+          }));
+          break;
+        }
+
         if (viewSailingsBtn) {
           viewSailingsBtn.click();
-          await wait(1500);
+          await wait(1200);
 
           const sailingsPanel = card.querySelector('[data-testid*="sailing"], [class*="sailing"]') || card;
-          await scrollUntilComplete(sailingsPanel, 8);
+          await scrollUntilComplete(sailingsPanel, 5);
 
           const sailingCards = sailingsPanel.querySelectorAll('[data-testid*="sailing-card"], [class*="sailing-item"]');
           
@@ -367,23 +383,30 @@ export const STEP1_OFFERS_SCRIPT = `
     } catch (error) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Error in extraction, sending what we have: ' + error.message,
+        message: 'Error in extraction: ' + error.message + ', sending what we have (' + offersData.length + ' offers)',
         logType: 'error'
       }));
-      
+    } finally {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete',
         step: 1,
         data: offersData
       }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Step 1 extraction completed (final count: ' + offersData.length + ' offers)',
+        logType: 'info'
+      }));
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', extractOffers);
-  } else {
-    extractOffers();
-  }
+  setTimeout(() => {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', extractOffers);
+    } else {
+      extractOffers();
+    }
+  }, 500);
 })();
 `;
 

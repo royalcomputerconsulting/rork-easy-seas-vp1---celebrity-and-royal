@@ -219,7 +219,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         true;
       `);
       
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
       addLog('Checking page readiness...', 'info');
       webViewRef.current.injectJavaScript(`
@@ -241,12 +241,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         true;
       `);
       
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       addLog('Injecting extraction script...', 'info');
       webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
       
-      await waitForStepCompletion(1, 120000);
+      await waitForStepCompletion(1, 90000);
       addLog('Step 1 completed successfully', 'success');
       
       setState(prev => ({ 
@@ -260,11 +260,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         true;
       `);
       
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 3500));
       
       webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
       
-      await waitForStepCompletion(2, 60000);
+      await waitForStepCompletion(2, 90000);
       addLog('Step 2 completed successfully', 'success');
       
       setState(prev => ({ 
@@ -278,11 +278,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         true;
       `);
       
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 3500));
       
       webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
       
-      await waitForStepCompletion(3, 60000);
+      await waitForStepCompletion(3, 90000);
       addLog('Step 3 completed successfully', 'success');
       
       setState(prev => ({ 
@@ -296,11 +296,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         true;
       `);
       
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 3500));
       
       webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
       
-      await waitForStepCompletion(4, 60000);
+      await waitForStepCompletion(4, 90000);
       addLog('Step 4 completed successfully', 'success');
       
     } catch (error) {

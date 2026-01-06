@@ -4,12 +4,12 @@ export const STEP2_UPCOMING_SCRIPT = `
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async function scrollUntilComplete(maxAttempts = 10) {
+  async function scrollUntilComplete(maxAttempts = 8) {
     let previousHeight = 0;
     let stableCount = 0;
     let attempts = 0;
 
-    while (stableCount < 3 && attempts < maxAttempts) {
+    while (stableCount < 2 && attempts < maxAttempts) {
       const currentHeight = document.body.scrollHeight;
       
       if (currentHeight === previousHeight) {
@@ -20,7 +20,7 @@ export const STEP2_UPCOMING_SCRIPT = `
       
       previousHeight = currentHeight;
       window.scrollBy(0, 500);
-      await wait(1000);
+      await wait(800);
       attempts++;
     }
   }
@@ -63,6 +63,10 @@ export const STEP2_UPCOMING_SCRIPT = `
   }
 
   async function extractUpcomingCruises() {
+    const cruises = [];
+    const startTime = Date.now();
+    const maxExecutionTime = 50000;
+    
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -70,7 +74,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         logType: 'info'
       }));
 
-      await wait(3000);
+      await wait(2000);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -84,7 +88,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         logType: 'info'
       }));
       
-      await scrollUntilComplete(15);
+      await scrollUntilComplete(8);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -157,12 +161,19 @@ export const STEP2_UPCOMING_SCRIPT = `
         }));
       }
       
-      const cruises = [];
       let processedCount = 0;
       let skippedCount = 0;
 
       for (let i = 0; i < cruiseCards.length; i++) {
         try {
+          if (Date.now() - startTime > maxExecutionTime) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Time limit reached at card ' + (i + 1) + ', completing with ' + cruises.length + ' cruises',
+              logType: 'warning'
+            }));
+            break;
+          }
           const card = cruiseCards[i];
 
           window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -193,7 +204,7 @@ export const STEP2_UPCOMING_SCRIPT = `
               }));
               
               viewDetailsButton.click();
-              await wait(1500);
+              await wait(1000);
               
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
@@ -280,8 +291,8 @@ export const STEP2_UPCOMING_SCRIPT = `
           if (!hasMinimumData) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: 'Card ' + (i + 1) + ' lacks minimum data (ship: "' + (shipName || 'none') + '", start: "' + (sailingStartDate || 'none') + '", booking: "' + (bookingId || 'none') + '"), skipping',
-              logType: 'warning'
+              message: 'Card ' + (i + 1) + ' appears to be empty or not a cruise card (no ship, dates, or booking ID found), skipping',
+              logType: 'info'
             }));
             skippedCount++;
             continue;
@@ -357,17 +368,31 @@ export const STEP2_UPCOMING_SCRIPT = `
 
     } catch (error) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'error',
-        message: 'Failed to extract upcoming cruises: ' + error.message
+        type: 'log',
+        message: 'Error in extraction: ' + error.message + ', sending what we have (' + cruises.length + ' cruises)',
+        logType: 'error'
+      }));
+    } finally {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 2,
+        data: cruises
+      }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Step 2 extraction completed (final count: ' + cruises.length + ' cruises)',
+        logType: 'info'
       }));
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', extractUpcomingCruises);
-  } else {
-    extractUpcomingCruises();
-  }
+  setTimeout(() => {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', extractUpcomingCruises);
+    } else {
+      extractUpcomingCruises();
+    }
+  }, 500);
 })();
 `;
 
