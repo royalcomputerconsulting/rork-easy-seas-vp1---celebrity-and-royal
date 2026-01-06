@@ -233,7 +233,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       await new Promise(resolve => setTimeout(resolve, 60000));
       
       addLog('Step 1 complete. Navigating to Account page for 10-second pause...', 'info');
-      const accountUrl = `https://www.royalcaribbean.com/Account?_t=${timestamp}`;
+      const accountUrl = `https://www.royalcaribbean.com/account/`;
       webViewRef.current.injectJavaScript(`
         window.location.href = '${accountUrl}';
         true;
@@ -242,7 +242,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       await new Promise(resolve => setTimeout(resolve, 10000));
       
       addLog('Account page pause complete. Navigating to upcoming cruises...', 'info');
-      const upcomingUrl = `https://www.royalcaribbean.com/Account/upcoming-cruises?_t=${timestamp + 1}`;
+      const upcomingUrl = `https://www.royalcaribbean.com/account/upcoming-cruises`;
       setState(prev => ({ 
         ...prev, 
         status: 'running_step_2',
@@ -262,7 +262,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       await new Promise(resolve => setTimeout(resolve, 40000));
       
       addLog('Step 2 complete. Navigating to courtesy holds page...', 'info');
-      const holdsUrl = `https://www.royalcaribbean.com/Account/courtesy-holds?_t=${timestamp + 2}`;
+      const holdsUrl = `https://www.royalcaribbean.com/account/Courtesy-hold`;
       setState(prev => ({ 
         ...prev, 
         status: 'running_step_3',
