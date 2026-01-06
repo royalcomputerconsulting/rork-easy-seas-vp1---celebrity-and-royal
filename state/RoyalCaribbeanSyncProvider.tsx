@@ -5,7 +5,6 @@ import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { 
   RoyalCaribbeanSyncState, 
-  SyncStatus,
   OfferRow, 
   BookedCruiseRow,
   WebViewMessage
@@ -41,10 +40,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       ...prev,
       logs: rcLogger.getLogs()
     }));
-  }, []);
-
-  const setStatus = useCallback((status: SyncStatus) => {
-    setState(prev => ({ ...prev, status }));
   }, []);
 
   const setProgress = useCallback((current: number, total: number, stepName?: string) => {
@@ -101,7 +96,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const handleWebViewMessage = useCallback((message: WebViewMessage) => {
     switch (message.type) {
       case 'auth_status':
-        setStatus(message.loggedIn ? 'logged_in' : 'not_logged_in');
+        setState(prev => {
+          if (prev.status.startsWith('running_') || prev.status === 'syncing') {
+            return prev;
+          }
+          return { ...prev, status: message.loggedIn ? 'logged_in' : 'not_logged_in' };
+        });
         addLog(message.loggedIn ? 'User logged in successfully' : 'User not logged in', 'info');
         break;
 
@@ -164,7 +164,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Ingestion completed successfully', 'success');
         break;
     }
-  }, [addLog, setStatus, setProgress, checkIfAllStepsComplete]);
+  }, [addLog, setProgress, checkIfAllStepsComplete]);
 
   const openLogin = useCallback(() => {
     if (webViewRef.current) {
@@ -175,7 +175,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
   }, [addLog]);
 
+  const isIngestionRunning = useRef(false);
+
   const runIngestion = useCallback(async () => {
+    if (isIngestionRunning.current) {
+      addLog('Ingestion already running, ignoring duplicate call', 'warning');
+      return;
+    }
+
     if (state.status !== 'logged_in') {
       addLog('Cannot run ingestion: user not logged in', 'error');
       return;
@@ -186,6 +193,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       return;
     }
 
+    isIngestionRunning.current = true;
     stepsCompleted.current = { step1: false, step2: false, step3: false };
 
     setState(prev => ({
@@ -269,6 +277,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
+    } finally {
+      isIngestionRunning.current = false;
     }
   }, [state.status, addLog, checkIfAllStepsComplete]);
 
