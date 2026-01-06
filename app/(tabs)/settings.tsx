@@ -214,7 +214,10 @@ export default function SettingsScreen() {
       }
 
       console.log('[Settings] File selected:', result.fileName);
-      const { cruises: parsedCruises, offers: parsedOffers } = parseOffersCSV(result.content);
+      const parseResult = parseOffersCSV(result.content);
+      const parsedCruises = parseResult.cruises;
+      const parsedOffers = parseResult.offers;
+      const isCelebrityImport = parseResult.isCelebrityImport;
       
       if (parsedCruises.length === 0) {
         Alert.alert('Import Failed', 'No valid cruise data found in the CSV file. Please check the file format.');
@@ -222,11 +225,26 @@ export default function SettingsScreen() {
         return;
       }
 
-      setCruises(parsedCruises);
-      setOffers(parsedOffers);
+      const existingCruises = cruises.length > 0 ? cruises : (localData.cruises || []);
+      const existingOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
+      
+      const mergedCruises = isCelebrityImport 
+        ? [...existingCruises, ...parsedCruises]
+        : parsedCruises;
+      
+      const mergedOffers = isCelebrityImport
+        ? [...existingOffers, ...parsedOffers]
+        : parsedOffers;
+      
+      const message = isCelebrityImport
+        ? `Merged ${parsedCruises.length} Celebrity cruises and ${parsedOffers.length} offers with existing data. Total: ${mergedCruises.length} cruises, ${mergedOffers.length} offers.`
+        : `Replaced all data with ${parsedCruises.length} Royal Caribbean cruises and ${parsedOffers.length} offers.`;
+
+      setCruises(mergedCruises);
+      setOffers(mergedOffers);
       setLocalData({
-        cruises: parsedCruises,
-        offers: parsedOffers,
+        cruises: mergedCruises,
+        offers: mergedOffers,
       });
 
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
@@ -235,7 +253,7 @@ export default function SettingsScreen() {
       setLastImportResult({ type: 'offers', count: parsedCruises.length });
       Alert.alert(
         'Import Successful', 
-        `Imported ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}`
+        message
       );
       console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {
@@ -244,7 +262,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [setCruises, setOffers, setLocalData]);
+  }, [setCruises, setOffers, setLocalData, cruises, casinoOffers, localData.cruises, localData.offers]);
 
   const handleImportCalendarFromURL = useCallback(async () => {
     try {
@@ -405,7 +423,9 @@ export default function SettingsScreen() {
       const existingBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
       console.log('[Settings] Existing booked cruises:', existingBooked.length);
       
-      const parsedBooked = parseBookedCSV(result.content, existingBooked);
+      const parseResult = parseBookedCSV(result.content, existingBooked);
+      const parsedBooked = parseResult.cruises;
+      const isCelebrityImport = parseResult.isCelebrityImport;
       
       if (parsedBooked.length === 0) {
         Alert.alert('No New Cruises', 'All cruises in the file already exist in your database, or the file contains no valid data.');
@@ -413,7 +433,14 @@ export default function SettingsScreen() {
         return;
       }
 
-      const mergedBooked = [...existingBooked, ...parsedBooked];
+      const mergedBooked = isCelebrityImport 
+        ? [...existingBooked, ...parsedBooked] 
+        : parsedBooked;
+      
+      const message = isCelebrityImport
+        ? `Merged ${parsedBooked.length} Celebrity cruises with existing ${existingBooked.length} cruises. Total: ${mergedBooked.length}.`
+        : `Replaced all data with ${parsedBooked.length} new Royal Caribbean cruises.`;
+      
       console.log('[Settings] Merged booked cruises:', mergedBooked.length, '(added:', parsedBooked.length, ')');
 
       setBookedCruises(mergedBooked);
@@ -428,7 +455,7 @@ export default function SettingsScreen() {
       
       Alert.alert(
         'Import Successful', 
-        `Added ${parsedBooked.length} new cruises from ${result.fileName}`
+        message
       );
       console.log('[Settings] Booked import complete:', parsedBooked.length, 'new cruises added');
     } catch (error) {
