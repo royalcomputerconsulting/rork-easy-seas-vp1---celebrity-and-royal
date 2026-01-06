@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
@@ -169,11 +169,21 @@ function RoyalCaribbeanSyncScreen() {
           <Text style={styles.statusText}>{getStatusText()}</Text>
         </View>
 
-        {state.status === 'not_logged_in' && (
-          <View style={styles.infoBox}>
-            <Text style={styles.infoText}>
-              Note: The webpage may take a few seconds to load initially.
-            </Text>
+        {state.logs.length > 0 && (
+          <View style={styles.recentLogsBox}>
+            <Text style={styles.recentLogsTitle}>Recent Activity:</Text>
+            {state.logs.slice(-5).map((log, index) => (
+              <View key={index} style={styles.recentLogEntry}>
+                <Text style={styles.recentLogTimestamp}>{log.timestamp}</Text>
+                <Text style={[
+                  styles.recentLogMessage,
+                  log.type === 'error' && styles.logMessageError,
+                  log.type === 'success' && styles.logMessageSuccess
+                ]}>
+                  {log.message}
+                </Text>
+              </View>
+            ))}
           </View>
         )}
 
@@ -289,28 +299,28 @@ function RoyalCaribbeanSyncScreen() {
 
 
 
-          <View style={styles.buttonRow}>
+          <View style={styles.compactButtonRow}>
             <Pressable 
-              style={[styles.button, styles.tertiaryButton]}
+              style={[styles.compactButton, styles.tertiaryButton]}
               onPress={() => setLogsVisible(!logsVisible)}
             >
-              <Text style={styles.tertiaryButtonText}>
+              <Text style={styles.compactButtonText}>
                 {logsVisible ? 'Hide' : 'View'} Log ({state.logs.length})
               </Text>
             </Pressable>
 
             <Pressable 
-              style={[styles.button, styles.tertiaryButton]}
+              style={[styles.compactButton, styles.tertiaryButton]}
               onPress={exportLog}
             >
-              <Text style={styles.tertiaryButtonText}>Export Log</Text>
+              <Text style={styles.compactButtonText}>Export Log</Text>
             </Pressable>
 
             <Pressable 
-              style={[styles.button, styles.dangerButton]}
+              style={[styles.compactButton, styles.dangerButton]}
               onPress={resetState}
             >
-              <Text style={styles.buttonText}>Reset</Text>
+              <Text style={styles.compactButtonText}>Reset</Text>
             </Pressable>
           </View>
         </View>
@@ -325,28 +335,25 @@ function RoyalCaribbeanSyncScreen() {
           </View>
         )}
 
-        {logsVisible && (
-          <View style={styles.logsContainer}>
-            <Text style={styles.logsTitle}>Sync Log</Text>
-            <ScrollView style={styles.logsScroll}>
-              {state.logs.map((log, index) => (
-                <View key={index} style={[styles.logEntry, log.type === 'error' && styles.logError]}>
-                  <Text style={styles.logTimestamp}>{log.timestamp}</Text>
-                  <Text style={[
-                    styles.logMessage,
-                    log.type === 'error' && styles.logMessageError,
-                    log.type === 'success' && styles.logMessageSuccess
-                  ]}>
-                    {log.message}
-                  </Text>
-                </View>
-              ))}
-              {state.logs.length === 0 && (
-                <Text style={styles.logsEmpty}>No logs yet</Text>
-              )}
-            </ScrollView>
+        {!isRunning && state.logs.length > 0 && (
+          <View style={styles.recentLogsBox}>
+            <Text style={styles.recentLogsTitle}>Recent Activity:</Text>
+            {state.logs.slice(-5).map((log, index) => (
+              <View key={index} style={styles.recentLogEntry}>
+                <Text style={styles.recentLogTimestamp}>{log.timestamp}</Text>
+                <Text style={[
+                  styles.recentLogMessage,
+                  log.type === 'error' && styles.logMessageError,
+                  log.type === 'success' && styles.logMessageSuccess
+                ]}>
+                  {log.message}
+                </Text>
+              </View>
+            ))}
           </View>
         )}
+
+
 
         {state.error && (
           <View style={styles.errorContainer}>
@@ -759,20 +766,53 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'monospace'
   },
-  infoBox: {
-    marginHorizontal: 12,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  recentLogsBox: {
+    margin: 12,
+    marginTop: 0,
+    padding: 12,
     backgroundColor: '#1e293b',
     borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#3b82f6'
+    borderWidth: 1,
+    borderColor: '#334155'
   },
-  infoText: {
+  recentLogsTitle: {
     color: '#94a3b8',
     fontSize: 12,
-    fontStyle: 'italic' as const
+    fontWeight: '600' as const,
+    marginBottom: 8
+  },
+  recentLogEntry: {
+    marginBottom: 6,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155'
+  },
+  recentLogTimestamp: {
+    color: '#64748b',
+    fontSize: 10,
+    marginBottom: 2
+  },
+  recentLogMessage: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    lineHeight: 16
+  },
+  compactButtonRow: {
+    flexDirection: 'row' as const,
+    gap: 8
+  },
+  compactButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const
+  },
+  compactButtonText: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '500' as const
   },
   debugBox: {
     backgroundColor: '#422006',
