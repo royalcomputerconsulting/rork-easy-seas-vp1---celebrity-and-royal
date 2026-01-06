@@ -48,7 +48,24 @@ export const STEP2_UPCOMING_SCRIPT = `
         logType: 'info'
       }));
 
-      const cruiseCards = document.querySelectorAll('[data-testid*="cruise"], [class*="cruise-card"], [class*="booking"]');
+      let cruiseCards = document.querySelectorAll('[data-testid*="cruise"], [class*="cruise-card"], [class*="booking"]');
+      
+      if (cruiseCards.length === 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'No cruises found with primary selectors, trying broader search...',
+          logType: 'warning'
+        }));
+        
+        cruiseCards = document.querySelectorAll('[class*="cruise"], [class*="Cruise"], [class*="trip"], [class*="booking"], article, .card');
+      }
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Found ' + cruiseCards.length + ' potential cruise elements',
+        logType: 'info'
+      }));
+      
       const cruises = [];
       let processedCount = 0;
 

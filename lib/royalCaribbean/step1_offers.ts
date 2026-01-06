@@ -46,6 +46,12 @@ export const STEP1_OFFERS_SCRIPT = `
       }));
 
       await wait(3000);
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Page loaded, searching for offer elements...',
+        logType: 'info'
+      }));
 
       const showAllBtn = Array.from(document.querySelectorAll('button, a')).find(el => 
         el.textContent?.match(/Show All|View All|See All/i)
@@ -69,7 +75,24 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      const offerCards = document.querySelectorAll('[data-testid*="offer"], [class*="offer-card"], [class*="OfferCard"]');
+      let offerCards = document.querySelectorAll('[data-testid*="offer"], [class*="offer-card"], [class*="OfferCard"]');
+      
+      if (offerCards.length === 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'No offers found with primary selectors, trying broader search...',
+          logType: 'warning'
+        }));
+        
+        offerCards = document.querySelectorAll('[class*="offer"], [class*="Offer"], article, .card, [role="article"]');
+      }
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Found ' + offerCards.length + ' potential offer elements',
+        logType: 'info'
+      }));
+      
       const offers = [];
       let processedCount = 0;
 

@@ -175,9 +175,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       await new Promise(resolve => setTimeout(resolve, 20000));
       
       setState(prev => ({ ...prev, status: 'running_step_4' }));
-      addLog('Step 4: Navigating to loyalty status page...', 'info');
+      addLog('Step 4: Navigating to loyalty programs page...', 'info');
       webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/account/loyalty-status';
+        window.location.href = 'https://www.royalcaribbean.com/loyalty-programs';
         true;
       `);
       

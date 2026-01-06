@@ -48,7 +48,24 @@ export const STEP3_HOLDS_SCRIPT = `
         logType: 'info'
       }));
 
-      const holdCards = document.querySelectorAll('[data-testid*="hold"], [class*="hold-card"], [class*="courtesy"]');
+      let holdCards = document.querySelectorAll('[data-testid*="hold"], [class*="hold-card"], [class*="courtesy"]');
+      
+      if (holdCards.length === 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'No holds found with primary selectors, trying broader search...',
+          logType: 'warning'
+        }));
+        
+        holdCards = document.querySelectorAll('[class*="hold"], [class*="Hold"], [class*="courtesy"], article, .card');
+      }
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Found ' + holdCards.length + ' potential hold elements',
+        logType: 'info'
+      }));
+      
       const holds = [];
       let processedCount = 0;
 
