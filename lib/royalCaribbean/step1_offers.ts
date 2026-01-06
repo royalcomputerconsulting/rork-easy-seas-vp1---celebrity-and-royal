@@ -45,7 +45,7 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      await wait(3000);
+      await wait(4000);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -53,45 +53,62 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      const showAllBtn = Array.from(document.querySelectorAll('button, a')).find(el => 
-        el.textContent?.match(/Show All|View All|See All/i)
-      );
-      
-      if (showAllBtn) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Clicking "Show All Offers"',
-          logType: 'info'
-        }));
-        showAllBtn.click();
-        await wait(2000);
-      }
-
       await scrollUntilComplete(null, 15);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Scrolling complete, extracting offers...',
+        message: 'Scrolling complete, looking for offers...',
         logType: 'info'
       }));
 
-      let offerCards = document.querySelectorAll('[data-testid*="offer"], [class*="offer-card"], [class*="OfferCard"]');
+      let offerCards = [];
+      
+      const possibleSelectors = [
+        '[data-testid*="offer"]',
+        '[class*="OfferCard"]',
+        '[class*="offer-card"]',
+        'article[class*="offer"]',
+        'div[class*="offer"][class*="card"]',
+        '.card',
+        'article',
+        'div[role="article"]'
+      ];
+      
+      for (const selector of possibleSelectors) {
+        const elements = document.querySelectorAll(selector);
+        if (elements.length > 0) {
+          offerCards = Array.from(elements).filter(el => {
+            const text = el.textContent || '';
+            return text.toLowerCase().includes('view sailing') || 
+                   text.toLowerCase().includes('offer') ||
+                   el.querySelector('h1, h2, h3, h4');
+          });
+          
+          if (offerCards.length > 0) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Found ' + offerCards.length + ' offers using selector: ' + selector,
+              logType: 'info'
+            }));
+            break;
+          }
+        }
+      }
       
       if (offerCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'No offers found with primary selectors, trying broader search...',
+          message: 'No offer cards found with any selector',
           logType: 'warning'
         }));
         
-        offerCards = document.querySelectorAll('[class*="offer"], [class*="Offer"], article, .card, [role="article"]');
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'step_complete',
+          step: 1,
+          data: []
+        }));
+        return;
       }
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Found ' + offerCards.length + ' potential offer elements',
-        logType: 'info'
-      }));
       
       const offers = [];
       let processedCount = 0;
@@ -99,28 +116,91 @@ export const STEP1_OFFERS_SCRIPT = `
       for (let i = 0; i < offerCards.length; i++) {
         const card = offerCards[i];
         
-        const offerName = extractText(card, '[data-testid*="offer-name"], [class*="offer-name"], h2, h3');
-        const offerCode = extractText(card, '[data-testid*="offer-code"], [class*="offer-code"], [class*="code"]');
-        const offerExpiry = extractText(card, '[data-testid*="expir"], [class*="expir"]');
-        const offerType = extractText(card, '[data-testid*="type"], [class*="type"]');
-        const perks = extractText(card, '[data-testid*="perk"], [class*="perk"], [class*="benefit"]');
+        const offerName = extractText(card, 'h1') || extractText(card, 'h2') || 
+                         extractText(card, 'h3') || extractText(card, 'h4') || 
+                         extractText(card, '[class*="title"]') || extractText(card, '[class*="name"]');
+        
+        if (!offerName || offerName.length < 3) {
+          continue;
+        }
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Processing offer: ' + offerName,
+          logType: 'info'
+        }));
+        
+        const offerCode = extractText(card, '[data-testid*="code"]') || 
+                         extractText(card, '[class*="code"]') || '';
+        const offerExpiry = extractText(card, '[data-testid*="expir"]') || 
+                           extractText(card, '[class*="expir"]') || 
+                           extractText(card, '[class*="valid"]') || '';
+        const offerType = extractText(card, '[data-testid*="type"]') || 
+                         extractText(card, '[class*="type"]') || 'Club Royale';
+        const perks = extractText(card, '[data-testid*="perk"]') || 
+                     extractText(card, '[class*="perk"]') || 
+                     extractText(card, '[class*="benefit"]') || '';
 
-        const viewSailingsBtn = Array.from(card.querySelectorAll('button, a')).find(el => 
-          el.textContent?.match(/View Sailings?|See Sailings?/i)
+        const viewSailingsBtn = Array.from(card.querySelectorAll('button, a, [role="button"]')).find(el => 
+          (el.textContent || '').match(/View Sailing|See Sailing|Show Sailing/i)
         );
 
         if (viewSailingsBtn) {
-          viewSailingsBtn.click();
-          await wait(1500);
-
-          const sailingsPanel = card.querySelector('[data-testid*="sailing"], [class*="sailing"]') || card;
-          await scrollUntilComplete(sailingsPanel, 8);
-
-          const sailingCards = sailingsPanel.querySelectorAll('[data-testid*="sailing-card"], [class*="sailing-item"]');
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Clicking "View Sailings" for: ' + offerName,
+            logType: 'info'
+          }));
           
-          if (sailingCards.length > 0) {
-            for (let j = 0; j < sailingCards.length; j++) {
-              const sailing = sailingCards[j];
+          viewSailingsBtn.click();
+          await wait(3000);
+
+          let sailingsContainer = document.querySelector('[class*="modal"]') || 
+                                 document.querySelector('[role="dialog"]') || 
+                                 document.querySelector('[class*="sailing"][class*="list"]') ||
+                                 card;
+          
+          await scrollUntilComplete(sailingsContainer, 10);
+          await wait(1000);
+
+          const sailingElements = sailingsContainer.querySelectorAll(
+            '[data-testid*="sailing"], [class*="sailing-card"], [class*="SailingCard"], [class*="cruise-card"], [class*="CruiseCard"], .card'
+          );
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found ' + sailingElements.length + ' sailings for: ' + offerName,
+            logType: 'info'
+          }));
+          
+          if (sailingElements.length > 0) {
+            for (let j = 0; j < sailingElements.length; j++) {
+              const sailing = sailingElements[j];
+              
+              const shipName = extractText(sailing, '[data-testid*="ship"]') || 
+                              extractText(sailing, '[class*="ship"]') || 
+                              extractText(sailing, 'h3') || 
+                              extractText(sailing, 'h4') || '';
+              
+              const sailingDate = extractText(sailing, '[data-testid*="date"]') || 
+                                 extractText(sailing, '[class*="date"]') || 
+                                 extractText(sailing, 'time') || '';
+              
+              const itinerary = extractText(sailing, '[data-testid*="itinerary"]') || 
+                               extractText(sailing, '[class*="itinerary"]') || 
+                               extractText(sailing, '[class*="destination"]') || '';
+              
+              const departurePort = extractText(sailing, '[data-testid*="port"]') || 
+                                   extractText(sailing, '[class*="port"]') || 
+                                   extractText(sailing, '[class*="departure"]') || '';
+              
+              const cabinType = extractText(sailing, '[data-testid*="cabin"]') || 
+                               extractText(sailing, '[class*="cabin"]') || 
+                               extractText(sailing, '[class*="stateroom"]') || '';
+              
+              const numberOfGuests = extractText(sailing, '[data-testid*="guest"]') || 
+                                    extractText(sailing, '[class*="guest"]') || 
+                                    extractText(sailing, '[class*="passenger"]') || '';
               
               offers.push({
                 sourcePage: 'Offers',
@@ -128,12 +208,12 @@ export const STEP1_OFFERS_SCRIPT = `
                 offerCode: offerCode,
                 offerExpirationDate: offerExpiry,
                 offerType: offerType,
-                shipName: extractText(sailing, '[data-testid*="ship"], [class*="ship"]'),
-                sailingDate: extractText(sailing, '[data-testid*="date"], [class*="date"]'),
-                itinerary: extractText(sailing, '[data-testid*="itinerary"], [class*="itinerary"]'),
-                departurePort: extractText(sailing, '[data-testid*="port"], [class*="port"]'),
-                cabinType: extractText(sailing, '[data-testid*="cabin"], [class*="cabin"]'),
-                numberOfGuests: extractText(sailing, '[data-testid*="guest"], [class*="guest"]'),
+                shipName: shipName,
+                sailingDate: sailingDate,
+                itinerary: itinerary,
+                departurePort: departurePort,
+                cabinType: cabinType,
+                numberOfGuests: numberOfGuests,
                 perks: perks,
                 loyaltyLevel: '',
                 loyaltyPoints: ''
@@ -157,7 +237,21 @@ export const STEP1_OFFERS_SCRIPT = `
               loyaltyPoints: ''
             });
           }
+          
+          const closeBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el =>
+            (el.textContent || '').match(/close|×|✕/i) || el.querySelector('[class*="close"]')
+          );
+          if (closeBtn) {
+            closeBtn.click();
+            await wait(1000);
+          }
         } else {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'No "View Sailings" button found for: ' + offerName,
+            logType: 'warning'
+          }));
+          
           offers.push({
             sourcePage: 'Offers',
             offerName: offerName,
@@ -179,7 +273,7 @@ export const STEP1_OFFERS_SCRIPT = `
         processedCount++;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'progress',
-          current: processedCount,
+          current: offers.length,
           total: offerCards.length,
           stepName: 'Club Royale Offers'
         }));
