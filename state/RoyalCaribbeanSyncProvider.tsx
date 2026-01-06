@@ -219,12 +219,34 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         true;
       `);
       
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      addLog('Checking page readiness...', 'info');
+      webViewRef.current.injectJavaScript(`
+        (function checkReady() {
+          if (document.readyState === 'complete') {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Page fully loaded and ready',
+              logType: 'info'
+            }));
+          } else {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Page state: ' + document.readyState + ', waiting...',
+              logType: 'info'
+            }));
+          }
+        })();
+        true;
+      `);
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       addLog('Injecting extraction script...', 'info');
       webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
       
-      await waitForStepCompletion(1, 90000);
+      await waitForStepCompletion(1, 120000);
       addLog('Step 1 completed successfully', 'success');
       
       setState(prev => ({ 

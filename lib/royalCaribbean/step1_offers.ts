@@ -38,6 +38,7 @@ export const STEP1_OFFERS_SCRIPT = `
   }
 
   async function extractOffers() {
+    let offersData = [];
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -245,7 +246,6 @@ export const STEP1_OFFERS_SCRIPT = `
         return;
       }
       
-      const offers = [];
       let processedCount = 0;
 
       for (let i = 0; i < offerCards.length; i++) {
@@ -289,7 +289,7 @@ export const STEP1_OFFERS_SCRIPT = `
             for (let j = 0; j < sailingCards.length; j++) {
               const sailing = sailingCards[j];
               
-              offers.push({
+              offersData.push({
                 sourcePage: 'Offers',
                 offerName: offerName,
                 offerCode: offerCode,
@@ -307,7 +307,7 @@ export const STEP1_OFFERS_SCRIPT = `
               });
             }
           } else {
-            offers.push({
+            offersData.push({
               sourcePage: 'Offers',
               offerName: offerName,
               offerCode: offerCode,
@@ -325,7 +325,7 @@ export const STEP1_OFFERS_SCRIPT = `
             });
           }
         } else {
-          offers.push({
+          offersData.push({
             sourcePage: 'Offers',
             offerName: offerName,
             offerCode: offerCode,
@@ -355,19 +355,26 @@ export const STEP1_OFFERS_SCRIPT = `
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete',
         step: 1,
-        data: offers
+        data: offersData
       }));
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: \`Extracted \${offers.length} offer rows from \${offerCards.length} offers\`,
+        message: \`Extracted \${offersData.length} offer rows from \${offerCards.length} offers\`,
         logType: 'success'
       }));
 
     } catch (error) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'error',
-        message: 'Failed to extract offers: ' + error.message
+        type: 'log',
+        message: 'Error in extraction, sending what we have: ' + error.message,
+        logType: 'error'
+      }));
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 1,
+        data: offersData
       }));
     }
   }
