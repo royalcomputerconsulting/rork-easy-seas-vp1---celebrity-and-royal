@@ -169,6 +169,14 @@ function RoyalCaribbeanSyncScreen() {
           <Text style={styles.statusText}>{getStatusText()}</Text>
         </View>
 
+        {state.status === 'not_logged_in' && (
+          <View style={styles.infoBox}>
+            <Text style={styles.infoText}>
+              Note: The webpage may take a few seconds to load initially.
+            </Text>
+          </View>
+        )}
+
         <Pressable 
           style={styles.webViewToggle}
           onPress={() => setWebViewVisible(!webViewVisible)}
@@ -733,6 +741,21 @@ const styles = StyleSheet.create({
     color: '#d1fae5',
     fontSize: 11,
     fontFamily: 'monospace'
+  },
+  infoBox: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#1e293b',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#3b82f6'
+  },
+  infoText: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontStyle: 'italic' as const
   }
 });
 
