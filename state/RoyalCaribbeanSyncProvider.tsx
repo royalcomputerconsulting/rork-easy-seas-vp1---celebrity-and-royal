@@ -194,6 +194,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     stepsCompleted.current = { step1: false, step2: false, step3: false, step4: false };
     stepResolvers.current = {};
 
+    addLog('Starting ingestion process...', 'info');
+
     setState(prev => ({
       ...prev,
       status: 'running_step_1',
@@ -203,16 +205,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       error: null,
       syncCounts: null
     }));
-
-    addLog('Starting ingestion process...', 'info');
     
     try {
       addLog('Step 1: Starting Club Royale offers extraction (already on page)...', 'info');
-      await new Promise(resolve => setTimeout(resolve, 2000));
       
+      webViewRef.current.injectJavaScript(`
+        console.log('Verifying page before extraction...');
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Current page: ' + window.location.href,
+          logType: 'info'
+        }));
+        true;
+      `);
+      
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      addLog('Injecting extraction script...', 'info');
       webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
       
-      await waitForStepCompletion(1, 60000);
+      await waitForStepCompletion(1, 90000);
       addLog('Step 1 completed successfully', 'success');
       
       setState(prev => ({ 

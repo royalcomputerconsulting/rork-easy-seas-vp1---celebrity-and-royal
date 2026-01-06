@@ -25,7 +25,7 @@ function RoyalCaribbeanSyncScreen() {
   } = useRoyalCaribbeanSync();
 
   const [webViewVisible, setWebViewVisible] = useState(true);
-  const [logsVisible, setLogsVisible] = useState(false);
+  const [logsVisible, setLogsVisible] = useState(true);
 
   const onMessage = (event: any) => {
     try {
@@ -222,17 +222,34 @@ function RoyalCaribbeanSyncScreen() {
                 styles.primaryButton,
                 (!canRunIngestion || isRunning) && styles.buttonDisabled
               ]}
-              onPress={runIngestion}
+              onPress={() => {
+                setLogsVisible(true);
+                runIngestion();
+              }}
               disabled={!canRunIngestion || isRunning}
             >
               <Text style={[
                 styles.buttonText,
                 (!canRunIngestion || isRunning) && styles.buttonTextDisabled
               ]}>
-                Run Ingestion
+                {isRunning ? 'Running...' : 'Run Ingestion'}
               </Text>
             </Pressable>
           </View>
+
+          {state.status === 'not_logged_in' && (
+            <View style={styles.debugBox}>
+              <Text style={styles.debugText}>Not detecting login? Force it:</Text>
+              <Pressable 
+                style={[styles.button, styles.warningButton]}
+                onPress={() => {
+                  handleWebViewMessage({ type: 'auth_status', loggedIn: true });
+                }}
+              >
+                <Text style={styles.buttonText}>Force Logged In</Text>
+              </Pressable>
+            </View>
+          )}
 
           <View style={styles.buttonRow}>
             <Pressable 
@@ -756,6 +773,22 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 12,
     fontStyle: 'italic' as const
+  },
+  debugBox: {
+    backgroundColor: '#422006',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    gap: 8
+  },
+  debugText: {
+    color: '#fbbf24',
+    fontSize: 12,
+    fontWeight: '600' as const
+  },
+  warningButton: {
+    backgroundColor: '#f59e0b'
   }
 });
 
