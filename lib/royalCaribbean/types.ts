@@ -73,7 +73,8 @@ export type WebViewMessage =
   | { type: 'complete' };
 
 export interface SyncDataCounts {
-  offers: number;
+  offerCount: number;
+  offerRows: number;
   upcomingCruises: number;
   courtesyHolds: number;
 }

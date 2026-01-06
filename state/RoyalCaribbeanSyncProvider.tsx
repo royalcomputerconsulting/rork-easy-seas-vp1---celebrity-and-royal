@@ -173,12 +173,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState(prev => {
         const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
         const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
+        const uniqueOffers = new Set(prev.extractedOffers.map(o => o.offerName)).size;
         
         return {
           ...prev, 
           status: 'awaiting_confirmation',
           syncCounts: {
-            offers: prev.extractedOffers.length,
+            offerCount: uniqueOffers,
+            offerRows: prev.extractedOffers.length,
             upcomingCruises,
             courtesyHolds
           }

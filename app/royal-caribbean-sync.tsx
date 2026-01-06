@@ -324,7 +324,7 @@ function RoyalCaribbeanSyncScreen() {
                     <Ship size={24} color="#3b82f6" />
                   </View>
                   <View style={styles.countInfo}>
-                    <Text style={styles.countNumber}>{state.syncCounts?.offers || 0}</Text>
+                    <Text style={styles.countNumber}>{state.syncCounts?.offerCount || 0} offer, {state.syncCounts?.offerRows || 0} cruises</Text>
                     <Text style={styles.countLabel}>Club Royale Offers</Text>
                   </View>
                 </View>
@@ -348,6 +348,24 @@ function RoyalCaribbeanSyncScreen() {
                     <Text style={styles.countLabel}>Courtesy Holds</Text>
                   </View>
                 </View>
+
+                {state.loyaltyData && (
+                  <View style={styles.loyaltyCard}>
+                    <Text style={styles.loyaltyTitle}>Loyalty Status</Text>
+                    <View style={styles.loyaltyRow}>
+                      <Text style={styles.loyaltyLabel}>Crown & Anchor:</Text>
+                      <Text style={styles.loyaltyValue}>{state.loyaltyData.crownAndAnchorLevel || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.loyaltyRow}>
+                      <Text style={styles.loyaltyLabel}>Club Royale:</Text>
+                      <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyaleTier || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.loyaltyRow}>
+                      <Text style={styles.loyaltyLabel}>Club Royale Points:</Text>
+                      <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyalePoints || 'N/A'}</Text>
+                    </View>
+                  </View>
+                )}
               </View>
 
               <Text style={styles.confirmationQuestion}>Do you want to sync this data to the app?</Text>
@@ -378,7 +396,7 @@ function RoyalCaribbeanSyncScreen() {
               <Text style={styles.successTitle}>Sync Complete!</Text>
               <Text style={styles.successMessage}>
                 {state.syncCounts && (
-                  `Successfully synced ${state.syncCounts.offers} offers, ${state.syncCounts.upcomingCruises} upcoming cruises, and ${state.syncCounts.courtesyHolds} courtesy holds to your app.`
+                  `Successfully synced ${state.syncCounts.offerCount} offer (${state.syncCounts.offerRows} cruises), ${state.syncCounts.upcomingCruises} upcoming cruises, and ${state.syncCounts.courtesyHolds} courtesy holds to your app.`
                 )}
               </Text>
             </View>
@@ -670,6 +688,34 @@ const styles = StyleSheet.create({
     color: '#6ee7b7',
     fontSize: 13,
     lineHeight: 18
+  },
+  loyaltyCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#334155'
+  },
+  loyaltyTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700' as const,
+    marginBottom: 12
+  },
+  loyaltyRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: 8
+  },
+  loyaltyLabel: {
+    color: '#94a3b8',
+    fontSize: 14
+  },
+  loyaltyValue: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600' as const
   }
 });
 
