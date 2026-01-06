@@ -214,6 +214,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 45000));
       
+      addLog('Navigating to Account page...', 'info');
+      const accountUrl = `https://www.royalcaribbean.com/Account?_t=${timestamp + 10}`;
+      webViewRef.current.injectJavaScript(`
+        window.location.href = '${accountUrl}';
+        true;
+      `);
+      
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      
       addLog('Step 2: Navigating to upcoming cruises page...', 'info');
       const upcomingUrl = `https://www.royalcaribbean.com/Account/upcoming-cruises?_t=${timestamp + 1}`;
       setState(prev => ({ 
