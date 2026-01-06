@@ -102,6 +102,29 @@ function RoyalCaribbeanSyncScreen() {
     }
   };
 
+  const getCurrentActivity = () => {
+    switch (state.status) {
+      case 'running_step_1':
+        return state.progress && state.progress.current > 0 
+          ? `Scraping Offers - ${state.progress.current} scraped so far`
+          : 'Working - Scraping Offers Page...';
+      case 'running_step_2':
+        return state.progress && state.progress.current > 0
+          ? `Scraping Upcoming Cruises - ${state.progress.current} scraped so far`
+          : 'Working - Scraping Upcoming Cruises Page...';
+      case 'running_step_3':
+        return state.progress && state.progress.current > 0
+          ? `Scraping Courtesy Holds - ${state.progress.current} scraped so far`
+          : 'Working - Scraping Courtesy Holds Page...';
+      case 'running_step_4':
+        return 'Working - Scraping Loyalty Status Page...';
+      case 'syncing':
+        return 'Syncing data to app...';
+      default:
+        return 'Idle';
+    }
+  };
+
   const getStatusIcon = () => {
     const color = '#fff';
     const size = 16;
@@ -266,6 +289,16 @@ function RoyalCaribbeanSyncScreen() {
             </Pressable>
           </View>
         </View>
+
+        {isRunning && (
+          <View style={styles.currentStatusBox}>
+            <Text style={styles.currentStatusTitle}>Current Status:</Text>
+            <Text style={styles.currentStatusText}>{getCurrentActivity()}</Text>
+            {state.currentUrl && (
+              <Text style={styles.currentStatusUrl}>Going to: {state.currentUrl}</Text>
+            )}
+          </View>
+        )}
 
         {logsVisible && (
           <View style={styles.logsContainer}>
@@ -674,6 +707,32 @@ const styles = StyleSheet.create({
     color: '#6ee7b7',
     fontSize: 13,
     lineHeight: 18
+  },
+  currentStatusBox: {
+    margin: 12,
+    marginTop: 0,
+    padding: 16,
+    backgroundColor: '#10b981',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#059669'
+  },
+  currentStatusTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700' as const,
+    marginBottom: 6
+  },
+  currentStatusText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '500' as const,
+    marginBottom: 4
+  },
+  currentStatusUrl: {
+    color: '#d1fae5',
+    fontSize: 11,
+    fontFamily: 'monospace'
   }
 });
 
