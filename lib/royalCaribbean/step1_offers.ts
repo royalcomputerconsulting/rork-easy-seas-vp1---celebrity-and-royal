@@ -63,60 +63,28 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      const allElements = document.querySelectorAll('div, section, article, [class], [data-testid]');
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Total elements on page: ' + allElements.length,
-        logType: 'info'
-      }));
-      
-      const classNames = Array.from(allElements)
-        .map(el => el.className)
-        .filter(c => c && typeof c === 'string')
-        .slice(0, 20)
-        .join(', ');
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Sample class names: ' + classNames,
-        logType: 'info'
-      }));
-
       let clubRoyaleTier = '';
       let clubRoyalePoints = '';
       
-      const clubRoyaleSelectors = [
-        '[data-testid*="club-royale"], [class*="club-royale"], [class*="ClubRoyale"]',
-        '[data-testid*="tier"], [class*="tier"]',
-        'header, nav, [class*="header"], [class*="profile"]',
-        'h1, h2, h3, h4, h5, h6, p, span, div'
-      ];
-
-      for (const selector of clubRoyaleSelectors) {
-        const elements = document.querySelectorAll(selector);
-        elements.forEach(el => {
-          const text = el.textContent?.trim() || '';
-          
-          if (text.match(/Signature|Premier|Classic/i) && !clubRoyaleTier) {
-            clubRoyaleTier = text.match(/(Signature|Premier|Classic)/i)?.[0] || '';
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Found Club Royale tier: ' + clubRoyaleTier,
-              logType: 'info'
-            }));
-          }
-          
-          if (text.match(/\d{3,}\s*(Club Royale\s*)?points?/i) && !clubRoyalePoints) {
-            clubRoyalePoints = text.match(/\d{3,}/)?.[0] || '';
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Found Club Royale points: ' + clubRoyalePoints,
-              logType: 'info'
-            }));
-          }
-        });
-        
-        if (clubRoyaleTier && clubRoyalePoints) break;
+      const bodyText = document.body.textContent || '';
+      const tierMatch = bodyText.match(/(Signature|Premier|Classic)/i);
+      if (tierMatch) {
+        clubRoyaleTier = tierMatch[1];
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Found Club Royale tier: ' + clubRoyaleTier,
+          logType: 'info'
+        }));
+      }
+      
+      const pointsMatch = bodyText.match(/(\d{3,})\s*(?:Club Royale\s*)?points?/i);
+      if (pointsMatch) {
+        clubRoyalePoints = pointsMatch[1];
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Found Club Royale points: ' + clubRoyalePoints,
+          logType: 'info'
+        }));
       }
 
       const showAllBtn = Array.from(document.querySelectorAll('button, a')).find(el => 
@@ -175,50 +143,21 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'warning'
         }));
         
-        const broadSelectors = document.querySelectorAll('div[class*="card"], section[class*="card"], article, [role="article"], [class*="item"]');
-        const potentialOffers = Array.from(broadSelectors).filter(card => {
+        const broadSelectors = document.querySelectorAll('div[class*="card"], section[class*="card"], article');
+        const potentialOffers = Array.from(broadSelectors).slice(0, 100).filter(card => {
           const text = card.textContent?.toLowerCase() || '';
-          const hasOfferKeyword = text.includes('offer') || text.includes('promo') || text.includes('deal');
-          const hasCruiseInfo = text.includes('sail') || text.includes('cruise') || text.includes('ship');
-          const hasDate = text.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/) || text.match(/[a-z]{3}\s+\d{1,2}/i);
+          if (text.length < 50 || text.length > 5000) return false;
+          
+          const hasOfferKeyword = text.includes('offer') || text.includes('promo');
+          const hasCruiseInfo = text.includes('sail') || text.includes('cruise');
+          const hasDate = /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(text) || /[a-z]{3}\s+\d{1,2}/i.test(text);
           
           return hasOfferKeyword && (hasCruiseInfo || hasDate);
         });
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Broader search found: ' + potentialOffers.length + ' potential offer elements',
-          logType: 'info'
-        }));
-        
-        offerCards = potentialOffers;
-      }
-      
-      if (offerCards.length === 0) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Still no offers found. Looking for any promotional content...',
-          logType: 'warning'
-        }));
-        
-        const allDivs = document.querySelectorAll('div, section');
-        const potentialOffers = Array.from(allDivs).filter(card => {
-          const text = card.textContent || '';
-          const childCount = card.children.length;
-          
-          if (childCount < 2 || text.length < 50) return false;
-          
-          const lowerText = text.toLowerCase();
-          const hasPrice = text.match(/\$\d+/) || lowerText.includes('free') || lowerText.includes('discount');
-          const hasShip = lowerText.match(/symphony|harmony|oasis|allure|wonder|anthem|quantum|legend|adventure|of the seas/i);
-          const hasDate = text.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/) || text.match(/[a-z]{3}\s+\d{1,2}/i);
-          
-          return (hasPrice || hasShip) && hasDate;
-        });
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Generic promotional search found: ' + potentialOffers.length + ' elements',
+          message: 'Found ' + potentialOffers.length + ' potential offer elements',
           logType: 'info'
         }));
         
@@ -400,11 +339,30 @@ export const STEP1_OFFERS_SCRIPT = `
     }
   }
 
+  let scriptCompleted = false;
+  
+  setTimeout(() => {
+    if (!scriptCompleted) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Safety timeout triggered - completing step with partial data',
+        logType: 'warning'
+      }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 1,
+        data: []
+      }));
+    }
+  }, 55000);
+  
   setTimeout(() => {
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', extractOffers);
+      document.addEventListener('DOMContentLoaded', () => {
+        extractOffers().finally(() => { scriptCompleted = true; });
+      });
     } else {
-      extractOffers();
+      extractOffers().finally(() => { scriptCompleted = true; });
     }
   }, 500);
 })();

@@ -186,11 +186,13 @@ export const STEP2_UPCOMING_SCRIPT = `
             let viewDetailsButton = null;
             const allButtons = card.querySelectorAll('button, a');
             for (let btn of allButtons) {
-              const text = btn.textContent?.toLowerCase() || '';
-              const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
-              if (text.includes('view') && text.includes('detail') || 
-                  ariaLabel.includes('detail') || 
-                  btn.className.includes('detail')) {
+              const text = (btn.textContent || '').toLowerCase();
+              const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+              const btnClass = (btn.className || '').toLowerCase();
+              
+              if ((text.includes('view') && text.includes('detail')) || 
+                  (ariaLabel.includes('view') && ariaLabel.includes('detail')) || 
+                  btnClass.includes('detail')) {
                 viewDetailsButton = btn;
                 break;
               }
@@ -203,8 +205,16 @@ export const STEP2_UPCOMING_SCRIPT = `
                 logType: 'info'
               }));
               
+              const cardRect = card.getBoundingClientRect();
+              const isInView = cardRect.top >= 0 && cardRect.bottom <= window.innerHeight;
+              
+              if (!isInView) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                await wait(500);
+              }
+              
               viewDetailsButton.click();
-              await wait(1000);
+              await wait(1200);
               
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
@@ -386,11 +396,30 @@ export const STEP2_UPCOMING_SCRIPT = `
     }
   }
 
+  let scriptCompleted = false;
+  
+  setTimeout(() => {
+    if (!scriptCompleted) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Safety timeout triggered - completing step with partial data',
+        logType: 'warning'
+      }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 2,
+        data: []
+      }));
+    }
+  }, 55000);
+  
   setTimeout(() => {
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', extractUpcomingCruises);
+      document.addEventListener('DOMContentLoaded', () => {
+        extractUpcomingCruises().finally(() => { scriptCompleted = true; });
+      });
     } else {
-      extractUpcomingCruises();
+      extractUpcomingCruises().finally(() => { scriptCompleted = true; });
     }
   }, 500);
 })();
