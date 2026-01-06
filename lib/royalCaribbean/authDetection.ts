@@ -1,20 +1,31 @@
 export const AUTH_DETECTION_SCRIPT = `
 (function() {
   function checkAuthStatus() {
+    const pageText = document.body.innerText || '';
+    const pageHTML = document.body.innerHTML || '';
+    
     const indicators = {
-      accountMenu: document.querySelector('[data-testid="account-menu"], .account-menu, [aria-label*="Account"]'),
-      userName: document.querySelector('[data-testid="user-name"], .user-name'),
-      logoutButton: document.querySelector('[href*="logout"], [data-testid="logout"]'),
-      myAccountLink: document.querySelector('[href*="/account"], a[href*="my-account"]'),
-      loginForm: document.querySelector('form[action*="login"], [data-testid="login-form"]'),
-      loginButton: document.querySelector('button[type="submit"][data-testid*="login"]')
+      accountLinks: document.querySelectorAll('a[href*="/account"]'),
+      logoutLinks: document.querySelectorAll('a[href*="logout"], button[onclick*="logout"]'),
+      signInText: pageText.toLowerCase().includes('sign in'),
+      loginText: pageText.toLowerCase().includes('log in'),
+      upcomingCruisesLink: document.querySelector('a[href*="upcoming-cruises"]'),
+      courtesyHoldsLink: document.querySelector('a[href*="courtesy-holds"]'),
+      loyaltyStatusLink: document.querySelector('a[href*="loyalty-status"]'),
+      myProfileText: pageText.toLowerCase().includes('my profile'),
+      welcomeText: pageText.toLowerCase().includes('welcome back')
     };
 
-    const isLoggedIn = !!(
-      (indicators.accountMenu || indicators.userName || indicators.logoutButton || indicators.myAccountLink) &&
-      !indicators.loginForm &&
-      !indicators.loginButton
-    );
+    const hasAccountFeatures = indicators.accountLinks.length > 2 || 
+                              indicators.upcomingCruisesLink || 
+                              indicators.courtesyHoldsLink || 
+                              indicators.loyaltyStatusLink ||
+                              indicators.myProfileText ||
+                              indicators.welcomeText;
+    
+    const hasLoginPrompts = indicators.signInText || indicators.loginText;
+    
+    const isLoggedIn = hasAccountFeatures && !hasLoginPrompts;
 
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'auth_status',
@@ -23,29 +34,35 @@ export const AUTH_DETECTION_SCRIPT = `
 
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'log',
-      message: isLoggedIn ? 'Authentication detected' : 'Not authenticated',
+      message: isLoggedIn 
+        ? 'Authentication detected - account features visible' 
+        : 'Not authenticated - login prompts detected',
       logType: 'info'
     }));
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', checkAuthStatus);
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(checkAuthStatus, 1000);
+    });
   } else {
-    checkAuthStatus();
+    setTimeout(checkAuthStatus, 1000);
   }
 
   const observer = new MutationObserver(() => {
     checkAuthStatus();
   });
 
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
+  if (document.body) {
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  }
 
   setTimeout(() => {
     observer.disconnect();
-  }, 10000);
+  }, 15000);
 })();
 `;
 

@@ -108,9 +108,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const openLogin = useCallback(() => {
     if (webViewRef.current) {
       webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/login';
+        window.location.href = 'https://www.royalcaribbean.com/club-royale';
       `);
-      addLog('Navigating to login page', 'info');
+      addLog('Navigating to Club Royale page', 'info');
     }
   }, [addLog]);
 
