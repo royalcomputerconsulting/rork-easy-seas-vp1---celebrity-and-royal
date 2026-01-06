@@ -211,6 +211,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
   const extractedDataRef = useRef({ offers: 0, booked: 0 });
 
+  const waitForStepCompletion = useCallback((stepNumber: number, timeoutMs: number) => {
+    return new Promise<void>((resolve) => {
+      const checkInterval = setInterval(() => {
+        if ((stepNumber === 1 && stepsCompleted.current.step1) ||
+            (stepNumber === 2 && stepsCompleted.current.step2) ||
+            (stepNumber === 3 && stepsCompleted.current.step3)) {
+          clearInterval(checkInterval);
+          console.log(`[PROVIDER] Step ${stepNumber} confirmed complete`);
+          resolve();
+        }
+      }, 500);
+      
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        console.log(`[PROVIDER] Step ${stepNumber} timed out after ${timeoutMs}ms`);
+        resolve();
+      }, timeoutMs);
+    });
+  }, []);
+
   const runIngestion = useCallback(async () => {
     if (isIngestionRunning.current) {
       addLog('Ingestion already running, ignoring duplicate call', 'warning');
@@ -262,7 +282,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog('Extracting offers and available sailings...', 'info');
       webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 60000));
+      addLog('Waiting for Step 1 to complete...', 'info');
+      await waitForStepCompletion(1, 90000);
+      addLog('Step 1 complete or timed out', 'info');
       
       addLog('', 'info');
       addLog('Transitioning: Navigating to Account page...', 'info');
@@ -294,7 +316,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       console.log('[PROVIDER] Injecting step 2 script');
       webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 40000));
+      addLog('Waiting for Step 2 to complete...', 'info');
+      await waitForStepCompletion(2, 60000);
+      addLog('Step 2 complete or timed out', 'info');
       
       addLog('', 'info');
       addLog('STEP 3: Extracting Courtesy Holds', 'info');
@@ -315,24 +339,25 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog('Extracting courtesy holds...', 'info');
       webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 20000));
+      addLog('Waiting for Step 3 to complete...', 'info');
+      await waitForStepCompletion(3, 30000);
+      addLog('Step 3 complete or timed out', 'info');
       
       addLog('', 'info');
-      addLog('All extraction steps initiated. Waiting for completion...', 'info');
+      addLog('All extraction steps complete. Processing results...', 'info');
       
-      console.log('[PROVIDER] All steps initiated. Checking completion status...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      console.log('[PROVIDER] All steps finished. Final check...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      console.log('[PROVIDER] Final completion check...');
+      console.log('[PROVIDER] Running final completion check...');
       checkIfAllStepsComplete();
       
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
-    } finally {
       isIngestionRunning.current = false;
     }
-  }, [addLog, checkIfAllStepsComplete, state.status]);
+  }, [addLog, checkIfAllStepsComplete, state.status, waitForStepCompletion]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
