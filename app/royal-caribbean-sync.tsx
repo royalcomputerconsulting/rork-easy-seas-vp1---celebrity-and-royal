@@ -158,7 +158,7 @@ function RoyalCaribbeanSyncScreen() {
                   webViewRef.current = ref;
                 }
               }}
-              source={{ uri: 'https://www.royalcaribbean.com' }}
+              source={{ uri: 'https://www.royalcaribbean.com/club-royale' }}
               style={styles.webView}
               onMessage={onMessage}
               javaScriptEnabled={true}
