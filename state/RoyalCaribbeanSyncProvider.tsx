@@ -198,9 +198,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     addLog('Starting ingestion process...', 'info');
     
     try {
+      const timestamp = Date.now();
+      
       addLog('Step 1: Navigating to Club Royale offers page...', 'info');
+      const offersUrl = `https://www.royalcaribbean.com/club-royale/offers?_t=${timestamp}`;
+      setState(prev => ({ ...prev, currentUrl: offersUrl }));
       webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/club-royale/offers';
+        window.location.href = '${offersUrl}';
         true;
       `);
       
@@ -210,14 +214,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 45000));
       
+      addLog('Step 2: Navigating to upcoming cruises page...', 'info');
+      const upcomingUrl = `https://www.royalcaribbean.com/Account/upcoming-cruises?_t=${timestamp + 1}`;
       setState(prev => ({ 
         ...prev, 
         status: 'running_step_2',
-        currentUrl: 'https://www.royalcaribbean.com/Account/upcoming-cruises'
+        currentUrl: upcomingUrl
       }));
-      addLog('Step 2: Navigating to upcoming cruises page...', 'info');
       webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/Account/upcoming-cruises';
+        window.location.href = '${upcomingUrl}';
         true;
       `);
       
@@ -228,14 +233,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 35000));
       
+      addLog('Step 3: Navigating to courtesy holds page...', 'info');
+      const holdsUrl = `https://www.royalcaribbean.com/Account/courtesy-holds?_t=${timestamp + 2}`;
       setState(prev => ({ 
         ...prev, 
         status: 'running_step_3',
-        currentUrl: 'https://www.royalcaribbean.com/Account/courtesy-holds'
+        currentUrl: holdsUrl
       }));
-      addLog('Step 3: Navigating to courtesy holds page...', 'info');
       webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/Account/courtesy-holds';
+        window.location.href = '${holdsUrl}';
         true;
       `);
       
@@ -245,14 +251,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 25000));
       
+      addLog('Step 4: Navigating to loyalty programs page...', 'info');
+      const loyaltyUrl = `https://www.royalcaribbean.com/loyalty-programs?_t=${timestamp + 3}`;
       setState(prev => ({ 
         ...prev, 
         status: 'running_step_4',
-        currentUrl: 'https://www.royalcaribbean.com/loyalty-programs'
+        currentUrl: loyaltyUrl
       }));
-      addLog('Step 4: Navigating to loyalty programs page...', 'info');
       webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/loyalty-programs';
+        window.location.href = '${loyaltyUrl}';
         true;
       `);
       

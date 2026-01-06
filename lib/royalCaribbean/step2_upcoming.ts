@@ -90,40 +90,59 @@ export const STEP2_UPCOMING_SCRIPT = `
       for (let i = 0; i < cruiseCards.length; i++) {
         const card = cruiseCards[i];
 
+        const viewMoreBtn = Array.from(card.querySelectorAll('button, a')).find(el => 
+          el.textContent?.match(/View More Details|More Details|View Details/i)
+        );
+
+        if (viewMoreBtn) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Clicking View More Details for cruise ' + (i + 1),
+            logType: 'info'
+          }));
+          
+          viewMoreBtn.click();
+          await wait(2000);
+          
+          await scrollUntilComplete(10);
+          await wait(500);
+        }
+
         const cardText = card.textContent || '';
         const cardHTML = card.innerHTML || '';
 
         const shipName = extractText(card, '[data-testid*="ship"], [class*="ship"]') || 
-                        (cardHTML.match(/([A-Z][a-z]+ of the [A-Z][a-z]+|Anthem of the Seas|Legend of the Seas)/i) || [])[0] || '';
+                        (cardHTML.match(/([A-Z][a-z]+ of the [A-Z][a-z]+|Anthem of the Seas|Legend of the Seas|Quantum of the Seas|Ovation of the Seas|Odyssey of the Seas|Wonder of the Seas|Symphony of the Seas|Harmony of the Seas|Oasis of the Seas|Allure of the Seas|Navigator of the Seas|Mariner of the Seas|Explorer of the Seas|Adventure of the Seas|Voyager of the Seas|Freedom of the Seas|Liberty of the Seas|Independence of the Seas|Brilliance of the Seas|Radiance of the Seas|Serenade of the Seas|Jewel of the Seas|Vision of the Seas|Enchantment of the Seas|Grandeur of the Seas|Rhapsody of the Seas|Majesty of the Seas)/i) || [])[0] || '';
         
-        const dateMatches = cardText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:\s*—\s*|\s*-\s*)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{1,2},?\s*\d{4}/i);
+        const dateMatches = cardText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:\s*—\s*|\s*-\s*|\s+to\s+)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{1,2},?\s*\d{4}/i);
         let sailingStartDate = '';
         let sailingEndDate = '';
         
         if (dateMatches) {
-          sailingStartDate = dateMatches[0].split(/—|-/)[0].trim();
-          sailingEndDate = dateMatches[0].split(/—|-/)[1]?.trim() || '';
+          const parts = dateMatches[0].split(/—|-|\s+to\s+/i);
+          sailingStartDate = parts[0].trim();
+          sailingEndDate = parts[1]?.trim() || '';
         }
         
         const nightMatch = cardText.match(/(\d+)\s*Night/i);
         const nights = nightMatch ? nightMatch[1] : '';
         
         const itineraryMatch = cardText.match(/([A-Z][a-z]+(?:,\s*[A-Z][a-z]+)*(?:\s+[|]\s+[A-Z][a-z]+(?:,\s*[A-Z][a-z]+)*)*)/);
-        const itinerary = itineraryMatch ? itineraryMatch[0] : extractText(card, '[data-testid*="itinerary"], [class*="itinerary"]');
+        const itinerary = itineraryMatch ? itineraryMatch[0] : extractText(card, '[data-testid*="itinerary"], [class*="itinerary"], [class*="destination"]');
         
-        const portMatch = cardText.match(/(Vancouver|Seattle|Fort Lauderdale|Miami|San Juan|Los Angeles|Galveston|New York|Baltimore|Tampa|Port Canaveral|Cape Liberty|Boston)/i);
-        const departurePort = portMatch ? portMatch[0] : extractText(card, '[data-testid*="port"], [class*="port"]');
+        const portMatch = cardText.match(/(Vancouver|Seattle|Fort Lauderdale|Miami|San Juan|Los Angeles|Galveston|New York|Baltimore|Tampa|Port Canaveral|Cape Liberty|Boston|Honolulu|San Diego|New Orleans)/i);
+        const departurePort = portMatch ? portMatch[0] : extractText(card, '[data-testid*="port"], [class*="port"], [class*="departure"]');
         
-        const cabinType = extractText(card, '[data-testid*="cabin"], [data-testid*="stateroom"]') ||
-                         (cardText.match(/(Interior|Ocean View|Balcony|Suite|Junior Suite|Grand Suite)/i) || [])[0] || '';
+        const cabinType = extractText(card, '[data-testid*="cabin"], [data-testid*="stateroom"], [class*="cabin"], [class*="stateroom"]') ||
+                         (cardText.match(/(Interior|Ocean View|Balcony|Suite|Junior Suite|Grand Suite|Royal Suite|Owner's Suite)/i) || [])[0] || '';
         
-        const reservationMatch = cardText.match(/RESERVATION[\s\n]+(\d+)/i) || cardHTML.match(/reservation[^>]*>(\d+)/i);
+        const reservationMatch = cardText.match(/RESERVATION[\s\n:]+(\d+)/i) || cardHTML.match(/reservation[^>]*>(\d+)/i) || cardText.match(/Booking\s*#?:?\s*(\d+)/i);
         const bookingId = reservationMatch ? reservationMatch[1] : '';
         
-        const cabinNumberMatch = cardText.match(/\b\d{4,5}\b/);
-        const cabinNumber = cabinNumberMatch ? cabinNumberMatch[0] : '';
+        const cabinNumberMatch = cardText.match(/(?:Cabin|Stateroom|Room)\s*#?:?\s*(\d{4,5})/i) || cardText.match(/\b(\d{4,5})\b/);
+        const cabinNumber = cabinNumberMatch ? cabinNumberMatch[1] : '';
 
-        const guestMatch = cardText.match(/Guests?[\s\n]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i);
+        const guestMatch = cardText.match(/Guests?[\s\n:]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)*)/i);
         const guests = guestMatch ? guestMatch[1] : '';
 
         if (shipName || bookingId) {
@@ -142,6 +161,12 @@ export const STEP2_UPCOMING_SCRIPT = `
             loyaltyLevel: '',
             loyaltyPoints: ''
           });
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Extracted cruise: ' + shipName + ' - ' + sailingStartDate,
+            logType: 'success'
+          }));
         }
         
         processedCount++;

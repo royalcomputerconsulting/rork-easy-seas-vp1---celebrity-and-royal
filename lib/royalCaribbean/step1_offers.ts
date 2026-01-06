@@ -141,18 +141,26 @@ export const STEP1_OFFERS_SCRIPT = `
           '[class*="Banner"]',
           'section',
           'main > div',
-          '[role="region"]'
+          'main section',
+          '[role="region"]',
+          '[class*="container"]',
+          'article'
         ];
         
         for (const selector of featuredSelectors) {
           const elements = document.querySelectorAll(selector);
           for (const el of elements) {
             const text = el.textContent || '';
-            if (text.match(/full house|offer|promotion|deal/i) && text.length > 20 && text.length < 5000) {
+            const hasViewSailings = el.querySelector('button, a') && 
+              Array.from(el.querySelectorAll('button, a')).some(btn => 
+                btn.textContent?.match(/View Sailings?|See Sailings?/i)
+              );
+            
+            if ((text.match(/full house|offer|promotion|deal/i) && text.length > 50 && text.length < 10000) || hasViewSailings) {
               offerCards = [el];
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: 'Found featured/single offer section',
+                message: 'Found featured/single offer section: ' + text.substring(0, 100),
                 logType: 'info'
               }));
               break;
@@ -174,7 +182,18 @@ export const STEP1_OFFERS_SCRIPT = `
       for (let i = 0; i < offerCards.length; i++) {
         const card = offerCards[i];
         
-        const offerName = extractText(card, '[data-testid*="offer-name"], [class*="offer-name"], h2, h3');
+        let offerName = extractText(card, '[data-testid*="offer-name"], [class*="offer-name"], h1, h2, h3');
+        if (!offerName) {
+          const headings = card.querySelectorAll('h1, h2, h3, h4');
+          for (const h of headings) {
+            const text = h.textContent?.trim() || '';
+            if (text.length > 5 && text.length < 200) {
+              offerName = text;
+              break;
+            }
+          }
+        }
+        
         const offerCode = extractText(card, '[data-testid*="offer-code"], [class*="offer-code"], [class*="code"]');
         const offerExpiry = extractText(card, '[data-testid*="expir"], [class*="expir"]');
         const offerType = extractText(card, '[data-testid*="type"], [class*="type"]');
