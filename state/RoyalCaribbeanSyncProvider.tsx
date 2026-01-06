@@ -55,6 +55,36 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }));
   }, []);
 
+  const stepsCompleted = useRef({ step1: false, step2: false, step3: false, step4: false });
+
+  const checkIfAllStepsComplete = useCallback(() => {
+    setState(prev => {
+      if (!stepsCompleted.current.step1 || !stepsCompleted.current.step2 || 
+          !stepsCompleted.current.step3 || !stepsCompleted.current.step4) {
+        return prev;
+      }
+
+      const uniqueOfferCodes = new Set(prev.extractedOffers.map(o => o.offerCode));
+      const cruisesFromOffers = prev.extractedOffers.filter(o => o.shipName && o.sailingDate).length;
+      const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
+      const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
+      
+      addLog(`Found ${uniqueOfferCodes.size} offers with ${cruisesFromOffers} sailings, ${upcomingCruises} upcoming cruises, ${courtesyHolds} courtesy holds`, 'success');
+      addLog('All steps completed! Ready to sync.', 'success');
+      
+      return {
+        ...prev, 
+        status: 'awaiting_confirmation',
+        syncCounts: {
+          offers: uniqueOfferCodes.size,
+          cruises: cruisesFromOffers,
+          upcomingCruises,
+          courtesyHolds
+        }
+      };
+    });
+  }, [addLog]);
+
   const handleWebViewMessage = useCallback((message: WebViewMessage) => {
     switch (message.type) {
       case 'auth_status':
@@ -74,7 +104,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Step ${message.step} completed with ${message.data.length} items`, 'success');
         if (message.step === 1) {
           setState(prev => ({ ...prev, extractedOffers: message.data as OfferRow[] }));
-        } else if (message.step === 2 || message.step === 3) {
+          stepsCompleted.current.step1 = true;
+        } else if (message.step === 2) {
           setState(prev => ({
             ...prev,
             extractedBookedCruises: [
@@ -82,7 +113,21 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               ...(message.data as BookedCruiseRow[])
             ]
           }));
+          stepsCompleted.current.step2 = true;
+        } else if (message.step === 3) {
+          setState(prev => ({
+            ...prev,
+            extractedBookedCruises: [
+              ...prev.extractedBookedCruises,
+              ...(message.data as BookedCruiseRow[])
+            ]
+          }));
+          stepsCompleted.current.step3 = true;
+        } else if (message.step === 4) {
+          stepsCompleted.current.step4 = true;
         }
+        
+        setTimeout(() => checkIfAllStepsComplete(), 100);
         break;
 
       case 'loyalty_data':
@@ -104,7 +149,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Ingestion completed successfully', 'success');
         break;
     }
-  }, [addLog, setStatus, setProgress]);
+  }, [addLog, setStatus, setProgress, checkIfAllStepsComplete]);
 
   const openLogin = useCallback(() => {
     if (webViewRef.current) {
@@ -126,13 +171,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       return;
     }
 
+    stepsCompleted.current = { step1: false, step2: false, step3: false, step4: false };
+
     setState(prev => ({
       ...prev,
       status: 'running_step_1',
       currentUrl: 'https://www.royalcaribbean.com/club-royale/offers',
       extractedOffers: [],
       extractedBookedCruises: [],
-      error: null
+      error: null,
+      syncCounts: null
     }));
 
     addLog('Starting ingestion process...', 'info');
@@ -198,27 +246,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       await new Promise(resolve => setTimeout(resolve, 5000));
       
       webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
-      
-      await new Promise(resolve => setTimeout(resolve, 8000));
-      
-      setState(prev => {
-        const uniqueOfferCodes = new Set(prev.extractedOffers.map(o => o.offerCode));
-        const cruisesFromOffers = prev.extractedOffers.filter(o => o.shipName && o.sailingDate).length;
-        const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
-        const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
-        
-        return {
-          ...prev, 
-          status: 'awaiting_confirmation',
-          syncCounts: {
-            offers: uniqueOfferCodes.size,
-            cruises: cruisesFromOffers,
-            upcomingCruises,
-            courtesyHolds
-          }
-        };
-      });
-      addLog('All steps completed successfully! Ready to sync.', 'success');
       
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');

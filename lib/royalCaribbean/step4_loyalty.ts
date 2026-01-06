@@ -64,6 +64,12 @@ export const STEP4_LOYALTY_SCRIPT = `
       }));
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 4,
+        data: [loyaltyData]
+      }));
+
+      window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: \`Loyalty data extracted: \${loyaltyData.crownAndAnchorLevel || 'N/A'}\`,
         logType: 'success'
