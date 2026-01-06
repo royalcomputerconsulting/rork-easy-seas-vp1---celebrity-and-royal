@@ -97,10 +97,10 @@ export const AUTH_DETECTION_SCRIPT = `
   function initAuthDetection() {
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(checkAuthStatus, 500);
+        setTimeout(checkAuthStatus, 1500);
       });
     } else {
-      setTimeout(checkAuthStatus, 500);
+      setTimeout(checkAuthStatus, 1500);
     }
 
     const observer = new MutationObserver(() => {
@@ -114,7 +114,12 @@ export const AUTH_DETECTION_SCRIPT = `
       });
     }
     
-    setInterval(checkAuthStatus, 2000);
+    const intervalId = setInterval(checkAuthStatus, 3000);
+
+    setTimeout(() => {
+      observer.disconnect();
+      clearInterval(intervalId);
+    }, 30000);
   }
   
   initAuthDetection();

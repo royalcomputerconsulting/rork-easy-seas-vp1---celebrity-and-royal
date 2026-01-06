@@ -4,12 +4,12 @@ export const STEP1_OFFERS_SCRIPT = `
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async function scrollUntilComplete(container, maxAttempts = 6) {
+  async function scrollUntilComplete(container, maxAttempts = 10) {
     let previousHeight = 0;
     let stableCount = 0;
     let attempts = 0;
 
-    while (stableCount < 2 && attempts < maxAttempts) {
+    while (stableCount < 3 && attempts < maxAttempts) {
       const currentHeight = container ? container.scrollHeight : document.body.scrollHeight;
       
       if (currentHeight === previousHeight) {
@@ -26,7 +26,7 @@ export const STEP1_OFFERS_SCRIPT = `
         window.scrollBy(0, 500);
       }
       
-      await wait(800);
+      await wait(1000);
       attempts++;
     }
   }
@@ -38,10 +38,6 @@ export const STEP1_OFFERS_SCRIPT = `
   }
 
   async function extractOffers() {
-    let offersData = [];
-    const startTime = Date.now();
-    const maxExecutionTime = 50000;
-    
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -49,13 +45,7 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Current URL: ' + window.location.href,
-        logType: 'info'
-      }));
-
-      await wait(1000);
+      await wait(3000);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -66,25 +56,38 @@ export const STEP1_OFFERS_SCRIPT = `
       let clubRoyaleTier = '';
       let clubRoyalePoints = '';
       
-      const bodyText = document.body.textContent || '';
-      const tierMatch = bodyText.match(/(Signature|Premier|Classic)/i);
-      if (tierMatch) {
-        clubRoyaleTier = tierMatch[1];
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Found Club Royale tier: ' + clubRoyaleTier,
-          logType: 'info'
-        }));
-      }
-      
-      const pointsMatch = bodyText.match(/(\d{3,})\s*(?:Club Royale\s*)?points?/i);
-      if (pointsMatch) {
-        clubRoyalePoints = pointsMatch[1];
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Found Club Royale points: ' + clubRoyalePoints,
-          logType: 'info'
-        }));
+      const clubRoyaleSelectors = [
+        '[data-testid*="club-royale"], [class*="club-royale"], [class*="ClubRoyale"]',
+        '[data-testid*="tier"], [class*="tier"]',
+        'header, nav, [class*="header"], [class*="profile"]',
+        'h1, h2, h3, h4, h5, h6, p, span, div'
+      ];
+
+      for (const selector of clubRoyaleSelectors) {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+          const text = el.textContent?.trim() || '';
+          
+          if (text.match(/Signature|Premier|Classic/i) && !clubRoyaleTier) {
+            clubRoyaleTier = text.match(/(Signature|Premier|Classic)/i)?.[0] || '';
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Found Club Royale tier: ' + clubRoyaleTier,
+              logType: 'info'
+            }));
+          }
+          
+          if (text.match(/\d{3,}\s*(Club Royale\s*)?points?/i) && !clubRoyalePoints) {
+            clubRoyalePoints = text.match(/\d{3,}/)?.[0] || '';
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Found Club Royale points: ' + clubRoyalePoints,
+              logType: 'info'
+            }));
+          }
+        });
+        
+        if (clubRoyaleTier && clubRoyalePoints) break;
       }
 
       const showAllBtn = Array.from(document.querySelectorAll('button, a')).find(el => 
@@ -98,14 +101,10 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'info'
         }));
         showAllBtn.click();
-        await wait(1500);
+        await wait(2000);
       }
 
-      if (Date.now() - startTime > maxExecutionTime) {
-        throw new Error('Execution time limit reached');
-      }
-
-      await scrollUntilComplete(null, 6);
+      await scrollUntilComplete(null, 15);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -113,28 +112,7 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      let offerCards = [];
-      
-      const primarySelectors = [
-        '[data-testid*="offer"]',
-        '[class*="offer-card"]',
-        '[class*="OfferCard"]',
-        '[class*="offer"][class*="card"]',
-        '[id*="offer"]'
-      ];
-      
-      for (const selector of primarySelectors) {
-        const found = document.querySelectorAll(selector);
-        if (found.length > 0) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Selector "' + selector + '" found ' + found.length + ' elements',
-            logType: 'info'
-          }));
-          offerCards = Array.from(found);
-          break;
-        }
-      }
+      let offerCards = document.querySelectorAll('[data-testid*="offer"], [class*="offer-card"], [class*="OfferCard"]');
       
       if (offerCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -143,100 +121,37 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'warning'
         }));
         
-        const broadSelectors = document.querySelectorAll('div[class*="card"], section[class*="card"], article');
-        const potentialOffers = Array.from(broadSelectors).slice(0, 100).filter(card => {
-          const text = card.textContent?.toLowerCase() || '';
-          if (text.length < 50 || text.length > 5000) return false;
-          
-          const hasOfferKeyword = text.includes('offer') || text.includes('promo');
-          const hasCruiseInfo = text.includes('sail') || text.includes('cruise');
-          const hasDate = /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(text) || /[a-z]{3}\s+\d{1,2}/i.test(text);
-          
-          return hasOfferKeyword && (hasCruiseInfo || hasDate);
-        });
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Found ' + potentialOffers.length + ' potential offer elements',
-          logType: 'info'
-        }));
-        
-        offerCards = potentialOffers;
+        offerCards = document.querySelectorAll('[class*="offer"], [class*="Offer"], article, .card, [role="article"]');
       }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + offerCards.length + ' potential offer elements. Processing...',
+        message: 'Found ' + offerCards.length + ' potential offer elements',
         logType: 'info'
       }));
       
-      if (offerCards.length > 0) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'First card sample: ' + (offerCards[0].textContent?.substring(0, 200) || 'No text'),
-          logType: 'info'
-        }));
-      }
-      
-      if (offerCards.length === 0) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'No offers found on page, completing step',
-          logType: 'warning'
-        }));
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'step_complete',
-          step: 1,
-          data: []
-        }));
-        return;
-      }
-      
+      const offers = [];
       let processedCount = 0;
 
       for (let i = 0; i < offerCards.length; i++) {
         const card = offerCards[i];
         
-        const cardText = card.textContent?.trim() || '';
-        
-        if (!cardText || cardText.length < 20) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Card ' + (i + 1) + ' has insufficient text (' + cardText.length + ' chars), skipping',
-            logType: 'info'
-          }));
-          continue;
-        }
-        
-        const offerName = extractText(card, '[data-testid*="offer-name"], [class*="offer-name"], [class*="title"], h1, h2, h3, h4');
+        const offerName = extractText(card, '[data-testid*="offer-name"], [class*="offer-name"], h2, h3');
         const offerCode = extractText(card, '[data-testid*="offer-code"], [class*="offer-code"], [class*="code"]');
-        const offerExpiry = extractText(card, '[data-testid*="expir"], [class*="expir"], [class*="valid"]');
+        const offerExpiry = extractText(card, '[data-testid*="expir"], [class*="expir"]');
         const offerType = extractText(card, '[data-testid*="type"], [class*="type"]');
         const perks = extractText(card, '[data-testid*="perk"], [class*="perk"], [class*="benefit"]');
-        
-        if (!offerName && !offerCode && !cardText.match(/sail|cruise|ship/i)) {
-          continue;
-        }
 
         const viewSailingsBtn = Array.from(card.querySelectorAll('button, a')).find(el => 
           el.textContent?.match(/View Sailings?|See Sailings?/i)
         );
 
-        if (Date.now() - startTime > maxExecutionTime) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Time limit reached at card ' + (i + 1) + ', completing with ' + offersData.length + ' offers',
-            logType: 'warning'
-          }));
-          break;
-        }
-
         if (viewSailingsBtn) {
           viewSailingsBtn.click();
-          await wait(1200);
+          await wait(1500);
 
           const sailingsPanel = card.querySelector('[data-testid*="sailing"], [class*="sailing"]') || card;
-          await scrollUntilComplete(sailingsPanel, 5);
+          await scrollUntilComplete(sailingsPanel, 8);
 
           const sailingCards = sailingsPanel.querySelectorAll('[data-testid*="sailing-card"], [class*="sailing-item"]');
           
@@ -244,7 +159,7 @@ export const STEP1_OFFERS_SCRIPT = `
             for (let j = 0; j < sailingCards.length; j++) {
               const sailing = sailingCards[j];
               
-              offersData.push({
+              offers.push({
                 sourcePage: 'Offers',
                 offerName: offerName,
                 offerCode: offerCode,
@@ -262,7 +177,7 @@ export const STEP1_OFFERS_SCRIPT = `
               });
             }
           } else {
-            offersData.push({
+            offers.push({
               sourcePage: 'Offers',
               offerName: offerName,
               offerCode: offerCode,
@@ -280,7 +195,7 @@ export const STEP1_OFFERS_SCRIPT = `
             });
           }
         } else {
-          offersData.push({
+          offers.push({
             sourcePage: 'Offers',
             offerName: offerName,
             offerCode: offerCode,
@@ -310,61 +225,28 @@ export const STEP1_OFFERS_SCRIPT = `
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete',
         step: 1,
-        data: offersData
+        data: offers
       }));
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: \`Extracted \${offersData.length} offer rows from \${offerCards.length} offers\`,
+        message: \`Extracted \${offers.length} offer rows from \${offerCards.length} offers\`,
         logType: 'success'
       }));
 
     } catch (error) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Error in extraction: ' + error.message + ', sending what we have (' + offersData.length + ' offers)',
-        logType: 'error'
-      }));
-    } finally {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'step_complete',
-        step: 1,
-        data: offersData
-      }));
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Step 1 extraction completed (final count: ' + offersData.length + ' offers)',
-        logType: 'info'
+        type: 'error',
+        message: 'Failed to extract offers: ' + error.message
       }));
     }
   }
 
-  let scriptCompleted = false;
-  
-  setTimeout(() => {
-    if (!scriptCompleted) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Safety timeout triggered - completing step with partial data',
-        logType: 'warning'
-      }));
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'step_complete',
-        step: 1,
-        data: []
-      }));
-    }
-  }, 55000);
-  
-  setTimeout(() => {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        extractOffers().finally(() => { scriptCompleted = true; });
-      });
-    } else {
-      extractOffers().finally(() => { scriptCompleted = true; });
-    }
-  }, 500);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', extractOffers);
+  } else {
+    extractOffers();
+  }
 })();
 `;
 

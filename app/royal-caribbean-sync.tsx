@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
 import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
@@ -25,6 +25,7 @@ function RoyalCaribbeanSyncScreen() {
   } = useRoyalCaribbeanSync();
 
   const [webViewVisible, setWebViewVisible] = useState(true);
+  const [logsVisible, setLogsVisible] = useState(false);
 
   const onMessage = (event: any) => {
     try {
@@ -168,21 +169,11 @@ function RoyalCaribbeanSyncScreen() {
           <Text style={styles.statusText}>{getStatusText()}</Text>
         </View>
 
-        {state.logs.length > 0 && (
-          <View style={styles.recentLogsBox}>
-            <Text style={styles.recentLogsTitle}>Recent Activity:</Text>
-            {state.logs.slice(-5).map((log, index) => (
-              <View key={index} style={styles.recentLogEntry}>
-                <Text style={styles.recentLogTimestamp}>{log.timestamp}</Text>
-                <Text style={[
-                  styles.recentLogMessage,
-                  log.type === 'error' && styles.logMessageError,
-                  log.type === 'success' && styles.logMessageSuccess
-                ]}>
-                  {log.message}
-                </Text>
-              </View>
-            ))}
+        {state.status === 'not_logged_in' && (
+          <View style={styles.infoBox}>
+            <Text style={styles.infoText}>
+              Note: The webpage may take a few seconds to load initially.
+            </Text>
           </View>
         )}
 
@@ -204,7 +195,7 @@ function RoyalCaribbeanSyncScreen() {
                   webViewRef.current = ref;
                 }
               }}
-              source={{ uri: 'https://www.royalcaribbean.com/club-royale/offers' }}
+              source={{ uri: 'https://www.royalcaribbean.com/club-royale' }}
               style={styles.webView}
               onMessage={onMessage}
               javaScriptEnabled={true}
@@ -212,11 +203,6 @@ function RoyalCaribbeanSyncScreen() {
               sharedCookiesEnabled={true}
               thirdPartyCookiesEnabled={true}
               injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
-              onLoadEnd={() => {
-                if (webViewRef.current) {
-                  webViewRef.current.injectJavaScript(AUTH_DETECTION_SCRIPT + '; true;');
-                }
-              }}
             />
           </View>
         )}
@@ -243,24 +229,10 @@ function RoyalCaribbeanSyncScreen() {
                 styles.buttonText,
                 (!canRunIngestion || isRunning) && styles.buttonTextDisabled
               ]}>
-                {isRunning ? 'Running...' : 'Run Ingestion'}
+                Run Ingestion
               </Text>
             </Pressable>
           </View>
-
-          {state.status === 'not_logged_in' && (
-            <View style={styles.debugBox}>
-              <Text style={styles.debugText}>Not detecting login? Force it:</Text>
-              <Pressable 
-                style={[styles.button, styles.warningButton]}
-                onPress={() => {
-                  handleWebViewMessage({ type: 'auth_status', loggedIn: true });
-                }}
-              >
-                <Text style={styles.buttonText}>Force Logged In</Text>
-              </Pressable>
-            </View>
-          )}
 
           <View style={styles.buttonRow}>
             <Pressable 
@@ -300,19 +272,28 @@ function RoyalCaribbeanSyncScreen() {
 
 
 
-          <View style={styles.compactButtonRow}>
+          <View style={styles.buttonRow}>
             <Pressable 
-              style={[styles.compactButton, styles.tertiaryButton]}
-              onPress={exportLog}
+              style={[styles.button, styles.tertiaryButton]}
+              onPress={() => setLogsVisible(!logsVisible)}
             >
-              <Text style={styles.compactButtonText}>Export Log</Text>
+              <Text style={styles.tertiaryButtonText}>
+                {logsVisible ? 'Hide' : 'View'} Log ({state.logs.length})
+              </Text>
             </Pressable>
 
             <Pressable 
-              style={[styles.compactButton, styles.dangerButton]}
+              style={[styles.button, styles.tertiaryButton]}
+              onPress={exportLog}
+            >
+              <Text style={styles.tertiaryButtonText}>Export Log</Text>
+            </Pressable>
+
+            <Pressable 
+              style={[styles.button, styles.dangerButton]}
               onPress={resetState}
             >
-              <Text style={styles.compactButtonText}>Reset</Text>
+              <Text style={styles.buttonText}>Reset</Text>
             </Pressable>
           </View>
         </View>
@@ -327,25 +308,28 @@ function RoyalCaribbeanSyncScreen() {
           </View>
         )}
 
-        {!isRunning && state.logs.length > 0 && (
-          <View style={styles.recentLogsBox}>
-            <Text style={styles.recentLogsTitle}>Recent Activity:</Text>
-            {state.logs.slice(-5).map((log, index) => (
-              <View key={index} style={styles.recentLogEntry}>
-                <Text style={styles.recentLogTimestamp}>{log.timestamp}</Text>
-                <Text style={[
-                  styles.recentLogMessage,
-                  log.type === 'error' && styles.logMessageError,
-                  log.type === 'success' && styles.logMessageSuccess
-                ]}>
-                  {log.message}
-                </Text>
-              </View>
-            ))}
+        {logsVisible && (
+          <View style={styles.logsContainer}>
+            <Text style={styles.logsTitle}>Sync Log</Text>
+            <ScrollView style={styles.logsScroll}>
+              {state.logs.map((log, index) => (
+                <View key={index} style={[styles.logEntry, log.type === 'error' && styles.logError]}>
+                  <Text style={styles.logTimestamp}>{log.timestamp}</Text>
+                  <Text style={[
+                    styles.logMessage,
+                    log.type === 'error' && styles.logMessageError,
+                    log.type === 'success' && styles.logMessageSuccess
+                  ]}>
+                    {log.message}
+                  </Text>
+                </View>
+              ))}
+              {state.logs.length === 0 && (
+                <Text style={styles.logsEmpty}>No logs yet</Text>
+              )}
+            </ScrollView>
           </View>
         )}
-
-
 
         {state.error && (
           <View style={styles.errorContainer}>
@@ -758,69 +742,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'monospace'
   },
-  recentLogsBox: {
-    margin: 12,
-    marginTop: 0,
-    padding: 12,
+  infoBox: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: '#1e293b',
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155'
+    borderLeftWidth: 3,
+    borderLeftColor: '#3b82f6'
   },
-  recentLogsTitle: {
+  infoText: {
     color: '#94a3b8',
     fontSize: 12,
-    fontWeight: '600' as const,
-    marginBottom: 8
-  },
-  recentLogEntry: {
-    marginBottom: 6,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155'
-  },
-  recentLogTimestamp: {
-    color: '#64748b',
-    fontSize: 10,
-    marginBottom: 2
-  },
-  recentLogMessage: {
-    color: '#cbd5e1',
-    fontSize: 11,
-    lineHeight: 16
-  },
-  compactButtonRow: {
-    flexDirection: 'row' as const,
-    gap: 8
-  },
-  compactButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const
-  },
-  compactButtonText: {
-    color: '#64748b',
-    fontSize: 11,
-    fontWeight: '500' as const
-  },
-  debugBox: {
-    backgroundColor: '#422006',
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#f59e0b',
-    gap: 8
-  },
-  debugText: {
-    color: '#fbbf24',
-    fontSize: 12,
-    fontWeight: '600' as const
-  },
-  warningButton: {
-    backgroundColor: '#f59e0b'
+    fontStyle: 'italic' as const
   }
 });
 

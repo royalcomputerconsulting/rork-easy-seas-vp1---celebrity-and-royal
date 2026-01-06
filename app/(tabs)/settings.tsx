@@ -1101,7 +1101,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
             <View style={styles.quickActionsGrid}>
               <TouchableOpacity 
                 style={styles.quickActionButton} 
-                onPress={() => router.push('/royal-caribbean-sync' as any)}
+                onPress={() => router.push('/royal-caribbean-sync')}
                 activeOpacity={0.7}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>

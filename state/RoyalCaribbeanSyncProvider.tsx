@@ -56,7 +56,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, []);
 
   const stepsCompleted = useRef({ step1: false, step2: false, step3: false, step4: false });
-  const stepResolvers = useRef<{ [key: number]: () => void }>({});
 
   const checkIfAllStepsComplete = useCallback(() => {
     setState(prev => {
@@ -128,11 +127,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           stepsCompleted.current.step4 = true;
         }
         
-        if (stepResolvers.current[message.step]) {
-          stepResolvers.current[message.step]();
-          delete stepResolvers.current[message.step];
-        }
-        
         setTimeout(() => checkIfAllStepsComplete(), 100);
         break;
 
@@ -166,20 +160,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
   }, [addLog]);
 
-  const waitForStepCompletion = useCallback((stepNumber: number, timeoutMs: number = 60000): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        delete stepResolvers.current[stepNumber];
-        reject(new Error(`Step ${stepNumber} timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      stepResolvers.current[stepNumber] = () => {
-        clearTimeout(timeoutId);
-        resolve();
-      };
-    });
-  }, []);
-
   const runIngestion = useCallback(async () => {
     if (state.status !== 'logged_in') {
       addLog('Cannot run ingestion: user not logged in', 'error');
@@ -192,9 +172,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
 
     stepsCompleted.current = { step1: false, step2: false, step3: false, step4: false };
-    stepResolvers.current = {};
-
-    addLog('Starting ingestion process...', 'info');
 
     setState(prev => ({
       ...prev,
@@ -205,49 +182,21 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       error: null,
       syncCounts: null
     }));
+
+    addLog('Starting ingestion process...', 'info');
     
     try {
-      addLog('Step 1: Starting Club Royale offers extraction (already on page)...', 'info');
-      
+      addLog('Step 1: Navigating to Club Royale offers page...', 'info');
       webViewRef.current.injectJavaScript(`
-        console.log('Verifying page before extraction...');
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Current page: ' + window.location.href,
-          logType: 'info'
-        }));
+        window.location.href = 'https://www.royalcaribbean.com/club-royale/offers';
         true;
       `);
       
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
-      addLog('Checking page readiness...', 'info');
-      webViewRef.current.injectJavaScript(`
-        (function checkReady() {
-          if (document.readyState === 'complete') {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Page fully loaded and ready',
-              logType: 'info'
-            }));
-          } else {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Page state: ' + document.readyState + ', waiting...',
-              logType: 'info'
-            }));
-          }
-        })();
-        true;
-      `);
-      
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      addLog('Injecting extraction script...', 'info');
       webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
       
-      await waitForStepCompletion(1, 90000);
-      addLog('Step 1 completed successfully', 'success');
+      await new Promise(resolve => setTimeout(resolve, 30000));
       
       setState(prev => ({ 
         ...prev, 
@@ -260,12 +209,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         true;
       `);
       
-      await new Promise(resolve => setTimeout(resolve, 3500));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
       webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
       
-      await waitForStepCompletion(2, 90000);
-      addLog('Step 2 completed successfully', 'success');
+      await new Promise(resolve => setTimeout(resolve, 20000));
       
       setState(prev => ({ 
         ...prev, 
@@ -278,12 +226,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         true;
       `);
       
-      await new Promise(resolve => setTimeout(resolve, 3500));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
       webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
       
-      await waitForStepCompletion(3, 90000);
-      addLog('Step 3 completed successfully', 'success');
+      await new Promise(resolve => setTimeout(resolve, 20000));
       
       setState(prev => ({ 
         ...prev, 
@@ -296,18 +243,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         true;
       `);
       
-      await new Promise(resolve => setTimeout(resolve, 3500));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
       webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
-      
-      await waitForStepCompletion(4, 90000);
-      addLog('Step 4 completed successfully', 'success');
       
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, addLog, waitForStepCompletion]);
+  }, [state.status, addLog]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
