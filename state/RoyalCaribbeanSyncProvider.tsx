@@ -217,23 +217,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     try {
       const timestamp = Date.now();
       
-      addLog('Step 1: Navigating to Club Royale offers page...', 'info');
-      const offersUrl = `https://www.royalcaribbean.com/club-royale/offers?_t=${timestamp}`;
-      setState(prev => ({ ...prev, currentUrl: offersUrl }));
-      webViewRef.current.injectJavaScript(`
-        window.location.href = '${offersUrl}';
-        true;
-      `);
-      
-      await new Promise(resolve => setTimeout(resolve, 8000));
-      
+      addLog('Step 1: Scraping offers on current page (no reload)...', 'info');
       addLog('Injecting Step 1 extraction script...', 'info');
       webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
       
       await new Promise(resolve => setTimeout(resolve, 50000));
       
-      addLog('Navigating to Account page...', 'info');
-      const accountUrl = `https://www.royalcaribbean.com/Account?_t=${timestamp + 10}`;
+      addLog('Step 1 complete. Navigating to Account page for 10-second pause...', 'info');
+      const accountUrl = `https://www.royalcaribbean.com/Account?_t=${timestamp}`;
       webViewRef.current.injectJavaScript(`
         window.location.href = '${accountUrl}';
         true;
@@ -241,7 +232,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 10000));
       
-      addLog('Step 2: Navigating to upcoming cruises page...', 'info');
+      addLog('Account page pause complete. Navigating to upcoming cruises...', 'info');
       const upcomingUrl = `https://www.royalcaribbean.com/Account/upcoming-cruises?_t=${timestamp + 1}`;
       setState(prev => ({ 
         ...prev, 
@@ -261,7 +252,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 40000));
       
-      addLog('Step 3: Navigating to courtesy holds page...', 'info');
+      addLog('Step 2 complete. Navigating to courtesy holds page...', 'info');
       const holdsUrl = `https://www.royalcaribbean.com/Account/courtesy-holds?_t=${timestamp + 2}`;
       setState(prev => ({ 
         ...prev, 
