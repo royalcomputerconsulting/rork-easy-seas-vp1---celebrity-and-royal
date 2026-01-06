@@ -58,16 +58,23 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const stepsCompleted = useRef({ step1: false, step2: false, step3: false, step4: false });
 
   const checkIfAllStepsComplete = useCallback(() => {
-    setState(prev => {
-      if (!stepsCompleted.current.step1 || !stepsCompleted.current.step2 || 
-          !stepsCompleted.current.step3 || !stepsCompleted.current.step4) {
-        return prev;
-      }
+    console.log('Checking if all steps complete:', stepsCompleted.current);
+    
+    if (!stepsCompleted.current.step1 || !stepsCompleted.current.step2 || 
+        !stepsCompleted.current.step3 || !stepsCompleted.current.step4) {
+      console.log('Not all steps complete yet');
+      return;
+    }
 
+    console.log('All steps completed! Computing counts...');
+
+    setState(prev => {
       const uniqueOfferCodes = new Set(prev.extractedOffers.map(o => o.offerCode));
       const cruisesFromOffers = prev.extractedOffers.filter(o => o.shipName && o.sailingDate).length;
       const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
       const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
+      
+      console.log('Counts:', { offers: uniqueOfferCodes.size, cruises: cruisesFromOffers, upcomingCruises, courtesyHolds });
       
       addLog(`Found ${uniqueOfferCodes.size} offers with ${cruisesFromOffers} sailings, ${upcomingCruises} upcoming cruises, ${courtesyHolds} courtesy holds`, 'success');
       addLog('All steps completed! Ready to sync.', 'success');
@@ -101,10 +108,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
 
       case 'step_complete':
+        console.log(`Step ${message.step} completed with ${message.data.length} items`);
         addLog(`Step ${message.step} completed with ${message.data.length} items`, 'success');
         if (message.step === 1) {
           setState(prev => ({ ...prev, extractedOffers: message.data as OfferRow[] }));
           stepsCompleted.current.step1 = true;
+          console.log('Step 1 marked complete');
         } else if (message.step === 2) {
           setState(prev => ({
             ...prev,
@@ -114,6 +123,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             ]
           }));
           stepsCompleted.current.step2 = true;
+          console.log('Step 2 marked complete');
         } else if (message.step === 3) {
           setState(prev => ({
             ...prev,
@@ -123,11 +133,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             ]
           }));
           stepsCompleted.current.step3 = true;
+          console.log('Step 3 marked complete');
         } else if (message.step === 4) {
           stepsCompleted.current.step4 = true;
+          console.log('Step 4 marked complete');
         }
         
-        setTimeout(() => checkIfAllStepsComplete(), 100);
+        setTimeout(() => checkIfAllStepsComplete(), 500);
         break;
 
       case 'loyalty_data':
@@ -154,9 +166,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const openLogin = useCallback(() => {
     if (webViewRef.current) {
       webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/club-royale';
+        window.location.href = 'https://www.royalcaribbean.com/club-royale/offers';
       `);
-      addLog('Navigating to Club Royale page', 'info');
+      addLog('Navigating to Club Royale offers page', 'info');
     }
   }, [addLog]);
 

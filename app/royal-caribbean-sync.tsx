@@ -63,30 +63,30 @@ function RoyalCaribbeanSyncScreen() {
   };
 
   const getStatusText = () => {
-    const urlDisplay = state.currentUrl ? `\n${state.currentUrl}` : '';
+    const currentPage = state.currentUrl ? new URL(state.currentUrl).pathname : '/club-royale/offers';
     
     switch (state.status) {
       case 'not_logged_in':
-        return 'Not Logged In';
+        return `Not Logged In\nPage: ${currentPage}`;
       case 'logged_in':
-        return 'Logged In - Ready to Scrape';
+        return `Logged In - Ready to Scrape\nPage: ${currentPage}`;
       case 'running_step_1':
         if (state.progress && state.progress.current > 0) {
-          return `Loading Offers Page - ${state.progress.current} Scraped${urlDisplay}`;
+          return `Scraping Offers - ${state.progress.current} Found\nPage: ${currentPage}`;
         }
-        return `Working - Loading Offers Page...${urlDisplay}`;
+        return `Working - Scraping Offers...\nPage: ${currentPage}`;
       case 'running_step_2':
         if (state.progress && state.progress.current > 0) {
-          return `Loading Upcoming Cruises - ${state.progress.current} Scraped${urlDisplay}`;
+          return `Scraping Upcoming - ${state.progress.current} Found\nPage: ${currentPage}`;
         }
-        return `Working - Loading Upcoming Cruises Page...${urlDisplay}`;
+        return `Working - Scraping Upcoming...\nPage: ${currentPage}`;
       case 'running_step_3':
         if (state.progress && state.progress.current > 0) {
-          return `Loading Courtesy Holds - ${state.progress.current} Scraped${urlDisplay}`;
+          return `Scraping Holds - ${state.progress.current} Found\nPage: ${currentPage}`;
         }
-        return `Working - Loading Courtesy Holds Page...${urlDisplay}`;
+        return `Working - Scraping Holds...\nPage: ${currentPage}`;
       case 'running_step_4':
-        return `Working - Loading Loyalty Status Page...${urlDisplay}`;
+        return `Working - Scraping Loyalty...\nPage: ${currentPage}`;
       case 'awaiting_confirmation':
         return 'Ready to Sync';
       case 'syncing':
@@ -195,7 +195,7 @@ function RoyalCaribbeanSyncScreen() {
                   webViewRef.current = ref;
                 }
               }}
-              source={{ uri: 'https://www.royalcaribbean.com/club-royale' }}
+              source={{ uri: 'https://www.royalcaribbean.com/club-royale/offers' }}
               style={styles.webView}
               onMessage={onMessage}
               javaScriptEnabled={true}

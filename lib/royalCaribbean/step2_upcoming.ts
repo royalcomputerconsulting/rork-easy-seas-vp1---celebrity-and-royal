@@ -72,47 +72,68 @@ export const STEP2_UPCOMING_SCRIPT = `
       for (let i = 0; i < cruiseCards.length; i++) {
         const card = cruiseCards[i];
 
-        const viewDetailsBtn = Array.from(card.querySelectorAll('button, a')).find(el => 
-          el.textContent?.match(/View.*Details?|Additional Details|Show Details/i)
-        );
+        const cardText = card.textContent || '';
+        const cardHTML = card.innerHTML || '';
 
-        if (viewDetailsBtn) {
-          viewDetailsBtn.click();
-          await wait(1500);
+        const shipName = extractText(card, '[data-testid*="ship"], [class*="ship"]') || 
+                        (cardHTML.match(/([A-Z][a-z]+ of the [A-Z][a-z]+|Anthem of the Seas|Legend of the Seas)/i) || [])[0] || '';
+        
+        const dateMatches = cardText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:\s*—\s*|\s*-\s*)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{1,2},?\s*\d{4}/i);
+        let sailingStartDate = '';
+        let sailingEndDate = '';
+        
+        if (dateMatches) {
+          sailingStartDate = dateMatches[0].split(/—|-/)[0].trim();
+          sailingEndDate = dateMatches[0].split(/—|-/)[1]?.trim() || '';
+        }
+        
+        const nightMatch = cardText.match(/(\d+)\s*Night/i);
+        const nights = nightMatch ? nightMatch[1] : '';
+        
+        const itineraryMatch = cardText.match(/([A-Z][a-z]+(?:,\s*[A-Z][a-z]+)*(?:\s+[|]\s+[A-Z][a-z]+(?:,\s*[A-Z][a-z]+)*)*)/);
+        const itinerary = itineraryMatch ? itineraryMatch[0] : extractText(card, '[data-testid*="itinerary"], [class*="itinerary"]');
+        
+        const portMatch = cardText.match(/(Vancouver|Seattle|Fort Lauderdale|Miami|San Juan|Los Angeles|Galveston|New York|Baltimore|Tampa|Port Canaveral|Cape Liberty|Boston)/i);
+        const departurePort = portMatch ? portMatch[0] : extractText(card, '[data-testid*="port"], [class*="port"]');
+        
+        const cabinType = extractText(card, '[data-testid*="cabin"], [data-testid*="stateroom"]') ||
+                         (cardText.match(/(Interior|Ocean View|Balcony|Suite|Junior Suite|Grand Suite)/i) || [])[0] || '';
+        
+        const reservationMatch = cardText.match(/RESERVATION[\s\n]+(\d+)/i) || cardHTML.match(/reservation[^>]*>(\d+)/i);
+        const bookingId = reservationMatch ? reservationMatch[1] : '';
+        
+        const cabinNumberMatch = cardText.match(/\b\d{4,5}\b/);
+        const cabinNumber = cabinNumberMatch ? cabinNumberMatch[0] : '';
+
+        const guestMatch = cardText.match(/Guests?[\s\n]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i);
+        const guests = guestMatch ? guestMatch[1] : '';
+
+        if (shipName || bookingId) {
+          cruises.push({
+            sourcePage: 'Upcoming',
+            shipName: shipName,
+            sailingStartDate: sailingStartDate,
+            sailingEndDate: sailingEndDate,
+            sailingDates: sailingStartDate && sailingEndDate ? \`\${sailingStartDate} - \${sailingEndDate}\` : '',
+            itinerary: itinerary,
+            departurePort: departurePort,
+            cabinType: cabinType,
+            cabinNumberOrGTY: cabinNumber || (cabinType.includes('GTY') ? 'GTY' : ''),
+            bookingId: bookingId,
+            status: 'Upcoming',
+            loyaltyLevel: '',
+            loyaltyPoints: ''
+          });
         }
 
-        const shipName = extractText(card, '[data-testid*="ship"], [class*="ship"]');
-        const sailingStartDate = extractText(card, '[data-testid*="start"], [data-testid*="departure"]');
-        const sailingEndDate = extractText(card, '[data-testid*="end"], [data-testid*="return"]');
-        const itinerary = extractText(card, '[data-testid*="itinerary"], [class*="itinerary"]');
-        const departurePort = extractText(card, '[data-testid*="port"], [class*="port"]');
-        const cabinType = extractText(card, '[data-testid*="cabin"], [data-testid*="stateroom"]');
-        const cabinNumber = extractText(card, '[data-testid*="cabin-number"], [data-testid*="room-number"]');
-        const bookingId = extractText(card, '[data-testid*="booking"], [data-testid*="reservation"]');
-
-        cruises.push({
-          sourcePage: 'Upcoming',
-          shipName: shipName,
-          sailingStartDate: sailingStartDate,
-          sailingEndDate: sailingEndDate,
-          sailingDates: sailingStartDate && sailingEndDate ? \`\${sailingStartDate} - \${sailingEndDate}\` : '',
-          itinerary: itinerary,
-          departurePort: departurePort,
-          cabinType: cabinType,
-          cabinNumberOrGTY: cabinNumber || (cabinType.includes('GTY') ? 'GTY' : ''),
-          bookingId: bookingId,
-          status: 'Upcoming',
-          loyaltyLevel: '',
-          loyaltyPoints: ''
-        });
-
-        processedCount++;
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'progress',
-          current: processedCount,
-          total: cruiseCards.length,
-          stepName: 'Upcoming Cruises'
-        }));
+          processedCount++;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'progress',
+            current: processedCount,
+            total: cruiseCards.length,
+            stepName: 'Upcoming Cruises'
+          }));
+        }
       }
 
       window.ReactNativeWebView.postMessage(JSON.stringify({

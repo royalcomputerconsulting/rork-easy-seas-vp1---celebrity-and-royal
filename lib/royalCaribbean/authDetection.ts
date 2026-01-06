@@ -23,6 +23,7 @@ export const AUTH_DETECTION_SCRIPT = `
       courtesyHoldsLink: document.querySelector('a[href*="courtesy-holds"]'),
       loyaltyStatusLink: document.querySelector('a[href*="loyalty-status"]'),
       myAccountLink: document.querySelector('a[href*="/account"]'),
+      offersLink: document.querySelector('a[href*="club-royale/offers"]'),
       myProfileText: pageText.toLowerCase().includes('my profile'),
       welcomeText: pageText.toLowerCase().includes('welcome'),
       memberText: pageHTML.toLowerCase().includes('member'),
@@ -30,14 +31,17 @@ export const AUTH_DETECTION_SCRIPT = `
       crownAnchorText: pageHTML.toLowerCase().includes('crown') || pageHTML.toLowerCase().includes('anchor'),
       clubRoyaleText: pageHTML.toLowerCase().includes('club royale'),
       tierText: pageHTML.toLowerCase().includes('tier') || pageHTML.toLowerCase().includes('level'),
-      hasLogoutButton: document.querySelectorAll('a[href*="logout"], a[href*="sign-out"]').length > 0
+      hasLogoutButton: document.querySelectorAll('a[href*="logout"], a[href*="sign-out"]').length > 0,
+      isOnClubRoyalePage: url.includes('club-royale'),
+      hasOfferCards: document.querySelectorAll('[class*="offer"], [class*="Offer"]').length > 0
     };
 
     const strongAuthSignals = 
       indicators.upcomingCruisesLink || 
       indicators.courtesyHoldsLink || 
       indicators.loyaltyStatusLink ||
-      indicators.hasLogoutButton;
+      indicators.hasLogoutButton ||
+      (indicators.isOnClubRoyalePage && indicators.hasOfferCards && hasCookies);
     
     const accountFeatureCount = 
       (indicators.accountLinks.length > 0 ? 1 : 0) +
@@ -45,7 +49,8 @@ export const AUTH_DETECTION_SCRIPT = `
       (indicators.courtesyHoldsLink ? 1 : 0) +
       (indicators.loyaltyStatusLink ? 1 : 0) +
       (indicators.myAccountLink ? 1 : 0) +
-      (indicators.hasLogoutButton ? 1 : 0);
+      (indicators.hasLogoutButton ? 1 : 0) +
+      (indicators.offersLink ? 1 : 0);
     
     const contentSignals = 
       (indicators.memberText ? 1 : 0) +
