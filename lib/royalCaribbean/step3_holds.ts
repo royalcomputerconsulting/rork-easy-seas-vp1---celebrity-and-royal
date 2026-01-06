@@ -74,15 +74,16 @@ export const STEP3_HOLDS_SCRIPT = `
         return;
       }
 
-      const allElements = Array.from(document.querySelectorAll('div, article, section'));
+      const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="hold"], [class*="courtesy"]'));
       let holdCards = allElements.filter(el => {
         const text = el.textContent || '';
         const hasShip = text.includes('of the Seas');
-        const hasNight = text.match(/\\d+\\s+Night/);
+        const hasNight = text.match(/\\d+\\s+Night/i);
         const hasReservation = text.match(/Reservation[:\\s]*\\d+/i);
-        const hasExpires = text.match(/Expires[:\\s]*(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/i);
-        const isReasonablySmall = text.length > 100 && text.length < 2000;
-        return (hasShip && hasNight && hasReservation && hasExpires) && isReasonablySmall;
+        const hasExpires = text.match(/Expires[:\\s]*(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/i) || text.includes('Expires');
+        const hasCourtesy = text.includes('Courtesy') || text.includes('Hold');
+        const isReasonablySmall = text.length > 80 && text.length < 2500;
+        return hasShip && hasNight && hasReservation && (hasExpires || hasCourtesy) && isReasonablySmall;
       }).filter((el, idx, arr) => {
         return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
       }).sort((a, b) => a.textContent.length - b.textContent.length);

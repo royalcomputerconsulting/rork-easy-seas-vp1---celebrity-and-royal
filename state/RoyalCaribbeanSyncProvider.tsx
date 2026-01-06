@@ -12,7 +12,6 @@ import {
 } from '@/lib/royalCaribbean/types';
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
-import { injectLoyaltyExtraction } from '@/lib/royalCaribbean/step4_loyalty';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectUpcomingCruisesExtraction } from '@/lib/royalCaribbean/step2_upcoming';
 import { injectCourtesyHoldsExtraction } from '@/lib/royalCaribbean/step3_holds';
@@ -170,20 +169,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
       
       await new Promise(resolve => setTimeout(resolve, 20000));
-      
-      setState(prev => ({ ...prev, status: 'running_step_4' }));
-      addLog('Step 4: Navigating to loyalty programs page...', 'info');
-      addLog('Loading Loyalty Status Page...', 'info');
-      webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/account/loyalty-programs';
-        true;
-      `);
-      
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
-      
-      await new Promise(resolve => setTimeout(resolve, 8000));
       
       setState(prev => {
         const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;

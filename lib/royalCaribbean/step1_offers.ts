@@ -66,13 +66,15 @@ export const STEP1_OFFERS_SCRIPT = `
       
       offerCards = allElements.filter(el => {
         const text = el.textContent || '';
-        const hasViewSailings = text.includes('View Sailings');
+        const hasViewSailings = text.includes('View Sailings') || text.includes('VIEW SAILINGS');
+        const isFeaturedOffer = text.includes('Featured Offer') || text.includes('FEATURED OFFER');
+        const hasOfferKeyword = text.includes('Full House') || text.includes('READY TO PLAY');
         const hasRedeem = text.includes('Redeem');
         const hasTradeIn = text.toLowerCase().includes('trade-in');
         const hasRoomType = text.includes('Room for Two') || text.includes('Balcony') || text.includes('Ocean');
         const isReasonableSize = text.length > 50 && text.length < 2000;
         
-        return (hasViewSailings || hasRedeem) && (hasTradeIn || hasRoomType) && isReasonableSize;
+        return hasViewSailings && (isFeaturedOffer || hasOfferKeyword || hasRedeem || hasTradeIn || hasRoomType) && isReasonableSize;
       });
       
       offerCards = offerCards.filter((el, idx, arr) => {
@@ -109,6 +111,13 @@ export const STEP1_OFFERS_SCRIPT = `
         
         let offerName = extractText(card, 'h1') || extractText(card, 'h2') || 
                         extractText(card, 'h3') || extractText(card, 'h4');
+        
+        if (!offerName) {
+          const featuredMatch = cardText.match(/Featured Offer[:\\s]*(Full House February|[A-Za-z0-9\\s]+)/i);
+          if (featuredMatch) {
+            offerName = featuredMatch[0];
+          }
+        }
         
         if (!offerName) {
           const roomMatch = cardText.match(/(Balcony|Ocean View|Interior|Suite)\\s+(Room for Two|or Oceanview Room for Two)/i);

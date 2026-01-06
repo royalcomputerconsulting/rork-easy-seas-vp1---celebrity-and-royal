@@ -67,39 +67,25 @@ export const STEP2_UPCOMING_SCRIPT = `
         logType: 'info'
       }));
 
-      const allLinks = Array.from(document.querySelectorAll('a[href*="/account/upcoming-cruises/"]'));
+      const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="cruise"]'));
+      
+      let cruiseCards = allElements.filter(el => {
+        const text = el.textContent || '';
+        const hasShip = text.includes('of the Seas');
+        const hasNight = text.match(/\\d+\\s+Night/i);
+        const hasReservation = text.match(/Reservation[:\\s]*\\d+/i);
+        const hasDaysToGo = text.includes('Days to go') || text.includes('Day to go');
+        const hasGuests = text.includes('Guests') || text.includes('Guest');
+        const textLength = text.length;
+        
+        return hasShip && hasNight && hasReservation && textLength > 150 && textLength < 3000;
+      });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + allLinks.length + ' cruise detail links',
+        message: 'Found ' + cruiseCards.length + ' potential cruise cards',
         logType: 'info'
       }));
-
-      let cruiseCards = [];
-      const processedElements = new Set();
-
-      for (const link of allLinks) {
-        let parent = link;
-        for (let i = 0; i < 12; i++) {
-          if (!parent || !parent.parentElement) break;
-          parent = parent.parentElement;
-          
-          if (processedElements.has(parent)) break;
-          
-          const text = parent.textContent || '';
-          const hasShip = text.includes('of the Seas');
-          const hasNight = text.match(/\\d+\\s+Night/);
-          const hasDate = text.match(/(\\w{3})\\s+\\d+/);
-          const hasReservation = text.includes('Reservation');
-          const textLength = text.length;
-          
-          if (hasShip && hasNight && hasDate && textLength > 200 && textLength < 4000) {
-            cruiseCards.push(parent);
-            processedElements.add(parent);
-            break;
-          }
-        }
-      }
       
       cruiseCards = cruiseCards.filter((el, idx, arr) => {
         return !arr.some((other, otherIdx) => otherIdx !== idx && (other.contains(el) || el.contains(other)));
