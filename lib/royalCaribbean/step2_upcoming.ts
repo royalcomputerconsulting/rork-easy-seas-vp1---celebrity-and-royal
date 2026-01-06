@@ -41,6 +41,62 @@ export const STEP2_UPCOMING_SCRIPT = `
       }));
 
       await wait(2000);
+      
+      let crownAndAnchorLevel = '';
+      let crownAndAnchorPoints = '';
+      
+      const headerSelectors = [
+        'header',
+        'nav',
+        '[class*="header"]',
+        '[class*="Header"]',
+        '[class*="navigation"]',
+        '[role="banner"]'
+      ];
+      
+      for (const selector of headerSelectors) {
+        const headers = document.querySelectorAll(selector);
+        headers.forEach(header => {
+          const headerText = header.textContent?.trim() || '';
+          
+          if (headerText.match(/Diamond Plus|Diamond|Platinum Plus|Platinum|Gold Plus|Gold|Silver|Emerald/i)) {
+            const levelMatch = headerText.match(/(Diamond Plus|Diamond|Platinum Plus|Platinum|Gold Plus|Gold|Silver|Emerald)/i);
+            if (levelMatch && !crownAndAnchorLevel) {
+              crownAndAnchorLevel = levelMatch[1];
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Found Crown & Anchor level in header: ' + crownAndAnchorLevel,
+                logType: 'info'
+              }));
+            }
+          }
+          
+          if (headerText.match(/\d+\s*(nights?|cruise points?)/i)) {
+            const pointsMatch = headerText.match(/(\d+)\s*(nights?|cruise points?)/i);
+            if (pointsMatch && !crownAndAnchorPoints) {
+              crownAndAnchorPoints = pointsMatch[1];
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Found Crown & Anchor points/nights in header: ' + crownAndAnchorPoints,
+                logType: 'info'
+              }));
+            }
+          }
+        });
+        
+        if (crownAndAnchorLevel && crownAndAnchorPoints) break;
+      }
+      
+      if (crownAndAnchorLevel || crownAndAnchorPoints) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'loyalty_data',
+          data: {
+            crownAndAnchorLevel: crownAndAnchorLevel,
+            crownAndAnchorPoints: crownAndAnchorPoints
+          }
+        }));
+      }
+      
       console.log('[STEP2] Starting scroll');
       await scrollUntilComplete(15);
 
@@ -158,8 +214,8 @@ export const STEP2_UPCOMING_SCRIPT = `
             cabinNumberOrGTY: cabinNumber || (cabinType.includes('GTY') ? 'GTY' : ''),
             bookingId: bookingId,
             status: 'Upcoming',
-            loyaltyLevel: '',
-            loyaltyPoints: ''
+            loyaltyLevel: crownAndAnchorLevel,
+            loyaltyPoints: crownAndAnchorPoints
           });
           
           window.ReactNativeWebView.postMessage(JSON.stringify({

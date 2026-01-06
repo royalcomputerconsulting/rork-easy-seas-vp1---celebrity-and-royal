@@ -108,65 +108,45 @@ export const STEP1_OFFERS_SCRIPT = `
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Scrolling complete, extracting offers...',
+        message: 'Scrolling complete, searching for offers...',
         logType: 'info'
       }));
 
-      let offerCards = document.querySelectorAll('[data-testid*="offer"], [class*="offer-card"], [class*="OfferCard"]');
+      let offerCards = [];
+      
+      const allSections = document.querySelectorAll('section, [role="region"], main > div, article, [class*="container"]');
+      
+      for (const section of allSections) {
+        const hasViewSailings = Array.from(section.querySelectorAll('button, a')).some(btn => 
+          btn.textContent?.match(/View Sailings?|See Sailings?/i)
+        );
+        
+        if (hasViewSailings) {
+          offerCards.push(section);
+          const text = section.textContent?.trim() || '';
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found offer section with View Sailings: ' + text.substring(0, 100),
+            logType: 'info'
+          }));
+        }
+      }
       
       if (offerCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'No offers found with primary selectors, trying broader search...',
+          message: 'No offers found with View Sailings buttons, trying broader search...',
           logType: 'warning'
         }));
         
-        offerCards = document.querySelectorAll('[class*="offer"], [class*="Offer"], article, .card, [role="article"]');
-      }
-
-      if (offerCards.length === 0) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'No offer cards found, checking for featured/single offers...',
-          logType: 'warning'
-        }));
-        
-        const featuredSelectors = [
-          '[class*="featured"]',
-          '[class*="Featured"]',
-          '[data-testid*="featured"]',
-          '[class*="hero"]',
-          '[class*="Hero"]',
-          '[class*="banner"]',
-          '[class*="Banner"]',
-          'section',
-          'main > div',
-          'main section',
-          '[role="region"]',
-          '[class*="container"]',
-          'article'
-        ];
-        
-        for (const selector of featuredSelectors) {
-          const elements = document.querySelectorAll(selector);
-          for (const el of elements) {
-            const text = el.textContent || '';
-            const hasViewSailings = el.querySelector('button, a') && 
-              Array.from(el.querySelectorAll('button, a')).some(btn => 
-                btn.textContent?.match(/View Sailings?|See Sailings?/i)
-              );
-            
-            if ((text.match(/full house|offer|promotion|deal/i) && text.length > 50 && text.length < 10000) || hasViewSailings) {
-              offerCards = [el];
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: 'Found featured/single offer section: ' + text.substring(0, 100),
-                logType: 'info'
-              }));
-              break;
-            }
-          }
-          if (offerCards.length > 0) break;
+        const allText = document.body.textContent || '';
+        if (allText.match(/Full House|offer|promotion/i)) {
+          offerCards = [document.querySelector('main') || document.body];
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Using main content area as single offer',
+            logType: 'info'
+          }));
         }
       }
       
@@ -211,92 +191,128 @@ export const STEP1_OFFERS_SCRIPT = `
           }));
           
           viewSailingsBtn.click();
-          await wait(2500);
+          await wait(3000);
 
-          await scrollUntilComplete(null, 10);
-          
-          await wait(1000);
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'View Sailings modal opened, scrolling to load all room categories...',
+            logType: 'info'
+          }));
 
-          const sailingSelectors = [
-            '[data-testid*="sailing-card"]',
-            '[class*="sailing-item"]',
-            '[class*="sailing-card"]',
-            '[class*="SailingCard"]',
-            '[class*="cruise-card"]',
-            '[class*="CruiseCard"]',
-            'article',
-            '[role="article"]',
-            '.card',
-            '[class*="card"]'
-          ];
+          await scrollUntilComplete(null, 15);
+          await wait(2000);
+
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Extracting room categories and sailings...',
+            logType: 'info'
+          }));
+
+          const roomCategories = document.querySelectorAll('h3, h4, [class*="room"], [class*="Room"], [class*="category"], [class*="Category"]');
+          const shipNames = [];
           
-          let sailingCards = [];
-          for (const selector of sailingSelectors) {
-            sailingCards = document.querySelectorAll(selector);
-            if (sailingCards.length > 0) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: 'Found ' + sailingCards.length + ' sailings with selector: ' + selector,
-                logType: 'info'
-              }));
-              break;
+          document.querySelectorAll('h2, h3, h4, h5, [class*="ship"], [class*="Ship"]').forEach(el => {
+            const text = el.textContent?.trim() || '';
+            const shipMatch = text.match(/([A-Z][a-z]+ of the [A-Z][a-z]+)/i);
+            if (shipMatch && !shipNames.includes(shipMatch[1])) {
+              shipNames.push(shipMatch[1]);
+            }
+          });
+
+          const allText = document.body.textContent || '';
+          const dateMatches = allText.matchAll(/(\d{2}\/\d{2}\/\d{2,4})/g);
+          const dates = [];
+          for (const match of dateMatches) {
+            if (!dates.includes(match[1])) {
+              dates.push(match[1]);
             }
           }
           
-          if (sailingCards.length > 0) {
-            for (let j = 0; j < sailingCards.length; j++) {
-              const sailing = sailingCards[j];
-              const sailingText = sailing.textContent || '';
-              
-              if (sailingText.length < 50) continue;
-              
-              const shipName = extractText(sailing, '[data-testid*="ship"], [class*="ship"], h3, h4');
-              const sailingDate = extractText(sailing, '[data-testid*="date"], [class*="date"], time');
-              
-              if (!shipName && !sailingDate) continue;
-              
-              offers.push({
-                sourcePage: 'Offers',
-                offerName: offerName,
-                offerCode: offerCode,
-                offerExpirationDate: offerExpiry,
-                offerType: offerType,
-                shipName: shipName,
-                sailingDate: sailingDate,
-                itinerary: extractText(sailing, '[data-testid*="itinerary"], [class*="itinerary"], [class*="destination"]'),
-                departurePort: extractText(sailing, '[data-testid*="port"], [class*="port"]'),
-                cabinType: extractText(sailing, '[data-testid*="cabin"], [class*="cabin"]'),
-                numberOfGuests: extractText(sailing, '[data-testid*="guest"], [class*="guest"]'),
-                perks: perks,
-                loyaltyLevel: clubRoyaleTier,
-                loyaltyPoints: clubRoyalePoints
-              });
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found ' + shipNames.length + ' ships and ' + dates.length + ' sailing dates',
+            logType: 'info'
+          }));
+
+          const portMatches = allText.matchAll(/(Miami|Fort Lauderdale|Tampa|Orlando|Port Canaveral|Galveston|Los Angeles|Seattle|Vancouver|San Juan|New York|Baltimore|Boston|Honolulu|San Diego|New Orleans)/gi);
+          const ports = [];
+          for (const match of portMatches) {
+            if (!ports.includes(match[1])) {
+              ports.push(match[1]);
             }
+          }
+
+          let extractedSailings = 0;
+          
+          for (const roomCat of roomCategories) {
+            const roomText = roomCat.textContent?.trim() || '';
+            const cabinType = roomText.match(/(Interior|Ocean View|Balcony|Suite|Oceanview)/i)?.[1] || '';
             
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Extracted ' + offers.length + ' sailings from offer',
-              logType: 'success'
-            }));
-          } else {
+            if (!cabinType) continue;
+            
+            const sailingCountMatch = roomText.match(/\((\d+)\s*Sailings?\)/i);
+            const sailingCount = sailingCountMatch ? parseInt(sailingCountMatch[1]) : 0;
+            
+            if (sailingCount > 0) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Found ' + cabinType + ' with ' + sailingCount + ' sailings',
+                logType: 'info'
+              }));
+
+              for (let s = 0; s < Math.min(sailingCount, shipNames.length); s++) {
+                offers.push({
+                  sourcePage: 'Offers',
+                  offerName: offerName,
+                  offerCode: offerCode,
+                  offerExpirationDate: offerExpiry,
+                  offerType: offerType,
+                  shipName: shipNames[s] || '',
+                  sailingDate: dates[s] || '',
+                  itinerary: '',
+                  departurePort: ports[0] || '',
+                  cabinType: cabinType,
+                  numberOfGuests: '2',
+                  perks: perks,
+                  loyaltyLevel: clubRoyaleTier,
+                  loyaltyPoints: clubRoyalePoints
+                });
+                extractedSailings++;
+              }
+            }
+          }
+            
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Extracted ' + extractedSailings + ' sailings from offer modal',
+            logType: 'success'
+          }));
+
+          if (extractedSailings === 0) {
             offers.push({
               sourcePage: 'Offers',
               offerName: offerName,
               offerCode: offerCode,
               offerExpirationDate: offerExpiry,
               offerType: offerType,
-              shipName: '',
-              sailingDate: '',
+              shipName: shipNames[0] || '',
+              sailingDate: dates[0] || '',
               itinerary: '',
-              departurePort: '',
-              cabinType: '',
-              numberOfGuests: '',
+              departurePort: ports[0] || '',
+              cabinType: 'Various',
+              numberOfGuests: '2',
               perks: perks,
               loyaltyLevel: clubRoyaleTier,
               loyaltyPoints: clubRoyalePoints
             });
           }
         } else {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'No View Sailings button found for: ' + offerName,
+            logType: 'warning'
+          }));
+          
           offers.push({
             sourcePage: 'Offers',
             offerName: offerName,

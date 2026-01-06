@@ -12,7 +12,6 @@ import {
 } from '@/lib/royalCaribbean/types';
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
-import { injectLoyaltyExtraction } from '@/lib/royalCaribbean/step4_loyalty';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectUpcomingCruisesExtraction } from '@/lib/royalCaribbean/step2_upcoming';
 import { injectCourtesyHoldsExtraction } from '@/lib/royalCaribbean/step3_holds';
@@ -55,13 +54,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }));
   }, []);
 
-  const stepsCompleted = useRef({ step1: false, step2: false, step3: false, step4: false });
+  const stepsCompleted = useRef({ step1: false, step2: false, step3: false });
 
   const checkIfAllStepsComplete = useCallback(() => {
     console.log('Checking if all steps complete:', stepsCompleted.current);
     
     if (!stepsCompleted.current.step1 || !stepsCompleted.current.step2 || 
-        !stepsCompleted.current.step3 || !stepsCompleted.current.step4) {
+        !stepsCompleted.current.step3) {
       console.log('Not all steps complete yet');
       return;
     }
@@ -76,8 +75,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       console.log('Counts:', { offers: uniqueOfferCodes.size, cruises: cruisesFromOffers, upcomingCruises, courtesyHolds });
       
-      addLog(`Found ${uniqueOfferCodes.size} offers with ${cruisesFromOffers} sailings, ${upcomingCruises} upcoming cruises, ${courtesyHolds} courtesy holds`, 'success');
-      addLog('All steps completed! Ready to sync.', 'success');
+      addLog(`\n========== INGESTION COMPLETE ==========`, 'success');
+      addLog(`Found ${uniqueOfferCodes.size} unique offers with ${cruisesFromOffers} sailings`, 'success');
+      addLog(`Found ${upcomingCruises} upcoming cruises`, 'success');
+      addLog(`Found ${courtesyHolds} courtesy holds`, 'success');
+      if (prev.loyaltyData?.crownAndAnchorLevel) {
+        addLog(`Crown & Anchor: ${prev.loyaltyData.crownAndAnchorLevel} (${prev.loyaltyData.crownAndAnchorPoints || 'N/A'} points)`, 'success');
+      }
+      addLog(`========================================`, 'success');
+      addLog('All data extracted successfully! Ready to sync to app.', 'success');
       
       return {
         ...prev, 
@@ -134,9 +140,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }));
           stepsCompleted.current.step3 = true;
           console.log('Step 3 marked complete');
-        } else if (message.step === 4) {
-          stepsCompleted.current.step4 = true;
-          console.log('Step 4 marked complete');
         }
         
         setTimeout(() => checkIfAllStepsComplete(), 500);
@@ -183,7 +186,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       return;
     }
 
-    stepsCompleted.current = { step1: false, step2: false, step3: false, step4: false };
+    stepsCompleted.current = { step1: false, step2: false, step3: false };
 
     setState(prev => ({
       ...prev,
@@ -260,28 +263,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 25000));
       
-      addLog('Step 4: Navigating to loyalty programs page...', 'info');
-      const loyaltyUrl = `https://www.royalcaribbean.com/loyalty-programs?_t=${timestamp + 3}`;
-      setState(prev => ({ 
-        ...prev, 
-        status: 'running_step_4',
-        currentUrl: loyaltyUrl
-      }));
-      webViewRef.current.injectJavaScript(`
-        window.location.href = '${loyaltyUrl}';
-        true;
-      `);
-      
-      await new Promise(resolve => setTimeout(resolve, 6000));
-      
-      console.log('[PROVIDER] Injecting step 4 script');
-      webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
+      addLog('All steps completed! Finalizing data...', 'success');
+      setTimeout(() => checkIfAllStepsComplete(), 1000);
       
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, addLog]);
+  }, [state.status, addLog, checkIfAllStepsComplete]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
