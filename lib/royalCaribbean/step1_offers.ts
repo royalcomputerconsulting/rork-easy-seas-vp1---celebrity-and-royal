@@ -51,7 +51,7 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      await wait(3000);
+      await wait(1500);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -129,7 +129,7 @@ export const STEP1_OFFERS_SCRIPT = `
         await wait(2000);
       }
 
-      await scrollUntilComplete(null, 15);
+      await scrollUntilComplete(null, 8);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -229,6 +229,20 @@ export const STEP1_OFFERS_SCRIPT = `
           message: 'First card sample: ' + (offerCards[0].textContent?.substring(0, 200) || 'No text'),
           logType: 'info'
         }));
+      }
+      
+      if (offerCards.length === 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'step_complete',
+          step: 1,
+          data: []
+        }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'No offers found on page, completing step',
+          logType: 'warning'
+        }));
+        return;
       }
       
       const offers = [];
