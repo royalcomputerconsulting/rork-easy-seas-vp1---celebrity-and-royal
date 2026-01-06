@@ -299,28 +299,3 @@ export function isRoyalCaribbeanShip(shipName: string): boolean {
     name => name.toLowerCase() === normalizedName
   );
 }
-
-export const CELEBRITY_SHIPS = [
-  'Celebrity Apex',
-  'Celebrity Beyond',
-  'Celebrity Constellation',
-  'Celebrity Eclipse',
-  'Celebrity Edge',
-  'Celebrity Equinox',
-  'Celebrity Flora',
-  'Celebrity Infinity',
-  'Celebrity Millennium',
-  'Celebrity Reflection',
-  'Celebrity Silhouette',
-  'Celebrity Solstice',
-  'Celebrity Summit',
-  'Celebrity Xpedition',
-  'Celebrity Xploration',
-];
-
-export function isCelebrityShip(shipName: string): boolean {
-  const normalizedName = shipName.trim().toLowerCase();
-  return CELEBRITY_SHIPS.some(
-    name => name.toLowerCase() === normalizedName
-  );
-}

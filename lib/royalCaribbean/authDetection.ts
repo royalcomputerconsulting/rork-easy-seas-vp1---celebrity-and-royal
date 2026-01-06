@@ -2,24 +2,6 @@ export const AUTH_DETECTION_SCRIPT = `
 (function() {
   let lastAuthState = null;
   let checkCount = 0;
-  let observer = null;
-  let intervalId = null;
-  let timeoutId = null;
-  
-  window.__stopAuthDetection = function() {
-    if (observer) {
-      observer.disconnect();
-      observer = null;
-    }
-    if (intervalId) {
-      clearInterval(intervalId);
-      intervalId = null;
-    }
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
-  };
   
   function checkAuthStatus() {
     checkCount++;
@@ -41,7 +23,6 @@ export const AUTH_DETECTION_SCRIPT = `
       courtesyHoldsLink: document.querySelector('a[href*="courtesy-holds"]'),
       loyaltyStatusLink: document.querySelector('a[href*="loyalty-status"]'),
       myAccountLink: document.querySelector('a[href*="/account"]'),
-      offersLink: document.querySelector('a[href*="club-royale/offers"]'),
       myProfileText: pageText.toLowerCase().includes('my profile'),
       welcomeText: pageText.toLowerCase().includes('welcome'),
       memberText: pageHTML.toLowerCase().includes('member'),
@@ -49,17 +30,14 @@ export const AUTH_DETECTION_SCRIPT = `
       crownAnchorText: pageHTML.toLowerCase().includes('crown') || pageHTML.toLowerCase().includes('anchor'),
       clubRoyaleText: pageHTML.toLowerCase().includes('club royale'),
       tierText: pageHTML.toLowerCase().includes('tier') || pageHTML.toLowerCase().includes('level'),
-      hasLogoutButton: document.querySelectorAll('a[href*="logout"], a[href*="sign-out"]').length > 0,
-      isOnClubRoyalePage: url.includes('club-royale'),
-      hasOfferCards: document.querySelectorAll('[class*="offer"], [class*="Offer"]').length > 0
+      hasLogoutButton: document.querySelectorAll('a[href*="logout"], a[href*="sign-out"]').length > 0
     };
 
     const strongAuthSignals = 
       indicators.upcomingCruisesLink || 
       indicators.courtesyHoldsLink || 
       indicators.loyaltyStatusLink ||
-      indicators.hasLogoutButton ||
-      (indicators.isOnClubRoyalePage && indicators.hasOfferCards && hasCookies);
+      indicators.hasLogoutButton;
     
     const accountFeatureCount = 
       (indicators.accountLinks.length > 0 ? 1 : 0) +
@@ -67,8 +45,7 @@ export const AUTH_DETECTION_SCRIPT = `
       (indicators.courtesyHoldsLink ? 1 : 0) +
       (indicators.loyaltyStatusLink ? 1 : 0) +
       (indicators.myAccountLink ? 1 : 0) +
-      (indicators.hasLogoutButton ? 1 : 0) +
-      (indicators.offersLink ? 1 : 0);
+      (indicators.hasLogoutButton ? 1 : 0);
     
     const contentSignals = 
       (indicators.memberText ? 1 : 0) +
@@ -76,7 +53,7 @@ export const AUTH_DETECTION_SCRIPT = `
       (indicators.crownAnchorText ? 1 : 0) +
       (indicators.tierText ? 1 : 0);
     
-    const isOnAccountPage = url.includes('/account/') || url.includes('loyalty-status') || url.includes('loyalty-programs');
+    const isOnAccountPage = url.includes('/account/') || url.includes('loyalty-status');
     
     let isLoggedIn = false;
     
@@ -101,8 +78,17 @@ export const AUTH_DETECTION_SCRIPT = `
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: isLoggedIn 
-          ? 'User logged in' 
-          : 'Not logged in',
+          ? 'Authentication detected - logged in successfully' 
+          : 'Not authenticated - please log in',
+        logType: 'info'
+      }));
+    }
+    
+    if (checkCount % 5 === 0) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Auth check: ' + (isLoggedIn ? 'LOGGED IN' : 'NOT LOGGED IN') + 
+                 ' (signals: ' + accountFeatureCount + ' account features, ' + contentSignals + ' content signals)',
         logType: 'info'
       }));
     }
@@ -117,7 +103,7 @@ export const AUTH_DETECTION_SCRIPT = `
       setTimeout(checkAuthStatus, 1500);
     }
 
-    observer = new MutationObserver(() => {
+    const observer = new MutationObserver(() => {
       checkAuthStatus();
     });
 
@@ -128,12 +114,12 @@ export const AUTH_DETECTION_SCRIPT = `
       });
     }
     
-    intervalId = setInterval(checkAuthStatus, 5000);
+    const intervalId = setInterval(checkAuthStatus, 3000);
 
-    timeoutId = setTimeout(() => {
-      if (observer) observer.disconnect();
-      if (intervalId) clearInterval(intervalId);
-    }, 15000);
+    setTimeout(() => {
+      observer.disconnect();
+      clearInterval(intervalId);
+    }, 30000);
   }
   
   initAuthDetection();

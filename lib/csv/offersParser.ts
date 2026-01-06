@@ -8,7 +8,6 @@ import {
   createHeaderMap,
   getColumnIndex,
 } from './csvParser';
-import { isCelebrityShip } from '@/constants/shipInfo';
 
 export interface ParsedOfferRow {
   shipName: string;
@@ -71,15 +70,13 @@ function getShipClassFromName(shipName: string): string {
   return 'Unknown Class';
 }
 
-export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: CasinoOffer[]; isCelebrityImport: boolean } {
+export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: CasinoOffer[] } {
   console.log('[OffersParser] Starting to parse offers CSV');
-  
-  const allShipNames: string[] = [];
   
   const lines = content.split(/\r?\n/).filter(line => line.trim());
   if (lines.length < 2) {
     console.log('[OffersParser] CSV has no data rows');
-    return { cruises: [], offers: [], isCelebrityImport: false };
+    return { cruises: [], offers: [] };
   }
 
   const headerLine = lines[0];
@@ -146,9 +143,6 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     };
 
     const shipName = getValue(colIndices.shipName);
-    if (shipName) {
-      allShipNames.push(shipName);
-    }
     const sailingDateRaw = getValue(colIndices.sailingDate);
     const itinerary = getValue(colIndices.itinerary);
     const offerCode = getValue(colIndices.offerCode);
@@ -260,16 +254,9 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
   }
 
   const offersArray = Array.from(offerMap.values());
-  const isCelebrityImport = allShipNames.length > 0 && allShipNames.every(ship => isCelebrityShip(ship));
-  
   console.log(`[OffersParser] Parsed ${cruises.length} cruises and ${offersArray.length} unique offers`);
-  console.log(`[OffersParser] Is Celebrity import: ${isCelebrityImport}`);
-  
-  if (isCelebrityImport) {
-    console.log('[OffersParser] Celebrity cruises detected - will merge with existing data');
-  }
 
-  return { cruises, offers: offersArray, isCelebrityImport };
+  return { cruises, offers: offersArray };
 }
 
 function escapeCSVField(value: string | number): string {

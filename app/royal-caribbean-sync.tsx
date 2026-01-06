@@ -1,14 +1,15 @@
-import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, LogIn, Play, Download, FileText, RotateCcw, Star } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
+import { useCoreData } from '@/state/CoreDataProvider';
 
 function RoyalCaribbeanSyncScreen() {
-  const router = useRouter();
+  const coreData = useCoreData();
   const {
     state,
     webViewRef,
@@ -18,11 +19,13 @@ function RoyalCaribbeanSyncScreen() {
     exportBookedCruisesCSV,
     exportLog,
     resetState,
+    syncToApp,
     cancelSync,
     handleWebViewMessage
   } = useRoyalCaribbeanSync();
 
   const [webViewVisible, setWebViewVisible] = useState(true);
+  const [logsVisible, setLogsVisible] = useState(false);
 
   const onMessage = (event: any) => {
     try {
@@ -60,30 +63,28 @@ function RoyalCaribbeanSyncScreen() {
   };
 
   const getStatusText = () => {
-    const currentPage = state.currentUrl ? new URL(state.currentUrl).pathname : '/club-royale/offers';
-    
     switch (state.status) {
       case 'not_logged_in':
-        return `Not Logged In\nPage: ${currentPage}`;
+        return 'Not Logged In';
       case 'logged_in':
-        return `Logged In - Ready to Scrape\nPage: ${currentPage}`;
+        return 'Logged In - Ready to Scrape';
       case 'running_step_1':
         if (state.progress && state.progress.current > 0) {
-          return `Scraping Offers - ${state.progress.current} Found\nPage: ${currentPage}`;
+          return `Loading Offers Page - ${state.progress.current} Scraped`;
         }
-        return `Working - Scraping Offers...\nPage: ${currentPage}`;
+        return 'Loading Offers Page...';
       case 'running_step_2':
         if (state.progress && state.progress.current > 0) {
-          return `Scraping Upcoming - ${state.progress.current} Found\nPage: ${currentPage}`;
+          return `Loading Upcoming Cruises - ${state.progress.current} Scraped`;
         }
-        return `Working - Scraping Upcoming...\nPage: ${currentPage}`;
+        return 'Loading Upcoming Cruises Page...';
       case 'running_step_3':
         if (state.progress && state.progress.current > 0) {
-          return `Scraping Holds - ${state.progress.current} Found\nPage: ${currentPage}`;
+          return `Loading Courtesy Holds - ${state.progress.current} Scraped`;
         }
-        return `Working - Scraping Holds...\nPage: ${currentPage}`;
+        return 'Loading Courtesy Holds Page...';
       case 'running_step_4':
-        return `Working - Scraping Loyalty...\nPage: ${currentPage}`;
+        return 'Loading Loyalty Status Page...';
       case 'awaiting_confirmation':
         return 'Ready to Sync';
       case 'syncing':
@@ -98,8 +99,6 @@ function RoyalCaribbeanSyncScreen() {
         return 'Unknown';
     }
   };
-
-
 
   const getStatusIcon = () => {
     const color = '#fff';
@@ -145,27 +144,6 @@ function RoyalCaribbeanSyncScreen() {
           <Text style={styles.statusText}>{getStatusText()}</Text>
         </View>
 
-        <View style={styles.compactLogsContainer}>
-          <Text style={styles.compactLogsTitle}>Sync Log</Text>
-          <View style={styles.compactLogsContent}>
-            {state.logs.slice(-4).map((log, index) => (
-              <View key={index} style={styles.compactLogEntry}>
-                <Text style={styles.compactLogTimestamp}>{log.timestamp}</Text>
-                <Text style={[
-                  styles.compactLogMessage,
-                  log.type === 'error' && styles.compactLogMessageError,
-                  log.type === 'success' && styles.compactLogMessageSuccess
-                ]} numberOfLines={1}>
-                  {log.message}
-                </Text>
-              </View>
-            ))}
-            {state.logs.length === 0 && (
-              <Text style={styles.compactLogsEmpty}>No logs yet. Click &quot;Open Login&quot; to start.</Text>
-            )}
-          </View>
-        </View>
-
         <Pressable 
           style={styles.webViewToggle}
           onPress={() => setWebViewVisible(!webViewVisible)}
@@ -184,7 +162,7 @@ function RoyalCaribbeanSyncScreen() {
                   webViewRef.current = ref;
                 }
               }}
-              source={{ uri: 'https://www.royalcaribbean.com/club-royale/offers' }}
+              source={{ uri: 'https://www.royalcaribbean.com/club-royale' }}
               style={styles.webView}
               onMessage={onMessage}
               javaScriptEnabled={true}
@@ -197,90 +175,118 @@ function RoyalCaribbeanSyncScreen() {
         )}
 
         <View style={styles.actionsContainer}>
-          <View style={styles.compactButtonRow}>
+          <View style={styles.buttonRow}>
             <Pressable 
-              style={[styles.compactButton, styles.primaryButton]}
+              style={[styles.button, styles.primaryButton]}
               onPress={openLogin}
             >
-              <LogIn size={16} color="#fff" />
-              <Text style={styles.compactButtonText}>Login</Text>
+              <Text style={styles.buttonText}>Open Login</Text>
             </Pressable>
 
             <Pressable 
               style={[
-                styles.compactButton, 
+                styles.button, 
                 styles.primaryButton,
                 (!canRunIngestion || isRunning) && styles.buttonDisabled
               ]}
               onPress={runIngestion}
               disabled={!canRunIngestion || isRunning}
             >
-              <Play size={16} color="#fff" />
               <Text style={[
-                styles.compactButtonText,
+                styles.buttonText,
                 (!canRunIngestion || isRunning) && styles.buttonTextDisabled
               ]}>
-                Run
+                Run Ingestion
               </Text>
             </Pressable>
+          </View>
 
+          <View style={styles.buttonRow}>
             <Pressable 
               style={[
-                styles.compactButton, 
+                styles.button, 
                 styles.secondaryButton,
                 !canExport && styles.buttonDisabled
               ]}
               onPress={exportOffersCSV}
               disabled={!canExport}
             >
-              <Download size={14} color="#94a3b8" />
               <Text style={[
-                styles.compactSecondaryButtonText,
+                styles.secondaryButtonText,
                 !canExport && styles.buttonTextDisabled
               ]}>
-                Offers
+                Export Offers
               </Text>
             </Pressable>
-          </View>
 
-          <View style={styles.compactButtonRow}>
             <Pressable 
               style={[
-                styles.compactButton, 
+                styles.button, 
                 styles.secondaryButton,
                 !canExport && styles.buttonDisabled
               ]}
               onPress={exportBookedCruisesCSV}
               disabled={!canExport}
             >
-              <Download size={14} color="#94a3b8" />
               <Text style={[
-                styles.compactSecondaryButtonText,
+                styles.secondaryButtonText,
                 !canExport && styles.buttonTextDisabled
               ]}>
-                Booked
+                Export Booked
+              </Text>
+            </Pressable>
+          </View>
+
+
+
+          <View style={styles.buttonRow}>
+            <Pressable 
+              style={[styles.button, styles.tertiaryButton]}
+              onPress={() => setLogsVisible(!logsVisible)}
+            >
+              <Text style={styles.tertiaryButtonText}>
+                {logsVisible ? 'Hide' : 'View'} Log ({state.logs.length})
               </Text>
             </Pressable>
 
             <Pressable 
-              style={[styles.compactButton, styles.secondaryButton]}
+              style={[styles.button, styles.tertiaryButton]}
               onPress={exportLog}
             >
-              <FileText size={14} color="#94a3b8" />
-              <Text style={styles.compactSecondaryButtonText}>Log</Text>
+              <Text style={styles.tertiaryButtonText}>Export Log</Text>
             </Pressable>
 
             <Pressable 
-              style={[styles.compactButton, styles.dangerButton]}
+              style={[styles.button, styles.dangerButton]}
               onPress={resetState}
             >
-              <RotateCcw size={14} color="#fff" />
-              <Text style={styles.compactButtonText}>Reset</Text>
+              <Text style={styles.buttonText}>Reset</Text>
             </Pressable>
           </View>
         </View>
 
-
+        {logsVisible && (
+          <View style={styles.logsContainer}>
+            <Text style={styles.logsTitle}>Sync Log</Text>
+            <ScrollView style={styles.logsScroll}>
+              {state.logs.map((log, index) => (
+                <View key={index} style={[styles.logEntry, log.type === 'error' && styles.logError]}>
+                  <Text style={styles.logTimestamp}>{log.timestamp}</Text>
+                  <Text style={[
+                    styles.logMessage,
+                    log.type === 'error' && styles.logMessageError,
+                    log.type === 'success' && styles.logMessageSuccess
+                  ]}>
+                    {log.message}
+                  </Text>
+                </View>
+              ))}
+              {state.logs.length === 0 && (
+                <Text style={styles.logsEmpty}>No logs yet</Text>
+              )}
+            </ScrollView>
+          </View>
+        )}
 
         {state.error && (
           <View style={styles.errorContainer}>
@@ -316,21 +322,11 @@ function RoyalCaribbeanSyncScreen() {
 
                 <View style={styles.countCard}>
                   <View style={styles.countIconContainer}>
-                    <Ship size={24} color="#8b5cf6" />
-                  </View>
-                  <View style={styles.countInfo}>
-                    <Text style={styles.countNumber}>{state.syncCounts?.cruises || 0}</Text>
-                    <Text style={styles.countLabel}>Available Cruises (from Offers)</Text>
-                  </View>
-                </View>
-
-                <View style={styles.countCard}>
-                  <View style={styles.countIconContainer}>
                     <Calendar size={24} color="#10b981" />
                   </View>
                   <View style={styles.countInfo}>
                     <Text style={styles.countNumber}>{state.syncCounts?.upcomingCruises || 0}</Text>
-                    <Text style={styles.countLabel}>Upcoming Booked Cruises</Text>
+                    <Text style={styles.countLabel}>Upcoming Cruises</Text>
                   </View>
                 </View>
 
@@ -343,24 +339,9 @@ function RoyalCaribbeanSyncScreen() {
                     <Text style={styles.countLabel}>Courtesy Holds</Text>
                   </View>
                 </View>
-
-                {state.loyaltyData?.crownAndAnchorLevel && (
-                  <View style={styles.countCard}>
-                    <View style={styles.countIconContainer}>
-                      <Star size={24} color="#fbbf24" />
-                    </View>
-                    <View style={styles.countInfo}>
-                      <Text style={styles.countNumber}>{state.loyaltyData.crownAndAnchorLevel}</Text>
-                      <Text style={styles.countLabel}>Crown & Anchor Level</Text>
-                      {state.loyaltyData.crownAndAnchorPoints && (
-                        <Text style={styles.loyaltyPoints}>{state.loyaltyData.crownAndAnchorPoints} points</Text>
-                      )}
-                    </View>
-                  </View>
-                )}
               </View>
 
-              <Text style={styles.confirmationQuestion}>Do you want to preview and sync this data?</Text>
+              <Text style={styles.confirmationQuestion}>Do you want to sync this data to the app?</Text>
 
               <View style={styles.confirmationButtons}>
                 <Pressable 
@@ -372,9 +353,9 @@ function RoyalCaribbeanSyncScreen() {
 
                 <Pressable 
                   style={[styles.button, styles.confirmButton]}
-                  onPress={() => router.push('/settings')}
+                  onPress={() => syncToApp(coreData)}
                 >
-                  <Text style={styles.buttonText}>Yes, Preview & Import</Text>
+                  <Text style={styles.buttonText}>Yes, Sync Now</Text>
                 </Pressable>
               </View>
             </View>
@@ -388,7 +369,7 @@ function RoyalCaribbeanSyncScreen() {
               <Text style={styles.successTitle}>Sync Complete!</Text>
               <Text style={styles.successMessage}>
                 {state.syncCounts && (
-                  `Successfully synced ${state.syncCounts.offers} offers, ${state.syncCounts.cruises} available cruises, ${state.syncCounts.upcomingCruises} upcoming cruises, and ${state.syncCounts.courtesyHolds} courtesy holds to your app.`
+                  `Successfully synced ${state.syncCounts.offers} offers, ${state.syncCounts.upcomingCruises} upcoming cruises, and ${state.syncCounts.courtesyHolds} courtesy holds to your app.`
                 )}
               </Text>
             </View>
@@ -417,8 +398,7 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600' as const,
-    textAlign: 'center' as const
+    fontWeight: '600' as const
   },
   progressText: {
     color: '#fff',
@@ -449,31 +429,19 @@ const styles = StyleSheet.create({
   },
   actionsContainer: {
     padding: 12,
-    gap: 8
+    gap: 12
   },
-  compactButtonRow: {
+  buttonRow: {
     flexDirection: 'row' as const,
-    gap: 8
+    gap: 12
   },
-  compactButton: {
+  button: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    flexDirection: 'row' as const,
-    gap: 4
-  },
-  compactButtonText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600' as const
-  },
-  compactSecondaryButtonText: {
-    color: '#94a3b8',
-    fontSize: 11,
-    fontWeight: '600' as const
+    justifyContent: 'center' as const
   },
   primaryButton: {
     backgroundColor: '#3b82f6'
@@ -497,54 +465,72 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.5
   },
+  buttonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600' as const
+  },
+  secondaryButtonText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '600' as const
+  },
+  tertiaryButtonText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '500' as const
+  },
   buttonTextDisabled: {
     opacity: 0.5
   },
-  compactLogsContainer: {
-    marginHorizontal: 12,
-    marginBottom: 8,
+  logsContainer: {
+    flex: 1,
+    margin: 12,
     backgroundColor: '#1e293b',
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
     overflow: 'hidden' as const
   },
-  compactLogsTitle: {
+  logsTitle: {
     color: '#cbd5e1',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600' as const,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#334155'
   },
-  compactLogsContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 8
+  logsScroll: {
+    flex: 1,
+    padding: 12
   },
-  compactLogEntry: {
-    marginBottom: 6
+  logEntry: {
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155'
   },
-  compactLogTimestamp: {
+  logError: {
+    backgroundColor: '#7f1d1d22'
+  },
+  logTimestamp: {
     color: '#64748b',
-    fontSize: 10,
+    fontSize: 11,
     marginBottom: 2
   },
-  compactLogMessage: {
+  logMessage: {
     color: '#cbd5e1',
-    fontSize: 11,
-    lineHeight: 14
+    fontSize: 12
   },
-  compactLogMessageError: {
+  logMessageError: {
     color: '#f87171'
   },
-  compactLogMessageSuccess: {
+  logMessageSuccess: {
     color: '#4ade80'
   },
-  compactLogsEmpty: {
+  logsEmpty: {
     color: '#64748b',
-    fontSize: 11,
-    fontStyle: 'italic' as const
+    fontSize: 13,
+    textAlign: 'center' as const,
+    paddingVertical: 24
   },
   errorContainer: {
     flexDirection: 'row' as const,
@@ -626,11 +612,6 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 14
   },
-  loyaltyPoints: {
-    color: '#64748b',
-    fontSize: 12,
-    marginTop: 2
-  },
   confirmationQuestion: {
     color: '#cbd5e1',
     fontSize: 16,
@@ -680,19 +661,6 @@ const styles = StyleSheet.create({
     color: '#6ee7b7',
     fontSize: 13,
     lineHeight: 18
-  },
-  button: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600' as const
   }
 });
 

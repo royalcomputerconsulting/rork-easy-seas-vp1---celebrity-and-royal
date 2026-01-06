@@ -20,6 +20,8 @@ export interface LogEntry {
 export interface LoyaltyData {
   crownAndAnchorLevel?: string;
   crownAndAnchorPoints?: string;
+  clubRoyaleTier?: string;
+  clubRoyalePoints?: string;
 }
 
 export interface OfferRow {
@@ -72,7 +74,6 @@ export type WebViewMessage =
 
 export interface SyncDataCounts {
   offers: number;
-  cruises: number;
   upcomingCruises: number;
   courtesyHolds: number;
 }
@@ -80,7 +81,6 @@ export interface SyncDataCounts {
 export interface RoyalCaribbeanSyncState {
   status: SyncStatus;
   currentStep: string;
-  currentUrl: string | null;
   progress: ProgressInfo | null;
   logs: LogEntry[];
   extractedOffers: OfferRow[];

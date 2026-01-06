@@ -7,7 +7,6 @@ import {
   createHeaderMap,
   getColumnIndex,
 } from './csvParser';
-import { isCelebrityShip } from '@/constants/shipInfo';
 
 function stripOuterQuotes(value: string): string {
   const trimmed = value.trim();
@@ -80,16 +79,14 @@ function isDuplicateCruise(cruise: BookedCruise, existingCruises: BookedCruise[]
   });
 }
 
-export function parseBookedCSV(content: string, existingCruises: BookedCruise[] = []): { cruises: BookedCruise[]; isCelebrityImport: boolean } {
+export function parseBookedCSV(content: string, existingCruises: BookedCruise[] = []): BookedCruise[] {
   console.log('[BookedParser] Starting to parse booked CSV');
   console.log('[BookedParser] Existing cruises count:', existingCruises.length);
-  
-  const allShipNames: string[] = [];
   
   const lines = content.split(/\r?\n/).filter(line => line.trim());
   if (lines.length < 2) {
     console.log('[BookedParser] Booked CSV has no data rows');
-    return { cruises: [], isCelebrityImport: false };
+    return [];
   }
 
   const headerLine = lines[0];
@@ -186,9 +183,6 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
 
     const id = getValue(colIndices.id) || `booked_${Date.now()}_${i}`;
     const ship = getValue(colIndices.ship);
-    if (ship) {
-      allShipNames.push(ship);
-    }
     const departureDateRaw = getValue(colIndices.departureDate);
     const returnDateRaw = getValue(colIndices.returnDate);
     const nights = getNumericValue(colIndices.nights) || 7;
@@ -270,16 +264,8 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     console.log(`[BookedParser] Parsed booked cruise: ${ship} - ${sailDate} - ${itineraryName}`);
   }
 
-  const isCelebrityImport = allShipNames.length > 0 && allShipNames.every(ship => isCelebrityShip(ship));
-  
   console.log(`[BookedParser] Parsed ${bookedCruises.length} booked cruises`);
-  console.log(`[BookedParser] Is Celebrity import: ${isCelebrityImport}`);
-  
-  if (isCelebrityImport) {
-    console.log('[BookedParser] Celebrity cruises detected - will merge with existing data');
-  }
-  
-  return { cruises: bookedCruises, isCelebrityImport };
+  return bookedCruises;
 }
 
 function escapeCSVField(value: string): string {

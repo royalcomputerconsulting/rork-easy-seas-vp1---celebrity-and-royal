@@ -34,7 +34,6 @@ import { MachineStrategyProvider } from "@/state/MachineStrategyProvider";
 import { SlotMachineProvider } from "@/state/SlotMachineProvider";
 import { SlotMachineLibraryProvider } from "@/state/SlotMachineLibraryProvider";
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
-import { RoyalCaribbeanSyncProvider } from "@/state/RoyalCaribbeanSyncProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 
 SplashScreen.preventAutoHideAsync();
@@ -80,7 +79,7 @@ function FreshStartHandler({ onComplete }: { onComplete: () => void }) {
         
         console.log('[FreshStartHandler] Redirecting to settings...');
         setTimeout(() => {
-          router.replace('/(tabs)/settings' as any);
+          router.replace('/(tabs)/settings');
           onComplete();
         }, 500);
       } catch (error) {
@@ -88,7 +87,7 @@ function FreshStartHandler({ onComplete }: { onComplete: () => void }) {
         setStatus('Error occurred, redirecting...');
         await clearFreshStartFlag();
         setTimeout(() => {
-          router.replace('/(tabs)/settings' as any);
+          router.replace('/(tabs)/settings');
           onComplete();
         }, 1000);
       }
@@ -302,47 +301,45 @@ export default function RootLayout() {
           <AuthProvider>
             <UserProvider>
               <CoreDataProvider>
-                <RoyalCaribbeanSyncProvider>
-                  <HistoricalPerformanceProvider>
-                    <PriceHistoryProvider>
-                      <FinancialsProvider>
-                        <CasinoStrategyProvider>
-                          <LoyaltyProvider>
-                            <SimpleAnalyticsProvider>
-                              <CasinoSessionProvider>
-                                <SlotMachineProvider>
-                                  <SlotMachineLibraryProvider>
-                                    <DeckPlanProvider>
-                                      <MachineStrategyProvider>
-                                        <BankrollProvider>
-                                          <TaxProvider>
-                                            <GamificationProvider>
-                                              <PPHAlertsProvider>
-                                                <AlertsProvider>
-                                                  <AgentXProvider>
-                                                    <CertificatesProvider>
-                                                      <CelebrityProvider>
-                                                        <AppContent />
-                                                      </CelebrityProvider>
-                                                    </CertificatesProvider>
-                                                  </AgentXProvider>
-                                                </AlertsProvider>
-                                              </PPHAlertsProvider>
-                                            </GamificationProvider>
-                                          </TaxProvider>
-                                        </BankrollProvider>
-                                      </MachineStrategyProvider>
-                                    </DeckPlanProvider>
-                                  </SlotMachineLibraryProvider>
-                                </SlotMachineProvider>
-                              </CasinoSessionProvider>
-                            </SimpleAnalyticsProvider>
-                          </LoyaltyProvider>
-                        </CasinoStrategyProvider>
-                      </FinancialsProvider>
-                    </PriceHistoryProvider>
-                  </HistoricalPerformanceProvider>
-                </RoyalCaribbeanSyncProvider>
+                <HistoricalPerformanceProvider>
+                  <PriceHistoryProvider>
+                    <FinancialsProvider>
+                      <CasinoStrategyProvider>
+                        <LoyaltyProvider>
+                          <SimpleAnalyticsProvider>
+                            <CasinoSessionProvider>
+                              <SlotMachineProvider>
+                                <SlotMachineLibraryProvider>
+                                  <DeckPlanProvider>
+                                    <MachineStrategyProvider>
+                                      <BankrollProvider>
+                                        <TaxProvider>
+                                          <GamificationProvider>
+                                            <PPHAlertsProvider>
+                                              <AlertsProvider>
+                                                <AgentXProvider>
+                                                  <CertificatesProvider>
+                                                    <CelebrityProvider>
+                                                      <AppContent />
+                                                    </CelebrityProvider>
+                                                  </CertificatesProvider>
+                                                </AgentXProvider>
+                                              </AlertsProvider>
+                                            </PPHAlertsProvider>
+                                          </GamificationProvider>
+                                        </TaxProvider>
+                                      </BankrollProvider>
+                                    </MachineStrategyProvider>
+                                  </DeckPlanProvider>
+                                </SlotMachineLibraryProvider>
+                              </SlotMachineProvider>
+                            </CasinoSessionProvider>
+                          </SimpleAnalyticsProvider>
+                        </LoyaltyProvider>
+                      </CasinoStrategyProvider>
+                    </FinancialsProvider>
+                  </PriceHistoryProvider>
+                </HistoricalPerformanceProvider>
               </CoreDataProvider>
             </UserProvider>
           </AuthProvider>

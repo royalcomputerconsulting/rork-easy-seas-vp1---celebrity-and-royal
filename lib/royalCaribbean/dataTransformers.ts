@@ -1,5 +1,5 @@
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
-import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
+import { CasinoOffer, BookedCruise } from '@/types/models';
 
 function parseDate(dateStr: string): string {
   if (!dateStr) return '';
@@ -20,192 +20,83 @@ function generateId(): string {
   return `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-export interface TransformedOffersData {
-  offers: CasinoOffer[];
-  cruises: Cruise[];
-}
-
 export function transformOffersToCasinoOffers(
-  offerRows: OfferRow[], 
+  offers: OfferRow[], 
   loyaltyData: LoyaltyData | null
-): TransformedOffersData {
-  const offersMap = new Map<string, { offer: CasinoOffer; sailings: OfferRow[] }>();
-  const cruises: Cruise[] = [];
-  
-  console.log('[DataTransformers] Transforming', offerRows.length, 'offer rows');
-  
-  for (const row of offerRows) {
-    if (!row.offerCode) {
-      console.log('[DataTransformers] Skipping row without offer code');
-      continue;
-    }
+): CasinoOffer[] {
+  return offers.map(offer => {
+    const casinoOffer: CasinoOffer = {
+      id: generateId(),
+      title: offer.offerName || 'Royal Caribbean Offer',
+      offerCode: offer.offerCode,
+      offerName: offer.offerName,
+      offerType: determineOfferType(offer.perks),
+      category: offer.offerType,
+      perks: offer.perks ? [offer.perks] : [],
+      
+      shipName: offer.shipName,
+      sailingDate: parseDate(offer.sailingDate),
+      itineraryName: offer.itinerary,
+      
+      roomType: offer.cabinType,
+      guestsInfo: offer.numberOfGuests,
+      guests: parseGuestCount(offer.numberOfGuests),
+      
+      expires: parseDate(offer.offerExpirationDate),
+      expiryDate: parseDate(offer.offerExpirationDate),
+      offerExpiryDate: parseDate(offer.offerExpirationDate),
+      
+      status: 'active' as const,
+      offerSource: 'royal' as const,
+      
+      freePlay: extractFreePlay(offer.perks),
+      freeplayAmount: extractFreePlay(offer.perks),
+      OBC: extractOBC(offer.perks),
+      obcAmount: extractOBC(offer.perks),
+      
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
     
-    if (!row.shipName || !row.sailingDate) {
-      console.log('[DataTransformers] Skipping incomplete offer:', row.offerCode);
-      continue;
-    }
-    
-    if (!offersMap.has(row.offerCode)) {
-      const freePlay = extractFreePlay(row.perks);
-      const obc = extractOBC(row.perks);
-      const offerValue = extractOfferValue(row.perks);
-      
-      const casinoOffer: CasinoOffer = {
-        id: generateId(),
-        title: row.offerName || row.offerCode || 'Royal Caribbean Offer',
-        offerCode: row.offerCode,
-        offerName: row.offerName || row.offerCode,
-        offerType: determineOfferType(row.perks),
-        category: row.offerType || 'Club Royale Offer',
-        perks: row.perks ? row.perks.split(',').map(p => p.trim()).filter(Boolean) : [],
-        
-        expires: parseDate(row.offerExpirationDate),
-        expiryDate: parseDate(row.offerExpirationDate),
-        offerExpiryDate: parseDate(row.offerExpirationDate),
-        
-        status: 'active' as const,
-        offerSource: 'royal' as const,
-        
-        value: offerValue,
-        offerValue: offerValue,
-        
-        freePlay: freePlay,
-        freeplayAmount: freePlay,
-        OBC: obc,
-        obcAmount: obc,
-        
-        cruiseIds: [],
-        
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      offersMap.set(row.offerCode, { offer: casinoOffer, sailings: [] });
-      console.log('[DataTransformers] Created offer:', row.offerCode, 'with value:', offerValue);
-    }
-    
-    const offerData = offersMap.get(row.offerCode)!;
-    offerData.sailings.push(row);
-    
-    if (row.shipName && row.sailingDate) {
-      const cruiseId = generateId();
-      const sailDate = parseDate(row.sailingDate);
-      const nights = 7;
-      const returnDate = calculateReturnDate(sailDate, nights);
-      
-      const ports = row.itinerary
-        ? row.itinerary.split(/[→›|]/).map(p => p.trim()).filter(Boolean)
-        : [];
-      
-      const cruise: Cruise = {
-        id: cruiseId,
-        shipName: row.shipName,
-        sailDate: sailDate,
-        returnDate: returnDate,
-        departurePort: row.departurePort || '',
-        destination: row.itinerary || '',
-        nights: nights,
-        
-        cabinType: row.cabinType || 'Balcony',
-        itineraryName: row.itinerary || '',
-        ports: ports,
-        
-        offerCode: row.offerCode,
-        offerName: row.offerName,
-        offerValue: extractOfferValue(row.perks),
-        offerExpiry: parseDate(row.offerExpirationDate),
-        
-        guestsInfo: row.numberOfGuests || '2 Guests',
-        guests: parseInt(row.numberOfGuests?.match(/\d+/)?.[0] || '2', 10),
-        
-        perks: row.perks ? row.perks.split(',').map(p => p.trim()).filter(Boolean) : [],
-        
-        freePlay: extractFreePlay(row.perks),
-        freeOBC: extractOBC(row.perks),
-        
-        status: 'available' as const,
-        cruiseSource: 'royal' as const,
-        
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      cruises.push(cruise);
-      offerData.offer.cruiseIds?.push(cruiseId);
-      
-      console.log('[DataTransformers] Created cruise:', cruise.id, 'for', cruise.shipName, 'on', sailDate);
-    }
-  }
-  
-  const offers = Array.from(offersMap.values()).map(({ offer }) => offer);
-  
-  return { offers, cruises };
+    return casinoOffer;
+  });
 }
 
 export function transformBookedCruisesToAppFormat(
   cruises: BookedCruiseRow[],
   loyaltyData: LoyaltyData | null
 ): BookedCruise[] {
-  console.log('[DataTransformers] Transforming', cruises.length, 'booked cruise rows');
-  
-  const validCruises = cruises.filter(cruise => {
-    if (!cruise.shipName || !cruise.sailingStartDate) {
-      console.log('[DataTransformers] Skipping invalid cruise row:', cruise);
-      return false;
-    }
-    return true;
-  });
-  
-  console.log('[DataTransformers] Valid cruises:', validCruises.length);
-  
-  return validCruises.map(cruise => {
+  return cruises.map(cruise => {
     const startDate = parseDate(cruise.sailingStartDate);
     const endDate = parseDate(cruise.sailingEndDate);
     
     const nights = calculateNights(startDate, endDate);
-    
-    const ports = cruise.itinerary
-      ? cruise.itinerary.split(/[→›|]/).map(p => p.trim()).filter(Boolean)
-      : [];
-    
-    const isCourtesyHold = cruise.status === 'Courtesy Hold';
-    const sailDateObj = new Date(startDate);
-    const today = new Date();
-    const isUpcoming = sailDateObj > today;
     
     const bookedCruise: BookedCruise = {
       id: generateId(),
       shipName: cruise.shipName,
       sailDate: startDate,
       returnDate: endDate,
-      departurePort: cruise.departurePort || '',
+      departurePort: cruise.departurePort,
       destination: cruise.itinerary || 'Unknown',
       nights: nights,
       
-      cabinType: cruise.cabinType || 'Balcony',
-      cabinCategory: cruise.cabinType,
+      cabinType: cruise.cabinType,
       cabinNumber: cruise.cabinNumberOrGTY && cruise.cabinNumberOrGTY !== 'GTY' ? cruise.cabinNumberOrGTY : undefined,
-      
       bookingId: cruise.bookingId,
       reservationNumber: cruise.bookingId,
       
-      status: isCourtesyHold ? 'available' : 'booked',
-      completionState: isUpcoming ? 'upcoming' : 'completed',
+      status: cruise.status === 'Courtesy Hold' ? 'available' : 'booked',
+      completionState: cruise.status === 'Upcoming' ? 'upcoming' : 'upcoming',
       
-      itineraryName: cruise.itinerary || '',
+      itineraryName: cruise.itinerary,
       itineraryRaw: cruise.itinerary ? [cruise.itinerary] : [],
-      ports: ports,
-      
-      guests: 2,
-      guestsInfo: '2 Guests',
       
       cruiseSource: 'royal' as const,
       
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    
-    console.log('[DataTransformers] Created booked cruise:', bookedCruise.id, 'for', bookedCruise.shipName, 'status:', bookedCruise.status);
     
     return bookedCruise;
   });
@@ -252,34 +143,27 @@ function extractOBC(perks: string): number | undefined {
   return undefined;
 }
 
+function parseGuestCount(guestsInfo: string): number | undefined {
+  if (!guestsInfo) return undefined;
+  
+  const match = guestsInfo.match(/(\d+)/);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  
+  return undefined;
+}
+
 function calculateNights(startDate: string, endDate: string): number {
-  if (!startDate || !endDate) return 7;
+  if (!startDate || !endDate) return 0;
   
   try {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const diffTime = Math.abs(end.getTime() - start.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : 7;
+    return diffDays;
   } catch {
-    return 7;
+    return 0;
   }
-}
-
-function calculateReturnDate(startDate: string, nights: number): string {
-  if (!startDate) return '';
-  
-  try {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + nights);
-    return date.toISOString().split('T')[0];
-  } catch {
-    return '';
-  }
-}
-
-function extractOfferValue(perks: string): number {
-  const freePlay = extractFreePlay(perks);
-  const obc = extractOBC(perks);
-  return freePlay || obc || 0;
 }

@@ -73,18 +73,13 @@ import { saveMockData } from '@/lib/saveMockData';
 import { useAuth } from '@/state/AuthProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
-import { useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { settings, updateSettings, clearLocalData, setLocalData, localData } = useAppState();
   const cruiseStore = useCruiseStore();
   const { clearAllData, cruises, bookedCruises, setCruises, setOffers, casinoOffers, setBookedCruises } = cruiseStore;
-  const coreData = useCoreData();
-  const { restoreMockData } = coreData;
-  const rcSync = useRoyalCaribbeanSync();
-  const rcSyncState = rcSync?.state;
-  const syncToApp = rcSync?.syncToApp;
+  const { restoreMockData } = useCoreData();
   const { currentUser, updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
   const { 
     clubRoyalePoints: loyaltyClubRoyalePoints, 
@@ -113,7 +108,6 @@ export default function SettingsScreen() {
   const [isLoadingWhitelist, setIsLoadingWhitelist] = useState(false);
   const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   const [isUserManualVisible, setIsUserManualVisible] = useState(false);
-  const [isImportingRCData, setIsImportingRCData] = useState(false);
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
@@ -220,10 +214,7 @@ export default function SettingsScreen() {
       }
 
       console.log('[Settings] File selected:', result.fileName);
-      const parseResult = parseOffersCSV(result.content);
-      const parsedCruises = parseResult.cruises;
-      const parsedOffers = parseResult.offers;
-      const isCelebrityImport = parseResult.isCelebrityImport;
+      const { cruises: parsedCruises, offers: parsedOffers } = parseOffersCSV(result.content);
       
       if (parsedCruises.length === 0) {
         Alert.alert('Import Failed', 'No valid cruise data found in the CSV file. Please check the file format.');
@@ -231,26 +222,11 @@ export default function SettingsScreen() {
         return;
       }
 
-      const existingCruises = cruises.length > 0 ? cruises : (localData.cruises || []);
-      const existingOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
-      
-      const mergedCruises = isCelebrityImport 
-        ? [...existingCruises, ...parsedCruises]
-        : parsedCruises;
-      
-      const mergedOffers = isCelebrityImport
-        ? [...existingOffers, ...parsedOffers]
-        : parsedOffers;
-      
-      const message = isCelebrityImport
-        ? `Merged ${parsedCruises.length} Celebrity cruises and ${parsedOffers.length} offers with existing data. Total: ${mergedCruises.length} cruises, ${mergedOffers.length} offers.`
-        : `Replaced all data with ${parsedCruises.length} Royal Caribbean cruises and ${parsedOffers.length} offers.`;
-
-      setCruises(mergedCruises);
-      setOffers(mergedOffers);
+      setCruises(parsedCruises);
+      setOffers(parsedOffers);
       setLocalData({
-        cruises: mergedCruises,
-        offers: mergedOffers,
+        cruises: parsedCruises,
+        offers: parsedOffers,
       });
 
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
@@ -259,7 +235,7 @@ export default function SettingsScreen() {
       setLastImportResult({ type: 'offers', count: parsedCruises.length });
       Alert.alert(
         'Import Successful', 
-        message
+        `Imported ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}`
       );
       console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {
@@ -268,7 +244,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [setCruises, setOffers, setLocalData, cruises, casinoOffers, localData.cruises, localData.offers]);
+  }, [setCruises, setOffers, setLocalData]);
 
   const handleImportCalendarFromURL = useCallback(async () => {
     try {
@@ -429,9 +405,7 @@ export default function SettingsScreen() {
       const existingBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
       console.log('[Settings] Existing booked cruises:', existingBooked.length);
       
-      const parseResult = parseBookedCSV(result.content, existingBooked);
-      const parsedBooked = parseResult.cruises;
-      const isCelebrityImport = parseResult.isCelebrityImport;
+      const parsedBooked = parseBookedCSV(result.content, existingBooked);
       
       if (parsedBooked.length === 0) {
         Alert.alert('No New Cruises', 'All cruises in the file already exist in your database, or the file contains no valid data.');
@@ -439,14 +413,7 @@ export default function SettingsScreen() {
         return;
       }
 
-      const mergedBooked = isCelebrityImport 
-        ? [...existingBooked, ...parsedBooked] 
-        : parsedBooked;
-      
-      const message = isCelebrityImport
-        ? `Merged ${parsedBooked.length} Celebrity cruises with existing ${existingBooked.length} cruises. Total: ${mergedBooked.length}.`
-        : `Replaced all data with ${parsedBooked.length} new Royal Caribbean cruises.`;
-      
+      const mergedBooked = [...existingBooked, ...parsedBooked];
       console.log('[Settings] Merged booked cruises:', mergedBooked.length, '(added:', parsedBooked.length, ')');
 
       setBookedCruises(mergedBooked);
@@ -461,7 +428,7 @@ export default function SettingsScreen() {
       
       Alert.alert(
         'Import Successful', 
-        message
+        `Added ${parsedBooked.length} new cruises from ${result.fileName}`
       );
       console.log('[Settings] Booked import complete:', parsedBooked.length, 'new cruises added');
     } catch (error) {
@@ -1004,23 +971,6 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
     }
   }, []);
 
-  const handleImportRCData = useCallback(async () => {
-    try {
-      setIsImportingRCData(true);
-      console.log('[Settings] Importing Royal Caribbean sync data...');
-      await syncToApp(coreData);
-      Alert.alert(
-        'Import Complete',
-        'Royal Caribbean data has been successfully imported into the app!'
-      );
-    } catch (error) {
-      console.error('[Settings] RC data import error:', error);
-      Alert.alert('Import Error', 'Failed to import data. Please try again.');
-    } finally {
-      setIsImportingRCData(false);
-    }
-  }, [syncToApp, coreData]);
-
   const renderSettingRow = (
     icon: React.ReactNode,
     label: string,
@@ -1119,67 +1069,12 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
             </View>
           </View>
 
-          {rcSyncState.status === 'awaiting_confirmation' && rcSyncState.syncCounts && (
-            <View style={styles.rcPreviewSection}>
-              <View style={styles.rcPreviewHeader}>
-                <CheckCircle size={20} color="#10b981" />
-                <Text style={styles.rcPreviewTitle}>Royal Caribbean Data Ready</Text>
-              </View>
-              <Text style={styles.rcPreviewSubtitle}>Preview and import synced data from Royal Caribbean</Text>
-              
-              <View style={styles.rcPreviewGrid}>
-                <View style={styles.rcPreviewItem}>
-                  <Text style={styles.rcPreviewValue}>{rcSyncState.syncCounts.offers}</Text>
-                  <Text style={styles.rcPreviewLabel}>Offers</Text>
-                </View>
-                <View style={styles.rcPreviewItem}>
-                  <Text style={styles.rcPreviewValue}>{rcSyncState.syncCounts.cruises}</Text>
-                  <Text style={styles.rcPreviewLabel}>Available</Text>
-                </View>
-                <View style={styles.rcPreviewItem}>
-                  <Text style={styles.rcPreviewValue}>{rcSyncState.syncCounts.upcomingCruises}</Text>
-                  <Text style={styles.rcPreviewLabel}>Upcoming</Text>
-                </View>
-                <View style={styles.rcPreviewItem}>
-                  <Text style={styles.rcPreviewValue}>{rcSyncState.syncCounts.courtesyHolds}</Text>
-                  <Text style={styles.rcPreviewLabel}>Holds</Text>
-                </View>
-              </View>
-
-              {rcSyncState.loyaltyData?.crownAndAnchorLevel && (
-                <View style={styles.rcLoyaltyInfo}>
-                  <Star size={16} color="#fbbf24" />
-                  <Text style={styles.rcLoyaltyText}>
-                    {rcSyncState.loyaltyData.crownAndAnchorLevel}
-                    {rcSyncState.loyaltyData.crownAndAnchorPoints && ` • ${rcSyncState.loyaltyData.crownAndAnchorPoints} pts`}
-                  </Text>
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={styles.rcImportButton}
-                onPress={handleImportRCData}
-                disabled={isImportingRCData}
-                activeOpacity={0.7}
-              >
-                {isImportingRCData ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Download size={18} color="#fff" />
-                    <Text style={styles.rcImportButtonText}>Import Data to App</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-
           <View style={styles.quickActionsSection}>
             <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
             <View style={styles.quickActionsGrid}>
               <TouchableOpacity 
                 style={styles.quickActionButton} 
-                onPress={() => router.push('/royal-caribbean-sync' as any)}
+                onPress={() => router.push('/royal-caribbean-sync')}
                 activeOpacity={0.7}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
@@ -2148,87 +2043,5 @@ const styles = StyleSheet.create({
     padding: SPACING.sm,
     backgroundColor: 'rgba(244, 67, 54, 0.1)',
     borderRadius: BORDER_RADIUS.sm,
-  },
-  rcPreviewSection: {
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderWidth: 2,
-    borderColor: '#10b981',
-  },
-  rcPreviewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.xs,
-  },
-  rcPreviewTitle: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#047857',
-  },
-  rcPreviewSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#065f46',
-    marginBottom: SPACING.md,
-  },
-  rcPreviewGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.md,
-  },
-  rcPreviewItem: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.sm,
-  },
-  rcPreviewValue: {
-    fontSize: 24,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#047857',
-  },
-  rcPreviewLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#065f46',
-    marginTop: 2,
-  },
-  rcLoyaltyInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    justifyContent: 'center',
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
-    borderRadius: BORDER_RADIUS.md,
-    marginBottom: SPACING.md,
-  },
-  rcLoyaltyText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#92400e',
-  },
-  rcImportButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    backgroundColor: '#059669',
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: BORDER_RADIUS.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  rcImportButtonText: {
-    color: '#fff',
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
 });
