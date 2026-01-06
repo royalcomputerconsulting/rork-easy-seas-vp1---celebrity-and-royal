@@ -185,17 +185,56 @@ export const STEP1_OFFERS_SCRIPT = `
         );
 
         if (viewSailingsBtn) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Clicking View Sailings for: ' + offerName,
+            logType: 'info'
+          }));
+          
           viewSailingsBtn.click();
-          await wait(1500);
+          await wait(2500);
 
-          const sailingsPanel = card.querySelector('[data-testid*="sailing"], [class*="sailing"]') || card;
-          await scrollUntilComplete(sailingsPanel, 8);
+          await scrollUntilComplete(null, 10);
+          
+          await wait(1000);
 
-          const sailingCards = sailingsPanel.querySelectorAll('[data-testid*="sailing-card"], [class*="sailing-item"]');
+          const sailingSelectors = [
+            '[data-testid*="sailing-card"]',
+            '[class*="sailing-item"]',
+            '[class*="sailing-card"]',
+            '[class*="SailingCard"]',
+            '[class*="cruise-card"]',
+            '[class*="CruiseCard"]',
+            'article',
+            '[role="article"]',
+            '.card',
+            '[class*="card"]'
+          ];
+          
+          let sailingCards = [];
+          for (const selector of sailingSelectors) {
+            sailingCards = document.querySelectorAll(selector);
+            if (sailingCards.length > 0) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Found ' + sailingCards.length + ' sailings with selector: ' + selector,
+                logType: 'info'
+              }));
+              break;
+            }
+          }
           
           if (sailingCards.length > 0) {
             for (let j = 0; j < sailingCards.length; j++) {
               const sailing = sailingCards[j];
+              const sailingText = sailing.textContent || '';
+              
+              if (sailingText.length < 50) continue;
+              
+              const shipName = extractText(sailing, '[data-testid*="ship"], [class*="ship"], h3, h4');
+              const sailingDate = extractText(sailing, '[data-testid*="date"], [class*="date"], time');
+              
+              if (!shipName && !sailingDate) continue;
               
               offers.push({
                 sourcePage: 'Offers',
@@ -203,9 +242,9 @@ export const STEP1_OFFERS_SCRIPT = `
                 offerCode: offerCode,
                 offerExpirationDate: offerExpiry,
                 offerType: offerType,
-                shipName: extractText(sailing, '[data-testid*="ship"], [class*="ship"]'),
-                sailingDate: extractText(sailing, '[data-testid*="date"], [class*="date"]'),
-                itinerary: extractText(sailing, '[data-testid*="itinerary"], [class*="itinerary"]'),
+                shipName: shipName,
+                sailingDate: sailingDate,
+                itinerary: extractText(sailing, '[data-testid*="itinerary"], [class*="itinerary"], [class*="destination"]'),
                 departurePort: extractText(sailing, '[data-testid*="port"], [class*="port"]'),
                 cabinType: extractText(sailing, '[data-testid*="cabin"], [class*="cabin"]'),
                 numberOfGuests: extractText(sailing, '[data-testid*="guest"], [class*="guest"]'),
@@ -214,6 +253,12 @@ export const STEP1_OFFERS_SCRIPT = `
                 loyaltyPoints: clubRoyalePoints
               });
             }
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Extracted ' + offers.length + ' sailings from offer',
+              logType: 'success'
+            }));
           } else {
             offers.push({
               sourcePage: 'Offers',
