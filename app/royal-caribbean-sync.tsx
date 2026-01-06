@@ -324,7 +324,7 @@ function RoyalCaribbeanSyncScreen() {
                     <Ship size={24} color="#3b82f6" />
                   </View>
                   <View style={styles.countInfo}>
-                    <Text style={styles.countNumber}>{state.syncCounts?.offerCount || 0} offer, {state.syncCounts?.offerRows || 0} cruises</Text>
+                    <Text style={styles.countNumber}>{state.syncCounts?.offerCount || 0} offer ({state.syncCounts?.offerRows || 0} cruises)</Text>
                     <Text style={styles.countLabel}>Club Royale Offers</Text>
                   </View>
                 </View>
@@ -396,7 +396,7 @@ function RoyalCaribbeanSyncScreen() {
               <Text style={styles.successTitle}>Sync Complete!</Text>
               <Text style={styles.successMessage}>
                 {state.syncCounts && (
-                  `Successfully synced ${state.syncCounts.offerCount} offer (${state.syncCounts.offerRows} cruises), ${state.syncCounts.upcomingCruises} upcoming cruises, and ${state.syncCounts.courtesyHolds} courtesy holds to your app.`
+                  `Successfully synced ${state.syncCounts.offerCount} offer (${state.syncCounts.offerRows} sailings), ${state.syncCounts.upcomingCruises} upcoming cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}, and ${state.syncCounts.courtesyHolds} courtesy hold${state.syncCounts.courtesyHolds !== 1 ? 's' : ''} to your app.`
                 )}
               </Text>
             </View>

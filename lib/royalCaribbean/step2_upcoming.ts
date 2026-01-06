@@ -198,17 +198,70 @@ export const STEP2_UPCOMING_SCRIPT = `
           logType: bookingId ? 'info' : 'warning'
         }));
 
-        const cabinMatches = fullText.match(/(Interior|Ocean View|Balcony|Suite|Junior Suite|GTY|Gty)([^\\n]*?)(?=(\\d{4,5})|Guests|Days|$)/i);
         let cabinType = '';
         let cabinNumber = '';
         
-        if (cabinMatches) {
-          cabinType = cabinMatches[1].trim();
-          const cabinNumMatch = fullText.match(/(Interior|Balcony|Suite|Ocean View|GTY|Gty)[^\\n]*?(\\d{4,5})/i);
-          if (cabinNumMatch) {
-            cabinNumber = cabinNumMatch[2];
+        const cabinTypeMatch = fullText.match(/(Interior|Ocean View|Oceanview|Balcony|Suite|Junior Suite|GTY|Gty|Grand Suite)/i);
+        if (cabinTypeMatch) {
+          cabinType = cabinTypeMatch[1].trim();
+        }
+        
+        const cabinNumMatch = fullText.match(/(Interior|Balcony|Suite|Ocean View|Oceanview|GTY|Gty|Grand Suite)[^\\n]*?(\\d{4,5})/i);
+        if (cabinNumMatch) {
+          cabinNumber = cabinNumMatch[2];
+        } else {
+          const directNumMatch = fullText.match(/(?:Cabin|Room|Stateroom)[:\\s]*(\\d{4,5})/i);
+          if (directNumMatch) {
+            cabinNumber = directNumMatch[1];
           }
         }
+        
+        if (!cabinType || !cabinNumber) {
+          const viewMoreBtn = Array.from(card.querySelectorAll('button, a, [role="button"]')).find(el => 
+            (el.textContent || '').match(/View More|More Details|View Details/i)
+          );
+          
+          if (viewMoreBtn) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '  ▶ Clicking "View Details" to get cabin info...',
+              logType: 'info'
+            }));
+            
+            viewMoreBtn.click();
+            await wait(2000);
+            
+            const detailsText = document.body.textContent || '';
+            
+            if (!cabinType) {
+              const detailCabinTypeMatch = detailsText.match(/(Interior|Ocean View|Oceanview|Balcony|Suite|Junior Suite|Grand Suite|GTY|Gty)/i);
+              if (detailCabinTypeMatch) {
+                cabinType = detailCabinTypeMatch[1].trim();
+              }
+            }
+            
+            if (!cabinNumber) {
+              const detailCabinNumMatch = detailsText.match(/(?:Cabin|Room|Stateroom)[:\\s]*(\\d{4,5})/i);
+              if (detailCabinNumMatch) {
+                cabinNumber = detailCabinNumMatch[1];
+              } else {
+                const directNumMatch2 = detailsText.match(/(Interior|Balcony|Suite|Ocean View|Oceanview)[^\\n]*?(\\d{4,5})/i);
+                if (directNumMatch2) {
+                  cabinNumber = directNumMatch2[2];
+                }
+              }
+            }
+            
+            const closeBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el =>
+              (el.textContent || '').match(/close|back|×|✕/i) || el.querySelector('[class*="close"]')
+            );
+            if (closeBtn) {
+              closeBtn.click();
+              await wait(1000);
+            }
+          }
+        }
+        
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
           message: '  Cabin Type: ' + (cabinType || '[NOT FOUND]'),

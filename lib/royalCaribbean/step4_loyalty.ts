@@ -82,21 +82,71 @@ export const STEP4_LOYALTY_SCRIPT = `
         }));
       }
 
-      const allElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div');
+      const allElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, section, article');
+      let foundClubRoyale = false;
+      
       allElements.forEach(el => {
         const text = el.textContent?.trim() || '';
         
-        if (text.match(/Signature|Premier|Classic/i) && !loyaltyData.clubRoyaleTier) {
-          loyaltyData.clubRoyaleTier = text;
+        if (text.match(/Club Royale/i) && !foundClubRoyale) {
+          foundClubRoyale = true;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found Club Royale section',
+            logType: 'info'
+          }));
         }
         
-        if (text.match(/^\\d{3,}$/) && !loyaltyData.clubRoyalePoints) {
-          const num = parseInt(text);
-          if (num > 100 && num < 10000) {
-            loyaltyData.clubRoyalePoints = text;
+        if (text.match(/^(Signature|Premier|Classic)$/i) && !loyaltyData.clubRoyaleTier) {
+          loyaltyData.clubRoyaleTier = text;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found Club Royale tier: ' + text,
+            logType: 'success'
+          }));
+        }
+        
+        const pointsMatch = text.match(/^([\d,]+)\s*(?:Club Royale)?\s*(?:Points?)?$/i);
+        if (pointsMatch && !loyaltyData.clubRoyalePoints) {
+          const num = parseInt(pointsMatch[1].replace(/,/g, ''));
+          if (num >= 1000 && num <= 100000) {
+            loyaltyData.clubRoyalePoints = pointsMatch[1];
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Found Club Royale points: ' + pointsMatch[1],
+              logType: 'success'
+            }));
           }
         }
       });
+      
+      const bodyText = document.body.textContent || '';
+      
+      if (!loyaltyData.clubRoyaleTier) {
+        const tierPattern = /(Signature|Premier|Classic)\s+Club Royale|Club Royale\s+(Signature|Premier|Classic)/i;
+        const tierMatch = bodyText.match(tierPattern);
+        if (tierMatch) {
+          loyaltyData.clubRoyaleTier = tierMatch[1] || tierMatch[2];
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found Club Royale tier (pattern): ' + loyaltyData.clubRoyaleTier,
+            logType: 'success'
+          }));
+        }
+      }
+      
+      if (!loyaltyData.clubRoyalePoints) {
+        const pointsPattern = /Club Royale[^\d]*([\d,]{4,})\s*(?:Points?|pts)/i;
+        const pointsMatch2 = bodyText.match(pointsPattern);
+        if (pointsMatch2) {
+          loyaltyData.clubRoyalePoints = pointsMatch2[1];
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found Club Royale points (pattern): ' + pointsMatch2[1],
+            logType: 'success'
+          }));
+        }
+      }
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'loyalty_data',

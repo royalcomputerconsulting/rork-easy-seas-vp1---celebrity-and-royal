@@ -212,8 +212,10 @@ export const STEP1_OFFERS_SCRIPT = `
             const hasNights = text.match(/\\d+\\s+NIGHT/i);
             const hasPort = text.match(/(Miami|Orlando|Fort Lauderdale|Tampa|Galveston|Port Canaveral|Port Cañaveral|Cape Liberty|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan|Bayonne)/i);
             const hasDate = text.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
-            const lengthOk = text.length > 50 && text.length < 1500;
-            return hasShipName && (hasNights || hasPort || hasDate) && lengthOk;
+            const hasCabin = text.match(/(Balcony|Ocean View|Interior|Suite)/i);
+            const lengthOk = text.length > 40 && text.length < 2000;
+            const hasMultipleMarkers = [hasShipName, hasNights, hasPort, hasDate, hasCabin].filter(Boolean).length >= 2;
+            return hasShipName && hasMultipleMarkers && lengthOk;
           }).filter((el, idx, arr) => {
             return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
           });

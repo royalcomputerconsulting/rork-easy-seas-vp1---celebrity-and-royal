@@ -125,8 +125,23 @@ export const STEP3_HOLDS_SCRIPT = `
           logType: 'info'
         }));
 
-        const cruiseTitleMatch = fullText.match(/(\\d+)\\s+Night\\s+([^\\n]+?)(?=\\n|$)/);
-        const cruiseTitle = cruiseTitleMatch ? cruiseTitleMatch[0].trim() : '';
+        const cruiseTitleMatch = fullText.match(/(\\d+)\\s+[Nn]ight\\s+([^\\n]+?)(?=\\n|$|Reservation)/i);
+        let cruiseTitle = cruiseTitleMatch ? cruiseTitleMatch[0].trim() : '';
+        
+        if (!cruiseTitle) {
+          const alternateMatch = fullText.match(/(\\d+)\\s+[Nn]ight\\s+[\\w\\s&]+/i);
+          if (alternateMatch) {
+            cruiseTitle = alternateMatch[0].trim();
+          }
+        }
+        
+        if (cruiseTitle.includes('of the Seas')) {
+          const parts = cruiseTitle.split(/(?=[A-Z][a-z]+\\s+of the Seas)/);
+          if (parts.length > 0) {
+            cruiseTitle = parts[0].trim();
+          }
+        }
+        
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
           message: '  Title: ' + (cruiseTitle || '[NOT FOUND]'),
