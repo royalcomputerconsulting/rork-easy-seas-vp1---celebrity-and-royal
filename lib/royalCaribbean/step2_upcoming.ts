@@ -110,35 +110,37 @@ export const STEP2_UPCOMING_SCRIPT = `
         logType: 'info'
       }));
       
-      let cruiseCards = document.querySelectorAll('[data-testid*="cruise"], [class*="cruise-card"], [class*="booking"], [class*="reservation"]');
+      let cruiseCards = document.querySelectorAll('[data-testid*="cruise"], [class*="cruise-card"], [class*="cruise"], [class*="Cruise"], [class*="booking"], [class*="reservation"], [class*="trip"], [class*="upcoming"]');
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Initial search found ' + cruiseCards.length + ' cruise cards',
+        logType: 'info'
+      }));
       
       if (cruiseCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'No cruises found with primary selectors, trying broader search...',
+          message: 'No cruises with class selectors, searching for cards with ship names...',
           logType: 'warning'
         }));
         
-        cruiseCards = document.querySelectorAll('[class*="cruise"], [class*="Cruise"], [class*="trip"], [class*="booking"], [class*="upcoming"], section, article, .card, main > div > div');
-      }
-      
-      if (cruiseCards.length === 0) {
+        const allElements = document.querySelectorAll('section, article, [class*="card"], main > div > div, div[class*="container"]');
+        const potentialCards = [];
+        
+        allElements.forEach(el => {
+          const text = el.textContent || '';
+          if (text.match(/of the [A-Z][a-z]+/i) && text.match(/RESERVATION|Booking|\d{4,5}/i)) {
+            potentialCards.push(el);
+          }
+        });
+        
+        cruiseCards = potentialCards;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Still no cards found, checking page content...',
-          logType: 'warning'
+          message: 'Found ' + cruiseCards.length + ' cards with ship names and booking info',
+          logType: 'info'
         }));
-        
-        const bodyText = document.body.textContent || '';
-        const hasReservation = bodyText.match(/RESERVATION|Booking|Cruise/i);
-        if (hasReservation) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Page contains cruise-related text, using main sections',
-            logType: 'info'
-          }));
-          cruiseCards = document.querySelectorAll('main section, main > div');
-        }
       }
       
       console.log('[STEP2] Starting scroll');
@@ -177,9 +179,12 @@ export const STEP2_UPCOMING_SCRIPT = `
 
       for (let i = 0; i < cruiseCards.length; i++) {
         const card = cruiseCards[i];
+        
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await wait(500);
 
-        const viewMoreBtn = Array.from(card.querySelectorAll('button, a')).find(el => 
-          el.textContent?.match(/View More Details|More Details|View Details/i)
+        const viewMoreBtn = Array.from(card.querySelectorAll('button, a, [role="button"]')).find(el => 
+          el.textContent?.match(/View More Details|More Details|View Details|Details|Expand/i)
         );
 
         if (viewMoreBtn) {
@@ -190,17 +195,24 @@ export const STEP2_UPCOMING_SCRIPT = `
           }));
           
           viewMoreBtn.click();
-          await wait(2000);
+          await wait(1500);
           
-          await scrollUntilComplete(10);
+          await scrollUntilComplete(5);
           await wait(500);
+        } else {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'No View More button for cruise ' + (i + 1) + ', card may already be expanded',
+            logType: 'info'
+          }));
         }
 
         const cardText = card.textContent || '';
         const cardHTML = card.innerHTML || '';
 
-        const shipName = extractText(card, '[data-testid*="ship"], [class*="ship"]') || 
-                        (cardHTML.match(/([A-Z][a-z]+ of the [A-Z][a-z]+|Anthem of the Seas|Legend of the Seas|Quantum of the Seas|Ovation of the Seas|Odyssey of the Seas|Wonder of the Seas|Symphony of the Seas|Harmony of the Seas|Oasis of the Seas|Allure of the Seas|Navigator of the Seas|Mariner of the Seas|Explorer of the Seas|Adventure of the Seas|Voyager of the Seas|Freedom of the Seas|Liberty of the Seas|Independence of the Seas|Brilliance of the Seas|Radiance of the Seas|Serenade of the Seas|Jewel of the Seas|Vision of the Seas|Enchantment of the Seas|Grandeur of the Seas|Rhapsody of the Seas|Majesty of the Seas)/i) || [])[0] || '';
+        const shipNameEl = extractText(card, '[data-testid*="ship"], [class*="ship"], h1, h2, h3');
+        const shipMatch = cardText.match(/([A-Z][a-z]+ of the [A-Z][a-z]+)/i);
+        const shipName = shipNameEl || (shipMatch ? shipMatch[1] : '');
         
         const dateMatches = cardText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:\s*—\s*|\s*-\s*|\s+to\s+)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{1,2},?\s*\d{4}/i);
         let sailingStartDate = '';
@@ -233,7 +245,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         const guestMatch = cardText.match(/Guests?[\s\n:]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)*)/i);
         const guests = guestMatch ? guestMatch[1] : '';
 
-        if (shipName || bookingId) {
+        if ((shipName || bookingId) && sailingStartDate) {
           cruises.push({
             sourcePage: 'Upcoming',
             shipName: shipName,

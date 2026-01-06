@@ -97,12 +97,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     switch (message.type) {
       case 'auth_status':
         setState(prev => {
-          if (prev.status.startsWith('running_') || prev.status === 'syncing') {
+          if (isIngestionRunning.current || prev.status.startsWith('running_') || prev.status === 'syncing' || prev.status === 'awaiting_confirmation') {
             return prev;
           }
           return { ...prev, status: message.loggedIn ? 'logged_in' : 'not_logged_in' };
         });
-        addLog(message.loggedIn ? 'User logged in successfully' : 'User not logged in', 'info');
+        if (!isIngestionRunning.current) {
+          addLog(message.loggedIn ? 'User logged in successfully' : 'User not logged in', 'info');
+        }
         break;
 
       case 'log':
@@ -217,11 +219,18 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     try {
       const timestamp = Date.now();
       
-      addLog('Step 1: Scraping offers on current page (no reload)...', 'info');
+      addLog('Step 1: Scraping Club Royale Offers page...', 'info');
+      webViewRef.current.injectJavaScript(`
+        window.location.href = 'https://www.royalcaribbean.com/club-royale/offers?_t=${timestamp}';
+        true;
+      `);
+      
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
       addLog('Injecting Step 1 extraction script...', 'info');
       webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 50000));
+      await new Promise(resolve => setTimeout(resolve, 60000));
       
       addLog('Step 1 complete. Navigating to Account page for 10-second pause...', 'info');
       const accountUrl = `https://www.royalcaribbean.com/Account?_t=${timestamp}`;
