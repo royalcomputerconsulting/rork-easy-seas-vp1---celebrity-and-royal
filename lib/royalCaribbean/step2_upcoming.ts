@@ -100,7 +100,7 @@ export const STEP2_UPCOMING_SCRIPT = `
       if (cruiseCards.length !== expectedCount) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'WARNING: Found ' + cruiseCards.length + ' but expected ' + expectedCount,
+          message: '⚠️ WARNING: Found ' + cruiseCards.length + ' but expected ' + expectedCount,
           logType: 'warning'
         }));
       }
@@ -114,15 +114,25 @@ export const STEP2_UPCOMING_SCRIPT = `
 
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Processing cruise ' + (i + 1) + '/' + cruiseCards.length,
+          message: '━━━━━ Cruise ' + (i + 1) + '/' + cruiseCards.length + ' ━━━━━',
           logType: 'info'
         }));
 
         const shipMatch = fullText.match(/([\\w\\s]+of the Seas)/);
         const shipName = shipMatch ? shipMatch[1].trim() : '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Ship: ' + (shipName || '[NOT FOUND]'),
+          logType: shipName ? 'info' : 'warning'
+        }));
 
         const cruiseTitleMatch = fullText.match(/(\\d+)\\s+Night\\s+([^\\n]+?)(?=VANCOUVER|LOS ANGELES|MIAMI|SEATTLE|TAMPA|ORLANDO|FORT LAUDERDALE|GALVESTON|NEW YORK|BOSTON|BALTIMORE|CHECK-IN|\\d+ Days|$)/i);
         const cruiseTitle = cruiseTitleMatch ? cruiseTitleMatch[0].trim() : '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Title: ' + (cruiseTitle || '[NOT FOUND]'),
+          logType: cruiseTitle ? 'info' : 'warning'
+        }));
 
         const dateMatch = fullText.match(/(\\w{3})\\s+(\\d+)\\s*—\\s*(\\w{3})\\s+(\\d+),?\\s*(\\d{4})/);
         let sailingStartDate = '';
@@ -134,6 +144,16 @@ export const STEP2_UPCOMING_SCRIPT = `
           sailingStartDate = parseDate(dateMatch[1] + ' ' + dateMatch[2], year);
           sailingEndDate = dateMatch[3] + ' ' + dateMatch[4] + ', ' + year;
         }
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Start Date: ' + (sailingStartDate || '[NOT FOUND]'),
+          logType: sailingStartDate ? 'info' : 'warning'
+        }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  End Date: ' + (sailingEndDate || '[NOT FOUND]'),
+          logType: sailingEndDate ? 'info' : 'warning'
+        }));
 
         let itinerary = '';
         const itineraryPattern = /([A-Z][A-Z\\s,()]+?)(?=Reservation|Interior|Balcony|Suite|Ocean View|GTY|Gty|\\d+ Gty|CHECK-IN|Guests|Days to go)/i;
@@ -150,9 +170,19 @@ export const STEP2_UPCOMING_SCRIPT = `
             }
           }
         }
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Itinerary: ' + (itinerary || '[NOT FOUND]'),
+          logType: itinerary ? 'info' : 'warning'
+        }));
 
         const reservationMatch = fullText.match(/Reservation[:\\s]*(\\d+)/i);
         const bookingId = reservationMatch ? reservationMatch[1] : '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Reservation: ' + (bookingId || '[NOT FOUND]'),
+          logType: bookingId ? 'info' : 'warning'
+        }));
 
         const cabinMatches = fullText.match(/(Interior|Ocean View|Balcony|Suite|Junior Suite|GTY|Gty)([^\\n]*?)(?=(\\d{4,5})|Guests|Days|$)/i);
         let cabinType = '';
@@ -165,12 +195,32 @@ export const STEP2_UPCOMING_SCRIPT = `
             cabinNumber = cabinNumMatch[2];
           }
         }
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Cabin Type: ' + (cabinType || '[NOT FOUND]'),
+          logType: cabinType ? 'info' : 'warning'
+        }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Cabin Number: ' + (cabinNumber || '[NOT FOUND]'),
+          logType: cabinNumber ? 'info' : 'warning'
+        }));
 
         const guestsMatch = fullText.match(/(\\d+)\\s+Guest/i);
         const numberOfGuests = guestsMatch ? guestsMatch[1] : '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Guests: ' + (numberOfGuests || '[NOT FOUND]'),
+          logType: numberOfGuests ? 'info' : 'warning'
+        }));
 
         const daysMatch = fullText.match(/(\\d+)\\s+Days?\\s+to\\s+go/i);
         const daysToGo = daysMatch ? daysMatch[1] : '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Days to Go: ' + (daysToGo || '[NOT FOUND]'),
+          logType: daysToGo ? 'info' : 'warning'
+        }));
 
         if (shipName && cruiseTitle && bookingId) {
           const cruise = {
@@ -198,8 +248,8 @@ export const STEP2_UPCOMING_SCRIPT = `
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Scraped: ' + shipName + ' - ' + cruiseTitle + ' (Res: ' + bookingId + ')',
-            logType: 'info'
+            message: '  ✓ Cruise scraped successfully (' + processedCount + '/' + expectedCount + ')',
+            logType: 'success'
           }));
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -211,7 +261,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         } else {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Skipped cruise card - missing required fields (ship: ' + !!shipName + ', title: ' + !!cruiseTitle + ', booking: ' + !!bookingId + ')',
+            message: '  ⚠️ Skipped - missing required fields (ship: ' + !!shipName + ', title: ' + !!cruiseTitle + ', booking: ' + !!bookingId + ')',
             logType: 'warning'
           }));
         }
@@ -226,7 +276,7 @@ export const STEP2_UPCOMING_SCRIPT = `
       const statusType = cruises.length === expectedCount ? 'success' : 'warning';
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Extracted ' + cruises.length + ' cruises (expected ' + expectedCount + ')',
+        message: '✓ Extracted ' + cruises.length + ' cruises (expected ' + expectedCount + ')',
         logType: statusType
       }));
 

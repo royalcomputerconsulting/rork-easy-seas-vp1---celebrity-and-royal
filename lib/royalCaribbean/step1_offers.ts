@@ -109,6 +109,12 @@ export const STEP1_OFFERS_SCRIPT = `
         const card = offerCards[i];
         const cardText = card.textContent || '';
         
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '━━━━━ Offer ' + (i + 1) + '/' + offerCards.length + ' ━━━━━',
+          logType: 'info'
+        }));
+        
         let offerName = extractText(card, 'h1') || extractText(card, 'h2') || 
                         extractText(card, 'h3') || extractText(card, 'h4');
         
@@ -129,7 +135,7 @@ export const STEP1_OFFERS_SCRIPT = `
         if (!offerName || offerName.length < 3) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Skipping element - no valid offer name found',
+            message: '⚠️ Skipping - no valid offer name found',
             logType: 'warning'
           }));
           continue;
@@ -137,18 +143,35 @@ export const STEP1_OFFERS_SCRIPT = `
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Processing offer: ' + offerName,
+          message: '  Offer Name: ' + offerName,
           logType: 'info'
         }));
         
         const codeMatch = cardText.match(/([A-Z0-9]{5,15})/);
         const offerCode = codeMatch ? codeMatch[1] : '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Offer Code: ' + (offerCode || '[NOT FOUND]'),
+          logType: offerCode ? 'info' : 'warning'
+        }));
         
         const expiryMatch = cardText.match(/Redeem by ([A-Za-z]+ \\d+, \\d{4})/i);
         const offerExpiry = expiryMatch ? expiryMatch[1] : '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Expiry Date: ' + (offerExpiry || '[NOT FOUND]'),
+          logType: offerExpiry ? 'info' : 'warning'
+        }));
         
         const tradeInMatch = cardText.match(/\\$([\\d,]+\\.\\d{2})\\s*trade-in value/i);
         const tradeInValue = tradeInMatch ? tradeInMatch[1] : '';
+        if (tradeInValue) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '  Trade-in Value: $' + tradeInValue,
+            logType: 'info'
+          }));
+        }
         
         const offerType = 'Club Royale';
         const perks = tradeInValue ? 'Trade-in value: $' + tradeInValue : '';
@@ -160,7 +183,7 @@ export const STEP1_OFFERS_SCRIPT = `
         if (viewSailingsBtn) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Clicking "View Sailings" for: ' + offerName,
+            message: '  ▶ Clicking "View Sailings"...',
             logType: 'info'
           }));
           
@@ -189,7 +212,7 @@ export const STEP1_OFFERS_SCRIPT = `
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Found ' + sailingElements.length + ' sailings for: ' + offerName,
+            message: '  Found ' + sailingElements.length + ' sailings',
             logType: 'info'
           }));
           
@@ -198,20 +221,51 @@ export const STEP1_OFFERS_SCRIPT = `
               const sailing = sailingElements[j];
               const sailingText = sailing.textContent || '';
               
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '    ─── Sailing ' + (j + 1) + '/' + sailingElements.length + ' ───',
+                logType: 'info'
+              }));
+              
               const shipMatch = sailingText.match(/([\\w\\s]+of the Seas)/);
               const shipName = shipMatch ? shipMatch[1].trim() : '';
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '      Ship: ' + (shipName || '[NOT FOUND]'),
+                logType: shipName ? 'info' : 'warning'
+              }));
               
               const itineraryMatch = sailingText.match(/(\\d+)\\s+NIGHT\\s+([A-Z\\s&]+?)(?=\\d{2}\\/|$)/i);
               const itinerary = itineraryMatch ? itineraryMatch[0].trim() : '';
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '      Itinerary: ' + (itinerary || '[NOT FOUND]'),
+                logType: itinerary ? 'info' : 'warning'
+              }));
               
               const portMatch = sailingText.match(/(Orlando \\(Port Cañaveral\\)|Miami|Fort Lauderdale|Tampa|Galveston)/i);
               const departurePort = portMatch ? portMatch[1] : '';
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '      Port: ' + (departurePort || '[NOT FOUND]'),
+                logType: departurePort ? 'info' : 'warning'
+              }));
               
               const dateMatch = sailingText.match(/(\\d{2}\\/\\d{2}\\/\\d{2})/);
               const sailingDate = dateMatch ? dateMatch[1] : '';
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '      Date: ' + (sailingDate || '[NOT FOUND]'),
+                logType: sailingDate ? 'info' : 'warning'
+              }));
               
               const cabinMatch = cardText.match(/(Balcony|Ocean View|Interior|Suite)\\s+(Room for Two|or Oceanview Room for Two)/i);
               const cabinType = cabinMatch ? cabinMatch[1] : '';
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '      Cabin: ' + (cabinType || '[NOT FOUND]'),
+                logType: cabinType ? 'info' : 'warning'
+              }));
               
               offers.push({
                 sourcePage: 'Offers',
@@ -229,6 +283,12 @@ export const STEP1_OFFERS_SCRIPT = `
                 loyaltyLevel: '',
                 loyaltyPoints: ''
               });
+              
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '      ✓ Row added (' + offers.length + ' total)',
+                logType: 'success'
+              }));
             }
           } else {
             offers.push({
@@ -259,7 +319,7 @@ export const STEP1_OFFERS_SCRIPT = `
         } else {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'No "View Sailings" button found for: ' + offerName,
+            message: '  ⚠️ No "View Sailings" button found',
             logType: 'warning'
           }));
           
@@ -298,7 +358,7 @@ export const STEP1_OFFERS_SCRIPT = `
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: \`Extracted \${offers.length} offer rows from \${offerCards.length} offers\`,
+        message: \`✓ Extracted \${offers.length} offer rows from \${offerCards.length} offers\`,
         logType: 'success'
       }));
 

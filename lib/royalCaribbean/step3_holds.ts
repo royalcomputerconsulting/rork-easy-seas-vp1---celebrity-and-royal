@@ -103,15 +103,25 @@ export const STEP3_HOLDS_SCRIPT = `
 
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Processing hold ' + (i + 1) + '/' + holdCards.length,
+          message: '━━━━━ Hold ' + (i + 1) + '/' + holdCards.length + ' ━━━━━',
           logType: 'info'
         }));
 
         const cruiseTitleMatch = fullText.match(/(\\d+)\\s+Night\\s+([^\\n]+?)(?=\\n|$)/);
         const cruiseTitle = cruiseTitleMatch ? cruiseTitleMatch[0].trim() : '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Title: ' + (cruiseTitle || '[NOT FOUND]'),
+          logType: cruiseTitle ? 'info' : 'warning'
+        }));
 
         const shipMatch = fullText.match(/([\\w\\s]+of the Seas)/);
         const shipName = shipMatch ? shipMatch[1].trim() : '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Ship: ' + (shipName || '[NOT FOUND]'),
+          logType: shipName ? 'info' : 'warning'
+        }));
 
         const dateMatch = fullText.match(/(\\w{3})\\s+(\\d+)\\s*—\\s*(\\w{3})\\s+(\\d+),?\\s*(\\d{4})/);
         let sailingStartDate = '';
@@ -123,12 +133,32 @@ export const STEP3_HOLDS_SCRIPT = `
           sailingStartDate = parseDate(dateMatch[1] + ' ' + dateMatch[2], year);
           sailingEndDate = dateMatch[3] + ' ' + dateMatch[4] + ', ' + year;
         }
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Start Date: ' + (sailingStartDate || '[NOT FOUND]'),
+          logType: sailingStartDate ? 'info' : 'warning'
+        }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  End Date: ' + (sailingEndDate || '[NOT FOUND]'),
+          logType: sailingEndDate ? 'info' : 'warning'
+        }));
 
         const reservationMatch = fullText.match(/Reservation[:\\s]*(\\d+)/i);
         const bookingId = reservationMatch ? reservationMatch[1] : '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Reservation: ' + (bookingId || '[NOT FOUND]'),
+          logType: bookingId ? 'info' : 'warning'
+        }));
 
         const expiresMatch = fullText.match(/Expires[:\\s]*(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/i);
         const holdExpiration = expiresMatch ? expiresMatch[1] : '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '  Expiration: ' + (holdExpiration || '[NOT FOUND]'),
+          logType: holdExpiration ? 'info' : 'warning'
+        }));
 
         if (shipName && cruiseTitle && bookingId) {
           const hold = {
@@ -154,8 +184,8 @@ export const STEP3_HOLDS_SCRIPT = `
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Scraped hold: ' + shipName + ' - Res: ' + bookingId + ', Expires: ' + holdExpiration,
-            logType: 'info'
+            message: '  ✓ Hold scraped successfully (' + processedCount + '/' + expectedCount + ')',
+            logType: 'success'
           }));
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -163,6 +193,12 @@ export const STEP3_HOLDS_SCRIPT = `
             current: processedCount,
             total: holdCards.length,
             stepName: 'Holds: ' + processedCount + ' of ' + expectedCount + ' scraped'
+          }));
+        } else {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '  ⚠️ Skipped - missing required fields',
+            logType: 'warning'
           }));
         }
       }
@@ -176,7 +212,7 @@ export const STEP3_HOLDS_SCRIPT = `
       const statusType = holds.length === expectedCount ? 'success' : 'warning';
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Extracted ' + holds.length + ' holds (expected ' + expectedCount + ')',
+        message: '✓ Extracted ' + holds.length + ' holds (expected ' + expectedCount + ')',
         logType: statusType
       }));
 
