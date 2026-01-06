@@ -69,6 +69,12 @@ export const STEP2_UPCOMING_SCRIPT = `
 
       const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="cruise"]'));
       
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '📊 Scanning ' + allElements.length + ' elements for cruise cards...',
+        logType: 'info'
+      }));
+
       let cruiseCards = allElements.filter(el => {
         const text = el.textContent || '';
         const hasShip = text.includes('of the Seas');
@@ -76,31 +82,39 @@ export const STEP2_UPCOMING_SCRIPT = `
         const hasReservation = text.match(/Reservation[:\\s]*\\d+/i);
         const hasDaysToGo = text.includes('Days to go') || text.includes('Day to go');
         const hasGuests = text.includes('Guests') || text.includes('Guest');
+        const hasCheckIn = text.includes('CHECK-IN NOT AVAILABLE') || text.includes('Check-In');
         const textLength = text.length;
         
-        return hasShip && hasNight && hasReservation && textLength > 150 && textLength < 3000;
+        return hasShip && hasNight && hasReservation && textLength > 100 && textLength < 4000;
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + cruiseCards.length + ' potential cruise cards',
+        message: 'Found ' + cruiseCards.length + ' potential cruise cards (before deduplication)',
         logType: 'info'
       }));
       
+      const beforeDedup = cruiseCards.length;
       cruiseCards = cruiseCards.filter((el, idx, arr) => {
         return !arr.some((other, otherIdx) => otherIdx !== idx && (other.contains(el) || el.contains(other)));
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Extracted ' + cruiseCards.length + ' unique cruise cards',
+        message: 'After deduplication: ' + cruiseCards.length + ' unique cruise cards (removed ' + (beforeDedup - cruiseCards.length) + ' duplicates)',
+        logType: 'info'
+      }));
+
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '📊 CRUISE COUNT: Found ' + cruiseCards.length + ' / Expected ' + expectedCount,
         logType: cruiseCards.length === expectedCount ? 'success' : 'warning'
       }));
       
       if (cruiseCards.length !== expectedCount) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '⚠️ WARNING: Found ' + cruiseCards.length + ' but expected ' + expectedCount,
+          message: '⚠️ WARNING: Missing ' + (expectedCount - cruiseCards.length) + ' cruise(s)',
           logType: 'warning'
         }));
       }
@@ -261,8 +275,13 @@ export const STEP2_UPCOMING_SCRIPT = `
         } else {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: '  ⚠️ Skipped - missing required fields (ship: ' + !!shipName + ', title: ' + !!cruiseTitle + ', booking: ' + !!bookingId + ')',
-            logType: 'warning'
+            message: '  ❌ SKIPPED - Missing fields: ship=' + !!shipName + ', title=' + !!cruiseTitle + ', booking=' + !!bookingId,
+            logType: 'error'
+          }));
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '  📝 Card text preview: ' + fullText.substring(0, 200) + '...',
+            logType: 'info'
           }));
         }
       }

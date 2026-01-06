@@ -75,22 +75,40 @@ export const STEP3_HOLDS_SCRIPT = `
       }
 
       const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="hold"], [class*="courtesy"]'));
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '📊 Scanning ' + allElements.length + ' elements for hold cards...',
+        logType: 'info'
+      }));
+
       let holdCards = allElements.filter(el => {
         const text = el.textContent || '';
         const hasShip = text.includes('of the Seas');
         const hasNight = text.match(/\\d+\\s+Night/i);
         const hasReservation = text.match(/Reservation[:\\s]*\\d+/i);
-        const hasExpires = text.match(/Expires[:\\s]*(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/i) || text.includes('Expires');
-        const hasCourtesy = text.includes('Courtesy') || text.includes('Hold');
-        const isReasonablySmall = text.length > 80 && text.length < 2500;
-        return hasShip && hasNight && hasReservation && (hasExpires || hasCourtesy) && isReasonablySmall;
+        const hasExpires = text.match(/Expires[:\\s]*(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/i) || text.includes('Expires') || text.includes('EXPIRES');
+        const hasCourtesy = text.includes('Courtesy') || text.includes('Hold') || text.includes('COURTESY') || text.includes('HOLD');
+        const isReasonablySmall = text.length > 50 && text.length < 4000;
+        
+        const passes = hasShip && hasNight && hasReservation && (hasExpires || hasCourtesy) && isReasonablySmall;
+        
+        if (!passes && hasShip && hasReservation) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '  🔍 Filtered element (ship=' + hasShip + ', night=' + hasNight + ', res=' + hasReservation + ', expires=' + hasExpires + ', courtesy=' + hasCourtesy + ', size=' + text.length + ')',
+            logType: 'info'
+          }));
+        }
+        
+        return passes;
       }).filter((el, idx, arr) => {
         return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
       }).sort((a, b) => a.textContent.length - b.textContent.length);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + holdCards.length + ' potential hold cards',
+        message: '📊 HOLD COUNT: Found ' + holdCards.length + ' / Expected ' + expectedCount,
         logType: holdCards.length === expectedCount ? 'success' : 'warning'
       }));
       
@@ -197,8 +215,13 @@ export const STEP3_HOLDS_SCRIPT = `
         } else {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: '  ⚠️ Skipped - missing required fields',
-            logType: 'warning'
+            message: '  ❌ SKIPPED - Missing fields: ship=' + !!shipName + ', title=' + !!cruiseTitle + ', booking=' + !!bookingId,
+            logType: 'error'
+          }));
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '  📝 Card text preview: ' + fullText.substring(0, 200) + '...',
+            logType: 'info'
           }));
         }
       }

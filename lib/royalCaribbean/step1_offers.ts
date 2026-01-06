@@ -199,21 +199,29 @@ export const STEP1_OFFERS_SCRIPT = `
           await wait(1000);
 
           const allPossibleElements = Array.from(sailingsContainer.querySelectorAll('div, article, section'));
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '  📊 Analyzing ' + allPossibleElements.length + ' elements for sailings...',
+            logType: 'info'
+          }));
+
           const sailingElements = allPossibleElements.filter(el => {
             const text = el.textContent || '';
             const hasShipName = text.match(/\\w+\\s+of the Seas/);
             const hasNights = text.match(/\\d+\\s+NIGHT/i);
-            const hasPort = text.match(/(Miami|Orlando|Fort Lauderdale|Tampa)/i);
-            const hasDate = text.match(/\\d{2}\\/\\d{2}\\/\\d{2}/);
-            return hasShipName && (hasNights || hasPort || hasDate) && text.length > 50 && text.length < 800;
+            const hasPort = text.match(/(Miami|Orlando|Fort Lauderdale|Tampa|Galveston|Port Canaveral|Port Cañaveral|Cape Liberty|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan|Bayonne)/i);
+            const hasDate = text.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
+            const lengthOk = text.length > 50 && text.length < 1500;
+            return hasShipName && (hasNights || hasPort || hasDate) && lengthOk;
           }).filter((el, idx, arr) => {
             return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
           });
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: '  Found ' + sailingElements.length + ' sailings',
-            logType: 'info'
+            message: '  ✓ Found ' + sailingElements.length + ' valid sailings (filtered from ' + allPossibleElements.length + ')',
+            logType: sailingElements.length > 0 ? 'success' : 'warning'
           }));
           
           if (sailingElements.length > 0) {
@@ -243,7 +251,7 @@ export const STEP1_OFFERS_SCRIPT = `
                 logType: itinerary ? 'info' : 'warning'
               }));
               
-              const portMatch = sailingText.match(/(Orlando \\(Port Cañaveral\\)|Miami|Fort Lauderdale|Tampa|Galveston)/i);
+              const portMatch = sailingText.match(/(Orlando \\(Port Cañaveral\\)|Port Cañaveral|Miami|Fort Lauderdale|Tampa|Galveston|Cape Liberty|Bayonne|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan)/i);
               const departurePort = portMatch ? portMatch[1] : '';
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
@@ -251,7 +259,7 @@ export const STEP1_OFFERS_SCRIPT = `
                 logType: departurePort ? 'info' : 'warning'
               }));
               
-              const dateMatch = sailingText.match(/(\\d{2}\\/\\d{2}\\/\\d{2})/);
+              const dateMatch = sailingText.match(/(\\d{2}\\/\\d{2}\\/\\d{2,4})/);
               const sailingDate = dateMatch ? dateMatch[1] : '';
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
