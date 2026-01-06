@@ -127,7 +127,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     setState(prev => ({
       ...prev,
-      status: 'running_step_4',
+      status: 'running_step_1',
       extractedOffers: [],
       extractedBookedCruises: [],
       error: null
@@ -136,19 +136,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     addLog('Starting ingestion process...', 'info');
     
     try {
-      addLog('Step 4: Navigating to loyalty status page...', 'info');
-      webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/account/loyalty-status';
-        true;
-      `);
-      
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
-      
-      await new Promise(resolve => setTimeout(resolve, 8000));
-      
-      setState(prev => ({ ...prev, status: 'running_step_1' }));
       addLog('Step 1: Navigating to Club Royale offers page...', 'info');
       webViewRef.current.injectJavaScript(`
         window.location.href = 'https://www.royalcaribbean.com/club-royale/offers';
@@ -186,6 +173,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
       
       await new Promise(resolve => setTimeout(resolve, 20000));
+      
+      setState(prev => ({ ...prev, status: 'running_step_4' }));
+      addLog('Step 4: Navigating to loyalty status page...', 'info');
+      webViewRef.current.injectJavaScript(`
+        window.location.href = 'https://www.royalcaribbean.com/account/loyalty-status';
+        true;
+      `);
+      
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
+      
+      await new Promise(resolve => setTimeout(resolve, 8000));
       
       setState(prev => {
         const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
