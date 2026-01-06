@@ -53,6 +53,43 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
+      let clubRoyaleTier = '';
+      let clubRoyalePoints = '';
+      
+      const clubRoyaleSelectors = [
+        '[data-testid*="club-royale"], [class*="club-royale"], [class*="ClubRoyale"]',
+        '[data-testid*="tier"], [class*="tier"]',
+        'header, nav, [class*="header"], [class*="profile"]',
+        'h1, h2, h3, h4, h5, h6, p, span, div'
+      ];
+
+      for (const selector of clubRoyaleSelectors) {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+          const text = el.textContent?.trim() || '';
+          
+          if (text.match(/Signature|Premier|Classic/i) && !clubRoyaleTier) {
+            clubRoyaleTier = text.match(/(Signature|Premier|Classic)/i)?.[0] || '';
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Found Club Royale tier: ' + clubRoyaleTier,
+              logType: 'info'
+            }));
+          }
+          
+          if (text.match(/\d{3,}\s*(Club Royale\s*)?points?/i) && !clubRoyalePoints) {
+            clubRoyalePoints = text.match(/\d{3,}/)?.[0] || '';
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Found Club Royale points: ' + clubRoyalePoints,
+              logType: 'info'
+            }));
+          }
+        });
+        
+        if (clubRoyaleTier && clubRoyalePoints) break;
+      }
+
       const showAllBtn = Array.from(document.querySelectorAll('button, a')).find(el => 
         el.textContent?.match(/Show All|View All|See All/i)
       );
@@ -135,8 +172,8 @@ export const STEP1_OFFERS_SCRIPT = `
                 cabinType: extractText(sailing, '[data-testid*="cabin"], [class*="cabin"]'),
                 numberOfGuests: extractText(sailing, '[data-testid*="guest"], [class*="guest"]'),
                 perks: perks,
-                loyaltyLevel: '',
-                loyaltyPoints: ''
+                loyaltyLevel: clubRoyaleTier,
+                loyaltyPoints: clubRoyalePoints
               });
             }
           } else {
@@ -153,8 +190,8 @@ export const STEP1_OFFERS_SCRIPT = `
               cabinType: '',
               numberOfGuests: '',
               perks: perks,
-              loyaltyLevel: '',
-              loyaltyPoints: ''
+              loyaltyLevel: clubRoyaleTier,
+              loyaltyPoints: clubRoyalePoints
             });
           }
         } else {
@@ -171,8 +208,8 @@ export const STEP1_OFFERS_SCRIPT = `
             cabinType: '',
             numberOfGuests: '',
             perks: perks,
-            loyaltyLevel: '',
-            loyaltyPoints: ''
+            loyaltyLevel: clubRoyaleTier,
+            loyaltyPoints: clubRoyalePoints
           });
         }
 
