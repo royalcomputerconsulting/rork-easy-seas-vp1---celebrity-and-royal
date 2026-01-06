@@ -82,7 +82,9 @@ export default function SettingsScreen() {
   const { clearAllData, cruises, bookedCruises, setCruises, setOffers, casinoOffers, setBookedCruises } = cruiseStore;
   const coreData = useCoreData();
   const { restoreMockData } = coreData;
-  const { state: rcSyncState, syncToApp } = useRoyalCaribbeanSync();
+  const rcSync = useRoyalCaribbeanSync();
+  const rcSyncState = rcSync?.state;
+  const syncToApp = rcSync?.syncToApp;
   const { currentUser, updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
   const { 
     clubRoyalePoints: loyaltyClubRoyalePoints, 

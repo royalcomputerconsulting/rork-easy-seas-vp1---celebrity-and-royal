@@ -73,20 +73,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       console.log('[PROVIDER] ✓ Final Counts:', { offers: uniqueOfferCodes.size, cruises: cruisesFromOffers, upcomingCruises, courtesyHolds });
       
-      addLog('', 'success');
-      addLog('========================================', 'success');
-      addLog('✓ DATA EXTRACTION COMPLETE', 'success');
-      addLog('========================================', 'success');
-      addLog(`Offers Found: ${uniqueOfferCodes.size}`, 'success');
-      addLog(`Available Sailings: ${cruisesFromOffers}`, 'success');
-      addLog(`Upcoming Booked: ${upcomingCruises}`, 'success');
-      addLog(`Courtesy Holds: ${courtesyHolds}`, 'success');
-      if (prev.loyaltyData?.crownAndAnchorLevel) {
-        addLog(`Loyalty Level: ${prev.loyaltyData.crownAndAnchorLevel} (${prev.loyaltyData.crownAndAnchorPoints || 'N/A'} points)`, 'success');
-      }
-      addLog('========================================', 'success');
-      addLog('🎉 Ready to preview and import to app!', 'success');
-      
       console.log('[PROVIDER] ✓ Setting status to awaiting_confirmation');
       
       return {
@@ -99,6 +85,30 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           courtesyHolds
         }
       };
+    });
+
+    addLog('', 'success');
+    addLog('========================================', 'success');
+    addLog('✓ DATA EXTRACTION COMPLETE', 'success');
+    addLog('========================================', 'success');
+    
+    setState(prev => {
+      const uniqueOfferCodes = new Set(prev.extractedOffers.map(o => o.offerCode));
+      const cruisesFromOffers = prev.extractedOffers.filter(o => o.shipName && o.sailingDate).length;
+      const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
+      const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
+      
+      addLog(`Offers Found: ${uniqueOfferCodes.size}`, 'success');
+      addLog(`Available Sailings: ${cruisesFromOffers}`, 'success');
+      addLog(`Upcoming Booked: ${upcomingCruises}`, 'success');
+      addLog(`Courtesy Holds: ${courtesyHolds}`, 'success');
+      if (prev.loyaltyData?.crownAndAnchorLevel) {
+        addLog(`Loyalty Level: ${prev.loyaltyData.crownAndAnchorLevel} (${prev.loyaltyData.crownAndAnchorPoints || 'N/A'} points)`, 'success');
+      }
+      addLog('========================================', 'success');
+      addLog('🎉 Ready to preview and import to app!', 'success');
+      
+      return prev;
     });
     
     isIngestionRunning.current = false;
@@ -243,17 +253,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     `);
     
     try {
-      const timestamp = Date.now();
-      
       addLog('', 'info');
       addLog('STEP 1: Extracting Club Royale Offers & Sailings', 'info');
-      addLog('Navigating to offers page...', 'info');
-      webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/club-royale/offers?_t=${timestamp}';
-        true;
-      `);
+      addLog('Already on offers page, starting extraction...', 'info');
       
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       addLog('Extracting offers and available sailings...', 'info');
       webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
