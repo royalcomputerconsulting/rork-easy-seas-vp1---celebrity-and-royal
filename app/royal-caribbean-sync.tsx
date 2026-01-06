@@ -1,9 +1,9 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, LogIn, Play, Download, FileText, RotateCcw } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -25,7 +25,6 @@ function RoyalCaribbeanSyncScreen() {
   } = useRoyalCaribbeanSync();
 
   const [webViewVisible, setWebViewVisible] = useState(true);
-  const [logsVisible, setLogsVisible] = useState(false);
 
   const onMessage = (event: any) => {
     try {
@@ -102,28 +101,7 @@ function RoyalCaribbeanSyncScreen() {
     }
   };
 
-  const getCurrentActivity = () => {
-    switch (state.status) {
-      case 'running_step_1':
-        return state.progress && state.progress.current > 0 
-          ? `Scraping Offers - ${state.progress.current} scraped so far`
-          : 'Working - Scraping Offers Page...';
-      case 'running_step_2':
-        return state.progress && state.progress.current > 0
-          ? `Scraping Upcoming Cruises - ${state.progress.current} scraped so far`
-          : 'Working - Scraping Upcoming Cruises Page...';
-      case 'running_step_3':
-        return state.progress && state.progress.current > 0
-          ? `Scraping Courtesy Holds - ${state.progress.current} scraped so far`
-          : 'Working - Scraping Courtesy Holds Page...';
-      case 'running_step_4':
-        return 'Working - Scraping Loyalty Status Page...';
-      case 'syncing':
-        return 'Syncing data to app...';
-      default:
-        return 'Idle';
-    }
-  };
+
 
   const getStatusIcon = () => {
     const color = '#fff';
@@ -169,13 +147,26 @@ function RoyalCaribbeanSyncScreen() {
           <Text style={styles.statusText}>{getStatusText()}</Text>
         </View>
 
-        {state.status === 'not_logged_in' && (
-          <View style={styles.infoBox}>
-            <Text style={styles.infoText}>
-              Note: The webpage may take a few seconds to load initially.
-            </Text>
+        <View style={styles.compactLogsContainer}>
+          <Text style={styles.compactLogsTitle}>Sync Log</Text>
+          <View style={styles.compactLogsContent}>
+            {state.logs.slice(-4).map((log, index) => (
+              <View key={index} style={styles.compactLogEntry}>
+                <Text style={styles.compactLogTimestamp}>{log.timestamp}</Text>
+                <Text style={[
+                  styles.compactLogMessage,
+                  log.type === 'error' && styles.compactLogMessageError,
+                  log.type === 'success' && styles.compactLogMessageSuccess
+                ]} numberOfLines={1}>
+                  {log.message}
+                </Text>
+              </View>
+            ))}
+            {state.logs.length === 0 && (
+              <Text style={styles.compactLogsEmpty}>No logs yet. Click &quot;Open Login&quot; to start.</Text>
+            )}
           </View>
-        )}
+        </View>
 
         <Pressable 
           style={styles.webViewToggle}
@@ -208,128 +199,90 @@ function RoyalCaribbeanSyncScreen() {
         )}
 
         <View style={styles.actionsContainer}>
-          <View style={styles.buttonRow}>
+          <View style={styles.compactButtonRow}>
             <Pressable 
-              style={[styles.button, styles.primaryButton]}
+              style={[styles.compactButton, styles.primaryButton]}
               onPress={openLogin}
             >
-              <Text style={styles.buttonText}>Open Login</Text>
+              <LogIn size={16} color="#fff" />
+              <Text style={styles.compactButtonText}>Login</Text>
             </Pressable>
 
             <Pressable 
               style={[
-                styles.button, 
+                styles.compactButton, 
                 styles.primaryButton,
                 (!canRunIngestion || isRunning) && styles.buttonDisabled
               ]}
               onPress={runIngestion}
               disabled={!canRunIngestion || isRunning}
             >
+              <Play size={16} color="#fff" />
               <Text style={[
-                styles.buttonText,
+                styles.compactButtonText,
                 (!canRunIngestion || isRunning) && styles.buttonTextDisabled
               ]}>
-                Run Ingestion
+                Run
               </Text>
             </Pressable>
-          </View>
 
-          <View style={styles.buttonRow}>
             <Pressable 
               style={[
-                styles.button, 
+                styles.compactButton, 
                 styles.secondaryButton,
                 !canExport && styles.buttonDisabled
               ]}
               onPress={exportOffersCSV}
               disabled={!canExport}
             >
+              <Download size={14} color="#94a3b8" />
               <Text style={[
-                styles.secondaryButtonText,
+                styles.compactSecondaryButtonText,
                 !canExport && styles.buttonTextDisabled
               ]}>
-                Export Offers
+                Offers
               </Text>
             </Pressable>
+          </View>
 
+          <View style={styles.compactButtonRow}>
             <Pressable 
               style={[
-                styles.button, 
+                styles.compactButton, 
                 styles.secondaryButton,
                 !canExport && styles.buttonDisabled
               ]}
               onPress={exportBookedCruisesCSV}
               disabled={!canExport}
             >
+              <Download size={14} color="#94a3b8" />
               <Text style={[
-                styles.secondaryButtonText,
+                styles.compactSecondaryButtonText,
                 !canExport && styles.buttonTextDisabled
               ]}>
-                Export Booked
-              </Text>
-            </Pressable>
-          </View>
-
-
-
-          <View style={styles.buttonRow}>
-            <Pressable 
-              style={[styles.button, styles.tertiaryButton]}
-              onPress={() => setLogsVisible(!logsVisible)}
-            >
-              <Text style={styles.tertiaryButtonText}>
-                {logsVisible ? 'Hide' : 'View'} Log ({state.logs.length})
+                Booked
               </Text>
             </Pressable>
 
             <Pressable 
-              style={[styles.button, styles.tertiaryButton]}
+              style={[styles.compactButton, styles.secondaryButton]}
               onPress={exportLog}
             >
-              <Text style={styles.tertiaryButtonText}>Export Log</Text>
+              <FileText size={14} color="#94a3b8" />
+              <Text style={styles.compactSecondaryButtonText}>Log</Text>
             </Pressable>
 
             <Pressable 
-              style={[styles.button, styles.dangerButton]}
+              style={[styles.compactButton, styles.dangerButton]}
               onPress={resetState}
             >
-              <Text style={styles.buttonText}>Reset</Text>
+              <RotateCcw size={14} color="#fff" />
+              <Text style={styles.compactButtonText}>Reset</Text>
             </Pressable>
           </View>
         </View>
 
-        {isRunning && (
-          <View style={styles.currentStatusBox}>
-            <Text style={styles.currentStatusTitle}>Current Status:</Text>
-            <Text style={styles.currentStatusText}>{getCurrentActivity()}</Text>
-            {state.currentUrl && (
-              <Text style={styles.currentStatusUrl}>Going to: {state.currentUrl}</Text>
-            )}
-          </View>
-        )}
 
-        {logsVisible && (
-          <View style={styles.logsContainer}>
-            <Text style={styles.logsTitle}>Sync Log</Text>
-            <ScrollView style={styles.logsScroll}>
-              {state.logs.map((log, index) => (
-                <View key={index} style={[styles.logEntry, log.type === 'error' && styles.logError]}>
-                  <Text style={styles.logTimestamp}>{log.timestamp}</Text>
-                  <Text style={[
-                    styles.logMessage,
-                    log.type === 'error' && styles.logMessageError,
-                    log.type === 'success' && styles.logMessageSuccess
-                  ]}>
-                    {log.message}
-                  </Text>
-                </View>
-              ))}
-              {state.logs.length === 0 && (
-                <Text style={styles.logsEmpty}>No logs yet</Text>
-              )}
-            </ScrollView>
-          </View>
-        )}
 
         {state.error && (
           <View style={styles.errorContainer}>
@@ -483,19 +436,31 @@ const styles = StyleSheet.create({
   },
   actionsContainer: {
     padding: 12,
-    gap: 12
+    gap: 8
   },
-  buttonRow: {
+  compactButtonRow: {
     flexDirection: 'row' as const,
-    gap: 12
+    gap: 8
   },
-  button: {
+  compactButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 6,
     alignItems: 'center' as const,
-    justifyContent: 'center' as const
+    justifyContent: 'center' as const,
+    flexDirection: 'row' as const,
+    gap: 4
+  },
+  compactButtonText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600' as const
+  },
+  compactSecondaryButtonText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '600' as const
   },
   primaryButton: {
     backgroundColor: '#3b82f6'
@@ -519,72 +484,54 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.5
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600' as const
-  },
-  secondaryButtonText: {
-    color: '#94a3b8',
-    fontSize: 14,
-    fontWeight: '600' as const
-  },
-  tertiaryButtonText: {
-    color: '#64748b',
-    fontSize: 13,
-    fontWeight: '500' as const
-  },
   buttonTextDisabled: {
     opacity: 0.5
   },
-  logsContainer: {
-    flex: 1,
-    margin: 12,
+  compactLogsContainer: {
+    marginHorizontal: 12,
+    marginBottom: 8,
     backgroundColor: '#1e293b',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
     overflow: 'hidden' as const
   },
-  logsTitle: {
+  compactLogsTitle: {
     color: '#cbd5e1',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600' as const,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#334155'
   },
-  logsScroll: {
-    flex: 1,
-    padding: 12
+  compactLogsContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 8
   },
-  logEntry: {
-    marginBottom: 8,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155'
+  compactLogEntry: {
+    marginBottom: 6
   },
-  logError: {
-    backgroundColor: '#7f1d1d22'
-  },
-  logTimestamp: {
+  compactLogTimestamp: {
     color: '#64748b',
-    fontSize: 11,
+    fontSize: 10,
     marginBottom: 2
   },
-  logMessage: {
+  compactLogMessage: {
     color: '#cbd5e1',
-    fontSize: 12
+    fontSize: 11,
+    lineHeight: 14
   },
-  logMessageError: {
+  compactLogMessageError: {
     color: '#f87171'
   },
-  logMessageSuccess: {
+  compactLogMessageSuccess: {
     color: '#4ade80'
   },
-  logsEmpty: {
+  compactLogsEmpty: {
     color: '#64748b',
-    fontSize: 13,
-    textAlign: 'center' as const,
-    paddingVertical: 24
+    fontSize: 11,
+    fontStyle: 'italic' as const
   },
   errorContainer: {
     flexDirection: 'row' as const,
@@ -716,46 +663,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18
   },
-  currentStatusBox: {
-    margin: 12,
-    marginTop: 0,
-    padding: 16,
-    backgroundColor: '#10b981',
+  button: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#059669'
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const
   },
-  currentStatusTitle: {
+  buttonText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '700' as const,
-    marginBottom: 6
-  },
-  currentStatusText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '500' as const,
-    marginBottom: 4
-  },
-  currentStatusUrl: {
-    color: '#d1fae5',
-    fontSize: 11,
-    fontFamily: 'monospace'
-  },
-  infoBox: {
-    marginHorizontal: 12,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#1e293b',
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#3b82f6'
-  },
-  infoText: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontStyle: 'italic' as const
+    fontWeight: '600' as const
   }
 });
 
