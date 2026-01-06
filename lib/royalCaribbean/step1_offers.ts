@@ -115,17 +115,19 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'info'
         }));
         
-        let offerName = extractText(card, 'h1') || extractText(card, 'h2') || 
-                        extractText(card, 'h3') || extractText(card, 'h4');
+        let offerName = '';
         
-        if (!offerName) {
-          const featuredMatch = cardText.match(/Featured Offer[:\\s]*(Full House February|[A-Za-z0-9\\s]+)/i);
-          if (featuredMatch) {
-            offerName = featuredMatch[0];
-          }
+        const featuredMatch = cardText.match(/Featured Offer[:\\s]*([A-Za-z0-9\\s]+?)(?=Redeem|Trade-in|\\$|Room|View|Featured|$)/i);
+        if (featuredMatch && featuredMatch[1]) {
+          offerName = featuredMatch[1].trim();
         }
         
-        if (!offerName) {
+        if (!offerName || offerName.length < 3) {
+          offerName = extractText(card, 'h1') || extractText(card, 'h2') || 
+                      extractText(card, 'h3') || extractText(card, 'h4');
+        }
+        
+        if (!offerName || offerName.length < 3) {
           const roomMatch = cardText.match(/(Balcony|Ocean View|Interior|Suite)\\s+(Room for Two|or Oceanview Room for Two)/i);
           if (roomMatch) {
             offerName = roomMatch[0];
@@ -213,9 +215,9 @@ export const STEP1_OFFERS_SCRIPT = `
             const hasPort = text.match(/(Miami|Orlando|Fort Lauderdale|Tampa|Galveston|Port Canaveral|Port Cañaveral|Cape Liberty|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan|Bayonne)/i);
             const hasDate = text.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
             const hasCabin = text.match(/(Balcony|Ocean View|Interior|Suite)/i);
-            const lengthOk = text.length > 40 && text.length < 2000;
-            const hasMultipleMarkers = [hasShipName, hasNights, hasPort, hasDate, hasCabin].filter(Boolean).length >= 2;
-            return hasShipName && hasMultipleMarkers && lengthOk;
+            const lengthOk = text.length > 40 && text.length < 3000;
+            const hasBasicInfo = hasShipName || (hasNights && hasDate);
+            return hasBasicInfo && lengthOk;
           }).filter((el, idx, arr) => {
             return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
           });

@@ -154,7 +154,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 20000));
+      await new Promise(resolve => setTimeout(resolve, 90000));
       
       setState(prev => ({ ...prev, status: 'running_step_3' }));
       addLog('Step 3: Navigating to courtesy holds page...', 'info');
@@ -168,7 +168,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 20000));
+      await new Promise(resolve => setTimeout(resolve, 30000));
       
       setState(prev => {
         const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
