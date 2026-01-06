@@ -111,6 +111,66 @@ export const STEP2_UPCOMING_SCRIPT = `
             logType: 'info'
           }));
 
+          try {
+            const viewDetailsButton = card.querySelector('button[aria-label*="detail"], button:has-text("View Details"), button[class*="detail"], a[aria-label*="detail"]');
+            
+            if (!viewDetailsButton) {
+              const allButtons = card.querySelectorAll('button, a');
+              let foundButton = null;
+              for (let btn of allButtons) {
+                const text = btn.textContent?.toLowerCase() || '';
+                if (text.includes('view') || text.includes('detail') || text.includes('expand') || text.includes('more')) {
+                  foundButton = btn;
+                  break;
+                }
+              }
+              
+              if (foundButton) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: 'Found View Details button for card ' + (i + 1) + ', clicking to expand...',
+                  logType: 'info'
+                }));
+                
+                foundButton.click();
+                await wait(1500);
+                
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: 'Card ' + (i + 1) + ' expanded, extracting data...',
+                  logType: 'info'
+                }));
+              } else {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: 'No View Details button found for card ' + (i + 1) + ', will try to extract visible data',
+                  logType: 'warning'
+                }));
+              }
+            } else {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Found View Details button for card ' + (i + 1) + ', clicking to expand...',
+                logType: 'info'
+              }));
+              
+              viewDetailsButton.click();
+              await wait(1500);
+              
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Card ' + (i + 1) + ' expanded, extracting data...',
+                logType: 'info'
+              }));
+            }
+          } catch (clickError) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Could not click View Details for card ' + (i + 1) + ': ' + clickError.message + ', will try to extract visible data',
+              logType: 'warning'
+            }));
+          }
+
           const patterns = extractFromPatterns(card);
           
           const shipName = patterns.shipName || extractTextMultiple(card, [
