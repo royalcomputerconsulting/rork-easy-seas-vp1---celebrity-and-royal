@@ -123,6 +123,44 @@ export const STEP1_OFFERS_SCRIPT = `
         
         offerCards = document.querySelectorAll('[class*="offer"], [class*="Offer"], article, .card, [role="article"]');
       }
+
+      if (offerCards.length === 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'No offer cards found, checking for featured/single offers...',
+          logType: 'warning'
+        }));
+        
+        const featuredSelectors = [
+          '[class*="featured"]',
+          '[class*="Featured"]',
+          '[data-testid*="featured"]',
+          '[class*="hero"]',
+          '[class*="Hero"]',
+          '[class*="banner"]',
+          '[class*="Banner"]',
+          'section',
+          'main > div',
+          '[role="region"]'
+        ];
+        
+        for (const selector of featuredSelectors) {
+          const elements = document.querySelectorAll(selector);
+          for (const el of elements) {
+            const text = el.textContent || '';
+            if (text.match(/full house|offer|promotion|deal/i) && text.length > 20 && text.length < 5000) {
+              offerCards = [el];
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Found featured/single offer section',
+                logType: 'info'
+              }));
+              break;
+            }
+          }
+          if (offerCards.length > 0) break;
+        }
+      }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
