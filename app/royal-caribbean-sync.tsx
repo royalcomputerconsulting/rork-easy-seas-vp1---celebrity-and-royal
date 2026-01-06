@@ -212,6 +212,11 @@ function RoyalCaribbeanSyncScreen() {
               sharedCookiesEnabled={true}
               thirdPartyCookiesEnabled={true}
               injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
+              onLoadEnd={() => {
+                if (webViewRef.current) {
+                  webViewRef.current.injectJavaScript(AUTH_DETECTION_SCRIPT + '; true;');
+                }
+              }}
             />
           </View>
         )}
