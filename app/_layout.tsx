@@ -34,6 +34,7 @@ import { MachineStrategyProvider } from "@/state/MachineStrategyProvider";
 import { SlotMachineProvider } from "@/state/SlotMachineProvider";
 import { SlotMachineLibraryProvider } from "@/state/SlotMachineLibraryProvider";
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
+import { RoyalCaribbeanSyncProvider } from "@/state/RoyalCaribbeanSyncProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 
 SplashScreen.preventAutoHideAsync();
@@ -301,45 +302,47 @@ export default function RootLayout() {
           <AuthProvider>
             <UserProvider>
               <CoreDataProvider>
-                <HistoricalPerformanceProvider>
-                  <PriceHistoryProvider>
-                    <FinancialsProvider>
-                      <CasinoStrategyProvider>
-                        <LoyaltyProvider>
-                          <SimpleAnalyticsProvider>
-                            <CasinoSessionProvider>
-                              <SlotMachineProvider>
-                                <SlotMachineLibraryProvider>
-                                  <DeckPlanProvider>
-                                    <MachineStrategyProvider>
-                                      <BankrollProvider>
-                                        <TaxProvider>
-                                          <GamificationProvider>
-                                            <PPHAlertsProvider>
-                                              <AlertsProvider>
-                                                <AgentXProvider>
-                                                  <CertificatesProvider>
-                                                    <CelebrityProvider>
-                                                      <AppContent />
-                                                    </CelebrityProvider>
-                                                  </CertificatesProvider>
-                                                </AgentXProvider>
-                                              </AlertsProvider>
-                                            </PPHAlertsProvider>
-                                          </GamificationProvider>
-                                        </TaxProvider>
-                                      </BankrollProvider>
-                                    </MachineStrategyProvider>
-                                  </DeckPlanProvider>
-                                </SlotMachineLibraryProvider>
-                              </SlotMachineProvider>
-                            </CasinoSessionProvider>
-                          </SimpleAnalyticsProvider>
-                        </LoyaltyProvider>
-                      </CasinoStrategyProvider>
-                    </FinancialsProvider>
-                  </PriceHistoryProvider>
-                </HistoricalPerformanceProvider>
+                <RoyalCaribbeanSyncProvider>
+                  <HistoricalPerformanceProvider>
+                    <PriceHistoryProvider>
+                      <FinancialsProvider>
+                        <CasinoStrategyProvider>
+                          <LoyaltyProvider>
+                            <SimpleAnalyticsProvider>
+                              <CasinoSessionProvider>
+                                <SlotMachineProvider>
+                                  <SlotMachineLibraryProvider>
+                                    <DeckPlanProvider>
+                                      <MachineStrategyProvider>
+                                        <BankrollProvider>
+                                          <TaxProvider>
+                                            <GamificationProvider>
+                                              <PPHAlertsProvider>
+                                                <AlertsProvider>
+                                                  <AgentXProvider>
+                                                    <CertificatesProvider>
+                                                      <CelebrityProvider>
+                                                        <AppContent />
+                                                      </CelebrityProvider>
+                                                    </CertificatesProvider>
+                                                  </AgentXProvider>
+                                                </AlertsProvider>
+                                              </PPHAlertsProvider>
+                                            </GamificationProvider>
+                                          </TaxProvider>
+                                        </BankrollProvider>
+                                      </MachineStrategyProvider>
+                                    </DeckPlanProvider>
+                                  </SlotMachineLibraryProvider>
+                                </SlotMachineProvider>
+                              </CasinoSessionProvider>
+                            </SimpleAnalyticsProvider>
+                          </LoyaltyProvider>
+                        </CasinoStrategyProvider>
+                      </FinancialsProvider>
+                    </PriceHistoryProvider>
+                  </HistoricalPerformanceProvider>
+                </RoyalCaribbeanSyncProvider>
               </CoreDataProvider>
             </UserProvider>
           </AuthProvider>
