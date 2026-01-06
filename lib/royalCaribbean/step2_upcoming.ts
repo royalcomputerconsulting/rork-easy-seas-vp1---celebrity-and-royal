@@ -71,6 +71,19 @@ export const STEP2_UPCOMING_SCRIPT = `
       }));
 
       await wait(3000);
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Current URL: ' + window.location.href,
+        logType: 'info'
+      }));
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Page HTML sample (first 500 chars): ' + document.body.innerHTML.substring(0, 500),
+        logType: 'info'
+      }));
+      
       await scrollUntilComplete(15);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -79,7 +92,13 @@ export const STEP2_UPCOMING_SCRIPT = `
         logType: 'info'
       }));
 
-      let cruiseCards = document.querySelectorAll('[data-testid*="cruise"], [class*="cruise-card"], [class*="booking"]');
+      let cruiseCards = document.querySelectorAll('[data-testid*="cruise"], [class*="cruise-card"], [class*="booking-card"]');
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Primary selectors found: ' + cruiseCards.length + ' elements',
+        logType: 'info'
+      }));
       
       if (cruiseCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -89,13 +108,39 @@ export const STEP2_UPCOMING_SCRIPT = `
         }));
         
         cruiseCards = document.querySelectorAll('[class*="cruise"], [class*="Cruise"], [class*="trip"], [class*="booking"], article, .card');
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Broader selectors found: ' + cruiseCards.length + ' elements',
+          logType: 'info'
+        }));
       }
+      
+      const filteredCards = Array.from(cruiseCards).filter(card => {
+        const text = card.textContent?.toLowerCase() || '';
+        const hasReservation = text.includes('reservation') || /\d{6,8}/.test(text);
+        const hasShip = text.match(/symphony|harmony|oasis|allure|wonder|anthem|quantum|legend|adventure|of the seas/i);
+        const hasDate = text.match(/[a-z]{3}\s+\d{1,2}[,\s]+\d{4}/i) || text.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/);
+        const hasNights = text.match(/\d+\s*night/i);
+        
+        return (hasReservation || hasShip || hasDate) && hasNights;
+      });
+      
+      cruiseCards = filteredCards;
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + cruiseCards.length + ' potential cruise elements',
+        message: 'After filtering: ' + cruiseCards.length + ' valid cruise elements',
         logType: 'info'
       }));
+      
+      if (cruiseCards.length > 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'First card sample: ' + (cruiseCards[0].textContent?.substring(0, 300) || 'No text'),
+          logType: 'info'
+        }));
+      }
       
       const cruises = [];
       let processedCount = 0;

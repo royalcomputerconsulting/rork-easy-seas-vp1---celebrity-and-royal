@@ -45,11 +45,23 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Current URL: ' + window.location.href,
+        logType: 'info'
+      }));
+
       await wait(3000);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: 'Page loaded, searching for offer elements...',
+        logType: 'info'
+      }));
+
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Page HTML sample (first 500 chars): ' + document.body.innerHTML.substring(0, 500),
         logType: 'info'
       }));
 
@@ -114,6 +126,12 @@ export const STEP1_OFFERS_SCRIPT = `
 
       let offerCards = document.querySelectorAll('[data-testid*="offer"], [class*="offer-card"], [class*="OfferCard"]');
       
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Primary selectors found: ' + offerCards.length + ' elements',
+        logType: 'info'
+      }));
+      
       if (offerCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
@@ -122,13 +140,51 @@ export const STEP1_OFFERS_SCRIPT = `
         }));
         
         offerCards = document.querySelectorAll('[class*="offer"], [class*="Offer"], article, .card, [role="article"]');
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Broader selectors found: ' + offerCards.length + ' elements',
+          logType: 'info'
+        }));
+      }
+      
+      if (offerCards.length === 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Still no offers found. Trying most generic approach...',
+          logType: 'warning'
+        }));
+        
+        offerCards = document.querySelectorAll('div[class], section[class]');
+        const potentialOffers = Array.from(offerCards).filter(card => {
+          const text = card.textContent?.toLowerCase() || '';
+          return text.includes('offer') || text.includes('sailing') || text.includes('cruise');
+        });
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Generic search found: ' + potentialOffers.length + ' potential elements',
+          logType: 'info'
+        }));
+        
+        if (potentialOffers.length > 0) {
+          offerCards = potentialOffers;
+        }
       }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + offerCards.length + ' potential offer elements',
+        message: 'Found ' + offerCards.length + ' potential offer elements. Processing...',
         logType: 'info'
       }));
+      
+      if (offerCards.length > 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'First card sample: ' + (offerCards[0].textContent?.substring(0, 200) || 'No text'),
+          logType: 'info'
+        }));
+      }
       
       const offers = [];
       let processedCount = 0;
@@ -136,11 +192,21 @@ export const STEP1_OFFERS_SCRIPT = `
       for (let i = 0; i < offerCards.length; i++) {
         const card = offerCards[i];
         
-        const offerName = extractText(card, '[data-testid*="offer-name"], [class*="offer-name"], h2, h3');
+        const cardText = card.textContent?.trim() || '';
+        
+        if (!cardText || cardText.length < 10) {
+          continue;
+        }
+        
+        const offerName = extractText(card, '[data-testid*="offer-name"], [class*="offer-name"], [class*="title"], h1, h2, h3, h4');
         const offerCode = extractText(card, '[data-testid*="offer-code"], [class*="offer-code"], [class*="code"]');
-        const offerExpiry = extractText(card, '[data-testid*="expir"], [class*="expir"]');
+        const offerExpiry = extractText(card, '[data-testid*="expir"], [class*="expir"], [class*="valid"]');
         const offerType = extractText(card, '[data-testid*="type"], [class*="type"]');
         const perks = extractText(card, '[data-testid*="perk"], [class*="perk"], [class*="benefit"]');
+        
+        if (!offerName && !offerCode && !cardText.match(/sail|cruise|ship/i)) {
+          continue;
+        }
 
         const viewSailingsBtn = Array.from(card.querySelectorAll('button, a')).find(el => 
           el.textContent?.match(/View Sailings?|See Sailings?/i)
