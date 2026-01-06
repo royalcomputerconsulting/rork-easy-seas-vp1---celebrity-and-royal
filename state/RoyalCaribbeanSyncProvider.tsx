@@ -362,26 +362,66 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       const { offers: transformedOffers, cruises: transformedCruises } = transformOffersToCasinoOffers(state.extractedOffers, state.loyaltyData);
       const transformedBookedCruises = transformBookedCruisesToAppFormat(state.extractedBookedCruises, state.loyaltyData);
 
-      addLog(`Syncing ${transformedOffers.length} offers, ${transformedCruises.length} cruises, and ${transformedBookedCruises.length} booked cruises`, 'info');
+      addLog(`Transformed ${transformedOffers.length} offers, ${transformedCruises.length} cruises, and ${transformedBookedCruises.length} booked cruises`, 'info');
 
-      transformedOffers.forEach(offer => {
-        coreDataContext.addCasinoOffer(offer);
-      });
+      const existingOffers = coreDataContext.casinoOffers || [];
+      const existingCruises = coreDataContext.cruises || [];
+      const existingBooked = coreDataContext.bookedCruises || [];
 
-      transformedCruises.forEach(cruise => {
-        coreDataContext.addCruise(cruise);
-      });
+      const isDuplicateOffer = (offer: any, existing: any[]) => {
+        return existing.some(e => e.offerCode && offer.offerCode && e.offerCode === offer.offerCode);
+      };
 
-      transformedBookedCruises.forEach(cruise => {
-        coreDataContext.addBookedCruise(cruise);
-      });
+      const isDuplicateCruise = (cruise: any, existing: any[]) => {
+        return existing.some(e => {
+          return e.shipName === cruise.shipName && 
+                 e.sailDate === cruise.sailDate && 
+                 e.nights === cruise.nights;
+        });
+      };
+
+      const isDuplicateBooked = (cruise: any, existing: any[]) => {
+        return existing.some(e => {
+          if (cruise.reservationNumber && e.reservationNumber && 
+              cruise.reservationNumber === e.reservationNumber) {
+            return true;
+          }
+          return e.shipName === cruise.shipName && 
+                 e.sailDate === cruise.sailDate && 
+                 e.nights === cruise.nights;
+        });
+      };
+
+      const newOffers = transformedOffers.filter(offer => !isDuplicateOffer(offer, existingOffers));
+      const newCruises = transformedCruises.filter(cruise => !isDuplicateCruise(cruise, existingCruises));
+      const newBookedCruises = transformedBookedCruises.filter(cruise => !isDuplicateBooked(cruise, existingBooked));
+
+      addLog(`Filtered duplicates: ${newOffers.length} new offers, ${newCruises.length} new cruises, ${newBookedCruises.length} new booked cruises`, 'info');
+
+      if (newOffers.length === 0 && newCruises.length === 0 && newBookedCruises.length === 0) {
+        addLog('No new data to sync - all items already exist in the app', 'warning');
+        setState(prev => ({ 
+          ...prev, 
+          status: 'complete',
+          lastSyncTimestamp: new Date().toISOString()
+        }));
+        return;
+      }
+
+      const allOffers = [...existingOffers, ...newOffers];
+      const allCruises = [...existingCruises, ...newCruises];
+      const allBooked = [...existingBooked, ...newBookedCruises];
+
+      coreDataContext.setCasinoOffers(allOffers);
+      coreDataContext.setCruises(allCruises);
+      coreDataContext.setBookedCruises(allBooked);
 
       setState(prev => ({ 
         ...prev, 
         status: 'complete',
         lastSyncTimestamp: new Date().toISOString()
       }));
-      addLog('Data synced successfully to app!', 'success');
+      addLog(`Successfully synced ${newOffers.length} new offers, ${newCruises.length} new available cruises, and ${newBookedCruises.length} new booked cruises to your app!`, 'success');
     } catch (error) {
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
       addLog(`Failed to sync data: ${error}`, 'error');
