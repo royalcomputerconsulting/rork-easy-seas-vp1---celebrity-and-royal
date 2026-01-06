@@ -59,9 +59,22 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
+      const allElements = document.querySelectorAll('div, section, article, [class], [data-testid]');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Page HTML sample (first 500 chars): ' + document.body.innerHTML.substring(0, 500),
+        message: 'Total elements on page: ' + allElements.length,
+        logType: 'info'
+      }));
+      
+      const classNames = Array.from(allElements)
+        .map(el => el.className)
+        .filter(c => c && typeof c === 'string')
+        .slice(0, 20)
+        .join(', ');
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Sample class names: ' + classNames,
         logType: 'info'
       }));
 
@@ -124,13 +137,28 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      let offerCards = document.querySelectorAll('[data-testid*="offer"], [class*="offer-card"], [class*="OfferCard"]');
+      let offerCards = [];
       
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Primary selectors found: ' + offerCards.length + ' elements',
-        logType: 'info'
-      }));
+      const primarySelectors = [
+        '[data-testid*="offer"]',
+        '[class*="offer-card"]',
+        '[class*="OfferCard"]',
+        '[class*="offer"][class*="card"]',
+        '[id*="offer"]'
+      ];
+      
+      for (const selector of primarySelectors) {
+        const found = document.querySelectorAll(selector);
+        if (found.length > 0) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Selector "' + selector + '" found ' + found.length + ' elements',
+            logType: 'info'
+          }));
+          offerCards = Array.from(found);
+          break;
+        }
+      }
       
       if (offerCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -139,37 +167,54 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'warning'
         }));
         
-        offerCards = document.querySelectorAll('[class*="offer"], [class*="Offer"], article, .card, [role="article"]');
+        const broadSelectors = document.querySelectorAll('div[class*="card"], section[class*="card"], article, [role="article"], [class*="item"]');
+        const potentialOffers = Array.from(broadSelectors).filter(card => {
+          const text = card.textContent?.toLowerCase() || '';
+          const hasOfferKeyword = text.includes('offer') || text.includes('promo') || text.includes('deal');
+          const hasCruiseInfo = text.includes('sail') || text.includes('cruise') || text.includes('ship');
+          const hasDate = text.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/) || text.match(/[a-z]{3}\s+\d{1,2}/i);
+          
+          return hasOfferKeyword && (hasCruiseInfo || hasDate);
+        });
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Broader selectors found: ' + offerCards.length + ' elements',
+          message: 'Broader search found: ' + potentialOffers.length + ' potential offer elements',
           logType: 'info'
         }));
+        
+        offerCards = potentialOffers;
       }
       
       if (offerCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Still no offers found. Trying most generic approach...',
+          message: 'Still no offers found. Looking for any promotional content...',
           logType: 'warning'
         }));
         
-        offerCards = document.querySelectorAll('div[class], section[class]');
-        const potentialOffers = Array.from(offerCards).filter(card => {
-          const text = card.textContent?.toLowerCase() || '';
-          return text.includes('offer') || text.includes('sailing') || text.includes('cruise');
+        const allDivs = document.querySelectorAll('div, section');
+        const potentialOffers = Array.from(allDivs).filter(card => {
+          const text = card.textContent || '';
+          const childCount = card.children.length;
+          
+          if (childCount < 2 || text.length < 50) return false;
+          
+          const lowerText = text.toLowerCase();
+          const hasPrice = text.match(/\$\d+/) || lowerText.includes('free') || lowerText.includes('discount');
+          const hasShip = lowerText.match(/symphony|harmony|oasis|allure|wonder|anthem|quantum|legend|adventure|of the seas/i);
+          const hasDate = text.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/) || text.match(/[a-z]{3}\s+\d{1,2}/i);
+          
+          return (hasPrice || hasShip) && hasDate;
         });
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Generic search found: ' + potentialOffers.length + ' potential elements',
+          message: 'Generic promotional search found: ' + potentialOffers.length + ' elements',
           logType: 'info'
         }));
         
-        if (potentialOffers.length > 0) {
-          offerCards = potentialOffers;
-        }
+        offerCards = potentialOffers;
       }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -194,7 +239,12 @@ export const STEP1_OFFERS_SCRIPT = `
         
         const cardText = card.textContent?.trim() || '';
         
-        if (!cardText || cardText.length < 10) {
+        if (!cardText || cardText.length < 20) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Card ' + (i + 1) + ' has insufficient text (' + cardText.length + ' chars), skipping',
+            logType: 'info'
+          }));
           continue;
         }
         

@@ -118,19 +118,34 @@ export const STEP2_UPCOMING_SCRIPT = `
       
       const filteredCards = Array.from(cruiseCards).filter(card => {
         const text = card.textContent?.toLowerCase() || '';
+        const textLength = text.length;
+        
+        if (textLength < 50) return false;
+        
         const hasReservation = text.includes('reservation') || /\d{6,8}/.test(text);
         const hasShip = text.match(/symphony|harmony|oasis|allure|wonder|anthem|quantum|legend|adventure|of the seas/i);
         const hasDate = text.match(/[a-z]{3}\s+\d{1,2}[,\s]+\d{4}/i) || text.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/);
         const hasNights = text.match(/\d+\s*night/i);
+        const hasPort = text.match(/port|miami|galveston|fort lauderdale|cape canaveral|new york|baltimore|seattle/i);
         
-        return (hasReservation || hasShip || hasDate) && hasNights;
+        const childElements = card.children.length;
+        if (childElements < 2) return false;
+        
+        const validCombination = (
+          (hasShip && hasDate && hasNights) ||
+          (hasReservation && hasDate && hasNights) ||
+          (hasShip && hasReservation && hasNights) ||
+          (hasShip && hasPort && hasNights)
+        );
+        
+        return validCombination;
       });
       
       cruiseCards = filteredCards;
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'After filtering: ' + cruiseCards.length + ' valid cruise elements',
+        message: 'After filtering: ' + cruiseCards.length + ' valid cruise elements (filtered from ' + Array.from(document.querySelectorAll('[data-testid*="cruise"], [class*="cruise-card"], [class*="booking-card"]')).length + ' initial elements)',
         logType: 'info'
       }));
       
@@ -157,45 +172,23 @@ export const STEP2_UPCOMING_SCRIPT = `
           }));
 
           try {
-            const viewDetailsButton = card.querySelector('button[aria-label*="detail"], button:has-text("View Details"), button[class*="detail"], a[aria-label*="detail"]');
+            let viewDetailsButton = null;
+            const allButtons = card.querySelectorAll('button, a');
+            for (let btn of allButtons) {
+              const text = btn.textContent?.toLowerCase() || '';
+              const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+              if (text.includes('view') && text.includes('detail') || 
+                  ariaLabel.includes('detail') || 
+                  btn.className.includes('detail')) {
+                viewDetailsButton = btn;
+                break;
+              }
+            }
             
-            if (!viewDetailsButton) {
-              const allButtons = card.querySelectorAll('button, a');
-              let foundButton = null;
-              for (let btn of allButtons) {
-                const text = btn.textContent?.toLowerCase() || '';
-                if (text.includes('view') || text.includes('detail') || text.includes('expand') || text.includes('more')) {
-                  foundButton = btn;
-                  break;
-                }
-              }
-              
-              if (foundButton) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: 'Found View Details button for card ' + (i + 1) + ', clicking to expand...',
-                  logType: 'info'
-                }));
-                
-                foundButton.click();
-                await wait(1500);
-                
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: 'Card ' + (i + 1) + ' expanded, extracting data...',
-                  logType: 'info'
-                }));
-              } else {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: 'No View Details button found for card ' + (i + 1) + ', will try to extract visible data',
-                  logType: 'warning'
-                }));
-              }
-            } else {
+            if (viewDetailsButton) {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: 'Found View Details button for card ' + (i + 1) + ', clicking to expand...',
+                message: 'Found View Details button for card ' + (i + 1) + ', clicking once to expand...',
                 logType: 'info'
               }));
               
@@ -206,6 +199,12 @@ export const STEP2_UPCOMING_SCRIPT = `
                 type: 'log',
                 message: 'Card ' + (i + 1) + ' expanded, extracting data...',
                 logType: 'info'
+              }));
+            } else {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'No View Details button found for card ' + (i + 1) + ', will try to extract visible data',
+                logType: 'warning'
               }));
             }
           } catch (clickError) {
@@ -272,10 +271,16 @@ export const STEP2_UPCOMING_SCRIPT = `
             '[class*="guest"]'
           ]);
 
-          if (!shipName && !sailingStartDate && !bookingId) {
+          const hasMinimumData = (
+            (shipName && sailingStartDate) ||
+            (bookingId && sailingStartDate) ||
+            (shipName && bookingId)
+          );
+          
+          if (!hasMinimumData) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: 'Card ' + (i + 1) + ' appears to be empty or not a cruise card (no ship, dates, or booking ID found), skipping',
+              message: 'Card ' + (i + 1) + ' lacks minimum data (ship: "' + (shipName || 'none') + '", start: "' + (sailingStartDate || 'none') + '", booking: "' + (bookingId || 'none') + '"), skipping',
               logType: 'warning'
             }));
             skippedCount++;
