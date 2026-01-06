@@ -48,21 +48,32 @@ export const STEP3_HOLDS_SCRIPT = `
         logType: 'info'
       }));
 
-      let holdCards = document.querySelectorAll('[data-testid*="hold"], [class*="hold-card"], [class*="courtesy"]');
-      
-      if (holdCards.length === 0) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'No holds found with primary selectors, trying broader search...',
-          logType: 'warning'
-        }));
-        
-        holdCards = document.querySelectorAll('[class*="hold"], [class*="Hold"], [class*="courtesy"], article, .card');
-      }
+      const countText = document.body.textContent || '';
+      const countMatch = countText.match(/You have (\d+) courtesy hold/i);
+      const expectedCount = countMatch ? parseInt(countMatch[1], 10) : 0;
+
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Page says there are ' + expectedCount + ' courtesy holds',
+        logType: 'info'
+      }));
+
+      const allElements = document.querySelectorAll('div, article, section');
+      let holdCards = Array.from(allElements).filter(el => {
+        const text = el.textContent || '';
+        const hasShip = text.includes('of the Seas');
+        const hasNight = text.match(/\d+\s+Night/);
+        const hasReservation = text.includes('Reservation:');
+        const hasExpires = text.includes('Expires');
+        const isReasonablySmall = text.length < 2000;
+        return (hasShip || hasNight) && (hasReservation || hasExpires) && isReasonablySmall;
+      }).sort((a, b) => a.textContent.length - b.textContent.length).filter((el, idx, arr) => {
+        return !arr.some((other, otherIdx) => otherIdx < idx && other.contains(el));
+      });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + holdCards.length + ' potential hold elements',
+        message: 'Found ' + holdCards.length + ' courtesy hold cards',
         logType: 'info'
       }));
       
@@ -71,39 +82,60 @@ export const STEP3_HOLDS_SCRIPT = `
 
       for (let i = 0; i < holdCards.length; i++) {
         const card = holdCards[i];
+        const fullText = card.textContent || '';
 
-        const shipName = extractText(card, '[data-testid*="ship"], [class*="ship"]');
-        const sailingStartDate = extractText(card, '[data-testid*="start"], [data-testid*="departure"]');
-        const sailingEndDate = extractText(card, '[data-testid*="end"], [data-testid*="return"]');
-        const itinerary = extractText(card, '[data-testid*="itinerary"], [class*="itinerary"]');
-        const departurePort = extractText(card, '[data-testid*="port"], [class*="port"]');
-        const cabinType = extractText(card, '[data-testid*="cabin"], [data-testid*="stateroom"]');
-        const holdExpiration = extractText(card, '[data-testid*="expir"], [class*="expir"]');
-        const bookingId = extractText(card, '[data-testid*="hold-id"], [data-testid*="reference"]');
-
-        holds.push({
-          sourcePage: 'Courtesy',
-          shipName: shipName,
-          sailingStartDate: sailingStartDate,
-          sailingEndDate: sailingEndDate,
-          sailingDates: sailingStartDate && sailingEndDate ? \`\${sailingStartDate} - \${sailingEndDate}\` : '',
-          itinerary: itinerary,
-          departurePort: departurePort,
-          cabinType: cabinType,
-          cabinNumberOrGTY: 'Hold',
-          bookingId: bookingId,
-          status: 'Courtesy Hold',
-          loyaltyLevel: '',
-          loyaltyPoints: ''
-        });
-
-        processedCount++;
         window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'progress',
-          current: processedCount,
-          total: holdCards.length,
-          stepName: 'Courtesy Holds'
+          type: 'log',
+          message: 'Processing hold card ' + (i + 1) + ': ' + fullText.substring(0, 100) + '...',
+          logType: 'info'
         }));
+
+        const nightsMatch = fullText.match(/(\d+)\s+Night\s+([^\n]+)/);
+        const itinerary = nightsMatch ? nightsMatch[0].trim() : '';
+
+        const shipMatch = fullText.match(/([\w\s]+of the Seas)/);
+        const shipName = shipMatch ? shipMatch[1].trim() : '';
+
+        const dateMatch = fullText.match(/(\w+ \d+)\s*—\s*(\w+ \d+,\s*\d{4})/);
+        let sailingStartDate = '';
+        let sailingEndDate = '';
+        if (dateMatch) {
+          sailingStartDate = dateMatch[1];
+          sailingEndDate = dateMatch[2];
+        }
+
+        const reservationMatch = fullText.match(/Reservation:\s*(\d+)/);
+        const bookingId = reservationMatch ? reservationMatch[1] : '';
+
+        const expiresMatch = fullText.match(/Expires\s*([\d\/]+)/);
+        const holdExpiration = expiresMatch ? expiresMatch[1] : '';
+
+        if (shipName || itinerary || bookingId) {
+          holds.push({
+            sourcePage: 'Courtesy',
+            shipName: shipName,
+            sailingStartDate: sailingStartDate,
+            sailingEndDate: sailingEndDate,
+            sailingDates: sailingStartDate && sailingEndDate ? \`\${sailingStartDate} - \${sailingEndDate}\` : '',
+            itinerary: itinerary,
+            departurePort: '',
+            cabinType: '',
+            cabinNumberOrGTY: 'Hold',
+            bookingId: bookingId,
+            status: 'Courtesy Hold',
+            holdExpiration: holdExpiration,
+            loyaltyLevel: '',
+            loyaltyPoints: ''
+          });
+
+          processedCount++;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'progress',
+            current: processedCount,
+            total: holdCards.length,
+            stepName: 'Courtesy Holds'
+          }));
+        }
       }
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
