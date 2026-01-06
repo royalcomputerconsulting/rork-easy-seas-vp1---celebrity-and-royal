@@ -56,6 +56,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, []);
 
   const stepsCompleted = useRef({ step1: false, step2: false, step3: false, step4: false });
+  const stepResolvers = useRef<{ [key: number]: () => void }>({});
 
   const checkIfAllStepsComplete = useCallback(() => {
     setState(prev => {
@@ -127,6 +128,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           stepsCompleted.current.step4 = true;
         }
         
+        if (stepResolvers.current[message.step]) {
+          stepResolvers.current[message.step]();
+          delete stepResolvers.current[message.step];
+        }
+        
         setTimeout(() => checkIfAllStepsComplete(), 100);
         break;
 
@@ -160,6 +166,20 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
   }, [addLog]);
 
+  const waitForStepCompletion = useCallback((stepNumber: number, timeoutMs: number = 60000): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        delete stepResolvers.current[stepNumber];
+        reject(new Error(`Step ${stepNumber} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      stepResolvers.current[stepNumber] = () => {
+        clearTimeout(timeoutId);
+        resolve();
+      };
+    });
+  }, []);
+
   const runIngestion = useCallback(async () => {
     if (state.status !== 'logged_in') {
       addLog('Cannot run ingestion: user not logged in', 'error');
@@ -172,6 +192,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
 
     stepsCompleted.current = { step1: false, step2: false, step3: false, step4: false };
+    stepResolvers.current = {};
 
     setState(prev => ({
       ...prev,
@@ -186,17 +207,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     addLog('Starting ingestion process...', 'info');
     
     try {
-      addLog('Step 1: Navigating to Club Royale offers page...', 'info');
-      webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/club-royale/offers';
-        true;
-      `);
-      
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      addLog('Step 1: Starting Club Royale offers extraction (already on page)...', 'info');
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 30000));
+      await waitForStepCompletion(1, 60000);
+      addLog('Step 1 completed successfully', 'success');
       
       setState(prev => ({ 
         ...prev, 
@@ -213,7 +230,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 20000));
+      await waitForStepCompletion(2, 60000);
+      addLog('Step 2 completed successfully', 'success');
       
       setState(prev => ({ 
         ...prev, 
@@ -230,7 +248,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 20000));
+      await waitForStepCompletion(3, 60000);
+      addLog('Step 3 completed successfully', 'success');
       
       setState(prev => ({ 
         ...prev, 
@@ -247,11 +266,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
       
+      await waitForStepCompletion(4, 60000);
+      addLog('Step 4 completed successfully', 'success');
+      
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, addLog]);
+  }, [state.status, addLog, waitForStepCompletion]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
