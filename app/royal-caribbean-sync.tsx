@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -150,7 +150,7 @@ function RoyalCaribbeanSyncScreen() {
       <View style={styles.container}>
         <View style={[styles.statusPill, { backgroundColor: getStatusColor() }]}>
           {getStatusIcon()}
-          <Text style={styles.statusText}>{getStatusText()}</Text>
+          <Text style={styles.statusText}>Status: {getStatusText()}</Text>
         </View>
 
         <Pressable 
@@ -184,92 +184,78 @@ function RoyalCaribbeanSyncScreen() {
         )}
 
         <View style={styles.actionsContainer}>
-          <View style={styles.buttonRow}>
+          <View style={styles.quickActionsGrid}>
             <Pressable 
-              style={[styles.button, styles.primaryButton]}
+              style={styles.quickActionButton}
               onPress={openLogin}
             >
-              <Text style={styles.buttonText}>Open Login</Text>
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
+                <ExternalLink size={18} color="#0070C9" />
+              </View>
+              <Text style={styles.quickActionLabel}>Login</Text>
             </Pressable>
 
             <Pressable 
-              style={[
-                styles.button, 
-                styles.primaryButton,
-                (!canRunIngestion || isRunning) && styles.buttonDisabled
-              ]}
+              style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled]}
               onPress={runIngestion}
               disabled={!canRunIngestion || isRunning}
             >
-              <Text style={[
-                styles.buttonText,
-                (!canRunIngestion || isRunning) && styles.buttonTextDisabled
-              ]}>
-                Run Ingestion
-              </Text>
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
+                <RefreshCcw size={18} color="#4CAF50" />
+              </View>
+              <Text style={styles.quickActionLabel}>SYNC NOW</Text>
             </Pressable>
-          </View>
 
-          <View style={styles.buttonRow}>
             <Pressable 
-              style={[
-                styles.button, 
-                styles.secondaryButton,
-                !canExport && styles.buttonDisabled
-              ]}
+              style={[styles.quickActionButton, !canExport && styles.buttonDisabled]}
               onPress={exportOffersCSV}
               disabled={!canExport}
             >
-              <Text style={[
-                styles.secondaryButtonText,
-                !canExport && styles.buttonTextDisabled
-              ]}>
-                Export Offers
-              </Text>
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(156, 39, 176, 0.1)' }]}>
+                <Download size={18} color="#9C27B0" />
+              </View>
+              <Text style={styles.quickActionLabel}>Export Offers</Text>
             </Pressable>
 
             <Pressable 
-              style={[
-                styles.button, 
-                styles.secondaryButton,
-                !canExport && styles.buttonDisabled
-              ]}
+              style={[styles.quickActionButton, !canExport && styles.buttonDisabled]}
               onPress={exportBookedCruisesCSV}
               disabled={!canExport}
             >
-              <Text style={[
-                styles.secondaryButtonText,
-                !canExport && styles.buttonTextDisabled
-              ]}>
-                Export Booked
-              </Text>
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
+                <Download size={18} color="#2196F3" />
+              </View>
+              <Text style={styles.quickActionLabel}>Export Booked</Text>
             </Pressable>
-          </View>
 
-
-
-          <View style={styles.buttonRow}>
             <Pressable 
-              style={[styles.button, styles.tertiaryButton]}
+              style={styles.quickActionButton}
               onPress={() => setLogsVisible(!logsVisible)}
             >
-              <Text style={styles.tertiaryButtonText}>
-                {logsVisible ? 'Hide' : 'View'} Log ({state.logs.length})
-              </Text>
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(255, 152, 0, 0.1)' }]}>
+                <Calendar size={18} color="#FF9800" />
+              </View>
+              <Text style={styles.quickActionLabel}>{logsVisible ? 'Hide' : 'View'} Log</Text>
             </Pressable>
 
             <Pressable 
-              style={[styles.button, styles.tertiaryButton]}
+              style={styles.quickActionButton}
               onPress={exportLog}
             >
-              <Text style={styles.tertiaryButtonText}>Export Log</Text>
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(96, 125, 139, 0.1)' }]}>
+                <Download size={18} color="#607D8B" />
+              </View>
+              <Text style={styles.quickActionLabel}>Export Log</Text>
             </Pressable>
 
             <Pressable 
-              style={[styles.button, styles.dangerButton]}
+              style={styles.quickActionButton}
               onPress={resetState}
             >
-              <Text style={styles.buttonText}>Reset</Text>
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(244, 67, 54, 0.1)' }]}>
+                <XCircle size={18} color="#F44336" />
+              </View>
+              <Text style={styles.quickActionLabel}>Reset</Text>
             </Pressable>
           </View>
         </View>
@@ -455,12 +441,39 @@ const styles = StyleSheet.create({
     flex: 1
   },
   actionsContainer: {
-    padding: 12,
+    padding: 12
+  },
+  quickActionsGrid: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
     gap: 12
   },
-  buttonRow: {
-    flexDirection: 'row' as const,
-    gap: 12
+  quickActionButton: {
+    width: 'calc(33.333% - 8px)' as any,
+    minWidth: 100,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center' as const,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#334155'
+  },
+  quickActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const
+  },
+  quickActionLabel: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '600' as const,
+    textAlign: 'center' as const
+  },
+  buttonDisabled: {
+    opacity: 0.5
   },
   button: {
     flex: 1,
@@ -470,45 +483,10 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     justifyContent: 'center' as const
   },
-  primaryButton: {
-    backgroundColor: '#3b82f6'
-  },
-  secondaryButton: {
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155'
-  },
-  tertiaryButton: {
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155'
-  },
-  dangerButton: {
-    backgroundColor: '#7f1d1d'
-  },
-  successButton: {
-    backgroundColor: '#059669'
-  },
-  buttonDisabled: {
-    opacity: 0.5
-  },
   buttonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600' as const
-  },
-  secondaryButtonText: {
-    color: '#94a3b8',
-    fontSize: 14,
-    fontWeight: '600' as const
-  },
-  tertiaryButtonText: {
-    color: '#64748b',
-    fontSize: 13,
-    fontWeight: '500' as const
-  },
-  buttonTextDisabled: {
-    opacity: 0.5
   },
   logsContainer: {
     flex: 1,
