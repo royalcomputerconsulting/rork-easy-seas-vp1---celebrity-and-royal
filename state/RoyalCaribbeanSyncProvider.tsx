@@ -224,11 +224,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       await new Promise(resolve => setTimeout(resolve, 6000));
       
       console.log('[PROVIDER] Injecting step 2 script');
-      webViewRef.current.injectJavaScript(`
-        console.log('[PROVIDER] Step 2 script injecting now');
-        ${injectUpcomingCruisesExtraction()}
-        true;
-      `);
+      webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
       
       await new Promise(resolve => setTimeout(resolve, 35000));
       
@@ -263,11 +259,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       await new Promise(resolve => setTimeout(resolve, 6000));
       
       console.log('[PROVIDER] Injecting step 4 script');
-      webViewRef.current.injectJavaScript(`
-        console.log('[PROVIDER] Step 4 script injecting now');
-        ${injectLoyaltyExtraction()}
-        true;
-      `);
+      webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
       
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');

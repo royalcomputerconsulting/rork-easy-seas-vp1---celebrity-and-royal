@@ -58,7 +58,7 @@ export const AUTH_DETECTION_SCRIPT = `
       (indicators.crownAnchorText ? 1 : 0) +
       (indicators.tierText ? 1 : 0);
     
-    const isOnAccountPage = url.includes('/account/') || url.includes('loyalty-status');
+    const isOnAccountPage = url.includes('/account/') || url.includes('loyalty-status') || url.includes('loyalty-programs');
     
     let isLoggedIn = false;
     
