@@ -40,7 +40,13 @@ export const STEP2_UPCOMING_SCRIPT = `
         logType: 'info'
       }));
 
-      await wait(2000);
+      await wait(3000);
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Page loaded, extracting Crown & Anchor loyalty from header...',
+        logType: 'info'
+      }));
       
       let crownAndAnchorLevel = '';
       let crownAndAnchorPoints = '';
@@ -97,6 +103,44 @@ export const STEP2_UPCOMING_SCRIPT = `
         }));
       }
       
+      const allElements = document.querySelectorAll('*');
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'DOM has ' + allElements.length + ' total elements',
+        logType: 'info'
+      }));
+      
+      let cruiseCards = document.querySelectorAll('[data-testid*="cruise"], [class*="cruise-card"], [class*="booking"], [class*="reservation"]');
+      
+      if (cruiseCards.length === 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'No cruises found with primary selectors, trying broader search...',
+          logType: 'warning'
+        }));
+        
+        cruiseCards = document.querySelectorAll('[class*="cruise"], [class*="Cruise"], [class*="trip"], [class*="booking"], [class*="upcoming"], section, article, .card, main > div > div');
+      }
+      
+      if (cruiseCards.length === 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Still no cards found, checking page content...',
+          logType: 'warning'
+        }));
+        
+        const bodyText = document.body.textContent || '';
+        const hasReservation = bodyText.match(/RESERVATION|Booking|Cruise/i);
+        if (hasReservation) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Page contains cruise-related text, using main sections',
+            logType: 'info'
+          }));
+          cruiseCards = document.querySelectorAll('main section, main > div');
+        }
+      }
+      
       console.log('[STEP2] Starting scroll');
       await scrollUntilComplete(15);
 
@@ -106,18 +150,6 @@ export const STEP2_UPCOMING_SCRIPT = `
         message: 'Scrolling complete, extracting cruise cards...',
         logType: 'info'
       }));
-
-      let cruiseCards = document.querySelectorAll('[data-testid*="cruise"], [class*="cruise-card"], [class*="booking"]');
-      
-      if (cruiseCards.length === 0) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'No cruises found with primary selectors, trying broader search...',
-          logType: 'warning'
-        }));
-        
-        cruiseCards = document.querySelectorAll('[class*="cruise"], [class*="Cruise"], [class*="trip"], [class*="booking"], article, .card');
-      }
       
       console.log('[STEP2] Found', cruiseCards.length, 'cards');
       window.ReactNativeWebView.postMessage(JSON.stringify({

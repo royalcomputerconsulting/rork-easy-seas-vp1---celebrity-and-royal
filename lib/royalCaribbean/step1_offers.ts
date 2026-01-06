@@ -114,19 +114,26 @@ export const STEP1_OFFERS_SCRIPT = `
 
       let offerCards = [];
       
-      const allSections = document.querySelectorAll('section, [role="region"], main > div, article, [class*="container"]');
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Searching for featured offers and offer cards...',
+        logType: 'info'
+      }));
+      
+      const allSections = document.querySelectorAll('section, [role="region"], main > div, article, [class*="container"], [class*="hero"], [class*="featured"], [class*="banner"]');
       
       for (const section of allSections) {
-        const hasViewSailings = Array.from(section.querySelectorAll('button, a')).some(btn => 
-          btn.textContent?.match(/View Sailings?|See Sailings?/i)
+        const hasViewSailings = Array.from(section.querySelectorAll('button, a, [role="button"]')).some(btn => 
+          btn.textContent?.match(/View Sailings?|See Sailings?|Book Now|Learn More/i)
         );
         
         if (hasViewSailings) {
           offerCards.push(section);
           const text = section.textContent?.trim() || '';
+          const offerNamePreview = text.match(/Full House|[A-Z][a-z]+ [A-Z][a-z]+/)?.[0] || text.substring(0, 50);
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Found offer section with View Sailings: ' + text.substring(0, 100),
+            message: 'Found offer section: ' + offerNamePreview,
             logType: 'info'
           }));
         }
@@ -135,17 +142,24 @@ export const STEP1_OFFERS_SCRIPT = `
       if (offerCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'No offers found with View Sailings buttons, trying broader search...',
+          message: 'No standard offer cards found, searching for featured hero section...',
           logType: 'warning'
         }));
         
-        const allText = document.body.textContent || '';
-        if (allText.match(/Full House|offer|promotion/i)) {
+        const hero = document.querySelector('main section:first-of-type, [class*="hero"], [class*="featured"]');
+        if (hero) {
+          offerCards = [hero];
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Using featured hero section as offer',
+            logType: 'info'
+          }));
+        } else {
           offerCards = [document.querySelector('main') || document.body];
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Using main content area as single offer',
-            logType: 'info'
+            message: 'Using main content area as fallback',
+            logType: 'warning'
           }));
         }
       }
@@ -179,8 +193,8 @@ export const STEP1_OFFERS_SCRIPT = `
         const offerType = extractText(card, '[data-testid*="type"], [class*="type"]');
         const perks = extractText(card, '[data-testid*="perk"], [class*="perk"], [class*="benefit"]');
 
-        const viewSailingsBtn = Array.from(card.querySelectorAll('button, a')).find(el => 
-          el.textContent?.match(/View Sailings?|See Sailings?/i)
+        const viewSailingsBtn = Array.from(card.querySelectorAll('button, a, [role="button"]')).find(el => 
+          el.textContent?.match(/View Sailings?|See Sailings?|Book Now|Learn More/i)
         );
 
         if (viewSailingsBtn) {
@@ -199,8 +213,9 @@ export const STEP1_OFFERS_SCRIPT = `
             logType: 'info'
           }));
 
+          await wait(3000);
           await scrollUntilComplete(null, 15);
-          await wait(2000);
+          await wait(3000);
 
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
