@@ -31,6 +31,37 @@ export const STEP2_UPCOMING_SCRIPT = `
     return el?.textContent?.trim() || '';
   }
 
+  function extractTextMultiple(element, selectors) {
+    if (!element) return '';
+    for (const selector of selectors) {
+      const text = extractText(element, selector);
+      if (text) return text;
+    }
+    return '';
+  }
+
+  function extractFromPatterns(card) {
+    const allText = card.textContent || '';
+    const result = {};
+    
+    const shipMatch = allText.match(/^([^|]+?)\s*\|\s*[A-Za-z]{3}\s+\d{1,2}/);
+    if (shipMatch) result.shipName = shipMatch[1].trim();
+    
+    const dateMatch = allText.match(/([A-Za-z]{3}\s+\d{1,2})\s*—\s*([A-Za-z]{3}\s+\d{1,2},\s*\d{4})/);
+    if (dateMatch) {
+      result.startDate = dateMatch[1];
+      result.endDate = dateMatch[2];
+    }
+    
+    const reservationMatch = allText.match(/RESERVATION\s*([\d]{6,8})/);
+    if (reservationMatch) result.bookingId = reservationMatch[1];
+    
+    const nightsMatch = allText.match(/(\d+)\s*Night/);
+    if (nightsMatch) result.nights = nightsMatch[1];
+    
+    return result;
+  }
+
   async function extractUpcomingCruises() {
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -97,23 +128,78 @@ export const STEP2_UPCOMING_SCRIPT = `
             }
           }
 
-          const shipName = extractText(card, '[data-testid*="ship"], [class*="ship"]');
-          const sailingStartDate = extractText(card, '[data-testid*="start"], [data-testid*="departure"]');
-          const sailingEndDate = extractText(card, '[data-testid*="end"], [data-testid*="return"]');
-          const itinerary = extractText(card, '[data-testid*="itinerary"], [class*="itinerary"]');
-          const departurePort = extractText(card, '[data-testid*="port"], [class*="port"]');
-          const cabinType = extractText(card, '[data-testid*="cabin"], [data-testid*="stateroom"]');
-          const cabinNumber = extractText(card, '[data-testid*="cabin-number"], [data-testid*="room-number"]');
-          const bookingId = extractText(card, '[data-testid*="booking"], [data-testid*="reservation"]');
+          const patterns = extractFromPatterns(card);
+          
+          const shipName = patterns.shipName || extractTextMultiple(card, [
+            '[data-testid*="ship"]',
+            '[class*="ship"]',
+            'h1',
+            '[class*="title"]:first-child'
+          ]);
+          
+          const sailingStartDate = patterns.startDate || extractTextMultiple(card, [
+            '[data-testid*="start"]',
+            '[data-testid*="departure"]',
+            '[class*="date"]'
+          ]);
+          
+          const sailingEndDate = patterns.endDate || extractTextMultiple(card, [
+            '[data-testid*="end"]',
+            '[data-testid*="return"]'
+          ]);
+          
+          const itinerary = extractTextMultiple(card, [
+            '[data-testid*="itinerary"]',
+            '[class*="itinerary"]',
+            'h2',
+            '[class*="title"]:nth-child(2)'
+          ]);
+          
+          const departurePort = extractTextMultiple(card, [
+            '[data-testid*="port"]',
+            '[class*="port"]',
+            '[class*="location"]'
+          ]);
+          
+          const cabinType = extractTextMultiple(card, [
+            '[data-testid*="cabin"]',
+            '[data-testid*="stateroom"]',
+            '[class*="cabin"]',
+            '[class*="room"]'
+          ]);
+          
+          const cabinNumber = extractTextMultiple(card, [
+            '[data-testid*="cabin-number"]',
+            '[data-testid*="room-number"]'
+          ]);
+          
+          const bookingId = patterns.bookingId || extractTextMultiple(card, [
+            '[data-testid*="booking"]',
+            '[data-testid*="reservation"]',
+            '[class*="reservation"]'
+          ]);
+          
+          let guests = extractTextMultiple(card, [
+            '[data-testid*="guest"]',
+            '[class*="guest"]'
+          ]);
 
           if (!shipName && !sailingStartDate && !bookingId) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: 'Card ' + (i + 1) + ' appears to be empty or not a cruise card, skipping',
+              message: 'Card ' + (i + 1) + ' appears to be empty or not a cruise card (no ship, dates, or booking ID found), skipping',
               logType: 'warning'
             }));
             skippedCount++;
             continue;
+          }
+          
+          if (!bookingId) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Card ' + (i + 1) + ' has no booking ID but has other data, will still include',
+              logType: 'warning'
+            }));
           }
 
           cruises.push({
