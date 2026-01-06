@@ -25,7 +25,6 @@ function RoyalCaribbeanSyncScreen() {
   } = useRoyalCaribbeanSync();
 
   const [webViewVisible, setWebViewVisible] = useState(true);
-  const [logsVisible, setLogsVisible] = useState(true);
 
   const onMessage = (event: any) => {
     try {
@@ -232,10 +231,7 @@ function RoyalCaribbeanSyncScreen() {
                 styles.primaryButton,
                 (!canRunIngestion || isRunning) && styles.buttonDisabled
               ]}
-              onPress={() => {
-                setLogsVisible(true);
-                runIngestion();
-              }}
+              onPress={runIngestion}
               disabled={!canRunIngestion || isRunning}
             >
               <Text style={[
@@ -300,15 +296,6 @@ function RoyalCaribbeanSyncScreen() {
 
 
           <View style={styles.compactButtonRow}>
-            <Pressable 
-              style={[styles.compactButton, styles.tertiaryButton]}
-              onPress={() => setLogsVisible(!logsVisible)}
-            >
-              <Text style={styles.compactButtonText}>
-                {logsVisible ? 'Hide' : 'View'} Log ({state.logs.length})
-              </Text>
-            </Pressable>
-
             <Pressable 
               style={[styles.compactButton, styles.tertiaryButton]}
               onPress={exportLog}
