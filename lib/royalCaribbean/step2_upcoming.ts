@@ -111,23 +111,6 @@ export const STEP2_UPCOMING_SCRIPT = `
             logType: 'info'
           }));
 
-          const viewDetailsBtn = Array.from(card.querySelectorAll('button, a')).find(el => 
-            el.textContent?.match(/View.*Details?|Additional Details|Show Details/i)
-          );
-
-          if (viewDetailsBtn) {
-            try {
-              viewDetailsBtn.click();
-              await wait(2000);
-            } catch (clickError) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: 'Could not click View Details button on card ' + (i + 1) + ', continuing anyway',
-                logType: 'warning'
-              }));
-            }
-          }
-
           const patterns = extractFromPatterns(card);
           
           const shipName = patterns.shipName || extractTextMultiple(card, [
