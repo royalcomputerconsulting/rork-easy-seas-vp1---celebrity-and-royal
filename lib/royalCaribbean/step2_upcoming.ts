@@ -33,15 +33,18 @@ export const STEP2_UPCOMING_SCRIPT = `
 
   async function extractUpcomingCruises() {
     try {
+      console.log('[STEP2] Starting extraction');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: 'Starting Upcoming Cruises extraction...',
         logType: 'info'
       }));
 
-      await wait(3000);
+      await wait(2000);
+      console.log('[STEP2] Starting scroll');
       await scrollUntilComplete(15);
 
+      console.log('[STEP2] Scroll complete, looking for cards');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: 'Scrolling complete, extracting cruise cards...',
@@ -60,6 +63,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         cruiseCards = document.querySelectorAll('[class*="cruise"], [class*="Cruise"], [class*="trip"], [class*="booking"], article, .card');
       }
       
+      console.log('[STEP2] Found', cruiseCards.length, 'cards');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: 'Found ' + cruiseCards.length + ' potential cruise elements',
@@ -69,11 +73,19 @@ export const STEP2_UPCOMING_SCRIPT = `
       const cruises = [];
       let processedCount = 0;
 
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Processing ' + cruiseCards.length + ' cruise cards...',
-        logType: 'info'
-      }));
+      if (cruiseCards.length > 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Processing ' + cruiseCards.length + ' cruise cards...',
+          logType: 'info'
+        }));
+      } else {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'No cruise cards found to process',
+          logType: 'warning'
+        }));
+      }
 
       for (let i = 0; i < cruiseCards.length; i++) {
         const card = cruiseCards[i];
@@ -141,12 +153,14 @@ export const STEP2_UPCOMING_SCRIPT = `
         }));
       }
 
+      console.log('[STEP2] Finished processing, found', cruises.length, 'valid cruises');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: 'Finished processing cards, found ' + cruises.length + ' valid cruises',
         logType: 'info'
       }));
 
+      console.log('[STEP2] Sending step_complete');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete',
         step: 2,
@@ -160,6 +174,7 @@ export const STEP2_UPCOMING_SCRIPT = `
       }));
 
     } catch (error) {
+      console.error('[STEP2] Error:', error);
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'error',
         message: 'Failed to extract upcoming cruises: ' + error.message
@@ -167,9 +182,12 @@ export const STEP2_UPCOMING_SCRIPT = `
     }
   }
 
+  console.log('[STEP2] Script loaded, readyState:', document.readyState);
   if (document.readyState === 'loading') {
+    console.log('[STEP2] Waiting for DOMContentLoaded');
     document.addEventListener('DOMContentLoaded', extractUpcomingCruises);
   } else {
+    console.log('[STEP2] Running immediately');
     extractUpcomingCruises();
   }
 })();

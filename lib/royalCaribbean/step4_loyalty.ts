@@ -6,13 +6,14 @@ export const STEP4_LOYALTY_SCRIPT = `
 
   async function extractLoyaltyStatus() {
     try {
+      console.log('[STEP4] Starting loyalty extraction');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: 'Extracting Crown & Anchor loyalty status...',
         logType: 'info'
       }));
 
-      await wait(2000);
+      await wait(3000);
 
       const loyaltyData = {
         crownAndAnchorLevel: '',
@@ -25,8 +26,10 @@ export const STEP4_LOYALTY_SCRIPT = `
         'h1, h2, h3, h4, h5, h6, p, span, div, [class*="tier"], [class*="level"]'
       ];
 
+      console.log('[STEP4] Searching for loyalty data');
       for (const selector of selectors) {
         const elements = document.querySelectorAll(selector);
+        console.log('[STEP4] Found', elements.length, 'elements with selector:', selector);
         elements.forEach(el => {
           const text = el.textContent?.trim() || '';
           
@@ -50,24 +53,30 @@ export const STEP4_LOYALTY_SCRIPT = `
             }
           }
           
-          if (text.match(/\\d+\\s*(nights?|loyalty points?)/i)) {
+          if (text.match(/\\d+\\s*(nights?|loyalty points?|cruise points?)/i)) {
             if (!loyaltyData.crownAndAnchorPoints) {
-              loyaltyData.crownAndAnchorPoints = text.match(/\\d+/)?.[0] || '';
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: 'Found nights/loyalty points: ' + loyaltyData.crownAndAnchorPoints,
-                logType: 'info'
-              }));
+              const pointsMatch = text.match(/\\d+/);
+              if (pointsMatch) {
+                loyaltyData.crownAndAnchorPoints = pointsMatch[0];
+                console.log('[STEP4] Found points:', loyaltyData.crownAndAnchorPoints);
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: 'Found nights/loyalty points: ' + loyaltyData.crownAndAnchorPoints,
+                  logType: 'info'
+                }));
+              }
             }
           }
         });
       }
 
+      console.log('[STEP4] Final data:', loyaltyData);
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'loyalty_data',
         data: loyaltyData
       }));
 
+      console.log('[STEP4] Sending step_complete');
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete',
         step: 4,
@@ -81,6 +90,7 @@ export const STEP4_LOYALTY_SCRIPT = `
       }));
 
     } catch (error) {
+      console.error('[STEP4] Error:', error);
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'error',
         message: 'Failed to extract loyalty status: ' + error.message
@@ -88,9 +98,12 @@ export const STEP4_LOYALTY_SCRIPT = `
     }
   }
 
+  console.log('[STEP4] Script loaded, readyState:', document.readyState);
   if (document.readyState === 'loading') {
+    console.log('[STEP4] Waiting for DOMContentLoaded');
     document.addEventListener('DOMContentLoaded', extractLoyaltyStatus);
   } else {
+    console.log('[STEP4] Running immediately');
     extractLoyaltyStatus();
   }
 })();
