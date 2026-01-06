@@ -67,15 +67,24 @@ function RoyalCaribbeanSyncScreen() {
       case 'not_logged_in':
         return 'Not Logged In';
       case 'logged_in':
-        return 'Logged In';
+        return 'Logged In - Ready to Scrape';
       case 'running_step_1':
-        return 'Extracting Club Royale Offers...';
+        if (state.progress && state.progress.current > 0) {
+          return `Loading Offers Page - ${state.progress.current} Scraped`;
+        }
+        return 'Loading Offers Page...';
       case 'running_step_2':
-        return 'Extracting Upcoming Cruises...';
+        if (state.progress && state.progress.current > 0) {
+          return `Loading Upcoming Cruises - ${state.progress.current} Scraped`;
+        }
+        return 'Loading Upcoming Cruises Page...';
       case 'running_step_3':
-        return 'Extracting Courtesy Holds...';
+        if (state.progress && state.progress.current > 0) {
+          return `Loading Courtesy Holds - ${state.progress.current} Scraped`;
+        }
+        return 'Loading Courtesy Holds Page...';
       case 'running_step_4':
-        return 'Extracting Loyalty Status...';
+        return 'Loading Loyalty Status Page...';
       case 'awaiting_confirmation':
         return 'Ready to Sync';
       case 'syncing':
@@ -133,11 +142,6 @@ function RoyalCaribbeanSyncScreen() {
         <View style={[styles.statusPill, { backgroundColor: getStatusColor() }]}>
           {getStatusIcon()}
           <Text style={styles.statusText}>{getStatusText()}</Text>
-          {state.progress && (
-            <Text style={styles.progressText}>
-              {state.progress.current}/{state.progress.total}
-            </Text>
-          )}
         </View>
 
         <Pressable 
