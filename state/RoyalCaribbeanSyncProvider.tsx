@@ -354,6 +354,23 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     rcLogger.clear();
   }, []);
 
+  const getTransformedPreview = useCallback(() => {
+    if (state.extractedOffers.length === 0 && state.extractedBookedCruises.length === 0) {
+      return null;
+    }
+
+    const { offers: transformedOffers, cruises: transformedCruises } = transformOffersToCasinoOffers(state.extractedOffers, state.loyaltyData);
+    const transformedBookedCruises = transformBookedCruisesToAppFormat(state.extractedBookedCruises, state.loyaltyData);
+
+    return {
+      offers: transformedOffers,
+      cruises: transformedCruises,
+      bookedCruises: transformedBookedCruises,
+      loyaltyData: state.loyaltyData,
+      syncCounts: state.syncCounts
+    };
+  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, state.syncCounts]);
+
   const syncToApp = useCallback(async (coreDataContext: any) => {
     try {
       setState(prev => ({ ...prev, status: 'syncing' }));
@@ -445,6 +462,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     syncToApp,
     cancelSync,
     handleWebViewMessage,
-    addLog
+    addLog,
+    getTransformedPreview
   };
 });

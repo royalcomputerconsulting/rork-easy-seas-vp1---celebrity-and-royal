@@ -1,15 +1,14 @@
 import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, LogIn, Play, Download, FileText, RotateCcw } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, LogIn, Play, Download, FileText, RotateCcw, Star } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
-import { useCoreData } from '@/state/CoreDataProvider';
 
 function RoyalCaribbeanSyncScreen() {
-  const coreData = useCoreData();
+  const router = useRouter();
   const {
     state,
     webViewRef,
@@ -19,7 +18,6 @@ function RoyalCaribbeanSyncScreen() {
     exportBookedCruisesCSV,
     exportLog,
     resetState,
-    syncToApp,
     cancelSync,
     handleWebViewMessage
   } = useRoyalCaribbeanSync();
@@ -345,9 +343,24 @@ function RoyalCaribbeanSyncScreen() {
                     <Text style={styles.countLabel}>Courtesy Holds</Text>
                   </View>
                 </View>
+
+                {state.loyaltyData?.crownAndAnchorLevel && (
+                  <View style={styles.countCard}>
+                    <View style={styles.countIconContainer}>
+                      <Star size={24} color="#fbbf24" />
+                    </View>
+                    <View style={styles.countInfo}>
+                      <Text style={styles.countNumber}>{state.loyaltyData.crownAndAnchorLevel}</Text>
+                      <Text style={styles.countLabel}>Crown & Anchor Level</Text>
+                      {state.loyaltyData.crownAndAnchorPoints && (
+                        <Text style={styles.loyaltyPoints}>{state.loyaltyData.crownAndAnchorPoints} points</Text>
+                      )}
+                    </View>
+                  </View>
+                )}
               </View>
 
-              <Text style={styles.confirmationQuestion}>Do you want to sync this data to the app?</Text>
+              <Text style={styles.confirmationQuestion}>Do you want to preview and sync this data?</Text>
 
               <View style={styles.confirmationButtons}>
                 <Pressable 
@@ -359,9 +372,9 @@ function RoyalCaribbeanSyncScreen() {
 
                 <Pressable 
                   style={[styles.button, styles.confirmButton]}
-                  onPress={() => syncToApp(coreData)}
+                  onPress={() => router.push('/settings')}
                 >
-                  <Text style={styles.buttonText}>Yes, Sync Now</Text>
+                  <Text style={styles.buttonText}>Yes, Preview & Import</Text>
                 </Pressable>
               </View>
             </View>
@@ -612,6 +625,11 @@ const styles = StyleSheet.create({
   countLabel: {
     color: '#94a3b8',
     fontSize: 14
+  },
+  loyaltyPoints: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 2
   },
   confirmationQuestion: {
     color: '#cbd5e1',
