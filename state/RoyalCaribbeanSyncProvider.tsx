@@ -262,7 +262,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       await new Promise(resolve => setTimeout(resolve, 40000));
       
       addLog('Step 2 complete. Navigating to courtesy holds page...', 'info');
-      const holdsUrl = `https://www.royalcaribbean.com/account/Courtesy-hold`;
+      const holdsUrl = `https://www.royalcaribbean.com/account/courtesy-holds`;
       setState(prev => ({ 
         ...prev, 
         status: 'running_step_3',
