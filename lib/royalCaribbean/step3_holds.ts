@@ -74,18 +74,18 @@ export const STEP3_HOLDS_SCRIPT = `
         return;
       }
 
-      const allElements = document.querySelectorAll('div, article, section');
-      let holdCards = Array.from(allElements).filter(el => {
+      const allElements = Array.from(document.querySelectorAll('div, article, section'));
+      let holdCards = allElements.filter(el => {
         const text = el.textContent || '';
         const hasShip = text.includes('of the Seas');
         const hasNight = text.match(/\\d+\\s+Night/);
-        const hasReservation = text.includes('Reservation:');
-        const hasExpires = text.includes('Expires');
+        const hasReservation = text.match(/Reservation[:\\s]*\\d+/i);
+        const hasExpires = text.match(/Expires[:\\s]*(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/i);
         const isReasonablySmall = text.length > 100 && text.length < 2000;
         return (hasShip && hasNight && hasReservation && hasExpires) && isReasonablySmall;
-      }).sort((a, b) => a.textContent.length - b.textContent.length).filter((el, idx, arr) => {
-        return !arr.some((other, otherIdx) => otherIdx < idx && other.contains(el));
-      });
+      }).filter((el, idx, arr) => {
+        return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
+      }).sort((a, b) => a.textContent.length - b.textContent.length);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -123,10 +123,10 @@ export const STEP3_HOLDS_SCRIPT = `
           sailingEndDate = dateMatch[3] + ' ' + dateMatch[4] + ', ' + year;
         }
 
-        const reservationMatch = fullText.match(/Reservation:\\s*(\\d+)/);
+        const reservationMatch = fullText.match(/Reservation[:\\s]*(\\d+)/i);
         const bookingId = reservationMatch ? reservationMatch[1] : '';
 
-        const expiresMatch = fullText.match(/Expires\\s*([\\d\\/]+)/);
+        const expiresMatch = fullText.match(/Expires[:\\s]*(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/i);
         const holdExpiration = expiresMatch ? expiresMatch[1] : '';
 
         if (shipName && cruiseTitle && bookingId) {
@@ -161,7 +161,7 @@ export const STEP3_HOLDS_SCRIPT = `
             type: 'progress',
             current: processedCount,
             total: holdCards.length,
-            stepName: 'Courtesy Holds (' + processedCount + ' scraped)'
+            stepName: 'Holds: ' + processedCount + ' of ' + expectedCount + ' scraped'
           }));
         }
       }

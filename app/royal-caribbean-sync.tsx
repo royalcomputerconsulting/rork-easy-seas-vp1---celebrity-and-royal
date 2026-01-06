@@ -69,22 +69,31 @@ function RoyalCaribbeanSyncScreen() {
       case 'logged_in':
         return 'Logged In - Ready to Scrape';
       case 'running_step_1':
-        if (state.progress && state.progress.current > 0) {
-          return `Loading Offers Page - ${state.progress.current} Scraped`;
+        if (state.progress && state.progress.stepName) {
+          return state.progress.stepName;
         }
-        return 'Loading Offers Page...';
-      case 'running_step_2':
         if (state.progress && state.progress.current > 0) {
-          return `Loading Upcoming Cruises - ${state.progress.current} Scraped`;
+          return `Scraping Offers - ${state.progress.current} scraped`;
+        }
+        return 'Loading Club Royale Offers Page...';
+      case 'running_step_2':
+        if (state.progress && state.progress.stepName) {
+          return state.progress.stepName;
+        }
+        if (state.progress && state.progress.current > 0) {
+          return `Scraping Upcoming - ${state.progress.current} scraped`;
         }
         return 'Loading Upcoming Cruises Page...';
       case 'running_step_3':
+        if (state.progress && state.progress.stepName) {
+          return state.progress.stepName;
+        }
         if (state.progress && state.progress.current > 0) {
-          return `Loading Courtesy Holds - ${state.progress.current} Scraped`;
+          return `Scraping Holds - ${state.progress.current} scraped`;
         }
         return 'Loading Courtesy Holds Page...';
       case 'running_step_4':
-        return 'Loading Loyalty Status Page...';
+        return 'Loading Loyalty Programs Page...';
       case 'awaiting_confirmation':
         return 'Ready to Sync';
       case 'syncing':

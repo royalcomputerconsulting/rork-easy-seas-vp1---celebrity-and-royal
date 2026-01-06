@@ -45,7 +45,7 @@ export const STEP2_UPCOMING_SCRIPT = `
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Scrolling page to load all content...',
+        message: 'Scrolling page to load all cruises...',
         logType: 'info'
       }));
       
@@ -71,7 +71,7 @@ export const STEP2_UPCOMING_SCRIPT = `
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + allLinks.length + ' detail links',
+        message: 'Found ' + allLinks.length + ' cruise detail links',
         logType: 'info'
       }));
 
@@ -90,10 +90,10 @@ export const STEP2_UPCOMING_SCRIPT = `
           const hasShip = text.includes('of the Seas');
           const hasNight = text.match(/\\d+\\s+Night/);
           const hasDate = text.match(/(\\w{3})\\s+\\d+/);
-          const hasReservation = text.includes('Reservation:');
+          const hasReservation = text.includes('Reservation');
           const textLength = text.length;
           
-          if (hasShip && hasNight && hasDate && textLength > 200 && textLength < 3000) {
+          if (hasShip && hasNight && hasDate && textLength > 200 && textLength < 4000) {
             cruiseCards.push(parent);
             processedElements.add(parent);
             break;
@@ -135,7 +135,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         const shipMatch = fullText.match(/([\\w\\s]+of the Seas)/);
         const shipName = shipMatch ? shipMatch[1].trim() : '';
 
-        const cruiseTitleMatch = fullText.match(/(\\d+)\\s+Night\\s+([^\\n]+?)(?=\\n|$)/);
+        const cruiseTitleMatch = fullText.match(/(\\d+)\\s+Night\\s+([^\\n]+?)(?=VANCOUVER|LOS ANGELES|MIAMI|SEATTLE|TAMPA|ORLANDO|FORT LAUDERDALE|GALVESTON|NEW YORK|BOSTON|BALTIMORE|CHECK-IN|\\d+ Days|$)/i);
         const cruiseTitle = cruiseTitleMatch ? cruiseTitleMatch[0].trim() : '';
 
         const dateMatch = fullText.match(/(\\w{3})\\s+(\\d+)\\s*—\\s*(\\w{3})\\s+(\\d+),?\\s*(\\d{4})/);
@@ -149,24 +149,32 @@ export const STEP2_UPCOMING_SCRIPT = `
           sailingEndDate = dateMatch[3] + ' ' + dateMatch[4] + ', ' + year;
         }
 
-        const itineraryMatch = fullText.match(/([A-Z][A-Z\\s,]+?)(?=\\||Reservation|Interior|Balcony|Suite|Ocean View|GTY|\\d+ Gty)/i);
-        let itinerary = itineraryMatch ? itineraryMatch[1].trim() : '';
+        let itinerary = '';
+        const itineraryPattern = /([A-Z][A-Z\\s,()]+?)(?=Reservation|Interior|Balcony|Suite|Ocean View|GTY|Gty|\\d+ Gty|CHECK-IN|Guests|Days to go)/i;
+        const itineraryMatch = fullText.match(itineraryPattern);
         
-        if (itinerary.length > 100) {
-          const shortMatch = fullText.match(/([A-Z][A-Z\\s]{10,60})\\s*\\|/);
-          itinerary = shortMatch ? shortMatch[1].trim() : itinerary;
+        if (itineraryMatch) {
+          itinerary = itineraryMatch[1].trim();
+          itinerary = itinerary.replace(/\\s+/g, ' ');
+          
+          if (itinerary.length > 150) {
+            const parts = itinerary.split('|');
+            if (parts.length > 0) {
+              itinerary = parts.slice(0, Math.min(5, parts.length)).join(' | ').trim();
+            }
+          }
         }
 
-        const reservationMatch = fullText.match(/Reservation:\\s*(\\d+)/);
+        const reservationMatch = fullText.match(/Reservation[:\\s]*(\\d+)/i);
         const bookingId = reservationMatch ? reservationMatch[1] : '';
 
-        const cabinMatches = fullText.match(/(Interior|Ocean View|Balcony|Suite|Junior Suite|GTY|Gty)([^\\n]*?)(?=(\\d{4,5})|$)/i);
+        const cabinMatches = fullText.match(/(Interior|Ocean View|Balcony|Suite|Junior Suite|GTY|Gty)([^\\n]*?)(?=(\\d{4,5})|Guests|Days|$)/i);
         let cabinType = '';
         let cabinNumber = '';
         
         if (cabinMatches) {
           cabinType = cabinMatches[1].trim();
-          const cabinNumMatch = fullText.match(/(Interior|Balcony|Suite|Ocean View|GTY|Gty)[^\\n]*?(\\d{4,5})/);
+          const cabinNumMatch = fullText.match(/(Interior|Balcony|Suite|Ocean View|GTY|Gty)[^\\n]*?(\\d{4,5})/i);
           if (cabinNumMatch) {
             cabinNumber = cabinNumMatch[2];
           }
@@ -178,7 +186,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         const daysMatch = fullText.match(/(\\d+)\\s+Days?\\s+to\\s+go/i);
         const daysToGo = daysMatch ? daysMatch[1] : '';
 
-        if (shipName && cruiseTitle) {
+        if (shipName && cruiseTitle && bookingId) {
           const cruise = {
             sourcePage: 'Upcoming',
             shipName: shipName,
@@ -212,7 +220,13 @@ export const STEP2_UPCOMING_SCRIPT = `
             type: 'progress',
             current: processedCount,
             total: cruiseCards.length,
-            stepName: 'Upcoming Cruises (' + processedCount + ' scraped)'
+            stepName: 'Upcoming: ' + processedCount + ' of ' + expectedCount + ' scraped'
+          }));
+        } else {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Skipped cruise card - missing required fields (ship: ' + !!shipName + ', title: ' + !!cruiseTitle + ', booking: ' + !!bookingId + ')',
+            logType: 'warning'
           }));
         }
       }

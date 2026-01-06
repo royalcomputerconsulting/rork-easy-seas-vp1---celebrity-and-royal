@@ -41,7 +41,7 @@ export const STEP1_OFFERS_SCRIPT = `
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Starting Club Royale Offers extraction...',
+        message: 'Loading Club Royale Offers page...',
         logType: 'info'
       }));
 
@@ -49,7 +49,7 @@ export const STEP1_OFFERS_SCRIPT = `
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Page loaded, searching for offer elements...',
+        message: 'Scrolling to load all content...',
         logType: 'info'
       }));
 
@@ -57,48 +57,38 @@ export const STEP1_OFFERS_SCRIPT = `
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Scrolling complete, looking for offers...',
+        message: 'Analyzing offers page structure...',
         logType: 'info'
       }));
 
       let offerCards = [];
+      const allElements = Array.from(document.querySelectorAll('div, article, section'));
       
-      const possibleSelectors = [
-        '[data-testid*="offer"]',
-        '[class*="OfferCard"]',
-        '[class*="offer-card"]',
-        'article[class*="offer"]',
-        'div[class*="offer"][class*="card"]',
-        '.card',
-        'article',
-        'div[role="article"]'
-      ];
+      offerCards = allElements.filter(el => {
+        const text = el.textContent || '';
+        const hasViewSailings = text.includes('View Sailings');
+        const hasRedeem = text.includes('Redeem');
+        const hasTradeIn = text.toLowerCase().includes('trade-in');
+        const hasRoomType = text.includes('Room for Two') || text.includes('Balcony') || text.includes('Ocean');
+        const isReasonableSize = text.length > 50 && text.length < 2000;
+        
+        return (hasViewSailings || hasRedeem) && (hasTradeIn || hasRoomType) && isReasonableSize;
+      });
       
-      for (const selector of possibleSelectors) {
-        const elements = document.querySelectorAll(selector);
-        if (elements.length > 0) {
-          offerCards = Array.from(elements).filter(el => {
-            const text = el.textContent || '';
-            return text.toLowerCase().includes('view sailing') || 
-                   text.toLowerCase().includes('offer') ||
-                   el.querySelector('h1, h2, h3, h4');
-          });
-          
-          if (offerCards.length > 0) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Found ' + offerCards.length + ' offers using selector: ' + selector,
-              logType: 'info'
-            }));
-            break;
-          }
-        }
-      }
+      offerCards = offerCards.filter((el, idx, arr) => {
+        return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
+      });
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Found ' + offerCards.length + ' offer cards on page',
+        logType: 'info'
+      }));
       
       if (offerCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'No offer cards found with any selector',
+          message: 'No offer cards found',
           logType: 'warning'
         }));
         
@@ -115,12 +105,24 @@ export const STEP1_OFFERS_SCRIPT = `
 
       for (let i = 0; i < offerCards.length; i++) {
         const card = offerCards[i];
+        const cardText = card.textContent || '';
         
-        const offerName = extractText(card, 'h1') || extractText(card, 'h2') || 
-                         extractText(card, 'h3') || extractText(card, 'h4') || 
-                         extractText(card, '[class*="title"]') || extractText(card, '[class*="name"]');
+        let offerName = extractText(card, 'h1') || extractText(card, 'h2') || 
+                        extractText(card, 'h3') || extractText(card, 'h4');
+        
+        if (!offerName) {
+          const roomMatch = cardText.match(/(Balcony|Ocean View|Interior|Suite)\\s+(Room for Two|or Oceanview Room for Two)/i);
+          if (roomMatch) {
+            offerName = roomMatch[0];
+          }
+        }
         
         if (!offerName || offerName.length < 3) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Skipping element - no valid offer name found',
+            logType: 'warning'
+          }));
           continue;
         }
         
@@ -130,16 +132,17 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'info'
         }));
         
-        const offerCode = extractText(card, '[data-testid*="code"]') || 
-                         extractText(card, '[class*="code"]') || '';
-        const offerExpiry = extractText(card, '[data-testid*="expir"]') || 
-                           extractText(card, '[class*="expir"]') || 
-                           extractText(card, '[class*="valid"]') || '';
-        const offerType = extractText(card, '[data-testid*="type"]') || 
-                         extractText(card, '[class*="type"]') || 'Club Royale';
-        const perks = extractText(card, '[data-testid*="perk"]') || 
-                     extractText(card, '[class*="perk"]') || 
-                     extractText(card, '[class*="benefit"]') || '';
+        const codeMatch = cardText.match(/([A-Z0-9]{5,15})/);
+        const offerCode = codeMatch ? codeMatch[1] : '';
+        
+        const expiryMatch = cardText.match(/Redeem by ([A-Za-z]+ \\d+, \\d{4})/i);
+        const offerExpiry = expiryMatch ? expiryMatch[1] : '';
+        
+        const tradeInMatch = cardText.match(/\\$([\\d,]+\\.\\d{2})\\s*trade-in value/i);
+        const tradeInValue = tradeInMatch ? tradeInMatch[1] : '';
+        
+        const offerType = 'Club Royale';
+        const perks = tradeInValue ? 'Trade-in value: $' + tradeInValue : '';
 
         const viewSailingsBtn = Array.from(card.querySelectorAll('button, a, [role="button"]')).find(el => 
           (el.textContent || '').match(/View Sailing|See Sailing|Show Sailing/i)
@@ -163,9 +166,17 @@ export const STEP1_OFFERS_SCRIPT = `
           await scrollUntilComplete(sailingsContainer, 10);
           await wait(1000);
 
-          const sailingElements = sailingsContainer.querySelectorAll(
-            '[data-testid*="sailing"], [class*="sailing-card"], [class*="SailingCard"], [class*="cruise-card"], [class*="CruiseCard"], .card'
-          );
+          const allPossibleElements = Array.from(sailingsContainer.querySelectorAll('div, article, section'));
+          const sailingElements = allPossibleElements.filter(el => {
+            const text = el.textContent || '';
+            const hasShipName = text.match(/\\w+\\s+of the Seas/);
+            const hasNights = text.match(/\\d+\\s+NIGHT/i);
+            const hasPort = text.match(/(Miami|Orlando|Fort Lauderdale|Tampa)/i);
+            const hasDate = text.match(/\\d{2}\\/\\d{2}\\/\\d{2}/);
+            return hasShipName && (hasNights || hasPort || hasDate) && text.length > 50 && text.length < 800;
+          }).filter((el, idx, arr) => {
+            return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
+          });
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
@@ -176,31 +187,22 @@ export const STEP1_OFFERS_SCRIPT = `
           if (sailingElements.length > 0) {
             for (let j = 0; j < sailingElements.length; j++) {
               const sailing = sailingElements[j];
+              const sailingText = sailing.textContent || '';
               
-              const shipName = extractText(sailing, '[data-testid*="ship"]') || 
-                              extractText(sailing, '[class*="ship"]') || 
-                              extractText(sailing, 'h3') || 
-                              extractText(sailing, 'h4') || '';
+              const shipMatch = sailingText.match(/([\\w\\s]+of the Seas)/);
+              const shipName = shipMatch ? shipMatch[1].trim() : '';
               
-              const sailingDate = extractText(sailing, '[data-testid*="date"]') || 
-                                 extractText(sailing, '[class*="date"]') || 
-                                 extractText(sailing, 'time') || '';
+              const itineraryMatch = sailingText.match(/(\\d+)\\s+NIGHT\\s+([A-Z\\s&]+?)(?=\\d{2}\\/|$)/i);
+              const itinerary = itineraryMatch ? itineraryMatch[0].trim() : '';
               
-              const itinerary = extractText(sailing, '[data-testid*="itinerary"]') || 
-                               extractText(sailing, '[class*="itinerary"]') || 
-                               extractText(sailing, '[class*="destination"]') || '';
+              const portMatch = sailingText.match(/(Orlando \\(Port Cañaveral\\)|Miami|Fort Lauderdale|Tampa|Galveston)/i);
+              const departurePort = portMatch ? portMatch[1] : '';
               
-              const departurePort = extractText(sailing, '[data-testid*="port"]') || 
-                                   extractText(sailing, '[class*="port"]') || 
-                                   extractText(sailing, '[class*="departure"]') || '';
+              const dateMatch = sailingText.match(/(\\d{2}\\/\\d{2}\\/\\d{2})/);
+              const sailingDate = dateMatch ? dateMatch[1] : '';
               
-              const cabinType = extractText(sailing, '[data-testid*="cabin"]') || 
-                               extractText(sailing, '[class*="cabin"]') || 
-                               extractText(sailing, '[class*="stateroom"]') || '';
-              
-              const numberOfGuests = extractText(sailing, '[data-testid*="guest"]') || 
-                                    extractText(sailing, '[class*="guest"]') || 
-                                    extractText(sailing, '[class*="passenger"]') || '';
+              const cabinMatch = cardText.match(/(Balcony|Ocean View|Interior|Suite)\\s+(Room for Two|or Oceanview Room for Two)/i);
+              const cabinType = cabinMatch ? cabinMatch[1] : '';
               
               offers.push({
                 sourcePage: 'Offers',
@@ -213,7 +215,7 @@ export const STEP1_OFFERS_SCRIPT = `
                 itinerary: itinerary,
                 departurePort: departurePort,
                 cabinType: cabinType,
-                numberOfGuests: numberOfGuests,
+                numberOfGuests: '2',
                 perks: perks,
                 loyaltyLevel: '',
                 loyaltyPoints: ''
@@ -275,7 +277,7 @@ export const STEP1_OFFERS_SCRIPT = `
           type: 'progress',
           current: offers.length,
           total: offerCards.length,
-          stepName: 'Club Royale Offers'
+          stepName: 'Offers: ' + offers.length + ' scraped'
         }));
       }
 
