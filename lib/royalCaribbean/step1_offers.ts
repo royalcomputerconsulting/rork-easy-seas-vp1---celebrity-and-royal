@@ -210,14 +210,13 @@ export const STEP1_OFFERS_SCRIPT = `
 
           const sailingElements = allPossibleElements.filter(el => {
             const text = el.textContent || '';
-            const hasShipName = text.match(/\\w+\\s+of the Seas/);
-            const hasNights = text.match(/\\d+\\s+NIGHT/i);
-            const hasPort = text.match(/(Miami|Orlando|Fort Lauderdale|Tampa|Galveston|Port Canaveral|Port Cañaveral|Cape Liberty|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan|Bayonne)/i);
             const hasDate = text.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
-            const hasCabin = text.match(/(Balcony|Ocean View|Interior|Suite)/i);
-            const lengthOk = text.length > 40 && text.length < 3000;
-            const hasBasicInfo = hasShipName || (hasNights && hasDate);
-            return hasBasicInfo && lengthOk;
+            const hasNights = text.match(/\\d+\\s+NIGHT/i);
+            const hasShipName = text.match(/\\w+\\s+of the Seas/i);
+            const lengthOk = text.length > 30 && text.length < 5000;
+            const hasPortOrItinerary = text.match(/(Miami|Orlando|Fort Lauderdale|Tampa|Galveston|Port Canaveral|Port Cañaveral|Cape Liberty|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan|Bayonne|Caribbean|Mexico|Bahamas|Alaska|Hawaii|Europe)/i);
+            const hasSailingInfo = hasDate && (hasNights || hasShipName || hasPortOrItinerary);
+            return hasSailingInfo && lengthOk;
           }).filter((el, idx, arr) => {
             return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
           });
@@ -271,8 +270,26 @@ export const STEP1_OFFERS_SCRIPT = `
                 logType: sailingDate ? 'info' : 'warning'
               }));
               
-              const cabinMatch = cardText.match(/(Balcony|Ocean View|Interior|Suite)\\s+(Room for Two|or Oceanview Room for Two)/i);
-              const cabinType = cabinMatch ? cabinMatch[1] : '';
+              let cabinType = '';
+              const cabinMatchSailing = sailingText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
+              if (cabinMatchSailing) {
+                cabinType = cabinMatchSailing[1];
+              } else {
+                let parent = sailing.parentElement;
+                for (let p = 0; p < 5 && parent && !cabinType; p++) {
+                  const parentText = parent.textContent || '';
+                  const parentCabinMatch = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)(?:\\s+Room|\\s+Stateroom|\\s+Sailings)?/i);
+                  if (parentCabinMatch && parentText.length < 200) {
+                    cabinType = parentCabinMatch[1];
+                    break;
+                  }
+                  parent = parent.parentElement;
+                }
+              }
+              if (!cabinType) {
+                const offerCabinMatch = cardText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)(?:\\s+Room for Two|\\s+or\\s+Oceanview\\s+Room\\s+for\\s+Two)?/i);
+                cabinType = offerCabinMatch ? offerCabinMatch[1] : '';
+              }
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '      Cabin: ' + (cabinType || '[NOT FOUND]'),
