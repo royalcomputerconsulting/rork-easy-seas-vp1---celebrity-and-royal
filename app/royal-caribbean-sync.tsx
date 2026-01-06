@@ -195,7 +195,7 @@ function RoyalCaribbeanSyncScreen() {
                   webViewRef.current = ref;
                 }
               }}
-              source={{ uri: 'https://www.royalcaribbean.com/club-royale' }}
+              source={{ uri: 'https://www.royalcaribbean.com/club-royale/offers' }}
               style={styles.webView}
               onMessage={onMessage}
               javaScriptEnabled={true}
