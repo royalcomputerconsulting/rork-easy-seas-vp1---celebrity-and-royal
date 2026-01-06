@@ -63,6 +63,8 @@ function RoyalCaribbeanSyncScreen() {
   };
 
   const getStatusText = () => {
+    const urlDisplay = state.currentUrl ? `\n${state.currentUrl}` : '';
+    
     switch (state.status) {
       case 'not_logged_in':
         return 'Not Logged In';
@@ -70,21 +72,21 @@ function RoyalCaribbeanSyncScreen() {
         return 'Logged In - Ready to Scrape';
       case 'running_step_1':
         if (state.progress && state.progress.current > 0) {
-          return `Loading Offers Page - ${state.progress.current} Scraped`;
+          return `Loading Offers Page - ${state.progress.current} Scraped${urlDisplay}`;
         }
-        return 'Loading Offers Page...';
+        return `Loading Offers Page...${urlDisplay}`;
       case 'running_step_2':
         if (state.progress && state.progress.current > 0) {
-          return `Loading Upcoming Cruises - ${state.progress.current} Scraped`;
+          return `Loading Upcoming Cruises - ${state.progress.current} Scraped${urlDisplay}`;
         }
-        return 'Loading Upcoming Cruises Page...';
+        return `Loading Upcoming Cruises Page...${urlDisplay}`;
       case 'running_step_3':
         if (state.progress && state.progress.current > 0) {
-          return `Loading Courtesy Holds - ${state.progress.current} Scraped`;
+          return `Loading Courtesy Holds - ${state.progress.current} Scraped${urlDisplay}`;
         }
-        return 'Loading Courtesy Holds Page...';
+        return `Loading Courtesy Holds Page...${urlDisplay}`;
       case 'running_step_4':
-        return 'Loading Loyalty Status Page...';
+        return `Loading Loyalty Status Page...${urlDisplay}`;
       case 'awaiting_confirmation':
         return 'Ready to Sync';
       case 'syncing':
@@ -408,7 +410,8 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600' as const
+    fontWeight: '600' as const,
+    textAlign: 'center' as const
   },
   progressText: {
     color: '#fff',

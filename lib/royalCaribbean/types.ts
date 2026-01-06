@@ -82,6 +82,7 @@ export interface SyncDataCounts {
 export interface RoyalCaribbeanSyncState {
   status: SyncStatus;
   currentStep: string;
+  currentUrl: string | null;
   progress: ProgressInfo | null;
   logs: LogEntry[];
   extractedOffers: OfferRow[];

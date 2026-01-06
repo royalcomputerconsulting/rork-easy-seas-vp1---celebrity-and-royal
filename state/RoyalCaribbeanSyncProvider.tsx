@@ -21,6 +21,7 @@ import { transformOffersToCasinoOffers, transformBookedCruisesToAppFormat } from
 const INITIAL_STATE: RoyalCaribbeanSyncState = {
   status: 'not_logged_in',
   currentStep: '',
+  currentUrl: null,
   progress: null,
   logs: [],
   extractedOffers: [],
@@ -128,6 +129,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     setState(prev => ({
       ...prev,
       status: 'running_step_1',
+      currentUrl: 'https://www.royalcaribbean.com/club-royale/offers',
       extractedOffers: [],
       extractedBookedCruises: [],
       error: null
@@ -148,7 +150,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 30000));
       
-      setState(prev => ({ ...prev, status: 'running_step_2' }));
+      setState(prev => ({ 
+        ...prev, 
+        status: 'running_step_2',
+        currentUrl: 'https://www.royalcaribbean.com/account/upcoming-cruises'
+      }));
       addLog('Step 2: Navigating to upcoming cruises page...', 'info');
       webViewRef.current.injectJavaScript(`
         window.location.href = 'https://www.royalcaribbean.com/account/upcoming-cruises';
@@ -161,7 +167,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 20000));
       
-      setState(prev => ({ ...prev, status: 'running_step_3' }));
+      setState(prev => ({ 
+        ...prev, 
+        status: 'running_step_3',
+        currentUrl: 'https://www.royalcaribbean.com/account/courtesy-holds'
+      }));
       addLog('Step 3: Navigating to courtesy holds page...', 'info');
       webViewRef.current.injectJavaScript(`
         window.location.href = 'https://www.royalcaribbean.com/account/courtesy-holds';
@@ -174,7 +184,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await new Promise(resolve => setTimeout(resolve, 20000));
       
-      setState(prev => ({ ...prev, status: 'running_step_4' }));
+      setState(prev => ({ 
+        ...prev, 
+        status: 'running_step_4',
+        currentUrl: 'https://www.royalcaribbean.com/loyalty-programs'
+      }));
       addLog('Step 4: Navigating to loyalty programs page...', 'info');
       webViewRef.current.injectJavaScript(`
         window.location.href = 'https://www.royalcaribbean.com/loyalty-programs';
