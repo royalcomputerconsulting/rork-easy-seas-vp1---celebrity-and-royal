@@ -222,7 +222,7 @@ export const STEP1_OFFERS_SCRIPT = `
           await scrollUntilComplete(sailingsContainer, 10);
           await wait(1000);
 
-          const allPossibleElements = Array.from(sailingsContainer.querySelectorAll('div, article, section'));
+          const allPossibleElements = Array.from(sailingsContainer.querySelectorAll('div, article, section, tr, li, [role="row"]'));
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
@@ -235,7 +235,7 @@ export const STEP1_OFFERS_SCRIPT = `
             const hasDate = text.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
             const hasNights = text.match(/\\d+\\s+NIGHT/i);
             const hasShipName = text.match(/\\w+\\s+of the Seas/i);
-            const lengthOk = text.length > 30 && text.length < 1000;
+            const lengthOk = text.length > 20 && text.length < 600;
             const hasPortOrItinerary = text.match(/(Miami|Orlando|Fort Lauderdale|Tampa|Galveston|Port Canaveral|Port Cañaveral|Cape Liberty|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan|Bayonne|Caribbean|Mexico|Bahamas|Alaska|Hawaii|Europe)/i);
             const hasSailingInfo = hasDate && (hasNights || hasShipName || hasPortOrItinerary);
             return hasSailingInfo && lengthOk;
@@ -319,8 +319,10 @@ export const STEP1_OFFERS_SCRIPT = `
                 allDateMatches.push(match[0]);
               }
               
-              if (allDateMatches.length > 0) {
-                for (const dateStr of allDateMatches) {
+              const uniqueDates = [...new Set(allDateMatches)];
+              
+              if (uniqueDates.length > 0) {
+                for (const dateStr of uniqueDates) {
                   const shipMatch = sectionText.match(/([\\w\\s]+of the Seas)/i);
                   const shipName = shipMatch ? shipMatch[1].trim() : '';
                   const key = dateStr + '|' + shipName + '|' + cabinType;
@@ -336,12 +338,16 @@ export const STEP1_OFFERS_SCRIPT = `
                   }
                 }
               } else {
-                allIndividualDates.push({
-                  element: sectionEl,
-                  date: '',
-                  shipName: '',
-                  text: sectionText
-                });
+                const noDateKey = 'nodate-' + Math.random() + '-' + cabinType;
+                if (!seenDates.has(noDateKey)) {
+                  seenDates.add(noDateKey);
+                  allIndividualDates.push({
+                    element: sectionEl,
+                    date: '',
+                    shipName: '',
+                    text: sectionText
+                  });
+                }
               }
             }
             
