@@ -189,7 +189,7 @@ function RoyalCaribbeanSyncScreen() {
               onPress={openLogin}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
-                <ExternalLink size={20} color="#0070C9" />
+                <ExternalLink size={18} color="#0070C9" />
               </View>
               <Text style={styles.quickActionLabel}>Login</Text>
             </Pressable>
@@ -200,7 +200,7 @@ function RoyalCaribbeanSyncScreen() {
               disabled={!canRunIngestion || isRunning}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
-                <RefreshCcw size={20} color="#4CAF50" />
+                <RefreshCcw size={18} color="#4CAF50" />
               </View>
               <Text style={styles.quickActionLabel}>SYNC NOW</Text>
             </Pressable>
@@ -211,7 +211,7 @@ function RoyalCaribbeanSyncScreen() {
               disabled={!canExport}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(156, 39, 176, 0.1)' }]}>
-                <Download size={20} color="#9C27B0" />
+                <Download size={18} color="#9C27B0" />
               </View>
               <Text style={styles.quickActionLabel}>Export Offers</Text>
             </Pressable>
@@ -222,7 +222,7 @@ function RoyalCaribbeanSyncScreen() {
               disabled={!canExport}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
-                <Download size={20} color="#2196F3" />
+                <Download size={18} color="#2196F3" />
               </View>
               <Text style={styles.quickActionLabel}>Export Booked</Text>
             </Pressable>
@@ -232,7 +232,7 @@ function RoyalCaribbeanSyncScreen() {
               onPress={exportLog}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(96, 125, 139, 0.1)' }]}>
-                <Download size={20} color="#607D8B" />
+                <Download size={18} color="#607D8B" />
               </View>
               <Text style={styles.quickActionLabel}>Export Log</Text>
             </Pressable>
@@ -242,7 +242,7 @@ function RoyalCaribbeanSyncScreen() {
               onPress={resetState}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(244, 67, 54, 0.1)' }]}>
-                <XCircle size={20} color="#F44336" />
+                <XCircle size={18} color="#F44336" />
               </View>
               <Text style={styles.quickActionLabel}>Reset</Text>
             </Pressable>
@@ -438,24 +438,27 @@ const styles = StyleSheet.create({
   quickActionButton: {
     width: 'calc(33.333% - 8px)' as any,
     minWidth: 100,
+    height: 96,
     backgroundColor: '#1e293b',
     borderRadius: 16,
-    padding: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     alignItems: 'center' as const,
-    gap: 12,
+    justifyContent: 'center' as const,
+    gap: 8,
     borderWidth: 1,
     borderColor: '#334155'
   },
   quickActionIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center' as const,
     justifyContent: 'center' as const
   },
   quickActionLabel: {
     color: '#e2e8f0',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600' as const,
     textAlign: 'center' as const
   },
