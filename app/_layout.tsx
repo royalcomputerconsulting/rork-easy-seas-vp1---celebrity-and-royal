@@ -79,7 +79,7 @@ function FreshStartHandler({ onComplete }: { onComplete: () => void }) {
         
         console.log('[FreshStartHandler] Redirecting to settings...');
         setTimeout(() => {
-          router.replace('/(tabs)/settings' as any);
+          router.replace('/(tabs)/settings');
           onComplete();
         }, 500);
       } catch (error) {
@@ -87,7 +87,7 @@ function FreshStartHandler({ onComplete }: { onComplete: () => void }) {
         setStatus('Error occurred, redirecting...');
         await clearFreshStartFlag();
         setTimeout(() => {
-          router.replace('/(tabs)/settings' as any);
+          router.replace('/(tabs)/settings');
           onComplete();
         }, 1000);
       }
