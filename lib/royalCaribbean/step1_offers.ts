@@ -117,32 +117,33 @@ export const STEP1_OFFERS_SCRIPT = `
         
         let offerName = '';
         
-        const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5'));
-        for (const heading of allHeadings) {
-          const headingText = (heading.textContent || '').trim();
-          if (headingText && 
-              headingText.length > 5 && 
-              headingText.length < 100 &&
-              !headingText.match(/Featured Offer|View Sailing|Redeem|Trade-in|^\\$|Room for Two|My Offers|Club Royale|Offers/i)) {
-            offerName = headingText;
+        const titlePatterns = [
+          /Full\\s+House\\s+[A-Za-z]+/i,
+          /Winning\\s+\\w+/i,
+          /Instant\\s+\\w+/i,
+          /\\w+\\s+Mix/i,
+          /\\w+\\s+Picks/i,
+          /Monthly\\s+\\w+/i,
+          /READY\\s+TO\\s+PLAY/i
+        ];
+        
+        for (const pattern of titlePatterns) {
+          const match = cardText.match(pattern);
+          if (match) {
+            offerName = match[0].trim();
             break;
           }
         }
         
         if (!offerName || offerName.length < 3) {
-          const titlePatterns = [
-            /Full House\\s+\\w+/i,
-            /Winning\\s+\\w+/i,
-            /Instant\\s+\\w+/i,
-            /\\w+\\s+Mix/i,
-            /\\w+\\s+Picks/i,
-            /Monthly\\s+\\w+/i
-          ];
-          
-          for (const pattern of titlePatterns) {
-            const match = cardText.match(pattern);
-            if (match) {
-              offerName = match[0].trim();
+          const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5'));
+          for (const heading of allHeadings) {
+            const headingText = (heading.textContent || '').trim();
+            if (headingText && 
+                headingText.length > 5 && 
+                headingText.length < 100 &&
+                !headingText.match(/Featured Offer|View Sailing|Redeem|Trade-in|^\\$|Room for Two|My Offers|Club Royale|Offers/i)) {
+              offerName = headingText;
               break;
             }
           }
@@ -263,6 +264,9 @@ export const STEP1_OFFERS_SCRIPT = `
             const cabinMatch = text.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
             if (cabinMatch) {
               cabinType = cabinMatch[1];
+              if (cabinType.toLowerCase().includes('ocean')) {
+                cabinType = 'Oceanview';
+              }
             }
             
             if (!cabinType) {
@@ -272,6 +276,9 @@ export const STEP1_OFFERS_SCRIPT = `
                 const parentCabinMatch = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)(?:\\s+Room|\\s+Stateroom|\\s+Sailings)?/i);
                 if (parentCabinMatch && parentText.length < 500) {
                   cabinType = parentCabinMatch[1];
+                  if (cabinType.toLowerCase().includes('ocean')) {
+                    cabinType = 'Oceanview';
+                  }
                   break;
                 }
                 parent = parent.parentElement;
@@ -280,7 +287,14 @@ export const STEP1_OFFERS_SCRIPT = `
             
             if (!cabinType && offerName) {
               const offerCabinMatch = cardText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
-              cabinType = offerCabinMatch ? offerCabinMatch[1] : 'Unknown';
+              if (offerCabinMatch) {
+                cabinType = offerCabinMatch[1];
+                if (cabinType.toLowerCase().includes('ocean')) {
+                  cabinType = 'Oceanview';
+                }
+              } else {
+                cabinType = 'Unknown';
+              }
             }
             
             if (!sailingsByType[cabinType]) {
@@ -297,7 +311,8 @@ export const STEP1_OFFERS_SCRIPT = `
             logType: totalSailingRows > 0 ? 'success' : 'warning'
           }));
           
-          Object.keys(sailingsByType).forEach(cabinType => {
+          const sortedCabinTypes = Object.keys(sailingsByType).sort();
+          sortedCabinTypes.forEach(cabinType => {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
               message: '    • ' + cabinType + ': ' + sailingsByType[cabinType].length + ' sailing(s)',
@@ -357,9 +372,19 @@ export const STEP1_OFFERS_SCRIPT = `
                 const cabinMatch = sailingText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
                 if (cabinMatch) {
                   cabinType = cabinMatch[1];
+                  if (cabinType.toLowerCase().includes('ocean')) {
+                    cabinType = 'Oceanview';
+                  }
                 } else {
                   const offerCabinMatch = cardText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)(?:\\s+Room for Two|\\s+or\\s+Oceanview\\s+Room\\s+for\\s+Two)?/i);
-                  cabinType = offerCabinMatch ? offerCabinMatch[1] : '';
+                  if (offerCabinMatch) {
+                    cabinType = offerCabinMatch[1];
+                    if (cabinType.toLowerCase().includes('ocean')) {
+                      cabinType = 'Oceanview';
+                    }
+                  } else {
+                    cabinType = '';
+                  }
                 }
               }
               window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -452,6 +477,8 @@ export const STEP1_OFFERS_SCRIPT = `
         }));
       }
 
+      const uniqueOfferNames = [...new Set(offers.map(o => o.offerName))];
+      
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete',
         step: 1,
@@ -460,7 +487,7 @@ export const STEP1_OFFERS_SCRIPT = `
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: \`✓ Extracted \${offers.length} offer rows from \${offerCards.length} offers\`,
+        message: \`✓ Extracted \${offers.length} offer rows from \${offerCards.length} offer(s)\`,
         logType: 'success'
       }));
 

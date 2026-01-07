@@ -25,7 +25,6 @@ function RoyalCaribbeanSyncScreen() {
   } = useRoyalCaribbeanSync();
 
   const [webViewVisible, setWebViewVisible] = useState(true);
-  const [logsVisible, setLogsVisible] = useState(false);
 
   const onMessage = (event: any) => {
     try {
@@ -190,7 +189,7 @@ function RoyalCaribbeanSyncScreen() {
               onPress={openLogin}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
-                <ExternalLink size={18} color="#0070C9" />
+                <ExternalLink size={20} color="#0070C9" />
               </View>
               <Text style={styles.quickActionLabel}>Login</Text>
             </Pressable>
@@ -201,7 +200,7 @@ function RoyalCaribbeanSyncScreen() {
               disabled={!canRunIngestion || isRunning}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
-                <RefreshCcw size={18} color="#4CAF50" />
+                <RefreshCcw size={20} color="#4CAF50" />
               </View>
               <Text style={styles.quickActionLabel}>SYNC NOW</Text>
             </Pressable>
@@ -212,7 +211,7 @@ function RoyalCaribbeanSyncScreen() {
               disabled={!canExport}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(156, 39, 176, 0.1)' }]}>
-                <Download size={18} color="#9C27B0" />
+                <Download size={20} color="#9C27B0" />
               </View>
               <Text style={styles.quickActionLabel}>Export Offers</Text>
             </Pressable>
@@ -223,19 +222,9 @@ function RoyalCaribbeanSyncScreen() {
               disabled={!canExport}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
-                <Download size={18} color="#2196F3" />
+                <Download size={20} color="#2196F3" />
               </View>
               <Text style={styles.quickActionLabel}>Export Booked</Text>
-            </Pressable>
-
-            <Pressable 
-              style={styles.quickActionButton}
-              onPress={() => setLogsVisible(!logsVisible)}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(255, 152, 0, 0.1)' }]}>
-                <Calendar size={18} color="#FF9800" />
-              </View>
-              <Text style={styles.quickActionLabel}>{logsVisible ? 'Hide' : 'View'} Log</Text>
             </Pressable>
 
             <Pressable 
@@ -243,7 +232,7 @@ function RoyalCaribbeanSyncScreen() {
               onPress={exportLog}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(96, 125, 139, 0.1)' }]}>
-                <Download size={18} color="#607D8B" />
+                <Download size={20} color="#607D8B" />
               </View>
               <Text style={styles.quickActionLabel}>Export Log</Text>
             </Pressable>
@@ -253,15 +242,14 @@ function RoyalCaribbeanSyncScreen() {
               onPress={resetState}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(244, 67, 54, 0.1)' }]}>
-                <XCircle size={18} color="#F44336" />
+                <XCircle size={20} color="#F44336" />
               </View>
               <Text style={styles.quickActionLabel}>Reset</Text>
             </Pressable>
           </View>
         </View>
 
-        {logsVisible && (
-          <View style={styles.logsContainer}>
+        <View style={styles.logsContainer}>
             <Text style={styles.logsTitle}>Sync Log</Text>
             <ScrollView style={styles.logsScroll}>
               {state.logs.map((log, index) => (
@@ -281,7 +269,6 @@ function RoyalCaribbeanSyncScreen() {
               )}
             </ScrollView>
           </View>
-        )}
 
         {state.error && (
           <View style={styles.errorContainer}>
@@ -452,23 +439,23 @@ const styles = StyleSheet.create({
     width: 'calc(33.333% - 8px)' as any,
     minWidth: 100,
     backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     alignItems: 'center' as const,
-    gap: 8,
+    gap: 12,
     borderWidth: 1,
     borderColor: '#334155'
   },
   quickActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center' as const,
     justifyContent: 'center' as const
   },
   quickActionLabel: {
-    color: '#cbd5e1',
-    fontSize: 12,
+    color: '#e2e8f0',
+    fontSize: 13,
     fontWeight: '600' as const,
     textAlign: 'center' as const
   },
