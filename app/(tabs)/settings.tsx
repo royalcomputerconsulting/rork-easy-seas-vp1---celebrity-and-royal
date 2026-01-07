@@ -1074,13 +1074,38 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
             <View style={styles.quickActionsGrid}>
               <TouchableOpacity 
                 style={styles.quickActionButton} 
-                onPress={() => router.push('/royal-caribbean-sync')}
+                onPress={() => router.push('/royal-caribbean-sync' as any)}
                 activeOpacity={0.7}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
                   <Ship size={18} color="#0070C9" />
                 </View>
                 <Text style={styles.quickActionLabel}>Sync Club Royale</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.quickActionButton} 
+                onPress={() => {
+                  Alert.alert(
+                    'Test Sync',
+                    'Opening Royal Caribbean Sync page for testing...',
+                    [
+                      {
+                        text: 'Cancel',
+                        style: 'cancel'
+                      },
+                      {
+                        text: 'Open',
+                        onPress: () => router.push('/royal-caribbean-sync' as any)
+                      }
+                    ]
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(139, 92, 246, 0.1)' }]}>
+                  <RefreshCcw size={18} color="#8b5cf6" />
+                </View>
+                <Text style={styles.quickActionLabel}>Test RC Sync</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.quickActionButton} 
