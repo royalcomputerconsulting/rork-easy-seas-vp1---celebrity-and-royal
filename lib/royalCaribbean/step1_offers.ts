@@ -306,52 +306,46 @@ export const STEP1_OFFERS_SCRIPT = `
           let sailingsByType = {};
           
           for (const [cabinType, sectionElements] of Object.entries(cabinTypeSections)) {
-            const individualSailings = [];
+            const allIndividualDates = [];
             const seenDates = new Set();
             
             for (const sectionEl of sectionElements) {
               const sectionText = sectionEl.textContent || '';
-              const allChildDivs = Array.from(sectionEl.querySelectorAll('div, tr, article, li, span, p, button, a'));
               
-              const dateRows = allChildDivs.filter(child => {
-                const childText = child.textContent || '';
-                const hasDate = childText.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
-                const hasShip = childText.match(/\\w+\\s+of the Seas/i);
-                const hasNights = childText.match(/\\d+\\s+NIGHT/i);
-                const isNotTooLong = childText.length < 500;
-                const isNotTooShort = childText.length > 10;
-                
-                if (hasDate && isNotTooLong && isNotTooShort) {
-                  return true;
-                }
-                
-                return false;
-              }).filter((child, idx, arr) => {
-                return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(child));
-              });
+              const allDateMatches = [];
+              const dateRegex = /\\d{2}\\/\\d{2}\\/\\d{2,4}/g;
+              let match;
+              while ((match = dateRegex.exec(sectionText)) !== null) {
+                allDateMatches.push(match[0]);
+              }
               
-              for (const row of dateRows) {
-                const rowText = row.textContent || '';
-                const dateMatch = rowText.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
-                if (dateMatch) {
-                  const dateStr = dateMatch[0];
-                  const shipMatch = rowText.match(/([\\w\\s]+of the Seas)/i);
+              if (allDateMatches.length > 0) {
+                for (const dateStr of allDateMatches) {
+                  const shipMatch = sectionText.match(/([\\w\\s]+of the Seas)/i);
                   const shipName = shipMatch ? shipMatch[1].trim() : '';
                   const key = dateStr + '|' + shipName + '|' + cabinType;
                   
                   if (!seenDates.has(key)) {
                     seenDates.add(key);
-                    individualSailings.push(row);
+                    allIndividualDates.push({
+                      element: sectionEl,
+                      date: dateStr,
+                      shipName: shipName,
+                      text: sectionText
+                    });
                   }
                 }
-              }
-              
-              if (individualSailings.length === 0) {
-                individualSailings.push(sectionEl);
+              } else {
+                allIndividualDates.push({
+                  element: sectionEl,
+                  date: '',
+                  shipName: '',
+                  text: sectionText
+                });
               }
             }
             
-            sailingsByType[cabinType] = individualSailings;
+            sailingsByType[cabinType] = allIndividualDates;
           }
           
           const totalSailingRows = Object.values(sailingsByType).reduce((sum, arr) => sum + arr.length, 0);
@@ -376,8 +370,9 @@ export const STEP1_OFFERS_SCRIPT = `
             for (const [cabinTypeKey, sailingsForType] of Object.entries(sailingsByType)) {
               for (let j = 0; j < sailingsForType.length; j++) {
                 sailingIndex++;
-                const sailing = sailingsForType[j];
-              const sailingText = sailing.textContent || '';
+                const sailingData = sailingsForType[j];
+              const sailing = sailingData.element;
+              const sailingText = sailingData.text || sailing.textContent || '';
               
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
@@ -385,8 +380,12 @@ export const STEP1_OFFERS_SCRIPT = `
                 logType: 'info'
               }));
               
-              let shipMatch = sailingText.match(/([\\w\\s]+of the Seas)/);
-              let shipName = shipMatch ? shipMatch[1].trim() : '';
+              let shipName = sailingData.shipName || '';
+              
+              if (!shipName) {
+                const shipMatch = sailingText.match(/([\\w\\s]+of the Seas)/);
+                shipName = shipMatch ? shipMatch[1].trim() : '';
+              }
               
               if (!shipName) {
                 let parent = sailing.parentElement;
@@ -451,8 +450,7 @@ export const STEP1_OFFERS_SCRIPT = `
                 logType: departurePort ? 'info' : 'warning'
               }));
               
-              const dateMatch = sailingText.match(/(\\d{2}\\/\\d{2}\\/\\d{2,4})/);
-              const sailingDate = dateMatch ? dateMatch[1] : '';
+              const sailingDate = sailingData.date || '';
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '      Date: ' + (sailingDate || '[NOT FOUND]'),
