@@ -255,7 +255,7 @@ export const STEP1_OFFERS_SCRIPT = `
             });
           }
           
-          let sailingsByType = {};
+          let cabinTypeSections = {};
           
           sailingElements.forEach(el => {
             const text = el.textContent || '';
@@ -297,17 +297,46 @@ export const STEP1_OFFERS_SCRIPT = `
               }
             }
             
-            if (!sailingsByType[cabinType]) {
-              sailingsByType[cabinType] = [];
+            if (!cabinTypeSections[cabinType]) {
+              cabinTypeSections[cabinType] = [];
             }
-            sailingsByType[cabinType].push(el);
+            cabinTypeSections[cabinType].push(el);
           });
+          
+          let sailingsByType = {};
+          
+          for (const [cabinType, sectionElements] of Object.entries(cabinTypeSections)) {
+            const individualSailings = [];
+            
+            for (const sectionEl of sectionElements) {
+              const allChildDivs = Array.from(sectionEl.querySelectorAll('div, tr, article, li'));
+              
+              const dateRows = allChildDivs.filter(child => {
+                const childText = child.textContent || '';
+                const hasDate = childText.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
+                const hasShip = childText.match(/\\w+\\s+of the Seas/i);
+                const isNotTooLong = childText.length < 400;
+                const isNotTooShort = childText.length > 20;
+                return hasDate && hasShip && isNotTooLong && isNotTooShort;
+              }).filter((child, idx, arr) => {
+                return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(child));
+              });
+              
+              if (dateRows.length > 0) {
+                individualSailings.push(...dateRows);
+              } else {
+                individualSailings.push(sectionEl);
+              }
+            }
+            
+            sailingsByType[cabinType] = individualSailings;
+          }
           
           const totalSailingRows = Object.values(sailingsByType).reduce((sum, arr) => sum + arr.length, 0);
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: '  ✓ Found ' + totalSailingRows + ' valid sailing rows (filtered from ' + allPossibleElements.length + ')',
+            message: '  ✓ Found ' + totalSailingRows + ' individual sailing date rows (filtered from ' + allPossibleElements.length + ')',
             logType: totalSailingRows > 0 ? 'success' : 'warning'
           }));
           
@@ -315,7 +344,7 @@ export const STEP1_OFFERS_SCRIPT = `
           sortedCabinTypes.forEach(cabinType => {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: '    • ' + cabinType + ': ' + sailingsByType[cabinType].length + ' sailing(s)',
+              message: '    • ' + cabinType + ': ' + sailingsByType[cabinType].length + ' individual date(s)',
               logType: 'info'
             }));
           });
