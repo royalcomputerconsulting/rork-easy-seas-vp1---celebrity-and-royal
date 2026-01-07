@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
+import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
@@ -10,6 +11,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 
 function RoyalCaribbeanSyncScreen() {
   const coreData = useCoreData();
+  const loyalty = useLoyalty();
   const {
     state,
     webViewRef,
@@ -297,8 +299,15 @@ function RoyalCaribbeanSyncScreen() {
                     <Ship size={24} color="#3b82f6" />
                   </View>
                   <View style={styles.countInfo}>
-                    <Text style={styles.countNumber}>{state.syncCounts?.offerCount || 0} offer, {state.syncCounts?.offerRows || 0} sailings</Text>
+                    <Text style={styles.countNumber}>
+                      {state.syncCounts?.offerRows || 0} sailings
+                    </Text>
                     <Text style={styles.countLabel}>Club Royale Offers</Text>
+                    {state.syncCounts && state.syncCounts.offerRows > 0 && (
+                      <Text style={styles.countDetail}>
+                        {state.syncCounts.offerCount} unique offer{state.syncCounts.offerCount !== 1 ? 's' : ''}
+                      </Text>
+                    )}
                   </View>
                 </View>
 
@@ -309,6 +318,7 @@ function RoyalCaribbeanSyncScreen() {
                   <View style={styles.countInfo}>
                     <Text style={styles.countNumber}>{state.syncCounts?.upcomingCruises || 0}</Text>
                     <Text style={styles.countLabel}>Upcoming Cruises</Text>
+                    <Text style={styles.countDetail}>Will be added to Booked</Text>
                   </View>
                 </View>
 
@@ -319,29 +329,49 @@ function RoyalCaribbeanSyncScreen() {
                   <View style={styles.countInfo}>
                     <Text style={styles.countNumber}>{state.syncCounts?.courtesyHolds || 0}</Text>
                     <Text style={styles.countLabel}>Courtesy Holds</Text>
+                    <Text style={styles.countDetail}>Marked as &ldquo;On Hold&rdquo;</Text>
                   </View>
                 </View>
 
                 {state.loyaltyData && (
                   <View style={styles.loyaltyCard}>
-                    <Text style={styles.loyaltyTitle}>Loyalty Status</Text>
-                    <View style={styles.loyaltyRow}>
-                      <Text style={styles.loyaltyLabel}>Crown & Anchor:</Text>
-                      <Text style={styles.loyaltyValue}>{state.loyaltyData.crownAndAnchorLevel || 'N/A'}</Text>
-                    </View>
-                    <View style={styles.loyaltyRow}>
-                      <Text style={styles.loyaltyLabel}>Club Royale:</Text>
-                      <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyaleTier || 'N/A'}</Text>
-                    </View>
-                    <View style={styles.loyaltyRow}>
-                      <Text style={styles.loyaltyLabel}>Club Royale Points:</Text>
-                      <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyalePoints || 'N/A'}</Text>
-                    </View>
+                    <Text style={styles.loyaltyTitle}>Loyalty Status Updates</Text>
+                    {state.loyaltyData.clubRoyaleTier && (
+                      <View style={styles.loyaltyRow}>
+                        <Text style={styles.loyaltyLabel}>Club Royale:</Text>
+                        <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyaleTier}</Text>
+                      </View>
+                    )}
+                    {state.loyaltyData.clubRoyalePoints && (
+                      <View style={styles.loyaltyRow}>
+                        <Text style={styles.loyaltyLabel}>CR Points:</Text>
+                        <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyalePoints}</Text>
+                      </View>
+                    )}
+                    {state.loyaltyData.crownAndAnchorLevel && (
+                      <View style={styles.loyaltyRow}>
+                        <Text style={styles.loyaltyLabel}>Crown & Anchor:</Text>
+                        <Text style={styles.loyaltyValue}>{state.loyaltyData.crownAndAnchorLevel}</Text>
+                      </View>
+                    )}
+                    {state.loyaltyData.crownAndAnchorPoints && (
+                      <View style={styles.loyaltyRow}>
+                        <Text style={styles.loyaltyLabel}>C&A Points:</Text>
+                        <Text style={styles.loyaltyValue}>{state.loyaltyData.crownAndAnchorPoints}</Text>
+                      </View>
+                    )}
                   </View>
                 )}
+
+                <View style={styles.warningBox}>
+                  <AlertCircle size={16} color="#f59e0b" />
+                  <Text style={styles.warningText}>
+                    Sync will update existing data. If conflicts exist, synced data wins.
+                  </Text>
+                </View>
               </View>
 
-              <Text style={styles.confirmationQuestion}>Do you want to sync this data to the app?</Text>
+              <Text style={styles.confirmationQuestion}>Sync this data to the app?</Text>
 
               <View style={styles.confirmationButtons}>
                 <Pressable 
@@ -353,7 +383,7 @@ function RoyalCaribbeanSyncScreen() {
 
                 <Pressable 
                   style={[styles.button, styles.confirmButton]}
-                  onPress={() => syncToApp(coreData)}
+                  onPress={() => syncToApp(coreData, loyalty)}
                 >
                   <Text style={styles.buttonText}>Yes, Sync Now</Text>
                 </Pressable>
@@ -599,13 +629,18 @@ const styles = StyleSheet.create({
   },
   countNumber: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700' as const,
     marginBottom: 2
   },
   countLabel: {
     color: '#94a3b8',
     fontSize: 14
+  },
+  countDetail: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 2
   },
   confirmationQuestion: {
     color: '#cbd5e1',
@@ -684,6 +719,22 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600' as const
+  },
+  warningBox: {
+    backgroundColor: '#78350f',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#f59e0b'
+  },
+  warningText: {
+    flex: 1,
+    color: '#fbbf24',
+    fontSize: 12,
+    lineHeight: 16
   }
 });
 

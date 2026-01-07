@@ -72,6 +72,8 @@ export function transformBookedCruisesToAppFormat(
     
     const nights = calculateNights(startDate, endDate);
     
+    const isCourtesyHold = cruise.status === 'Courtesy Hold';
+    
     const bookedCruise: BookedCruise = {
       id: generateId(),
       shipName: cruise.shipName,
@@ -86,8 +88,9 @@ export function transformBookedCruisesToAppFormat(
       bookingId: cruise.bookingId,
       reservationNumber: cruise.bookingId,
       
-      status: cruise.status === 'Courtesy Hold' ? 'available' : 'booked',
-      completionState: cruise.status === 'Upcoming' ? 'upcoming' : 'upcoming',
+      status: isCourtesyHold ? 'available' : 'booked',
+      completionState: isCourtesyHold ? 'upcoming' : 'upcoming',
+      notes: isCourtesyHold ? 'On Hold' : undefined,
       
       itineraryName: cruise.itinerary,
       itineraryRaw: cruise.itinerary ? [cruise.itinerary] : [],

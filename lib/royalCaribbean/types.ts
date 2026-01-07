@@ -90,4 +90,5 @@ export interface RoyalCaribbeanSyncState {
   error: string | null;
   lastSyncTimestamp: string | null;
   syncCounts: SyncDataCounts | null;
+  syncPreview: any | null;
 }

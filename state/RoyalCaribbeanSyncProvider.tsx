@@ -15,7 +15,7 @@ import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbea
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectUpcomingCruisesExtraction } from '@/lib/royalCaribbean/step2_upcoming';
 import { injectCourtesyHoldsExtraction } from '@/lib/royalCaribbean/step3_holds';
-import { transformOffersToCasinoOffers, transformBookedCruisesToAppFormat } from '@/lib/royalCaribbean/dataTransformers';
+import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 
 const INITIAL_STATE: RoyalCaribbeanSyncState = {
   status: 'not_logged_in',
@@ -27,10 +27,12 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
   loyaltyData: null,
   error: null,
   lastSyncTimestamp: null,
-  syncCounts: null
+  syncCounts: null,
+  syncPreview: null
 };
 
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
+  console.log('[RoyalCaribbeanSync] Provider initializing...');
   const [state, setState] = useState<RoyalCaribbeanSyncState>(INITIAL_STATE);
   const webViewRef = useRef<WebView | null>(null);
 
@@ -183,7 +185,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             offerRows: prev.extractedOffers.length,
             upcomingCruises,
             courtesyHolds
-          }
+          },
+          syncPreview: null
         };
       });
       addLog('All steps completed successfully! Ready to sync.', 'success');
@@ -256,33 +259,74 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     rcLogger.clear();
   }, []);
 
-  const syncToApp = useCallback(async (coreDataContext: any) => {
+  const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any) => {
     try {
       setState(prev => ({ ...prev, status: 'syncing' }));
-      addLog('Syncing data to app...', 'info');
+      addLog('Creating sync preview...', 'info');
 
-      const transformedOffers = transformOffersToCasinoOffers(state.extractedOffers, state.loyaltyData);
-      const transformedCruises = transformBookedCruisesToAppFormat(state.extractedBookedCruises, state.loyaltyData);
+      const currentLoyalty = {
+        clubRoyalePoints: loyaltyContext.clubRoyalePoints,
+        clubRoyaleTier: loyaltyContext.clubRoyaleTier,
+        crownAndAnchorPoints: loyaltyContext.crownAnchorPoints,
+        crownAndAnchorLevel: loyaltyContext.crownAnchorLevel
+      };
 
-      addLog(`Syncing ${transformedOffers.length} offers and ${transformedCruises.length} cruises`, 'info');
+      const preview = createSyncPreview(
+        state.extractedOffers,
+        state.extractedBookedCruises,
+        state.loyaltyData,
+        coreDataContext.casinoOffers,
+        coreDataContext.bookedCruises,
+        currentLoyalty
+      );
 
-      transformedOffers.forEach(offer => {
-        coreDataContext.addCasinoOffer(offer);
-      });
+      const counts = calculateSyncCounts(preview);
+      addLog(`Preview: ${counts.offersNew} new offers, ${counts.offersUpdated} updated offers`, 'info');
+      addLog(`Preview: ${counts.cruisesNew} new cruises, ${counts.cruisesUpdated} updated cruises`, 'info');
+      addLog(`Preview: ${counts.upcomingCruises} upcoming, ${counts.courtesyHolds} holds`, 'info');
 
-      transformedCruises.forEach(cruise => {
-        coreDataContext.addBookedCruise(cruise);
-      });
+      setState(prev => ({ ...prev, syncPreview: preview }));
+
+      addLog('Applying sync...', 'info');
+      const { offers: finalOffers, cruises: finalCruises } = applySyncPreview(
+        preview,
+        coreDataContext.casinoOffers,
+        coreDataContext.bookedCruises
+      );
+
+      addLog(`Setting ${finalOffers.length} total offers in app`, 'info');
+      coreDataContext.setCasinoOffers(finalOffers);
+
+      addLog(`Setting ${finalCruises.length} total cruises in app`, 'info');
+      coreDataContext.setBookedCruises(finalCruises);
+
+      if (preview.loyalty) {
+        if (preview.loyalty.clubRoyalePoints.changed) {
+          addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
+          await loyaltyContext.setManualClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
+        }
+        if (preview.loyalty.crownAndAnchorPoints.changed) {
+          addLog(`Updating Crown & Anchor points: ${preview.loyalty.crownAndAnchorPoints.current} → ${preview.loyalty.crownAndAnchorPoints.synced}`, 'info');
+          await loyaltyContext.setManualCrownAnchorPoints(preview.loyalty.crownAndAnchorPoints.synced);
+        }
+      }
 
       setState(prev => ({ 
         ...prev, 
         status: 'complete',
-        lastSyncTimestamp: new Date().toISOString()
+        lastSyncTimestamp: new Date().toISOString(),
+        syncCounts: {
+          offerCount: counts.totalOffers,
+          offerRows: counts.totalOffers,
+          upcomingCruises: counts.upcomingCruises,
+          courtesyHolds: counts.courtesyHolds
+        }
       }));
       addLog('Data synced successfully to app!', 'success');
     } catch (error) {
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
       addLog(`Failed to sync data: ${error}`, 'error');
+      console.error('[RoyalCaribbeanSync] Sync error:', error);
     }
   }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, addLog]);
 
