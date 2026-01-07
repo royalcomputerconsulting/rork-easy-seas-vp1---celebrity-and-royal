@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
@@ -149,9 +149,31 @@ function RoyalCaribbeanSyncScreen() {
       />
       
       <View style={styles.container}>
-        <View style={[styles.statusPill, { backgroundColor: getStatusColor() }]}>
-          {getStatusIcon()}
-          <Text style={styles.statusText}>Status: {getStatusText()}</Text>
+        <View style={styles.logsContainerTop}>
+          <View style={styles.logsHeaderRow}>
+            <Text style={styles.logsTitle}>Sync Log</Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
+              {getStatusIcon()}
+              <Text style={styles.statusBadgeText}>{getStatusText()}</Text>
+            </View>
+          </View>
+          <View style={styles.logsScrollTop}>
+            {state.logs.slice(-3).map((log, index) => (
+              <View key={`${log.timestamp}-${index}`} style={[styles.logEntry, log.type === 'error' && styles.logError]}>
+                <Text style={styles.logTimestamp}>{log.timestamp}</Text>
+                <Text style={[
+                  styles.logMessage,
+                  log.type === 'error' && styles.logMessageError,
+                  log.type === 'success' && styles.logMessageSuccess
+                ]}>
+                  {log.message}
+                </Text>
+              </View>
+            ))}
+            {state.logs.length === 0 && (
+              <Text style={styles.logsEmpty}>No sync activity yet</Text>
+            )}
+          </View>
         </View>
 
         <Pressable 
@@ -190,9 +212,7 @@ function RoyalCaribbeanSyncScreen() {
               style={styles.quickActionButton}
               onPress={openLogin}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
-                <ExternalLink size={14} color="#0070C9" />
-              </View>
+              <ExternalLink size={20} color="#60a5fa" />
               <Text style={styles.quickActionLabel}>Login</Text>
             </Pressable>
 
@@ -201,9 +221,7 @@ function RoyalCaribbeanSyncScreen() {
               onPress={runIngestion}
               disabled={!canRunIngestion || isRunning}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
-                <RefreshCcw size={14} color="#4CAF50" />
-              </View>
+              <RefreshCcw size={20} color="#34d399" />
               <Text style={styles.quickActionLabel}>SYNC NOW</Text>
             </Pressable>
 
@@ -212,9 +230,7 @@ function RoyalCaribbeanSyncScreen() {
               onPress={exportOffersCSV}
               disabled={!canExport}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(156, 39, 176, 0.1)' }]}>
-                <Download size={14} color="#9C27B0" />
-              </View>
+              <Download size={20} color="#a78bfa" />
               <Text style={styles.quickActionLabel}>Export Offers</Text>
             </Pressable>
 
@@ -223,9 +239,7 @@ function RoyalCaribbeanSyncScreen() {
               onPress={exportBookedCruisesCSV}
               disabled={!canExport}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
-                <Download size={14} color="#2196F3" />
-              </View>
+              <Download size={20} color="#60a5fa" />
               <Text style={styles.quickActionLabel}>Export Booked</Text>
             </Pressable>
 
@@ -233,9 +247,7 @@ function RoyalCaribbeanSyncScreen() {
               style={styles.quickActionButton}
               onPress={exportLog}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(96, 125, 139, 0.1)' }]}>
-                <Download size={14} color="#607D8B" />
-              </View>
+              <Download size={20} color="#94a3b8" />
               <Text style={styles.quickActionLabel}>Export Log</Text>
             </Pressable>
 
@@ -243,34 +255,13 @@ function RoyalCaribbeanSyncScreen() {
               style={styles.quickActionButton}
               onPress={resetState}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(244, 67, 54, 0.1)' }]}>
-                <XCircle size={14} color="#F44336" />
-              </View>
+              <XCircle size={20} color="#f87171" />
               <Text style={styles.quickActionLabel}>Reset</Text>
             </Pressable>
           </View>
         </View>
 
-        <View style={styles.logsContainer}>
-            <Text style={styles.logsTitle}>Sync Log</Text>
-            <ScrollView style={styles.logsScroll}>
-              {state.logs.map((log, index) => (
-                <View key={index} style={[styles.logEntry, log.type === 'error' && styles.logError]}>
-                  <Text style={styles.logTimestamp}>{log.timestamp}</Text>
-                  <Text style={[
-                    styles.logMessage,
-                    log.type === 'error' && styles.logMessageError,
-                    log.type === 'success' && styles.logMessageSuccess
-                  ]}>
-                    {log.message}
-                  </Text>
-                </View>
-              ))}
-              {state.logs.length === 0 && (
-                <Text style={styles.logsEmpty}>No logs yet</Text>
-              )}
-            </ScrollView>
-          </View>
+
 
         {state.error && (
           <View style={styles.errorContainer}>
@@ -415,20 +406,38 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0f172a'
   },
-  statusPill: {
+  statusBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    margin: 12,
-    borderRadius: 24
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12
   },
-  statusText: {
+  statusBadgeText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: '600' as const
+  },
+  logsContainerTop: {
+    margin: 12,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    overflow: 'hidden' as const,
+    borderWidth: 1,
+    borderColor: '#334155'
+  },
+  logsHeaderRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155'
+  },
+  logsScrollTop: {
+    maxHeight: 140,
+    padding: 12
   },
   progressText: {
     color: '#fff',
@@ -468,27 +477,20 @@ const styles = StyleSheet.create({
   quickActionButton: {
     width: 'calc(33.333% - 8px)' as any,
     minWidth: 100,
-    height: 48,
+    height: 80,
     backgroundColor: '#1e293b',
     borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    gap: 4,
+    gap: 8,
     borderWidth: 1,
     borderColor: '#334155'
   },
-  quickActionIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const
-  },
   quickActionLabel: {
     color: '#e2e8f0',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600' as const,
     textAlign: 'center' as const
   },
@@ -508,24 +510,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const
   },
-  logsContainer: {
-    flex: 1,
-    margin: 12,
-    backgroundColor: '#1e293b',
-    borderRadius: 8,
-    overflow: 'hidden' as const
-  },
   logsTitle: {
     color: '#cbd5e1',
     fontSize: 14,
-    fontWeight: '600' as const,
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155'
-  },
-  logsScroll: {
-    flex: 1,
-    padding: 12
+    fontWeight: '700' as const
   },
   logEntry: {
     marginBottom: 8,
@@ -553,9 +541,10 @@ const styles = StyleSheet.create({
   },
   logsEmpty: {
     color: '#64748b',
-    fontSize: 13,
+    fontSize: 12,
     textAlign: 'center' as const,
-    paddingVertical: 24
+    paddingVertical: 16,
+    fontStyle: 'italic' as const
   },
   errorContainer: {
     flexDirection: 'row' as const,
