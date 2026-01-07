@@ -309,21 +309,46 @@ export const STEP1_OFFERS_SCRIPT = `
             const individualSailings = [];
             
             for (const sectionEl of sectionElements) {
-              const allChildDivs = Array.from(sectionEl.querySelectorAll('div, tr, article, li'));
+              const sectionText = sectionEl.textContent || '';
+              const allChildDivs = Array.from(sectionEl.querySelectorAll('div, tr, article, li, span, p'));
               
               const dateRows = allChildDivs.filter(child => {
                 const childText = child.textContent || '';
                 const hasDate = childText.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
                 const hasShip = childText.match(/\\w+\\s+of the Seas/i);
                 const isNotTooLong = childText.length < 400;
-                const isNotTooShort = childText.length > 20;
-                return hasDate && hasShip && isNotTooLong && isNotTooShort;
+                const isNotTooShort = childText.length > 15;
+                
+                if (hasDate && hasShip && isNotTooLong && isNotTooShort) {
+                  return true;
+                }
+                
+                if (hasDate && isNotTooLong && childText.length < 200) {
+                  return true;
+                }
+                
+                return false;
               }).filter((child, idx, arr) => {
                 return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(child));
               });
               
-              if (dateRows.length > 0) {
-                individualSailings.push(...dateRows);
+              const uniqueDateRows = [];
+              const seenDates = new Set();
+              
+              for (const row of dateRows) {
+                const rowText = row.textContent || '';
+                const dateMatch = rowText.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
+                if (dateMatch) {
+                  const dateStr = dateMatch[0];
+                  if (!seenDates.has(dateStr)) {
+                    seenDates.add(dateStr);
+                    uniqueDateRows.push(row);
+                  }
+                }
+              }
+              
+              if (uniqueDateRows.length > 0) {
+                individualSailings.push(...uniqueDateRows);
               } else {
                 individualSailings.push(sectionEl);
               }
@@ -363,24 +388,66 @@ export const STEP1_OFFERS_SCRIPT = `
                 logType: 'info'
               }));
               
-              const shipMatch = sailingText.match(/([\\w\\s]+of the Seas)/);
-              const shipName = shipMatch ? shipMatch[1].trim() : '';
+              let shipMatch = sailingText.match(/([\\w\\s]+of the Seas)/);
+              let shipName = shipMatch ? shipMatch[1].trim() : '';
+              
+              if (!shipName) {
+                let parent = sailing.parentElement;
+                for (let p = 0; p < 5 && parent && !shipName; p++) {
+                  const parentText = parent.textContent || '';
+                  const parentShipMatch = parentText.match(/([\\w\\s]+of the Seas)/);
+                  if (parentShipMatch) {
+                    shipName = parentShipMatch[1].trim();
+                    break;
+                  }
+                  parent = parent.parentElement;
+                }
+              }
+              
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '      Ship: ' + (shipName || '[NOT FOUND]'),
                 logType: shipName ? 'info' : 'warning'
               }));
               
-              const itineraryMatch = sailingText.match(/(\\d+)\\s+NIGHT\\s+([A-Z\\s&]+?)(?=\\d{2}\\/|$)/i);
-              const itinerary = itineraryMatch ? itineraryMatch[0].trim() : '';
+              let itineraryMatch = sailingText.match(/(\\d+)\\s+NIGHT\\s+([A-Z\\s&]+?)(?=\\d{2}\\/|$)/i);
+              let itinerary = itineraryMatch ? itineraryMatch[0].trim() : '';
+              
+              if (!itinerary) {
+                let parent = sailing.parentElement;
+                for (let p = 0; p < 5 && parent && !itinerary; p++) {
+                  const parentText = parent.textContent || '';
+                  const parentItinMatch = parentText.match(/(\\d+)\\s+NIGHT\\s+([A-Z\\s&]+)/i);
+                  if (parentItinMatch) {
+                    itinerary = parentItinMatch[0].trim();
+                    break;
+                  }
+                  parent = parent.parentElement;
+                }
+              }
+              
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '      Itinerary: ' + (itinerary || '[NOT FOUND]'),
                 logType: itinerary ? 'info' : 'warning'
               }));
               
-              const portMatch = sailingText.match(/(Orlando \\(Port Cañaveral\\)|Port Cañaveral|Miami|Fort Lauderdale|Tampa|Galveston|Cape Liberty|Bayonne|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan)/i);
-              const departurePort = portMatch ? portMatch[1] : '';
+              let portMatch = sailingText.match(/(Orlando \\(Port Cañaveral\\)|Port Cañaveral|Miami|Fort Lauderdale|Tampa|Galveston|Cape Liberty|Bayonne|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan)/i);
+              let departurePort = portMatch ? portMatch[1] : '';
+              
+              if (!departurePort) {
+                let parent = sailing.parentElement;
+                for (let p = 0; p < 5 && parent && !departurePort; p++) {
+                  const parentText = parent.textContent || '';
+                  const parentPortMatch = parentText.match(/(Orlando \\(Port Cañaveral\\)|Port Cañaveral|Miami|Fort Lauderdale|Tampa|Galveston|Cape Liberty|Bayonne|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan)/i);
+                  if (parentPortMatch) {
+                    departurePort = parentPortMatch[1];
+                    break;
+                  }
+                  parent = parent.parentElement;
+                }
+              }
+              
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '      Port: ' + (departurePort || '[NOT FOUND]'),
