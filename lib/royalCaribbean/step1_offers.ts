@@ -307,23 +307,21 @@ export const STEP1_OFFERS_SCRIPT = `
           
           for (const [cabinType, sectionElements] of Object.entries(cabinTypeSections)) {
             const individualSailings = [];
+            const seenDates = new Set();
             
             for (const sectionEl of sectionElements) {
               const sectionText = sectionEl.textContent || '';
-              const allChildDivs = Array.from(sectionEl.querySelectorAll('div, tr, article, li, span, p'));
+              const allChildDivs = Array.from(sectionEl.querySelectorAll('div, tr, article, li, span, p, button, a'));
               
               const dateRows = allChildDivs.filter(child => {
                 const childText = child.textContent || '';
                 const hasDate = childText.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
                 const hasShip = childText.match(/\\w+\\s+of the Seas/i);
-                const isNotTooLong = childText.length < 400;
-                const isNotTooShort = childText.length > 15;
+                const hasNights = childText.match(/\\d+\\s+NIGHT/i);
+                const isNotTooLong = childText.length < 500;
+                const isNotTooShort = childText.length > 10;
                 
-                if (hasDate && hasShip && isNotTooLong && isNotTooShort) {
-                  return true;
-                }
-                
-                if (hasDate && isNotTooLong && childText.length < 200) {
+                if (hasDate && isNotTooLong && isNotTooShort) {
                   return true;
                 }
                 
@@ -332,24 +330,23 @@ export const STEP1_OFFERS_SCRIPT = `
                 return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(child));
               });
               
-              const uniqueDateRows = [];
-              const seenDates = new Set();
-              
               for (const row of dateRows) {
                 const rowText = row.textContent || '';
                 const dateMatch = rowText.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
                 if (dateMatch) {
                   const dateStr = dateMatch[0];
-                  if (!seenDates.has(dateStr)) {
-                    seenDates.add(dateStr);
-                    uniqueDateRows.push(row);
+                  const shipMatch = rowText.match(/([\\w\\s]+of the Seas)/i);
+                  const shipName = shipMatch ? shipMatch[1].trim() : '';
+                  const key = dateStr + '|' + shipName + '|' + cabinType;
+                  
+                  if (!seenDates.has(key)) {
+                    seenDates.add(key);
+                    individualSailings.push(row);
                   }
                 }
               }
               
-              if (uniqueDateRows.length > 0) {
-                individualSailings.push(...uniqueDateRows);
-              } else {
+              if (individualSailings.length === 0) {
                 individualSailings.push(sectionEl);
               }
             }
