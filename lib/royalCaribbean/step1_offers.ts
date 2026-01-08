@@ -117,45 +117,41 @@ export const STEP1_OFFERS_SCRIPT = `
         
         let offerName = '';
         
-        const titlePatterns = [
-          /Full\\s+House\\s+[A-Za-z]+/i,
-          /Last\\s+Chance\\s+\\w+/i,
-          /Winning\\s+\\w+/i,
-          /Instant\\s+\\w+/i,
-          /\\w+\\s+Mix/i,
-          /\\w+\\s+Picks/i,
-          /Monthly\\s+\\w+/i,
-          /READY\\s+TO\\s+PLAY/i,
-          /Lucky\\s+\\w+/i,
-          /Special\\s+Offer/i
-        ];
+        const excludePatterns = /Featured Offer|View Sailing|View Sailings|See Sailing|Redeem|Trade-in value|^\\$|My Offers|Club Royale Offers|Offers|Exclusive|Available|Learn More|Book Now|Select|Close|Filter|Sort|Room for Two/i;
         
-        for (const pattern of titlePatterns) {
-          const match = cardText.match(pattern);
-          if (match) {
-            offerName = match[0].trim();
+        const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"], [class*="name"]'));
+        
+        for (const heading of allHeadings) {
+          const headingText = (heading.textContent || '').trim();
+          const words = headingText.split(/\\s+/).length;
+          
+          if (headingText && 
+              headingText.length >= 5 && 
+              headingText.length <= 100 &&
+              words >= 2 &&
+              words <= 10 &&
+              !excludePatterns.test(headingText) &&
+              !headingText.match(/^\\d+$/) &&
+              !headingText.match(/^[A-Z0-9]{5,15}$/)) {
+            offerName = headingText;
             break;
           }
         }
         
         if (!offerName || offerName.length < 3) {
-          const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5'));
-          for (const heading of allHeadings) {
-            const headingText = (heading.textContent || '').trim();
-            if (headingText && 
-                headingText.length > 5 && 
-                headingText.length < 100 &&
-                !headingText.match(/Featured Offer|View Sailing|Redeem|Trade-in|^\\$|Room for Two|My Offers|Club Royale|Offers/i)) {
-              offerName = headingText;
+          const lines = cardText.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
+          for (const line of lines.slice(0, 15)) {
+            const words = line.split(/\\s+/).length;
+            if (line.length >= 5 && 
+                line.length <= 100 && 
+                words >= 2 && 
+                words <= 10 &&
+                !excludePatterns.test(line) &&
+                !line.match(/^\\d+$/) &&
+                !line.match(/^[A-Z0-9]{5,15}$/)) {
+              offerName = line;
               break;
             }
-          }
-        }
-        
-        if (!offerName || offerName.length < 3) {
-          const roomMatch = cardText.match(/(Balcony|Ocean View|Interior|Suite)\\s+(Room for Two|or Oceanview Room for Two)/i);
-          if (roomMatch) {
-            offerName = roomMatch[0];
           }
         }
         
