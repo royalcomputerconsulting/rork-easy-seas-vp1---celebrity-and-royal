@@ -68,13 +68,13 @@ export const STEP1_OFFERS_SCRIPT = `
         const text = el.textContent || '';
         const hasViewSailings = text.includes('View Sailings') || text.includes('VIEW SAILINGS');
         const isFeaturedOffer = text.includes('Featured Offer') || text.includes('FEATURED OFFER');
-        const hasOfferKeyword = text.includes('Full House') || text.includes('READY TO PLAY');
         const hasRedeem = text.includes('Redeem');
         const hasTradeIn = text.toLowerCase().includes('trade-in');
         const hasRoomType = text.includes('Room for Two') || text.includes('Balcony') || text.includes('Ocean');
+        const hasOfferCode = text.match(/[A-Z0-9]{5,15}/);
         const isReasonableSize = text.length > 50 && text.length < 2000;
         
-        return hasViewSailings && (isFeaturedOffer || hasOfferKeyword || hasRedeem || hasTradeIn || hasRoomType) && isReasonableSize;
+        return hasViewSailings && (isFeaturedOffer || hasRedeem || hasTradeIn || hasRoomType || hasOfferCode) && isReasonableSize;
       });
       
       offerCards = offerCards.filter((el, idx, arr) => {
@@ -119,12 +119,15 @@ export const STEP1_OFFERS_SCRIPT = `
         
         const titlePatterns = [
           /Full\\s+House\\s+[A-Za-z]+/i,
+          /Last\\s+Chance\\s+\\w+/i,
           /Winning\\s+\\w+/i,
           /Instant\\s+\\w+/i,
           /\\w+\\s+Mix/i,
           /\\w+\\s+Picks/i,
           /Monthly\\s+\\w+/i,
-          /READY\\s+TO\\s+PLAY/i
+          /READY\\s+TO\\s+PLAY/i,
+          /Lucky\\s+\\w+/i,
+          /Special\\s+Offer/i
         ];
         
         for (const pattern of titlePatterns) {
