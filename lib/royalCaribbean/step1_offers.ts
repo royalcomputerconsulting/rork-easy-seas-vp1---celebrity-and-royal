@@ -603,6 +603,10 @@ export const STEP1_OFFERS_SCRIPT = `
 })();
 `;
 
-export function injectOffersExtraction() {
-  return STEP1_OFFERS_SCRIPT;
+export function injectOffersExtraction(scrapePricingAndItinerary: boolean = false) {
+  return `
+const SCRAPE_PRICING_AND_ITINERARY = ${scrapePricingAndItinerary};
+
+${STEP1_OFFERS_SCRIPT}
+`;
 }

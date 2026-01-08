@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Switch } from 'react-native';
 import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
@@ -23,6 +23,7 @@ function RoyalCaribbeanSyncScreen() {
     resetState,
     syncToApp,
     cancelSync,
+    togglePricingAndItinerary,
     handleWebViewMessage
   } = useRoyalCaribbeanSync();
 
@@ -205,6 +206,22 @@ function RoyalCaribbeanSyncScreen() {
             />
           </View>
         )}
+
+        <View style={styles.settingsContainer}>
+          <View style={styles.settingRow}>
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingLabel}>Scrape Pricing & Itinerary</Text>
+              <Text style={styles.settingDescription}>Optional: Fetch detailed pricing and itinerary info (slower)</Text>
+            </View>
+            <Switch
+              value={state.scrapePricingAndItinerary}
+              onValueChange={togglePricingAndItinerary}
+              trackColor={{ false: '#334155', true: '#3b82f6' }}
+              thumbColor={state.scrapePricingAndItinerary ? '#60a5fa' : '#94a3b8'}
+              disabled={isRunning}
+            />
+          </View>
+        </View>
 
         <View style={styles.actionsContainer}>
           <View style={styles.quickActionsGrid}>
@@ -722,6 +739,35 @@ const styles = StyleSheet.create({
   warningText: {
     flex: 1,
     color: '#fbbf24',
+    fontSize: 12,
+    lineHeight: 16
+  },
+  settingsContainer: {
+    margin: 12,
+    marginTop: 0,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#334155'
+  },
+  settingRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: 12
+  },
+  settingTextContainer: {
+    flex: 1
+  },
+  settingLabel: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '600' as const,
+    marginBottom: 4
+  },
+  settingDescription: {
+    color: '#94a3b8',
     fontSize: 12,
     lineHeight: 16
   }

@@ -91,4 +91,5 @@ export interface RoyalCaribbeanSyncState {
   lastSyncTimestamp: string | null;
   syncCounts: SyncDataCounts | null;
   syncPreview: any | null;
+  scrapePricingAndItinerary: boolean;
 }

@@ -28,7 +28,8 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
   error: null,
   lastSyncTimestamp: null,
   syncCounts: null,
-  syncPreview: null
+  syncPreview: null,
+  scrapePricingAndItinerary: false
 };
 
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
@@ -140,7 +141,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog('Step 1: Extracting offers from Club Royale page...', 'info');
       addLog('Loading Offers Page...', 'info');
       
-      webViewRef.current.injectJavaScript(injectOffersExtraction() + '; true;');
+      webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
       
       await new Promise(resolve => setTimeout(resolve, 30000));
       
@@ -195,7 +196,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, addLog]);
+  }, [state.status, state.scrapePricingAndItinerary, addLog]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
@@ -335,6 +336,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     addLog('Sync cancelled', 'warning');
   }, [addLog]);
 
+  const togglePricingAndItinerary = useCallback(() => {
+    setState(prev => ({ 
+      ...prev, 
+      scrapePricingAndItinerary: !prev.scrapePricingAndItinerary 
+    }));
+  }, []);
+
   return {
     state,
     webViewRef,
@@ -346,6 +354,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     resetState,
     syncToApp,
     cancelSync,
+    togglePricingAndItinerary,
     handleWebViewMessage,
     addLog
   };
