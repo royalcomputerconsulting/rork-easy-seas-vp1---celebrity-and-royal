@@ -1,6 +1,41 @@
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
 
+function isValidDate(date: Date): boolean {
+  return date instanceof Date && !isNaN(date.getTime()) && date.getTime() > 0;
+}
+
+function safeParseSailDate(sailDate: string | undefined): Date {
+  if (!sailDate) {
+    console.warn('[CasinoAvailability] No sailDate provided, using current date');
+    return new Date();
+  }
+  
+  try {
+    const parsed = new Date(sailDate);
+    if (isValidDate(parsed)) {
+      return parsed;
+    }
+    console.warn('[CasinoAvailability] Invalid sailDate:', sailDate, '- using current date');
+    return new Date();
+  } catch (e) {
+    console.warn('[CasinoAvailability] Error parsing sailDate:', sailDate, e);
+    return new Date();
+  }
+}
+
+function safeFormatDate(date: Date): string {
+  try {
+    if (!isValidDate(date)) {
+      return new Date().toISOString().split('T')[0];
+    }
+    return date.toISOString().split('T')[0];
+  } catch (e) {
+    console.warn('[CasinoAvailability] Error formatting date:', e);
+    return new Date().toISOString().split('T')[0];
+  }
+}
+
 export const US_PORTS = [
   'Miami',
   'Fort Lauderdale',
@@ -291,7 +326,6 @@ export function determineCasinoHoursWithContext(context: CasinoDayContext): Casi
     isDepartureDay, 
     isDisembarkDay,
     nextDayIsSeaDay,
-    nextDayIsPortDay,
     sailAwayTime,
     port 
   } = context;
@@ -366,19 +400,16 @@ export function determineCasinoHoursWithContext(context: CasinoDayContext): Casi
   const casinoOpenTime = addMinutesToTime(sailTime, 90);
   const portType = isNearshore ? 'Nearshore US port' : (isMexico ? 'Mexican port' : 'Foreign port');
   
-  let closeTime: string;
   let estimatedHours: number;
   let reason: string;
   let hoursDescription: string;
   
   if (nextDayIsSeaDay === true) {
-    closeTime = '(24 hrs)';
-    estimatedHours = 12; // ~5am from previous night + evening session
+    estimatedHours = 12;
     reason = `${portType} (${port}) - slots til 5am, reopens ~${casinoOpenTime}, 24hr slots (next day is sea day)`;
     hoursDescription = `Slots til 5am, reopens ~${casinoOpenTime} (24 hrs)`;
   } else {
-    closeTime = '05:00';
-    estimatedHours = 10; // ~5am from previous night + evening until 5am
+    estimatedHours = 10;
     reason = `${portType} (${port}) - slots til 5am, reopens ~${casinoOpenTime}, closes 5am (next day is port day)`;
     hoursDescription = `Slots til 5am, reopens ~${casinoOpenTime} til 5am`;
   }
@@ -521,13 +552,13 @@ export function calculateCasinoAvailabilityForCruise(
       
       const availability = determineCasinoHoursWithContext(context);
       
-      const sailDate = new Date(cruise.sailDate);
+      const sailDate = safeParseSailDate(cruise.sailDate);
       const dayDate = new Date(sailDate);
       dayDate.setDate(sailDate.getDate() + day.day - 1);
       
       dailyAvailability.push({
         day: day.day,
-        date: dayDate.toISOString().split('T')[0],
+        date: safeFormatDate(dayDate),
         port: day.port,
         isSeaDay,
         isUSPort: isUSPort(day.port),
@@ -568,13 +599,13 @@ export function calculateCasinoAvailabilityForCruise(
         
         const availability = determineCasinoHoursWithContext(context);
         
-        const sailDate = new Date(cruise.sailDate);
+        const sailDate = safeParseSailDate(cruise.sailDate);
         const dayDate = new Date(sailDate);
         dayDate.setDate(sailDate.getDate() + i);
         
         dailyAvailability.push({
           day: i + 1,
-          date: dayDate.toISOString().split('T')[0],
+          date: safeFormatDate(dayDate),
           port,
           isSeaDay,
           isUSPort: isUSPort(port),
@@ -610,13 +641,13 @@ export function calculateCasinoAvailabilityForCruise(
       
       const availability = determineCasinoHoursWithContext(context);
       
-      const sailDate = new Date(cruise.sailDate);
+      const sailDate = safeParseSailDate(cruise.sailDate);
       const dayDate = new Date(sailDate);
       dayDate.setDate(sailDate.getDate() + i);
       
       dailyAvailability.push({
         day: i + 1,
-        date: dayDate.toISOString().split('T')[0],
+        date: safeFormatDate(dayDate),
         port,
         isSeaDay,
         isUSPort: isUSPort(port),
