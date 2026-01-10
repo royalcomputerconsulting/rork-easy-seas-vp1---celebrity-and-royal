@@ -2,7 +2,13 @@ import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
 
 function isValidDate(date: Date): boolean {
-  return date instanceof Date && !isNaN(date.getTime()) && date.getTime() > 0;
+  if (!(date instanceof Date)) return false;
+  const time = date.getTime();
+  if (isNaN(time)) return false;
+  // Valid date range: year 1900 to 2100
+  const minTime = new Date('1900-01-01').getTime();
+  const maxTime = new Date('2100-12-31').getTime();
+  return time >= minTime && time <= maxTime;
 }
 
 function safeParseSailDate(sailDate: string | undefined): Date {
@@ -27,12 +33,38 @@ function safeParseSailDate(sailDate: string | undefined): Date {
 function safeFormatDate(date: Date): string {
   try {
     if (!isValidDate(date)) {
+      console.warn('[CasinoAvailability] Invalid date in safeFormatDate, using current date');
       return new Date().toISOString().split('T')[0];
     }
     return date.toISOString().split('T')[0];
   } catch (e) {
     console.warn('[CasinoAvailability] Error formatting date:', e);
     return new Date().toISOString().split('T')[0];
+  }
+}
+
+function safeAddDays(baseDate: Date, daysToAdd: number): Date {
+  try {
+    if (!isValidDate(baseDate)) {
+      console.warn('[CasinoAvailability] Invalid base date in safeAddDays');
+      return new Date();
+    }
+    if (typeof daysToAdd !== 'number' || isNaN(daysToAdd) || !isFinite(daysToAdd)) {
+      console.warn('[CasinoAvailability] Invalid daysToAdd:', daysToAdd);
+      return new Date(baseDate);
+    }
+    // Clamp days to reasonable range
+    const clampedDays = Math.max(-365, Math.min(365, Math.floor(daysToAdd)));
+    const result = new Date(baseDate);
+    result.setDate(baseDate.getDate() + clampedDays);
+    if (!isValidDate(result)) {
+      console.warn('[CasinoAvailability] Result date out of bounds');
+      return new Date();
+    }
+    return result;
+  } catch (e) {
+    console.warn('[CasinoAvailability] Error in safeAddDays:', e);
+    return new Date();
   }
 }
 
@@ -553,11 +585,11 @@ export function calculateCasinoAvailabilityForCruise(
       const availability = determineCasinoHoursWithContext(context);
       
       const sailDate = safeParseSailDate(cruise.sailDate);
-      const dayDate = new Date(sailDate);
-      dayDate.setDate(sailDate.getDate() + day.day - 1);
+      const dayNumber = typeof day.day === 'number' && isFinite(day.day) ? day.day : index + 1;
+      const dayDate = safeAddDays(sailDate, dayNumber - 1);
       
       dailyAvailability.push({
-        day: day.day,
+        day: dayNumber,
         date: safeFormatDate(dayDate),
         port: day.port,
         isSeaDay,
@@ -600,8 +632,7 @@ export function calculateCasinoAvailabilityForCruise(
         const availability = determineCasinoHoursWithContext(context);
         
         const sailDate = safeParseSailDate(cruise.sailDate);
-        const dayDate = new Date(sailDate);
-        dayDate.setDate(sailDate.getDate() + i);
+        const dayDate = safeAddDays(sailDate, i);
         
         dailyAvailability.push({
           day: i + 1,
@@ -642,8 +673,7 @@ export function calculateCasinoAvailabilityForCruise(
       const availability = determineCasinoHoursWithContext(context);
       
       const sailDate = safeParseSailDate(cruise.sailDate);
-      const dayDate = new Date(sailDate);
-      dayDate.setDate(sailDate.getDate() + i);
+      const dayDate = safeAddDays(sailDate, i);
       
       dailyAvailability.push({
         day: i + 1,
