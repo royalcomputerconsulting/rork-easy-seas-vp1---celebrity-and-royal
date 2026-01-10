@@ -155,6 +155,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, []);
 
   const syncToBackend = useCallback(async () => {
+    // Backend sync is optional - silently skip if not configured
     try {
       const bookedData = await AsyncStorage.getItem(STORAGE_KEYS.BOOKED_CRUISES);
       const offersData = await AsyncStorage.getItem(STORAGE_KEYS.CASINO_OFFERS);
@@ -162,7 +163,12 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const parsedBooked = bookedData ? JSON.parse(bookedData) : [];
       const parsedOffers = offersData ? JSON.parse(offersData) : [];
       
-      console.log('[CoreData] Syncing to backend:', {
+      // Only attempt sync if we have data
+      if (parsedBooked.length === 0 && parsedOffers.length === 0) {
+        return;
+      }
+      
+      console.log('[CoreData] Attempting backend sync:', {
         cruises: parsedBooked.length,
         offers: parsedOffers.length,
       });
@@ -174,14 +180,16 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       });
       
       console.log('[CoreData] Backend sync successful');
-    } catch (error) {
-      console.error('[CoreData] Backend sync failed:', error);
+    } catch {
+      // Silently ignore backend errors - local storage is the primary source
+      console.log('[CoreData] Backend sync skipped (not configured or unavailable)');
     }
   }, [saveToBackendMutation, userId]);
 
   const loadFromBackend = useCallback(async () => {
+    // Backend load is optional - silently skip if not configured
     try {
-      console.log('[CoreData] Loading from backend...');
+      console.log('[CoreData] Attempting to load from backend...');
       const result = await refetchBackendData();
       
       if (result.data && result.data.bookedCruises && result.data.bookedCruises.length > 0) {
@@ -200,8 +208,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       console.log('[CoreData] No backend data found');
       return false;
-    } catch (error) {
-      console.error('[CoreData] Backend load failed:', error);
+    } catch {
+      // Silently ignore backend errors - local storage is the primary source
+      console.log('[CoreData] Backend load skipped (not configured or unavailable)');
       return false;
     }
   }, [refetchBackendData]);
@@ -221,8 +230,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
     
     try {
-      console.log('[CoreData] Attempting to load from backend first...');
-      await loadFromBackend();
+      // Try backend load but don't block on it
+      loadFromBackend().catch(() => {});
       
       console.log('[CoreData] Loading from storage...');
 
