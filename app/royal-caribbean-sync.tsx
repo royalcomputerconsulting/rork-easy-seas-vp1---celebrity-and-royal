@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Switch } from 'react-native';
 import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
@@ -189,32 +189,25 @@ function RoyalCaribbeanSyncScreen() {
 
         {webViewVisible && (
           <View style={styles.webViewContainer}>
-            {Platform.OS === 'web' ? (
-              <View style={styles.webNotSupported}>
-                <Ship size={48} color="#64748b" />
-                <Text style={styles.webNotSupportedTitle}>WebView Not Available</Text>
-                <Text style={styles.webNotSupportedText}>
-                  Royal Caribbean sync requires a native mobile device.{"\n"}
-                  Please use this feature on iOS or Android.
-                </Text>
-              </View>
-            ) : (
-              <WebView
-                ref={(ref) => {
-                  if (ref) {
-                    webViewRef.current = ref;
-                  }
-                }}
-                source={{ uri: 'https://www.royalcaribbean.com/club-royale' }}
-                style={styles.webView}
-                onMessage={onMessage}
-                javaScriptEnabled={true}
-                domStorageEnabled={true}
-                sharedCookiesEnabled={true}
-                thirdPartyCookiesEnabled={true}
-                injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
-              />
-            )}
+            <WebView
+              ref={(ref) => {
+                if (ref) {
+                  webViewRef.current = ref;
+                }
+              }}
+              source={{ uri: 'https://www.royalcaribbean.com/club-royale' }}
+              style={styles.webView}
+              onMessage={onMessage}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              sharedCookiesEnabled={true}
+              thirdPartyCookiesEnabled={true}
+              injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.warn('WebView error:', nativeEvent);
+              }}
+            />
           </View>
         )}
 
