@@ -36,6 +36,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   console.log('[RoyalCaribbeanSync] Provider initializing...');
   const [state, setState] = useState<RoyalCaribbeanSyncState>(INITIAL_STATE);
   const webViewRef = useRef<WebView | null>(null);
+  const stepCompleteResolvers = useRef<{ [key: number]: () => void }>({});
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     rcLogger.log(message, type);
@@ -83,6 +84,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               ...(message.data as BookedCruiseRow[])
             ]
           }));
+        }
+        if (stepCompleteResolvers.current[message.step]) {
+          stepCompleteResolvers.current[message.step]();
+          delete stepCompleteResolvers.current[message.step];
         }
         break;
 
@@ -137,13 +142,28 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     addLog('Starting ingestion process...', 'info');
     
+    const waitForStepComplete = (step: number, timeoutMs: number = 300000): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          delete stepCompleteResolvers.current[step];
+          addLog(`Step ${step} timed out after ${timeoutMs / 1000}s - continuing anyway`, 'warning');
+          resolve();
+        }, timeoutMs);
+        
+        stepCompleteResolvers.current[step] = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
+      });
+    };
+    
     try {
       addLog('Step 1: Extracting offers from Club Royale page...', 'info');
       addLog('Loading Offers Page...', 'info');
       
       webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 30000));
+      await waitForStepComplete(1, 300000);
       
       setState(prev => ({ ...prev, status: 'running_step_2' }));
       addLog('Step 2: Navigating to upcoming cruises page...', 'info');
@@ -157,7 +177,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 90000));
+      await waitForStepComplete(2, 180000);
       
       setState(prev => ({ ...prev, status: 'running_step_3' }));
       addLog('Step 3: Navigating to courtesy holds page...', 'info');
@@ -171,7 +191,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
       
-      await new Promise(resolve => setTimeout(resolve, 30000));
+      await waitForStepComplete(3, 120000);
       
       setState(prev => {
         const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
