@@ -62,24 +62,137 @@ export const STEP1_OFFERS_SCRIPT = `
       }));
 
       let offerCards = [];
-      const allElements = Array.from(document.querySelectorAll('div, article, section'));
       
-      offerCards = allElements.filter(el => {
-        const text = el.textContent || '';
-        const hasViewSailings = text.includes('View Sailings') || text.includes('VIEW SAILINGS');
-        const isFeaturedOffer = text.includes('Featured Offer') || text.includes('FEATURED OFFER');
-        const hasRedeem = text.includes('Redeem');
-        const hasTradeIn = text.toLowerCase().includes('trade-in');
-        const hasRoomType = text.includes('Room for Two') || text.includes('Balcony') || text.includes('Ocean');
-        const hasOfferCode = text.match(/[A-Z0-9]{5,15}/);
-        const isReasonableSize = text.length > 50 && text.length < 2000;
+      // Strategy: Find "View Sailings" buttons first, then find their parent offer containers
+      const viewSailingsButtons = Array.from(document.querySelectorAll('button, a, [role="button"]')).filter(el => {
+        const text = (el.textContent || '').trim();
+        return text.match(/^View Sailing|^VIEW SAILING|^See Sailing/i);
+      });
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Found ' + viewSailingsButtons.length + ' "View Sailings" buttons',
+        logType: 'info'
+      }));
+      
+      // For each button, find its parent offer card
+      const seenOfferCodes = new Set();
+      const seenOfferNames = new Set();
+      
+      for (const btn of viewSailingsButtons) {
+        let parent = btn.parentElement;
+        let offerCard = null;
         
-        return hasViewSailings && (isFeaturedOffer || hasRedeem || hasTradeIn || hasRoomType || hasOfferCode) && isReasonableSize;
-      });
+        // Walk up the DOM to find the offer card container
+        for (let i = 0; i < 15 && parent; i++) {
+          const parentText = parent.textContent || '';
+          
+          // Check if this element looks like an offer card container
+          const hasOfferCode = parentText.match(/\b([A-Z0-9]{6,12}[A-Z])\b/); // Offer codes like 25FEB103B
+          const hasTradeIn = parentText.toLowerCase().includes('trade-in value');
+          const hasRedeem = parentText.includes('Redeem by');
+          const hasFeatured = parentText.includes('Featured Offer');
+          const hasOfferTitle = parentText.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Caribbean|Cruise|Sail|Summer|Winter|Spring|Fall|Holiday|Special)\b/i);
+          
+          // Look for reasonable container size (not too big = whole page, not too small = just button)
+          const isReasonableSize = parentText.length > 100 && parentText.length < 5000;
+          
+          // Check if this looks like an individual offer card
+          if (isReasonableSize && (hasOfferCode || hasTradeIn || hasRedeem || hasFeatured)) {
+            // Check if there's another "View Sailings" button in this container
+            const buttonsInContainer = Array.from(parent.querySelectorAll('button, a, [role="button"]')).filter(el => 
+              (el.textContent || '').match(/View Sailing|VIEW SAILING|See Sailing/i)
+            );
+            
+            // If there's exactly one View Sailings button, this is likely the offer card
+            if (buttonsInContainer.length === 1) {
+              offerCard = parent;
+              break;
+            }
+            // If multiple buttons but still reasonable size, keep going up
+            if (buttonsInContainer.length > 1 && parentText.length < 3000) {
+              // This might be a container with multiple offers, keep going up
+              parent = parent.parentElement;
+              continue;
+            }
+          }
+          
+          parent = parent.parentElement;
+        }
+        
+        if (offerCard) {
+          const cardText = offerCard.textContent || '';
+          
+          // Extract offer code to deduplicate
+          const codeMatch = cardText.match(/\b([A-Z0-9]{6,12}[A-Z])\b/);
+          const offerCode = codeMatch ? codeMatch[1] : '';
+          
+          // Extract offer name for secondary deduplication
+          let offerName = '';
+          const headings = Array.from(offerCard.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"]'));
+          for (const h of headings) {
+            const hText = (h.textContent || '').trim();
+            if (hText.length >= 5 && hText.length <= 100 && !hText.match(/Featured Offer|View Sailing|Redeem|Trade-in|^\$|^\d+$/i)) {
+              offerName = hText;
+              break;
+            }
+          }
+          
+          // Create a unique key for this offer
+          const uniqueKey = offerCode || offerName || '';
+          
+          if (uniqueKey && !seenOfferCodes.has(uniqueKey)) {
+            seenOfferCodes.add(uniqueKey);
+            offerCards.push(offerCard);
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Identified offer card: ' + (offerName || offerCode || '[Unknown]'),
+              logType: 'info'
+            }));
+          }
+        }
+      }
       
-      offerCards = offerCards.filter((el, idx, arr) => {
-        return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
-      });
+      // Fallback: If no offer cards found via buttons, try the old method but be more strict
+      if (offerCards.length === 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Button-based detection found 0 offers, trying fallback method...',
+          logType: 'warning'
+        }));
+        
+        const allElements = Array.from(document.querySelectorAll('div, article, section'));
+        
+        offerCards = allElements.filter(el => {
+          const text = el.textContent || '';
+          // Must have View Sailings button directly (not just text)
+          const hasViewSailingsButton = el.querySelector('button, a, [role="button"]')?.textContent?.match(/View Sailing/i);
+          const hasOfferCode = text.match(/\b([A-Z0-9]{6,12}[A-Z])\b/);
+          const hasTradeIn = text.toLowerCase().includes('trade-in value');
+          const hasRedeem = text.includes('Redeem by');
+          // Stricter size: between 200-4000 chars is likely a single offer card
+          const isReasonableSize = text.length > 200 && text.length < 4000;
+          
+          return hasViewSailingsButton && (hasOfferCode || hasTradeIn || hasRedeem) && isReasonableSize;
+        });
+        
+        // Remove elements contained within others
+        offerCards = offerCards.filter((el, idx, arr) => {
+          return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
+        });
+        
+        // Deduplicate by offer code
+        const seen = new Set();
+        offerCards = offerCards.filter(el => {
+          const text = el.textContent || '';
+          const codeMatch = text.match(/\b([A-Z0-9]{6,12}[A-Z])\b/);
+          const code = codeMatch ? codeMatch[1] : Math.random().toString();
+          if (seen.has(code)) return false;
+          seen.add(code);
+          return true;
+        });
+      }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
