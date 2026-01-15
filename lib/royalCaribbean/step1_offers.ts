@@ -230,41 +230,105 @@ export const STEP1_OFFERS_SCRIPT = `
         
         let offerName = '';
         
-        const excludePatterns = /Featured Offer|View Sailing|View Sailings|See Sailing|Redeem|Trade-in value|^\\$|My Offers|Club Royale Offers|Offers|Exclusive|Available|Learn More|Book Now|Select|Close|Filter|Sort|Room for Two/i;
+        const excludePatterns = /^Featured Offer$|^View Sailing|^View Sailings$|^See Sailing|^Redeem|^Trade-in value|^\\$|^My Offers$|^Club Royale Offers$|^Offers$|^Exclusive$|^Available$|^Learn More$|^Book Now$|^Select$|^Close$|^Filter$|^Sort$|^Room for Two$|^\\d+\\s+NIGHT/i;
         
-        const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"], [class*="name"]'));
+        // Strategy 1: Look for elements that specifically look like offer titles
+        const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"], [class*="name"], [class*="offer"], span, p, div'));
         
-        for (const heading of allHeadings) {
+        // Sort by DOM depth (shallower = more likely to be the main title)
+        const sortedHeadings = allHeadings.sort((a, b) => {
+          const depthA = getElementDepth(a, card);
+          const depthB = getElementDepth(b, card);
+          return depthA - depthB;
+        });
+        
+        function getElementDepth(el, container) {
+          let depth = 0;
+          let current = el;
+          while (current && current !== container) {
+            depth++;
+            current = current.parentElement;
+          }
+          return depth;
+        }
+        
+        // Look for offer-like names (months, promotional words)
+        const offerNamePatterns = /(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Sail|Summer|Winter|Spring|Fall|Holiday|Special|Wager|Deal|Flash|Hot|Golden|Diamond|Platinum|Elite|Premium|VIP|High Roller|All In|Big Win|Cash|Free|Comp|Cruise)/i;
+        
+        for (const heading of sortedHeadings) {
           const headingText = (heading.textContent || '').trim();
           const words = headingText.split(/\\s+/).length;
           
+          // Skip if this is a container with too much text (likely contains multiple things)
+          if (headingText.length > 150) continue;
+          
+          // Check if this looks like an offer name
+          const looksLikeOfferName = offerNamePatterns.test(headingText) && 
+                                    !headingText.match(/\\d{2}\\/\\d{2}/) && // Not a date
+                                    !headingText.match(/of the Seas/i); // Not a ship name
+          
           if (headingText && 
-              headingText.length >= 5 && 
+              headingText.length >= 3 && 
               headingText.length <= 100 &&
-              words >= 2 &&
-              words <= 10 &&
+              words >= 1 &&
+              words <= 12 &&
               !excludePatterns.test(headingText) &&
               !headingText.match(/^\\d+$/) &&
-              !headingText.match(/^[A-Z0-9]{5,15}$/)) {
+              !headingText.match(/^[A-Z0-9]{5,15}$/) &&
+              (looksLikeOfferName || heading.tagName.match(/^H[1-6]$/i))) {
             offerName = headingText;
             break;
           }
         }
         
+        // Strategy 2: Look for specific offer name patterns in text
+        if (!offerName || offerName.length < 3) {
+          const textContent = cardText;
+          // Look for promotional offer names
+          const promoPatterns = [
+            /([A-Z][a-z]+\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|Chance|House|Wagers?|Deal|Flash|Jackpot|Bonus))/,
+            /((?:Last Chance|Full House|Lucky|Double|Triple|High Roller|All In|Big Win|Golden|Diamond|Flash)\\s+[A-Za-z]+)/,
+            /([A-Z][a-z]+\\s+[A-Z][a-z]+)(?=\\s*[A-Z0-9]{5,15})/ // Two words before offer code
+          ];
+          
+          for (const pattern of promoPatterns) {
+            const match = textContent.match(pattern);
+            if (match && match[1] && match[1].length >= 5 && match[1].length <= 60) {
+              const candidate = match[1].trim();
+              if (!excludePatterns.test(candidate)) {
+                offerName = candidate;
+                break;
+              }
+            }
+          }
+        }
+        
+        // Strategy 3: Fallback - look at card text lines
         if (!offerName || offerName.length < 3) {
           const lines = cardText.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
-          for (const line of lines.slice(0, 15)) {
+          for (const line of lines.slice(0, 20)) {
             const words = line.split(/\\s+/).length;
-            if (line.length >= 5 && 
+            if (line.length >= 3 && 
                 line.length <= 100 && 
-                words >= 2 && 
-                words <= 10 &&
+                words >= 1 && 
+                words <= 12 &&
                 !excludePatterns.test(line) &&
                 !line.match(/^\\d+$/) &&
-                !line.match(/^[A-Z0-9]{5,15}$/)) {
+                !line.match(/^[A-Z0-9]{5,15}$/) &&
+                !line.match(/\\d{2}\\/\\d{2}/) &&
+                offerNamePatterns.test(line)) {
               offerName = line;
               break;
             }
+          }
+        }
+        
+        // Strategy 4: Use the offer code as fallback name if we have one
+        if (!offerName || offerName.length < 3) {
+          const codeMatch = cardText.match(/\\b([A-Z0-9]{5,15})\\b/);
+          if (codeMatch) {
+            // Generate a name from code like "25FEB103B" -> "Offer 25FEB103B"
+            offerName = 'Offer ' + codeMatch[1];
           }
         }
         
