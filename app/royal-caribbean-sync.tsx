@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Modal, Switch } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
@@ -189,21 +189,32 @@ function RoyalCaribbeanSyncScreen() {
 
         {webViewVisible && (
           <View style={styles.webViewContainer}>
-            <WebView
-              ref={(ref) => {
-                if (ref) {
-                  webViewRef.current = ref;
-                }
-              }}
-              source={{ uri: 'https://www.royalcaribbean.com/club-royale' }}
-              style={styles.webView}
-              onMessage={onMessage}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              sharedCookiesEnabled={true}
-              thirdPartyCookiesEnabled={true}
-              injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
-            />
+            {Platform.OS === 'web' ? (
+              <View style={styles.webNotSupported}>
+                <Ship size={48} color="#64748b" />
+                <Text style={styles.webNotSupportedTitle}>WebView Not Available</Text>
+                <Text style={styles.webNotSupportedText}>
+                  Royal Caribbean sync requires a native mobile device.{"\n"}
+                  Please use this feature on iOS or Android.
+                </Text>
+              </View>
+            ) : (
+              <WebView
+                ref={(ref) => {
+                  if (ref) {
+                    webViewRef.current = ref;
+                  }
+                }}
+                source={{ uri: 'https://www.royalcaribbean.com/club-royale' }}
+                style={styles.webView}
+                onMessage={onMessage}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                sharedCookiesEnabled={true}
+                thirdPartyCookiesEnabled={true}
+                injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
+              />
+            )}
           </View>
         )}
 
@@ -482,6 +493,25 @@ const styles = StyleSheet.create({
   },
   webView: {
     flex: 1
+  },
+  webNotSupported: {
+    flex: 1,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    padding: 24,
+    gap: 12
+  },
+  webNotSupportedTitle: {
+    color: '#e2e8f0',
+    fontSize: 18,
+    fontWeight: '600' as const,
+    textAlign: 'center' as const
+  },
+  webNotSupportedText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    textAlign: 'center' as const,
+    lineHeight: 20
   },
   actionsContainer: {
     padding: 12
