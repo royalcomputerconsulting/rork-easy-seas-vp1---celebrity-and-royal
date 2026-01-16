@@ -37,15 +37,165 @@ export const STEP1_OFFERS_SCRIPT = `
     return el?.textContent?.trim() || '';
   }
 
+  async function extractClubRoyaleStatus() {
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Extracting Club Royale status...',
+        logType: 'info'
+      }));
+
+      const loyaltyData = {
+        clubRoyaleTier: '',
+        clubRoyalePoints: '',
+        crownAndAnchorLevel: '',
+        crownAndAnchorPoints: ''
+      };
+
+      // Look for Club Royale tier and points in the page
+      const pageText = document.body.textContent || '';
+      
+      // Extract Club Royale tier (Signature, Premier, Classic)
+      const tierPatterns = [
+        /Club Royale\s*(?:Status|Tier)?[:\s]*(Signature|Premier|Classic)/i,
+        /(Signature|Premier|Classic)\s*(?:Member|Status|Tier)?/i,
+        /Your\s+(?:Club Royale\s+)?(?:Status|Tier)\s*(?:is)?\s*(Signature|Premier|Classic)/i
+      ];
+      
+      for (const pattern of tierPatterns) {
+        const match = pageText.match(pattern);
+        if (match && match[1]) {
+          loyaltyData.clubRoyaleTier = match[1];
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found Club Royale tier: ' + match[1],
+            logType: 'success'
+          }));
+          break;
+        }
+      }
+      
+      // Look for Club Royale points - typically a number near "points" or in a specific section
+      const pointsPatterns = [
+        /([\d,]+)\s*(?:Club Royale)?\s*Points/i,
+        /Points[:\s]*([\d,]+)/i,
+        /Club Royale[^\d]*([\d,]{3,})(?:\s*points)?/i
+      ];
+      
+      for (const pattern of pointsPatterns) {
+        const match = pageText.match(pattern);
+        if (match && match[1]) {
+          const points = match[1].replace(/,/g, '');
+          const numPoints = parseInt(points, 10);
+          // Sanity check: Club Royale points are typically between 0 and 1,000,000
+          if (numPoints >= 0 && numPoints <= 1000000) {
+            loyaltyData.clubRoyalePoints = match[1];
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Found Club Royale points: ' + match[1],
+              logType: 'success'
+            }));
+            break;
+          }
+        }
+      }
+
+      // Try to find in specific DOM elements if not found in text
+      if (!loyaltyData.clubRoyaleTier || !loyaltyData.clubRoyalePoints) {
+        const allElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, [class*="tier"], [class*="status"], [class*="points"], [class*="loyalty"]');
+        
+        for (const el of allElements) {
+          const text = (el.textContent || '').trim();
+          
+          // Check for tier
+          if (!loyaltyData.clubRoyaleTier) {
+            const tierMatch = text.match(/^(Signature|Premier|Classic)$/i);
+            if (tierMatch) {
+              loyaltyData.clubRoyaleTier = tierMatch[1];
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Found Club Royale tier (element): ' + tierMatch[1],
+                logType: 'success'
+              }));
+            }
+          }
+          
+          // Check for points - look for standalone numbers that could be points
+          if (!loyaltyData.clubRoyalePoints) {
+            const pointsMatch = text.match(/^([\d,]+)$/);  
+            if (pointsMatch) {
+              const num = parseInt(pointsMatch[1].replace(/,/g, ''), 10);
+              // Points are typically in thousands range
+              if (num >= 100 && num <= 1000000) {
+                // Check if this element or nearby element mentions "points"
+                const parentText = (el.parentElement?.textContent || '').toLowerCase();
+                if (parentText.includes('point')) {
+                  loyaltyData.clubRoyalePoints = pointsMatch[1];
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log',
+                    message: 'Found Club Royale points (element): ' + pointsMatch[1],
+                    logType: 'success'
+                  }));
+                }
+              }
+            }
+          }
+          
+          if (loyaltyData.clubRoyaleTier && loyaltyData.clubRoyalePoints) {
+            break;
+          }
+        }
+      }
+
+      // Send loyalty data if we found anything
+      if (loyaltyData.clubRoyaleTier || loyaltyData.clubRoyalePoints) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'loyalty_data',
+          data: loyaltyData
+        }));
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Club Royale status: ' + (loyaltyData.clubRoyaleTier || 'Unknown') + ', ' + (loyaltyData.clubRoyalePoints || '0') + ' points',
+          logType: 'success'
+        }));
+      } else {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Could not find Club Royale status on page',
+          logType: 'warning'
+        }));
+      }
+      
+      return loyaltyData;
+    } catch (error) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Error extracting Club Royale status: ' + error.message,
+        logType: 'warning'
+      }));
+      return null;
+    }
+  }
+
   async function extractOffers() {
     try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Extracting Club Royale data...',
+        logType: 'info'
+      }));
+
+      // First extract Club Royale tier and points
+      await extractClubRoyaleStatus();
+
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: 'Loading Club Royale Offers page...',
         logType: 'info'
       }));
 
-      await wait(4000);
+      await wait(4000)
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
