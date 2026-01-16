@@ -337,8 +337,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         status: 'complete',
         lastSyncTimestamp: new Date().toISOString(),
         syncCounts: {
-          offerCount: counts.totalOffers,
-          offerRows: counts.totalOffers,
+          offerCount: prev.syncCounts?.offerCount ?? 0,
+          offerRows: prev.syncCounts?.offerRows ?? 0,
           upcomingCruises: counts.upcomingCruises,
           courtesyHolds: counts.courtesyHolds
         }
