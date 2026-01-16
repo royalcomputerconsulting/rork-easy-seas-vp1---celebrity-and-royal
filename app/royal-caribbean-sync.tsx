@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Modal, Switch } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
@@ -23,7 +23,6 @@ function RoyalCaribbeanSyncScreen() {
     resetState,
     syncToApp,
     cancelSync,
-    togglePricingAndItinerary,
     handleWebViewMessage
   } = useRoyalCaribbeanSync();
 
@@ -211,23 +210,7 @@ function RoyalCaribbeanSyncScreen() {
           </View>
         )}
 
-        <View style={styles.settingsContainer}>
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextContainer}>
-              <Text style={styles.settingLabel}>Scrape Pricing & Itinerary</Text>
-              <Text style={styles.settingDescription}>Optional: Fetch detailed pricing and itinerary info (slower)</Text>
-            </View>
-            <Switch
-              value={state.scrapePricingAndItinerary}
-              onValueChange={togglePricingAndItinerary}
-              trackColor={{ false: '#334155', true: '#3b82f6' }}
-              thumbColor={state.scrapePricingAndItinerary ? '#60a5fa' : '#94a3b8'}
-              disabled={isRunning}
-            />
-          </View>
-        </View>
-
-        <View style={styles.actionsContainer}>
+<View style={styles.actionsContainer}>
           <View style={styles.quickActionsGrid}>
             <Pressable 
               style={styles.quickActionButton}

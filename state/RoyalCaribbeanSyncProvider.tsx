@@ -29,7 +29,7 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
   lastSyncTimestamp: null,
   syncCounts: null,
   syncPreview: null,
-  scrapePricingAndItinerary: false
+  scrapePricingAndItinerary: true
 };
 
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
@@ -356,12 +356,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     addLog('Sync cancelled', 'warning');
   }, [addLog]);
 
-  const togglePricingAndItinerary = useCallback(() => {
-    setState(prev => ({ 
-      ...prev, 
-      scrapePricingAndItinerary: !prev.scrapePricingAndItinerary 
-    }));
-  }, []);
+  
 
   return {
     state,
@@ -374,7 +369,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     resetState,
     syncToApp,
     cancelSync,
-    togglePricingAndItinerary,
     handleWebViewMessage,
     addLog
   };
