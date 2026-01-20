@@ -227,14 +227,18 @@ export const STEP1_OFFERS_SCRIPT = `
       }));
 
       // More aggressive scrolling to ensure all offers load
-      await scrollUntilComplete(null, 20);
+      await scrollUntilComplete(null, 25);
       await wait(2000);
       
-      // Scroll again just to be sure
-      window.scrollTo(0, document.body.scrollHeight);
-      await wait(2000);
+      // Multiple scroll passes to catch lazy-loaded content
+      for (let scrollPass = 0; scrollPass < 3; scrollPass++) {
+        window.scrollTo(0, document.body.scrollHeight);
+        await wait(1500);
+        window.scrollTo(0, document.body.scrollHeight / 2);
+        await wait(1000);
+      }
       window.scrollTo(0, 0);
-      await wait(1000);
+      await wait(1500);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -246,15 +250,24 @@ export const STEP1_OFFERS_SCRIPT = `
       
       // Strategy: Find "View Sailings" buttons first, then find their parent offer containers
       // Use multiple selector strategies to catch all buttons
-      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick]'));
+      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div'));
       
       const viewSailingsButtons = allClickables.filter(el => {
         const text = (el.textContent || '').trim().toLowerCase();
-        return text.includes('view sailing') || 
+        // Only match elements where this IS the button text, not containers
+        const isShortText = text.length < 30;
+        return isShortText && (
+               text.includes('view sailing') || 
                text.includes('see sailing') || 
                text.includes('show sailing') ||
+               text.includes('view dates') ||
+               text.includes('see dates') ||
+               text.includes('available sailing') ||
                text === 'view sailings' ||
-               text === 'see sailings';
+               text === 'see sailings' ||
+               text === 'view' ||
+               text === 'select'
+        );
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -375,19 +388,19 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'warning'
         }));
         
-        const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="offer"]'));
+        const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"]'));
         
+        // First fallback: Look for cards WITH View Sailings button
         const fallbackCards = allElements.filter(el => {
           const text = el.textContent || '';
-          // Must have View Sailings button or link
-          const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => 
-            (child.textContent || '').toLowerCase().includes('view sailing')
-          );
+          const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
+            const childText = (child.textContent || '').toLowerCase().trim();
+            return childText.length < 30 && (childText.includes('view sailing') || childText.includes('see sailing') || childText.includes('view dates'));
+          });
           const hasOfferCode = text.match(/\b([A-Z0-9]{5,12}[A-Z])\b/);
           const hasTradeIn = text.toLowerCase().includes('trade-in value');
           const hasRedeem = text.includes('Redeem by') || text.includes('redeem by');
           const hasFeatured = text.includes('Featured Offer');
-          // Size between 150-5000 chars is likely a single offer card
           const isReasonableSize = text.length > 150 && text.length < 5000;
           
           return hasViewSailingsButton && (hasOfferCode || hasTradeIn || hasRedeem || hasFeatured) && isReasonableSize;
@@ -414,7 +427,6 @@ export const STEP1_OFFERS_SCRIPT = `
             existingCodes.add(code);
             offerCards.push(card);
             
-            // Extract name for logging
             let name = '';
             const headings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6'));
             for (const h of headings) {
@@ -430,6 +442,64 @@ export const STEP1_OFFERS_SCRIPT = `
               message: 'Fallback found offer card: ' + (name || code || '[Unknown]'),
               logType: 'info'
             }));
+          }
+        }
+        
+        // Second fallback: Look for cards by structure WITHOUT requiring View Sailings button
+        // Some offers may have different button text or no button at all
+        if (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Still missing offers (' + offerCards.length + '/' + expectedOfferCount + '), trying structure-based detection...',
+            logType: 'warning'
+          }));
+          
+          const structuralCards = allElements.filter(el => {
+            const text = el.textContent || '';
+            // Must have offer characteristics
+            const hasOfferCode = text.match(/\b([A-Z0-9]{5,12}[A-Z])\b/);
+            const hasTradeIn = text.toLowerCase().includes('trade-in value');
+            const hasRedeem = text.includes('Redeem by') || text.includes('redeem by');
+            const hasDollarAmount = text.match(/\$[\d,]+\.?\d*/); 
+            const hasExpiry = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+,\s*\d{4}/i);
+            // Size check - not too small, not too big
+            const isReasonableSize = text.length > 100 && text.length < 6000;
+            // Must have at least 2 offer-like characteristics
+            const offerSignals = [hasOfferCode, hasTradeIn, hasRedeem, hasDollarAmount, hasExpiry].filter(Boolean).length;
+            
+            return offerSignals >= 2 && isReasonableSize;
+          });
+          
+          // Filter out nested elements
+          const filteredStructural = structuralCards.filter((el, idx, arr) => {
+            return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
+          });
+          
+          for (const card of filteredStructural) {
+            const text = card.textContent || '';
+            const codeMatch = text.match(/\b([A-Z0-9]{5,12}[A-Z])\b/);
+            const code = codeMatch ? codeMatch[1] : '';
+            
+            if (code && !existingCodes.has(code)) {
+              existingCodes.add(code);
+              offerCards.push(card);
+              
+              let name = '';
+              const headings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+              for (const h of headings) {
+                const hText = (h.textContent || '').trim();
+                if (hText.length >= 5 && hText.length <= 80) {
+                  name = hText;
+                  break;
+                }
+              }
+              
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Structure-based detection found offer: ' + (name || code || '[Unknown]'),
+                logType: 'info'
+              }));
+            }
           }
         }
       }
