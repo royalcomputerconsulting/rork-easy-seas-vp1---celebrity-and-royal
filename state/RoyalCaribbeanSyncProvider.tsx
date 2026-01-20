@@ -37,6 +37,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const [state, setState] = useState<RoyalCaribbeanSyncState>(INITIAL_STATE);
   const webViewRef = useRef<WebView | null>(null);
   const stepCompleteResolvers = useRef<{ [key: number]: () => void }>({});
+  const progressCallbacks = useRef<{ onProgress?: () => void }>({});
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     rcLogger.log(message, type);
@@ -70,12 +71,31 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       case 'progress':
         setProgress(message.current, message.total, message.stepName);
+        if (progressCallbacks.current.onProgress) {
+          progressCallbacks.current.onProgress();
+        }
+        break;
+
+      case 'offers_batch':
+        if (message.data && message.data.length > 0) {
+          setState(prev => ({
+            ...prev,
+            extractedOffers: [...prev.extractedOffers, ...(message.data as OfferRow[])]
+          }));
+          addLog(`Received batch of ${message.data.length} offers (total: ${message.data.length + (state.extractedOffers?.length || 0)})`, 'info');
+        }
+        if (progressCallbacks.current.onProgress) {
+          progressCallbacks.current.onProgress();
+        }
         break;
 
       case 'step_complete':
-        addLog(`Step ${message.step} completed with ${message.data.length} items`, 'success');
+        const itemCount = message.totalCount ?? message.data?.length ?? 0;
+        addLog(`Step ${message.step} completed with ${itemCount} items`, 'success');
         if (message.step === 1) {
-          setState(prev => ({ ...prev, extractedOffers: message.data as OfferRow[] }));
+          if (message.data && message.data.length > 0) {
+            setState(prev => ({ ...prev, extractedOffers: [...prev.extractedOffers, ...(message.data as OfferRow[])] }));
+          }
         } else if (message.step === 2 || message.step === 3) {
           setState(prev => ({
             ...prev,
@@ -110,7 +130,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Ingestion completed successfully', 'success');
         break;
     }
-  }, [addLog, setStatus, setProgress]);
+  }, [addLog, setStatus, setProgress, state.extractedOffers?.length]);
 
   const openLogin = useCallback(() => {
     if (webViewRef.current) {
@@ -142,16 +162,39 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     addLog('Starting ingestion process...', 'info');
     
-    const waitForStepComplete = (step: number, timeoutMs: number = 600000): Promise<void> => {
-      return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
+    const waitForStepComplete = (step: number, baseTimeoutMs: number = 600000): Promise<void> => {
+      return new Promise((resolve) => {
+        let lastProgressTime = Date.now();
+        const progressTimeoutMs = 120000;
+        
+        const checkProgress = () => {
+          const timeSinceProgress = Date.now() - lastProgressTime;
+          if (timeSinceProgress > progressTimeoutMs) {
+            delete stepCompleteResolvers.current[step];
+            delete progressCallbacks.current.onProgress;
+            addLog(`Step ${step} timed out (no progress for ${progressTimeoutMs / 1000}s) - continuing with collected data`, 'warning');
+            resolve();
+          }
+        };
+        
+        const progressInterval = setInterval(checkProgress, 10000);
+        
+        const maxTimeout = setTimeout(() => {
+          clearInterval(progressInterval);
           delete stepCompleteResolvers.current[step];
-          addLog(`Step ${step} timed out after ${timeoutMs / 1000}s - continuing anyway`, 'warning');
+          delete progressCallbacks.current.onProgress;
+          addLog(`Step ${step} reached max timeout (${baseTimeoutMs / 1000}s) - continuing with collected data`, 'warning');
           resolve();
-        }, timeoutMs);
+        }, baseTimeoutMs);
+        
+        progressCallbacks.current.onProgress = () => {
+          lastProgressTime = Date.now();
+        };
         
         stepCompleteResolvers.current[step] = () => {
-          clearTimeout(timeout);
+          clearTimeout(maxTimeout);
+          clearInterval(progressInterval);
+          delete progressCallbacks.current.onProgress;
           resolve();
         };
       });

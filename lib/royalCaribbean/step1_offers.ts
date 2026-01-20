@@ -4,6 +4,17 @@ export const STEP1_OFFERS_SCRIPT = `
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  function sendOfferBatch(offers, isFinal = false, totalCount = 0, offerCount = 0) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: isFinal ? 'step_complete' : 'offers_batch',
+      step: 1,
+      data: offers,
+      isFinal: isFinal,
+      totalCount: totalCount,
+      offerCount: offerCount
+    }));
+  }
+
   async function scrollUntilComplete(container, maxAttempts = 15) {
     let previousHeight = 0;
     let stableCount = 0;
@@ -30,7 +41,6 @@ export const STEP1_OFFERS_SCRIPT = `
       attempts++;
     }
     
-    // Scroll back to top
     if (container) {
       container.scrollTo(0, 0);
     } else {
@@ -60,14 +70,12 @@ export const STEP1_OFFERS_SCRIPT = `
         crownAndAnchorPoints: ''
       };
 
-      // Look for Club Royale tier and points in the page
       const pageText = document.body.textContent || '';
       
-      // Extract Club Royale tier (Signature, Premier, Classic)
       const tierPatterns = [
-        /Club Royale\s*(?:Status|Tier)?[:\s]*(Signature|Premier|Classic)/i,
-        /(Signature|Premier|Classic)\s*(?:Member|Status|Tier)?/i,
-        /Your\s+(?:Club Royale\s+)?(?:Status|Tier)\s*(?:is)?\s*(Signature|Premier|Classic)/i
+        /Club Royale\\s*(?:Status|Tier)?[:\\s]*(Signature|Premier|Classic)/i,
+        /(Signature|Premier|Classic)\\s*(?:Member|Status|Tier)?/i,
+        /Your\\s+(?:Club Royale\\s+)?(?:Status|Tier)\\s*(?:is)?\\s*(Signature|Premier|Classic)/i
       ];
       
       for (const pattern of tierPatterns) {
@@ -83,11 +91,10 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // Look for Club Royale points - typically a number near "points" or in a specific section
       const pointsPatterns = [
-        /([\d,]+)\s*(?:Club Royale)?\s*Points/i,
-        /Points[:\s]*([\d,]+)/i,
-        /Club Royale[^\d]*([\d,]{3,})(?:\s*points)?/i
+        /([\\d,]+)\\s*(?:Club Royale)?\\s*Points/i,
+        /Points[:\\s]*([\\d,]+)/i,
+        /Club Royale[^\\d]*([\\d,]{3,})(?:\\s*points)?/i
       ];
       
       for (const pattern of pointsPatterns) {
@@ -95,7 +102,6 @@ export const STEP1_OFFERS_SCRIPT = `
         if (match && match[1]) {
           const points = match[1].replace(/,/g, '');
           const numPoints = parseInt(points, 10);
-          // Sanity check: Club Royale points are typically between 0 and 1,000,000
           if (numPoints >= 0 && numPoints <= 1000000) {
             loyaltyData.clubRoyalePoints = match[1];
             window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -108,14 +114,12 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
 
-      // Try to find in specific DOM elements if not found in text
       if (!loyaltyData.clubRoyaleTier || !loyaltyData.clubRoyalePoints) {
         const allElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, [class*="tier"], [class*="status"], [class*="points"], [class*="loyalty"]');
         
         for (const el of allElements) {
           const text = (el.textContent || '').trim();
           
-          // Check for tier
           if (!loyaltyData.clubRoyaleTier) {
             const tierMatch = text.match(/^(Signature|Premier|Classic)$/i);
             if (tierMatch) {
@@ -128,14 +132,11 @@ export const STEP1_OFFERS_SCRIPT = `
             }
           }
           
-          // Check for points - look for standalone numbers that could be points
           if (!loyaltyData.clubRoyalePoints) {
-            const pointsMatch = text.match(/^([\d,]+)$/);  
+            const pointsMatch = text.match(/^([\\d,]+)$/);  
             if (pointsMatch) {
               const num = parseInt(pointsMatch[1].replace(/,/g, ''), 10);
-              // Points are typically in thousands range
               if (num >= 100 && num <= 1000000) {
-                // Check if this element or nearby element mentions "points"
                 const parentText = (el.parentElement?.textContent || '').toLowerCase();
                 if (parentText.includes('point')) {
                   loyaltyData.clubRoyalePoints = pointsMatch[1];
@@ -155,7 +156,6 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
 
-      // Send loyalty data if we found anything
       if (loyaltyData.clubRoyaleTier || loyaltyData.clubRoyalePoints) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'loyalty_data',
@@ -194,7 +194,6 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      // First extract Club Royale tier and points
       await extractClubRoyaleStatus();
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -205,12 +204,11 @@ export const STEP1_OFFERS_SCRIPT = `
 
       await wait(4000);
       
-      // Try to detect expected offer count from page
       let expectedOfferCount = 0;
       const pageText = document.body.textContent || '';
-      const offerCountMatch = pageText.match(/All Offers\s*\((\d+)\)/i) || 
-                              pageText.match(/Offers\s*\((\d+)\)/i) ||
-                              pageText.match(/(\d+)\s+Offers?\s+Available/i);
+      const offerCountMatch = pageText.match(/All Offers\\s*\\((\\d+)\\)/i) || 
+                              pageText.match(/Offers\\s*\\((\\d+)\\)/i) ||
+                              pageText.match(/(\\d+)\\s+Offers?\\s+Available/i);
       if (offerCountMatch) {
         expectedOfferCount = parseInt(offerCountMatch[1], 10);
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -226,11 +224,9 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      // More aggressive scrolling to ensure all offers load
       await scrollUntilComplete(null, 25);
       await wait(2000);
       
-      // Multiple scroll passes to catch lazy-loaded content
       for (let scrollPass = 0; scrollPass < 3; scrollPass++) {
         window.scrollTo(0, document.body.scrollHeight);
         await wait(1500);
@@ -248,13 +244,10 @@ export const STEP1_OFFERS_SCRIPT = `
 
       let offerCards = [];
       
-      // Strategy: Find "View Sailings" buttons first, then find their parent offer containers
-      // Use multiple selector strategies to catch all buttons
       const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div'));
       
       const viewSailingsButtons = allClickables.filter(el => {
         const text = (el.textContent || '').trim().toLowerCase();
-        // Only match elements where this IS the button text, not containers
         const isShortText = text.length < 30;
         return isShortText && (
                text.includes('view sailing') || 
@@ -276,7 +269,6 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: viewSailingsButtons.length >= expectedOfferCount ? 'info' : 'warning'
       }));
       
-      // If we found fewer buttons than expected, try alternative detection
       if (expectedOfferCount > 0 && viewSailingsButtons.length < expectedOfferCount) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
@@ -284,7 +276,6 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'info'
         }));
         
-        // Look for any clickable element with sailing-related text
         const additionalButtons = allClickables.filter(el => {
           const text = (el.textContent || '').trim().toLowerCase();
           const alreadyFound = viewSailingsButtons.includes(el);
@@ -301,7 +292,6 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // For each button, find its parent offer card
       const seenOfferCodes = new Set();
       const seenOfferNames = new Set();
       
@@ -309,35 +299,27 @@ export const STEP1_OFFERS_SCRIPT = `
         let parent = btn.parentElement;
         let offerCard = null;
         
-        // Walk up the DOM to find the offer card container
         for (let i = 0; i < 15 && parent; i++) {
           const parentText = parent.textContent || '';
           
-          // Check if this element looks like an offer card container
-          const hasOfferCode = parentText.match(/\b([A-Z0-9]{6,12}[A-Z])\b/); // Offer codes like 25FEB103B
+          const hasOfferCode = parentText.match(/\\b([A-Z0-9]{6,12}[A-Z])\\b/);
           const hasTradeIn = parentText.toLowerCase().includes('trade-in value');
           const hasRedeem = parentText.includes('Redeem by');
           const hasFeatured = parentText.includes('Featured Offer');
-          const hasOfferTitle = parentText.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Caribbean|Cruise|Sail|Summer|Winter|Spring|Fall|Holiday|Special)\b/i);
+          const hasOfferTitle = parentText.match(/\\b(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Caribbean|Cruise|Sail|Summer|Winter|Spring|Fall|Holiday|Special)\\b/i);
           
-          // Look for reasonable container size (not too big = whole page, not too small = just button)
           const isReasonableSize = parentText.length > 100 && parentText.length < 5000;
           
-          // Check if this looks like an individual offer card
           if (isReasonableSize && (hasOfferCode || hasTradeIn || hasRedeem || hasFeatured)) {
-            // Check if there's another "View Sailings" button in this container
             const buttonsInContainer = Array.from(parent.querySelectorAll('button, a, [role="button"]')).filter(el => 
               (el.textContent || '').match(/View Sailing|VIEW SAILING|See Sailing/i)
             );
             
-            // If there's exactly one View Sailings button, this is likely the offer card
             if (buttonsInContainer.length === 1) {
               offerCard = parent;
               break;
             }
-            // If multiple buttons but still reasonable size, keep going up
             if (buttonsInContainer.length > 1 && parentText.length < 3000) {
-              // This might be a container with multiple offers, keep going up
               parent = parent.parentElement;
               continue;
             }
@@ -349,22 +331,19 @@ export const STEP1_OFFERS_SCRIPT = `
         if (offerCard) {
           const cardText = offerCard.textContent || '';
           
-          // Extract offer code to deduplicate
-          const codeMatch = cardText.match(/\b([A-Z0-9]{6,12}[A-Z])\b/);
+          const codeMatch = cardText.match(/\\b([A-Z0-9]{6,12}[A-Z])\\b/);
           const offerCode = codeMatch ? codeMatch[1] : '';
           
-          // Extract offer name for secondary deduplication
           let offerName = '';
           const headings = Array.from(offerCard.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"]'));
           for (const h of headings) {
             const hText = (h.textContent || '').trim();
-            if (hText.length >= 5 && hText.length <= 100 && !hText.match(/Featured Offer|View Sailing|Redeem|Trade-in|^\$|^\d+$/i)) {
+            if (hText.length >= 5 && hText.length <= 100 && !hText.match(/Featured Offer|View Sailing|Redeem|Trade-in|^\\$|^\\d+$/i)) {
               offerName = hText;
               break;
             }
           }
           
-          // Create a unique key for this offer
           const uniqueKey = offerCode || offerName || '';
           
           if (uniqueKey && !seenOfferCodes.has(uniqueKey)) {
@@ -380,7 +359,6 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // Fallback: If no offer cards found via buttons or fewer than expected, try alternative methods
       if (offerCards.length === 0 || (expectedOfferCount > 0 && offerCards.length < expectedOfferCount)) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
@@ -390,14 +368,13 @@ export const STEP1_OFFERS_SCRIPT = `
         
         const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"]'));
         
-        // First fallback: Look for cards WITH View Sailings button
         const fallbackCards = allElements.filter(el => {
           const text = el.textContent || '';
           const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
             const childText = (child.textContent || '').toLowerCase().trim();
             return childText.length < 30 && (childText.includes('view sailing') || childText.includes('see sailing') || childText.includes('view dates'));
           });
-          const hasOfferCode = text.match(/\b([A-Z0-9]{5,12}[A-Z])\b/);
+          const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
           const hasTradeIn = text.toLowerCase().includes('trade-in value');
           const hasRedeem = text.includes('Redeem by') || text.includes('redeem by');
           const hasFeatured = text.includes('Featured Offer');
@@ -406,21 +383,19 @@ export const STEP1_OFFERS_SCRIPT = `
           return hasViewSailingsButton && (hasOfferCode || hasTradeIn || hasRedeem || hasFeatured) && isReasonableSize;
         });
         
-        // Remove elements contained within others
         const filteredFallback = fallbackCards.filter((el, idx, arr) => {
           return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
         });
         
-        // Deduplicate by offer code and merge with existing cards
         const existingCodes = new Set(offerCards.map(card => {
           const text = card.textContent || '';
-          const match = text.match(/\b([A-Z0-9]{5,12}[A-Z])\b/);
+          const match = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
           return match ? match[1] : '';
         }).filter(Boolean));
         
         for (const card of filteredFallback) {
           const text = card.textContent || '';
-          const codeMatch = text.match(/\b([A-Z0-9]{5,12}[A-Z])\b/);
+          const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
           const code = codeMatch ? codeMatch[1] : '';
           
           if (code && !existingCodes.has(code)) {
@@ -445,8 +420,6 @@ export const STEP1_OFFERS_SCRIPT = `
           }
         }
         
-        // Second fallback: Look for cards by structure WITHOUT requiring View Sailings button
-        // Some offers may have different button text or no button at all
         if (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
@@ -456,28 +429,24 @@ export const STEP1_OFFERS_SCRIPT = `
           
           const structuralCards = allElements.filter(el => {
             const text = el.textContent || '';
-            // Must have offer characteristics
-            const hasOfferCode = text.match(/\b([A-Z0-9]{5,12}[A-Z])\b/);
+            const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
             const hasTradeIn = text.toLowerCase().includes('trade-in value');
             const hasRedeem = text.includes('Redeem by') || text.includes('redeem by');
-            const hasDollarAmount = text.match(/\$[\d,]+\.?\d*/); 
-            const hasExpiry = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+,\s*\d{4}/i);
-            // Size check - not too small, not too big
+            const hasDollarAmount = text.match(/\\$[\\d,]+\\.?\\d*/); 
+            const hasExpiry = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
             const isReasonableSize = text.length > 100 && text.length < 6000;
-            // Must have at least 2 offer-like characteristics
             const offerSignals = [hasOfferCode, hasTradeIn, hasRedeem, hasDollarAmount, hasExpiry].filter(Boolean).length;
             
             return offerSignals >= 2 && isReasonableSize;
           });
           
-          // Filter out nested elements
           const filteredStructural = structuralCards.filter((el, idx, arr) => {
             return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
           });
           
           for (const card of filteredStructural) {
             const text = card.textContent || '';
-            const codeMatch = text.match(/\b([A-Z0-9]{5,12}[A-Z])\b/);
+            const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
             const code = codeMatch ? codeMatch[1] : '';
             
             if (code && !existingCodes.has(code)) {
@@ -510,7 +479,6 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) ? 'warning' : 'info'
       }));
       
-      // If still missing offers, warn but continue
       if (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
@@ -526,16 +494,26 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'warning'
         }));
         
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'step_complete',
-          step: 1,
-          data: []
-        }));
+        sendOfferBatch([], true, 0, 0);
         return;
       }
       
-      const offers = [];
+      let totalSailingsScraped = 0;
       let processedCount = 0;
+      const BATCH_SIZE = 150;
+      let pendingBatch = [];
+
+      function flushBatch(force = false) {
+        if (pendingBatch.length >= BATCH_SIZE || (force && pendingBatch.length > 0)) {
+          sendOfferBatch(pendingBatch, false);
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '📤 Sent batch of ' + pendingBatch.length + ' sailings (total: ' + totalSailingsScraped + ')',
+            logType: 'info'
+          }));
+          pendingBatch = [];
+        }
+      }
 
       for (let i = 0; i < offerCards.length; i++) {
         const card = offerCards[i];
@@ -551,10 +529,8 @@ export const STEP1_OFFERS_SCRIPT = `
         
         const excludePatterns = /^Featured Offer$|^View Sailing|^View Sailings$|^See Sailing|^Redeem|^Trade-in value|^\\$|^My Offers$|^Club Royale Offers$|^Offers$|^Exclusive$|^Available$|^Learn More$|^Book Now$|^Select$|^Close$|^Filter$|^Sort$|^Room for Two$|^\\d+\\s+NIGHT/i;
         
-        // Strategy 1: Look for elements that specifically look like offer titles
         const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"], [class*="name"], [class*="offer"], span, p, div'));
         
-        // Sort by DOM depth (shallower = more likely to be the main title)
         const sortedHeadings = allHeadings.sort((a, b) => {
           const depthA = getElementDepth(a, card);
           const depthB = getElementDepth(b, card);
@@ -571,20 +547,17 @@ export const STEP1_OFFERS_SCRIPT = `
           return depth;
         }
         
-        // Look for offer-like names (months, promotional words)
         const offerNamePatterns = /(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Sail|Summer|Winter|Spring|Fall|Holiday|Special|Wager|Deal|Flash|Hot|Golden|Diamond|Platinum|Elite|Premium|VIP|High Roller|All In|Big Win|Cash|Free|Comp|Cruise)/i;
         
         for (const heading of sortedHeadings) {
           const headingText = (heading.textContent || '').trim();
           const words = headingText.split(/\\s+/).length;
           
-          // Skip if this is a container with too much text (likely contains multiple things)
           if (headingText.length > 150) continue;
           
-          // Check if this looks like an offer name
           const looksLikeOfferName = offerNamePatterns.test(headingText) && 
-                                    !headingText.match(/\\d{2}\\/\\d{2}/) && // Not a date
-                                    !headingText.match(/of the Seas/i); // Not a ship name
+                                    !headingText.match(/\\d{2}\\/\\d{2}/) &&
+                                    !headingText.match(/of the Seas/i);
           
           if (headingText && 
               headingText.length >= 3 && 
@@ -600,14 +573,12 @@ export const STEP1_OFFERS_SCRIPT = `
           }
         }
         
-        // Strategy 2: Look for specific offer name patterns in text
         if (!offerName || offerName.length < 3) {
           const textContent = cardText;
-          // Look for promotional offer names
           const promoPatterns = [
             /([A-Z][a-z]+\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|Chance|House|Wagers?|Deal|Flash|Jackpot|Bonus))/,
             /((?:Last Chance|Full House|Lucky|Double|Triple|High Roller|All In|Big Win|Golden|Diamond|Flash)\\s+[A-Za-z]+)/,
-            /([A-Z][a-z]+\\s+[A-Z][a-z]+)(?=\\s*[A-Z0-9]{5,15})/ // Two words before offer code
+            /([A-Z][a-z]+\\s+[A-Z][a-z]+)(?=\\s*[A-Z0-9]{5,15})/
           ];
           
           for (const pattern of promoPatterns) {
@@ -622,7 +593,6 @@ export const STEP1_OFFERS_SCRIPT = `
           }
         }
         
-        // Strategy 3: Fallback - look at card text lines
         if (!offerName || offerName.length < 3) {
           const lines = cardText.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
           for (const line of lines.slice(0, 20)) {
@@ -642,11 +612,9 @@ export const STEP1_OFFERS_SCRIPT = `
           }
         }
         
-        // Strategy 4: Use the offer code as fallback name if we have one
         if (!offerName || offerName.length < 3) {
           const codeMatch = cardText.match(/\\b([A-Z0-9]{5,15})\\b/);
           if (codeMatch) {
-            // Generate a name from code like "25FEB103B" -> "Offer 25FEB103B"
             offerName = 'Offer ' + codeMatch[1];
           }
         }
@@ -706,30 +674,24 @@ export const STEP1_OFFERS_SCRIPT = `
             logType: 'info'
           }));
           
-          // Record current URL to detect navigation
           const urlBefore = window.location.href;
           
-          // Check if it's a link that would navigate away
           if (viewSailingsBtn.tagName === 'A') {
             const href = viewSailingsBtn.getAttribute('href');
             if (href && !href.startsWith('#') && !href.startsWith('javascript:') && !href.includes('modal')) {
-              // This is a navigation link - prevent default and try to trigger modal behavior
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '  ⚠️ View Sailings is a navigation link - preventing navigation...',
                 logType: 'warning'
               }));
               
-              // Remove href temporarily to prevent navigation
               const originalHref = viewSailingsBtn.getAttribute('href');
               viewSailingsBtn.removeAttribute('href');
               viewSailingsBtn.style.cursor = 'pointer';
               
-              // Click without href
               viewSailingsBtn.click();
               await wait(2000);
               
-              // Check if a modal opened
               const modalOpened = document.querySelector('[class*="modal"]') || 
                                  document.querySelector('[role="dialog"]') ||
                                  document.querySelector('[class*="drawer"]') ||
@@ -742,13 +704,11 @@ export const STEP1_OFFERS_SCRIPT = `
                   logType: 'warning'
                 }));
                 
-                // Restore href
                 if (originalHref) {
                   viewSailingsBtn.setAttribute('href', originalHref);
                 }
                 
-                // Add offer without sailings
-                offers.push({
+                const noSailingOffer = {
                   sourcePage: 'Offers',
                   offerName: offerName,
                   offerCode: offerCode,
@@ -763,19 +723,21 @@ export const STEP1_OFFERS_SCRIPT = `
                   perks: perks,
                   loyaltyLevel: '',
                   loyaltyPoints: ''
-                });
+                };
+                pendingBatch.push(noSailingOffer);
+                totalSailingsScraped++;
+                flushBatch();
                 
                 processedCount++;
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'progress',
-                  current: offers.length,
+                  current: totalSailingsScraped,
                   total: offerCards.length,
-                  stepName: 'Offers: ' + offers.length + ' scraped'
+                  stepName: 'Offer ' + (i + 1) + '/' + offerCards.length + ': ' + totalSailingsScraped + ' sailings'
                 }));
-                continue; // Skip to next offer
+                continue;
               }
               
-              // Restore href for future use
               if (originalHref) {
                 viewSailingsBtn.setAttribute('href', originalHref);
               }
@@ -788,19 +750,16 @@ export const STEP1_OFFERS_SCRIPT = `
             await wait(3000);
           }
           
-          // Double-check we didn't navigate away
           if (window.location.href !== urlBefore) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
               message: '  ⚠️ Page navigated away unexpectedly - attempting recovery...',
               logType: 'warning'
             }));
-            // Navigate back
             window.history.back();
             await wait(3000);
             
-            // Skip this offer's sailings and continue with next offer
-            offers.push({
+            const navOffer = {
               sourcePage: 'Offers',
               offerName: offerName,
               offerCode: offerCode,
@@ -815,7 +774,10 @@ export const STEP1_OFFERS_SCRIPT = `
               perks: perks,
               loyaltyLevel: '',
               loyaltyPoints: ''
-            });
+            };
+            pendingBatch.push(navOffer);
+            totalSailingsScraped++;
+            flushBatch();
             
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
@@ -824,7 +786,7 @@ export const STEP1_OFFERS_SCRIPT = `
             }));
             
             processedCount++;
-            continue; // Skip to next offer
+            continue;
           }
 
           let sailingsContainer = document.querySelector('[class*="modal"]') || 
@@ -971,7 +933,7 @@ export const STEP1_OFFERS_SCRIPT = `
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: '  ✓ Found ' + totalSailingRows + ' individual sailing date rows (filtered from ' + allPossibleElements.length + ')',
+            message: '  ✓ Found ' + totalSailingRows + ' individual sailing date rows',
             logType: totalSailingRows > 0 ? 'success' : 'warning'
           }));
           
@@ -1071,7 +1033,7 @@ export const STEP1_OFFERS_SCRIPT = `
                   }
                 }
                 
-                offers.push({
+                pendingBatch.push({
                   sourcePage: 'Offers',
                   offerName: offerName,
                   offerCode: offerCode,
@@ -1087,25 +1049,29 @@ export const STEP1_OFFERS_SCRIPT = `
                   loyaltyLevel: '',
                   loyaltyPoints: ''
                 });
+                totalSailingsScraped++;
                 
-                // Log progress every 100 sailings or at the end
-                if (offers.length - lastLoggedCount >= 100 || sailingIndex === totalSailingRows) {
+                if (totalSailingsScraped - lastLoggedCount >= 100 || sailingIndex === totalSailingRows) {
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log',
-                    message: '    ✓ Processed ' + sailingIndex + '/' + totalSailingRows + ' sailings (' + offers.length + ' total rows)',
+                    message: '    ✓ Processed ' + sailingIndex + '/' + totalSailingRows + ' sailings (' + totalSailingsScraped + ' total)',
                     logType: 'info'
                   }));
-                  lastLoggedCount = offers.length;
+                  lastLoggedCount = totalSailingsScraped;
                   
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'progress',
-                    current: offers.length,
+                    current: totalSailingsScraped,
                     total: offerCards.length,
-                    stepName: 'Offer ' + (i + 1) + ': ' + sailingIndex + '/' + totalSailingRows + ' sailings'
+                    stepName: 'Offer ' + (i + 1) + '/' + offerCards.length + ': ' + sailingIndex + '/' + totalSailingRows + ' sailings'
                   }));
                 }
+                
+                flushBatch();
               }
             }
+            
+            flushBatch(true);
             
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
@@ -1113,7 +1079,7 @@ export const STEP1_OFFERS_SCRIPT = `
               logType: 'success'
             }));
           } else {
-            offers.push({
+            const noSailingOffer = {
               sourcePage: 'Offers',
               offerName: offerName,
               offerCode: offerCode,
@@ -1128,7 +1094,10 @@ export const STEP1_OFFERS_SCRIPT = `
               perks: perks,
               loyaltyLevel: '',
               loyaltyPoints: ''
-            });
+            };
+            pendingBatch.push(noSailingOffer);
+            totalSailingsScraped++;
+            flushBatch(true);
           }
           
           const closeBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el =>
@@ -1145,7 +1114,7 @@ export const STEP1_OFFERS_SCRIPT = `
             logType: 'warning'
           }));
           
-          offers.push({
+          const noButtonOffer = {
             sourcePage: 'Offers',
             offerName: offerName,
             offerCode: offerCode,
@@ -1160,29 +1129,28 @@ export const STEP1_OFFERS_SCRIPT = `
             perks: perks,
             loyaltyLevel: '',
             loyaltyPoints: ''
-          });
+          };
+          pendingBatch.push(noButtonOffer);
+          totalSailingsScraped++;
+          flushBatch(true);
         }
 
         processedCount++;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'progress',
-          current: offers.length,
+          current: totalSailingsScraped,
           total: offerCards.length,
-          stepName: 'Offers: ' + offers.length + ' scraped'
+          stepName: 'Offers: ' + totalSailingsScraped + ' sailings (' + processedCount + '/' + offerCards.length + ' offers)'
         }));
       }
 
-      const uniqueOfferNames = [...new Set(offers.map(o => o.offerName))];
+      flushBatch(true);
       
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'step_complete',
-        step: 1,
-        data: offers
-      }));
+      sendOfferBatch([], true, totalSailingsScraped, offerCards.length);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: \`✓ Extracted \${offers.length} offer rows from \${offerCards.length} offer(s)\`,
+        message: '✓ Extracted ' + totalSailingsScraped + ' offer rows from ' + offerCards.length + ' offer(s)',
         logType: 'success'
       }));
 

@@ -67,7 +67,8 @@ export type WebViewMessage =
   | { type: 'auth_status'; loggedIn: boolean }
   | { type: 'log'; message: string; logType?: 'info' | 'success' | 'warning' | 'error' }
   | { type: 'progress'; current: number; total: number; stepName?: string }
-  | { type: 'step_complete'; step: number; data: any[] }
+  | { type: 'offers_batch'; step: number; data: any[]; isFinal?: boolean }
+  | { type: 'step_complete'; step: number; data: any[]; totalCount?: number; offerCount?: number }
   | { type: 'loyalty_data'; data: LoyaltyData }
   | { type: 'error'; message: string }
   | { type: 'complete' };
