@@ -142,7 +142,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     addLog('Starting ingestion process...', 'info');
     
-    const waitForStepComplete = (step: number, timeoutMs: number = 300000): Promise<void> => {
+    const waitForStepComplete = (step: number, timeoutMs: number = 600000): Promise<void> => {
       return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           delete stepCompleteResolvers.current[step];
@@ -163,7 +163,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
       
-      await waitForStepComplete(1, 300000);
+      await waitForStepComplete(1, 600000);
       
       setState(prev => ({ ...prev, status: 'running_step_2' }));
       addLog('Step 2: Navigating to upcoming cruises page...', 'info');

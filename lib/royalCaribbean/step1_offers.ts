@@ -4,12 +4,12 @@ export const STEP1_OFFERS_SCRIPT = `
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async function scrollUntilComplete(container, maxAttempts = 10) {
+  async function scrollUntilComplete(container, maxAttempts = 15) {
     let previousHeight = 0;
     let stableCount = 0;
     let attempts = 0;
 
-    while (stableCount < 3 && attempts < maxAttempts) {
+    while (stableCount < 4 && attempts < maxAttempts) {
       const currentHeight = container ? container.scrollHeight : document.body.scrollHeight;
       
       if (currentHeight === previousHeight) {
@@ -21,14 +21,22 @@ export const STEP1_OFFERS_SCRIPT = `
       previousHeight = currentHeight;
       
       if (container) {
-        container.scrollBy(0, 500);
+        container.scrollBy(0, 800);
       } else {
-        window.scrollBy(0, 500);
+        window.scrollBy(0, 800);
       }
       
-      await wait(1000);
+      await wait(1200);
       attempts++;
     }
+    
+    // Scroll back to top
+    if (container) {
+      container.scrollTo(0, 0);
+    } else {
+      window.scrollTo(0, 0);
+    }
+    await wait(500);
   }
 
   function extractText(element, selector) {
@@ -195,7 +203,22 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      await wait(4000)
+      await wait(4000);
+      
+      // Try to detect expected offer count from page
+      let expectedOfferCount = 0;
+      const pageText = document.body.textContent || '';
+      const offerCountMatch = pageText.match(/All Offers\s*\((\d+)\)/i) || 
+                              pageText.match(/Offers\s*\((\d+)\)/i) ||
+                              pageText.match(/(\d+)\s+Offers?\s+Available/i);
+      if (offerCountMatch) {
+        expectedOfferCount = parseInt(offerCountMatch[1], 10);
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Expected offer count from page: ' + expectedOfferCount,
+          logType: 'info'
+        }));
+      }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -203,7 +226,15 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      await scrollUntilComplete(null, 15);
+      // More aggressive scrolling to ensure all offers load
+      await scrollUntilComplete(null, 20);
+      await wait(2000);
+      
+      // Scroll again just to be sure
+      window.scrollTo(0, document.body.scrollHeight);
+      await wait(2000);
+      window.scrollTo(0, 0);
+      await wait(1000);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -214,16 +245,48 @@ export const STEP1_OFFERS_SCRIPT = `
       let offerCards = [];
       
       // Strategy: Find "View Sailings" buttons first, then find their parent offer containers
-      const viewSailingsButtons = Array.from(document.querySelectorAll('button, a, [role="button"]')).filter(el => {
-        const text = (el.textContent || '').trim();
-        return text.match(/^View Sailing|^VIEW SAILING|^See Sailing/i);
+      // Use multiple selector strategies to catch all buttons
+      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick]'));
+      
+      const viewSailingsButtons = allClickables.filter(el => {
+        const text = (el.textContent || '').trim().toLowerCase();
+        return text.includes('view sailing') || 
+               text.includes('see sailing') || 
+               text.includes('show sailing') ||
+               text === 'view sailings' ||
+               text === 'see sailings';
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + viewSailingsButtons.length + ' "View Sailings" buttons',
-        logType: 'info'
+        message: 'Found ' + viewSailingsButtons.length + ' "View Sailings" buttons (expected: ' + (expectedOfferCount || 'unknown') + ')',
+        logType: viewSailingsButtons.length >= expectedOfferCount ? 'info' : 'warning'
       }));
+      
+      // If we found fewer buttons than expected, try alternative detection
+      if (expectedOfferCount > 0 && viewSailingsButtons.length < expectedOfferCount) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Trying alternative button detection...',
+          logType: 'info'
+        }));
+        
+        // Look for any clickable element with sailing-related text
+        const additionalButtons = allClickables.filter(el => {
+          const text = (el.textContent || '').trim().toLowerCase();
+          const alreadyFound = viewSailingsButtons.includes(el);
+          return !alreadyFound && (text.includes('sailing') && text.length < 30);
+        });
+        
+        if (additionalButtons.length > 0) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found ' + additionalButtons.length + ' additional potential buttons',
+            logType: 'info'
+          }));
+          viewSailingsButtons.push(...additionalButtons);
+        }
+      }
       
       // For each button, find its parent offer card
       const seenOfferCodes = new Set();
@@ -304,51 +367,87 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // Fallback: If no offer cards found via buttons, try the old method but be more strict
-      if (offerCards.length === 0) {
+      // Fallback: If no offer cards found via buttons or fewer than expected, try alternative methods
+      if (offerCards.length === 0 || (expectedOfferCount > 0 && offerCards.length < expectedOfferCount)) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Button-based detection found 0 offers, trying fallback method...',
+          message: 'Button-based detection found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying fallback method...',
           logType: 'warning'
         }));
         
-        const allElements = Array.from(document.querySelectorAll('div, article, section'));
+        const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="offer"]'));
         
-        offerCards = allElements.filter(el => {
+        const fallbackCards = allElements.filter(el => {
           const text = el.textContent || '';
-          // Must have View Sailings button directly (not just text)
-          const hasViewSailingsButton = el.querySelector('button, a, [role="button"]')?.textContent?.match(/View Sailing/i);
-          const hasOfferCode = text.match(/\b([A-Z0-9]{6,12}[A-Z])\b/);
+          // Must have View Sailings button or link
+          const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => 
+            (child.textContent || '').toLowerCase().includes('view sailing')
+          );
+          const hasOfferCode = text.match(/\b([A-Z0-9]{5,12}[A-Z])\b/);
           const hasTradeIn = text.toLowerCase().includes('trade-in value');
-          const hasRedeem = text.includes('Redeem by');
-          // Stricter size: between 200-4000 chars is likely a single offer card
-          const isReasonableSize = text.length > 200 && text.length < 4000;
+          const hasRedeem = text.includes('Redeem by') || text.includes('redeem by');
+          const hasFeatured = text.includes('Featured Offer');
+          // Size between 150-5000 chars is likely a single offer card
+          const isReasonableSize = text.length > 150 && text.length < 5000;
           
-          return hasViewSailingsButton && (hasOfferCode || hasTradeIn || hasRedeem) && isReasonableSize;
+          return hasViewSailingsButton && (hasOfferCode || hasTradeIn || hasRedeem || hasFeatured) && isReasonableSize;
         });
         
         // Remove elements contained within others
-        offerCards = offerCards.filter((el, idx, arr) => {
+        const filteredFallback = fallbackCards.filter((el, idx, arr) => {
           return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
         });
         
-        // Deduplicate by offer code
-        const seen = new Set();
-        offerCards = offerCards.filter(el => {
-          const text = el.textContent || '';
-          const codeMatch = text.match(/\b([A-Z0-9]{6,12}[A-Z])\b/);
-          const code = codeMatch ? codeMatch[1] : Math.random().toString();
-          if (seen.has(code)) return false;
-          seen.add(code);
-          return true;
-        });
+        // Deduplicate by offer code and merge with existing cards
+        const existingCodes = new Set(offerCards.map(card => {
+          const text = card.textContent || '';
+          const match = text.match(/\b([A-Z0-9]{5,12}[A-Z])\b/);
+          return match ? match[1] : '';
+        }).filter(Boolean));
+        
+        for (const card of filteredFallback) {
+          const text = card.textContent || '';
+          const codeMatch = text.match(/\b([A-Z0-9]{5,12}[A-Z])\b/);
+          const code = codeMatch ? codeMatch[1] : '';
+          
+          if (code && !existingCodes.has(code)) {
+            existingCodes.add(code);
+            offerCards.push(card);
+            
+            // Extract name for logging
+            let name = '';
+            const headings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+            for (const h of headings) {
+              const hText = (h.textContent || '').trim();
+              if (hText.length >= 5 && hText.length <= 80) {
+                name = hText;
+                break;
+              }
+            }
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Fallback found offer card: ' + (name || code || '[Unknown]'),
+              logType: 'info'
+            }));
+          }
+        }
       }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + offerCards.length + ' offer cards on page',
-        logType: 'info'
+        message: 'Found ' + offerCards.length + ' offer cards on page' + (expectedOfferCount > 0 ? ' (expected: ' + expectedOfferCount + ')' : ''),
+        logType: (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) ? 'warning' : 'info'
       }));
+      
+      // If still missing offers, warn but continue
+      if (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '⚠️ WARNING: Found ' + offerCards.length + ' offers but expected ' + expectedOfferCount + '. Some offers may not be scraped.',
+          logType: 'warning'
+        }));
+      }
       
       if (offerCards.length === 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -817,147 +916,132 @@ export const STEP1_OFFERS_SCRIPT = `
           
           if (totalSailingRows > 0) {
             let sailingIndex = 0;
+            let lastLoggedCount = 0;
+            
             for (const [cabinTypeKey, sailingsForType] of Object.entries(sailingsByType)) {
               for (let j = 0; j < sailingsForType.length; j++) {
                 sailingIndex++;
                 const sailingData = sailingsForType[j];
-              const sailing = sailingData.element;
-              const sailingText = sailingData.text || sailing.textContent || '';
-              
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '    ─── Sailing ' + sailingIndex + '/' + totalSailingRows + ' ───',
-                logType: 'info'
-              }));
-              
-              let shipName = sailingData.shipName || '';
-              
-              if (!shipName) {
-                const shipMatch = sailingText.match(/([\\w\\s]+of the Seas)/);
-                shipName = shipMatch ? shipMatch[1].trim() : '';
-              }
-              
-              if (!shipName) {
-                let parent = sailing.parentElement;
-                for (let p = 0; p < 5 && parent && !shipName; p++) {
-                  const parentText = parent.textContent || '';
-                  const parentShipMatch = parentText.match(/([\\w\\s]+of the Seas)/);
-                  if (parentShipMatch) {
-                    shipName = parentShipMatch[1].trim();
-                    break;
-                  }
-                  parent = parent.parentElement;
+                const sailing = sailingData.element;
+                const sailingText = sailingData.text || sailing.textContent || '';
+                
+                let shipName = sailingData.shipName || '';
+                
+                if (!shipName) {
+                  const shipMatch = sailingText.match(/([\\w\\s]+of the Seas)/);
+                  shipName = shipMatch ? shipMatch[1].trim() : '';
                 }
-              }
-              
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '      Ship: ' + (shipName || '[NOT FOUND]'),
-                logType: shipName ? 'info' : 'warning'
-              }));
-              
-              let itineraryMatch = sailingText.match(/(\\d+)\\s+NIGHT\\s+([A-Z\\s&]+?)(?=\\d{2}\\/|$)/i);
-              let itinerary = itineraryMatch ? itineraryMatch[0].trim() : '';
-              
-              if (!itinerary) {
-                let parent = sailing.parentElement;
-                for (let p = 0; p < 5 && parent && !itinerary; p++) {
-                  const parentText = parent.textContent || '';
-                  const parentItinMatch = parentText.match(/(\\d+)\\s+NIGHT\\s+([A-Z\\s&]+)/i);
-                  if (parentItinMatch) {
-                    itinerary = parentItinMatch[0].trim();
-                    break;
+                
+                if (!shipName) {
+                  let parent = sailing.parentElement;
+                  for (let p = 0; p < 5 && parent && !shipName; p++) {
+                    const parentText = parent.textContent || '';
+                    const parentShipMatch = parentText.match(/([\\w\\s]+of the Seas)/);
+                    if (parentShipMatch) {
+                      shipName = parentShipMatch[1].trim();
+                      break;
+                    }
+                    parent = parent.parentElement;
                   }
-                  parent = parent.parentElement;
                 }
-              }
-              
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '      Itinerary: ' + (itinerary || '[NOT FOUND]'),
-                logType: itinerary ? 'info' : 'warning'
-              }));
-              
-              let portMatch = sailingText.match(/(Orlando \\(Port Cañaveral\\)|Port Cañaveral|Miami|Fort Lauderdale|Tampa|Galveston|Cape Liberty|Bayonne|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan)/i);
-              let departurePort = portMatch ? portMatch[1] : '';
-              
-              if (!departurePort) {
-                let parent = sailing.parentElement;
-                for (let p = 0; p < 5 && parent && !departurePort; p++) {
-                  const parentText = parent.textContent || '';
-                  const parentPortMatch = parentText.match(/(Orlando \\(Port Cañaveral\\)|Port Cañaveral|Miami|Fort Lauderdale|Tampa|Galveston|Cape Liberty|Bayonne|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan)/i);
-                  if (parentPortMatch) {
-                    departurePort = parentPortMatch[1];
-                    break;
+                
+                let itineraryMatch = sailingText.match(/(\\d+)\\s+NIGHT\\s+([A-Z\\s&]+?)(?=\\d{2}\\/|$)/i);
+                let itinerary = itineraryMatch ? itineraryMatch[0].trim() : '';
+                
+                if (!itinerary) {
+                  let parent = sailing.parentElement;
+                  for (let p = 0; p < 5 && parent && !itinerary; p++) {
+                    const parentText = parent.textContent || '';
+                    const parentItinMatch = parentText.match(/(\\d+)\\s+NIGHT\\s+([A-Z\\s&]+)/i);
+                    if (parentItinMatch) {
+                      itinerary = parentItinMatch[0].trim();
+                      break;
+                    }
+                    parent = parent.parentElement;
                   }
-                  parent = parent.parentElement;
                 }
-              }
-              
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '      Port: ' + (departurePort || '[NOT FOUND]'),
-                logType: departurePort ? 'info' : 'warning'
-              }));
-              
-              const sailingDate = sailingData.date || '';
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '      Date: ' + (sailingDate || '[NOT FOUND]'),
-                logType: sailingDate ? 'info' : 'warning'
-              }));
-              
-              let cabinType = cabinTypeKey || '';
-              
-              if (!cabinType || cabinType === 'Unknown') {
-                const cabinMatch = sailingText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
-                if (cabinMatch) {
-                  cabinType = cabinMatch[1];
-                  if (cabinType.toLowerCase().includes('ocean')) {
-                    cabinType = 'Oceanview';
+                
+                let portMatch = sailingText.match(/(Orlando \\(Port Cañaveral\\)|Port Cañaveral|Miami|Fort Lauderdale|Tampa|Galveston|Cape Liberty|Bayonne|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan)/i);
+                let departurePort = portMatch ? portMatch[1] : '';
+                
+                if (!departurePort) {
+                  let parent = sailing.parentElement;
+                  for (let p = 0; p < 5 && parent && !departurePort; p++) {
+                    const parentText = parent.textContent || '';
+                    const parentPortMatch = parentText.match(/(Orlando \\(Port Cañaveral\\)|Port Cañaveral|Miami|Fort Lauderdale|Tampa|Galveston|Cape Liberty|Bayonne|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan)/i);
+                    if (parentPortMatch) {
+                      departurePort = parentPortMatch[1];
+                      break;
+                    }
+                    parent = parent.parentElement;
                   }
-                } else {
-                  const offerCabinMatch = cardText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)(?:\\s+Room for Two|\\s+or\\s+Oceanview\\s+Room\\s+for\\s+Two)?/i);
-                  if (offerCabinMatch) {
-                    cabinType = offerCabinMatch[1];
+                }
+                
+                const sailingDate = sailingData.date || '';
+                
+                let cabinType = cabinTypeKey || '';
+                
+                if (!cabinType || cabinType === 'Unknown') {
+                  const cabinMatch = sailingText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
+                  if (cabinMatch) {
+                    cabinType = cabinMatch[1];
                     if (cabinType.toLowerCase().includes('ocean')) {
                       cabinType = 'Oceanview';
                     }
                   } else {
-                    cabinType = '';
+                    const offerCabinMatch = cardText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)(?:\\s+Room for Two|\\s+or\\s+Oceanview\\s+Room\\s+for\\s+Two)?/i);
+                    if (offerCabinMatch) {
+                      cabinType = offerCabinMatch[1];
+                      if (cabinType.toLowerCase().includes('ocean')) {
+                        cabinType = 'Oceanview';
+                      }
+                    } else {
+                      cabinType = '';
+                    }
                   }
                 }
-              }
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '      Cabin: ' + (cabinType || '[NOT FOUND]'),
-                logType: cabinType ? 'info' : 'warning'
-              }));
-              
-              offers.push({
-                sourcePage: 'Offers',
-                offerName: offerName,
-                offerCode: offerCode,
-                offerExpirationDate: offerExpiry,
-                offerType: offerType,
-                shipName: shipName,
-                sailingDate: sailingDate,
-                itinerary: itinerary,
-                departurePort: departurePort,
-                cabinType: cabinType,
-                numberOfGuests: '2',
-                perks: perks,
-                loyaltyLevel: '',
-                loyaltyPoints: ''
-              });
-              
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '      ✓ Row added (' + offers.length + ' total)',
-                logType: 'success'
-              }));
+                
+                offers.push({
+                  sourcePage: 'Offers',
+                  offerName: offerName,
+                  offerCode: offerCode,
+                  offerExpirationDate: offerExpiry,
+                  offerType: offerType,
+                  shipName: shipName,
+                  sailingDate: sailingDate,
+                  itinerary: itinerary,
+                  departurePort: departurePort,
+                  cabinType: cabinType,
+                  numberOfGuests: '2',
+                  perks: perks,
+                  loyaltyLevel: '',
+                  loyaltyPoints: ''
+                });
+                
+                // Log progress every 100 sailings or at the end
+                if (offers.length - lastLoggedCount >= 100 || sailingIndex === totalSailingRows) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log',
+                    message: '    ✓ Processed ' + sailingIndex + '/' + totalSailingRows + ' sailings (' + offers.length + ' total rows)',
+                    logType: 'info'
+                  }));
+                  lastLoggedCount = offers.length;
+                  
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'progress',
+                    current: offers.length,
+                    total: offerCards.length,
+                    stepName: 'Offer ' + (i + 1) + ': ' + sailingIndex + '/' + totalSailingRows + ' sailings'
+                  }));
+                }
               }
             }
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '  ✓ Offer complete: ' + totalSailingRows + ' sailings added',
+              logType: 'success'
+            }));
           } else {
             offers.push({
               sourcePage: 'Offers',
