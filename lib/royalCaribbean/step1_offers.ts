@@ -537,8 +537,126 @@ export const STEP1_OFFERS_SCRIPT = `
             logType: 'info'
           }));
           
-          viewSailingsBtn.click();
-          await wait(3000);
+          // Record current URL to detect navigation
+          const urlBefore = window.location.href;
+          
+          // Check if it's a link that would navigate away
+          if (viewSailingsBtn.tagName === 'A') {
+            const href = viewSailingsBtn.getAttribute('href');
+            if (href && !href.startsWith('#') && !href.startsWith('javascript:') && !href.includes('modal')) {
+              // This is a navigation link - prevent default and try to trigger modal behavior
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '  ⚠️ View Sailings is a navigation link - preventing navigation...',
+                logType: 'warning'
+              }));
+              
+              // Remove href temporarily to prevent navigation
+              const originalHref = viewSailingsBtn.getAttribute('href');
+              viewSailingsBtn.removeAttribute('href');
+              viewSailingsBtn.style.cursor = 'pointer';
+              
+              // Click without href
+              viewSailingsBtn.click();
+              await wait(2000);
+              
+              // Check if a modal opened
+              const modalOpened = document.querySelector('[class*="modal"]') || 
+                                 document.querySelector('[role="dialog"]') ||
+                                 document.querySelector('[class*="drawer"]') ||
+                                 document.querySelector('[class*="overlay"][class*="sailing"]');
+              
+              if (!modalOpened) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: '  ⚠️ No modal opened - skipping sailings for this offer',
+                  logType: 'warning'
+                }));
+                
+                // Restore href
+                if (originalHref) {
+                  viewSailingsBtn.setAttribute('href', originalHref);
+                }
+                
+                // Add offer without sailings
+                offers.push({
+                  sourcePage: 'Offers',
+                  offerName: offerName,
+                  offerCode: offerCode,
+                  offerExpirationDate: offerExpiry,
+                  offerType: offerType,
+                  shipName: '',
+                  sailingDate: '',
+                  itinerary: '',
+                  departurePort: '',
+                  cabinType: '',
+                  numberOfGuests: '',
+                  perks: perks,
+                  loyaltyLevel: '',
+                  loyaltyPoints: ''
+                });
+                
+                processedCount++;
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'progress',
+                  current: offers.length,
+                  total: offerCards.length,
+                  stepName: 'Offers: ' + offers.length + ' scraped'
+                }));
+                continue; // Skip to next offer
+              }
+              
+              // Restore href for future use
+              if (originalHref) {
+                viewSailingsBtn.setAttribute('href', originalHref);
+              }
+            } else {
+              viewSailingsBtn.click();
+              await wait(3000);
+            }
+          } else {
+            viewSailingsBtn.click();
+            await wait(3000);
+          }
+          
+          // Double-check we didn't navigate away
+          if (window.location.href !== urlBefore) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '  ⚠️ Page navigated away unexpectedly - attempting recovery...',
+              logType: 'warning'
+            }));
+            // Navigate back
+            window.history.back();
+            await wait(3000);
+            
+            // Skip this offer's sailings and continue with next offer
+            offers.push({
+              sourcePage: 'Offers',
+              offerName: offerName,
+              offerCode: offerCode,
+              offerExpirationDate: offerExpiry,
+              offerType: offerType,
+              shipName: '',
+              sailingDate: '',
+              itinerary: '',
+              departurePort: '',
+              cabinType: '',
+              numberOfGuests: '',
+              perks: perks,
+              loyaltyLevel: '',
+              loyaltyPoints: ''
+            });
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '  ⚠️ Skipped sailings for this offer (navigation detected)',
+              logType: 'warning'
+            }));
+            
+            processedCount++;
+            continue; // Skip to next offer
+          }
 
           let sailingsContainer = document.querySelector('[class*="modal"]') || 
                                  document.querySelector('[role="dialog"]') || 
