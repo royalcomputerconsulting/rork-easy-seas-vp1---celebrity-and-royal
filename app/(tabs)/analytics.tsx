@@ -469,30 +469,10 @@ export default function AnalyticsScreen() {
   }, [bookedCruises]);
 
   const stats = useMemo(() => [
-    {
-      icon: Ship,
-      label: 'Total Cruises',
-      value: realAnalytics.totalCruises.toString(),
-      color: COLORS.navyDeep,
-    },
-    {
-      icon: DollarSign,
-      label: 'Value Per $1',
-      value: realAnalytics.valuePerDollar >= 9999 ? '∞' : `${realAnalytics.valuePerDollar.toFixed(2)}`,
-      color: COLORS.success,
-    },
-    {
-      icon: TrendingUp,
-      label: 'Net Profit',
-      value: formatCurrency(realAnalytics.totalProfit),
-      color: realAnalytics.totalProfit >= 0 ? COLORS.success : COLORS.error,
-    },
-    {
-      icon: Award,
-      label: 'Club Royale Pts',
-      value: formatNumber(currentPoints),
-      color: COLORS.royalPurple,
-    },
+    { label: 'Cruises', value: realAnalytics.totalCruises.toString(), icon: Ship },
+    { label: 'Value/$1', value: realAnalytics.valuePerDollar >= 9999 ? '∞' : realAnalytics.valuePerDollar.toFixed(2), icon: DollarSign },
+    { label: 'Profit', value: formatCurrency(realAnalytics.totalProfit), color: realAnalytics.totalProfit >= 0 ? COLORS.success : COLORS.error, icon: TrendingUp },
+    { label: 'Points', value: formatNumber(currentPoints), icon: Award },
   ], [realAnalytics, currentPoints]);
 
   const ROIFilterTabs = () => (
@@ -680,14 +660,12 @@ export default function AnalyticsScreen() {
 
   const renderIntelligenceTab = () => (
     <View style={styles.tabContent}>
-      <View style={styles.statsGrid}>
+      <View style={styles.quickStatsRow}>
         {stats.map((stat, index) => (
-          <View key={index} style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: `${stat.color}12` }]}>
-              <stat.icon size={18} color={stat.color} />
-            </View>
-            <Text style={[styles.statValue, { color: stat.color }]}>{stat.value}</Text>
-            <Text style={styles.statLabel}>{stat.label}</Text>
+          <View key={index} style={styles.quickStatItem}>
+            <stat.icon size={16} color={stat.color || COLORS.navyDeep} />
+            <Text style={[styles.quickStatValue, stat.color && { color: stat.color }]}>{stat.value}</Text>
+            <Text style={styles.quickStatLabel}>{stat.label}</Text>
           </View>
         ))}
       </View>
@@ -701,80 +679,33 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
-        <View style={styles.financialCardContainer}>
-          <View style={styles.financialCardHeader}>
-            <View style={styles.financialHeaderContent}>
-              <View style={[styles.financialHeaderIcon, { backgroundColor: 'rgba(0, 31, 63, 0.15)' }]}>
-                <Receipt size={18} color={COLORS.navyDeep} />
-              </View>
-              <View>
-                <Text style={styles.financialCardTitle}>Financial Summary</Text>
-                <Text style={styles.financialCardSubtitle}>Complete performance overview</Text>
-              </View>
-            </View>
+        <View style={styles.cleanCard}>
+          <View style={styles.cleanCardHeader}>
+            <Receipt size={16} color={COLORS.navyDeep} />
+            <Text style={styles.cleanCardTitle}>Financial Overview</Text>
           </View>
-
-          <View style={styles.financialContent}>
-            <View style={styles.financialRow}>
-              <View style={[styles.financialIconContainer, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-                <Ship size={16} color={COLORS.success} />
-              </View>
-              <View style={styles.financialInfo}>
-                <Text style={styles.financialLabel}>Retail Value Received</Text>
-                <Text style={styles.financialSubtext}>Comped cabin value (completed cruises)</Text>
-              </View>
-              <Text style={[styles.financialValue, { color: COLORS.success }]}>{formatCurrency(realAnalytics.completedRetailValue)}</Text>
+          <View style={styles.dataGrid}>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Retail Value</Text>
+              <Text style={[styles.dataValue, { color: COLORS.success }]}>{formatCurrency(realAnalytics.completedRetailValue)}</Text>
             </View>
-            
-            <View style={styles.financialDivider} />
-            
-            <View style={styles.financialRow}>
-              <View style={[styles.financialIconContainer, { backgroundColor: 'rgba(0, 31, 63, 0.1)' }]}>
-                <Anchor size={16} color={COLORS.navyDeep} />
-              </View>
-              <View style={styles.financialInfo}>
-                <Text style={styles.financialLabel}>Taxes & Fees Paid</Text>
-                <Text style={styles.financialSubtext}>Actual out-of-pocket cost</Text>
-              </View>
-              <Text style={styles.financialValue}>-{formatCurrency(realAnalytics.completedTaxesFees)}</Text>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Taxes & Fees</Text>
+              <Text style={styles.dataValue}>-{formatCurrency(realAnalytics.completedTaxesFees)}</Text>
             </View>
-            
-            <View style={styles.financialDivider} />
-            
-            <View style={styles.financialRow}>
-              <View style={[styles.financialIconContainer, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                <Coins size={16} color={COLORS.goldDark} />
-              </View>
-              <View style={styles.financialInfo}>
-                <Text style={styles.financialLabel}>Total Coin-In</Text>
-                <Text style={styles.financialSubtext}>Money played through slots</Text>
-              </View>
-              <Text style={styles.financialValue}>{formatCurrency(casinoAnalytics.totalCoinIn)}</Text>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Coin-In</Text>
+              <Text style={styles.dataValue}>{formatCurrency(casinoAnalytics.totalCoinIn)}</Text>
             </View>
-            
-            <View style={styles.financialDivider} />
-            
-            <View style={styles.financialRow}>
-              <View style={[styles.financialIconContainer, { backgroundColor: realAnalytics.completedNetCasinoResult >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)' }]}>
-                <TrendingUp size={16} color={realAnalytics.completedNetCasinoResult >= 0 ? COLORS.success : COLORS.error} />
-              </View>
-              <View style={styles.financialInfo}>
-                <Text style={styles.financialLabel}>Casino Win/Loss</Text>
-                <Text style={styles.financialSubtext}>Net result from completed cruises</Text>
-              </View>
-              <Text style={[styles.financialValue, { color: realAnalytics.completedNetCasinoResult >= 0 ? COLORS.success : COLORS.error }]}>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Casino Result</Text>
+              <Text style={[styles.dataValue, { color: realAnalytics.completedNetCasinoResult >= 0 ? COLORS.success : COLORS.error }]}>
                 {realAnalytics.completedNetCasinoResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedNetCasinoResult)}
               </Text>
             </View>
-            
-            <View style={styles.financialDivider} />
-            
-            <View style={[styles.financialRow, styles.financialTotalRow]}>
-              <View style={styles.financialInfo}>
-                <Text style={[styles.financialLabel, styles.financialTotalLabel]}>Net Profit</Text>
-                <Text style={styles.financialSubtext}>Retail Value - Taxes + Casino Winnings</Text>
-              </View>
-              <Text style={[styles.financialTotalValue, { color: realAnalytics.completedProfit >= 0 ? COLORS.success : COLORS.error }]}>
+            <View style={[styles.dataRow, styles.dataRowTotal]}>
+              <Text style={styles.dataTotalLabel}>Net Profit</Text>
+              <Text style={[styles.dataTotalValue, { color: realAnalytics.completedProfit >= 0 ? COLORS.success : COLORS.error }]}>
                 {realAnalytics.completedProfit >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedProfit)}
               </Text>
             </View>
@@ -783,67 +714,32 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
-        <View style={styles.casinoPerformanceContainer}>
-          <View style={styles.casinoPerformanceHeader}>
-            <View style={styles.casinoPerformanceHeaderContent}>
-              <View style={[styles.casinoPerformanceHeaderIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                <PieChart size={18} color={COLORS.goldDark} />
-              </View>
-              <View>
-                <Text style={styles.casinoPerformanceTitle}>Casino Performance</Text>
-                <Text style={styles.casinoPerformanceSubtitle}>Detailed gambling analytics</Text>
-              </View>
+        <View style={styles.cleanCard}>
+          <View style={styles.cleanCardHeader}>
+            <PieChart size={16} color={COLORS.goldDark} />
+            <Text style={styles.cleanCardTitle}>Casino Stats</Text>
+          </View>
+          <View style={styles.compactMetricsGrid}>
+            <View style={styles.compactMetric}>
+              <Text style={styles.compactMetricValue}>{formatCurrency(casinoAnalytics.totalCoinIn)}</Text>
+              <Text style={styles.compactMetricLabel}>Coin-In</Text>
+            </View>
+            <View style={styles.compactMetric}>
+              <Text style={[styles.compactMetricValue, { color: casinoAnalytics.netResult >= 0 ? COLORS.success : COLORS.error }]}>
+                {casinoAnalytics.netResult >= 0 ? '+' : ''}{formatCurrency(casinoAnalytics.netResult)}
+              </Text>
+              <Text style={styles.compactMetricLabel}>Win/Loss</Text>
+            </View>
+            <View style={styles.compactMetric}>
+              <Text style={styles.compactMetricValue}>{formatNumber(currentPoints)}</Text>
+              <Text style={styles.compactMetricLabel}>Points</Text>
             </View>
           </View>
-
-          <View style={styles.casinoPerformanceContent}>
-            <View style={styles.metricsRow}>
-              <View style={styles.metricCard}>
-                <View style={[styles.metricIconContainer, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                  <Coins size={18} color={COLORS.goldDark} />
-                </View>
-                <Text style={styles.metricValue}>{formatCurrency(casinoAnalytics.totalCoinIn)}</Text>
-                <Text style={styles.metricLabel}>Total Coin-In</Text>
-              </View>
-              <View style={styles.metricCard}>
-                <View style={[styles.metricIconContainer, { backgroundColor: casinoAnalytics.netResult >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)' }]}>
-                  <Target size={18} color={casinoAnalytics.netResult >= 0 ? COLORS.success : COLORS.error} />
-                </View>
-                <Text style={[styles.metricValue, { color: casinoAnalytics.netResult >= 0 ? COLORS.success : COLORS.error }]}>
-                  {casinoAnalytics.netResult >= 0 ? '+' : ''}{formatCurrency(casinoAnalytics.netResult)}
-                </Text>
-                <Text style={styles.metricLabel}>Net Win/Loss</Text>
-              </View>
-              <View style={styles.metricCard}>
-                <View style={[styles.metricIconContainer, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-                  <Award size={18} color={COLORS.royalPurple} />
-                </View>
-                <Text style={styles.metricValue}>{formatNumber(currentPoints)}</Text>
-                <Text style={styles.metricLabel}>Current Points</Text>
-              </View>
+          {casinoAnalytics.completedCruisesCount > 0 && (
+            <View style={styles.avgStatsRow}>
+              <Text style={styles.avgStatText}>Avg/Cruise: {formatCurrency(casinoAnalytics.avgCoinInPerCruise)} coin-in • {casinoAnalytics.avgWinLossPerCruise >= 0 ? '+' : ''}{formatCurrency(casinoAnalytics.avgWinLossPerCruise)} • {formatNumber(Math.round(casinoAnalytics.avgPointsPerCruise))} pts</Text>
             </View>
-
-            {casinoAnalytics.completedCruisesCount > 0 && (
-              <View style={styles.avgMetricsRow}>
-                <View style={styles.avgMetric}>
-                  <Text style={styles.avgMetricLabel}>Avg Coin-In/Cruise</Text>
-                  <Text style={styles.avgMetricValue}>{formatCurrency(casinoAnalytics.avgCoinInPerCruise)}</Text>
-                </View>
-                <View style={styles.avgMetricDivider} />
-                <View style={styles.avgMetric}>
-                  <Text style={styles.avgMetricLabel}>Avg Win/Loss</Text>
-                  <Text style={[styles.avgMetricValue, { color: casinoAnalytics.avgWinLossPerCruise >= 0 ? COLORS.success : COLORS.error }]}>
-                    {casinoAnalytics.avgWinLossPerCruise >= 0 ? '+' : ''}{formatCurrency(casinoAnalytics.avgWinLossPerCruise)}
-                  </Text>
-                </View>
-                <View style={styles.avgMetricDivider} />
-                <View style={styles.avgMetric}>
-                  <Text style={styles.avgMetricLabel}>Avg Pts/Cruise</Text>
-                  <Text style={styles.avgMetricValue}>{formatNumber(Math.round(casinoAnalytics.avgPointsPerCruise))}</Text>
-                </View>
-              </View>
-            )}
-          </View>
+          )}
         </View>
       </View>
 
@@ -1664,6 +1560,119 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SPACING.md,
+  },
+  quickStatsRow: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOW.sm,
+  },
+  quickStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+  },
+  quickStatValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    marginTop: 4,
+  },
+  quickStatLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  cleanCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOW.sm,
+  },
+  cleanCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  cleanCardTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  dataGrid: {
+    gap: SPACING.xs,
+  },
+  dataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  dataLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#64748B',
+  },
+  dataValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  dataRowTotal: {
+    marginTop: SPACING.xs,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  dataTotalLabel: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  dataTotalValue: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  compactMetricsGrid: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  compactMetric: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+  },
+  compactMetricValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  compactMetricLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  avgStatsRow: {
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  avgStatText: {
+    fontSize: 11,
+    color: '#64748B',
+    textAlign: 'center',
   },
   header: {
     paddingHorizontal: SPACING.md,
