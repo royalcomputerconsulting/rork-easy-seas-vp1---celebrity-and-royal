@@ -635,128 +635,104 @@ export default function CruiseDetailsScreen() {
             )}
           </View>
 
-          <View style={styles.priceSection}>
-            <View style={styles.pricingGrid}>
-              {cruise.interiorPrice && cruise.interiorPrice > 0 && (
-                <View style={styles.priceItem}>
-                  <Text style={styles.priceLabel}>Interior</Text>
-                  <Text style={styles.priceValue}>{formatCurrency(cruise.interiorPrice)}</Text>
-                </View>
-              )}
-              {cruise.oceanviewPrice && cruise.oceanviewPrice > 0 && (
-                <View style={styles.priceItem}>
-                  <Text style={styles.priceLabel}>Ocean View</Text>
-                  <Text style={styles.priceValue}>{formatCurrency(cruise.oceanviewPrice)}</Text>
-                </View>
-              )}
-              {cruise.balconyPrice && cruise.balconyPrice > 0 && (
-                <View style={styles.priceItem}>
-                  <Text style={styles.priceLabel}>Balcony</Text>
-                  <Text style={styles.priceValue}>{formatCurrency(cruise.balconyPrice)}</Text>
-                </View>
-              )}
-              {cruise.suitePrice && cruise.suitePrice > 0 && (
-                <View style={styles.priceItem}>
-                  <Text style={styles.priceLabel}>Suite</Text>
-                  <Text style={styles.priceValue}>{formatCurrency(cruise.suitePrice)}</Text>
+          <View style={styles.compactInfoCard}>
+            <View style={styles.infoGrid}>
+              <View style={styles.infoGridItem}>
+                <Text style={styles.infoGridLabel}>Sail Date</Text>
+                <Text style={styles.infoGridValue}>{formatDate(cruise.sailDate, 'short')}</Text>
+              </View>
+              <View style={styles.infoGridItem}>
+                <Text style={styles.infoGridLabel}>Duration</Text>
+                <Text style={styles.infoGridValue}>{cruise.nights}N</Text>
+              </View>
+              <View style={styles.infoGridItem}>
+                <Text style={styles.infoGridLabel}>Departs</Text>
+                <Text style={styles.infoGridValue} numberOfLines={1}>{cruise.departurePort || 'TBD'}</Text>
+              </View>
+              <View style={styles.infoGridItem}>
+                <Text style={styles.infoGridLabel}>Guests</Text>
+                <Text style={styles.infoGridValue}>{cruise.guests || 2}</Text>
+              </View>
+              {cruise.cabinType && (
+                <View style={styles.infoGridItem}>
+                  <Text style={styles.infoGridLabel}>Cabin</Text>
+                  <Text style={styles.infoGridValue} numberOfLines={1}>{cruise.cabinType}</Text>
                 </View>
               )}
             </View>
-            
-            {cruise.taxes && cruise.taxes > 0 && (
-              <View style={styles.taxesRow}>
-                <Text style={styles.taxesLabel}>Port Taxes & Fees:</Text>
-                <Text style={styles.taxesValue}>{formatCurrency(cruise.taxes)}</Text>
-              </View>
-            )}
-            
-            {savings > 0 && (
-              <View style={styles.savingsBadge}>
-                <Text style={styles.savingsText}>Save {formatCurrency(savings)}</Text>
-              </View>
-            )}
           </View>
 
-          <View style={styles.detailsGrid}>
-            <View style={styles.detailCard}>
-              <Calendar size={20} color={COLORS.beigeWarm} />
-              <Text style={styles.detailLabel}>Sail Date</Text>
-              <Text style={styles.detailValue}>{formatDate(cruise.sailDate, 'medium')}</Text>
-            </View>
-            
-            <View style={styles.detailCard}>
-              <Clock size={20} color={COLORS.beigeWarm} />
-              <Text style={styles.detailLabel}>Duration</Text>
-              <Text style={styles.detailValue}>{formatNights(cruise.nights)}</Text>
-            </View>
-            
-            <View style={styles.detailCard}>
-              <MapPin size={20} color={COLORS.beigeWarm} />
-              <Text style={styles.detailLabel}>Departs From</Text>
-              <Text style={styles.detailValue}>{cruise.departurePort}</Text>
-            </View>
-            
-            <View style={styles.detailCard}>
-              <Users size={20} color={COLORS.beigeWarm} />
-              <Text style={styles.detailLabel}>Guests</Text>
-              <Text style={styles.detailValue}>{cruise.guestsInfo || `${cruise.guests || 2} Guests`}</Text>
-            </View>
-
-            {cruise.cabinType && (
-              <View style={styles.detailCard}>
-                <Anchor size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.detailLabel}>Cabin Type</Text>
-                <Text style={styles.detailValue}>{cruise.cabinType}</Text>
-              </View>
-            )}
-            
-            {displayPrice > 0 && cruise.nights > 0 && (
-              <View style={styles.detailCard}>
-                <DollarSign size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.detailLabel}>Per Night</Text>
-                <Text style={styles.detailValue}>{formatCurrency(Math.round(displayPrice / cruise.nights))}</Text>
-              </View>
-            )}
-
-            {isBooked && (
-              <View style={[styles.detailCard, styles.casinoStatsCard]}>
-                <View style={styles.casinoStatsHeader}>
-                  <TrendingUp size={20} color={COLORS.beigeWarm} />
-                  <Text style={styles.detailLabel}>Casino Stats</Text>
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={() => {
-                      console.log('[CruiseDetails] Opening edit modal for cruise:', cruise);
-                      const bookedCruise = cruise as any;
-                      setEditWinnings(String(bookedCruise.winnings || 0));
-                      setEditPoints(String(bookedCruise.earnedPoints || bookedCruise.casinoPoints || 0));
-                      setEditModalVisible(true);
-                    }}
-                    testID="edit-casino-stats-button"
-                  >
-                    <Edit3 size={16} color={COLORS.beigeWarm} />
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.casinoStatsValues}>
-                  <View style={styles.casinoStatRow}>
-                    <Text style={styles.casinoStatRowLabel}>Win/Loss:</Text>
-                    <Text style={[
-                      styles.casinoStatRowValue,
-                      { color: ((cruise as any).winnings || 0) >= 0 ? COLORS.success : COLORS.error }
-                    ]}>
-                      {((cruise as any).winnings || 0) >= 0 ? '+' : ''}{formatCurrency((cruise as any).winnings || 0)}
-                    </Text>
+          {(cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice) && (
+            <View style={styles.compactPriceCard}>
+              <View style={styles.pricingRow}>
+                {cruise.interiorPrice && cruise.interiorPrice > 0 && (
+                  <View style={styles.pricingCol}>
+                    <Text style={styles.pricingLabel}>INT</Text>
+                    <Text style={styles.pricingValue}>{formatCurrency(cruise.interiorPrice)}</Text>
                   </View>
-                  <View style={styles.casinoStatRow}>
-                    <Text style={styles.casinoStatRowLabel}>Points:</Text>
-                    <Text style={[styles.casinoStatRowValue, { color: COLORS.points }]}>
-                      {((cruise as any).earnedPoints || (cruise as any).casinoPoints || 0).toLocaleString()}
-                    </Text>
+                )}
+                {cruise.oceanviewPrice && cruise.oceanviewPrice > 0 && (
+                  <View style={styles.pricingCol}>
+                    <Text style={styles.pricingLabel}>OV</Text>
+                    <Text style={styles.pricingValue}>{formatCurrency(cruise.oceanviewPrice)}</Text>
                   </View>
-                </View>
+                )}
+                {cruise.balconyPrice && cruise.balconyPrice > 0 && (
+                  <View style={styles.pricingCol}>
+                    <Text style={styles.pricingLabel}>BAL</Text>
+                    <Text style={styles.pricingValue}>{formatCurrency(cruise.balconyPrice)}</Text>
+                  </View>
+                )}
+                {cruise.suitePrice && cruise.suitePrice > 0 && (
+                  <View style={styles.pricingCol}>
+                    <Text style={styles.pricingLabel}>STE</Text>
+                    <Text style={styles.pricingValue}>{formatCurrency(cruise.suitePrice)}</Text>
+                  </View>
+                )}
+                {cruise.taxes && cruise.taxes > 0 && (
+                  <View style={styles.pricingCol}>
+                    <Text style={styles.pricingLabel}>Tax</Text>
+                    <Text style={styles.pricingValue}>{formatCurrency(cruise.taxes)}</Text>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
+            </View>
+          )}
+
+          {isBooked && (
+            <View style={styles.compactCasinoCard}>
+              <View style={styles.casinoResultsRow}>
+                <View style={styles.casinoResultCol}>
+                  <Text style={styles.casinoResultLabel}>Win/Loss</Text>
+                  <Text style={[
+                    styles.casinoResultValue,
+                    { color: ((cruise as any).winnings || 0) >= 0 ? COLORS.success : COLORS.error }
+                  ]}>
+                    {((cruise as any).winnings || 0) >= 0 ? '+' : ''}{formatCurrency((cruise as any).winnings || 0)}
+                  </Text>
+                </View>
+                <View style={styles.casinoResultCol}>
+                  <Text style={styles.casinoResultLabel}>Points</Text>
+                  <Text style={[styles.casinoResultValue, { color: COLORS.points }]}>
+                    {((cruise as any).earnedPoints || (cruise as any).casinoPoints || 0).toLocaleString()}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.casinoEditButton}
+                  onPress={() => {
+                    console.log('[CruiseDetails] Opening edit modal for cruise:', cruise);
+                    const bookedCruise = cruise as any;
+                    setEditWinnings(String(bookedCruise.winnings || 0));
+                    setEditPoints(String(bookedCruise.earnedPoints || bookedCruise.casinoPoints || 0));
+                    setEditModalVisible(true);
+                  }}
+                  testID="edit-casino-stats-button"
+                >
+                  <Edit3 size={16} color={COLORS.navyDeep} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {(hasPerks || cruise.offerCode || (cruise as any).offerCode) && (
             <View style={styles.offersSection}>
@@ -835,22 +811,26 @@ export default function CruiseDetailsScreen() {
                 )}
               </View>
               
-              <View style={styles.casinoStatsGrid}>
-                <View style={styles.casinoStatCard}>
-                  <Text style={styles.casinoStatValue}>{casinoAvailability.casinoOpenDays}</Text>
-                  <Text style={styles.casinoStatLabel}>Casino Days</Text>
+              <View style={styles.casinoStatsCompact}>
+                <View style={styles.casinoStatCompact}>
+                  <Text style={styles.casinoStatCompactLabel}>Casino</Text>
+                  <Text style={styles.casinoStatCompactValue}>{casinoAvailability.casinoOpenDays}d</Text>
                 </View>
-                <View style={styles.casinoStatCard}>
-                  <Text style={styles.casinoStatValue}>{casinoAvailability.seaDays}</Text>
-                  <Text style={styles.casinoStatLabel}>Sea Days</Text>
+                <View style={styles.casinoStatCompact}>
+                  <Text style={styles.casinoStatCompactLabel}>Sea</Text>
+                  <Text style={styles.casinoStatCompactValue}>{casinoAvailability.seaDays}d</Text>
                 </View>
-                <View style={styles.casinoStatCard}>
-                  <Text style={styles.casinoStatValue}>{personalizedPlayEstimate?.playDays || 0}</Text>
-                  <Text style={styles.casinoStatLabel}>Your Play Days</Text>
+                <View style={styles.casinoStatCompact}>
+                  <Text style={styles.casinoStatCompactLabel}>Play</Text>
+                  <Text style={styles.casinoStatCompactValue}>{personalizedPlayEstimate?.playDays || 0}d</Text>
                 </View>
-                <View style={styles.casinoStatCard}>
-                  <Text style={styles.casinoStatValue}>{personalizedPlayEstimate?.goldenHoursTotal || personalizedPlayEstimate?.estimatedPlayHours || 0}h</Text>
-                  <Text style={styles.casinoStatLabel}>Golden Hours</Text>
+                <View style={styles.casinoStatCompact}>
+                  <Text style={styles.casinoStatCompactLabel}>Golden</Text>
+                  <Text style={styles.casinoStatCompactValue}>{personalizedPlayEstimate?.goldenHoursTotal || personalizedPlayEstimate?.estimatedPlayHours || 0}h</Text>
+                </View>
+                <View style={styles.casinoStatCompact}>
+                  <Text style={styles.casinoStatCompactLabel}>Est Pts</Text>
+                  <Text style={styles.casinoStatCompactValue}>~{((personalizedPlayEstimate?.estimatedPoints || 0) / 1000).toFixed(1)}k</Text>
                 </View>
               </View>
 
@@ -1757,89 +1737,231 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: COLORS.navyDeep,
   },
-  priceSection: {
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
+  compactInfoCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    overflow: 'hidden',
-    ...SHADOW.md,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
   },
-  priceSectionGradient: {
-    borderRadius: BORDER_RADIUS.lg,
-  },
-  pricingGrid: {
+  infoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: SPACING.md,
-    marginBottom: SPACING.md,
   },
-  priceItem: {
+  infoGridItem: {
+    minWidth: '30%',
     flex: 1,
-    minWidth: '45%',
-    backgroundColor: '#DBEAFE',
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
   },
-  priceLabel: {
+  infoGridLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textDarkGrey,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    marginBottom: 4,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
     textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
   },
-  priceValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
+  infoGridValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  compactInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  compactInfoItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  compactInfoValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: COLORS.navyDeep,
+    flex: 1,
+  },
+  compactInfoDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    marginHorizontal: SPACING.sm,
+  },
+  compactPriceCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  pricingRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  pricingCol: {
+    flex: 1,
+    minWidth: 60,
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+    backgroundColor: '#F0F9FF',
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  pricingLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  pricingValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.money,
   },
-  taxesRow: {
+  compactPriceHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
-  taxesLabel: {
+  compactPriceTitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+    flex: 1,
   },
-  taxesValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.textPrimary,
+  compactSavingsBadge: {
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
   },
-  savingsBadge: {
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
-    marginTop: SPACING.sm,
-  },
-  savingsText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
+  compactSavingsText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.success,
   },
-  detailsGrid: {
+  compactPriceGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.md,
-    marginBottom: SPACING.lg,
+    gap: SPACING.xs,
   },
-  detailCard: {
-    width: '47%',
+  compactPriceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: BORDER_RADIUS.xs,
+    gap: 6,
+  },
+  compactPriceLabel: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.5,
+  },
+  compactPriceValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.money,
+  },
+  compactTaxesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 31, 63, 0.06)',
+  },
+  compactTaxesLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+  },
+  compactTaxesValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: COLORS.textPrimary,
+  },
+  compactCasinoCard: {
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
+    marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    backgroundColor: '#E0F2FE',
-    ...SHADOW.sm,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  casinoResultsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.lg,
+  },
+  casinoResultCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  casinoResultLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  casinoResultValue: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  casinoEditButton: {
+    padding: SPACING.sm,
+    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  compactCasinoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  compactCasinoTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+    flex: 1,
+  },
+  compactEditButton: {
+    padding: 4,
+  },
+  compactCasinoStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  compactCasinoStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  compactCasinoStatLabel: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  compactCasinoStatValue: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  compactCasinoStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    marginHorizontal: SPACING.md,
   },
   detailLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -1979,6 +2101,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: SPACING.md,
+  },
+  casinoStatsCompact: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  casinoStatCompact: {
+    flex: 1,
+    minWidth: 60,
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+    backgroundColor: '#DBEAFE',
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  casinoStatCompactLabel: {
+    fontSize: 9,
+    color: COLORS.textSecondary,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    marginBottom: 2,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  casinoStatCompactValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
   },
   casinoStatCard: {
     flex: 1,
