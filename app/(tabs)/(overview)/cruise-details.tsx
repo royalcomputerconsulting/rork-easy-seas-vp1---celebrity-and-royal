@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { memo, useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ItineraryDay, BookedCruise, CasinoOffer } from '@/types/models';
@@ -14,6 +14,22 @@ import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
 import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PLAYER_SCHEDULE, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
+
+type CompactFactProps = {
+  icon: React.ComponentType<{ size?: number; color?: string }>;
+  value: string;
+  label?: string;
+};
+
+const CompactFact = memo(function CompactFact({ icon: Icon, value, label }: CompactFactProps) {
+  return (
+    <View style={styles.compactFact}>
+      <Icon size={12} color={COLORS.textSecondary} />
+      <Text style={styles.compactFactValue} numberOfLines={1}>{value}</Text>
+      {label && <Text style={styles.compactFactLabel}>{label}</Text>}
+    </View>
+  );
+});
 
 interface EditFormData {
   shipName: string;
@@ -635,70 +651,19 @@ export default function CruiseDetailsScreen() {
             )}
           </View>
 
-          <View style={styles.essentialsCard} testID="cruise-essentials-card">
-            <View style={styles.essentialsGrid}>
-              <View style={styles.essentialsItem}>
-                <View style={styles.essentialsIconBadge}>
-                  <Calendar size={14} color={COLORS.navyDeep} />
-                </View>
-                <View style={styles.essentialsTextWrap}>
-                  <Text style={styles.essentialsLabel}>Sail date</Text>
-                  <Text style={styles.essentialsValue}>{formatDate(cruise.sailDate, 'short')}</Text>
-                </View>
-              </View>
-
-              <View style={styles.essentialsItem}>
-                <View style={[styles.essentialsIconBadge, styles.essentialsIconBadgeAlt]}>
-                  <Clock size={14} color={COLORS.navyDeep} />
-                </View>
-                <View style={styles.essentialsTextWrap}>
-                  <Text style={styles.essentialsLabel}>Duration</Text>
-                  <Text style={styles.essentialsValue}>{formatNights(cruise.nights || 0)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.essentialsItem}>
-                <View style={styles.essentialsIconBadge}>
-                  <MapPin size={14} color={COLORS.navyDeep} />
-                </View>
-                <View style={styles.essentialsTextWrap}>
-                  <Text style={styles.essentialsLabel}>Departs</Text>
-                  <Text style={styles.essentialsValue} numberOfLines={1}>{cruise.departurePort || 'TBD'}</Text>
-                </View>
-              </View>
-
-              <View style={styles.essentialsItem}>
-                <View style={[styles.essentialsIconBadge, styles.essentialsIconBadgeAlt]}>
-                  <Users size={14} color={COLORS.navyDeep} />
-                </View>
-                <View style={styles.essentialsTextWrap}>
-                  <Text style={styles.essentialsLabel}>Guests</Text>
-                  <Text style={styles.essentialsValue}>{cruise.guests || 2}</Text>
-                </View>
-              </View>
-
-              <View style={styles.essentialsItem}>
-                <View style={styles.essentialsIconBadge}>
-                  <Anchor size={14} color={COLORS.navyDeep} />
-                </View>
-                <View style={styles.essentialsTextWrap}>
-                  <Text style={styles.essentialsLabel}>Cabin</Text>
-                  <Text style={styles.essentialsValue} numberOfLines={1}>{cruise.cabinType || 'TBD'}</Text>
-                </View>
-              </View>
-
-              <View style={styles.essentialsItem}>
-                <View style={[styles.essentialsIconBadge, styles.essentialsIconBadgeAlt]}>
-                  <Dice5 size={14} color={COLORS.navyDeep} />
-                </View>
-                <View style={styles.essentialsTextWrap}>
-                  <Text style={styles.essentialsLabel}>Casino slots</Text>
-                  <Text style={styles.essentialsValue} numberOfLines={1}>
-                    {casinoAvailability ? `${casinoAvailability.casinoOpenDays}/${casinoAvailability.totalDays} days` : '—'}
-                  </Text>
-                </View>
-              </View>
-            </View>
+          <View style={styles.compactFactsRow} testID="cruise-facts-card">
+            <CompactFact icon={Calendar} value={formatDate(cruise.sailDate, 'short')} />
+            <Text style={styles.factDivider}>•</Text>
+            <CompactFact icon={Clock} value={formatNights(cruise.nights || 0)} />
+            <Text style={styles.factDivider}>•</Text>
+            <CompactFact icon={MapPin} value={cruise.departurePort || 'TBD'} />
+          </View>
+          <View style={styles.compactFactsRow}>
+            <CompactFact icon={Users} value={`${cruise.guests || 2} guests`} />
+            <Text style={styles.factDivider}>•</Text>
+            <CompactFact icon={Anchor} value={cruise.cabinType || 'TBD'} />
+            <Text style={styles.factDivider}>•</Text>
+            <CompactFact icon={Dice5} value={casinoAvailability ? `${casinoAvailability.casinoOpenDays}/${casinoAvailability.totalDays} casino` : '—'} />
           </View>
 
           {(cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice || cruise.taxes) && (
@@ -1776,67 +1741,63 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: COLORS.navyDeep,
   },
-  essentialsCard: {
+  factsCard: {
     backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.08)',
     ...SHADOW.sm,
   },
-  essentialsGrid: {
+  factsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.sm,
+    gap: SPACING.xs,
   },
-  essentialsItem: {
+  factPill: {
     flex: 1,
-    minWidth: '47%',
+    minWidth: '48%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.sm,
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     backgroundColor: 'rgba(0, 31, 63, 0.03)',
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: BORDER_RADIUS.sm,
   },
-  essentialsIconBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#DBEAFE',
+  factIconBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(219, 234, 254, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.25)',
+    borderColor: 'rgba(59, 130, 246, 0.2)',
   },
-  essentialsIconBadgeAlt: {
-    backgroundColor: '#FEF3C7',
-    borderColor: 'rgba(245, 158, 11, 0.25)',
-  },
-  essentialsTextWrap: {
+  factTextWrap: {
     flex: 1,
     minWidth: 0,
   },
-  essentialsLabel: {
+  factLabel: {
     fontSize: 10,
     color: COLORS.textSecondary,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.5,
-    marginBottom: 2,
+    marginBottom: 1,
   },
-  essentialsValue: {
+  factValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.navyDeep,
   },
   pricingChipsCard: {
     backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.08)',
   },
@@ -2889,6 +2850,33 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#92400E',
+  },
+  compactFactsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    marginBottom: SPACING.xs,
+    paddingVertical: SPACING.xs,
+  },
+  compactFact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  compactFactValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textDarkGrey,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  compactFactLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+  },
+  factDivider: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textSecondary,
+    marginHorizontal: SPACING.sm,
   },
   fpObcHighlight: {
     flexDirection: 'row',
