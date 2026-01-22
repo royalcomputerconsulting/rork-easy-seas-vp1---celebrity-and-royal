@@ -1,5 +1,9 @@
 export const STEP1_OFFERS_SCRIPT = `
 (function() {
+  const MAX_SAILINGS_PER_OFFER = 600;
+  const OFFER_TIMEOUT_MS = 45000;
+  const BATCH_SIZE = 50;
+  
   function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
@@ -12,6 +16,17 @@ export const STEP1_OFFERS_SCRIPT = `
       isFinal: isFinal,
       totalCount: totalCount,
       offerCount: offerCount
+    }));
+  }
+  
+  function sendOfferProgress(offerIndex, totalOffers, offerName, sailingsCount, status) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'offer_progress',
+      offerIndex: offerIndex,
+      totalOffers: totalOffers,
+      offerName: offerName,
+      sailingsCount: sailingsCount,
+      status: status
     }));
   }
 
@@ -500,7 +515,6 @@ export const STEP1_OFFERS_SCRIPT = `
       
       let totalSailingsScraped = 0;
       let processedCount = 0;
-      const BATCH_SIZE = 150;
       let pendingBatch = [];
 
       function flushBatch(force = false) {
@@ -668,6 +682,9 @@ export const STEP1_OFFERS_SCRIPT = `
         );
 
         if (viewSailingsBtn) {
+          const offerStartTime = Date.now();
+          let offerSailingCount = 0;
+          
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
             message: '  ▶ Clicking "View Sailings"...',
@@ -880,7 +897,21 @@ export const STEP1_OFFERS_SCRIPT = `
           
           let sailingsByType = {};
           
+          const checkOfferTimeout = () => {
+            const elapsed = Date.now() - offerStartTime;
+            if (elapsed > OFFER_TIMEOUT_MS) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '  ⚠️ Offer timeout reached (' + Math.round(elapsed/1000) + 's) - moving to next offer',
+                logType: 'warning'
+              }));
+              return true;
+            }
+            return false;
+          };
+          
           for (const [cabinType, sectionElements] of Object.entries(cabinTypeSections)) {
+            if (checkOfferTimeout()) break;
             const allIndividualDates = [];
             const seenDates = new Set();
             
@@ -949,9 +980,24 @@ export const STEP1_OFFERS_SCRIPT = `
           if (totalSailingRows > 0) {
             let sailingIndex = 0;
             let lastLoggedCount = 0;
+            let hitLimit = false;
             
             for (const [cabinTypeKey, sailingsForType] of Object.entries(sailingsByType)) {
+              if (hitLimit || checkOfferTimeout()) break;
+              
               for (let j = 0; j < sailingsForType.length; j++) {
+                if (offerSailingCount >= MAX_SAILINGS_PER_OFFER) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log',
+                    message: '  ⚠️ Reached max sailings limit (' + MAX_SAILINGS_PER_OFFER + ') for this offer - moving to next',
+                    logType: 'warning'
+                  }));
+                  hitLimit = true;
+                  break;
+                }
+                
+                if (checkOfferTimeout()) break;
+                
                 sailingIndex++;
                 const sailingData = sailingsForType[j];
                 const sailing = sailingData.element;
@@ -1050,6 +1096,7 @@ export const STEP1_OFFERS_SCRIPT = `
                   loyaltyPoints: ''
                 });
                 totalSailingsScraped++;
+                offerSailingCount++;
                 
                 if (totalSailingsScraped - lastLoggedCount >= 100 || sailingIndex === totalSailingRows) {
                   window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -1073,11 +1120,15 @@ export const STEP1_OFFERS_SCRIPT = `
             
             flushBatch(true);
             
+            sendOfferProgress(i + 1, offerCards.length, offerName, offerSailingCount, 'complete');
+            
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: '  ✓ Offer complete: ' + totalSailingRows + ' sailings added',
+              message: '  ✓ Offer complete: ' + offerSailingCount + ' sailings added' + (hitLimit ? ' (limit reached)' : ''),
               logType: 'success'
             }));
+            
+            await wait(500);
           } else {
             const noSailingOffer = {
               sourcePage: 'Offers',
@@ -1142,6 +1193,8 @@ export const STEP1_OFFERS_SCRIPT = `
           total: offerCards.length,
           stepName: 'Offers: ' + totalSailingsScraped + ' sailings (' + processedCount + '/' + offerCards.length + ' offers)'
         }));
+        
+        await wait(300);
       }
 
       flushBatch(true);

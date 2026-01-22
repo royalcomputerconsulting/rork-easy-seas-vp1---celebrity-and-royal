@@ -69,6 +69,7 @@ export type WebViewMessage =
   | { type: 'progress'; current: number; total: number; stepName?: string }
   | { type: 'offers_batch'; step: number; data: any[]; isFinal?: boolean }
   | { type: 'step_complete'; step: number; data: any[]; totalCount?: number; offerCount?: number }
+  | { type: 'offer_progress'; offerIndex: number; totalOffers: number; offerName: string; sailingsCount: number; status: string }
   | { type: 'loyalty_data'; data: LoyaltyData }
   | { type: 'error'; message: string }
   | { type: 'complete' };

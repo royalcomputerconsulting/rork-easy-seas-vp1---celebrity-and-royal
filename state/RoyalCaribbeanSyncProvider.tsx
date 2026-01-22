@@ -78,12 +78,22 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       case 'offers_batch':
         if (message.data && message.data.length > 0) {
-          setState(prev => ({
-            ...prev,
-            extractedOffers: [...prev.extractedOffers, ...(message.data as OfferRow[])]
-          }));
-          addLog(`Received batch of ${message.data.length} offers (total: ${message.data.length + (state.extractedOffers?.length || 0)})`, 'info');
+          setState(prev => {
+            const newOffers = [...prev.extractedOffers, ...(message.data as OfferRow[])];
+            console.log(`[RoyalCaribbeanSync] Batch received: ${message.data.length} items, total now: ${newOffers.length}`);
+            return {
+              ...prev,
+              extractedOffers: newOffers
+            };
+          });
         }
+        if (progressCallbacks.current.onProgress) {
+          progressCallbacks.current.onProgress();
+        }
+        break;
+
+      case 'offer_progress':
+        addLog(`Offer ${message.offerIndex}/${message.totalOffers} (${message.offerName}): ${message.sailingsCount} sailings - ${message.status}`, 'info');
         if (progressCallbacks.current.onProgress) {
           progressCallbacks.current.onProgress();
         }
@@ -130,7 +140,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Ingestion completed successfully', 'success');
         break;
     }
-  }, [addLog, setStatus, setProgress, state.extractedOffers?.length]);
+  }, [addLog, setStatus, setProgress]);
 
   const openLogin = useCallback(() => {
     if (webViewRef.current) {
@@ -165,7 +175,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     const waitForStepComplete = (step: number, baseTimeoutMs: number = 600000): Promise<void> => {
       return new Promise((resolve) => {
         let lastProgressTime = Date.now();
-        const progressTimeoutMs = 120000;
+        const progressTimeoutMs = 60000;
         
         const checkProgress = () => {
           const timeSinceProgress = Date.now() - lastProgressTime;
@@ -177,7 +187,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
         };
         
-        const progressInterval = setInterval(checkProgress, 10000);
+        const progressInterval = setInterval(checkProgress, 5000);
         
         const maxTimeout = setTimeout(() => {
           clearInterval(progressInterval);
@@ -203,38 +213,52 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     try {
       addLog('Step 1: Extracting offers from Club Royale page...', 'info');
       addLog('Loading Offers Page...', 'info');
+      addLog('⏱️ Offers may take several minutes with large datasets - using chunked processing', 'info');
       
       webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
       
-      await waitForStepComplete(1, 600000);
+      await waitForStepComplete(1, 480000);
+      
+      const offersCollected = state.extractedOffers.length;
+      addLog(`✅ Offers step complete - collected ${offersCollected} sailing rows`, 'success');
       
       setState(prev => ({ ...prev, status: 'running_step_2' }));
       addLog('Step 2: Navigating to upcoming cruises page...', 'info');
       addLog('Loading Upcoming Cruises Page...', 'info');
-      webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/account/upcoming-cruises';
-        true;
-      `);
       
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
-      
-      await waitForStepComplete(2, 180000);
+      try {
+        webViewRef.current.injectJavaScript(`
+          window.location.href = 'https://www.royalcaribbean.com/account/upcoming-cruises';
+          true;
+        `);
+        
+        await new Promise(resolve => setTimeout(resolve, 6000));
+        
+        webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
+        
+        await waitForStepComplete(2, 120000);
+      } catch (step2Error) {
+        addLog(`Step 2 error: ${step2Error} - continuing with collected data`, 'warning');
+      }
       
       setState(prev => ({ ...prev, status: 'running_step_3' }));
       addLog('Step 3: Navigating to courtesy holds page...', 'info');
       addLog('Loading Courtesy Holds Page...', 'info');
-      webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/account/courtesy-holds';
-        true;
-      `);
       
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
-      
-      await waitForStepComplete(3, 120000);
+      try {
+        webViewRef.current.injectJavaScript(`
+          window.location.href = 'https://www.royalcaribbean.com/account/courtesy-holds';
+          true;
+        `);
+        
+        await new Promise(resolve => setTimeout(resolve, 6000));
+        
+        webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
+        
+        await waitForStepComplete(3, 90000);
+      } catch (step3Error) {
+        addLog(`Step 3 error: ${step3Error} - continuing with collected data`, 'warning');
+      }
       
       setState(prev => {
         const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
@@ -259,7 +283,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, state.scrapePricingAndItinerary, addLog]);
+  }, [state.status, state.scrapePricingAndItinerary, addLog, state.extractedOffers.length]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
