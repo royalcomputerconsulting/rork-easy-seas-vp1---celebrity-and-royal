@@ -568,7 +568,7 @@ export default function CruiseDetailsScreen() {
     );
   }
 
-  const { displayPrice, daysUntil, savings, hasPerks, isBooked } = cruiseDetails;
+  const { daysUntil, hasPerks, isBooked } = cruiseDetails;
 
   return (
     <View style={styles.container}>
@@ -635,64 +635,103 @@ export default function CruiseDetailsScreen() {
             )}
           </View>
 
-          <View style={styles.compactInfoCard}>
-            <View style={styles.infoGrid}>
-              <View style={styles.infoGridItem}>
-                <Text style={styles.infoGridLabel}>Sail Date</Text>
-                <Text style={styles.infoGridValue}>{formatDate(cruise.sailDate, 'short')}</Text>
-              </View>
-              <View style={styles.infoGridItem}>
-                <Text style={styles.infoGridLabel}>Duration</Text>
-                <Text style={styles.infoGridValue}>{cruise.nights}N</Text>
-              </View>
-              <View style={styles.infoGridItem}>
-                <Text style={styles.infoGridLabel}>Departs</Text>
-                <Text style={styles.infoGridValue} numberOfLines={1}>{cruise.departurePort || 'TBD'}</Text>
-              </View>
-              <View style={styles.infoGridItem}>
-                <Text style={styles.infoGridLabel}>Guests</Text>
-                <Text style={styles.infoGridValue}>{cruise.guests || 2}</Text>
-              </View>
-              {cruise.cabinType && (
-                <View style={styles.infoGridItem}>
-                  <Text style={styles.infoGridLabel}>Cabin</Text>
-                  <Text style={styles.infoGridValue} numberOfLines={1}>{cruise.cabinType}</Text>
+          <View style={styles.essentialsCard} testID="cruise-essentials-card">
+            <View style={styles.essentialsGrid}>
+              <View style={styles.essentialsItem}>
+                <View style={styles.essentialsIconBadge}>
+                  <Calendar size={14} color={COLORS.navyDeep} />
                 </View>
-              )}
+                <View style={styles.essentialsTextWrap}>
+                  <Text style={styles.essentialsLabel}>Sail date</Text>
+                  <Text style={styles.essentialsValue}>{formatDate(cruise.sailDate, 'short')}</Text>
+                </View>
+              </View>
+
+              <View style={styles.essentialsItem}>
+                <View style={[styles.essentialsIconBadge, styles.essentialsIconBadgeAlt]}>
+                  <Clock size={14} color={COLORS.navyDeep} />
+                </View>
+                <View style={styles.essentialsTextWrap}>
+                  <Text style={styles.essentialsLabel}>Duration</Text>
+                  <Text style={styles.essentialsValue}>{formatNights(cruise.nights || 0)}</Text>
+                </View>
+              </View>
+
+              <View style={styles.essentialsItem}>
+                <View style={styles.essentialsIconBadge}>
+                  <MapPin size={14} color={COLORS.navyDeep} />
+                </View>
+                <View style={styles.essentialsTextWrap}>
+                  <Text style={styles.essentialsLabel}>Departs</Text>
+                  <Text style={styles.essentialsValue} numberOfLines={1}>{cruise.departurePort || 'TBD'}</Text>
+                </View>
+              </View>
+
+              <View style={styles.essentialsItem}>
+                <View style={[styles.essentialsIconBadge, styles.essentialsIconBadgeAlt]}>
+                  <Users size={14} color={COLORS.navyDeep} />
+                </View>
+                <View style={styles.essentialsTextWrap}>
+                  <Text style={styles.essentialsLabel}>Guests</Text>
+                  <Text style={styles.essentialsValue}>{cruise.guests || 2}</Text>
+                </View>
+              </View>
+
+              <View style={styles.essentialsItem}>
+                <View style={styles.essentialsIconBadge}>
+                  <Anchor size={14} color={COLORS.navyDeep} />
+                </View>
+                <View style={styles.essentialsTextWrap}>
+                  <Text style={styles.essentialsLabel}>Cabin</Text>
+                  <Text style={styles.essentialsValue} numberOfLines={1}>{cruise.cabinType || 'TBD'}</Text>
+                </View>
+              </View>
+
+              <View style={styles.essentialsItem}>
+                <View style={[styles.essentialsIconBadge, styles.essentialsIconBadgeAlt]}>
+                  <Dice5 size={14} color={COLORS.navyDeep} />
+                </View>
+                <View style={styles.essentialsTextWrap}>
+                  <Text style={styles.essentialsLabel}>Casino slots</Text>
+                  <Text style={styles.essentialsValue} numberOfLines={1}>
+                    {casinoAvailability ? `${casinoAvailability.casinoOpenDays}/${casinoAvailability.totalDays} days` : '—'}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
 
-          {(cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice) && (
-            <View style={styles.compactPriceCard}>
-              <View style={styles.pricingRow}>
+          {(cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice || cruise.taxes) && (
+            <View style={styles.pricingChipsCard} testID="cruise-pricing-chips">
+              <View style={styles.pricingChipsRow}>
                 {cruise.interiorPrice && cruise.interiorPrice > 0 && (
-                  <View style={styles.pricingCol}>
-                    <Text style={styles.pricingLabel}>INT</Text>
-                    <Text style={styles.pricingValue}>{formatCurrency(cruise.interiorPrice)}</Text>
+                  <View style={styles.pricingChip}>
+                    <Text style={styles.pricingChipLabel}>INT</Text>
+                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.interiorPrice)}</Text>
                   </View>
                 )}
                 {cruise.oceanviewPrice && cruise.oceanviewPrice > 0 && (
-                  <View style={styles.pricingCol}>
-                    <Text style={styles.pricingLabel}>OV</Text>
-                    <Text style={styles.pricingValue}>{formatCurrency(cruise.oceanviewPrice)}</Text>
+                  <View style={styles.pricingChip}>
+                    <Text style={styles.pricingChipLabel}>OV</Text>
+                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.oceanviewPrice)}</Text>
                   </View>
                 )}
                 {cruise.balconyPrice && cruise.balconyPrice > 0 && (
-                  <View style={styles.pricingCol}>
-                    <Text style={styles.pricingLabel}>BAL</Text>
-                    <Text style={styles.pricingValue}>{formatCurrency(cruise.balconyPrice)}</Text>
+                  <View style={styles.pricingChip}>
+                    <Text style={styles.pricingChipLabel}>BAL</Text>
+                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.balconyPrice)}</Text>
                   </View>
                 )}
                 {cruise.suitePrice && cruise.suitePrice > 0 && (
-                  <View style={styles.pricingCol}>
-                    <Text style={styles.pricingLabel}>STE</Text>
-                    <Text style={styles.pricingValue}>{formatCurrency(cruise.suitePrice)}</Text>
+                  <View style={styles.pricingChip}>
+                    <Text style={styles.pricingChipLabel}>STE</Text>
+                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.suitePrice)}</Text>
                   </View>
                 )}
                 {cruise.taxes && cruise.taxes > 0 && (
-                  <View style={styles.pricingCol}>
-                    <Text style={styles.pricingLabel}>Tax</Text>
-                    <Text style={styles.pricingValue}>{formatCurrency(cruise.taxes)}</Text>
+                  <View style={[styles.pricingChip, styles.pricingChipMuted]}>
+                    <Text style={styles.pricingChipLabel}>TAX</Text>
+                    <Text style={[styles.pricingChipValue, styles.pricingChipValueMuted]}>{formatCurrency(cruise.taxes)}</Text>
                   </View>
                 )}
               </View>
@@ -1737,34 +1776,103 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: COLORS.navyDeep,
   },
-  compactInfoCard: {
+  essentialsCard: {
     backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+    ...SHADOW.sm,
+  },
+  essentialsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  essentialsItem: {
+    flex: 1,
+    minWidth: '47%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: 'rgba(0, 31, 63, 0.03)',
     borderRadius: BORDER_RADIUS.md,
+  },
+  essentialsIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#DBEAFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.25)',
+  },
+  essentialsIconBadgeAlt: {
+    backgroundColor: '#FEF3C7',
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+  },
+  essentialsTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  essentialsLabel: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  essentialsValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  pricingChipsCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.08)',
   },
-  infoGrid: {
+  pricingChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.md,
+    gap: SPACING.sm,
   },
-  infoGridItem: {
-    minWidth: '30%',
-    flex: 1,
+  pricingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: 'rgba(2, 132, 199, 0.15)',
   },
-  infoGridLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-    marginBottom: 2,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
+  pricingChipMuted: {
+    backgroundColor: 'rgba(15, 23, 42, 0.03)',
+    borderColor: 'rgba(15, 23, 42, 0.08)',
   },
-  infoGridValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
+  pricingChipLabel: {
+    fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.6,
+  },
+  pricingChipValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.money,
+  },
+  pricingChipValueMuted: {
+    color: COLORS.textPrimary,
   },
   compactInfoRow: {
     flexDirection: 'row',
