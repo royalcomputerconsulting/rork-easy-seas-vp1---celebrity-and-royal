@@ -52,94 +52,116 @@ export const STEP4_LOYALTY_SCRIPT = `
         }));
       }
 
-      // IMPROVED: Look for cruise points more comprehensively
-      let cruisePointsCandidates = [];
-      
+      // STRATEGY: Find the large number in the "YOUR TIER" section
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 Searching for Crown & Anchor cruise points...',
+        message: '🔍 Searching for Crown & Anchor cruise points in YOUR TIER card...',
         logType: 'info'
       }));
       
-      // STRATEGY 1: Look in all relevant elements
-      const topElements = Array.from(document.querySelectorAll('header, [class*="header"], [class*="point"], [class*="cruise"], [class*="anchor"], [class*="loyalty"], h1, h2, h3, h4, p, span, div'));
+      let cruisePointsFound = false;
       
-      for (const el of topElements.slice(0, 100)) {
+      // Look for elements containing "YOUR TIER" or "Crown & Anchor Society"
+      const allElements = Array.from(document.querySelectorAll('*'));
+      let tierSection = null;
+      
+      for (const el of allElements) {
         const text = (el.textContent || '').trim();
-        const lowerText = text.toLowerCase();
+        if (text.includes('YOUR TIER') || text === 'Crown & Anchor Society') {
+          tierSection = el;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found YOUR TIER section',
+            logType: 'info'
+          }));
+          break;
+        }
+      }
+      
+      // If we found the tier section, look for the prominent number
+      if (tierSection) {
+        const tierElements = tierSection.querySelectorAll('*');
+        const candidates = [];
         
-        // Look for numbers in elements that mention Crown & Anchor or cruise points
-        if (lowerText.includes('crown') || lowerText.includes('anchor') || (lowerText.includes('cruise') && lowerText.includes('point'))) {
-          const numMatches = text.match(/\\b(\\d+)\\b/g);
-          if (numMatches) {
-            for (const numStr of numMatches) {
-              const num = parseInt(numStr, 10);
-              // Crown & Anchor points typically range from 0 to 10,000 for most cruisers
-              if (num >= 0 && num <= 10000) {
-                const hasContext = lowerText.includes('cruise point') || lowerText.includes('crown') || lowerText.includes('anchor');
-                const priority = hasContext ? 1 : 2;
-                cruisePointsCandidates.push({ value: num, str: numStr, source: 'element-with-context', priority: priority });
+        for (const el of tierElements) {
+          const text = (el.textContent || '').trim();
+          
+          // Look for standalone numbers (the big cruise points display)
+          if (/^\\d+$/.test(text) && text.length >= 1) {
+            const num = parseInt(text, 10);
+            if (num >= 0 && num <= 10000) {
+              candidates.push({ value: num, str: text, source: 'tier-section-number' });
+            }
+          }
+          
+          // Also check for "Cruise Points" label nearby
+          const lowerText = text.toLowerCase();
+          if (lowerText === 'cruise points' || lowerText.includes('cruise point')) {
+            // Check siblings or parent for numbers
+            const parent = el.parentElement;
+            if (parent) {
+              const parentText = parent.textContent || '';
+              const numMatch = parentText.match(/\\b(\\d{1,5})\\b/);
+              if (numMatch) {
+                const num = parseInt(numMatch[1], 10);
+                if (num >= 0 && num <= 10000) {
+                  candidates.push({ value: num, str: numMatch[1], source: 'near-cruise-points-label', priority: 1 });
+                }
               }
+            }
+          }
+        }
+        
+        if (candidates.length > 0) {
+          // Sort by priority (label proximity) then by reasonable range
+          candidates.sort((a, b) => {
+            if (a.priority && !b.priority) return -1;
+            if (!a.priority && b.priority) return 1;
+            return 0;
+          });
+          
+          loyaltyData.crownAndAnchorPoints = candidates[0].str;
+          cruisePointsFound = true;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '✓ Found cruise points in YOUR TIER card: ' + candidates[0].str,
+            logType: 'success'
+          }));
+        }
+      }
+      
+      // Fallback: Pattern matching in full page text
+      if (!cruisePointsFound) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Trying pattern matching fallback...',
+          logType: 'info'
+        }));
+        
+        const cruisePointsPatterns = [
+          /(\\d+)\\s*Cruise Points?/i,
+          /Cruise Points?[:\\s]+(\\d+)/i
+        ];
+        
+        for (const pattern of cruisePointsPatterns) {
+          const match = pageText.match(pattern);
+          if (match && match[1]) {
+            const num = parseInt(match[1], 10);
+            if (num >= 0 && num <= 10000) {
+              loyaltyData.crownAndAnchorPoints = match[1];
+              cruisePointsFound = true;
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '✓ Found cruise points via pattern: ' + match[1],
+                logType: 'success'
+              }));
+              break;
             }
           }
         }
       }
       
-      // STRATEGY 2: Pattern matching for "X Cruise Points"
-      const cruisePointsPatterns = [
-        /(\\d+)\\s*Cruise Points?/i,
-        /Cruise Points?[:\\s]+(\\d+)/i,
-        /(\\d+)\\s*cruise\\s*points?/i,
-        /Crown\\s+(?:&|and)\\s+Anchor[^\\d]{0,50}?(\\d+)\\s*(?:points?|pts)/i
-      ];
-      
-      for (const pattern of cruisePointsPatterns) {
-        const match = pageText.match(pattern);
-        if (match && match[1]) {
-          const num = parseInt(match[1], 10);
-          if (num >= 0 && num <= 10000) {
-            cruisePointsCandidates.push({ value: num, str: match[1], source: 'pattern', priority: 1 });
-          }
-        }
-      }
-      
-      // Sort by priority, then by value
-      cruisePointsCandidates.sort((a, b) => {
-        const priorityDiff = (a.priority || 99) - (b.priority || 99);
-        if (priorityDiff !== 0) return priorityDiff;
-        
-        // For Crown & Anchor, reasonable values are typically 100-2000
-        // Prefer values in this range
-        const aReasonable = a.value >= 100 && a.value <= 2000;
-        const bReasonable = b.value >= 100 && b.value <= 2000;
-        if (aReasonable && !bReasonable) return -1;
-        if (!aReasonable && bReasonable) return 1;
-        
-        return a.value - b.value;
-      });
-      
-      // Remove duplicates
-      const seenValues = new Set();
-      cruisePointsCandidates = cruisePointsCandidates.filter(p => {
-        if (seenValues.has(p.value)) return false;
-        seenValues.add(p.value);
-        return true;
-      });
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Found ' + cruisePointsCandidates.length + ' cruise point candidates: ' + cruisePointsCandidates.slice(0, 5).map(p => p.value).join(', '),
-        logType: 'info'
-      }));
-      
-      if (cruisePointsCandidates.length > 0) {
-        loyaltyData.crownAndAnchorPoints = cruisePointsCandidates[0].str;
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '✓ Selected cruise points: ' + cruisePointsCandidates[0].str + ' (value: ' + cruisePointsCandidates[0].value + ') from ' + cruisePointsCandidates[0].source,
-          logType: 'success'
-        }));
-      } else {
+      if (!cruisePointsFound) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
           message: '⚠ Could not find cruise points',
