@@ -130,16 +130,39 @@ export const STEP1_OFFERS_SCRIPT = `
       let candidatePoints = [];
       
       // PRIORITY 0: Look for large numbers in header/top elements (most reliable)
-      const topElements = Array.from(document.querySelectorAll('header, [class*="header"], [class*="hero"], [class*="banner"], nav, [role="banner"]'));
-      for (const topEl of topElements.slice(0, 10)) {
+      // AGGRESSIVE: Check ALL elements in viewport top for large numbers first
+      const topElements = Array.from(document.querySelectorAll('header, [class*="header"], [class*="hero"], [class*="banner"], nav, [role="banner"], [class*="top"], [class*="nav"], main > div:first-child, body > div:first-child'));
+      
+      // STRATEGY 1: Find ANY large number (>10k) in top sections - likely user's actual points
+      for (const topEl of topElements.slice(0, 20)) {
+        const topText = (topEl.textContent || '');
+        const numberMatches = topText.match(/([\\d,]{5,})(?![\\d])/g);
+        if (numberMatches) {
+          for (const numStr of numberMatches) {
+            const numPoints = parseInt(numStr.replace(/,/g, ''), 10);
+            // ANY large number in top section is VERY likely the user's actual points
+            if (numPoints >= 10000 && numPoints <= 10000000) {
+              candidatePoints.push({ value: numPoints, str: numStr, source: 'top-header-large' });
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Found large number in top section: ' + numStr + ' (value: ' + numPoints + ')',
+                logType: 'info'
+              }));
+            }
+          }
+        }
+      }
+      
+      // STRATEGY 2: If we found large numbers, also check nearby for mid-range numbers with context
+      for (const topEl of topElements.slice(0, 15)) {
         const topText = (topEl.textContent || '').toLowerCase();
-        if (topText.includes('club royale') || topText.includes('point') || topText.includes('tier')) {
+        if (topText.includes('club royale') || topText.includes('point') || topText.includes('tier') || topText.includes('credit')) {
           const numberMatches = topText.match(/([\\d,]{4,})(?![\\d])/g);
           if (numberMatches) {
             for (const numStr of numberMatches) {
               const numPoints = parseInt(numStr.replace(/,/g, ''), 10);
-              if (numPoints >= 5000 && numPoints <= 10000000) {
-                candidatePoints.push({ value: numPoints, str: numStr, source: 'top-header-large' });
+              if (numPoints >= 1000 && numPoints <= 10000000) {
+                candidatePoints.push({ value: numPoints, str: numStr, source: 'top-header-with-context' });
               }
             }
           }
@@ -229,7 +252,7 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // Sort candidates: PRIORITIZE top-header-large, then tier-credits-primary, then larger values
+      // Sort candidates: PRIORITIZE top-header-large, then larger values, then tier-credits
       // (smaller values like 2500 might be promotional values, cruise prices, etc.)
       candidatePoints.sort((a, b) => {
         // ABSOLUTE HIGHEST PRIORITY: top-header-large (user's actual points at top)
@@ -238,20 +261,31 @@ export const STEP1_OFFERS_SCRIPT = `
         if (aIsTopHeader && !bIsTopHeader) return -1;
         if (!aIsTopHeader && bIsTopHeader) return 1;
         
-        // SECOND PRIORITY: tier-credits-primary source (the actual RC label)
+        // If both are top-header-large, pick the LARGEST value
+        if (aIsTopHeader && bIsTopHeader) {
+          return b.value - a.value;
+        }
+        
+        // SECOND PRIORITY: top-header-with-context (has keywords in same section)
+        const aIsTopContext = a.source === 'top-header-with-context';
+        const bIsTopContext = b.source === 'top-header-with-context';
+        if (aIsTopContext && !bIsTopContext) return -1;
+        if (!aIsTopContext && bIsTopContext) return 1;
+        
+        // THIRD PRIORITY: tier-credits-primary source (the actual RC label)
         const aIsTierCredits = a.source === 'tier-credits-primary';
         const bIsTierCredits = b.source === 'tier-credits-primary';
         if (aIsTierCredits && !bIsTierCredits) return -1;
         if (!aIsTierCredits && bIsTierCredits) return 1;
         
-        // Third, heavily prioritize values >= 10000 (almost certainly real points)
+        // Fourth, heavily prioritize values >= 10000 (almost certainly real points)
         const aIsLarge = a.value >= 10000;
         const bIsLarge = b.value >= 10000;
         if (aIsLarge && !bIsLarge) return -1;
         if (!aIsLarge && bIsLarge) return 1;
         
         // Then prefer element-class and element-pts sources
-        const sourceOrder = { 'top-header-large': 0, 'tier-credits-primary': 1, 'element-class': 2, 'element-pts': 3, 'container-high': 4, 'regex': 5, 'container': 6 };
+        const sourceOrder = { 'top-header-large': 0, 'top-header-with-context': 1, 'tier-credits-primary': 2, 'element-class': 3, 'element-pts': 4, 'container-high': 5, 'regex': 6, 'container': 7 };
         const sourceCompare = (sourceOrder[a.source] || 99) - (sourceOrder[b.source] || 99);
         if (sourceCompare !== 0) return sourceCompare;
         // Then prefer larger values (more likely to be actual accumulated points)
@@ -531,22 +565,25 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'warning'
         }));
         
-        const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"]'));
+        const allElements = Array.from(document.querySelectorAll('div, article, section, li, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"], [data-testid]'));
         
         const fallbackCards = allElements.filter(el => {
           const text = el.textContent || '';
           const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
             const childText = (child.textContent || '').toLowerCase().trim();
-            return childText.length < 30 && (childText.includes('view sailing') || childText.includes('see sailing') || childText.includes('view dates') || childText.includes('sailing'));
+            return childText.length < 30 && (childText.includes('view sailing') || childText.includes('see sailing') || childText.includes('view dates') || childText.includes('sailing') || childText.includes('view') || childText.includes('select'));
           });
-          const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-          const hasTradeIn = text.toLowerCase().includes('trade-in value');
-          const hasRedeem = text.includes('Redeem by') || text.includes('redeem by');
-          const hasFeatured = text.includes('Featured Offer');
-          const hasOfferKeywords = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom)/i);
-          const isReasonableSize = text.length > 100 && text.length < 6000;
+          const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12})\\b/);
+          const hasTradeIn = text.toLowerCase().includes('trade-in value') || text.toLowerCase().includes('trade in');
+          const hasRedeem = text.includes('Redeem by') || text.includes('redeem by') || text.toLowerCase().includes('redeem');
+          const hasFeatured = text.includes('Featured Offer') || text.includes('Featured');
+          const hasOfferKeywords = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom|Exclusive|Discounted)/i);
+          const hasOfferTitle = text.match(/(Offer|Deal|Promotion|Discount|Special|Exclusive)/i);
+          const isReasonableSize = text.length > 80 && text.length < 8000;
           
-          return hasViewSailingsButton && (hasOfferCode || hasTradeIn || hasRedeem || hasFeatured || hasOfferKeywords) && isReasonableSize;
+          // More lenient: just need button + ANY offer indicator
+          const hasAnyOfferIndicator = hasOfferCode || hasTradeIn || hasRedeem || hasFeatured || hasOfferKeywords || hasOfferTitle;
+          return hasViewSailingsButton && hasAnyOfferIndicator && isReasonableSize;
         });
         
         const filteredFallback = fallbackCards.filter((el, idx, arr) => {
@@ -595,19 +632,21 @@ export const STEP1_OFFERS_SCRIPT = `
           
           const structuralCards = allElements.filter(el => {
             const text = el.textContent || '';
-            const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-            const hasTradeIn = text.toLowerCase().includes('trade-in value');
-            const hasRedeem = text.includes('Redeem by') || text.includes('redeem by');
+            const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12})\\b/);
+            const hasTradeIn = text.toLowerCase().includes('trade-in value') || text.toLowerCase().includes('trade in');
+            const hasRedeem = text.includes('Redeem by') || text.includes('redeem by') || text.toLowerCase().includes('redeem');
             const hasDollarAmount = text.match(/\\$[\\d,]+\\.?\\d*/); 
             const hasExpiry = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
-            const hasCabinType = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom)/i);
+            const hasCabinType = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom|Exclusive|Discounted)/i);
+            const hasOfferKeyword = text.match(/(Offer|Deal|Promotion|Discount|Special|Exclusive)/i);
             const hasViewButton = Array.from(el.querySelectorAll('button, a, span, div')).some(child => {
               const childText = (child.textContent || '').toLowerCase().trim();
-              return childText.length < 40 && childText.includes('sailing');
+              return childText.length < 50 && (childText.includes('sailing') || childText.includes('view') || childText.includes('select'));
             });
-            const isReasonableSize = text.length > 80 && text.length < 7000;
-            const offerSignals = [hasOfferCode, hasTradeIn, hasRedeem, hasDollarAmount, hasExpiry, hasCabinType, hasViewButton].filter(Boolean).length;
+            const isReasonableSize = text.length > 60 && text.length < 10000;
+            const offerSignals = [hasOfferCode, hasTradeIn, hasRedeem, hasDollarAmount, hasExpiry, hasCabinType, hasOfferKeyword, hasViewButton].filter(Boolean).length;
             
+            // More lenient: need fewer signals
             return offerSignals >= 2 && isReasonableSize;
           });
           
