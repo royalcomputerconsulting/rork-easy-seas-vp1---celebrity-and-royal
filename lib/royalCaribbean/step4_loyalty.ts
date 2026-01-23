@@ -82,6 +82,30 @@ export const STEP4_LOYALTY_SCRIPT = `
         }));
       }
 
+      // PRIORITY 1: Look for TIER CREDITS pattern (this is the actual label RC uses on the offers page)
+      const tierCreditsPatterns = [
+        /YOUR\\s+CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
+        /TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
+        /([\\d,]+)\\s*TIER\\s+CREDITS/gi,
+        /CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi
+      ];
+      
+      for (const pattern of tierCreditsPatterns) {
+        const match = pageText.match(pattern);
+        if (match && match[1] && !loyaltyData.clubRoyalePoints) {
+          const num = parseInt(match[1].replace(/,/g, ''), 10);
+          if (num >= 100 && num <= 10000000) {
+            loyaltyData.clubRoyalePoints = match[1];
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Found Club Royale Tier Credits: ' + match[1],
+              logType: 'success'
+            }));
+            break;
+          }
+        }
+      }
+      
       const allElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, section, article');
       let foundClubRoyale = false;
       
@@ -106,10 +130,10 @@ export const STEP4_LOYALTY_SCRIPT = `
           }));
         }
         
-        const pointsMatch = text.match(/^([\d,]+)\s*(?:Club Royale)?\s*(?:Points?)?$/i);
+        const pointsMatch = text.match(/^([\\d,]+)\\s*(?:Club Royale)?\\s*(?:Points?)?$/i);
         if (pointsMatch && !loyaltyData.clubRoyalePoints) {
           const num = parseInt(pointsMatch[1].replace(/,/g, ''));
-          if (num >= 1000 && num <= 100000) {
+          if (num >= 1000 && num <= 10000000) {
             loyaltyData.clubRoyalePoints = pointsMatch[1];
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
@@ -120,11 +144,9 @@ export const STEP4_LOYALTY_SCRIPT = `
         }
       });
       
-      const bodyText = document.body.textContent || '';
-      
       if (!loyaltyData.clubRoyaleTier) {
-        const tierPattern = /(Signature|Premier|Classic)\s+Club Royale|Club Royale\s+(Signature|Premier|Classic)/i;
-        const tierMatch = bodyText.match(tierPattern);
+        const tierPattern = /(Signature|Premier|Classic)\\s+Club Royale|Club Royale\\s+(Signature|Premier|Classic)/i;
+        const tierMatch = pageText.match(tierPattern);
         if (tierMatch) {
           loyaltyData.clubRoyaleTier = tierMatch[1] || tierMatch[2];
           window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -136,8 +158,8 @@ export const STEP4_LOYALTY_SCRIPT = `
       }
       
       if (!loyaltyData.clubRoyalePoints) {
-        const pointsPattern = /Club Royale[^\d]*([\d,]{4,})\s*(?:Points?|pts)/i;
-        const pointsMatch2 = bodyText.match(pointsPattern);
+        const pointsPattern = /Club Royale[^\\d]*([\\d,]{4,})\\s*(?:Points?|pts)/i;
+        const pointsMatch2 = pageText.match(pointsPattern);
         if (pointsMatch2) {
           loyaltyData.clubRoyalePoints = pointsMatch2[1];
           window.ReactNativeWebView.postMessage(JSON.stringify({

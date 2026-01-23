@@ -35,7 +35,7 @@ export const STEP1_OFFERS_SCRIPT = `
     let attempts = 0;
     let previousItemCount = 0;
 
-    while (stableCount < 5 && attempts < maxAttempts) {
+    while (stableCount < 3 && attempts < maxAttempts) {
       const currentHeight = container ? container.scrollHeight : document.body.scrollHeight;
       
       // Also count items to detect if new content is loading
@@ -59,7 +59,7 @@ export const STEP1_OFFERS_SCRIPT = `
         window.scrollBy(0, 1200);
       }
       
-      await wait(800);
+      await wait(600);
       attempts++;
       
       // Log progress every 10 attempts
@@ -126,10 +126,29 @@ export const STEP1_OFFERS_SCRIPT = `
       }
       
       // IMPROVED: Find Club Royale points more accurately
-      // Strategy: Find all point-like numbers and pick the most likely Club Royale points
+      // Strategy: Look for "TIER CREDITS" first (this is what Royal Caribbean actually calls it)
       let candidatePoints = [];
       
-      // Look for specific Club Royale points patterns first
+      // PRIORITY 1: Look for "TIER CREDITS" or "YOUR CURRENT TIER CREDITS" (actual label on RC site)
+      const tierCreditsPatterns = [
+        /YOUR\\s+CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
+        /TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
+        /([\\d,]+)\\s*TIER\\s+CREDITS/gi,
+        /CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi
+      ];
+      
+      for (const pattern of tierCreditsPatterns) {
+        let match;
+        while ((match = pattern.exec(pageText)) !== null) {
+          const pointStr = match[1].replace(/,/g, '');
+          const numPoints = parseInt(pointStr, 10);
+          if (numPoints >= 100 && numPoints <= 10000000) {
+            candidatePoints.push({ value: numPoints, str: match[1], source: 'tier-credits-primary' });
+          }
+        }
+      }
+      
+      // PRIORITY 2: Look for specific Club Royale points patterns
       const specificPatterns = [
         /Club Royale[^\\d]{0,30}?([\\d,]+)\\s*(?:points|pts)/gi,
         /([\\d,]+)\\s*Club Royale\\s*(?:points|pts)/gi,
@@ -193,17 +212,23 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // Sort candidates: prefer larger values that are more likely to be actual points
+      // Sort candidates: PRIORITIZE tier-credits-primary source, then larger values
       // (smaller values like 2500 might be promotional values, cruise prices, etc.)
       candidatePoints.sort((a, b) => {
-        // First, heavily prioritize values >= 10000 (almost certainly real points)
+        // HIGHEST PRIORITY: tier-credits-primary source (the actual RC label)
+        const aIsTierCredits = a.source === 'tier-credits-primary';
+        const bIsTierCredits = b.source === 'tier-credits-primary';
+        if (aIsTierCredits && !bIsTierCredits) return -1;
+        if (!aIsTierCredits && bIsTierCredits) return 1;
+        
+        // Second, heavily prioritize values >= 10000 (almost certainly real points)
         const aIsLarge = a.value >= 10000;
         const bIsLarge = b.value >= 10000;
         if (aIsLarge && !bIsLarge) return -1;
         if (!aIsLarge && bIsLarge) return 1;
         
         // Then prefer element-class and element-pts sources
-        const sourceOrder = { 'element-class': 0, 'element-pts': 1, 'container-high': 2, 'regex': 3, 'container': 4 };
+        const sourceOrder = { 'tier-credits-primary': 0, 'element-class': 1, 'element-pts': 2, 'container-high': 3, 'regex': 4, 'container': 5 };
         const sourceCompare = (sourceOrder[a.source] || 99) - (sourceOrder[b.source] || 99);
         if (sourceCompare !== 0) return sourceCompare;
         // Then prefer larger values (more likely to be actual accumulated points)
@@ -913,8 +938,14 @@ export const STEP1_OFFERS_SCRIPT = `
                                  document.querySelector('[class*="sailing"][class*="list"]') ||
                                  card;
           
-          await scrollUntilComplete(sailingsContainer, 50);
-          await wait(600);
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '  📜 Scrolling sailings container to load all content...',
+            logType: 'info'
+          }));
+          
+          await scrollUntilComplete(sailingsContainer, 100);
+          await wait(1000);
 
           const allPossibleElements = Array.from(sailingsContainer.querySelectorAll('div, article, section, tr, li, [role="row"]'));
           
