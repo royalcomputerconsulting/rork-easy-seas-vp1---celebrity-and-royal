@@ -215,21 +215,36 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // PRIORITY 1: Look for "TIER CREDITS" or "YOUR CURRENT TIER CREDITS" (actual label on RC site)
-      const tierCreditsPatterns = [
-        /YOUR\\s+CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
-        /TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
-        /([\\d,]+)\\s*TIER\\s+CREDITS/gi,
-        /CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi
-      ];
+      // PRIORITY 1: Look for Club Royale specific TIER CREDITS
+      // Search in a LIMITED scope near Club Royale mentions to avoid Crown & Anchor confusion
+      const clubRoyaleElements = Array.from(document.querySelectorAll('*')).filter(el => {
+        const text = (el.textContent || '').toLowerCase();
+        return text.includes('club royale') && text.length < 2000;
+      });
       
-      for (const pattern of tierCreditsPatterns) {
-        let match;
-        while ((match = pattern.exec(pageText)) !== null) {
-          const pointStr = match[1].replace(/,/g, '');
-          const numPoints = parseInt(pointStr, 10);
-          if (numPoints >= 100 && numPoints <= 10000000) {
-            candidatePoints.push({ value: numPoints, str: match[1], source: 'tier-credits-primary' });
+      for (const crEl of clubRoyaleElements.slice(0, 10)) {
+        const crText = crEl.textContent || '';
+        const tierCreditsPatterns = [
+          /YOUR\\s+CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
+          /TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
+          /([\\d,]+)\\s*TIER\\s+CREDITS/gi,
+          /CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi
+        ];
+        
+        for (const pattern of tierCreditsPatterns) {
+          let match;
+          const resetPattern = new RegExp(pattern.source, pattern.flags);
+          while ((match = resetPattern.exec(crText)) !== null) {
+            const pointStr = match[1].replace(/,/g, '');
+            const numPoints = parseInt(pointStr, 10);
+            if (numPoints >= 100 && numPoints <= 10000000) {
+              candidatePoints.push({ value: numPoints, str: match[1], source: 'tier-credits-primary', priority: 0 });
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '  ➜ Found TIER CREDITS near Club Royale: ' + match[1],
+                logType: 'info'
+              }));
+            }
           }
         }
       }
@@ -298,18 +313,24 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // Sort candidates: PRIORITIZE by priority value (lower = better), then by source, then by value
+      // Sort candidates: PRIORITIZE tier-credits-primary FIRST (official label), then by priority, source, and value
       candidatePoints.sort((a, b) => {
-        // First: Sort by priority field (lower number = higher priority)
+        // HIGHEST PRIORITY: tier-credits-primary source (official RC label)
+        const aIsTierCredits = a.source === 'tier-credits-primary';
+        const bIsTierCredits = b.source === 'tier-credits-primary';
+        if (aIsTierCredits && !bIsTierCredits) return -1;
+        if (!aIsTierCredits && bIsTierCredits) return 1;
+        
+        // Second: Sort by priority field (lower number = higher priority)
         const priorityDiff = (a.priority || 99) - (b.priority || 99);
         if (priorityDiff !== 0) return priorityDiff;
         
-        // Second: Prefer top-header and tier-credits sources
-        const sourceOrder = { 'top-header': 1, 'top-context': 2, 'tier-credits-primary': 3, 'element-class': 4, 'element-pts': 5, 'container-high': 6, 'regex': 7, 'container': 8 };
+        // Third: Prefer top-header sources
+        const sourceOrder = { 'top-header': 1, 'top-context': 2, 'element-class': 3, 'element-pts': 4, 'container-high': 5, 'regex': 6, 'container': 7 };
         const sourceCompare = (sourceOrder[a.source] || 99) - (sourceOrder[b.source] || 99);
         if (sourceCompare !== 0) return sourceCompare;
         
-        // Third: Prefer larger values (more likely to be actual accumulated points)
+        // Fourth: Prefer larger values (more likely to be actual accumulated points)
         return b.value - a.value;
       });
       
@@ -465,12 +486,22 @@ export const STEP1_OFFERS_SCRIPT = `
       let offerCards = [];
       
       // First, identify and exclude promotional banners/dividers that interrupt offer listings
+      // Only exclude standalone promotional sections that DON'T contain offer cards
       const promotionalElements = Array.from(document.querySelectorAll('div, section, article')).filter(el => {
         const text = (el.textContent || '').toLowerCase();
-        const isPromo = text.includes('ready to play') || 
+        const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
+          const childText = (child.textContent || '').toLowerCase().trim();
+          return childText.length < 30 && (childText.includes('view sailing') || childText.includes('see sailing'));
+        });
+        const hasOfferCode = text.match(/\\b([A-Z0-9]{6,12})\\b/);
+        const hasTradeIn = text.includes('trade-in value');
+        const hasRedeem = text.includes('redeem by');
+        
+        // Only mark as promotional if it's a banner WITHOUT offer content
+        const isPromo = (text.includes('ready to play') || 
                        text.includes('apply now') ||
-                       text.includes('casino credit') ||
-                       (text.includes('apply') && text.includes('onboard') && text.length < 500);
+                       (text.includes('casino credit') && text.includes('apply') && text.length < 800)) &&
+                       !hasViewSailingsButton && !hasOfferCode && !hasTradeIn && !hasRedeem;
         return isPromo;
       });
       
