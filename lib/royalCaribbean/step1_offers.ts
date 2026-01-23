@@ -129,13 +129,25 @@ export const STEP1_OFFERS_SCRIPT = `
       // Strategy: Look for the large number at the TOP of the page first (user's actual points)
       let candidatePoints = [];
       
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '🔍 Starting Club Royale points search...',
+        logType: 'info'
+      }));
+      
       // PRIORITY 0: Look for large numbers in header/top elements (most reliable)
       // ULTRA AGGRESSIVE: The user's actual points are displayed PROMINENTLY at top
-      const topElements = Array.from(document.querySelectorAll('header, [class*="header"], [class*="hero"], [class*="banner"], nav, [role="banner"], [class*="top"], [class*="nav"], main > div:first-child, body > div:first-child, [class*="points"], [class*="balance"], [class*="tier"], [class*="credit"]'));
+      const topElements = Array.from(document.querySelectorAll('header, [class*="header"], [class*="hero"], [class*="banner"], nav, [role="banner"], [class*="top"], [class*="nav"], main > div:first-child, main > section:first-child, body > div:first-child, body > div:nth-child(2), [class*="points"], [class*="balance"], [class*="tier"], [class*="credit"], [class*="loyalty"], [class*="status"], h1, h2, h3, p[class*="point"], span[class*="point"], div[class*="point"]'));
       
-      // STRATEGY 1: Find ANY number >= 5000 in top sections (user's actual accumulated points)
-      // Scan VERY aggressively - user's points like 39,728 should be prominently displayed
-      for (const topEl of topElements.slice(0, 40)) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '📊 Analyzing ' + topElements.length + ' top elements...',
+        logType: 'info'
+      }));
+      
+      // STRATEGY 1: Find ALL numbers >= 1000 in top sections
+      // User's points like 39,728 or 37,928 are displayed prominently
+      for (const topEl of topElements.slice(0, 80)) {
         const topText = (topEl.textContent || '');
         // Look for standalone numbers (with or without commas)
         const numberMatches = topText.match(/\\b([\\d,]{4,})\\b/g);
@@ -145,7 +157,7 @@ export const STEP1_OFFERS_SCRIPT = `
             const numPoints = parseInt(cleanNum, 10);
             
             // Prioritize ANY number >= 5000 (actual user points vs promotional offers like 2500)
-            if (numPoints >= 5000 && numPoints <= 10000000) {
+            if (numPoints >= 1000 && numPoints <= 10000000) {
               const elementClasses = topEl.className || '';
               const elementText = topEl.textContent || '';
               const hasPointsContext = elementText.toLowerCase().includes('point') || 
@@ -154,24 +166,41 @@ export const STEP1_OFFERS_SCRIPT = `
                                       elementClasses.toLowerCase().includes('point') ||
                                       elementClasses.toLowerCase().includes('balance');
               
+              // Calculate priority based on size and context
+              let priority = 10;
+              if (numPoints >= 30000) {
+                priority = hasPointsContext ? 1 : 2;  // Very high with context = top priority
+              } else if (numPoints >= 10000) {
+                priority = hasPointsContext ? 2 : 3;
+              } else if (numPoints >= 5000) {
+                priority = hasPointsContext ? 3 : 5;
+              } else if (numPoints >= 2500) {
+                priority = hasPointsContext ? 4 : 6;
+              } else {
+                priority = hasPointsContext ? 5 : 7;
+              }
+              
               candidatePoints.push({ 
                 value: numPoints, 
                 str: numStr, 
-                source: 'top-header-large',
-                priority: hasPointsContext ? 1 : (numPoints >= 10000 ? 2 : 3)
+                source: 'top-header',
+                priority: priority
               });
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: 'Found number in top section: ' + numStr + ' (value: ' + numPoints + ', context: ' + hasPointsContext + ')',
-                logType: 'info'
-              }));
+              
+              if (numPoints >= 10000) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: '  ➜ Found large number: ' + numStr + ' (priority: ' + priority + ', context: ' + hasPointsContext + ')',
+                  logType: 'info'
+                }));
+              }
             }
           }
         }
       }
       
-      // STRATEGY 2: If we found large numbers, also check nearby for mid-range numbers with context
-      for (const topEl of topElements.slice(0, 15)) {
+      // STRATEGY 2: Check for numbers with explicit Club Royale / points context
+      for (const topEl of topElements.slice(0, 30)) {
         const topText = (topEl.textContent || '').toLowerCase();
         if (topText.includes('club royale') || topText.includes('point') || topText.includes('tier') || topText.includes('credit')) {
           const numberMatches = topText.match(/([\\d,]{4,})(?![\\d])/g);
@@ -179,7 +208,7 @@ export const STEP1_OFFERS_SCRIPT = `
             for (const numStr of numberMatches) {
               const numPoints = parseInt(numStr.replace(/,/g, ''), 10);
               if (numPoints >= 1000 && numPoints <= 10000000) {
-                candidatePoints.push({ value: numPoints, str: numStr, source: 'top-header-with-context' });
+                candidatePoints.push({ value: numPoints, str: numStr, source: 'top-context', priority: 2 });
               }
             }
           }
@@ -269,45 +298,18 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // Sort candidates: PRIORITIZE top-header-large, then larger values, then tier-credits
-      // (smaller values like 2500 might be promotional values, cruise prices, etc.)
+      // Sort candidates: PRIORITIZE by priority value (lower = better), then by source, then by value
       candidatePoints.sort((a, b) => {
-        // ABSOLUTE HIGHEST PRIORITY: top-header-large (user's actual points at top)
-        const aIsTopHeader = a.source === 'top-header-large';
-        const bIsTopHeader = b.source === 'top-header-large';
-        if (aIsTopHeader && !bIsTopHeader) return -1;
-        if (!aIsTopHeader && bIsTopHeader) return 1;
+        // First: Sort by priority field (lower number = higher priority)
+        const priorityDiff = (a.priority || 99) - (b.priority || 99);
+        if (priorityDiff !== 0) return priorityDiff;
         
-        // If both are top-header-large, prioritize by: 1) priority field, 2) LARGEST value
-        if (aIsTopHeader && bIsTopHeader) {
-          const priorityDiff = (a.priority || 99) - (b.priority || 99);
-          if (priorityDiff !== 0) return priorityDiff;
-          return b.value - a.value;
-        }
-        
-        // SECOND PRIORITY: top-header-with-context (has keywords in same section)
-        const aIsTopContext = a.source === 'top-header-with-context';
-        const bIsTopContext = b.source === 'top-header-with-context';
-        if (aIsTopContext && !bIsTopContext) return -1;
-        if (!aIsTopContext && bIsTopContext) return 1;
-        
-        // THIRD PRIORITY: tier-credits-primary source (the actual RC label)
-        const aIsTierCredits = a.source === 'tier-credits-primary';
-        const bIsTierCredits = b.source === 'tier-credits-primary';
-        if (aIsTierCredits && !bIsTierCredits) return -1;
-        if (!aIsTierCredits && bIsTierCredits) return 1;
-        
-        // Fourth, heavily prioritize values >= 10000 (almost certainly real points)
-        const aIsLarge = a.value >= 10000;
-        const bIsLarge = b.value >= 10000;
-        if (aIsLarge && !bIsLarge) return -1;
-        if (!aIsLarge && bIsLarge) return 1;
-        
-        // Then prefer element-class and element-pts sources
-        const sourceOrder = { 'top-header-large': 0, 'top-header-with-context': 1, 'tier-credits-primary': 2, 'element-class': 3, 'element-pts': 4, 'container-high': 5, 'regex': 6, 'container': 7 };
+        // Second: Prefer top-header and tier-credits sources
+        const sourceOrder = { 'top-header': 1, 'top-context': 2, 'tier-credits-primary': 3, 'element-class': 4, 'element-pts': 5, 'container-high': 6, 'regex': 7, 'container': 8 };
         const sourceCompare = (sourceOrder[a.source] || 99) - (sourceOrder[b.source] || 99);
         if (sourceCompare !== 0) return sourceCompare;
-        // Then prefer larger values (more likely to be actual accumulated points)
+        
+        // Third: Prefer larger values (more likely to be actual accumulated points)
         return b.value - a.value;
       });
       
