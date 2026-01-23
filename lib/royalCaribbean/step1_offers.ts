@@ -1,7 +1,7 @@
 export const STEP1_OFFERS_SCRIPT = `
 (function() {
-  const OFFER_TIMEOUT_MS = 60000;
-  const BATCH_SIZE = 100;
+  const OFFER_TIMEOUT_MS = 900000;
+  const BATCH_SIZE = 150;
   
   function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -29,38 +29,56 @@ export const STEP1_OFFERS_SCRIPT = `
     }));
   }
 
-  async function scrollUntilComplete(container, maxAttempts = 15) {
+  async function scrollUntilComplete(container, maxAttempts = 30) {
     let previousHeight = 0;
     let stableCount = 0;
     let attempts = 0;
+    let previousItemCount = 0;
 
-    while (stableCount < 4 && attempts < maxAttempts) {
+    while (stableCount < 5 && attempts < maxAttempts) {
       const currentHeight = container ? container.scrollHeight : document.body.scrollHeight;
       
-      if (currentHeight === previousHeight) {
+      // Also count items to detect if new content is loading
+      const currentItemCount = container 
+        ? container.querySelectorAll('[class*="sailing"], [class*="row"], [class*="card"], tr, li').length
+        : document.querySelectorAll('[class*="sailing"], [class*="row"], [class*="card"], tr, li').length;
+      
+      if (currentHeight === previousHeight && currentItemCount === previousItemCount) {
         stableCount++;
       } else {
         stableCount = 0;
       }
       
       previousHeight = currentHeight;
+      previousItemCount = currentItemCount;
       
+      // More aggressive scrolling
       if (container) {
-        container.scrollBy(0, 800);
+        container.scrollBy(0, 1200);
       } else {
-        window.scrollBy(0, 800);
+        window.scrollBy(0, 1200);
       }
       
-      await wait(1200);
+      await wait(800);
       attempts++;
+      
+      // Log progress every 10 attempts
+      if (attempts % 10 === 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Scroll progress: ' + attempts + '/' + maxAttempts + ' attempts, ' + currentItemCount + ' items loaded',
+          logType: 'info'
+        }));
+      }
     }
     
+    // Scroll back to top
     if (container) {
       container.scrollTo(0, 0);
     } else {
       window.scrollTo(0, 0);
     }
-    await wait(500);
+    await wait(300);
   }
 
   function extractText(element, selector) {
@@ -85,7 +103,9 @@ export const STEP1_OFFERS_SCRIPT = `
       };
 
       const pageText = document.body.textContent || '';
+      const pageHTML = document.body.innerHTML || '';
       
+      // Find tier first
       const tierPatterns = [
         /Club Royale\\s*(?:Status|Tier)?[:\\s]*(Signature|Premier|Classic)/i,
         /(Signature|Premier|Classic)\\s*(?:Member|Status|Tier)?/i,
@@ -105,31 +125,118 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      const pointsPatterns = [
-        /([\\d,]+)\\s*(?:Club Royale)?\\s*Points/i,
-        /Points[:\\s]*([\\d,]+)/i,
-        /Club Royale[^\\d]*([\\d,]{3,})(?:\\s*points)?/i
+      // IMPROVED: Find Club Royale points more accurately
+      // Strategy: Find all point-like numbers and pick the most likely Club Royale points
+      let candidatePoints = [];
+      
+      // Look for specific Club Royale points patterns first
+      const specificPatterns = [
+        /Club Royale[^\\d]{0,30}?([\\d,]+)\\s*(?:points|pts)/gi,
+        /([\\d,]+)\\s*Club Royale\\s*(?:points|pts)/gi,
+        /(?:your|total|current)\\s*(?:Club Royale)?\\s*points[:\\s]*([\\d,]+)/gi,
+        /points[:\\s]*([\\d,]+)/gi
       ];
       
-      for (const pattern of pointsPatterns) {
-        const match = pageText.match(pattern);
-        if (match && match[1]) {
-          const points = match[1].replace(/,/g, '');
-          const numPoints = parseInt(points, 10);
-          if (numPoints >= 0 && numPoints <= 1000000) {
-            loyaltyData.clubRoyalePoints = match[1];
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Found Club Royale points: ' + match[1],
-              logType: 'success'
-            }));
-            break;
+      for (const pattern of specificPatterns) {
+        let match;
+        while ((match = pattern.exec(pageText)) !== null) {
+          const pointStr = match[1].replace(/,/g, '');
+          const numPoints = parseInt(pointStr, 10);
+          if (numPoints >= 100 && numPoints <= 10000000) {
+            candidatePoints.push({ value: numPoints, str: match[1], source: 'regex' });
           }
         }
       }
-
-      if (!loyaltyData.clubRoyaleTier || !loyaltyData.clubRoyalePoints) {
-        const allElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, [class*="tier"], [class*="status"], [class*="points"], [class*="loyalty"]');
+      
+      // Look for points in specific DOM elements
+      const pointsElements = document.querySelectorAll('[class*="point"], [class*="loyalty"], [class*="balance"], [class*="royale"], [data-testid*="point"], [aria-label*="point"]');
+      for (const el of pointsElements) {
+        const text = (el.textContent || '').trim();
+        const numMatch = text.match(/^([\\d,]+)$/);
+        if (numMatch) {
+          const numPoints = parseInt(numMatch[1].replace(/,/g, ''), 10);
+          if (numPoints >= 100 && numPoints <= 10000000) {
+            candidatePoints.push({ value: numPoints, str: numMatch[1], source: 'element-class' });
+          }
+        }
+        // Also check for "X points" or "X pts" format
+        const ptsMatch = text.match(/([\\d,]+)\\s*(?:points|pts)/i);
+        if (ptsMatch) {
+          const numPoints = parseInt(ptsMatch[1].replace(/,/g, ''), 10);
+          if (numPoints >= 100 && numPoints <= 10000000) {
+            candidatePoints.push({ value: numPoints, str: ptsMatch[1], source: 'element-pts' });
+          }
+        }
+      }
+      
+      // Look for large numbers near "Club Royale" text (within same container)
+      const clubRoyaleContainers = document.querySelectorAll('[class*="club"], [class*="royale"], [class*="loyalty"], [class*="member"], section, article, div');
+      for (const container of clubRoyaleContainers) {
+        const containerText = (container.textContent || '').toLowerCase();
+        if (containerText.includes('club royale') || containerText.includes('points')) {
+          const numMatches = containerText.match(/([\\d,]{4,})(?![\\d])/g);
+          if (numMatches) {
+            for (const numStr of numMatches) {
+              const numPoints = parseInt(numStr.replace(/,/g, ''), 10);
+              // Looking for points typically > 1000 for active players
+              if (numPoints >= 1000 && numPoints <= 10000000) {
+                // Check if this container mentions points specifically
+                if (containerText.includes('point')) {
+                  candidatePoints.push({ value: numPoints, str: numStr, source: 'container' });
+                }
+              } else if (numPoints >= 10000 && numPoints <= 10000000) {
+                // High value numbers without explicit "point" mention - likely actual points
+                candidatePoints.push({ value: numPoints, str: numStr, source: 'container-high' });
+              }
+            }
+          }
+        }
+      }
+      
+      // Sort candidates: prefer larger values that are more likely to be actual points
+      // (smaller values like 2500 might be promotional values, cruise prices, etc.)
+      candidatePoints.sort((a, b) => {
+        // First, heavily prioritize values >= 10000 (almost certainly real points)
+        const aIsLarge = a.value >= 10000;
+        const bIsLarge = b.value >= 10000;
+        if (aIsLarge && !bIsLarge) return -1;
+        if (!aIsLarge && bIsLarge) return 1;
+        
+        // Then prefer element-class and element-pts sources
+        const sourceOrder = { 'element-class': 0, 'element-pts': 1, 'container-high': 2, 'regex': 3, 'container': 4 };
+        const sourceCompare = (sourceOrder[a.source] || 99) - (sourceOrder[b.source] || 99);
+        if (sourceCompare !== 0) return sourceCompare;
+        // Then prefer larger values (more likely to be actual accumulated points)
+        return b.value - a.value;
+      });
+      
+      // Remove duplicates
+      const seenValues = new Set();
+      candidatePoints = candidatePoints.filter(p => {
+        if (seenValues.has(p.value)) return false;
+        seenValues.add(p.value);
+        return true;
+      });
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Found ' + candidatePoints.length + ' point candidates: ' + candidatePoints.slice(0, 5).map(p => p.value + ' (' + p.source + ')').join(', '),
+        logType: 'info'
+      }));
+      
+      // Pick the best candidate - after sorting, first one is best
+      if (candidatePoints.length > 0) {
+        loyaltyData.clubRoyalePoints = candidatePoints[0].str;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Selected Club Royale points: ' + candidatePoints[0].str + ' (value: ' + candidatePoints[0].value + ') from ' + candidatePoints[0].source,
+          logType: 'success'
+        }));
+      }
+      
+      // Fallback: search for standalone number elements with points context
+      if (!loyaltyData.clubRoyalePoints) {
+        const allElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div');
         
         for (const el of allElements) {
           const text = (el.textContent || '').trim();
@@ -146,26 +253,22 @@ export const STEP1_OFFERS_SCRIPT = `
             }
           }
           
-          if (!loyaltyData.clubRoyalePoints) {
-            const pointsMatch = text.match(/^([\\d,]+)$/);  
-            if (pointsMatch) {
-              const num = parseInt(pointsMatch[1].replace(/,/g, ''), 10);
-              if (num >= 100 && num <= 1000000) {
-                const parentText = (el.parentElement?.textContent || '').toLowerCase();
-                if (parentText.includes('point')) {
-                  loyaltyData.clubRoyalePoints = pointsMatch[1];
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log',
-                    message: 'Found Club Royale points (element): ' + pointsMatch[1],
-                    logType: 'success'
-                  }));
-                }
+          const pointsMatch = text.match(/^([\\d,]+)$/);  
+          if (pointsMatch) {
+            const num = parseInt(pointsMatch[1].replace(/,/g, ''), 10);
+            if (num >= 1000 && num <= 10000000) {
+              const parentText = (el.parentElement?.textContent || '').toLowerCase();
+              const grandparentText = (el.parentElement?.parentElement?.textContent || '').toLowerCase();
+              if (parentText.includes('point') || grandparentText.includes('point') || parentText.includes('royale')) {
+                loyaltyData.clubRoyalePoints = pointsMatch[1];
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: 'Found Club Royale points (fallback element): ' + pointsMatch[1],
+                  logType: 'success'
+                }));
+                break;
               }
             }
-          }
-          
-          if (loyaltyData.clubRoyaleTier && loyaltyData.clubRoyalePoints) {
-            break;
           }
         }
       }
@@ -810,7 +913,7 @@ export const STEP1_OFFERS_SCRIPT = `
                                  document.querySelector('[class*="sailing"][class*="list"]') ||
                                  card;
           
-          await scrollUntilComplete(sailingsContainer, 8);
+          await scrollUntilComplete(sailingsContainer, 50);
           await wait(600);
 
           const allPossibleElements = Array.from(sailingsContainer.querySelectorAll('div, article, section, tr, li, [role="row"]'));

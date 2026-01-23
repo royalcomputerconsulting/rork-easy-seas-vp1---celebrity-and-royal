@@ -15,6 +15,7 @@ import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbea
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectUpcomingCruisesExtraction } from '@/lib/royalCaribbean/step2_upcoming';
 import { injectCourtesyHoldsExtraction } from '@/lib/royalCaribbean/step3_holds';
+import { injectLoyaltyExtraction } from '@/lib/royalCaribbean/step4_loyalty';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 
 const INITIAL_STATE: RoyalCaribbeanSyncState = {
@@ -172,10 +173,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     addLog('Starting ingestion process...', 'info');
     
-    const waitForStepComplete = (step: number, baseTimeoutMs: number = 300000): Promise<void> => {
+    const waitForStepComplete = (step: number, baseTimeoutMs: number = 600000): Promise<void> => {
       return new Promise((resolve) => {
         let lastProgressTime = Date.now();
-        const progressTimeoutMs = 45000;
+        const progressTimeoutMs = 90000;
         
         const checkProgress = () => {
           const timeSinceProgress = Date.now() - lastProgressTime;
@@ -217,7 +218,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
       
-      await waitForStepComplete(1, 360000);
+      await waitForStepComplete(1, 900000);
       
       addLog(`✅ Offers step complete - continuing to upcoming cruises...`, 'success');
       
@@ -236,7 +237,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           
           webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
           
-          await waitForStepComplete(2, 90000);
+          await waitForStepComplete(2, 120000);
         }
       } catch (step2Error) {
         addLog(`Step 2 error: ${step2Error} - continuing with collected data`, 'warning');
@@ -257,10 +258,31 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           
           webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
           
-          await waitForStepComplete(3, 60000);
+          await waitForStepComplete(3, 90000);
         }
       } catch (step3Error) {
         addLog(`Step 3 error: ${step3Error} - continuing with collected data`, 'warning');
+      }
+      
+      setState(prev => ({ ...prev, status: 'running_step_4' }));
+      addLog('Step 4: Navigating to loyalty programs page...', 'info');
+      addLog('Loading Loyalty Programs Page...', 'info');
+      
+      try {
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`
+            window.location.href = 'https://www.royalcaribbean.com/account/loyalty-programs';
+            true;
+          `);
+          
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
+          
+          await waitForStepComplete(4, 60000);
+        }
+      } catch (step4Error) {
+        addLog(`Step 4 error: ${step4Error} - continuing with collected data`, 'warning');
       }
       
       setState(prev => {

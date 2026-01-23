@@ -94,6 +94,9 @@ function RoyalCaribbeanSyncScreen() {
         }
         return 'Loading Courtesy Holds Page...';
       case 'running_step_4':
+        if (state.progress && state.progress.stepName) {
+          return state.progress.stepName;
+        }
         return 'Loading Loyalty Programs Page...';
       case 'awaiting_confirmation':
         return 'Ready to Sync';
