@@ -464,9 +464,30 @@ export const STEP1_OFFERS_SCRIPT = `
 
       let offerCards = [];
       
+      // First, identify and exclude promotional banners/dividers that interrupt offer listings
+      const promotionalElements = Array.from(document.querySelectorAll('div, section, article')).filter(el => {
+        const text = (el.textContent || '').toLowerCase();
+        const isPromo = text.includes('ready to play') || 
+                       text.includes('apply now') ||
+                       text.includes('casino credit') ||
+                       (text.includes('apply') && text.includes('onboard') && text.length < 500);
+        return isPromo;
+      });
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '🚫 Filtering out ' + promotionalElements.length + ' promotional banner(s)...',
+        logType: 'info'
+      }));
+      
       const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div'));
       
+      // Filter out buttons that are inside promotional banners
       const viewSailingsButtons = allClickables.filter(el => {
+        // Skip if inside a promotional banner
+        const isInsidePromo = promotionalElements.some(promo => promo.contains(el));
+        if (isInsidePromo) return false;
+        
         const text = (el.textContent || '').trim().toLowerCase();
         const isShortText = text.length < 30;
         return isShortText && (
@@ -521,6 +542,13 @@ export const STEP1_OFFERS_SCRIPT = `
         
         for (let i = 0; i < 15 && parent; i++) {
           const parentText = parent.textContent || '';
+          
+          // Skip if this parent is inside a promotional banner
+          const isInsidePromo = promotionalElements.some(promo => promo.contains(parent));
+          if (isInsidePromo) {
+            parent = parent.parentElement;
+            continue;
+          }
           
           const hasOfferCode = parentText.match(/\\b([A-Z0-9]{6,12}[A-Z])\\b/);
           const hasTradeIn = parentText.toLowerCase().includes('trade-in value');
@@ -589,6 +617,10 @@ export const STEP1_OFFERS_SCRIPT = `
         const allElements = Array.from(document.querySelectorAll('div, article, section, li, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"], [data-testid]'));
         
         const fallbackCards = allElements.filter(el => {
+          // Skip promotional banners
+          const isInsidePromo = promotionalElements.some(promo => promo.contains(el) || promo === el);
+          if (isInsidePromo) return false;
+          
           const text = el.textContent || '';
           const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
             const childText = (child.textContent || '').toLowerCase().trim();
@@ -652,6 +684,10 @@ export const STEP1_OFFERS_SCRIPT = `
           }));
           
           const structuralCards = allElements.filter(el => {
+            // Skip promotional banners
+            const isInsidePromo = promotionalElements.some(promo => promo.contains(el) || promo === el);
+            if (isInsidePromo) return false;
+            
             const text = el.textContent || '';
             const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12})\\b/);
             const hasTradeIn = text.toLowerCase().includes('trade-in value') || text.toLowerCase().includes('trade in');
