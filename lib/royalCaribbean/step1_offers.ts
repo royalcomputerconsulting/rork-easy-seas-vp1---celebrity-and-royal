@@ -126,8 +126,25 @@ export const STEP1_OFFERS_SCRIPT = `
       }
       
       // IMPROVED: Find Club Royale points more accurately
-      // Strategy: Look for "TIER CREDITS" first (this is what Royal Caribbean actually calls it)
+      // Strategy: Look for the large number at the TOP of the page first (user's actual points)
       let candidatePoints = [];
+      
+      // PRIORITY 0: Look for large numbers in header/top elements (most reliable)
+      const topElements = Array.from(document.querySelectorAll('header, [class*="header"], [class*="hero"], [class*="banner"], nav, [role="banner"]'));
+      for (const topEl of topElements.slice(0, 10)) {
+        const topText = (topEl.textContent || '').toLowerCase();
+        if (topText.includes('club royale') || topText.includes('point') || topText.includes('tier')) {
+          const numberMatches = topText.match(/([\\d,]{4,})(?![\\d])/g);
+          if (numberMatches) {
+            for (const numStr of numberMatches) {
+              const numPoints = parseInt(numStr.replace(/,/g, ''), 10);
+              if (numPoints >= 5000 && numPoints <= 10000000) {
+                candidatePoints.push({ value: numPoints, str: numStr, source: 'top-header-large' });
+              }
+            }
+          }
+        }
+      }
       
       // PRIORITY 1: Look for "TIER CREDITS" or "YOUR CURRENT TIER CREDITS" (actual label on RC site)
       const tierCreditsPatterns = [
@@ -212,23 +229,29 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // Sort candidates: PRIORITIZE tier-credits-primary source, then larger values
+      // Sort candidates: PRIORITIZE top-header-large, then tier-credits-primary, then larger values
       // (smaller values like 2500 might be promotional values, cruise prices, etc.)
       candidatePoints.sort((a, b) => {
-        // HIGHEST PRIORITY: tier-credits-primary source (the actual RC label)
+        // ABSOLUTE HIGHEST PRIORITY: top-header-large (user's actual points at top)
+        const aIsTopHeader = a.source === 'top-header-large';
+        const bIsTopHeader = b.source === 'top-header-large';
+        if (aIsTopHeader && !bIsTopHeader) return -1;
+        if (!aIsTopHeader && bIsTopHeader) return 1;
+        
+        // SECOND PRIORITY: tier-credits-primary source (the actual RC label)
         const aIsTierCredits = a.source === 'tier-credits-primary';
         const bIsTierCredits = b.source === 'tier-credits-primary';
         if (aIsTierCredits && !bIsTierCredits) return -1;
         if (!aIsTierCredits && bIsTierCredits) return 1;
         
-        // Second, heavily prioritize values >= 10000 (almost certainly real points)
+        // Third, heavily prioritize values >= 10000 (almost certainly real points)
         const aIsLarge = a.value >= 10000;
         const bIsLarge = b.value >= 10000;
         if (aIsLarge && !bIsLarge) return -1;
         if (!aIsLarge && bIsLarge) return 1;
         
         // Then prefer element-class and element-pts sources
-        const sourceOrder = { 'tier-credits-primary': 0, 'element-class': 1, 'element-pts': 2, 'container-high': 3, 'regex': 4, 'container': 5 };
+        const sourceOrder = { 'top-header-large': 0, 'tier-credits-primary': 1, 'element-class': 2, 'element-pts': 3, 'container-high': 4, 'regex': 5, 'container': 6 };
         const sourceCompare = (sourceOrder[a.source] || 99) - (sourceOrder[b.source] || 99);
         if (sourceCompare !== 0) return sourceCompare;
         // Then prefer larger values (more likely to be actual accumulated points)
@@ -514,15 +537,16 @@ export const STEP1_OFFERS_SCRIPT = `
           const text = el.textContent || '';
           const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
             const childText = (child.textContent || '').toLowerCase().trim();
-            return childText.length < 30 && (childText.includes('view sailing') || childText.includes('see sailing') || childText.includes('view dates'));
+            return childText.length < 30 && (childText.includes('view sailing') || childText.includes('see sailing') || childText.includes('view dates') || childText.includes('sailing'));
           });
           const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
           const hasTradeIn = text.toLowerCase().includes('trade-in value');
           const hasRedeem = text.includes('Redeem by') || text.includes('redeem by');
           const hasFeatured = text.includes('Featured Offer');
-          const isReasonableSize = text.length > 150 && text.length < 5000;
+          const hasOfferKeywords = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom)/i);
+          const isReasonableSize = text.length > 100 && text.length < 6000;
           
-          return hasViewSailingsButton && (hasOfferCode || hasTradeIn || hasRedeem || hasFeatured) && isReasonableSize;
+          return hasViewSailingsButton && (hasOfferCode || hasTradeIn || hasRedeem || hasFeatured || hasOfferKeywords) && isReasonableSize;
         });
         
         const filteredFallback = fallbackCards.filter((el, idx, arr) => {
@@ -576,8 +600,13 @@ export const STEP1_OFFERS_SCRIPT = `
             const hasRedeem = text.includes('Redeem by') || text.includes('redeem by');
             const hasDollarAmount = text.match(/\\$[\\d,]+\\.?\\d*/); 
             const hasExpiry = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
-            const isReasonableSize = text.length > 100 && text.length < 6000;
-            const offerSignals = [hasOfferCode, hasTradeIn, hasRedeem, hasDollarAmount, hasExpiry].filter(Boolean).length;
+            const hasCabinType = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom)/i);
+            const hasViewButton = Array.from(el.querySelectorAll('button, a, span, div')).some(child => {
+              const childText = (child.textContent || '').toLowerCase().trim();
+              return childText.length < 40 && childText.includes('sailing');
+            });
+            const isReasonableSize = text.length > 80 && text.length < 7000;
+            const offerSignals = [hasOfferCode, hasTradeIn, hasRedeem, hasDollarAmount, hasExpiry, hasCabinType, hasViewButton].filter(Boolean).length;
             
             return offerSignals >= 2 && isReasonableSize;
           });
