@@ -220,7 +220,7 @@ function RoyalCaribbeanSyncScreen() {
               onPress={openLogin}
             >
               <ExternalLink size={20} color="#60a5fa" />
-              <Text style={styles.quickActionLabel}>Login</Text>
+              <Text style={styles.quickActionLabel}>LOGIN</Text>
             </Pressable>
 
             <Pressable 
@@ -233,37 +233,11 @@ function RoyalCaribbeanSyncScreen() {
             </Pressable>
 
             <Pressable 
-              style={[styles.quickActionButton, !canExport && styles.buttonDisabled]}
-              onPress={exportOffersCSV}
-              disabled={!canExport}
-            >
-              <Download size={20} color="#a78bfa" />
-              <Text style={styles.quickActionLabel}>Export Offers</Text>
-            </Pressable>
-
-            <Pressable 
-              style={[styles.quickActionButton, !canExport && styles.buttonDisabled]}
-              onPress={exportBookedCruisesCSV}
-              disabled={!canExport}
-            >
-              <Download size={20} color="#60a5fa" />
-              <Text style={styles.quickActionLabel}>Export Booked</Text>
-            </Pressable>
-
-            <Pressable 
               style={styles.quickActionButton}
               onPress={exportLog}
             >
               <Download size={20} color="#94a3b8" />
-              <Text style={styles.quickActionLabel}>Export Log</Text>
-            </Pressable>
-
-            <Pressable 
-              style={styles.quickActionButton}
-              onPress={resetState}
-            >
-              <XCircle size={20} color="#f87171" />
-              <Text style={styles.quickActionLabel}>Reset</Text>
+              <Text style={styles.quickActionLabel}>EXPORT LOG</Text>
             </Pressable>
           </View>
         </View>
@@ -443,7 +417,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#334155'
   },
   logsScrollTop: {
-    maxHeight: 140,
+    maxHeight: 200,
     padding: 12
   },
   progressText: {
@@ -497,12 +471,10 @@ const styles = StyleSheet.create({
   },
   quickActionsGrid: {
     flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
     gap: 12
   },
   quickActionButton: {
-    width: 'calc(33.333% - 8px)' as any,
-    minWidth: 100,
+    flex: 1,
     height: 80,
     backgroundColor: '#1e293b',
     borderRadius: 12,
