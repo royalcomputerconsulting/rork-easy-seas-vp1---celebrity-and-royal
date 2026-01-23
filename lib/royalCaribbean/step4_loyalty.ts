@@ -52,13 +52,67 @@ export const STEP4_LOYALTY_SCRIPT = `
         }));
       }
 
-      const cruisePointsMatch = pageText.match(/(\\d+)\\s*Cruise Points?/);
-      if (cruisePointsMatch) {
-        loyaltyData.crownAndAnchorPoints = cruisePointsMatch[1];
+      // IMPROVED: Look for cruise points more comprehensively
+      let cruisePointsCandidates = [];
+      
+      // Pattern 1: Standard "X Cruise Points" format
+      const cruisePointsPatterns = [
+        /(\\d+)\\s*Cruise Points?/i,
+        /Cruise Points?[:\\s]+(\\d+)/i,
+        /(\\d+)\\s*(?:cruise)?\\s*point/i,
+        /Crown\\s+(?:&|and)\\s+Anchor[^\\d]{0,50}?(\\d+)\\s*(?:points?|pts)/i
+      ];
+      
+      for (const pattern of cruisePointsPatterns) {
+        const match = pageText.match(pattern);
+        if (match && match[1]) {
+          const num = parseInt(match[1], 10);
+          if (num >= 0 && num <= 100000) {
+            cruisePointsCandidates.push({ value: num, str: match[1], source: 'pattern' });
+          }
+        }
+      }
+      
+      // Pattern 2: Look in specific DOM elements with point-related classes
+      const pointElements = document.querySelectorAll('[class*="point"], [class*="cruise"], [class*="anchor"], [class*="loyalty"]');
+      for (const el of pointElements) {
+        const text = (el.textContent || '').trim();
+        // Look for numbers near "cruise" or "point" keywords
+        if (text.toLowerCase().includes('cruise') || text.toLowerCase().includes('point')) {
+          const numMatch = text.match(/\\b(\\d+)\\b/);
+          if (numMatch) {
+            const num = parseInt(numMatch[1], 10);
+            if (num >= 0 && num <= 100000 && num !== parseInt(loyaltyData.clubRoyalePoints || '0', 10)) {
+              cruisePointsCandidates.push({ value: num, str: numMatch[1], source: 'element' });
+            }
+          }
+        }
+      }
+      
+      // Pick the best candidate (prefer pattern matches, then smaller reasonable values)
+      cruisePointsCandidates.sort((a, b) => {
+        if (a.source === 'pattern' && b.source !== 'pattern') return -1;
+        if (a.source !== 'pattern' && b.source === 'pattern') return 1;
+        // Prefer values in reasonable range (100-10000 for cruise points)
+        const aReasonable = a.value >= 100 && a.value <= 10000;
+        const bReasonable = b.value >= 100 && b.value <= 10000;
+        if (aReasonable && !bReasonable) return -1;
+        if (!aReasonable && bReasonable) return 1;
+        return a.value - b.value;
+      });
+      
+      if (cruisePointsCandidates.length > 0) {
+        loyaltyData.crownAndAnchorPoints = cruisePointsCandidates[0].str;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Found cruise points: ' + cruisePointsMatch[1],
+          message: 'Found cruise points: ' + cruisePointsCandidates[0].str + ' (from ' + cruisePointsCandidates[0].source + ')',
           logType: 'info'
+        }));
+      } else {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Could not find cruise points',
+          logType: 'warning'
         }));
       }
 

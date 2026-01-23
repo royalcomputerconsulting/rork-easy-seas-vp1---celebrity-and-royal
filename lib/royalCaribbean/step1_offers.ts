@@ -130,22 +130,39 @@ export const STEP1_OFFERS_SCRIPT = `
       let candidatePoints = [];
       
       // PRIORITY 0: Look for large numbers in header/top elements (most reliable)
-      // AGGRESSIVE: Check ALL elements in viewport top for large numbers first
-      const topElements = Array.from(document.querySelectorAll('header, [class*="header"], [class*="hero"], [class*="banner"], nav, [role="banner"], [class*="top"], [class*="nav"], main > div:first-child, body > div:first-child'));
+      // ULTRA AGGRESSIVE: The user's actual points are displayed PROMINENTLY at top
+      const topElements = Array.from(document.querySelectorAll('header, [class*="header"], [class*="hero"], [class*="banner"], nav, [role="banner"], [class*="top"], [class*="nav"], main > div:first-child, body > div:first-child, [class*="points"], [class*="balance"], [class*="tier"], [class*="credit"]'));
       
-      // STRATEGY 1: Find ANY large number (>10k) in top sections - likely user's actual points
-      for (const topEl of topElements.slice(0, 20)) {
+      // STRATEGY 1: Find ANY number >= 5000 in top sections (user's actual accumulated points)
+      // Scan VERY aggressively - user's points like 39,728 should be prominently displayed
+      for (const topEl of topElements.slice(0, 40)) {
         const topText = (topEl.textContent || '');
-        const numberMatches = topText.match(/([\\d,]{5,})(?![\\d])/g);
+        // Look for standalone numbers (with or without commas)
+        const numberMatches = topText.match(/\\b([\\d,]{4,})\\b/g);
         if (numberMatches) {
           for (const numStr of numberMatches) {
-            const numPoints = parseInt(numStr.replace(/,/g, ''), 10);
-            // ANY large number in top section is VERY likely the user's actual points
-            if (numPoints >= 10000 && numPoints <= 10000000) {
-              candidatePoints.push({ value: numPoints, str: numStr, source: 'top-header-large' });
+            const cleanNum = numStr.replace(/,/g, '');
+            const numPoints = parseInt(cleanNum, 10);
+            
+            // Prioritize ANY number >= 5000 (actual user points vs promotional offers like 2500)
+            if (numPoints >= 5000 && numPoints <= 10000000) {
+              const elementClasses = topEl.className || '';
+              const elementText = topEl.textContent || '';
+              const hasPointsContext = elementText.toLowerCase().includes('point') || 
+                                      elementText.toLowerCase().includes('credit') || 
+                                      elementText.toLowerCase().includes('tier') ||
+                                      elementClasses.toLowerCase().includes('point') ||
+                                      elementClasses.toLowerCase().includes('balance');
+              
+              candidatePoints.push({ 
+                value: numPoints, 
+                str: numStr, 
+                source: 'top-header-large',
+                priority: hasPointsContext ? 1 : (numPoints >= 10000 ? 2 : 3)
+              });
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: 'Found large number in top section: ' + numStr + ' (value: ' + numPoints + ')',
+                message: 'Found number in top section: ' + numStr + ' (value: ' + numPoints + ', context: ' + hasPointsContext + ')',
                 logType: 'info'
               }));
             }
@@ -261,8 +278,10 @@ export const STEP1_OFFERS_SCRIPT = `
         if (aIsTopHeader && !bIsTopHeader) return -1;
         if (!aIsTopHeader && bIsTopHeader) return 1;
         
-        // If both are top-header-large, pick the LARGEST value
+        // If both are top-header-large, prioritize by: 1) priority field, 2) LARGEST value
         if (aIsTopHeader && bIsTopHeader) {
+          const priorityDiff = (a.priority || 99) - (b.priority || 99);
+          if (priorityDiff !== 0) return priorityDiff;
           return b.value - a.value;
         }
         

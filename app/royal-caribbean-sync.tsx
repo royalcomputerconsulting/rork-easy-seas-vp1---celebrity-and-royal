@@ -136,7 +136,7 @@ function RoyalCaribbeanSyncScreen() {
     }
   };
 
-  const canRunIngestion = state.status === 'logged_in';
+  const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
   const canExport = state.status === 'complete' || state.status === 'awaiting_confirmation';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
