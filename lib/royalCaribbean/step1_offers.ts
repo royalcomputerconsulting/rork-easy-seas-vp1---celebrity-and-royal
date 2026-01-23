@@ -321,6 +321,11 @@ export const STEP1_OFFERS_SCRIPT = `
         if (aIsTierCredits && !bIsTierCredits) return -1;
         if (!aIsTierCredits && bIsTierCredits) return 1;
         
+        // CRITICAL: When both are tier-credits, prefer SMALLER value (current points, not points-to-next-tier)
+        if (aIsTierCredits && bIsTierCredits) {
+          return a.value - b.value;
+        }
+        
         // Second: Sort by priority field (lower number = higher priority)
         const priorityDiff = (a.priority || 99) - (b.priority || 99);
         if (priorityDiff !== 0) return priorityDiff;

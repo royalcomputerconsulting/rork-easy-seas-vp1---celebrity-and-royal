@@ -12,7 +12,13 @@ export const STEP4_LOYALTY_SCRIPT = `
         logType: 'info'
       }));
 
-      await wait(3000);
+      await wait(5000);
+      
+      let waitCount = 0;
+      while (waitCount < 10 && document.body.textContent.length < 1000) {
+        await wait(500);
+        waitCount++;
+      }
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -52,85 +58,54 @@ export const STEP4_LOYALTY_SCRIPT = `
         }));
       }
 
-      // STRATEGY: Find the large number in the "YOUR TIER" section
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 Searching for Crown & Anchor cruise points in YOUR TIER card...',
+        message: '🔍 Searching for cruise points...',
         logType: 'info'
       }));
       
       let cruisePointsFound = false;
       
-      // Look for elements containing "YOUR TIER" or "Crown & Anchor Society"
-      const allElements = Array.from(document.querySelectorAll('*'));
-      let tierSection = null;
+      const quickSearchElements = document.querySelectorAll('h1, h2, h3, h4, p, span, div[class*="tier"], div[class*="point"], div[class*="credit"], div[class*="card"]');
+      const candidates = [];
       
-      for (const el of allElements) {
+      for (const el of quickSearchElements) {
         const text = (el.textContent || '').trim();
-        if (text.includes('YOUR TIER') || text === 'Crown & Anchor Society') {
-          tierSection = el;
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Found YOUR TIER section',
-            logType: 'info'
-          }));
-          break;
-        }
-      }
-      
-      // If we found the tier section, look for the prominent number
-      if (tierSection) {
-        const tierElements = tierSection.querySelectorAll('*');
-        const candidates = [];
         
-        for (const el of tierElements) {
-          const text = (el.textContent || '').trim();
-          
-          // Look for standalone numbers (the big cruise points display)
-          if (/^\\d+$/.test(text) && text.length >= 1) {
-            const num = parseInt(text, 10);
-            if (num >= 0 && num <= 10000) {
-              candidates.push({ value: num, str: text, source: 'tier-section-number' });
+        if (/^\\d{1,4}$/.test(text)) {
+          const num = parseInt(text, 10);
+          if (num >= 0 && num <= 10000) {
+            let contextScore = 0;
+            let parent = el.parentElement;
+            let checkDepth = 0;
+            
+            while (parent && checkDepth < 5) {
+              const parentText = (parent.textContent || '').toLowerCase();
+              if (parentText.includes('your tier')) contextScore += 10;
+              if (parentText.includes('cruise points') || parentText.includes('cruise point')) contextScore += 20;
+              if (parentText.includes('crown') && parentText.includes('anchor')) contextScore += 5;
+              parent = parent.parentElement;
+              checkDepth++;
             }
-          }
-          
-          // Also check for "Cruise Points" label nearby
-          const lowerText = text.toLowerCase();
-          if (lowerText === 'cruise points' || lowerText.includes('cruise point')) {
-            // Check siblings or parent for numbers
-            const parent = el.parentElement;
-            if (parent) {
-              const parentText = parent.textContent || '';
-              const numMatch = parentText.match(/\\b(\\d{1,5})\\b/);
-              if (numMatch) {
-                const num = parseInt(numMatch[1], 10);
-                if (num >= 0 && num <= 10000) {
-                  candidates.push({ value: num, str: numMatch[1], source: 'near-cruise-points-label', priority: 1 });
-                }
-              }
+            
+            if (contextScore > 0) {
+              candidates.push({ value: num, str: text, contextScore: contextScore });
             }
           }
         }
-        
-        if (candidates.length > 0) {
-          // Sort by priority (label proximity) then by reasonable range
-          candidates.sort((a, b) => {
-            if (a.priority && !b.priority) return -1;
-            if (!a.priority && b.priority) return 1;
-            return 0;
-          });
-          
-          loyaltyData.crownAndAnchorPoints = candidates[0].str;
-          cruisePointsFound = true;
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '✓ Found cruise points in YOUR TIER card: ' + candidates[0].str,
-            logType: 'success'
-          }));
-        }
       }
       
-      // Fallback: Pattern matching in full page text
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => b.contextScore - a.contextScore);
+        loyaltyData.crownAndAnchorPoints = candidates[0].str;
+        cruisePointsFound = true;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '✓ Found cruise points: ' + candidates[0].str,
+          logType: 'success'
+        }));
+      }
+      
       if (!cruisePointsFound) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
@@ -189,7 +164,6 @@ export const STEP4_LOYALTY_SCRIPT = `
         }));
       }
 
-      // PRIORITY 1: Look for TIER CREDITS pattern (this is the actual label RC uses on the offers page)
       const tierCreditsPatterns = [
         /YOUR\\s+CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
         /TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
@@ -213,19 +187,14 @@ export const STEP4_LOYALTY_SCRIPT = `
         }
       }
       
-      const allElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, section, article');
+      const targetElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span[class*="tier"], span[class*="point"], div[class*="tier"], div[class*="point"]');
       let foundClubRoyale = false;
       
-      allElements.forEach(el => {
+      targetElements.forEach(el => {
         const text = el.textContent?.trim() || '';
         
         if (text.match(/Club Royale/i) && !foundClubRoyale) {
           foundClubRoyale = true;
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Found Club Royale section',
-            logType: 'info'
-          }));
         }
         
         if (text.match(/^(Signature|Premier|Classic)$/i) && !loyaltyData.clubRoyaleTier) {
