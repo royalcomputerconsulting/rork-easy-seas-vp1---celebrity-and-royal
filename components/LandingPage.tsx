@@ -30,7 +30,7 @@ export function LandingPage({ onContinue }: LandingPageProps) {
 
           <View style={styles.linkContainer}>
             <Text style={styles.linkLabel}>🌐 Live Platform</Text>
-            <Text style={styles.link}>https://easy-seas.onrender.com</Text>
+            <Text style={styles.link}>https://easy-seas.com</Text>
           </View>
 
           <View style={styles.divider} />
@@ -113,26 +113,10 @@ export function LandingPage({ onContinue }: LandingPageProps) {
 
           <View style={styles.divider} />
 
-          <Text style={styles.sectionTitle}>💳 SIMPLE PRICING</Text>
-
-          <Text style={styles.pricingHighlight}>
-            $35 for 90 days of full access
-          </Text>
-
-          <Text style={styles.bodyText}>
-            Less than $0.39 per day
-          </Text>
-
-          <Text style={styles.bodyText}>
-            Avoid one bad booking and it pays for itself.
-          </Text>
-
-          <View style={styles.divider} />
-
           <Text style={styles.sectionTitle}>✅ START PLANNING INTELLIGENTLY</Text>
 
           <Text style={styles.finalCTA}>
-            🌐 https://easy-seas.onrender.com{'\n'}
+            🌐 https://easy-seas.com{'\n'}
             EasySeas™ — Because every cruise should be planned intelligently.
           </Text>
 

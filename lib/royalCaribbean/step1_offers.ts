@@ -681,6 +681,40 @@ export const STEP1_OFFERS_SCRIPT = `
         return isTierCreditsDisplay;
       }
       
+      // Helper function to check if element is help/contact text (NOT an offer)
+      function isHelpOrContactText(element) {
+        const text = (element.textContent || '').toLowerCase();
+        // Filter out help sections, contact info, and other non-offer content
+        const isHelpText = text.includes('missing offers') ||
+                          text.includes('contact a club royale') ||
+                          text.includes('representative') ||
+                          text.includes('clubroyale@') ||
+                          text.includes('@rccl.com') ||
+                          (text.includes('contact') && text.includes('club royale')) ||
+                          text.includes('need help') ||
+                          text.includes('questions about your offers');
+        return isHelpText;
+      }
+      
+      // Helper function to validate offer code format
+      function isValidOfferCode(code) {
+        if (!code || code.length < 5 || code.length > 15) return false;
+        // RC offer codes typically:
+        // - Start with year (24, 25, 26) like 26CLS103, 2601C05, 25GOLD%
+        // - Or are alphanumeric promo codes like 26NEW104O, 26MAR103B
+        // Invalid: random words like SCOTTS, CURRENT, generic text
+        const invalidCodes = ['SCOTTS', 'CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER', 'CHOICE', 'PRIME', 'MASTERS', 'SIGNATURE', 'DIAMOND', 'PLATINUM', 'CONTACT', 'MISSING', 'REPRESENTATIVE'];
+        if (invalidCodes.includes(code.toUpperCase())) return false;
+        // Valid RC codes usually start with 2-digit year or have specific patterns
+        const validPatterns = [
+          /^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/i,  // 26CLS103, 26MAR103B
+          /^\d{4}[A-Z]\d{2}[A-Z]?$/i,         // 2601C05, 2601A08
+          /^\d{2}[A-Z]{3,6}%?$/i,              // 25GOLD, 25GOLD%
+          /^\d{2}[A-Z]{3}\d{3}[A-Z]?$/i       // 26NEW104, 26NEW104O
+        ];
+        return validPatterns.some(pattern => pattern.test(code));
+      }
+      
       // Helper function to get bounding rect Y position for sorting
       function getButtonYPosition(btn) {
         try {
@@ -839,11 +873,12 @@ export const STEP1_OFFERS_SCRIPT = `
       }
       
       // STEP 4: CODE-FIRST APPROACH - Build offer cards from offer codes directly
-      // This handles cases where View Sailings buttons are hard to detect
-      if (expectedOfferCount > 0 && uniqueOfferCodes.length >= expectedOfferCount) {
+      // This is now the PRIMARY detection method since button detection is unreliable
+      // We use offer codes to find containers, then look for View Sailings buttons within
+      if (uniqueOfferCodes.length > 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '🔄 Using code-first detection to find all ' + expectedOfferCount + ' offers...',
+          message: '🔄 Using CODE-FIRST detection as primary method...',
           logType: 'info'
         }));
         
@@ -851,54 +886,105 @@ export const STEP1_OFFERS_SCRIPT = `
         const codeBasedOfferCards = [];
         const seenCodeContainers = new Set();
         
+        // Sort codes by their Y position on page to process in order
+        const codeElementsWithPosition = [];
         for (const code of uniqueOfferCodes) {
-          // Skip codes that look like dates or tier credits
-          if (code.match(/^\d{4}$/) || code === 'CURRENT') continue;
+          // Skip codes that look like dates, tier credits, or reservation numbers
+          if (code.match(/^\d{4,}$/) || code === 'CURRENT' || code.match(/^\d{6,}$/)) continue;
           
           // Find all elements containing this exact code
           const codeElements = allOfferCodeElements.filter(el => (el.textContent || '').trim() === code);
           
           for (const codeEl of codeElements) {
-            let parent = codeEl.parentElement;
-            let bestContainer = null;
-            
-            for (let i = 0; i < 15 && parent; i++) {
-              const parentText = parent.textContent || '';
-              const parentLower = parentText.toLowerCase();
-              
-              // Check for offer signals
-              const hasTradeIn = parentLower.includes('trade-in') || parentLower.includes('trade in');
-              const hasRedeem = parentText.includes('Redeem by') || parentText.match(/Redeem\s+by/i);
-              const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
-              const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Room for Two|Stateroom)/i);
-              const hasDollarValue = parentText.match(/\\$[\\d,]+\\.?\\d*/);
-              const hasViewBtn = Array.from(parent.querySelectorAll('button, a, span, div')).some(btn => {
-                const btnText = (btn.textContent || '').toLowerCase().trim();
-                return btnText.length < 40 && (btnText.includes('sailing') || btnText === 'view sailings');
-              });
-              
-              const isReasonableSize = parentText.length > 50 && parentText.length < 10000;
-              const offerSignals = [hasTradeIn, hasRedeem, hasExpiry, hasCabinType, hasDollarValue, hasViewBtn].filter(Boolean).length;
-              
-              if (isReasonableSize && offerSignals >= 1 && !seenCodeContainers.has(parent)) {
-                // Count offer codes in this container to avoid grabbing too large a container
-                const codesInParent = (parentText.match(/\\b[A-Z0-9]{5,12}[A-Z0-9%]\\b/g) || []);
-                const uniqueCodesInParent = [...new Set(codesInParent)].length;
-                
-                if (uniqueCodesInParent <= 2 || parentText.length < 3000) {
-                  bestContainer = parent;
-                  if (offerSignals >= 2 && hasViewBtn) {
-                    break; // Found a good container
-                  }
-                }
-              }
+            try {
+              const rect = codeEl.getBoundingClientRect();
+              const yPos = rect.top + window.scrollY;
+              codeElementsWithPosition.push({ code, element: codeEl, yPos });
+            } catch (e) {
+              codeElementsWithPosition.push({ code, element: codeEl, yPos: 0 });
+            }
+          }
+        }
+        
+        // Sort by Y position
+        codeElementsWithPosition.sort((a, b) => a.yPos - b.yPos);
+        
+        // Process codes in order (top to bottom on page)
+        for (const { code, element: codeEl } of codeElementsWithPosition) {
+          let parent = codeEl.parentElement;
+          let bestContainer = null;
+          let bestScore = 0;
+          
+          for (let i = 0; i < 15 && parent; i++) {
+            // Skip if this container is already used by another offer
+            if (seenCodeContainers.has(parent)) {
               parent = parent.parentElement;
+              continue;
             }
             
-            if (bestContainer && !seenCodeContainers.has(bestContainer)) {
-              seenCodeContainers.add(bestContainer);
-              codeBasedOfferCards.push({ container: bestContainer, code: code });
+            const parentText = parent.textContent || '';
+            const parentLower = parentText.toLowerCase();
+            
+            // Skip promotional banners
+            if (parentLower.includes('ready to play') || parentLower.includes('apply now') ||
+                parentLower.includes('casino credit') || parentLower.includes('keep the party')) {
+              parent = parent.parentElement;
+              continue;
             }
+            
+            // Check for offer signals
+            const hasTradeIn = parentLower.includes('trade-in') || parentLower.includes('trade in');
+            const hasRedeem = parentText.includes('Redeem by') || parentText.match(/Redeem\s+by/i);
+            const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
+            const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Room for Two|Stateroom)/i);
+            const hasDollarValue = parentText.match(/\\$[\\d,]+\\.?\\d*/);
+            const hasViewBtn = Array.from(parent.querySelectorAll('button, a, span, div')).some(btn => {
+              const btnText = (btn.textContent || '').toLowerCase().trim();
+              return btnText.length < 40 && (btnText.includes('sailing') || btnText === 'view sailings');
+            });
+            const hasOfferKeyword = parentText.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Getaway|Spins|Jackpot)/i);
+            
+            const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
+            
+            // Calculate score
+            let score = 0;
+            if (hasTradeIn) score += 3;
+            if (hasRedeem) score += 3;
+            if (hasExpiry) score += 2;
+            if (hasCabinType) score += 2;
+            if (hasDollarValue) score += 2;
+            if (hasViewBtn) score += 4; // High priority for View Sailings button
+            if (hasOfferKeyword) score += 1;
+            
+            // Count offer codes in this container - prefer containers with 1-2 codes
+            const codesInParent = (parentText.match(/\\b[A-Z0-9]{5,12}[A-Z0-9%]\\b/g) || []);
+            const uniqueCodesInParent = [...new Set(codesInParent)].length;
+            
+            if (isReasonableSize && score >= 2) {
+              // Prefer containers with fewer codes (more specific to this offer)
+              if (uniqueCodesInParent <= 2) {
+                score += 2;
+              } else if (uniqueCodesInParent > 4) {
+                score -= 2; // Penalize containers with too many codes
+              }
+              
+              if (score > bestScore) {
+                bestScore = score;
+                bestContainer = parent;
+              }
+              
+              // If we have a strong match with View Sailings button, use it
+              if (score >= 8 && hasViewBtn && uniqueCodesInParent <= 2) {
+                break;
+              }
+            }
+            
+            parent = parent.parentElement;
+          }
+          
+          if (bestContainer && !seenCodeContainers.has(bestContainer) && !isAccountStatusDisplay(bestContainer)) {
+            seenCodeContainers.add(bestContainer);
+            codeBasedOfferCards.push({ container: bestContainer, code: code, score: bestScore });
           }
         }
         
@@ -908,9 +994,9 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'info'
         }));
         
-        // Add any code-based cards that weren't found via button detection
+        // Add code-based cards to offerCards (primary source)
         for (const { container, code } of codeBasedOfferCards) {
-          if (!seenOfferCards.has(container) && !isAccountStatusDisplay(container)) {
+          if (!seenOfferCards.has(container)) {
             seenOfferCards.add(container);
             offerCards.push(container);
             window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -920,6 +1006,18 @@ export const STEP1_OFFERS_SCRIPT = `
             }));
           }
         }
+      }
+      
+      // BUTTON-BASED DETECTION: Only use if code-first didn't find enough offers
+      // This is now a FALLBACK method
+      const needMoreOffers = expectedOfferCount > 0 && offerCards.length < expectedOfferCount;
+      
+      if (needMoreOffers || offerCards.length === 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '🔄 Button-based detection as fallback (found ' + offerCards.length + '/' + expectedOfferCount + ' via code-first)...',
+          logType: 'info'
+        }));
       }
       
       let buttonIndex = 0;
@@ -1015,12 +1113,12 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // Second pass: deduplicate and add unique offer cards
+      // Second pass: deduplicate and add unique offer cards (ONLY if not already found via code-first)
       for (const btn of sortedButtons) {
         const offerCard = buttonToCard.get(btn);
         if (!offerCard) continue;
         
-        // Skip if we've already processed this exact card element
+        // Skip if we've already processed this exact card element (including from code-first)
         if (seenOfferCards.has(offerCard)) {
           continue;
         }
@@ -1030,6 +1128,16 @@ export const STEP1_OFFERS_SCRIPT = `
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
             message: '🚫 Skipping account status display (not an offer)',
+            logType: 'info'
+          }));
+          continue;
+        }
+        
+        // CRITICAL: Skip help/contact text - it's NOT an offer
+        if (isHelpOrContactText(offerCard)) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '🚫 Skipping help/contact text (not an offer)',
             logType: 'info'
           }));
           continue;
@@ -1070,7 +1178,7 @@ export const STEP1_OFFERS_SCRIPT = `
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Identified offer card: ' + (offerName || offerCode || '[Unknown]') + duplicateLabel + ' (code: ' + (offerCode || 'N/A') + ')',
+          message: 'Button-based found offer: ' + (offerName || offerCode || '[Unknown]') + duplicateLabel + ' (code: ' + (offerCode || 'N/A') + ')',
           logType: 'info'
         }));
       }
@@ -1079,10 +1187,11 @@ export const STEP1_OFFERS_SCRIPT = `
       // The button-based detection with code-first approach should find all offers
       // If we're still missing offers, it's likely due to lazy loading issues, not detection
       
-      if (offerCards.length === 0 || (expectedOfferCount > 0 && offerCards.length < expectedOfferCount)) {
+      // ULTRA AGGRESSIVE FALLBACK: Only if we're still significantly short on offers
+      if (offerCards.length === 0 || (expectedOfferCount > 0 && offerCards.length < expectedOfferCount - 1)) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Still only found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying ULTRA AGGRESSIVE fallback (ignoring banners)...',
+          message: 'Found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying ULTRA AGGRESSIVE fallback...',
           logType: 'warning'
         }));
         
@@ -1140,8 +1249,8 @@ export const STEP1_OFFERS_SCRIPT = `
           const code = codeMatch ? codeMatch[1] : '';
           
           // Allow cards even with duplicate codes - they may be different offers
-          // But skip account status displays
-          if (code && !isAccountStatusDisplay(card)) {
+          // But skip account status displays, help text, and invalid codes
+          if (code && !isAccountStatusDisplay(card) && !isHelpOrContactText(card) && isValidOfferCode(code)) {
             existingCardElements.add(card);
             offerCards.push(card);
             
@@ -1240,15 +1349,26 @@ export const STEP1_OFFERS_SCRIPT = `
             }
             
             // Allow same code from different containers (different offers with same code)
-            if (offerContainer && !seenContainers.has(offerContainer)) {
-              seenContainers.add(offerContainer);
-              offerCards.push(offerContainer);
-              
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: 'Deep scan found offer by code: ' + codeText,
-                logType: 'info'
-              }));
+            if (offerContainer && !seenContainers.has(offerContainer) && !isHelpOrContactText(offerContainer)) {
+              // Validate the code looks like a real RC offer code
+              const codeMatch = codeText.match(/\b([A-Z0-9]{5,12}[A-Z0-9%])\b/);
+              const extractedCode = codeMatch ? codeMatch[1] : codeText;
+              if (isValidOfferCode(extractedCode)) {
+                seenContainers.add(offerContainer);
+                offerCards.push(offerContainer);
+                
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: 'Deep scan found offer by code: ' + codeText,
+                  logType: 'info'
+                }));
+              } else {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: '🚫 Skipping invalid code: ' + extractedCode,
+                  logType: 'info'
+                }));
+              }
             }
           }
           
@@ -1288,8 +1408,8 @@ export const STEP1_OFFERS_SCRIPT = `
             const code = codeMatch ? codeMatch[1] : '';
             
             // Allow same code from different cards (different offers with same code)
-            // But skip account status displays
-            if (code && !isAccountStatusDisplay(card)) {
+            // But skip account status displays, help text, and invalid codes
+            if (code && !isAccountStatusDisplay(card) && !isHelpOrContactText(card) && isValidOfferCode(code)) {
               seenContainers.add(card);
               offerCards.push(card);
               
@@ -1312,6 +1432,17 @@ export const STEP1_OFFERS_SCRIPT = `
           }
         }
       }
+      
+      // Final deduplication: ensure no container appears more than once
+      const finalOfferCards = [];
+      const finalSeenContainers = new Set();
+      for (const card of offerCards) {
+        if (!finalSeenContainers.has(card)) {
+          finalSeenContainers.add(card);
+          finalOfferCards.push(card);
+        }
+      }
+      offerCards = finalOfferCards;
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -1472,12 +1603,18 @@ export const STEP1_OFFERS_SCRIPT = `
           continue;
         }
         
-        // CRITICAL: Skip if offer name indicates it's account status, not an actual offer
+        // CRITICAL: Skip if offer name indicates it's account status, help text, or not an actual offer
         const offerNameLower = offerName.toLowerCase();
         if (offerNameLower.includes('your current tier') || 
             offerNameLower.includes('tier credits') ||
             offerName.includes('Club Royale #') ||
-            offerCode === 'CURRENT') {
+            offerCode === 'CURRENT' ||
+            offerNameLower.includes('missing offers') ||
+            offerNameLower.includes('contact a club royale') ||
+            offerNameLower.includes('representative') ||
+            offerNameLower.includes('clubroyale@') ||
+            offerNameLower.includes('@rccl.com') ||
+            (offerCode && !isValidOfferCode(offerCode))) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
             message: '🚫 Skipping account status display: ' + offerName.substring(0, 50) + '...',

@@ -70,21 +70,6 @@ export function LoginScreen() {
           <View style={styles.card}>
             <Text style={styles.title}>Welcome to EasySeas</Text>
             
-            <Text style={styles.description}>
-              In order to use this app, you must purchase a monthly subscription.
-            </Text>
-            
-            <Text style={styles.pricing}>
-              $35 for 90 days of use
-            </Text>
-
-            <TouchableOpacity 
-              style={styles.purchaseButton}
-              onPress={handlePurchasePress}
-            >
-              <Text style={styles.purchaseButtonText}>Purchase Subscription</Text>
-            </TouchableOpacity>
-
             <TouchableOpacity 
               style={styles.bookButton}
               onPress={handleFirstBookPress}
@@ -198,7 +183,7 @@ export function LoginScreen() {
               Automatically import every cruise, offer, itinerary, price, and calendar event — then let AI recommend exactly what to book, when to sail, and why.{"\n\n"}
               
               <Text style={styles.modalBold}>🌐 Live Platform:{"\n"}</Text>
-              https://easy-seas.onrender.com{"\n\n"}
+              https://easy-seas.com{"\n\n"}
               
               ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{"\n\n"}
               
@@ -437,7 +422,7 @@ export function LoginScreen() {
               
               <Text style={styles.modalBold}>Launch EasySeas Today{"\n\n"}</Text>
               
-              🌐 https://easy-seas.onrender.com{"\n"}
+              🌐 https://easy-seas.com{"\n"}
               $35 / 90 Days{"\n\n"}
               
               EasySeas™ — Because every cruise should be planned intelligently.
