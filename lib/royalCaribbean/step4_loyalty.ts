@@ -106,34 +106,60 @@ export const STEP4_LOYALTY_SCRIPT = `
       }
       
       if (yourTierElement) {
-        // Scan parent containers aggressively
+        // ULTRA PRIORITY: Find the FIRST and LARGEST standalone number immediately under "YOUR TIER"
+        // This is almost always the actual cruise points displayed prominently
         let container = yourTierElement.parentElement;
-        for (let level = 0; level < 8 && container; level++) {
-          // Get all prominent elements (headings, large text, standalone numbers)
-          const prominentElements = Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6, div, span, p, strong'));
+        for (let level = 0; level < 10 && container; level++) {
+          // Get all elements, prioritize by size and prominence
+          const allContainerElements = Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6, div, span, p, strong, [class*="large"], [class*="big"], [class*="hero"]'));
           
-          for (const el of prominentElements) {
+          // Sort by DOM order (elements appearing earlier get priority)
+          const elementsWithOrder = allContainerElements.map((el, index) => ({ el, index }));
+          
+          for (const { el } of elementsWithOrder) {
             const elText = (el.textContent || '').trim();
             // Look for STANDALONE numbers - MUST be at least 2 digits
             const standaloneMatch = elText.match(/^(\\d{2,4})$/);
             if (standaloneMatch) {
               const num = parseInt(standaloneMatch[1], 10);
-              // CRITICAL: Minimum 50 points to exclude random small numbers, years, etc.
-              if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026) {
-                // Check this isn't tier credits
+              // Minimum 50 points, exclude years and tier credits
+              if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024) {
+                // Check this isn't tier credits or points to next tier
                 const parentText = (el.parentElement?.textContent || '').toLowerCase();
-                if (!parentText.includes('tier credit') && !parentText.includes('100,000')) {
-                  // Higher priority if it's in a heading or large element
+                const grandparentText = (el.parentElement?.parentElement?.textContent || '').toLowerCase();
+                const isNotTierCredits = !parentText.includes('tier credit') && 
+                                          !grandparentText.includes('tier credit') &&
+                                          !parentText.includes('100,000') &&
+                                          !parentText.includes('to diamond') &&
+                                          !parentText.includes('to platinum') &&
+                                          !parentText.includes('points to');
+                
+                if (isNotTierCredits) {
+                  // HIGHEST priority for larger numbers displayed prominently
                   const isHeading = el.tagName.match(/^H[1-6]$/i);
+                  const isLargeClass = (el.className || '').toLowerCase().includes('large') || 
+                                        (el.className || '').toLowerCase().includes('big') ||
+                                        (el.className || '').toLowerCase().includes('hero');
+                  
+                  // Priority: larger numbers in headings/large elements = TOP priority
+                  let priority = 5;
+                  if (num >= 400) {
+                    priority = (isHeading || isLargeClass) ? 1 : 2;
+                  } else if (num >= 200) {
+                    priority = (isHeading || isLargeClass) ? 2 : 3;
+                  } else if (num >= 100) {
+                    priority = (isHeading || isLargeClass) ? 3 : 4;
+                  }
+                  
                   allCandidates.push({ 
                     value: num, 
                     str: standaloneMatch[1], 
                     source: 'your-tier-standalone', 
-                    priority: isHeading ? 2 : 3 
+                    priority: priority
                   });
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log',
-                    message: '  ➜ Found standalone number near YOUR TIER: ' + num,
+                    message: '  ➜ Found standalone number near YOUR TIER: ' + num + ' (priority: ' + priority + ')',
                     logType: 'info'
                   }));
                 }
@@ -194,17 +220,29 @@ export const STEP4_LOYALTY_SCRIPT = `
       
       // STRATEGY 4: Look for prominent standalone numbers anywhere on page (2-4 digits)
       // This catches the big "503" displayed prominently
-      const prominentNumberElements = document.querySelectorAll('h1, h2, h3, h4, h5, strong, b, [class*="large"], [class*="big"], [class*="hero"], [class*="featured"]');
+      const prominentNumberElements = document.querySelectorAll('h1, h2, h3, h4, h5, strong, b, [class*="large"], [class*="big"], [class*="hero"], [class*="featured"], [class*="primary"], [class*="title"]');
       for (const el of prominentNumberElements) {
         const elText = (el.textContent || '').trim();
         const numMatch = elText.match(/^(\\d{2,4})$/);
         if (numMatch) {
           const num = parseInt(numMatch[1], 10);
-          if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026) {
+          if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024) {
             const parentText = (el.parentElement?.textContent || '').toLowerCase();
-            // Exclude if it's tier credits or dates
-            if (!parentText.includes('tier credit') && !parentText.includes('100,000') && !parentText.includes('feb') && !parentText.includes('jan')) {
-              allCandidates.push({ value: num, str: numMatch[1], source: 'prominent-number', priority: 6 });
+            const grandparentText = (el.parentElement?.parentElement?.textContent || '').toLowerCase();
+            // Exclude if it's tier credits, dates, or points-to-next
+            const isValid = !parentText.includes('tier credit') && 
+                           !grandparentText.includes('tier credit') &&
+                           !parentText.includes('100,000') && 
+                           !parentText.includes('feb') && 
+                           !parentText.includes('jan') &&
+                           !parentText.includes('to diamond') &&
+                           !parentText.includes('to platinum') &&
+                           !parentText.includes('points to');
+            
+            if (isValid) {
+              // Higher priority for VERY prominent large numbers (like 503)
+              const priority = num >= 400 ? 2 : 6;
+              allCandidates.push({ value: num, str: numMatch[1], source: 'prominent-number', priority: priority });
             }
           }
         }

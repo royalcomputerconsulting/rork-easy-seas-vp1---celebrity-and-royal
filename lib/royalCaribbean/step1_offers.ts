@@ -473,17 +473,35 @@ export const STEP1_OFFERS_SCRIPT = `
       await scrollUntilComplete(null, 20);
       await wait(1000);
       
-      // AGGRESSIVE scrolling to ensure ALL content is loaded
-      for (let scrollPass = 0; scrollPass < 4; scrollPass++) {
+      // ULTRA AGGRESSIVE scrolling to ensure ALL 9 offers are loaded
+      // Royal Caribbean uses lazy loading, so we need to scroll multiple times
+      for (let scrollPass = 0; scrollPass < 8; scrollPass++) {
         window.scrollTo(0, document.body.scrollHeight);
-        await wait(1000);
-        window.scrollTo(0, document.body.scrollHeight / 2);
-        await wait(600);
-        window.scrollTo(0, document.body.scrollHeight);
+        await wait(1500);
+        window.scrollTo(0, document.body.scrollHeight * 0.25);
         await wait(800);
+        window.scrollTo(0, document.body.scrollHeight * 0.5);
+        await wait(800);
+        window.scrollTo(0, document.body.scrollHeight * 0.75);
+        await wait(800);
+        window.scrollTo(0, document.body.scrollHeight);
+        await wait(1500);
+        
+        // Log progress
+        if (scrollPass % 2 === 0) {
+          const currentOfferButtons = document.querySelectorAll('button, a, [role="button"]');
+          const viewSailingCount = Array.from(currentOfferButtons).filter(btn => 
+            (btn.textContent || '').toLowerCase().includes('sailing')
+          ).length;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Scroll pass ' + (scrollPass + 1) + '/8: Found ' + viewSailingCount + ' View Sailings buttons so far',
+            logType: 'info'
+          }));
+        }
       }
       window.scrollTo(0, 0);
-      await wait(1000);
+      await wait(1500);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -493,39 +511,13 @@ export const STEP1_OFFERS_SCRIPT = `
 
       let offerCards = [];
       
-      // First, identify and exclude promotional banners/dividers that interrupt offer listings
-      // ULTRA CONSERVATIVE: Only exclude very specific pure marketing banners
-      const promotionalElements = Array.from(document.querySelectorAll('div, section, article')).filter(el => {
-        const text = (el.textContent || '').toLowerCase();
-        
-        // NEVER exclude anything that might be an offer
-        const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
-          const childText = (child.textContent || '').toLowerCase().trim();
-          return childText.length < 50 && (childText.includes('sailing') || childText.includes('view') || childText.includes('select'));
-        });
-        const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12})\\b/);
-        const hasTradeIn = text.includes('trade-in value') || text.includes('trade in');
-        const hasRedeem = text.includes('redeem by') || text.includes('redeem');
-        const hasExpiry = text.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
-        const hasCabinType = text.match(/(balcony|oceanview|interior|suite|room for two|stateroom)/i);
-        const hasOfferName = text.match(/(january|last chance|gamechanger|instant reward|mgm|exclusive|discounted|ocean view)/i);
-        
-        // If it has ANY offer signals, it's NOT promotional - NEVER filter it out
-        if (hasViewSailingsButton || hasOfferCode || hasTradeIn || hasRedeem || hasExpiry || hasCabinType || hasOfferName) {
-          return false;
-        }
-        
-        // Only mark as promotional if it's a VERY specific banner with NO offer content
-        const isPurePromo = (text.includes('ready to play') || 
-                            text.includes('apply now and')) &&
-                            !text.includes('offer') &&
-                            text.length < 300;  // Pure banners are very short
-        return isPurePromo;
-      });
+      // IMPORTANT: Do NOT filter out promotional elements - they might be near offers
+      // The dividers between offers were causing issues
+      // Instead, we'll find ALL View Sailings buttons and work backwards
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🚫 Filtering out ' + promotionalElements.length + ' promotional banner(s)...',
+        message: '🔍 Scanning entire page for all ' + expectedOfferCount + ' offers (ignoring dividers)...',
         logType: 'info'
       }));
       
@@ -629,16 +621,9 @@ export const STEP1_OFFERS_SCRIPT = `
         let parent = btn.parentElement;
         let offerCard = null;
         
+        // Work upwards to find the offer container
         for (let i = 0; i < 15 && parent; i++) {
           const parentText = parent.textContent || '';
-          
-          // CRITICAL: Don't skip parents just because they might be near promotional content
-          // Only skip if the parent ITSELF is a pure promotional element
-          const isPromoItself = promotionalElements.includes(parent);
-          if (isPromoItself) {
-            parent = parent.parentElement;
-            continue;
-          }
           
           const hasOfferCode = parentText.match(/\\b([A-Z0-9]{6,12}[A-Z])\\b/);
           const hasTradeIn = parentText.toLowerCase().includes('trade-in value');
