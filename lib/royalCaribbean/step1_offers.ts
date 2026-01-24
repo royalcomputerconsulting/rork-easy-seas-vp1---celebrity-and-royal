@@ -473,21 +473,23 @@ export const STEP1_OFFERS_SCRIPT = `
       await scrollUntilComplete(null, 20);
       await wait(1000);
       
-      // ULTRA AGGRESSIVE scrolling to ensure ALL 9 offers are loaded
+      // ULTRA AGGRESSIVE scrolling to ensure ALL offers are loaded
       // Royal Caribbean uses lazy loading, so we need to scroll multiple times
-      for (let scrollPass = 0; scrollPass < 8; scrollPass++) {
+      for (let scrollPass = 0; scrollPass < 12; scrollPass++) {
         window.scrollTo(0, document.body.scrollHeight);
-        await wait(1500);
-        window.scrollTo(0, document.body.scrollHeight * 0.25);
-        await wait(800);
-        window.scrollTo(0, document.body.scrollHeight * 0.5);
-        await wait(800);
-        window.scrollTo(0, document.body.scrollHeight * 0.75);
-        await wait(800);
+        await wait(2000);
+        window.scrollTo(0, document.body.scrollHeight * 0.2);
+        await wait(1000);
+        window.scrollTo(0, document.body.scrollHeight * 0.4);
+        await wait(1000);
+        window.scrollTo(0, document.body.scrollHeight * 0.6);
+        await wait(1000);
+        window.scrollTo(0, document.body.scrollHeight * 0.8);
+        await wait(1000);
         window.scrollTo(0, document.body.scrollHeight);
-        await wait(1500);
+        await wait(2000);
         
-        // Log progress
+        // Log progress and check if we've found all expected offers
         if (scrollPass % 2 === 0) {
           const currentOfferButtons = document.querySelectorAll('button, a, [role="button"]');
           const viewSailingCount = Array.from(currentOfferButtons).filter(btn => 
@@ -495,9 +497,19 @@ export const STEP1_OFFERS_SCRIPT = `
           ).length;
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Scroll pass ' + (scrollPass + 1) + '/8: Found ' + viewSailingCount + ' View Sailings buttons so far',
+            message: 'Scroll pass ' + (scrollPass + 1) + '/12: Found ' + viewSailingCount + ' View Sailings buttons so far',
             logType: 'info'
           }));
+          
+          // If we've found expected number of buttons, we can stop early
+          if (expectedOfferCount > 0 && viewSailingCount >= expectedOfferCount * 2) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '✓ Found sufficient buttons (' + viewSailingCount + '), stopping scroll early',
+              logType: 'success'
+            }));
+            break;
+          }
         }
       }
       window.scrollTo(0, 0);
@@ -517,7 +529,21 @@ export const STEP1_OFFERS_SCRIPT = `
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 ULTRA AGGRESSIVE SCAN: Looking for all ' + expectedOfferCount + ' offers (ignoring ALL dividers and promotional content)...',
+        message: '🔍 HYPER AGGRESSIVE SCAN: Extracting ALL ' + (expectedOfferCount || 'available') + ' offers (bypassing ALL dividers and promotional content)...',
+        logType: 'info'
+      }));
+      
+      // CRITICAL: First, let's scan the entire page HTML structure to understand what we're dealing with
+      const pageHTML = document.body.innerHTML;
+      const allOfferCodes = pageHTML.match(/\b[A-Z0-9]{5,12}[A-Z]\b/g) || [];
+      const uniqueOfferCodes = [...new Set(allOfferCodes)].filter(code => {
+        // Filter out common false positives
+        return !code.match(/^(CURRENT|FEATURED|SAILING|BOOKING|LOYALTY|MEMBER)$/);
+      });
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '📋 Detected ' + uniqueOfferCodes.length + ' unique offer codes in page HTML: ' + uniqueOfferCodes.slice(0, 10).join(', '),
         logType: 'info'
       }));
       
@@ -618,6 +644,73 @@ export const STEP1_OFFERS_SCRIPT = `
       const seenOfferCodes = new Set();
       const seenOfferNames = new Set();
       
+      // STRATEGY: Instead of relying on buttons, find ALL containers with offer codes first
+      // Then match them with buttons. This ensures we don't miss offers due to button detection issues.
+      const offerCodeContainers = [];
+      
+      for (const code of uniqueOfferCodes) {
+        // Find the element containing this specific offer code
+        const allElements = Array.from(document.querySelectorAll('*'));
+        for (const el of allElements) {
+          const elText = (el.textContent || '').trim();
+          const elHTML = el.innerHTML || '';
+          
+          // Check if this element contains ONLY this offer code (not parent with multiple)
+          if (elText.includes(code) && elText.length < 5000) {
+            // Count how many offer codes are in this element
+            const codesInElement = uniqueOfferCodes.filter(c => elText.includes(c)).length;
+            
+            // We want containers that have exactly 1 offer code (the offer card itself)
+            if (codesInElement === 1) {
+              // Find the appropriate container level
+              let container = el;
+              for (let i = 0; i < 8; i++) {
+                const containerText = container.textContent || '';
+                const hasButton = Array.from(container.querySelectorAll('button, a, [role="button"]')).some(btn => 
+                  (btn.textContent || '').toLowerCase().includes('sailing')
+                );
+                const hasTradeIn = containerText.toLowerCase().includes('trade-in');
+                const hasExpiry = containerText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+,\s*\d{4}/i);
+                const isReasonableSize = containerText.length > 100 && containerText.length < 3000;
+                
+                if (isReasonableSize && (hasButton || hasTradeIn || hasExpiry)) {
+                  offerCodeContainers.push({ code: code, container: container });
+                  break;
+                }
+                
+                if (!container.parentElement) break;
+                container = container.parentElement;
+              }
+              break;
+            }
+          }
+        }
+      }
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '🎯 Found ' + offerCodeContainers.length + ' offer containers by code matching',
+        logType: 'info'
+      }));
+      
+      // Add these containers to offerCards if they're not duplicates
+      for (const { code, container } of offerCodeContainers) {
+        if (!seenOfferCodes.has(code)) {
+          seenOfferCodes.add(code);
+          offerCards.push(container);
+          
+          const nameEl = container.querySelector('h1, h2, h3, h4');
+          const name = nameEl ? (nameEl.textContent || '').trim() : '';
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '✓ Matched offer container for code ' + code + ': ' + (name || '[No title]'),
+            logType: 'success'
+          }));
+        }
+      }
+      
+      // NOW process remaining buttons that weren't matched by code
       for (const btn of viewSailingsButtons) {
         let parent = btn.parentElement;
         let offerCard = null;

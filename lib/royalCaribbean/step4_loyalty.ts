@@ -109,9 +109,9 @@ export const STEP4_LOYALTY_SCRIPT = `
         // ULTRA PRIORITY: Find the FIRST and LARGEST standalone number immediately under "YOUR TIER"
         // This is almost always the actual cruise points displayed prominently (e.g., 503)
         let container = yourTierElement.parentElement;
-        for (let level = 0; level < 12 && container; level++) {
+        for (let level = 0; level < 15 && container; level++) {
           // Get ALL elements, including those without specific classes
-          const allContainerElements = Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6, div, span, p, strong, b, [class*="large"], [class*="big"], [class*="hero"], [class*="count"], [class*="number"], [class*="point"], [class*="tier"], [class*="badge"], [class*="stat"]'));
+          const allContainerElements = Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6, div, span, p, strong, b, [class*="large"], [class*="big"], [class*="hero"], [class*="count"], [class*="number"], [class*="point"], [class*="tier"], [class*="badge"], [class*="stat"], [class*="value"], [class*="display"]'));
           
           // Sort by DOM order (elements appearing earlier get priority)
           const elementsWithOrder = allContainerElements.map((el, index) => ({ el, index }));
@@ -128,12 +128,20 @@ export const STEP4_LOYALTY_SCRIPT = `
                 const parentText = (el.parentElement?.textContent || '').toLowerCase();
                 const grandparentText = (el.parentElement?.parentElement?.textContent || '').toLowerCase();
                 const greatGrandparentText = (el.parentElement?.parentElement?.parentElement?.textContent || '').toLowerCase();
+                
+                // Look for "nights earned" or "cruise nights" nearby (strongest signal)
+                const nearNightsEarned = parentText.includes('nights earned') || 
+                                         grandparentText.includes('nights earned') ||
+                                         parentText.includes('cruise nights') ||
+                                         grandparentText.includes('cruise nights');
+                
                 const isNotTierCredits = !parentText.includes('tier credit') && 
                                           !grandparentText.includes('tier credit') &&
                                           !greatGrandparentText.includes('tier credit') &&
                                           !parentText.includes('100,000') &&
                                           !parentText.includes('to diamond') &&
                                           !parentText.includes('to platinum') &&
+                                          !parentText.includes('to gold') &&
                                           !parentText.includes('points to') &&
                                           !parentText.includes('points away') &&
                                           !grandparentText.includes('points to') &&
@@ -147,25 +155,31 @@ export const STEP4_LOYALTY_SCRIPT = `
                                         (el.className || '').toLowerCase().includes('hero') ||
                                         (el.className || '').toLowerCase().includes('count') ||
                                         (el.className || '').toLowerCase().includes('badge') ||
-                                        (el.className || '').toLowerCase().includes('stat');
+                                        (el.className || '').toLowerCase().includes('stat') ||
+                                        (el.className || '').toLowerCase().includes('display') ||
+                                        (el.className || '').toLowerCase().includes('value');
                   const elementSize = el.offsetHeight || 0;
                   const isLarge = elementSize > 30;
                   
-                  // CRITICAL FIX: Priority calculation - 503 should get HIGHEST priority
-                  // Numbers >= 400 in prominent positions = TOP priority
+                  // CRITICAL: Priority calculation - 503 should get HIGHEST priority (0 or 1)
+                  // The HUGE number under YOUR TIER should be unmissable
                   let priority = 10;
-                  if (num >= 400) {
-                    // 503 should get priority 1 if in heading/large element
-                    priority = (isHeading || isLargeClass || isLarge || index < 5) ? 1 : 2;
+                  if (nearNightsEarned && num >= 100) {
+                    // ABSOLUTE TOP: Number with "nights earned" nearby = actual cruise points
+                    priority = 0;
+                  } else if (num >= 400) {
+                    // VERY HIGH: Large numbers (>= 400) in prominent positions
+                    priority = (isHeading || isLargeClass || isLarge || index < 10) ? 1 : 2;
                   } else if (num >= 300) {
                     priority = (isHeading || isLargeClass || isLarge) ? 2 : 3;
                   } else if (num >= 200) {
-                    priority = (isHeading || isLargeClass) ? 3 : 4;
-                  } else if (num >= 100) {
-                    priority = (isHeading || isLargeClass) ? 4 : 6;
+                    priority = (isHeading || isLargeClass) ? 4 : 5;
+                  } else if (num >= 150) {
+                    // 140 should get low priority
+                    priority = (isHeading || isLargeClass) ? 6 : 8;
                   } else {
-                    // Small numbers like 140 should have LOW priority
-                    priority = (isHeading || isLargeClass) ? 7 : 9;
+                    // Very small numbers get lowest priority
+                    priority = 9;
                   }
                   
                   allCandidates.push({ 
@@ -176,7 +190,7 @@ export const STEP4_LOYALTY_SCRIPT = `
                   });
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log',
-                    message: '  ➜ Found standalone number near YOUR TIER: ' + num + ' (priority: ' + priority + ', heading: ' + !!isHeading + ', large: ' + (isLargeClass || isLarge) + ')',
+                    message: '  ➜ Found standalone number near YOUR TIER: ' + num + ' (priority: ' + priority + ', nights: ' + nearNightsEarned + ', heading: ' + !!isHeading + ', large: ' + (isLargeClass || isLarge) + ')',
                     logType: 'info'
                   }));
                 }
@@ -267,20 +281,25 @@ export const STEP4_LOYALTY_SCRIPT = `
                            !grandparentText.includes('points away');
             
             if (isValid) {
-              // CRITICAL: 503 should get HIGHEST priority (priority 1 or 2)
-              // 140 should get lower priority (5-7)
+              // CRITICAL: 503 should get HIGHEST priority (priority 0, 1, or 2)
+              // 140 should get much lower priority (7-9)
               let priority = 10;
-              if (num >= 400) {
+              if (nearCruiseNights && num >= 100) {
+                // ABSOLUTE TOP PRIORITY: Number near "cruise nights" text
+                priority = 0;
+              } else if (num >= 400) {
+                // VERY HIGH: Large numbers (503) get priority 1-2
                 priority = (nearYourTier || nearCruiseNights) ? 1 : 2;
               } else if (num >= 300) {
                 priority = nearYourTier ? 2 : 3;
               } else if (num >= 200) {
-                priority = 4;
+                priority = nearYourTier ? 4 : 5;
               } else if (num >= 150) {
-                priority = 6;
+                // Medium numbers like 140 get LOW priority
+                priority = nearYourTier ? 7 : 8;
               } else {
-                // Small numbers like 140 get low priority
-                priority = 8;
+                // Very small numbers get lowest priority
+                priority = 9;
               }
               
               allCandidates.push({ value: num, str: numMatch[1], source: 'prominent-number', priority: priority });
@@ -345,22 +364,33 @@ export const STEP4_LOYALTY_SCRIPT = `
       });
       
       if (uniqueCandidates.length > 0) {
-        // CRITICAL: If the best candidate is very small (< 50), skip it and look for larger ones
+        // CRITICAL: Prefer larger values (more likely to be actual cruise nights)
+        // If best candidate is < 200 but there's a candidate >= 300 with similar priority, use the larger one
         let bestCandidate = uniqueCandidates[0];
+        if (bestCandidate.value < 200 && uniqueCandidates.length > 1) {
+          // Look for a significantly larger candidate with priority within 2 levels
+          const largerCandidate = uniqueCandidates.find(c => 
+            c.value >= 300 && 
+            c.priority <= bestCandidate.priority + 2
+          );
+          if (largerCandidate) {
+            bestCandidate = largerCandidate;
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '✓ Preferring larger value ' + bestCandidate.value + ' over ' + uniqueCandidates[0].value + ' (more likely to be actual cruise nights)',
+              logType: 'success'
+            }));
+          }
+        }
+        
+        // Final validation: if value < 50, warn
         if (bestCandidate.value < 50) {
           const largerCandidate = uniqueCandidates.find(c => c.value >= 50);
           if (largerCandidate) {
             bestCandidate = largerCandidate;
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: '⚠ Skipping small value ' + uniqueCandidates[0].value + ', using ' + bestCandidate.value + ' instead',
-              logType: 'warning'
-            }));
-          } else {
-            // No candidates >= 50, log warning
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '⚠ All candidates are small values (< 50), may be incorrect',
+              message: '⚠ Skipping very small value ' + uniqueCandidates[0].value + ', using ' + bestCandidate.value + ' instead',
               logType: 'warning'
             }));
           }
