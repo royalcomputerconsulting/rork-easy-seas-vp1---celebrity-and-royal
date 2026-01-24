@@ -98,15 +98,16 @@ export const STEP4_LOYALTY_SCRIPT = `
         const texts = [directText, fullText];
         
         for (const text of texts) {
-          // Match 2-4 digit numbers, but be flexible with whitespace
-          const numMatch = text.match(/^\s*(\d{2,4})\s*$/);
+          // Match 2-4 digit numbers, including cases where digits are split by whitespace/newlines (e.g. "5\n03")
+          const compactDigits = text.replace(/\s+/g, '');
+          const numMatch = compactDigits.match(/^(\d{2,4})$/);
           if (numMatch) {
             const num = parseInt(numMatch[1], 10);
             if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024 && num !== 2023) {
               // Check if we already have this number from this element
               const alreadyAdded = rawNumbers.some(r => r.num === num && r.el === el);
               if (!alreadyAdded) {
-                rawNumbers.push({ num, el, text: numMatch[1] });
+                rawNumbers.push({ num, el, text: compactDigits });
                 break; // Don't add same element twice
               }
             }
@@ -243,11 +244,12 @@ export const STEP4_LOYALTY_SCRIPT = `
       for (const pattern of nightsEarnedPatterns) {
         let match;
         while ((match = pattern.exec(pageText)) !== null) {
-          if (match[1]) {
-            const num = parseInt(match[1], 10);
-            // CRITICAL: Minimum 20 points to avoid picking up random small numbers
-            if (num >= 20 && num <= 2000) {
-              allCandidates.push({ value: num, str: match[1], source: 'nights-earned', priority: 1 });
+          const joined = (match[2] ? (String(match[1]) + String(match[2])) : match[1]) || '';
+          if (joined) {
+            const compact = joined.replace(/\s+/g, '');
+            const num = parseInt(compact, 10);
+            if (num >= 20 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024 && num !== 2023) {
+              allCandidates.push({ value: num, str: compact, source: 'nights-earned', priority: num >= 300 ? 0 : 2 });
             }
           }
         }

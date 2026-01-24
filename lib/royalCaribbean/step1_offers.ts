@@ -521,8 +521,8 @@ export const STEP1_OFFERS_SCRIPT = `
         // Count buttons after each pass - be MORE lenient in detection
         const currentOfferButtons = document.querySelectorAll('button, a, [role="button"], span[class*="button"], div[class*="button"]');
         const viewSailingCount = Array.from(currentOfferButtons).filter(btn => {
-          const text = (btn.textContent || '').toLowerCase();
-          return text.includes('sailing') || text.includes('view dates') || text.includes('see dates');
+          const text = ((btn.textContent || '') + ' ' + (btn.getAttribute?.('aria-label') || '') + ' ' + (btn.getAttribute?.('title') || '')).toLowerCase().replace(/\s+/g, ' ').trim();
+          return text === 'view sailings' || text === 'view sailing' || text.includes('view sailings') || text.includes('view sailing');
         }).length;
         
         // Log progress
@@ -604,7 +604,7 @@ export const STEP1_OFFERS_SCRIPT = `
       // We'll find containers that have ALL these signals
       
       const pageHTML = document.body.innerHTML;
-      const allOfferCodes = pageHTML.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO|MAR|WST|GRD|A0)[A-Z0-9]{2,8}[A-Z0-9%]?\b/gi) || [];
+      const allOfferCodes = pageHTML.match(/\b\d{2}(?:CLS|GOLD|C0|NEW|WEST|MAX|GO|MAR|WST|GRD|A0)[A-Z0-9%]{2,10}\b/gi) || [];
       const uniqueOfferCodes = [...new Set(allOfferCodes.map(c => c.toUpperCase()))].filter(code => {
         return !code.match(/^(CURRENT|FEATURED|SAILING|BOOKING|LOYALTY|MEMBER|ROYALE)$/);
       });
@@ -633,12 +633,8 @@ export const STEP1_OFFERS_SCRIPT = `
       // Find ALL "View Sailings" buttons - EXACT match only
       // User confirmed: ALL buttons say "View Sailings" - they are all exactly the same
       const allViewSailingButtons = allClickables.filter(el => {
-        const text = (el.textContent || '').trim().toLowerCase();
-        // ONLY match "view sailings" or "view sailing" (singular/plural)
-        // Don't try to be clever - the user says they're all the same
-        return text === 'view sailings' || 
-               text === 'view sailing' ||
-               (text.includes('view') && text.includes('sailing') && text.length < 30);
+        const text = ((el.textContent || '') + ' ' + (el.getAttribute?.('aria-label') || '') + ' ' + (el.getAttribute?.('title') || '')).toLowerCase().replace(/\s+/g, ' ').trim();
+        return text === 'view sailings' || text === 'view sailing' || text.includes('view sailings') || text.includes('view sailing');
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -798,7 +794,7 @@ export const STEP1_OFFERS_SCRIPT = `
           const parentLower = parentText.toLowerCase();
           
           // MUST have offer code
-          const offerCodeMatch = parentText.match(/\b([12][0-9](?:CLS|GOLD|C0|NEW|WEST|MAX|GO|MAR|WST|GRD|A0)[A-Z0-9]{2,8}[A-Z0-9%]?)\b/i);
+          const offerCodeMatch = parentText.match(/\b(\d{2}(?:CLS|GOLD|C0|NEW|WEST|MAX|GO|MAR|WST|GRD|A0)[A-Z0-9%]{2,10})\b/i);
           if (!offerCodeMatch) {
             parent = parent.parentElement;
             continue;
@@ -825,7 +821,7 @@ export const STEP1_OFFERS_SCRIPT = `
         }
         
         if (bestContainer && !offerCards.includes(bestContainer)) {
-          const offerCodeMatch = bestContainer.textContent.match(/\b([12][0-9](?:CLS|GOLD|C0|NEW|WEST|MAX|GO|MAR|WST|GRD|A0)[A-Z0-9]{2,8}[A-Z0-9%]?)\b/i);
+          const offerCodeMatch = bestContainer.textContent.match(/\b(\d{2}(?:CLS|GOLD|C0|NEW|WEST|MAX|GO|MAR|WST|GRD|A0)[A-Z0-9%]{2,10})\b/i);
           const offerCode = offerCodeMatch ? offerCodeMatch[1] : 'UNKNOWN';
           
           offerCards.push(bestContainer);

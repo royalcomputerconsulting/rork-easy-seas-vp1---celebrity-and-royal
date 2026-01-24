@@ -48,9 +48,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }));
   }, []);
 
-  const setStatus = useCallback((status: SyncStatus) => {
-    setState(prev => ({ ...prev, status }));
-  }, []);
 
   const setProgress = useCallback((current: number, total: number, stepName?: string) => {
     setState(prev => ({
@@ -61,10 +58,34 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
   const handleWebViewMessage = useCallback((message: WebViewMessage) => {
     switch (message.type) {
-      case 'auth_status':
-        setStatus(message.loggedIn ? 'logged_in' : 'not_logged_in');
-        addLog(message.loggedIn ? 'User logged in successfully' : 'User not logged in', 'info');
+      case 'auth_status': {
+        setState(prev => {
+          const nextStatus: SyncStatus = message.loggedIn ? 'logged_in' : 'not_logged_in';
+
+          const isBusy =
+            prev.status.startsWith('running_') ||
+            prev.status === 'awaiting_confirmation' ||
+            prev.status === 'syncing';
+
+          if (isBusy) {
+            if (!message.loggedIn) {
+              if (prev.status !== 'login_expired') {
+                addLog('Login expired during sync flow', 'warning');
+              }
+              return { ...prev, status: 'login_expired' };
+            }
+
+            return prev;
+          }
+
+          if (prev.status !== nextStatus) {
+            addLog(message.loggedIn ? 'User logged in successfully' : 'User not logged in', 'info');
+          }
+
+          return { ...prev, status: nextStatus };
+        });
         break;
+      }
 
       case 'log':
         addLog(message.message, message.logType);
@@ -141,7 +162,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Ingestion completed successfully', 'success');
         break;
     }
-  }, [addLog, setStatus, setProgress]);
+  }, [addLog, setProgress]);
 
   const openLogin = useCallback(() => {
     if (webViewRef.current) {
@@ -308,7 +329,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, state.scrapePricingAndItinerary, addLog, state.extractedOffers.length]);
+  }, [state.status, state.scrapePricingAndItinerary, addLog]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
