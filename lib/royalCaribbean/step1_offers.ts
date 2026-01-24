@@ -845,11 +845,26 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
       
-      // STEP 3: Get ALL possible clickable elements EXCEPT those inside promotional banners
+      // STEP 3: PRIMARY DETECTION - Use REDEEM buttons as anchors (each offer has exactly ONE Redeem button)
+      // This is the most reliable method since RC shows exactly 9 yellow Redeem buttons for 9 offers
       const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div, p')).filter(el => {
         // Exclude elements that are inside promotional banners
         return !Array.from(bannersSet).some(banner => banner.contains(el) || el.contains(banner));
       });
+      
+      // Find ALL Redeem buttons - these are yellow buttons that appear exactly once per offer
+      const redeemButtons = allClickables.filter(el => {
+        const text = (el.textContent || '').trim().toLowerCase();
+        const isShortText = text.length < 30;
+        // Match Redeem button text exactly (not "Redeem by" which is expiry text)
+        return isShortText && (text === 'redeem' || text === 'redeem offer' || text === 'redeem now');
+      });
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '🎯 Found ' + redeemButtons.length + ' Redeem buttons (should match offer count)',
+        logType: redeemButtons.length === expectedOfferCount ? 'success' : 'info'
+      }));
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -930,13 +945,129 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // STEP 4: CODE-FIRST APPROACH - Build offer cards from offer codes directly
-      // This is now the PRIMARY detection method since button detection is unreliable
-      // We use offer codes to find containers, then look for View Sailings buttons within
-      if (uniqueOfferCodes.length > 0) {
+      // STEP 4: REDEEM-BUTTON-FIRST APPROACH - Build offer cards from Redeem buttons
+      // This is the most reliable method since each offer has exactly ONE Redeem button
+      // The Redeem button is inside the offer card container
+      if (redeemButtons.length > 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '🔄 Using CODE-FIRST detection as primary method...',
+          message: '🎯 Using REDEEM-BUTTON detection as primary method (' + redeemButtons.length + ' offers)...',
+          logType: 'info'
+        }));
+        
+        const redeemBasedOfferCards = [];
+        const seenRedeemContainers = new Set();
+        
+        for (const redeemBtn of redeemButtons) {
+          // Work upward from Redeem button to find the offer card container
+          let parent = redeemBtn.parentElement;
+          let bestContainer = null;
+          let bestScore = 0;
+          
+          for (let i = 0; i < 15 && parent; i++) {
+            const parentText = parent.textContent || '';
+            const parentLower = parentText.toLowerCase();
+            
+            // Skip promotional banners
+            if (parentLower.includes('ready to play') || parentLower.includes('apply now') ||
+                parentLower.includes('casino credit') || parentLower.includes('keep the party')) {
+              parent = parent.parentElement;
+              continue;
+            }
+            
+            // Check for offer signals
+            const hasOfferCode = parentText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?)\b/);
+            const hasTradeIn = parentLower.includes('trade-in') || parentLower.includes('trade in');
+            const hasRedeem = parentText.includes('Redeem by') || parentText.match(/Redeem\s+by/i);
+            const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+,\s*\d{4}/i);
+            const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Room for Two|Stateroom)/i);
+            const hasDollarValue = parentText.match(/\$[\d,]+\.?\d*/);
+            const hasViewBtn = Array.from(parent.querySelectorAll('button, a, span, div')).some(btn => {
+              const btnText = (btn.textContent || '').toLowerCase().trim();
+              return btnText.length < 40 && (btnText.includes('sailing') || btnText === 'view sailings');
+            });
+            const hasOfferKeyword = parentText.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Getaway|Spins|Jackpot|Discount|Benefit|Gold|West Coast|Go for the Gold)/i);
+            
+            const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
+            
+            // Calculate score
+            let score = 0;
+            if (hasOfferCode) score += 4;
+            if (hasTradeIn) score += 3;
+            if (hasRedeem) score += 3;
+            if (hasExpiry) score += 2;
+            if (hasCabinType) score += 2;
+            if (hasDollarValue) score += 2;
+            if (hasViewBtn) score += 5;
+            if (hasOfferKeyword) score += 1;
+            
+            // Count Redeem buttons in this container - prefer containers with exactly 1
+            const redeemBtnsInParent = Array.from(parent.querySelectorAll('button, a, span, div')).filter(btn => {
+              const btnText = (btn.textContent || '').trim().toLowerCase();
+              return btnText === 'redeem' || btnText === 'redeem offer';
+            }).length;
+            
+            if (isReasonableSize && score >= 3) {
+              // Prefer containers with exactly 1 Redeem button (the offer card itself)
+              if (redeemBtnsInParent === 1) {
+                score += 5;
+              } else if (redeemBtnsInParent > 1) {
+                score -= 3; // Penalize containers with multiple Redeem buttons
+              }
+              
+              if (score > bestScore) {
+                bestScore = score;
+                bestContainer = parent;
+              }
+              
+              // If we have a strong match with exactly 1 Redeem button and View Sailings, use it
+              if (score >= 12 && hasViewBtn && redeemBtnsInParent === 1) {
+                break;
+              }
+            }
+            
+            parent = parent.parentElement;
+          }
+          
+          if (bestContainer && !seenRedeemContainers.has(bestContainer)) {
+            seenRedeemContainers.add(bestContainer);
+            
+            // Extract offer code from container
+            const containerText = bestContainer.textContent || '';
+            const codeMatch = containerText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?)\b/);
+            const offerCode = codeMatch ? codeMatch[1] : '';
+            
+            redeemBasedOfferCards.push({ container: bestContainer, code: offerCode, score: bestScore });
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Redeem-based found offer: ' + (offerCode || '[no code]'),
+              logType: 'info'
+            }));
+          }
+        }
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '📋 Redeem-based detection found ' + redeemBasedOfferCards.length + ' offer containers',
+          logType: 'info'
+        }));
+        
+        // Add redeem-based cards to offerCards (this is now the primary source)
+        for (const { container, code } of redeemBasedOfferCards) {
+          if (!seenOfferCards.has(container)) {
+            seenOfferCards.add(container);
+            offerCards.push(container);
+          }
+        }
+      }
+      
+      // FALLBACK: CODE-FIRST APPROACH - Only if Redeem detection didn't find enough
+      // Build offer cards from offer codes directly
+      if (uniqueOfferCodes.length > 0 && offerCards.length < expectedOfferCount) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '🔄 Using CODE-FIRST detection as fallback (found ' + offerCards.length + '/' + expectedOfferCount + ')...',
           logType: 'info'
         }));
         
