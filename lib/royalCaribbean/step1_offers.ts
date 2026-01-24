@@ -664,11 +664,12 @@ export const STEP1_OFFERS_SCRIPT = `
       
       // CRITICAL: Ignore promotional banners like "READY TO PLAY?"
       // These banners appear BETWEEN offers and should NOT stop our detection
-      // Strategy: Find ALL View Sailings buttons on the ENTIRE page, ignoring any promotional content
+      // NEW STRATEGY: Find ALL offer codes FIRST, then locate their containers and buttons
+      // This ensures we don't miss offers even if their View Sailings buttons are hard to detect
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 Scanning entire page for all ' + expectedOfferCount + ' offers (ignoring promotional banners)...',
+        message: '🔍 Scanning entire page for all ' + expectedOfferCount + ' offers (code-first detection)...',
         logType: 'info'
       }));
       
@@ -703,7 +704,27 @@ export const STEP1_OFFERS_SCRIPT = `
       // Mark these banners so we can skip them
       const bannersSet = new Set(promotionalBanners);
       
-      // STEP 2: Get ALL possible clickable elements EXCEPT those inside promotional banners
+      // STEP 2: CODE-FIRST DETECTION - Find ALL offer codes on the page first
+      // This is more reliable than button detection for finding all offers
+      const allOfferCodeElements = Array.from(document.querySelectorAll('*')).filter(el => {
+        const text = (el.textContent || '').trim();
+        // Match RC offer code patterns: 26CLS103B, 2601C05E, 25GOLD, 26NEW104O, etc.
+        const hasCode = text.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && text.length >= 5 && text.length <= 15;
+        const isNotNav = !el.closest('nav, header, footer, [role="navigation"]');
+        const isNotBanner = !Array.from(bannersSet).some(banner => banner.contains(el));
+        return hasCode && isNotNav && isNotBanner;
+      });
+      
+      // Extract unique offer codes
+      const uniqueOfferCodes = [...new Set(allOfferCodeElements.map(el => (el.textContent || '').trim()))];
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '🔍 Found ' + uniqueOfferCodes.length + ' unique offer codes: ' + uniqueOfferCodes.slice(0, 10).join(', '),
+        logType: 'info'
+      }));
+      
+      // STEP 3: Get ALL possible clickable elements EXCEPT those inside promotional banners
       const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div, p')).filter(el => {
         // Exclude elements that are inside promotional banners
         return !Array.from(bannersSet).some(banner => banner.contains(el) || el.contains(banner));
@@ -766,18 +787,7 @@ export const STEP1_OFFERS_SCRIPT = `
           viewSailingsButtons.push(...additionalButtons);
         }
         
-        // SECOND PASS: Also look for buttons by their position relative to offer codes
-        const allOfferCodeElements = Array.from(document.querySelectorAll('*')).filter(el => {
-          const text = (el.textContent || '').trim();
-          return text.match(/^[A-Z0-9]{5,12}[A-Z]$/) && text.length < 15;
-        });
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Found ' + allOfferCodeElements.length + ' offer code elements on page',
-          logType: 'info'
-        }));
-        
+        // SECOND PASS: Use pre-found offer codes to locate buttons
         for (const codeEl of allOfferCodeElements) {
           // Find parent container and look for View Sailings button within
           let parent = codeEl.parentElement;
@@ -795,6 +805,90 @@ export const STEP1_OFFERS_SCRIPT = `
             
             if (btnsInParent.length > 0) break;
             parent = parent.parentElement;
+          }
+        }
+      }
+      
+      // STEP 4: CODE-FIRST APPROACH - Build offer cards from offer codes directly
+      // This handles cases where View Sailings buttons are hard to detect
+      if (expectedOfferCount > 0 && uniqueOfferCodes.length >= expectedOfferCount) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '🔄 Using code-first detection to find all ' + expectedOfferCount + ' offers...',
+          logType: 'info'
+        }));
+        
+        // For each unique offer code, find its container
+        const codeBasedOfferCards = [];
+        const seenCodeContainers = new Set();
+        
+        for (const code of uniqueOfferCodes) {
+          // Skip codes that look like dates or tier credits
+          if (code.match(/^\d{4}$/) || code === 'CURRENT') continue;
+          
+          // Find all elements containing this exact code
+          const codeElements = allOfferCodeElements.filter(el => (el.textContent || '').trim() === code);
+          
+          for (const codeEl of codeElements) {
+            let parent = codeEl.parentElement;
+            let bestContainer = null;
+            
+            for (let i = 0; i < 15 && parent; i++) {
+              const parentText = parent.textContent || '';
+              const parentLower = parentText.toLowerCase();
+              
+              // Check for offer signals
+              const hasTradeIn = parentLower.includes('trade-in') || parentLower.includes('trade in');
+              const hasRedeem = parentText.includes('Redeem by') || parentText.match(/Redeem\s+by/i);
+              const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
+              const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Room for Two|Stateroom)/i);
+              const hasDollarValue = parentText.match(/\\$[\\d,]+\\.?\\d*/);
+              const hasViewBtn = Array.from(parent.querySelectorAll('button, a, span, div')).some(btn => {
+                const btnText = (btn.textContent || '').toLowerCase().trim();
+                return btnText.length < 40 && (btnText.includes('sailing') || btnText === 'view sailings');
+              });
+              
+              const isReasonableSize = parentText.length > 50 && parentText.length < 10000;
+              const offerSignals = [hasTradeIn, hasRedeem, hasExpiry, hasCabinType, hasDollarValue, hasViewBtn].filter(Boolean).length;
+              
+              if (isReasonableSize && offerSignals >= 1 && !seenCodeContainers.has(parent)) {
+                // Count offer codes in this container to avoid grabbing too large a container
+                const codesInParent = (parentText.match(/\\b[A-Z0-9]{5,12}[A-Z0-9%]\\b/g) || []);
+                const uniqueCodesInParent = [...new Set(codesInParent)].length;
+                
+                if (uniqueCodesInParent <= 2 || parentText.length < 3000) {
+                  bestContainer = parent;
+                  if (offerSignals >= 2 && hasViewBtn) {
+                    break; // Found a good container
+                  }
+                }
+              }
+              parent = parent.parentElement;
+            }
+            
+            if (bestContainer && !seenCodeContainers.has(bestContainer)) {
+              seenCodeContainers.add(bestContainer);
+              codeBasedOfferCards.push({ container: bestContainer, code: code });
+            }
+          }
+        }
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '📋 Code-first detection found ' + codeBasedOfferCards.length + ' offer containers',
+          logType: 'info'
+        }));
+        
+        // Add any code-based cards that weren't found via button detection
+        for (const { container, code } of codeBasedOfferCards) {
+          if (!seenOfferCards.has(container) && !isAccountStatusDisplay(container)) {
+            seenOfferCards.add(container);
+            offerCards.push(container);
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Code-first found offer: ' + code,
+              logType: 'info'
+            }));
           }
         }
       }
