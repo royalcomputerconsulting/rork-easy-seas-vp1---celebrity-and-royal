@@ -19,7 +19,9 @@ export interface LogEntry {
 
 export interface LoyaltyData {
   crownAndAnchorLevel?: string;
+  crownAndAnchorPoints?: string;
   clubRoyaleTier?: string;
+  clubRoyalePoints?: string;
 }
 
 export interface OfferRow {
