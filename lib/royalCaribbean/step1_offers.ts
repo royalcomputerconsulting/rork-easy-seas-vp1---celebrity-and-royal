@@ -473,43 +473,69 @@ export const STEP1_OFFERS_SCRIPT = `
       await scrollUntilComplete(null, 20);
       await wait(1000);
       
-      // ULTRA AGGRESSIVE scrolling to ensure ALL offers are loaded
-      // Royal Caribbean uses lazy loading, so we need to scroll multiple times
-      for (let scrollPass = 0; scrollPass < 12; scrollPass++) {
+      // HYPER AGGRESSIVE scrolling to ensure ALL offers are loaded (including past dividers)
+      // Royal Caribbean uses lazy loading AND has promotional dividers that can break detection
+      // We need to scroll PAST all dividers to load hidden offers
+      let lastButtonCount = 0;
+      let stableScrollCount = 0;
+      
+      for (let scrollPass = 0; scrollPass < 20; scrollPass++) {
+        // Scroll to multiple positions to trigger lazy loading
         window.scrollTo(0, document.body.scrollHeight);
-        await wait(2000);
-        window.scrollTo(0, document.body.scrollHeight * 0.2);
-        await wait(1000);
-        window.scrollTo(0, document.body.scrollHeight * 0.4);
-        await wait(1000);
-        window.scrollTo(0, document.body.scrollHeight * 0.6);
-        await wait(1000);
-        window.scrollTo(0, document.body.scrollHeight * 0.8);
-        await wait(1000);
+        await wait(2500);
+        window.scrollTo(0, document.body.scrollHeight * 0.25);
+        await wait(1200);
+        window.scrollTo(0, document.body.scrollHeight * 0.5);
+        await wait(1200);
+        window.scrollTo(0, document.body.scrollHeight * 0.75);
+        await wait(1200);
         window.scrollTo(0, document.body.scrollHeight);
-        await wait(2000);
+        await wait(2500);
         
-        // Log progress and check if we've found all expected offers
+        // Aggressive: scroll PAST the bottom by triggering events
+        window.scrollBy(0, 5000);
+        await wait(1500);
+        
+        // Count buttons after each pass
+        const currentOfferButtons = document.querySelectorAll('button, a, [role="button"]');
+        const viewSailingCount = Array.from(currentOfferButtons).filter(btn => 
+          (btn.textContent || '').toLowerCase().includes('sailing')
+        ).length;
+        
+        // Log progress
         if (scrollPass % 2 === 0) {
-          const currentOfferButtons = document.querySelectorAll('button, a, [role="button"]');
-          const viewSailingCount = Array.from(currentOfferButtons).filter(btn => 
-            (btn.textContent || '').toLowerCase().includes('sailing')
-          ).length;
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Scroll pass ' + (scrollPass + 1) + '/12: Found ' + viewSailingCount + ' View Sailings buttons so far',
+            message: 'Scroll pass ' + (scrollPass + 1) + '/20: Found ' + viewSailingCount + ' View Sailings buttons',
             logType: 'info'
           }));
-          
-          // If we've found expected number of buttons, we can stop early
-          if (expectedOfferCount > 0 && viewSailingCount >= expectedOfferCount * 2) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '✓ Found sufficient buttons (' + viewSailingCount + '), stopping scroll early',
-              logType: 'success'
-            }));
-            break;
+        }
+        
+        // Check if button count is stable (no new offers loading)
+        if (viewSailingCount === lastButtonCount) {
+          stableScrollCount++;
+          if (stableScrollCount >= 3) {
+            // If we've found expected count or more, stop
+            if (expectedOfferCount > 0 && viewSailingCount >= expectedOfferCount) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '✓ Found all expected offers (' + viewSailingCount + ' buttons), stopping scroll',
+                logType: 'success'
+              }));
+              break;
+            }
+            // If count is stable but we haven't reached expected, continue a bit more
+            if (stableScrollCount >= 5) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '⚠️ Button count stable at ' + viewSailingCount + ' (expected: ' + expectedOfferCount + '), continuing...',
+                logType: 'warning'
+              }));
+            }
           }
+        } else {
+          stableScrollCount = 0;
+          lastButtonCount = viewSailingCount;
         }
       }
       window.scrollTo(0, 0);
@@ -523,13 +549,13 @@ export const STEP1_OFFERS_SCRIPT = `
 
       let offerCards = [];
       
-      // CRITICAL FIX: Promotional dividers/banners were stopping detection at offer 4
-      // We need to scan the ENTIRE page and ignore all dividers/promotional content
-      // Use the most aggressive detection possible
+      // CRITICAL FIX: Promotional dividers like "READY TO PLAY" stop detection mid-page
+      // We need to scan the ENTIRE page INCLUDING content after dividers
+      // Strategy: Find ALL View Sailings buttons first, then work backwards to containers
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 HYPER AGGRESSIVE SCAN: Extracting ALL ' + (expectedOfferCount || 'available') + ' offers (bypassing ALL dividers and promotional content)...',
+        message: '🔍 HYPER AGGRESSIVE SCAN: Extracting ALL ' + (expectedOfferCount || 'available') + ' offers (ignoring promotional dividers like READY TO PLAY)...',
         logType: 'info'
       }));
       
@@ -547,13 +573,19 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
       
-      // ULTRA AGGRESSIVE: Get ALL possible clickable elements and find View Sailings buttons
-      // CRITICAL: We must find ALL offers even if separated by dividers/promotional content
+      // CRITICAL STRATEGY: Royal Caribbean page structure has:
+      // - Featured Offer (with View Sailings)
+      // - "All Offers (8)" section with 3 offers
+      // - "READY TO PLAY" promotional divider
+      // - 3 more offers AFTER the divider
+      // - 2 more offers at the bottom
+      // We MUST scan the ENTIRE page and ignore dividers completely
+      
       const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div, p, [class*="offer"], [class*="card"]'));
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 Scanning ' + allClickables.length + ' elements for ALL View Sailings buttons (ignoring dividers)...',
+        message: '🔍 Scanning ' + allClickables.length + ' elements across ENTIRE page (ignoring dividers like READY TO PLAY)...',
         logType: 'info'
       }));
       

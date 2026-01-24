@@ -161,25 +161,32 @@ export const STEP4_LOYALTY_SCRIPT = `
                   const elementSize = el.offsetHeight || 0;
                   const isLarge = elementSize > 30;
                   
-                  // CRITICAL: Priority calculation - 503 should get HIGHEST priority (0 or 1)
-                  // The HUGE number under YOUR TIER should be unmissable
+                  // CRITICAL: 503 displayed PROMINENTLY under YOUR TIER gets ABSOLUTE TOP priority
+                  // The HUGE number (300+) is the actual cruise nights, not smaller numbers like 140
                   let priority = 10;
                   if (nearNightsEarned && num >= 100) {
-                    // ABSOLUTE TOP: Number with "nights earned" nearby = actual cruise points
+                    // ABSOLUTE TOP: Number with "nights earned" or "cruise nights" nearby
+                    priority = 0;
+                  } else if (num >= 400 && (isHeading || isLargeClass || isLarge)) {
+                    // CRITICAL: Large numbers (503) displayed prominently = HIGHEST priority
                     priority = 0;
                   } else if (num >= 400) {
-                    // VERY HIGH: Large numbers (>= 400) in prominent positions
-                    priority = (isHeading || isLargeClass || isLarge || index < 10) ? 1 : 2;
+                    // High: 400+ without styling
+                    priority = 1;
+                  } else if (num >= 300 && (isHeading || isLargeClass || isLarge)) {
+                    priority = 1;
                   } else if (num >= 300) {
-                    priority = (isHeading || isLargeClass || isLarge) ? 2 : 3;
+                    priority = 2;
+                  } else if (num >= 200 && (isHeading || isLargeClass)) {
+                    priority = 3;
                   } else if (num >= 200) {
-                    priority = (isHeading || isLargeClass) ? 4 : 5;
+                    priority = 4;
                   } else if (num >= 150) {
-                    // 140 should get low priority
-                    priority = (isHeading || isLargeClass) ? 6 : 8;
+                    // 140-199 range gets LOW priority (NOT the main number)
+                    priority = (isHeading || isLargeClass) ? 8 : 9;
                   } else {
                     // Very small numbers get lowest priority
-                    priority = 9;
+                    priority = 10;
                   }
                   
                   allCandidates.push({ 
@@ -190,7 +197,7 @@ export const STEP4_LOYALTY_SCRIPT = `
                   });
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log',
-                    message: '  ➜ Found standalone number near YOUR TIER: ' + num + ' (priority: ' + priority + ', nights: ' + nearNightsEarned + ', heading: ' + !!isHeading + ', large: ' + (isLargeClass || isLarge) + ')',
+                    message: '  ➜ Found standalone number near YOUR TIER: ' + num + ' (priority: ' + priority + ', nights: ' + nearNightsEarned + ', heading: ' + !!isHeading + ', large: ' + (isLargeClass || isLarge) + ', size: ' + elementSize + ')',
                     logType: 'info'
                   }));
                 }
@@ -281,31 +288,46 @@ export const STEP4_LOYALTY_SCRIPT = `
                            !grandparentText.includes('points away');
             
             if (isValid) {
-              // CRITICAL: 503 should get HIGHEST priority (priority 0, 1, or 2)
-              // 140 should get much lower priority (7-9)
+              // Check element styling to determine if it's displayed PROMINENTLY
+              const computedStyle = window.getComputedStyle(el);
+              const fontSize = parseFloat(computedStyle.fontSize) || 0;
+              const fontWeight = computedStyle.fontWeight;
+              const isVeryLarge = fontSize > 40;
+              const isBold = fontWeight === 'bold' || fontWeight === '700' || fontWeight === '800' || fontWeight === '900';
+              
+              // CRITICAL: 503 displayed PROMINENTLY gets ABSOLUTE TOP priority
               let priority = 10;
               if (nearCruiseNights && num >= 100) {
-                // ABSOLUTE TOP PRIORITY: Number near "cruise nights" text
+                // ABSOLUTE TOP: Number near "cruise nights" or "nights earned"
                 priority = 0;
+              } else if (num >= 400 && isVeryLarge) {
+                // CRITICAL: Large numbers (503) with VERY LARGE font (> 40px) = HIGHEST priority
+                priority = 0;
+              } else if (num >= 400 && (nearYourTier || isBold)) {
+                priority = 1;
               } else if (num >= 400) {
-                // VERY HIGH: Large numbers (503) get priority 1-2
-                priority = (nearYourTier || nearCruiseNights) ? 1 : 2;
+                priority = 1;
+              } else if (num >= 300 && isVeryLarge) {
+                priority = 1;
+              } else if (num >= 300 && (nearYourTier || isBold)) {
+                priority = 2;
               } else if (num >= 300) {
-                priority = nearYourTier ? 2 : 3;
+                priority = 3;
+              } else if (num >= 200 && nearYourTier) {
+                priority = 4;
               } else if (num >= 200) {
-                priority = nearYourTier ? 4 : 5;
+                priority = 5;
               } else if (num >= 150) {
-                // Medium numbers like 140 get LOW priority
-                priority = nearYourTier ? 7 : 8;
+                // 140-199 range gets LOW priority (NOT the main number)
+                priority = nearYourTier ? 8 : 9;
               } else {
-                // Very small numbers get lowest priority
-                priority = 9;
+                priority = 10;
               }
               
               allCandidates.push({ value: num, str: numMatch[1], source: 'prominent-number', priority: priority });
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: '  ➜ Found prominent number: ' + num + ' (priority: ' + priority + ', nearYourTier: ' + nearYourTier + ')',
+                message: '  ➜ Found prominent number: ' + num + ' (priority: ' + priority + ', nearYourTier: ' + nearYourTier + ', nearNights: ' + nearCruiseNights + ', fontSize: ' + fontSize + 'px, bold: ' + isBold + ')',
                 logType: 'info'
               }));
             }
@@ -355,29 +377,42 @@ export const STEP4_LOYALTY_SCRIPT = `
         }));
       }
       
-      // Pick best candidate - prefer larger numbers (more likely to be actual points)
-      // Sort by priority first, then by value (larger = better)
+      // Pick best candidate - STRONGLY prefer larger numbers displayed prominently
       uniqueCandidates.sort((a, b) => {
         if (a.priority !== b.priority) return a.priority - b.priority;
-        // For same priority, prefer larger values (more likely to be real points)
+        // For same priority, STRONGLY prefer larger values (503 vs 140)
         return b.value - a.value;
       });
       
       if (uniqueCandidates.length > 0) {
-        // CRITICAL: Prefer larger values (more likely to be actual cruise nights)
-        // If best candidate is < 200 but there's a candidate >= 300 with similar priority, use the larger one
+        // CRITICAL: The HUGE number under YOUR TIER (like 503) should ALWAYS win
         let bestCandidate = uniqueCandidates[0];
+        
+        // AGGRESSIVE: If best is < 200, look for MUCH larger alternatives
         if (bestCandidate.value < 200 && uniqueCandidates.length > 1) {
-          // Look for a significantly larger candidate with priority within 2 levels
-          const largerCandidate = uniqueCandidates.find(c => 
+          // Look for 300+ with priority within 3 levels
+          const muchLargerCandidate = uniqueCandidates.find(c => 
             c.value >= 300 && 
-            c.priority <= bestCandidate.priority + 2
+            c.priority <= bestCandidate.priority + 3
           );
-          if (largerCandidate) {
-            bestCandidate = largerCandidate;
+          if (muchLargerCandidate) {
+            bestCandidate = muchLargerCandidate;
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: '✓ Preferring larger value ' + bestCandidate.value + ' over ' + uniqueCandidates[0].value + ' (more likely to be actual cruise nights)',
+              message: '✓ OVERRIDING: Preferring MUCH LARGER value ' + bestCandidate.value + ' over ' + uniqueCandidates[0].value + ' (the prominent number under YOUR TIER)',
+              logType: 'success'
+            }));
+          }
+        }
+        
+        // FORCE OVERRIDE: If still < 200 but there's ANY 400+ candidate, use it
+        if (bestCandidate.value < 200 && uniqueCandidates.length > 1) {
+          const veryLargeCandidate = uniqueCandidates.find(c => c.value >= 400 && c.priority <= 5);
+          if (veryLargeCandidate) {
+            bestCandidate = veryLargeCandidate;
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '✓✓ FORCE OVERRIDE: Using very large value ' + bestCandidate.value + ' (400+ always preferred)',
               logType: 'success'
             }));
           }
