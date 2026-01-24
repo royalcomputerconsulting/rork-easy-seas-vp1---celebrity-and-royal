@@ -715,7 +715,10 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      const seenOfferCodes = new Set();
+      // CRITICAL: Track offers by a combination of code + index to handle DUPLICATE CODES
+      // Multiple offers can have the SAME offer code (e.g., multiple "2026 January instant reward certificate")
+      const offerCodeCounts = {}; // Track how many times we've seen each code
+      const seenOfferCards = new Set(); // Track unique card elements to avoid duplicates
       let buttonIndex = 0;
       
       for (const btn of viewSailingsButtons) {
@@ -766,6 +769,11 @@ export const STEP1_OFFERS_SCRIPT = `
         }
         
         if (offerCard) {
+          // Skip if we've already processed this exact card element
+          if (seenOfferCards.has(offerCard)) {
+            continue;
+          }
+          
           const cardText = offerCard.textContent || '';
           
           const codeMatch = cardText.match(/\\b([A-Z0-9]{6,12}[A-Z])\\b/);
@@ -781,21 +789,29 @@ export const STEP1_OFFERS_SCRIPT = `
             }
           }
           
-          // CRITICAL: Use offer CODE as primary unique key
-          // Multiple offers can have the same NAME but different CODES (e.g., "2026 January instant reward certificate")
-          // If no code found, use button index to ensure all offers are captured
-          const uniqueKey = offerCode || ('btn-' + buttonIndex + '-' + (offerName || 'unknown'));
+          // CRITICAL: Handle MULTIPLE offers with the SAME offer code
+          // Track count of each code and create unique key with index
+          // This ensures offers like "2026 January instant reward certificate" (same code) are ALL captured
+          const baseKey = offerCode || ('btn-' + buttonIndex + '-' + (offerName || 'unknown'));
           
-          if (uniqueKey && !seenOfferCodes.has(uniqueKey)) {
-            seenOfferCodes.add(uniqueKey);
-            offerCards.push(offerCard);
-            
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Identified offer card: ' + (offerName || offerCode || '[Unknown]') + ' (code: ' + (offerCode || 'N/A') + ')',
-              logType: 'info'
-            }));
+          // Initialize or increment the count for this code
+          if (!offerCodeCounts[baseKey]) {
+            offerCodeCounts[baseKey] = 0;
           }
+          offerCodeCounts[baseKey]++;
+          
+          // Mark this card as seen
+          seenOfferCards.add(offerCard);
+          offerCards.push(offerCard);
+          
+          const duplicateIndex = offerCodeCounts[baseKey];
+          const duplicateLabel = duplicateIndex > 1 ? ' [#' + duplicateIndex + ']' : '';
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Identified offer card: ' + (offerName || offerCode || '[Unknown]') + duplicateLabel + ' (code: ' + (offerCode || 'N/A') + ')',
+            logType: 'info'
+          }));
         }
       }
       
@@ -846,19 +862,22 @@ export const STEP1_OFFERS_SCRIPT = `
           return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
         });
         
-        const existingCodes = new Set(offerCards.map(card => {
-          const text = card.textContent || '';
-          const match = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-          return match ? match[1] : '';
-        }).filter(Boolean));
+        // Track seen card elements to avoid duplicates (but allow same code from different cards)
+        const existingCardElements = new Set(offerCards);
         
         for (const card of filteredFallback) {
+          // Skip if we've already processed this exact card element
+          if (existingCardElements.has(card)) {
+            continue;
+          }
+          
           const text = card.textContent || '';
           const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
           const code = codeMatch ? codeMatch[1] : '';
           
-          if (code && !existingCodes.has(code)) {
-            existingCodes.add(code);
+          // Allow cards even with duplicate codes - they may be different offers
+          if (code) {
+            existingCardElements.add(card);
             offerCards.push(card);
             
             let name = '';
@@ -906,10 +925,12 @@ export const STEP1_OFFERS_SCRIPT = `
             logType: 'info'
           }));
           
+          // Track seen containers to avoid duplicates
+          const seenContainers = new Set(offerCards);
+          
           // For EACH offer code, find its parent container that looks like an offer card
           for (const codeEl of offerCodeElements) {
             const codeText = (codeEl.textContent || '').trim();
-            if (existingCodes.has(codeText)) continue; // Already found this offer
             
             let parent = codeEl.parentElement;
             let offerContainer = null;
@@ -939,8 +960,9 @@ export const STEP1_OFFERS_SCRIPT = `
               parent = parent.parentElement;
             }
             
-            if (offerContainer && !existingCodes.has(codeText)) {
-              existingCodes.add(codeText);
+            // Allow same code from different containers (different offers with same code)
+            if (offerContainer && !seenContainers.has(offerContainer)) {
+              seenContainers.add(offerContainer);
               offerCards.push(offerContainer);
               
               window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -977,12 +999,18 @@ export const STEP1_OFFERS_SCRIPT = `
           });
           
           for (const card of filteredStructural) {
+            // Skip if already seen this card element
+            if (seenContainers.has(card)) {
+              continue;
+            }
+            
             const text = card.textContent || '';
             const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
             const code = codeMatch ? codeMatch[1] : '';
             
-            if (code && !existingCodes.has(code)) {
-              existingCodes.add(code);
+            // Allow same code from different cards (different offers with same code)
+            if (code) {
+              seenContainers.add(card);
               offerCards.push(card);
               
               let name = '';
