@@ -620,26 +620,15 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
       
-      // Find ALL View Sailings buttons - be VERY lenient
+      // Find ALL "View Sailings" buttons - EXACT match only
+      // User confirmed: ALL buttons say "View Sailings" - they are all exactly the same
       const viewSailingsButtons = allClickables.filter(el => {
         const text = (el.textContent || '').trim().toLowerCase();
-        const isShortText = text.length < 50;
-        // Check for any sailing-related text
-        const hasSailingText = text.includes('sailing') || text.includes('dates') || text.includes('view');
-        // Match various button patterns
-        return isShortText && (
-               text.includes('view sailing') || 
-               text.includes('see sailing') || 
-               text.includes('show sailing') ||
-               text.includes('view dates') ||
-               text.includes('see dates') ||
-               text.includes('available sailing') ||
-               text === 'view sailings' ||
-               text === 'see sailings' ||
-               text === 'view' ||
-               (text === 'select' && el.closest('[class*="offer"], [class*="card"]')) ||
-               (hasSailingText && text.length < 25)
-        );
+        // ONLY match "view sailings" or "view sailing" (singular/plural)
+        // Don't try to be clever - the user says they're all the same
+        return text === 'view sailings' || 
+               text === 'view sailing' ||
+               (text.includes('view') && text.includes('sailing') && text.length < 30);
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -655,11 +644,15 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'info'
         }));
         
-        // AGGRESSIVE: Look for ANY element with sailing in text
+        // Look for any additional "View Sailings" buttons we might have missed
         const additionalButtons = allClickables.filter(el => {
           const text = (el.textContent || '').trim().toLowerCase();
           const alreadyFound = viewSailingsButtons.includes(el);
-          return !alreadyFound && (text.includes('sailing') && text.length < 40);
+          // Be more lenient but still focused on "view sailing" text
+          return !alreadyFound && 
+                 text.includes('view') && 
+                 text.includes('sailing') && 
+                 text.length < 50;
         });
         
         if (additionalButtons.length > 0) {
@@ -689,7 +682,8 @@ export const STEP1_OFFERS_SCRIPT = `
           for (let i = 0; i < 10 && parent; i++) {
             const btnsInParent = Array.from(parent.querySelectorAll('button, a, [role="button"], span, div')).filter(btn => {
               const btnText = (btn.textContent || '').trim().toLowerCase();
-              return btnText.length < 30 && (btnText.includes('sailing') || btnText.includes('view'));
+              // ONLY match elements with BOTH "view" AND "sailing" text
+              return btnText.length < 50 && btnText.includes('view') && btnText.includes('sailing');
             });
             
             for (const btn of btnsInParent) {
@@ -704,11 +698,9 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      const seenOfferCodes = new Set();
-      const seenOfferNames = new Set();
-      
-      // STRATEGY: Instead of relying on buttons, find ALL containers with offer codes first
-      // Then match them with buttons. This ensures we don't miss offers due to button detection issues.
+      // CRITICAL: Do NOT deduplicate by offer code! Same offer can appear multiple times
+      // (e.g., "2026 January Instant Rewards" can appear twice for different cabin types)
+      // Use DOM element reference as unique identifier instead
       const offerCodeContainers = [];
       
       for (const code of uniqueOfferCodes) {
@@ -756,10 +748,10 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
       
-      // Add these containers to offerCards if they're not duplicates
+      // Add ALL containers - same offer code can appear multiple times (don't deduplicate)
       for (const { code, container } of offerCodeContainers) {
-        if (!seenOfferCodes.has(code)) {
-          seenOfferCodes.add(code);
+        // Check if this exact container is already in the list
+        if (!offerCards.includes(container)) {
           offerCards.push(container);
           
           const nameEl = container.querySelector('h1, h2, h3, h4');
@@ -825,10 +817,8 @@ export const STEP1_OFFERS_SCRIPT = `
             }
           }
           
-          const uniqueKey = offerCode || offerName || '';
-          
-          if (uniqueKey && !seenOfferCodes.has(uniqueKey)) {
-            seenOfferCodes.add(uniqueKey);
+          // Don't deduplicate by code - use element reference instead
+          if (offerCard && !offerCards.includes(offerCard)) {
             offerCards.push(offerCard);
             
             window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -883,20 +873,14 @@ export const STEP1_OFFERS_SCRIPT = `
           return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
         });
         
-        const existingCodes = new Set(offerCards.map(card => {
-          const text = card.textContent || '';
-          const match = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-          return match ? match[1] : '';
-        }).filter(Boolean));
-        
+        // Don't deduplicate by code - check if container already exists
         for (const card of filteredFallback) {
-          const text = card.textContent || '';
-          const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-          const code = codeMatch ? codeMatch[1] : '';
-          
-          if (code && !existingCodes.has(code)) {
-            existingCodes.add(code);
+          if (!offerCards.includes(card)) {
             offerCards.push(card);
+            
+            const text = card.textContent || '';
+            const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
+            const code = codeMatch ? codeMatch[1] : '';
             
             let name = '';
             const headings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6'));
@@ -946,7 +930,7 @@ export const STEP1_OFFERS_SCRIPT = `
           // For EACH offer code, find its parent container that looks like an offer card
           for (const codeEl of offerCodeElements) {
             const codeText = (codeEl.textContent || '').trim();
-            if (existingCodes.has(codeText)) continue; // Already found this offer
+            // Don't skip based on code - same code can appear multiple times
             
             let parent = codeEl.parentElement;
             let offerContainer = null;
@@ -976,13 +960,12 @@ export const STEP1_OFFERS_SCRIPT = `
               parent = parent.parentElement;
             }
             
-            if (offerContainer && !existingCodes.has(codeText)) {
-              existingCodes.add(codeText);
+            if (offerContainer && !offerCards.includes(offerContainer)) {
               offerCards.push(offerContainer);
               
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: 'Deep scan found offer by code: ' + codeText,
+                message: 'Deep scan found offer by code: ' + codeText + ' (total: ' + offerCards.length + ')',
                 logType: 'info'
               }));
             }
@@ -1014,13 +997,13 @@ export const STEP1_OFFERS_SCRIPT = `
           });
           
           for (const card of filteredStructural) {
-            const text = card.textContent || '';
-            const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-            const code = codeMatch ? codeMatch[1] : '';
-            
-            if (code && !existingCodes.has(code)) {
-              existingCodes.add(code);
+            // Don't deduplicate - check if container already exists
+            if (!offerCards.includes(card)) {
               offerCards.push(card);
+              
+              const text = card.textContent || '';
+              const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
+              const code = codeMatch ? codeMatch[1] : '';
               
               let name = '';
               const headings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6'));
