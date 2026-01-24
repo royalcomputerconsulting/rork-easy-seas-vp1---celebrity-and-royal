@@ -622,6 +622,14 @@ export const STEP1_OFFERS_SCRIPT = `
             logType: 'info'
           }));
           
+          // Send progress to prevent timeout during long scroll phase
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'progress',
+            current: 0,
+            total: expectedOfferCount || viewSailingCount,
+            stepName: 'Scrolling to load offers (pass ' + (scrollPass + 1) + '/15)'
+          }));
+          
           // Stop early if we found enough buttons (2x expected = each offer has 2 buttons)
           if (expectedOfferCount > 0 && viewSailingCount >= expectedOfferCount * 2) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -642,6 +650,14 @@ export const STEP1_OFFERS_SCRIPT = `
         type: 'log',
         message: 'Analyzing offers page structure...',
         logType: 'info'
+      }));
+      
+      // Send progress to prevent timeout during analysis phase
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'progress',
+        current: 0,
+        total: expectedOfferCount,
+        stepName: 'Analyzing offers page structure...'
       }));
 
       let offerCards = [];
