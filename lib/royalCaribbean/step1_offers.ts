@@ -451,17 +451,65 @@ export const STEP1_OFFERS_SCRIPT = `
       await wait(4000);
       
       let expectedOfferCount = 0;
+      let featuredOfferCount = 0;
+      let moreOfferCount = 0;
       const pageText = document.body.textContent || '';
-      const offerCountMatch = pageText.match(/All Offers\\s*\\((\\d+)\\)/i) || 
-                              pageText.match(/Offers\\s*\\((\\d+)\\)/i) ||
-                              pageText.match(/(\\d+)\\s+Offers?\\s+Available/i);
-      if (offerCountMatch) {
-        expectedOfferCount = parseInt(offerCountMatch[1], 10);
+      
+      // Look for Featured Offers count
+      const featuredMatch = pageText.match(/Featured\\s+Offers?\\s*\\((\\d+)\\)/i) ||
+                           pageText.match(/Featured\\s*\\((\\d+)\\)/i);
+      if (featuredMatch) {
+        featuredOfferCount = parseInt(featuredMatch[1], 10);
+      } else {
+        // Check if there's a Featured Offers section with at least 1 offer
+        const hasFeaturedSection = pageText.match(/Featured\\s+Offer/i);
+        if (hasFeaturedSection) {
+          featuredOfferCount = 1;
+        }
+      }
+      
+      // Look for More Offers count
+      const moreMatch = pageText.match(/More\\s+Offers?\\s*\\((\\d+)\\)/i) ||
+                       pageText.match(/More\\s*\\((\\d+)\\)/i) ||
+                       pageText.match(/All\\s+Offers?\\s*\\((\\d+)\\)/i) ||
+                       pageText.match(/Other\\s+Offers?\\s*\\((\\d+)\\)/i);
+      if (moreMatch) {
+        moreOfferCount = parseInt(moreMatch[1], 10);
+      }
+      
+      // Also check for total offers pattern
+      const totalMatch = pageText.match(/Offers\\s*\\((\\d+)\\)/i) ||
+                        pageText.match(/(\\d+)\\s+Offers?\\s+Available/i);
+      if (totalMatch && !moreMatch) {
+        const totalFromPage = parseInt(totalMatch[1], 10);
+        if (totalFromPage > featuredOfferCount) {
+          moreOfferCount = totalFromPage - featuredOfferCount;
+        } else {
+          moreOfferCount = totalFromPage;
+        }
+      }
+      
+      expectedOfferCount = featuredOfferCount + moreOfferCount;
+      
+      if (expectedOfferCount > 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Expected offer count from page: ' + expectedOfferCount,
+          message: '📋 Found ' + featuredOfferCount + ' Featured Offer(s), Found ' + moreOfferCount + ' More = ' + expectedOfferCount + ' Total Offers',
           logType: 'info'
         }));
+      } else {
+        // Fallback: count View Sailings buttons directly
+        const quickButtonCount = Array.from(document.querySelectorAll('button, a, [role="button"]')).filter(btn => 
+          (btn.textContent || '').toLowerCase().includes('sailing')
+        ).length;
+        if (quickButtonCount > 0) {
+          expectedOfferCount = quickButtonCount;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '📋 Detected ' + expectedOfferCount + ' offer(s) from View Sailings buttons',
+            logType: 'info'
+          }));
+        }
       }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -721,6 +769,19 @@ export const STEP1_OFFERS_SCRIPT = `
       const seenOfferCards = new Set(); // Track unique card elements to avoid duplicates
       let buttonIndex = 0;
       
+      // Helper function to check if element is user's account/tier display (NOT an offer)
+      function isAccountStatusDisplay(element) {
+        const text = (element.textContent || '').toLowerCase();
+        const upperText = (element.textContent || '');
+        // Filter out user's tier credits display and account info
+        const isTierCreditsDisplay = text.includes('your current tier credits') || 
+                                     text.includes('current tier credits') ||
+                                     upperText.includes('Club Royale #') ||
+                                     text.includes('club royale #') ||
+                                     (text.includes('tier credits') && text.includes('club royale') && !text.includes('view sailing'));
+        return isTierCreditsDisplay;
+      }
+      
       for (const btn of viewSailingsButtons) {
         buttonIndex++;
         
@@ -771,6 +832,16 @@ export const STEP1_OFFERS_SCRIPT = `
         if (offerCard) {
           // Skip if we've already processed this exact card element
           if (seenOfferCards.has(offerCard)) {
+            continue;
+          }
+          
+          // CRITICAL: Skip user's account status/tier credits display - it's NOT an offer
+          if (isAccountStatusDisplay(offerCard)) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '🚫 Skipping account status display (not an offer)',
+              logType: 'info'
+            }));
             continue;
           }
           
@@ -876,7 +947,8 @@ export const STEP1_OFFERS_SCRIPT = `
           const code = codeMatch ? codeMatch[1] : '';
           
           // Allow cards even with duplicate codes - they may be different offers
-          if (code) {
+          // But skip account status displays
+          if (code && !isAccountStatusDisplay(card)) {
             existingCardElements.add(card);
             offerCards.push(card);
             
@@ -1009,7 +1081,8 @@ export const STEP1_OFFERS_SCRIPT = `
             const code = codeMatch ? codeMatch[1] : '';
             
             // Allow same code from different cards (different offers with same code)
-            if (code) {
+            // But skip account status displays
+            if (code && !isAccountStatusDisplay(card)) {
               seenContainers.add(card);
               offerCards.push(card);
               
@@ -1035,8 +1108,8 @@ export const STEP1_OFFERS_SCRIPT = `
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + offerCards.length + ' offer cards on page' + (expectedOfferCount > 0 ? ' (expected: ' + expectedOfferCount + ')' : ''),
-        logType: (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) ? 'warning' : 'info'
+        message: '✅ Identified ' + offerCards.length + ' offer cards on page' + (expectedOfferCount > 0 ? ' (expected: ' + expectedOfferCount + ')' : ''),
+        logType: (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) ? 'warning' : 'success'
       }));
       
       if (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) {
@@ -1183,6 +1256,20 @@ export const STEP1_OFFERS_SCRIPT = `
             type: 'log',
             message: '⚠️ Skipping - no valid offer name found',
             logType: 'warning'
+          }));
+          continue;
+        }
+        
+        // CRITICAL: Skip if offer name indicates it's account status, not an actual offer
+        const offerNameLower = offerName.toLowerCase();
+        if (offerNameLower.includes('your current tier') || 
+            offerNameLower.includes('tier credits') ||
+            offerName.includes('Club Royale #') ||
+            offerCode === 'CURRENT') {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '🚫 Skipping account status display: ' + offerName.substring(0, 50) + '...',
+            logType: 'info'
           }));
           continue;
         }
