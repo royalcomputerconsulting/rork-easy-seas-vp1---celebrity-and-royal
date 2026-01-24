@@ -1244,10 +1244,13 @@ export const STEP1_OFFERS_SCRIPT = `
           }
         }
         
+        // Extract offer code FIRST (before any checks that use it)
+        const codeMatch = cardText.match(/([A-Z0-9]{5,15})/);
+        const offerCode = codeMatch ? codeMatch[1] : '';
+        
         if (!offerName || offerName.length < 3) {
-          const codeMatch = cardText.match(/\\b([A-Z0-9]{5,15})\\b/);
-          if (codeMatch) {
-            offerName = 'Offer ' + codeMatch[1];
+          if (offerCode) {
+            offerName = 'Offer ' + offerCode;
           }
         }
         
@@ -1279,9 +1282,6 @@ export const STEP1_OFFERS_SCRIPT = `
           message: '  Offer Name: ' + offerName,
           logType: 'info'
         }));
-        
-        const codeMatch = cardText.match(/([A-Z0-9]{5,15})/);
-        const offerCode = codeMatch ? codeMatch[1] : '';
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
           message: '  Offer Code: ' + (offerCode || '[NOT FOUND]'),
