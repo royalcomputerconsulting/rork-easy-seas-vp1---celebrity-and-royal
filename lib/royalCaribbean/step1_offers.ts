@@ -662,6 +662,35 @@ export const STEP1_OFFERS_SCRIPT = `
 
       let offerCards = [];
       
+      // CRITICAL: Track offers by a combination of code + index to handle DUPLICATE CODES
+      // Multiple offers can have the SAME offer code (e.g., multiple "2026 January instant reward certificate")
+      const offerCodeCounts = {}; // Track how many times we've seen each code
+      const seenOfferCards = new Set(); // Track unique card elements to avoid duplicates
+      const seenOfferCodes = new Map(); // Track codes to their card elements
+      
+      // Helper function to check if element is user's account/tier display (NOT an offer)
+      function isAccountStatusDisplay(element) {
+        const text = (element.textContent || '').toLowerCase();
+        const upperText = (element.textContent || '');
+        // Filter out user's tier credits display and account info
+        const isTierCreditsDisplay = text.includes('your current tier credits') || 
+                                     text.includes('current tier credits') ||
+                                     upperText.includes('Club Royale #') ||
+                                     text.includes('club royale #') ||
+                                     (text.includes('tier credits') && text.includes('club royale') && !text.includes('view sailing'));
+        return isTierCreditsDisplay;
+      }
+      
+      // Helper function to get bounding rect Y position for sorting
+      function getButtonYPosition(btn) {
+        try {
+          const rect = btn.getBoundingClientRect();
+          return rect.top + window.scrollY;
+        } catch (e) {
+          return 0;
+        }
+      }
+      
       // CRITICAL: Ignore promotional banners like "READY TO PLAY?"
       // These banners appear BETWEEN offers and should NOT stop our detection
       // NEW STRATEGY: Find ALL offer codes FIRST, then locate their containers and buttons
@@ -893,35 +922,7 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // CRITICAL: Track offers by a combination of code + index to handle DUPLICATE CODES
-      // Multiple offers can have the SAME offer code (e.g., multiple "2026 January instant reward certificate")
-      const offerCodeCounts = {}; // Track how many times we've seen each code
-      const seenOfferCards = new Set(); // Track unique card elements to avoid duplicates
-      const seenOfferCodes = new Map(); // Track codes to their card elements
       let buttonIndex = 0;
-      
-      // Helper function to check if element is user's account/tier display (NOT an offer)
-      function isAccountStatusDisplay(element) {
-        const text = (element.textContent || '').toLowerCase();
-        const upperText = (element.textContent || '');
-        // Filter out user's tier credits display and account info
-        const isTierCreditsDisplay = text.includes('your current tier credits') || 
-                                     text.includes('current tier credits') ||
-                                     upperText.includes('Club Royale #') ||
-                                     text.includes('club royale #') ||
-                                     (text.includes('tier credits') && text.includes('club royale') && !text.includes('view sailing'));
-        return isTierCreditsDisplay;
-      }
-      
-      // Helper function to get bounding rect Y position for sorting
-      function getButtonYPosition(btn) {
-        try {
-          const rect = btn.getBoundingClientRect();
-          return rect.top + window.scrollY;
-        } catch (e) {
-          return 0;
-        }
-      }
       
       // Sort buttons by their Y position on page (top to bottom)
       // This ensures we process offers in order as they appear on page
