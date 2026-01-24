@@ -853,18 +853,70 @@ export const STEP1_OFFERS_SCRIPT = `
       });
       
       // Find ALL Redeem buttons - these are yellow buttons that appear exactly once per offer
+      // ULTRA FLEXIBLE: Look for ANY element that looks like a Redeem button
       const redeemButtons = allClickables.filter(el => {
         const text = (el.textContent || '').trim().toLowerCase();
-        const isShortText = text.length < 30;
-        // Match Redeem button text exactly (not "Redeem by" which is expiry text)
-        return isShortText && (text === 'redeem' || text === 'redeem offer' || text === 'redeem now');
+        const isShortText = text.length < 40;
+        const classes = (el.className || '').toLowerCase();
+        const styles = el.getAttribute('style') || '';
+        const isButton = el.tagName === 'BUTTON' || el.tagName === 'A' || classes.includes('btn') || classes.includes('button');
+        
+        // FLEXIBLE: Match any text containing "redeem" but NOT "redeem by" (which is expiry text)
+        const hasRedeemText = text.includes('redeem') && !text.includes('redeem by') && !text.includes('redeem points');
+        const isRedeemText = text === 'redeem' || text === 'redeem offer' || text === 'redeem now' || text === 'redeem certificate';
+        
+        // Also check parent for Redeem text if this is a nested element
+        const parentText = (el.parentElement?.textContent || '').trim().toLowerCase();
+        const parentHasRedeem = parentText.includes('redeem') && !parentText.includes('redeem by') && parentText.length < 50;
+        
+        // Check for yellow/gold button styling (characteristic of RC Redeem buttons)
+        const hasYellowStyle = styles.includes('yellow') || styles.includes('#f') || styles.includes('rgb(255') ||
+                              classes.includes('yellow') || classes.includes('gold') || classes.includes('primary') || classes.includes('cta');
+        
+        // CRITICAL: Also look for buttons that are siblings/near View Sailings buttons
+        const nearViewSailings = el.parentElement?.textContent?.toLowerCase().includes('view sailing') ||
+                                el.parentElement?.parentElement?.textContent?.toLowerCase().includes('view sailing');
+        
+        return isShortText && (
+          isRedeemText || 
+          (hasRedeemText && isShortText) ||
+          (isButton && parentHasRedeem) ||
+          (isButton && hasYellowStyle && nearViewSailings && text.length < 20)
+        );
       });
+      
+      // Deduplicate Redeem buttons - keep only the deepest element for each position
+      const uniqueRedeemButtons = [];
+      const redeemPositions = new Set();
+      for (const btn of redeemButtons) {
+        try {
+          const rect = btn.getBoundingClientRect();
+          // Round position to handle minor differences
+          const posKey = Math.round(rect.left / 10) + '|' + Math.round(rect.top / 10);
+          if (!redeemPositions.has(posKey)) {
+            redeemPositions.add(posKey);
+            uniqueRedeemButtons.push(btn);
+          }
+        } catch (e) {
+          uniqueRedeemButtons.push(btn);
+        }
+      }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🎯 Found ' + redeemButtons.length + ' Redeem buttons (should match offer count)',
-        logType: redeemButtons.length === expectedOfferCount ? 'success' : 'info'
+        message: '🎯 Found ' + uniqueRedeemButtons.length + ' unique Redeem buttons (expected: ' + expectedOfferCount + ')',
+        logType: uniqueRedeemButtons.length >= expectedOfferCount ? 'success' : 'warning'
       }));
+      
+      // If we found fewer Redeem buttons than expected, try VIEW SAILINGS PAIRING approach
+      // Each offer has exactly ONE View Sailings button, so we can use them to find offers
+      if (uniqueRedeemButtons.length < expectedOfferCount && expectedOfferCount > 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '🔄 Redeem detection found ' + uniqueRedeemButtons.length + '/' + expectedOfferCount + ', trying View Sailings pairing...',
+          logType: 'info'
+        }));
+      }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -873,6 +925,7 @@ export const STEP1_OFFERS_SCRIPT = `
       }));
       
       // Find ALL View Sailings buttons - be VERY lenient
+      // IMPROVED: Also look for buttons near Redeem buttons
       const viewSailingsButtons = allClickables.filter(el => {
         const text = (el.textContent || '').trim().toLowerCase();
         const isShortText = text.length < 50;
@@ -945,20 +998,142 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // STEP 4: REDEEM-BUTTON-FIRST APPROACH - Build offer cards from Redeem buttons
-      // This is the most reliable method since each offer has exactly ONE Redeem button
-      // The Redeem button is inside the offer card container
-      if (redeemButtons.length > 0) {
+      // STEP 4: VIEW-SAILINGS-BUTTON APPROACH - When Redeem detection fails, use View Sailings buttons
+      // RC shows each offer with a View Sailings button - find unique offer containers from these
+      // This is a PRIMARY fallback when Redeem buttons aren't all detected
+      if (uniqueRedeemButtons.length < expectedOfferCount && expectedOfferCount > 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '🎯 Using REDEEM-BUTTON detection as primary method (' + redeemButtons.length + ' offers)...',
+          message: '🎯 Using VIEW-SAILINGS-BUTTON detection (found ' + viewSailingsButtons.length + ' buttons)...',
+          logType: 'info'
+        }));
+        
+        // Sort View Sailings buttons by Y position
+        const sortedVSButtons = [...viewSailingsButtons].sort((a, b) => {
+          return getButtonYPosition(a) - getButtonYPosition(b);
+        });
+        
+        // Group buttons by their parent offer container
+        const vsOfferContainers = new Map();
+        const vsSeenContainers = new Set();
+        
+        for (const vsBtn of sortedVSButtons) {
+          let parent = vsBtn.parentElement;
+          let bestContainer = null;
+          let bestScore = 0;
+          
+          for (let i = 0; i < 15 && parent; i++) {
+            const parentText = parent.textContent || '';
+            const parentLower = parentText.toLowerCase();
+            
+            // Skip banners
+            if (parentLower.includes('ready to play') || parentLower.includes('apply now') ||
+                parentLower.includes('casino credit') || parentLower.includes('keep the party')) {
+              parent = parent.parentElement;
+              continue;
+            }
+            
+            // Skip account displays
+            if (isAccountStatusDisplay(parent) || isHelpOrContactText(parent)) {
+              parent = parent.parentElement;
+              continue;
+            }
+            
+            // Check for offer signals
+            const hasOfferCode = parentText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?)\b/);
+            const hasTradeIn = parentLower.includes('trade-in') || parentLower.includes('trade in');
+            const hasRedeem = parentText.includes('Redeem by') || parentText.match(/Redeem\s+by/i);
+            const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+,\s*\d{4}/i);
+            const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Room for Two|Stateroom)/i);
+            const hasDollarValue = parentText.match(/\$[\d,]+\.?\d*/);
+            const hasOfferKeyword = parentText.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Getaway)/i);
+            
+            const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
+            
+            let score = 0;
+            if (hasOfferCode) score += 4;
+            if (hasTradeIn) score += 3;
+            if (hasRedeem) score += 3;
+            if (hasExpiry) score += 2;
+            if (hasCabinType) score += 2;
+            if (hasDollarValue) score += 2;
+            if (hasOfferKeyword) score += 1;
+            
+            // Count View Sailings buttons - prefer containers with exactly 1
+            const vsBtnsInParent = Array.from(parent.querySelectorAll('button, a, span, div')).filter(btn => {
+              const btnText = (btn.textContent || '').trim().toLowerCase();
+              return btnText.length < 40 && (btnText.includes('sailing') || btnText === 'view sailings');
+            }).length;
+            
+            if (isReasonableSize && score >= 3) {
+              if (vsBtnsInParent === 1) score += 5;
+              else if (vsBtnsInParent > 1) score -= 2;
+              
+              if (score > bestScore) {
+                bestScore = score;
+                bestContainer = parent;
+              }
+              
+              if (score >= 10 && vsBtnsInParent === 1) break;
+            }
+            
+            parent = parent.parentElement;
+          }
+          
+          if (bestContainer && !vsSeenContainers.has(bestContainer)) {
+            const containerText = bestContainer.textContent || '';
+            const codeMatch = containerText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?)\b/);
+            const offerCode = codeMatch ? codeMatch[1] : '';
+            const expiryMatch = containerText.match(/Redeem by ([A-Za-z]+ \d+, \d{4})/i);
+            const expiry = expiryMatch ? expiryMatch[1] : '';
+            
+            // Create unique key from code + expiry to handle same code with different dates
+            const uniqueKey = (offerCode || 'nocode-' + vsSeenContainers.size) + '|' + (expiry || 'noexpiry');
+            
+            if (!vsOfferContainers.has(uniqueKey)) {
+              vsOfferContainers.set(uniqueKey, { container: bestContainer, code: offerCode, expiry: expiry, score: bestScore });
+              vsSeenContainers.add(bestContainer);
+              
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'VS-button found offer: ' + (offerCode || '[no code]') + ' (expires: ' + (expiry || 'unknown') + ')',
+                logType: 'info'
+              }));
+            }
+          }
+        }
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '📋 VS-button detection found ' + vsOfferContainers.size + ' unique offer containers',
+          logType: 'info'
+        }));
+        
+        // Add VS-based containers to offerCards
+        for (const [key, { container, code }] of vsOfferContainers.entries()) {
+          if (!seenOfferCards.has(container)) {
+            seenOfferCards.add(container);
+            offerCards.push(container);
+          }
+        }
+      }
+      
+      // STEP 5: REDEEM-BUTTON-FIRST APPROACH - Build offer cards from Redeem buttons
+      // This supplements VS-button detection
+      // The Redeem button is inside the offer card container
+      if (uniqueRedeemButtons.length > 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '🎯 Using REDEEM-BUTTON detection as primary method (' + uniqueRedeemButtons.length + ' offers)...',
           logType: 'info'
         }));
         
         const redeemBasedOfferCards = [];
         const seenRedeemContainers = new Set();
+        // Track container text signatures to detect true duplicates vs similar offers
+        const containerSignatures = new Map();
         
-        for (const redeemBtn of redeemButtons) {
+        for (const redeemBtn of uniqueRedeemButtons) {
           // Work upward from Redeem button to find the offer card container
           let parent = redeemBtn.parentElement;
           let bestContainer = null;
@@ -1029,21 +1204,37 @@ export const STEP1_OFFERS_SCRIPT = `
             parent = parent.parentElement;
           }
           
-          if (bestContainer && !seenRedeemContainers.has(bestContainer)) {
-            seenRedeemContainers.add(bestContainer);
-            
-            // Extract offer code from container
+          if (bestContainer) {
+            // Extract offer code and expiry to create unique signature
             const containerText = bestContainer.textContent || '';
             const codeMatch = containerText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?)\b/);
             const offerCode = codeMatch ? codeMatch[1] : '';
+            const expiryMatch = containerText.match(/Redeem by ([A-Za-z]+ \d+, \d{4})/i);
+            const expiry = expiryMatch ? expiryMatch[1] : '';
             
-            redeemBasedOfferCards.push({ container: bestContainer, code: offerCode, score: bestScore });
+            // Create unique signature: code + expiry date (handles same code with different expiries)
+            const signature = (offerCode || 'nocode') + '|' + (expiry || 'noexpiry');
             
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Redeem-based found offer: ' + (offerCode || '[no code]'),
-              logType: 'info'
-            }));
+            // Only skip if we've seen this EXACT signature (same code AND same expiry)
+            // This allows multiple offers with same code but different expiry dates
+            if (!containerSignatures.has(signature)) {
+              containerSignatures.set(signature, bestContainer);
+              seenRedeemContainers.add(bestContainer);
+              
+              redeemBasedOfferCards.push({ container: bestContainer, code: offerCode, score: bestScore, expiry: expiry });
+              
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Redeem-based found offer: ' + (offerCode || '[no code]') + ' (expires: ' + (expiry || 'unknown') + ')',
+                logType: 'info'
+              }));
+            } else {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '🔄 Skipping duplicate: ' + offerCode + ' (same expiry: ' + expiry + ')',
+                logType: 'info'
+              }));
+            }
           }
         }
         
@@ -1064,7 +1255,8 @@ export const STEP1_OFFERS_SCRIPT = `
       
       // FALLBACK: CODE-FIRST APPROACH - Only if Redeem detection didn't find enough
       // Build offer cards from offer codes directly
-      if (uniqueOfferCodes.length > 0 && offerCards.length < expectedOfferCount) {
+      // IMPROVED: Lower threshold to catch missing offers
+      if (uniqueOfferCodes.length > 0 && (offerCards.length < expectedOfferCount || offerCards.length < 3)) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
           message: '🔄 Using CODE-FIRST detection as fallback (found ' + offerCards.length + '/' + expectedOfferCount + ')...',
