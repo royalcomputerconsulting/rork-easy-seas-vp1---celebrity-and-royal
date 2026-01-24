@@ -2051,12 +2051,18 @@ export const STEP1_OFFERS_SCRIPT = `
         }
         
         // Also skip if extracted offerCode is clearly not an offer code (like CURRENT)
-        const invalidCodePatterns = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER'];
+        const invalidCodePatterns = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER', 'FEATURED', 'BENEFITS'];
         if (offerCode && invalidCodePatterns.includes(offerCode.toUpperCase())) {
-          // Try to find a better offer code in the card text
-          const betterCodeMatch = cardText.match(/\\b(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?)\\b/);
-          if (betterCodeMatch) {
-            offerCode = betterCodeMatch[1];
+          // Try to find a better offer code using extraction function
+          offerCode = extractOfferCodeFromText(cardText);
+        }
+        
+        // Validate offer code format
+        if (offerCode && !isValidOfferCode(offerCode)) {
+          // Try extraction one more time
+          const betterCode = extractOfferCodeFromText(cardText);
+          if (betterCode && isValidOfferCode(betterCode)) {
+            offerCode = betterCode;
           }
         }
         
