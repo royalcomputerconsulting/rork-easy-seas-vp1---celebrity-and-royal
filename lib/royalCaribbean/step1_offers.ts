@@ -455,13 +455,27 @@ export const STEP1_OFFERS_SCRIPT = `
       const offerCountMatch = pageText.match(/All Offers\\s*\\((\\d+)\\)/i) || 
                               pageText.match(/Offers\\s*\\((\\d+)\\)/i) ||
                               pageText.match(/(\\d+)\\s+Offers?\\s+Available/i);
+      
+      // Check if there's a FEATURED offer section
+      const hasFeaturedOffer = pageText.match(/FEATURED\\s+Offer/i);
+      
       if (offerCountMatch) {
         expectedOfferCount = parseInt(offerCountMatch[1], 10);
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Expected offer count from page: ' + expectedOfferCount,
-          logType: 'info'
-        }));
+        // Add 1 for FEATURED offer if it exists (structure: 1 FEATURED + X from ALL OFFERS)
+        if (hasFeaturedOffer) {
+          expectedOfferCount += 1;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found FEATURED offer section + ALL OFFERS (' + (expectedOfferCount - 1) + ') = ' + expectedOfferCount + ' total offers expected',
+            logType: 'info'
+          }));
+        } else {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Expected offer count from page: ' + expectedOfferCount,
+            logType: 'info'
+          }));
+        }
       }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({

@@ -385,53 +385,35 @@ export const STEP4_LOYALTY_SCRIPT = `
         }));
       }
       
-      // Pick best candidate - STRONGLY prefer larger numbers displayed prominently
-      uniqueCandidates.sort((a, b) => {
-        if (a.priority !== b.priority) return a.priority - b.priority;
-        // For same priority, STRONGLY prefer larger values (503 vs 140)
-        return b.value - a.value;
-      });
+      // ULTRA AGGRESSIVE: Always prefer larger numbers (503 should ALWAYS win over 140)
+      // Sort ONLY by value descending (largest first), ignore priority completely
+      uniqueCandidates.sort((a, b) => b.value - a.value);
       
       if (uniqueCandidates.length > 0) {
-        // CRITICAL: The HUGE number under YOUR TIER (like 503) should ALWAYS win
+        // ABSOLUTE RULE: Pick the LARGEST number found
+        // The actual cruise points displayed prominently (like 503) are ALWAYS the largest
+        // Smaller numbers like 140 are secondary stats (nights in tier, etc.)
         let bestCandidate = uniqueCandidates[0];
         
-        // CRITICAL OVERRIDE: If best candidate is < 200, look for MUCH larger alternatives
-        // This handles the case where 140 is selected instead of 503
+        // Log all candidates for debugging
+        const top5 = uniqueCandidates.slice(0, 5).map(c => c.value + ' (' + c.source + ', pri:' + c.priority + ')').join(', ');
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '📊 Top candidates sorted by value: ' + top5,
+          logType: 'info'
+        }));
+        
+        // CRITICAL: If the largest number is < 200 but there's a 250+ candidate, prefer the larger one
+        // This is a safety check but shouldn't be needed with value-first sorting
         if (bestCandidate.value < 200 && uniqueCandidates.length > 1) {
-          // Look for ANY 400+ candidate - NO priority restriction (503 should ALWAYS win over 140)
-          const muchLargerCandidate = uniqueCandidates.find(c => c.value >= 400);
-          if (muchLargerCandidate) {
-            bestCandidate = muchLargerCandidate;
+          const muchLargerCandidate = uniqueCandidates.find(c => c.value >= 250);
+          if (muchLargerCandidate && muchLargerCandidate !== bestCandidate) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: '✓✓ OVERRIDING: Chose MUCH LARGER value ' + bestCandidate.value + ' over ' + uniqueCandidates[0].value + ' (400+ is the real cruise points)',
-              logType: 'success'
+              message: '🚨 CRITICAL: Found ' + muchLargerCandidate.value + ' but initial pick was ' + bestCandidate.value + ' - using larger value',
+              logType: 'warning'
             }));
-          }
-          // If no 400+, look for ANY 300+ (no priority restriction)
-          else {
-            const largerCandidate = uniqueCandidates.find(c => c.value >= 300);
-            if (largerCandidate) {
-              bestCandidate = largerCandidate;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '✓ OVERRIDING: Chose larger value ' + bestCandidate.value + ' over ' + uniqueCandidates[0].value,
-                logType: 'success'
-              }));
-            }
-            // If no 300+, look for ANY 250+ as last resort
-            else {
-              const largerCandidate250 = uniqueCandidates.find(c => c.value >= 250);
-              if (largerCandidate250) {
-                bestCandidate = largerCandidate250;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: '✓ OVERRIDING: Chose larger value ' + bestCandidate.value + ' over ' + uniqueCandidates[0].value,
-                  logType: 'success'
-                }));
-              }
-            }
+            bestCandidate = muchLargerCandidate;
           }
         }
         
