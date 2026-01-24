@@ -122,8 +122,8 @@ export const STEP4_LOYALTY_SCRIPT = `
             const standaloneMatch = elText.match(/^(\\d{2,4})$/);
             if (standaloneMatch) {
               const num = parseInt(standaloneMatch[1], 10);
-              // Minimum 50 points, exclude years and tier credits
-              if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024) {
+              // Minimum 100 points (like 503), exclude years and tier credits
+              if (num >= 100 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024) {
                 // Check this isn't tier credits or points to next tier
                 const parentText = (el.parentElement?.textContent || '').toLowerCase();
                 const grandparentText = (el.parentElement?.parentElement?.textContent || '').toLowerCase();
@@ -141,14 +141,15 @@ export const STEP4_LOYALTY_SCRIPT = `
                                         (el.className || '').toLowerCase().includes('big') ||
                                         (el.className || '').toLowerCase().includes('hero');
                   
-                  // Priority: larger numbers in headings/large elements = TOP priority
+                  // Priority: 3-digit numbers (like 503) in headings/large elements = TOP priority
                   let priority = 5;
-                  if (num >= 400) {
+                  if (num >= 100 && num <= 999) {
+                    // 3-digit numbers like 503 are HIGHEST priority
+                    priority = (isHeading || isLargeClass) ? 0 : 1;
+                  } else if (num >= 400) {
                     priority = (isHeading || isLargeClass) ? 1 : 2;
                   } else if (num >= 200) {
                     priority = (isHeading || isLargeClass) ? 2 : 3;
-                  } else if (num >= 100) {
-                    priority = (isHeading || isLargeClass) ? 3 : 4;
                   }
                   
                   allCandidates.push({ 
@@ -184,8 +185,8 @@ export const STEP4_LOYALTY_SCRIPT = `
               const standaloneMatch = sibText.match(/^(\\d{2,4})$/);
               if (standaloneMatch) {
                 const num = parseInt(standaloneMatch[1], 10);
-                // CRITICAL: Minimum 50 points to exclude small numbers
-                if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026) {
+                // CRITICAL: Minimum 100 points to exclude small numbers
+                if (num >= 100 && num <= 2000 && num !== 2025 && num !== 2026) {
                   allCandidates.push({ value: num, str: standaloneMatch[1], source: 'near-tier', priority: 4 });
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log',
@@ -205,7 +206,7 @@ export const STEP4_LOYALTY_SCRIPT = `
                 const contMatch = contText.match(/^(\\d{2,4})$/);
                 if (contMatch) {
                   const num = parseInt(contMatch[1], 10);
-                  if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026) {
+                  if (num >= 100 && num <= 2000 && num !== 2025 && num !== 2026) {
                     const alreadyExists = allCandidates.some(c => c.value === num);
                     if (!alreadyExists) {
                       allCandidates.push({ value: num, str: contMatch[1], source: 'tier-container', priority: 5 });
@@ -226,7 +227,8 @@ export const STEP4_LOYALTY_SCRIPT = `
         const numMatch = elText.match(/^(\\d{2,4})$/);
         if (numMatch) {
           const num = parseInt(numMatch[1], 10);
-          if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024) {
+          // CRITICAL: Minimum 100 to avoid small random numbers
+          if (num >= 100 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024) {
             const parentText = (el.parentElement?.textContent || '').toLowerCase();
             const grandparentText = (el.parentElement?.parentElement?.textContent || '').toLowerCase();
             // Exclude if it's tier credits, dates, or points-to-next
@@ -240,8 +242,13 @@ export const STEP4_LOYALTY_SCRIPT = `
                            !parentText.includes('points to');
             
             if (isValid) {
-              // Higher priority for VERY prominent large numbers (like 503)
-              const priority = num >= 400 ? 2 : 6;
+              // HIGHEST priority for 3-digit numbers (100-999) like 503
+              let priority = 6;
+              if (num >= 100 && num <= 999) {
+                priority = 1; // 3-digit numbers are most likely cruise points
+              } else if (num >= 400) {
+                priority = 2;
+              }
               allCandidates.push({ value: num, str: numMatch[1], source: 'prominent-number', priority: priority });
             }
           }
@@ -259,8 +266,8 @@ export const STEP4_LOYALTY_SCRIPT = `
         const match = pageText.match(pattern);
         if (match && match[1]) {
           const num = parseInt(match[1], 10);
-          // CRITICAL: Minimum 50 points to avoid small random numbers
-          if (num >= 50 && num <= 2000) {
+          // CRITICAL: Minimum 100 points to avoid small random numbers
+          if (num >= 100 && num <= 2000) {
             allCandidates.push({ value: num, str: match[1], source: 'pattern', priority: 10 });
           }
         }

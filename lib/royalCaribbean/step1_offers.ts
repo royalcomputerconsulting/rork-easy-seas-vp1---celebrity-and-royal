@@ -475,7 +475,62 @@ export const STEP1_OFFERS_SCRIPT = `
       
       // ULTRA AGGRESSIVE scrolling to ensure ALL 9 offers are loaded
       // Royal Caribbean uses lazy loading, so we need to scroll multiple times
-      for (let scrollPass = 0; scrollPass < 8; scrollPass++) {
+      
+      // CRITICAL: Function to close/hide promotional banners blocking the view
+      async function closePromotionalBanners() {
+        const bannerCloseSelectors = [
+          '[class*="close"]',
+          '[class*="dismiss"]',
+          '[aria-label*="close"]',
+          '[aria-label*="dismiss"]',
+          'button[class*="modal"]',
+          '[class*="overlay"] button',
+          '[class*="banner"] button',
+          '[class*="popup"] button'
+        ];
+        
+        for (const selector of bannerCloseSelectors) {
+          try {
+            const closeButtons = document.querySelectorAll(selector);
+            for (const btn of closeButtons) {
+              const btnText = (btn.textContent || '').toLowerCase().trim();
+              const isCloseButton = btnText === 'x' || btnText === '×' || btnText === 'close' || 
+                                   btnText === 'dismiss' || btnText === '' || btnText.length < 5;
+              const parentText = (btn.parentElement?.textContent || '').toLowerCase();
+              const isInPromo = parentText.includes('ready to play') || 
+                               parentText.includes('apply now') || 
+                               parentText.includes('casino credit') ||
+                               parentText.includes('keep the party');
+              if (isCloseButton || isInPromo) {
+                btn.click();
+                await wait(200);
+              }
+            }
+          } catch (e) {}
+        }
+        
+        // Hide promotional banners from DOM
+        const promoElements = document.querySelectorAll('[class*="promo"], [class*="banner"], [class*="overlay"], [class*="modal"]');
+        for (const promo of promoElements) {
+          const promoText = (promo.textContent || '').toLowerCase();
+          if (promoText.includes('ready to play') || promoText.includes('apply now') || 
+              promoText.includes('casino credit') || promoText.includes('keep the party')) {
+            promo.style.display = 'none';
+            promo.style.visibility = 'hidden';
+            promo.style.height = '0';
+            promo.style.overflow = 'hidden';
+          }
+        }
+      }
+      
+      await closePromotionalBanners();
+      
+      for (let scrollPass = 0; scrollPass < 12; scrollPass++) {
+        // Close banners every few passes
+        if (scrollPass % 3 === 0) {
+          await closePromotionalBanners();
+        }
+        
         window.scrollTo(0, document.body.scrollHeight);
         await wait(1500);
         window.scrollTo(0, document.body.scrollHeight * 0.25);
@@ -495,11 +550,23 @@ export const STEP1_OFFERS_SCRIPT = `
           ).length;
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Scroll pass ' + (scrollPass + 1) + '/8: Found ' + viewSailingCount + ' View Sailings buttons so far',
+            message: 'Scroll pass ' + (scrollPass + 1) + '/12: Found ' + viewSailingCount + ' View Sailings buttons so far',
             logType: 'info'
           }));
+          
+          // Stop early if we found all expected offers
+          if (expectedOfferCount > 0 && viewSailingCount >= expectedOfferCount) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '✓ Found all expected offers, stopping scroll',
+              logType: 'success'
+            }));
+            break;
+          }
         }
       }
+      
+      await closePromotionalBanners();
       window.scrollTo(0, 0);
       await wait(1500);
 
@@ -529,14 +596,23 @@ export const STEP1_OFFERS_SCRIPT = `
                             text.includes('apply now') || 
                             text.includes('casino credit') ||
                             text.includes('keep the party going') ||
-                            text.includes('onboard you can');
-        const isLargePromo = text.length > 50 && text.length < 500 && hasPromoText;
+                            text.includes('onboard you can') ||
+                            text.includes('sign up') ||
+                            text.includes('join now') ||
+                            text.includes('exclusive benefits');
+        const isLargePromo = text.length > 30 && text.length < 1000 && hasPromoText;
         return isLargePromo && !text.includes('view sailing') && !text.match(/\b[A-Z0-9]{5,12}[A-Z]\b/);
       });
       
+      // Hide promotional banners to prevent blocking
+      for (const banner of promotionalBanners) {
+        banner.style.display = 'none';
+        banner.style.visibility = 'hidden';
+      }
+      
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🚫 Filtering out ' + promotionalBanners.length + ' promotional banner(s)...',
+        message: '🚫 Hidden ' + promotionalBanners.length + ' promotional banner(s)...',
         logType: 'info'
       }));
       
