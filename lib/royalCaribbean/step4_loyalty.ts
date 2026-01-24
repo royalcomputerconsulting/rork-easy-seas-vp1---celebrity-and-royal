@@ -80,7 +80,11 @@ export const STEP4_LOYALTY_SCRIPT = `
       for (const el of allPageElements) {
         const text = (el.textContent || '').trim();
         // Only look at elements with JUST a number (no other text)
-        if (text.match(/^\d{2,4}$/)) {
+        // CRITICAL: Also check if this is a LEAF node (no children with text) to avoid parent containers
+        const hasTextChildren = Array.from(el.children).some(child => (child.textContent || '').trim().length > 0);
+        const isLeafNode = el.children.length === 0 || !hasTextChildren;
+        
+        if (text.match(/^\d{2,4}$/) && isLeafNode) {
           const num = parseInt(text, 10);
           if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024 && num !== 2023) {
             rawNumbers.push({ num, el, text });
@@ -92,9 +96,19 @@ export const STEP4_LOYALTY_SCRIPT = `
       const uniqueRawNums = [...new Set(rawNumbers.map(r => r.num))].sort((a, b) => b - a);
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '  ➜ Found ' + uniqueRawNums.length + ' unique standalone numbers: ' + uniqueRawNums.slice(0, 10).join(', '),
+        message: '  ➜ Found ' + uniqueRawNums.length + ' unique standalone numbers: ' + uniqueRawNums.slice(0, 15).join(', '),
         logType: 'info'
       }));
+      
+      // ULTRA CRITICAL: If we see 503, 502, 501, 500, or any 400+ number, LOG IT PROMINENTLY
+      const has500Plus = uniqueRawNums.filter(n => n >= 400);
+      if (has500Plus.length > 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '🎯 FOUND LARGE NUMBERS (400+): ' + has500Plus.join(', ') + ' - These are likely cruise points!',
+          logType: 'success'
+        }));
+      }
       
       // Now process each number and determine its context
       for (const { num, el, text } of rawNumbers) {
@@ -109,8 +123,18 @@ export const STEP4_LOYALTY_SCRIPT = `
         const isDate = parentText.includes('feb') || parentText.includes('jan') || parentText.includes('mar') || parentText.includes('apr');
         
         // CRITICAL: For large numbers (400+), be VERY lenient - only exclude if EXPLICITLY tier credits
-        if (num >= 400 && isTierCredits) {
-          continue; // Skip ONLY if definitely tier credits
+        // ULTRA CRITICAL: 503 is the actual cruise points - NEVER skip it unless 100% certain it's wrong
+        if (num >= 400) {
+          // For 400+ numbers, ONLY skip if explicitly labeled as tier credits
+          if (isTierCredits) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '  ⚠️ Skipping ' + num + ' (tier credits)',
+              logType: 'warning'
+            }));
+            continue;
+          }
+          // Otherwise KEEP IT - it's likely the actual cruise points
         } else if (num < 400 && (isTierCredits || isPointsToNext || isToNextTier || isDate)) {
           continue; // Skip this number
         }

@@ -575,16 +575,26 @@ export const STEP1_OFFERS_SCRIPT = `
       // - FEATURED offer at top
       // - ALL OFFERS (X) section
       // - Some offers
-      // - PROMOTIONAL DIVIDERS (e.g., "READY TO PLAY") that MUST be ignored
+      // - PROMOTIONAL DIVIDERS (e.g., "READY TO PLAY", "Woman enjoying casino experience") that MUST be ignored
       // - More offers AFTER dividers
       // - More offers at bottom
       // Each card has: Title, Offer Code, Room Type, Redeem Date, T&C link, sometimes Trade-in, Redeem button, View Sailings button
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 SCANNING: Finding ALL ' + (expectedOfferCount || 'available') + ' offer cards (ignoring dividers like READY TO PLAY)...',
+        message: '🔍 SCANNING: Finding ALL ' + (expectedOfferCount || 'available') + ' offer cards (ignoring promotional banners)...',
         logType: 'info'
       }));
+      
+      // CRITICAL: Filter out promotional banners/dividers that are NOT offers
+      const promoExclusionPatterns = [
+        /READY TO PLAY/i,
+        /Woman enjoying casino/i,
+        /Playing card symbols/i,
+        /You can apply for a casino credit/i,
+        /Apply now/i,
+        /for more information click on the benefits tab/i
+      ];
       
       // STRATEGY: Each offer card MUST have ALL of these elements:
       // 1. Offer code (format: 26CLS103 or 26CLS103B)
@@ -594,7 +604,7 @@ export const STEP1_OFFERS_SCRIPT = `
       // We'll find containers that have ALL these signals
       
       const pageHTML = document.body.innerHTML;
-      const allOfferCodes = pageHTML.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO)[A-Z0-9]{2,8}[A-Z0-9]\b/gi) || [];
+      const allOfferCodes = pageHTML.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO|MAR|WST|GRD|A0)[A-Z0-9]{2,8}[A-Z0-9%]?\b/gi) || [];
       const uniqueOfferCodes = [...new Set(allOfferCodes.map(c => c.toUpperCase()))].filter(code => {
         return !code.match(/^(CURRENT|FEATURED|SAILING|BOOKING|LOYALTY|MEMBER|ROYALE)$/);
       });
@@ -654,14 +664,21 @@ export const STEP1_OFFERS_SCRIPT = `
           // So if a button has offer-related content nearby, it's likely valid
           
           // Check for offer code (STRONGEST signal this is a real offer)
-          const hasOfferCode = parentText.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO)[A-Z0-9]{2,8}[A-Z0-9]\b/i);
+          const hasOfferCode = parentText.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO|MAR|WST|GRD|A0)[A-Z0-9]{2,8}[A-Z0-9%]?\b/i);
           const hasRedeemDate = parentText.match(/Redeem by\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
-          const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
+          const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Stateroom)/i);
           const hasTradeIn = parentText.match(/trade.?in/i);
+          const isPromoBanner = parentText.match(/READY TO PLAY|Woman enjoying casino|Playing card symbols|apply for a casino credit|for more information click on the benefits tab/i);
           
-          // If we see ANY offer signals, this is likely a valid offer
-          if (hasOfferCode || (hasRedeemDate && hasCabinType) || hasTradeIn) {
+          // If we see ANY offer signals AND it's NOT a promo banner, this is likely a valid offer
+          if ((hasOfferCode || (hasRedeemDate && hasCabinType) || hasTradeIn) && !isPromoBanner) {
             foundOfferSignals = true;
+            break;
+          }
+          
+          // Explicitly exclude promotional banners
+          if (isPromoBanner) {
+            isDefinitelyNotOffer = true;
             break;
           }
           
@@ -671,8 +688,13 @@ export const STEP1_OFFERS_SCRIPT = `
             const isAccountNavigation = parentLower.includes('my account') || parentLower.includes('sign out') || parentLower.includes('log out');
             const isFooterLink = parentLower.includes('privacy policy') || parentLower.includes('terms of service');
             const isHelpText = parentLower.includes('need help') || parentLower.includes('contact us');
+            const isPromoBanner = parentLower.includes('ready to play') || 
+                                 parentLower.includes('woman enjoying') || 
+                                 parentLower.includes('playing card symbols') ||
+                                 parentLower.includes('you can apply for a casino credit') ||
+                                 parentLower.includes('for more information click on the benefits tab');
             
-            if (isAccountNavigation || isFooterLink || isHelpText) {
+            if (isAccountNavigation || isFooterLink || isHelpText || isPromoBanner) {
               isDefinitelyNotOffer = true;
               break;
             }
@@ -690,7 +712,7 @@ export const STEP1_OFFERS_SCRIPT = `
       if (filteredOutCount > 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '🚫 Filtered out ' + filteredOutCount + ' non-offer button(s) (account links, footer, etc.)',
+          message: '🚫 Filtered out ' + filteredOutCount + ' non-offer button(s) (promotional banners, account links, etc.)',
           logType: 'info'
         }));
       }
