@@ -573,22 +573,36 @@ export const STEP1_OFFERS_SCRIPT = `
       
       await closePromotionalBanners();
       
-      for (let scrollPass = 0; scrollPass < 12; scrollPass++) {
+      for (let scrollPass = 0; scrollPass < 15; scrollPass++) {
         // Close banners every few passes
-        if (scrollPass % 3 === 0) {
+        if (scrollPass % 2 === 0) {
           await closePromotionalBanners();
         }
         
-        window.scrollTo(0, document.body.scrollHeight);
-        await wait(1500);
-        window.scrollTo(0, document.body.scrollHeight * 0.25);
+        // More thorough scrolling pattern to ensure lazy-loaded content appears
+        const docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+        
+        // Scroll to bottom
+        window.scrollTo(0, docHeight);
+        await wait(1200);
+        
+        // Scroll back up in steps to trigger any lazy loading
+        window.scrollTo(0, docHeight * 0.8);
+        await wait(600);
+        window.scrollTo(0, docHeight * 0.6);
+        await wait(600);
+        window.scrollTo(0, docHeight * 0.4);
+        await wait(600);
+        window.scrollTo(0, docHeight * 0.2);
+        await wait(600);
+        
+        // Scroll back down to bottom
+        window.scrollTo(0, docHeight);
+        await wait(1200);
+        
+        // Extra scroll past "bottom" to trigger any additional lazy loading
+        window.scrollBy(0, 500);
         await wait(800);
-        window.scrollTo(0, document.body.scrollHeight * 0.5);
-        await wait(800);
-        window.scrollTo(0, document.body.scrollHeight * 0.75);
-        await wait(800);
-        window.scrollTo(0, document.body.scrollHeight);
-        await wait(1500);
         
         // Log progress
         if (scrollPass % 2 === 0) {
@@ -596,17 +610,23 @@ export const STEP1_OFFERS_SCRIPT = `
           const viewSailingCount = Array.from(currentOfferButtons).filter(btn => 
             (btn.textContent || '').toLowerCase().includes('sailing')
           ).length;
+          
+          // Also count unique offer codes on page
+          const pageText = document.body.textContent || '';
+          const offerCodes = pageText.match(/\\b[A-Z0-9]{5,12}[A-Z0-9]\\b/g) || [];
+          const uniqueCodes = [...new Set(offerCodes.filter(c => c.length >= 6 && c.length <= 12))].length;
+          
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Scroll pass ' + (scrollPass + 1) + '/12: Found ' + viewSailingCount + ' View Sailings buttons so far',
+            message: 'Scroll pass ' + (scrollPass + 1) + '/15: Found ' + viewSailingCount + ' View Sailings buttons, ~' + uniqueCodes + ' offer codes',
             logType: 'info'
           }));
           
-          // Stop early if we found all expected offers
-          if (expectedOfferCount > 0 && viewSailingCount >= expectedOfferCount) {
+          // Stop early if we found enough buttons (2x expected = each offer has 2 buttons)
+          if (expectedOfferCount > 0 && viewSailingCount >= expectedOfferCount * 2) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: '✓ Found all expected offers, stopping scroll',
+              message: '✓ Found all expected offer buttons, stopping scroll',
               logType: 'success'
             }));
             break;
@@ -767,6 +787,7 @@ export const STEP1_OFFERS_SCRIPT = `
       // Multiple offers can have the SAME offer code (e.g., multiple "2026 January instant reward certificate")
       const offerCodeCounts = {}; // Track how many times we've seen each code
       const seenOfferCards = new Set(); // Track unique card elements to avoid duplicates
+      const seenOfferCodes = new Map(); // Track codes to their card elements
       let buttonIndex = 0;
       
       // Helper function to check if element is user's account/tier display (NOT an offer)
@@ -782,47 +803,89 @@ export const STEP1_OFFERS_SCRIPT = `
         return isTierCreditsDisplay;
       }
       
-      for (const btn of viewSailingsButtons) {
+      // Helper function to get bounding rect Y position for sorting
+      function getButtonYPosition(btn) {
+        try {
+          const rect = btn.getBoundingClientRect();
+          return rect.top + window.scrollY;
+        } catch (e) {
+          return 0;
+        }
+      }
+      
+      // Sort buttons by their Y position on page (top to bottom)
+      // This ensures we process offers in order as they appear on page
+      const sortedButtons = [...viewSailingsButtons].sort((a, b) => {
+        return getButtonYPosition(a) - getButtonYPosition(b);
+      });
+      
+      // First pass: collect all potential offer cards from buttons
+      const buttonToCard = new Map();
+      
+      for (const btn of sortedButtons) {
         buttonIndex++;
         
         // Skip if this button is inside a promotional banner
         const isInsideBanner = Array.from(bannersSet).some(banner => banner.contains(btn));
         if (isInsideBanner) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Skipping button inside promotional banner',
-            logType: 'info'
-          }));
           continue;
         }
         
         let parent = btn.parentElement;
         let offerCard = null;
+        let bestCandidate = null;
+        let bestCandidateScore = 0;
         
-        // Work upwards to find the offer container
-        for (let i = 0; i < 15 && parent; i++) {
+        // Work upwards to find the offer container - be MORE lenient
+        for (let i = 0; i < 20 && parent; i++) {
           const parentText = parent.textContent || '';
+          const parentLower = parentText.toLowerCase();
           
-          const hasOfferCode = parentText.match(/\\b([A-Z0-9]{6,12}[A-Z])\\b/);
-          const hasTradeIn = parentText.toLowerCase().includes('trade-in value');
-          const hasRedeem = parentText.includes('Redeem by');
+          // Check for offer signals
+          const hasOfferCode = parentText.match(/\\b([A-Z0-9]{5,12}[A-Z0-9])\\b/);
+          const hasTradeIn = parentLower.includes('trade-in value') || parentLower.includes('trade in value');
+          const hasRedeem = parentText.includes('Redeem by') || parentText.match(/Redeem\s+by/i);
           const hasFeatured = parentText.includes('Featured Offer');
-          const hasOfferTitle = parentText.match(/\\b(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Caribbean|Cruise|Sail|Summer|Winter|Spring|Fall|Holiday|Special)\\b/i);
+          const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
+          const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Room for Two|Stateroom)/i);
+          const hasDollarValue = parentText.match(/\\$[\\d,]+\\.?\\d*/); // Trade-in values
+          const hasOfferKeyword = parentText.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Gold|Coast|Spins|Getaway)/i);
           
-          const isReasonableSize = parentText.length > 100 && parentText.length < 5000;
+          const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
           
-          if (isReasonableSize && (hasOfferCode || hasTradeIn || hasRedeem || hasFeatured)) {
+          // Calculate signal score
+          let score = 0;
+          if (hasOfferCode) score += 3;
+          if (hasTradeIn) score += 3;
+          if (hasRedeem) score += 2;
+          if (hasExpiry) score += 2;
+          if (hasCabinType) score += 1;
+          if (hasDollarValue) score += 2;
+          if (hasOfferKeyword) score += 1;
+          if (hasFeatured) score += 1;
+          
+          if (isReasonableSize && score >= 2) {
             const buttonsInContainer = Array.from(parent.querySelectorAll('button, a, [role="button"]')).filter(el => 
               (el.textContent || '').match(/View Sailing|VIEW SAILING|See Sailing/i)
             );
             
-            // FIXED: Allow containers with 1-2 View Sailings buttons (RC often has duplicate buttons)
-            if (buttonsInContainer.length >= 1 && buttonsInContainer.length <= 2) {
-              offerCard = parent;
-              break;
+            // Allow containers with 1-3 View Sailings buttons (RC sometimes has multiple)
+            if (buttonsInContainer.length >= 1 && buttonsInContainer.length <= 3) {
+              // Prefer smaller containers with higher signal density
+              const density = score / (parentText.length / 100);
+              if (density > bestCandidateScore || (density === bestCandidateScore && parentText.length < (bestCandidate?.textContent?.length || Infinity))) {
+                bestCandidate = parent;
+                bestCandidateScore = density;
+              }
+              
+              // If we have a strong signal, use this container
+              if (score >= 4 && buttonsInContainer.length <= 2) {
+                offerCard = parent;
+                break;
+              }
             }
-            // If more than 2 buttons, this container is too large - keep looking up
-            if (buttonsInContainer.length > 2 && parentText.length < 3000) {
+            // If too many buttons, this container is too large - keep looking up
+            if (buttonsInContainer.length > 3) {
               parent = parent.parentElement;
               continue;
             }
@@ -831,61 +894,74 @@ export const STEP1_OFFERS_SCRIPT = `
           parent = parent.parentElement;
         }
         
+        // Use best candidate if we didn't find a definitive offer card
+        if (!offerCard && bestCandidate) {
+          offerCard = bestCandidate;
+        }
+        
         if (offerCard) {
-          // Skip if we've already processed this exact card element
-          if (seenOfferCards.has(offerCard)) {
-            continue;
-          }
-          
-          // CRITICAL: Skip user's account status/tier credits display - it's NOT an offer
-          if (isAccountStatusDisplay(offerCard)) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '🚫 Skipping account status display (not an offer)',
-              logType: 'info'
-            }));
-            continue;
-          }
-          
-          const cardText = offerCard.textContent || '';
-          
-          const codeMatch = cardText.match(/\\b([A-Z0-9]{6,12}[A-Z])\\b/);
-          const offerCode = codeMatch ? codeMatch[1] : '';
-          
-          let offerName = '';
-          const headings = Array.from(offerCard.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"]'));
-          for (const h of headings) {
-            const hText = (h.textContent || '').trim();
-            if (hText.length >= 5 && hText.length <= 100 && !hText.match(/Featured Offer|View Sailing|Redeem|Trade-in|^\\$|^\\d+$/i)) {
-              offerName = hText;
-              break;
-            }
-          }
-          
-          // CRITICAL: Handle MULTIPLE offers with the SAME offer code
-          // Track count of each code and create unique key with index
-          // This ensures offers like "2026 January instant reward certificate" (same code) are ALL captured
-          const baseKey = offerCode || ('btn-' + buttonIndex + '-' + (offerName || 'unknown'));
-          
-          // Initialize or increment the count for this code
-          if (!offerCodeCounts[baseKey]) {
-            offerCodeCounts[baseKey] = 0;
-          }
-          offerCodeCounts[baseKey]++;
-          
-          // Mark this card as seen
-          seenOfferCards.add(offerCard);
-          offerCards.push(offerCard);
-          
-          const duplicateIndex = offerCodeCounts[baseKey];
-          const duplicateLabel = duplicateIndex > 1 ? ' [#' + duplicateIndex + ']' : '';
-          
+          buttonToCard.set(btn, offerCard);
+        }
+      }
+      
+      // Second pass: deduplicate and add unique offer cards
+      for (const btn of sortedButtons) {
+        const offerCard = buttonToCard.get(btn);
+        if (!offerCard) continue;
+        
+        // Skip if we've already processed this exact card element
+        if (seenOfferCards.has(offerCard)) {
+          continue;
+        }
+        
+        // CRITICAL: Skip user's account status/tier credits display - it's NOT an offer
+        if (isAccountStatusDisplay(offerCard)) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Identified offer card: ' + (offerName || offerCode || '[Unknown]') + duplicateLabel + ' (code: ' + (offerCode || 'N/A') + ')',
+            message: '🚫 Skipping account status display (not an offer)',
             logType: 'info'
           }));
+          continue;
         }
+        
+        const cardText = offerCard.textContent || '';
+        
+        // Look for offer code - be more flexible with pattern
+        const codeMatch = cardText.match(/\\b([A-Z0-9]{5,12}[A-Z0-9])\\b/);
+        const offerCode = codeMatch ? codeMatch[1] : '';
+        
+        let offerName = '';
+        const headings = Array.from(offerCard.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"]'));
+        for (const h of headings) {
+          const hText = (h.textContent || '').trim();
+          if (hText.length >= 5 && hText.length <= 100 && !hText.match(/Featured Offer|View Sailing|Redeem|Trade-in|^\\$|^\\d+$/i)) {
+            offerName = hText;
+            break;
+          }
+        }
+        
+        // CRITICAL: Handle MULTIPLE offers with the SAME offer code
+        // Each unique card element is a unique offer, even if codes match
+        const baseKey = offerCode || ('btn-' + buttonIndex + '-' + (offerName || 'unknown'));
+        
+        // Initialize or increment the count for this code
+        if (!offerCodeCounts[baseKey]) {
+          offerCodeCounts[baseKey] = 0;
+        }
+        offerCodeCounts[baseKey]++;
+        
+        // Mark this card as seen
+        seenOfferCards.add(offerCard);
+        offerCards.push(offerCard);
+        
+        const duplicateIndex = offerCodeCounts[baseKey];
+        const duplicateLabel = duplicateIndex > 1 ? ' [#' + duplicateIndex + ']' : '';
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Identified offer card: ' + (offerName || offerCode || '[Unknown]') + duplicateLabel + ' (code: ' + (offerCode || 'N/A') + ')',
+          logType: 'info'
+        }));
       }
       
       // CRITICAL: If we still don't have enough offers, try finding by View Sailings button position
@@ -899,9 +975,11 @@ export const STEP1_OFFERS_SCRIPT = `
         
         // Strategy: Group View Sailings buttons by their vertical position on page
         // Each unique Y position likely represents a different offer
+        // Use absolute page position (including scroll offset)
         const buttonPositions = viewSailingsButtons.map(btn => {
           const rect = btn.getBoundingClientRect();
-          return { btn, y: Math.round(rect.top / 50) * 50 }; // Group by 50px bands
+          const absY = rect.top + window.scrollY;
+          return { btn, y: Math.round(absY / 100) * 100 }; // Group by 100px bands for better separation
         });
         
         // Group buttons by Y position
@@ -911,32 +989,64 @@ export const STEP1_OFFERS_SCRIPT = `
           positionGroups[y].push(btn);
         });
         
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Position fallback found ' + Object.keys(positionGroups).length + ' unique Y positions',
+          logType: 'info'
+        }));
+        
         // For each unique position, find the offer container
         for (const [yPos, btns] of Object.entries(positionGroups)) {
           const btn = btns[0]; // Take first button at this position
           
-          // Find parent container that looks like an offer
+          // Find parent container that looks like an offer - be VERY lenient
           let parent = btn.parentElement;
-          for (let i = 0; i < 20 && parent; i++) {
+          let bestContainer = null;
+          
+          for (let i = 0; i < 25 && parent; i++) {
             const parentText = parent.textContent || '';
-            const hasOfferSignals = parentText.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/) || 
-                                   parentText.toLowerCase().includes('trade-in') ||
-                                   parentText.includes('Redeem by');
-            const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
+            const parentLower = parentText.toLowerCase();
             
-            if (hasOfferSignals && isReasonableSize && !seenOfferCards.has(parent) && !isAccountStatusDisplay(parent)) {
-              seenOfferCards.add(parent);
-              offerCards.push(parent);
+            // Check for ANY offer signal
+            const hasOfferCode = parentText.match(/\\b([A-Z0-9]{5,12}[A-Z0-9])\\b/);
+            const hasTradeIn = parentLower.includes('trade-in') || parentLower.includes('trade in');
+            const hasRedeem = parentText.includes('Redeem by') || parentText.match(/Redeem\\s+by/i);
+            const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
+            const hasDollarValue = parentText.match(/\\$[\\d,]+\\.?\\d*/);
+            const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Room for Two)/i);
+            const isReasonableSize = parentText.length > 40 && parentText.length < 10000;
+            
+            const hasAnySignal = hasOfferCode || hasTradeIn || hasRedeem || hasExpiry || hasDollarValue || hasCabinType;
+            
+            if (hasAnySignal && isReasonableSize && !seenOfferCards.has(parent) && !isAccountStatusDisplay(parent)) {
+              // Count buttons in this container
+              const btnsInParent = Array.from(parent.querySelectorAll('button, a, [role="button"]')).filter(el => 
+                (el.textContent || '').toLowerCase().includes('sailing')
+              ).length;
               
-              const codeMatch = parentText.match(/\\b([A-Z0-9]{6,12}[A-Z])\\b/);
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: 'Position-based detection found offer at Y=' + yPos + ' (code: ' + (codeMatch ? codeMatch[1] : 'N/A') + ')',
-                logType: 'info'
-              }));
-              break;
+              // Accept containers with 1-4 View Sailings buttons
+              if (btnsInParent >= 1 && btnsInParent <= 4) {
+                bestContainer = parent;
+                // If container has strong signals and reasonable button count, use it
+                if ((hasOfferCode || hasTradeIn) && btnsInParent <= 2) {
+                  break;
+                }
+              }
             }
             parent = parent.parentElement;
+          }
+          
+          if (bestContainer && !seenOfferCards.has(bestContainer)) {
+            seenOfferCards.add(bestContainer);
+            offerCards.push(bestContainer);
+            
+            const containerText = bestContainer.textContent || '';
+            const codeMatch = containerText.match(/\\b([A-Z0-9]{5,12}[A-Z0-9])\\b/);
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: 'Position-based detection found offer at Y=' + yPos + ' (code: ' + (codeMatch ? codeMatch[1] : 'N/A') + ')',
+              logType: 'info'
+            }));
           }
         }
       }
@@ -1034,14 +1144,22 @@ export const STEP1_OFFERS_SCRIPT = `
           
           // DEEP SCAN: Look for offer codes directly and work backwards to find containers
           // FIXED: Look for offer codes in larger text contexts, not just exact matches
-          const offerCodeElements = Array.from(document.querySelectorAll('span, div, p, h1, h2, h3, h4, h5, h6')).filter(el => {
+          // IMPROVED: Also scan for known RC offer code patterns
+          const offerCodeElements = Array.from(document.querySelectorAll('span, div, p, h1, h2, h3, h4, h5, h6, [class*="code"], [class*="offer"]')).filter(el => {
             const text = (el.textContent || '').trim();
-            // Match standalone codes OR codes within short text
-            const hasCode = text.match(/\\b[A-Z0-9]{5,12}[A-Z]\\b/);
-            const isShortEnough = text.length < 100;
+            // Match various offer code patterns:
+            // - Standard: 26CLS103, 2601C05, 26NEW104, 26WST104, 26GRD103G
+            // - MGM: 25GOLD%
+            // - With letters: 2601A05, 2601A08
+            const hasCode = text.match(/\\b[A-Z0-9]{5,12}[A-Z0-9%]\\b/) || 
+                           text.match(/\\b\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?\\b/) ||
+                           text.match(/\\b\\d{4}[A-Z]\\d{2}[A-Z]?\\b/);
+            const isShortEnough = text.length < 150;
             // Exclude navigation, header, footer elements
             const isNotNav = !el.closest('nav, header, footer, [role="navigation"]');
-            return hasCode && isShortEnough && isNotNav;
+            // Exclude promotional banners
+            const isNotBanner = !Array.from(bannersSet).some(banner => banner.contains(el));
+            return hasCode && isShortEnough && isNotNav && isNotBanner;
           });
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
