@@ -87,6 +87,43 @@ export const STEP1_OFFERS_SCRIPT = `
     return el?.textContent?.trim() || '';
   }
 
+  // Helper function to extract offer code from text - defined at top level for accessibility
+  function extractOfferCodeFromText(text) {
+    if (!text) return '';
+    const patterns = [
+      /\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)\b/,
+      /\b(\d{4}[A-Z]\d{2}[A-Z]?)\b/,
+      /\b(\d{2}[A-Z]{3,6}%?)\b/,
+      /\b(\d{2}[A-Z]{3}\d{3}[A-Z]?)\b/
+    ];
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        const code = match[1];
+        const invalidCodes = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER'];
+        if (!invalidCodes.includes(code.toUpperCase())) {
+          return code;
+        }
+      }
+    }
+    return '';
+  }
+
+  // Helper function to validate offer code format
+  function isValidOfferCode(code) {
+    if (!code || code.length < 5 || code.length > 15) return false;
+    const cleanCode = code.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
+    const invalidCodes = ['SCOTTS', 'CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER', 'CHOICE', 'PRIME', 'MASTERS', 'SIGNATURE', 'DIAMOND', 'PLATINUM', 'CONTACT', 'MISSING', 'REPRESENTATIVE'];
+    if (invalidCodes.includes(cleanCode.toUpperCase())) return false;
+    const validPatterns = [
+      /^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/i,
+      /^\d{4}[A-Z]\d{2}[A-Z]?$/i,
+      /^\d{2}[A-Z]{3,6}%?$/i,
+      /^\d{2}[A-Z]{3}\d{3}[A-Z]?$/i
+    ];
+    return validPatterns.some(pattern => pattern.test(cleanCode));
+  }
+
   async function extractClubRoyaleStatus() {
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -696,28 +733,6 @@ export const STEP1_OFFERS_SCRIPT = `
         return isHelpText;
       }
       
-      // Helper function to validate offer code format
-      function isValidOfferCode(code) {
-        if (!code || code.length < 5 || code.length > 15) return false;
-        // Clean prefix characters first
-        const cleanCode = code.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
-        // RC offer codes typically:
-        // - Start with year (24, 25, 26) like 26CLS103, 2601C05, 25GOLD%
-        // - Or are alphanumeric promo codes like 26NEW104O, 26MAR103B, 26GRD103G, 26WST104
-        // Invalid: random words like SCOTTS, CURRENT, generic text
-        const invalidCodes = ['SCOTTS', 'CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER', 'CHOICE', 'PRIME', 'MASTERS', 'SIGNATURE', 'DIAMOND', 'PLATINUM', 'CONTACT', 'MISSING', 'REPRESENTATIVE'];
-        if (invalidCodes.includes(cleanCode.toUpperCase())) return false;
-        // Valid RC codes usually start with 2-digit year or have specific patterns
-        // Examples: 26CLS103, 26MAR103B, 2601C05, 2601A08, 2601A05, 25GOLD%, 26NEW104O, 26GRD103G, 26WST104
-        const validPatterns = [
-          /^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/i,  // 26CLS103, 26MAR103B, 26GRD103G, 26WST104
-          /^\d{4}[A-Z]\d{2}[A-Z]?$/i,         // 2601C05, 2601A08, 2601A05
-          /^\d{2}[A-Z]{3,6}%?$/i,              // 25GOLD, 25GOLD%
-          /^\d{2}[A-Z]{3}\d{3}[A-Z]?$/i       // 26NEW104, 26NEW104O
-        ];
-        return validPatterns.some(pattern => pattern.test(cleanCode));
-      }
-      
       // Helper function to get bounding rect Y position for sorting
       function getButtonYPosition(btn) {
         try {
@@ -726,30 +741,6 @@ export const STEP1_OFFERS_SCRIPT = `
         } catch (e) {
           return 0;
         }
-      }
-      
-      // Helper function to extract offer code from text
-      function extractOfferCodeFromText(text) {
-        if (!text) return '';
-        // Try various RC offer code patterns
-        const patterns = [
-          /\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)\b/,  // 26CLS103, 26MAR103B
-          /\b(\d{4}[A-Z]\d{2}[A-Z]?)\b/,         // 2601C05, 2601A08
-          /\b(\d{2}[A-Z]{3,6}%?)\b/,             // 25GOLD, 25GOLD%
-          /\b(\d{2}[A-Z]{3}\d{3}[A-Z]?)\b/       // 26NEW104, 26NEW104O
-        ];
-        for (const pattern of patterns) {
-          const match = text.match(pattern);
-          if (match && match[1]) {
-            const code = match[1];
-            // Validate it's not a common false positive
-            const invalidCodes = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER'];
-            if (!invalidCodes.includes(code.toUpperCase())) {
-              return code;
-            }
-          }
-        }
-        return '';
       }
       
       // CRITICAL: Ignore promotional banners like "READY TO PLAY?"
@@ -1802,9 +1793,9 @@ export const STEP1_OFFERS_SCRIPT = `
         const card = offerCards[i];
         const cardText = card.textContent || '';
         
-        // Extract offer code IMMEDIATELY after getting cardText to avoid temporal dead zone
+        // Extract offer code IMMEDIATELY after getting cardText
         const offerCodeMatch = cardText.match(/([A-Z0-9]{5,15})/);
-        const offerCode = offerCodeMatch ? offerCodeMatch[1] : '';
+        let offerCode = offerCodeMatch ? offerCodeMatch[1] : '';
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
