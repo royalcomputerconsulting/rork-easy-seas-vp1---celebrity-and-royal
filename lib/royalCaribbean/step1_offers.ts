@@ -637,36 +637,63 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
       
-      // CRITICAL FIX: Only filter out buttons that are clearly NOT in offer cards
-      // Check if button is inside a promotional banner (no offer code, no cabin type, no redeem date)
+      // CRITICAL FIX: Only keep buttons that are in COMPLETE offer cards
+      // Explicitly filter out promotional banners, dividers, and informational sections
       const viewSailingsButtons = allViewSailingButtons.filter(btn => {
         let parent = btn.parentElement;
-        let isRealOffer = false;
+        let foundCompleteOfferCard = false;
+        let isPromotionalBanner = false;
         
-        // Check up to 15 levels to find offer card signals
+        // Check up to 15 levels to find complete offer card or banner signals
         for (let i = 0; i < 15 && parent; i++) {
           const parentText = parent.textContent || '';
           const parentLower = parentText.toLowerCase();
           
-          // Strong signals this is a REAL offer card
+          // FIRST: Check if this is a promotional banner/divider (DISCARD immediately)
+          const bannerKeywords = [
+            'ready to play',
+            'for more information click',
+            'benefits tab',
+            'explore our',
+            'learn more about',
+            'discover',
+            'join us',
+            'sign up',
+            'download app',
+            'stay connected'
+          ];
+          
+          for (const keyword of bannerKeywords) {
+            if (parentLower.includes(keyword)) {
+              isPromotionalBanner = true;
+              break;
+            }
+          }
+          
+          if (isPromotionalBanner) {
+            break; // Stop checking, this is a banner
+          }
+          
+          // SECOND: Check if this is a COMPLETE offer card (ALL required elements)
           const hasOfferCode = parentText.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO)[A-Z0-9]{2,8}[A-Z0-9]\b/i);
-          const hasTradeInValue = parentText.match(/\$[\d,]+\.\d{2}\s*trade-in/i);
-          const hasRedeemDate = parentText.match(/Redeem by.*?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
-          const hasCabinType = parentText.match(/(Balcony|Oceanview|Interior|Suite).*?(for Two|Room)/i);
-          const hasOfferName = parentText.match(/(Last Chance|Instant Rewards|Gamechanger|MGM)/i);
+          const hasRedeemDate = parentText.match(/Redeem by\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d+,?\s*\d{4}/i);
+          const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite).*?(for Two|for two|Room|room)/i);
           
-          // Need at least 2 strong signals to confirm it's a real offer
-          const signals = [hasOfferCode, hasTradeInValue, hasRedeemDate, hasCabinType, hasOfferName].filter(Boolean).length;
-          
-          if (signals >= 2) {
-            isRealOffer = true;
-            break;
+          // MUST have ALL 3 core elements to be a valid offer card
+          if (hasOfferCode && hasRedeemDate && hasCabinType) {
+            // Extra validation: container should be reasonably sized (not too big = page container, not too small = just code element)
+            const containerSize = parentText.length;
+            if (containerSize > 150 && containerSize < 3000) {
+              foundCompleteOfferCard = true;
+              break;
+            }
           }
           
           parent = parent.parentElement;
         }
         
-        return isRealOffer;
+        // Only return true if we found a complete offer card AND it's NOT a banner
+        return foundCompleteOfferCard && !isPromotionalBanner;
       });
       
       const filteredOutCount = allViewSailingButtons.length - viewSailingsButtons.length;
