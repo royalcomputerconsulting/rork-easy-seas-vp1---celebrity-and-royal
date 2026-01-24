@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#334155'
   },
   logsScrollTop: {
-    maxHeight: 260,
+    maxHeight: 320,
     padding: 12
   },
   progressText: {
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const
   },
   webViewContainer: {
-    height: 300,
+    height: 260,
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b'
   },
@@ -467,7 +467,8 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   actionsContainer: {
-    padding: 12
+    padding: 12,
+    paddingTop: 8
   },
   quickActionsGrid: {
     flexDirection: 'row' as const,
@@ -475,10 +476,10 @@ const styles = StyleSheet.create({
   },
   quickActionButton: {
     flex: 1,
-    height: 80,
+    height: 72,
     backgroundColor: '#1e293b',
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,

@@ -479,22 +479,8 @@ export const STEP1_OFFERS_SCRIPT = `
       let lastButtonCount = 0;
       let stableScrollCount = 0;
       
-      // FIRST: Try to expand any collapsed sections that might hide offers
-      const expandButtons = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="expand"], [class*="toggle"], [class*="show"]'));
-      for (const btn of expandButtons) {
-        const btnText = (btn.textContent || '').toLowerCase();
-        if (btnText.includes('show') || btnText.includes('expand') || btnText.includes('more') || btnText.includes('all')) {
-          try {
-            btn.click();
-            await wait(800);
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '🔓 Clicked expand/show button: ' + btnText.substring(0, 30),
-              logType: 'info'
-            }));
-          } catch (e) {}
-        }
-      }
+      // CRITICAL: DO NOT CLICK ANY BUTTONS - ONLY "View Sailings" buttons should be clicked
+      // Clicking other buttons can break the page or navigate away
       
       for (let scrollPass = 0; scrollPass < 30; scrollPass++) {
         // Scroll to multiple positions to trigger lazy loading
