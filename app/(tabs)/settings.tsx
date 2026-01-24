@@ -1071,71 +1071,47 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
 
           <View style={styles.quickActionsSection}>
             <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
-            <View style={styles.quickActionsGrid}>
+            <TouchableOpacity 
+              style={styles.quickActionFullWidth} 
+              onPress={() => router.push('/royal-caribbean-sync' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
+                <Ship size={16} color="#0070C9" />
+              </View>
+              <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
+              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
+            </TouchableOpacity>
+            <View style={styles.quickActionsRow}>
               <TouchableOpacity 
-                style={styles.quickActionButton} 
-                onPress={() => router.push('/royal-caribbean-sync' as any)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
-                  <Ship size={18} color="#0070C9" />
-                </View>
-                <Text style={styles.quickActionLabel}>Sync Club Royale</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.quickActionButton} 
+                style={styles.quickActionHalf} 
                 onPress={handleExportAllData}
                 activeOpacity={0.7}
                 disabled={isExportingAll}
               >
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
+                <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
                   {isExportingAll ? (
                     <ActivityIndicator size="small" color={COLORS.success} />
                   ) : (
-                    <Save size={18} color={COLORS.success} />
+                    <Save size={16} color={COLORS.success} />
                   )}
                 </View>
-                <Text style={styles.quickActionLabel}>Save All</Text>
+                <Text style={styles.quickActionLabelInline}>Save All</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={styles.quickActionButton} 
+                style={styles.quickActionHalf} 
                 onPress={handleImportAllData}
                 activeOpacity={0.7}
                 disabled={isImportingAll}
               >
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
+                <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
                   {isImportingAll ? (
                     <ActivityIndicator size="small" color={COLORS.info} />
                   ) : (
-                    <FolderInput size={18} color={COLORS.info} />
+                    <FolderInput size={16} color={COLORS.info} />
                   )}
                 </View>
-                <Text style={styles.quickActionLabel}>Load Backup</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.quickActionButton} 
-                onPress={handleImportOffersCSV}
-                activeOpacity={0.7}
-                disabled={isImporting}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(0, 31, 63, 0.1)' }]}>
-                  {isImporting ? (
-                    <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                  ) : (
-                    <FileSpreadsheet size={18} color={COLORS.navyDeep} />
-                  )}
-                </View>
-                <Text style={styles.quickActionLabel}>Import CSV</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.quickActionButton} 
-                onPress={handleClearData}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(244, 67, 54, 0.1)' }]}>
-                  <RefreshCcw size={18} color={COLORS.error} />
-                </View>
-                <Text style={styles.quickActionLabel}>Reset Data</Text>
+                <Text style={styles.quickActionLabelInline}>Load Backup</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1497,6 +1473,33 @@ STEP 4: Optional Calendar Import
                     </Text>
                   ),
                   handleExportMachinesJSON
+                )}
+
+                <View style={styles.dataDivider} />
+                
+                <View style={[styles.dataSubsection, { backgroundColor: 'rgba(0, 31, 63, 0.08)' }]}>
+                  <Text style={styles.subsectionLabel}>DATA TOOLS</Text>
+                  <Text style={styles.subsectionHelper}>Import CSV files and reset app data.</Text>
+                </View>
+                {renderSettingRow(
+                  <FileSpreadsheet size={18} color={COLORS.navyDeep} />,
+                  'Import Offers CSV',
+                  isImporting ? (
+                    <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                  ) : lastImportResult?.type === 'offers' ? (
+                    <View style={styles.successBadge}>
+                      <CheckCircle size={12} color={COLORS.success} />
+                      <Text style={styles.successText}>{lastImportResult.count}</Text>
+                    </View>
+                  ) : undefined,
+                  handleImportOffersCSV
+                )}
+                {renderSettingRow(
+                  <RefreshCcw size={18} color={COLORS.error} />,
+                  'Reset All Data',
+                  undefined,
+                  handleClearData,
+                  true
                 )}
 
                 <View style={styles.dataDivider} />
@@ -1900,30 +1903,42 @@ const styles = StyleSheet.create({
   quickActionsSection: {
     marginBottom: SPACING.md,
   },
-  quickActionsGrid: {
+  quickActionFullWidth: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-  },
-  quickActionButton: {
-    flex: 1,
-    minWidth: '45%',
+    alignItems: 'center',
     backgroundColor: CLEAN_THEME.background.secondary,
     borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
+    padding: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: CLEAN_THEME.border.light,
+    marginBottom: SPACING.xs,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  quickActionHalf: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: CLEAN_THEME.background.secondary,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     borderWidth: 1,
     borderColor: CLEAN_THEME.border.light,
   },
-  quickActionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  quickActionIconSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.xs,
+    marginRight: SPACING.sm,
   },
-  quickActionLabel: {
+  quickActionLabelInline: {
+    flex: 1,
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     color: CLEAN_THEME.text.primary,
