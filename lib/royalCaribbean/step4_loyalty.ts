@@ -60,7 +60,7 @@ export const STEP4_LOYALTY_SCRIPT = `
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 Searching for Crown & Anchor cruise points...',
+        message: '🔍 Searching for Crown & Anchor cruise points (looking for large prominent number)...',
         logType: 'info'
       }));
       
@@ -295,32 +295,40 @@ export const STEP4_LOYALTY_SCRIPT = `
               const isVeryLarge = fontSize > 40;
               const isBold = fontWeight === 'bold' || fontWeight === '700' || fontWeight === '800' || fontWeight === '900';
               
-              // CRITICAL: 503 displayed PROMINENTLY gets ABSOLUTE TOP priority
+              // CRITICAL: Strongly prioritize LARGE numbers (400+) displayed prominently
+              // User's actual cruise points like 503 should ALWAYS win over small numbers like 140
               let priority = 10;
-              if (nearCruiseNights && num >= 100) {
-                // ABSOLUTE TOP: Number near "cruise nights" or "nights earned"
+              
+              // ABSOLUTE TOP: 400+ with very large font (> 40px)
+              if (num >= 400 && isVeryLarge) {
                 priority = 0;
-              } else if (num >= 400 && isVeryLarge) {
-                // CRITICAL: Large numbers (503) with VERY LARGE font (> 40px) = HIGHEST priority
+              }
+              // SECOND: 300+ with very large font
+              else if (num >= 300 && isVeryLarge) {
                 priority = 0;
-              } else if (num >= 400 && (nearYourTier || isBold)) {
+              }
+              // THIRD: Any number with "nights earned" or "cruise nights" nearby
+              else if (nearCruiseNights && num >= 100) {
+                priority = 0;
+              }
+              // FOURTH: 400+ with large font or bold (even without "very large")
+              else if (num >= 400 && (nearYourTier || isBold || fontSize > 30)) {
                 priority = 1;
-              } else if (num >= 400) {
-                priority = 1;
-              } else if (num >= 300 && isVeryLarge) {
-                priority = 1;
-              } else if (num >= 300 && (nearYourTier || isBold)) {
+              }
+              // FIFTH: 300+ with styling
+              else if (num >= 300 && (isVeryLarge || isBold || fontSize > 30 || nearYourTier)) {
                 priority = 2;
-              } else if (num >= 300) {
-                priority = 3;
-              } else if (num >= 200 && nearYourTier) {
-                priority = 4;
-              } else if (num >= 200) {
-                priority = 5;
-              } else if (num >= 150) {
-                // 140-199 range gets LOW priority (NOT the main number)
-                priority = nearYourTier ? 8 : 9;
-              } else {
+              }
+              // LOWER: 200-299
+              else if (num >= 200) {
+                priority = (isVeryLarge || fontSize > 30) ? 4 : 6;
+              }
+              // VERY LOW: 100-199 (like 140 - definitely NOT the main cruise points number)
+              else if (num >= 150) {
+                priority = 9;
+              }
+              // LOWEST: < 150
+              else {
                 priority = 10;
               }
               
@@ -388,33 +396,34 @@ export const STEP4_LOYALTY_SCRIPT = `
         // CRITICAL: The HUGE number under YOUR TIER (like 503) should ALWAYS win
         let bestCandidate = uniqueCandidates[0];
         
-        // AGGRESSIVE: If best is < 200, look for MUCH larger alternatives
+        // CRITICAL OVERRIDE: If best candidate is < 200, look for MUCH larger alternatives
+        // This handles the case where 140 is selected instead of 503
         if (bestCandidate.value < 200 && uniqueCandidates.length > 1) {
-          // Look for 300+ with priority within 3 levels
+          // Look for ANY 400+ candidate with reasonable priority
           const muchLargerCandidate = uniqueCandidates.find(c => 
-            c.value >= 300 && 
-            c.priority <= bestCandidate.priority + 3
+            c.value >= 400 && c.priority <= 5
           );
           if (muchLargerCandidate) {
             bestCandidate = muchLargerCandidate;
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: '✓ OVERRIDING: Preferring MUCH LARGER value ' + bestCandidate.value + ' over ' + uniqueCandidates[0].value + ' (the prominent number under YOUR TIER)',
+              message: '✓✓ OVERRIDING: Chose MUCH LARGER value ' + bestCandidate.value + ' over ' + uniqueCandidates[0].value + ' (400+ is the real cruise points)',
               logType: 'success'
             }));
           }
-        }
-        
-        // FORCE OVERRIDE: If still < 200 but there's ANY 400+ candidate, use it
-        if (bestCandidate.value < 200 && uniqueCandidates.length > 1) {
-          const veryLargeCandidate = uniqueCandidates.find(c => c.value >= 400 && c.priority <= 5);
-          if (veryLargeCandidate) {
-            bestCandidate = veryLargeCandidate;
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '✓✓ FORCE OVERRIDE: Using very large value ' + bestCandidate.value + ' (400+ always preferred)',
-              logType: 'success'
-            }));
+          // If no 400+, look for 300+
+          else {
+            const largerCandidate = uniqueCandidates.find(c => 
+              c.value >= 300 && c.priority <= 5
+            );
+            if (largerCandidate) {
+              bestCandidate = largerCandidate;
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '✓ OVERRIDING: Chose larger value ' + bestCandidate.value + ' over ' + uniqueCandidates[0].value,
+                logType: 'success'
+              }));
+            }
           }
         }
         

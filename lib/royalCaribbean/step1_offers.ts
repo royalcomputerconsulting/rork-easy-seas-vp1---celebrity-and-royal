@@ -549,39 +549,45 @@ export const STEP1_OFFERS_SCRIPT = `
 
       let offerCards = [];
       
-      // CRITICAL FIX: Promotional dividers like "READY TO PLAY" stop detection mid-page
-      // We need to scan the ENTIRE page INCLUDING content after dividers
-      // Strategy: Find ALL View Sailings buttons first, then work backwards to containers
+      // CRITICAL FIX: Royal Caribbean structure:
+      // - FEATURED offer at top
+      // - ALL OFFERS (X) section
+      // - Some offers
+      // - PROMOTIONAL DIVIDERS (e.g., "READY TO PLAY") that MUST be ignored
+      // - More offers AFTER dividers
+      // - More offers at bottom
+      // Each card has: Title, Offer Code, Room Type, Redeem Date, T&C link, sometimes Trade-in, Redeem button, View Sailings button
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 HYPER AGGRESSIVE SCAN: Extracting ALL ' + (expectedOfferCount || 'available') + ' offers (ignoring promotional dividers like READY TO PLAY)...',
+        message: '🔍 SCANNING: Finding ALL ' + (expectedOfferCount || 'available') + ' offer cards (ignoring dividers like READY TO PLAY)...',
         logType: 'info'
       }));
       
-      // CRITICAL: First, let's scan the entire page HTML structure to understand what we're dealing with
+      // STRATEGY: Each offer card MUST have ALL of these elements:
+      // 1. Offer code (format: 26CLS103 or 26CLS103B)
+      // 2. Room type (Balcony, Oceanview, Interior, Suite) + guests ("for two")
+      // 3. Redeem by date (e.g., "Jan 31, 2026")
+      // 4. View Sailings button
+      // We'll find containers that have ALL these signals
+      
       const pageHTML = document.body.innerHTML;
-      const allOfferCodes = pageHTML.match(/\b[A-Z0-9]{5,12}[A-Z]\b/g) || [];
-      const uniqueOfferCodes = [...new Set(allOfferCodes)].filter(code => {
-        // Filter out common false positives
-        return !code.match(/^(CURRENT|FEATURED|SAILING|BOOKING|LOYALTY|MEMBER)$/);
+      const allOfferCodes = pageHTML.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO)[A-Z0-9]{2,8}[A-Z0-9]\b/gi) || [];
+      const uniqueOfferCodes = [...new Set(allOfferCodes.map(c => c.toUpperCase()))].filter(code => {
+        return !code.match(/^(CURRENT|FEATURED|SAILING|BOOKING|LOYALTY|MEMBER|ROYALE)$/);
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '📋 Detected ' + uniqueOfferCodes.length + ' unique offer codes in page HTML: ' + uniqueOfferCodes.slice(0, 10).join(', '),
+        message: '📋 Detected ' + uniqueOfferCodes.length + ' potential offer codes: ' + uniqueOfferCodes.slice(0, 10).join(', '),
         logType: 'info'
       }));
       
-      // CRITICAL STRATEGY: Royal Caribbean page structure has:
-      // - Featured Offer (with View Sailings)
-      // - "All Offers (8)" section with 3 offers
-      // - "READY TO PLAY" promotional divider
-      // - 3 more offers AFTER the divider
-      // - 2 more offers at the bottom
-      // We MUST scan the ENTIRE page and ignore dividers completely
+      // PRIMARY STRATEGY: Find containers with COMPLETE offer card structure
+      // Must have: offer code, room type, redeem date, and View Sailings button
+      // This ensures we get REAL offer cards and not dividers or promotional content
       
-      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div, p, [class*="offer"], [class*="card"]'));
+      const allPossibleContainers = Array.from(document.querySelectorAll('div, article, section, li, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"]'));
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
