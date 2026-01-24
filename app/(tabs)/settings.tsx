@@ -1235,21 +1235,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                 ) : undefined,
                 handleImportCalendarICS
               )}
-              {renderSettingRow(
-                <Database size={18} color="#FF5722" />,
-                'Machines (.json)',
-                isImportingMachines ? (
-                  <ActivityIndicator size="small" color={"#FF5722"} />
-                ) : lastImportResult?.type === 'machines' ? (
-                  <View style={styles.successBadge}>
-                    <CheckCircle size={12} color={COLORS.success} />
-                    <Text style={styles.successText}>{lastImportResult.count}</Text>
-                  </View>
-                ) : undefined,
-                handleImportMachinesJSON
-              )}
-              
-              <View style={styles.dataDivider} />
+<View style={styles.dataDivider} />
               
               <View style={[styles.dataSubsection, styles.fullBackupBanner]}>
                 <Text style={styles.subsectionLabel}>FULL BACKUP</Text>
@@ -1291,19 +1277,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                 ),
                 handleExportCalendarICS
               )}
-              {renderSettingRow(
-                <Database size={18} color="#FF5722" />,
-                'Machines (.json)',
-                isExportingMachines ? (
-                  <ActivityIndicator size="small" color="#FF5722" />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    {dataStats.machines} machines
-                  </Text>
-                ),
-                handleExportMachinesJSON
-              )}
-              {renderSettingRow(
+{renderSettingRow(
                 <FolderArchive size={18} color={COLORS.success} />,
                 'Export All App Data',
                 isExportingAll ? (
@@ -1493,6 +1467,40 @@ STEP 4: Optional Calendar Import
                   </TouchableOpacity>
                 </View>
 
+<View style={styles.dataDivider} />
+                
+                <View style={[styles.dataSubsection, { backgroundColor: 'rgba(255, 87, 34, 0.1)' }]}>
+                  <Text style={styles.subsectionLabel}>MACHINES DATA</Text>
+                  <Text style={styles.subsectionHelper}>Import/export machine library JSON files.</Text>
+                </View>
+                {renderSettingRow(
+                  <Database size={18} color="#FF5722" />,
+                  'Import Machines (.json)',
+                  isImportingMachines ? (
+                    <ActivityIndicator size="small" color="#FF5722" />
+                  ) : lastImportResult?.type === 'machines' ? (
+                    <View style={styles.successBadge}>
+                      <CheckCircle size={12} color={COLORS.success} />
+                      <Text style={styles.successText}>{lastImportResult.count}</Text>
+                    </View>
+                  ) : undefined,
+                  handleImportMachinesJSON
+                )}
+                {renderSettingRow(
+                  <Database size={18} color="#FF5722" />,
+                  'Export Machines (.json)',
+                  isExportingMachines ? (
+                    <ActivityIndicator size="small" color="#FF5722" />
+                  ) : (
+                    <Text style={styles.countBadge}>
+                      {dataStats.machines} machines
+                    </Text>
+                  ),
+                  handleExportMachinesJSON
+                )}
+
+                <View style={styles.dataDivider} />
+
                 {isLoadingWhitelist ? (
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="small" color={COLORS.navyDeep} />
@@ -1545,19 +1553,7 @@ STEP 4: Optional Calendar Import
             </View>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>DATA RECOVERY</Text>
-            <View style={styles.sectionCard}>
-              {renderSettingRow(
-                <RefreshCcw size={18} color={COLORS.navyDeep} />,
-                'Restore Mock Data',
-                isRestoringMockData ? <ActivityIndicator size="small" color={COLORS.navyDeep} /> : undefined,
-                isRestoringMockData ? undefined : handleRestoreMockData
-              )}
-            </View>
-          </View>
-
-          <View style={styles.section}>
+<View style={styles.section}>
             <Text style={styles.sectionLabel}>ABOUT</Text>
             <View style={styles.sectionCard}>
               {renderSettingRow(
