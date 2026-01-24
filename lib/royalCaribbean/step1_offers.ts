@@ -589,6 +589,9 @@ export const STEP1_OFFERS_SCRIPT = `
       
       const allPossibleContainers = Array.from(document.querySelectorAll('div, article, section, li, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"]'));
       
+      // Find ALL clickable elements on the page
+      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], span[class*="button"], div[class*="button"]'));
+      
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: '🔍 Scanning ' + allClickables.length + ' elements across ENTIRE page (ignoring dividers like READY TO PLAY)...',
