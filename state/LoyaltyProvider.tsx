@@ -75,7 +75,7 @@ const STORAGE_KEYS = {
 
 const DEFAULT_LOYALTY = {
   clubRoyalePoints: 34746,
-  crownAnchorPoints: 548,
+  crownAnchorPoints: 485,
 };
 
 export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState => {

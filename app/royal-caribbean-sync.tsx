@@ -161,7 +161,7 @@ function RoyalCaribbeanSyncScreen() {
             </View>
           </View>
           <View style={styles.logsScrollTop}>
-            {state.logs.slice(-4).map((log, index) => (
+            {state.logs.slice(-3).map((log, index) => (
               <View key={`${log.timestamp}-${index}`} style={[styles.logEntry, log.type === 'error' && styles.logError]}>
                 <Text style={styles.logTimestamp}>{log.timestamp}</Text>
                 <Text style={[
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#334155'
   },
   logsScrollTop: {
-    maxHeight: 320,
+    maxHeight: 200,
     padding: 12
   },
   progressText: {
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const
   },
   webViewContainer: {
-    height: 260,
+    height: 300,
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b'
   },
@@ -467,8 +467,7 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   actionsContainer: {
-    padding: 12,
-    paddingTop: 8
+    padding: 12
   },
   quickActionsGrid: {
     flexDirection: 'row' as const,
@@ -476,10 +475,10 @@ const styles = StyleSheet.create({
   },
   quickActionButton: {
     flex: 1,
-    height: 72,
+    height: 80,
     backgroundColor: '#1e293b',
     borderRadius: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,

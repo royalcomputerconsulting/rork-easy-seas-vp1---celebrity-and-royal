@@ -87,74 +87,6 @@ export const STEP1_OFFERS_SCRIPT = `
     return el?.textContent?.trim() || '';
   }
 
-  function dismissInterferingBanners() {
-    try {
-      const bannerTextSignals = [
-        'ready to play',
-        'for more information',
-        'benefits tab'
-      ];
-
-      const bannerElements = Array.from(
-        document.querySelectorAll(
-          'div, section, article, aside, [role="banner"], [class*="banner"], [class*="promo"], [class*="ready"], [class*="alert"], [class*="notice"], [class*="callout"]'
-        )
-      ).filter(el => {
-        const text = (el.textContent || '').toLowerCase();
-        const hasSignal = bannerTextSignals.some(sig => text.includes(sig));
-        if (!hasSignal) return false;
-        const height = el.offsetHeight || 0;
-        return height >= 40;
-      });
-
-      const overlays = Array.from(document.querySelectorAll('*')).filter(el => {
-        const style = window.getComputedStyle(el);
-        const text = (el.textContent || '').toLowerCase();
-        const hasSignal = bannerTextSignals.some(sig => text.includes(sig));
-        if (!hasSignal) return false;
-        if (style.pointerEvents === 'none') return false;
-        return style.position === 'fixed' || style.position === 'sticky';
-      });
-
-      const candidates = [...bannerElements, ...overlays];
-      if (candidates.length === 0) return;
-
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🚫 Detected ' + candidates.length + ' interfering banner/overlay element(s) - disabling interaction to prevent blocking offer clicks',
-        logType: 'info'
-      }));
-
-      for (const el of candidates.slice(0, 12)) {
-        const clickableClose = Array.from(el.querySelectorAll('button, [role="button"], a'))
-          .find(b => {
-            const t = (b.textContent || '').trim().toLowerCase();
-            return t === '×' || t === 'close' || t === 'dismiss' || t === 'got it';
-          }) as HTMLElement | undefined;
-
-        if (clickableClose) {
-          try {
-            clickableClose.click();
-          } catch (e) {
-          }
-        }
-
-        const h = el as HTMLElement;
-        h.style.pointerEvents = 'none';
-        h.style.visibility = 'hidden';
-        h.style.opacity = '0';
-        h.style.maxHeight = '0px';
-        h.style.overflow = 'hidden';
-      }
-    } catch (e) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '⚠️ Failed to dismiss interfering banner(s): ' + String(e),
-        logType: 'warning'
-      }));
-    }
-  }
-
   async function extractClubRoyaleStatus() {
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -523,27 +455,13 @@ export const STEP1_OFFERS_SCRIPT = `
       const offerCountMatch = pageText.match(/All Offers\\s*\\((\\d+)\\)/i) || 
                               pageText.match(/Offers\\s*\\((\\d+)\\)/i) ||
                               pageText.match(/(\\d+)\\s+Offers?\\s+Available/i);
-      
-      // Check if there's a FEATURED offer section
-      const hasFeaturedOffer = pageText.match(/FEATURED\\s+Offer/i);
-      
       if (offerCountMatch) {
         expectedOfferCount = parseInt(offerCountMatch[1], 10);
-        // Add 1 for FEATURED offer if it exists (structure: 1 FEATURED + X from ALL OFFERS)
-        if (hasFeaturedOffer) {
-          expectedOfferCount += 1;
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Found FEATURED offer section + ALL OFFERS (' + (expectedOfferCount - 1) + ') = ' + expectedOfferCount + ' total offers expected',
-            logType: 'info'
-          }));
-        } else {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Expected offer count from page: ' + expectedOfferCount,
-            logType: 'info'
-          }));
-        }
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Expected offer count from page: ' + expectedOfferCount,
+          logType: 'info'
+        }));
       }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -555,83 +473,35 @@ export const STEP1_OFFERS_SCRIPT = `
       await scrollUntilComplete(null, 20);
       await wait(1000);
       
-      // HYPER AGGRESSIVE scrolling to ensure ALL offers are loaded (including past dividers)
-      // Royal Caribbean uses lazy loading AND has promotional dividers that can break detection
-      // We need to scroll PAST all dividers to load hidden offers
-      let lastButtonCount = 0;
-      let stableScrollCount = 0;
-      
-      // CRITICAL: DO NOT CLICK ANY BUTTONS - ONLY "View Sailings" buttons should be clicked
-      // Clicking other buttons can break the page or navigate away
-      
-      for (let scrollPass = 0; scrollPass < 30; scrollPass++) {
-        // Scroll to multiple positions to trigger lazy loading
+      // ULTRA AGGRESSIVE scrolling to ensure ALL 9 offers are loaded
+      // Royal Caribbean uses lazy loading, so we need to scroll multiple times
+      for (let scrollPass = 0; scrollPass < 8; scrollPass++) {
         window.scrollTo(0, document.body.scrollHeight);
-        await wait(3000);
+        await wait(1500);
         window.scrollTo(0, document.body.scrollHeight * 0.25);
-        await wait(1500);
+        await wait(800);
         window.scrollTo(0, document.body.scrollHeight * 0.5);
-        await wait(1500);
+        await wait(800);
         window.scrollTo(0, document.body.scrollHeight * 0.75);
-        await wait(1500);
+        await wait(800);
         window.scrollTo(0, document.body.scrollHeight);
-        await wait(3000);
-        
-        // Aggressive: scroll PAST the bottom by triggering events
-        window.scrollBy(0, 8000);
-        await wait(2000);
-        
-        // Trigger scroll events manually to force lazy loading
-        window.dispatchEvent(new Event('scroll'));
-        document.body.dispatchEvent(new Event('scroll'));
-        await wait(500);
-        
-        // Count buttons after each pass - be MORE lenient in detection
-        const currentOfferButtons = document.querySelectorAll('button, a, [role="button"], span[class*="button"], div[class*="button"]');
-        const viewSailingCount = Array.from(currentOfferButtons).filter(btn => {
-          const text = (btn.textContent || '').toLowerCase();
-          return text.includes('sailing') || text.includes('view dates') || text.includes('see dates');
-        }).length;
+        await wait(1500);
         
         // Log progress
         if (scrollPass % 2 === 0) {
+          const currentOfferButtons = document.querySelectorAll('button, a, [role="button"]');
+          const viewSailingCount = Array.from(currentOfferButtons).filter(btn => 
+            (btn.textContent || '').toLowerCase().includes('sailing')
+          ).length;
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Scroll pass ' + (scrollPass + 1) + '/30: Found ' + viewSailingCount + ' View Sailings buttons',
+            message: 'Scroll pass ' + (scrollPass + 1) + '/8: Found ' + viewSailingCount + ' View Sailings buttons so far',
             logType: 'info'
           }));
         }
-        
-        // Check if button count is stable (no new offers loading)
-        if (viewSailingCount === lastButtonCount) {
-          stableScrollCount++;
-          // Only stop if we've reached the expected count
-          if (expectedOfferCount > 0 && viewSailingCount >= expectedOfferCount && stableScrollCount >= 3) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '✓ Found all expected offers (' + viewSailingCount + ' buttons), stopping scroll',
-              logType: 'success'
-            }));
-            break;
-          }
-          // If count is stable but below expected, keep trying until we exhaust all passes
-          if (stableScrollCount >= 8 && viewSailingCount < expectedOfferCount) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '⚠️ Button count stable at ' + viewSailingCount + ' (expected: ' + expectedOfferCount + '), trying more aggressive tactics...',
-              logType: 'warning'
-            }));
-            // Don't break, keep trying
-          }
-        } else {
-          stableScrollCount = 0;
-          lastButtonCount = viewSailingCount;
-        }
       }
       window.scrollTo(0, 0);
-      await wait(2000);
-
-      dismissInterferingBanners();
+      await wait(1500);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -641,129 +511,46 @@ export const STEP1_OFFERS_SCRIPT = `
 
       let offerCards = [];
       
-      // CRITICAL FIX: Royal Caribbean structure:
-      // - FEATURED offer at top
-      // - ALL OFFERS (X) section
-      // - Some offers
-      // - PROMOTIONAL DIVIDERS (e.g., "READY TO PLAY") that MUST be ignored
-      // - More offers AFTER dividers
-      // - More offers at bottom
-      // Each card has: Title, Offer Code, Room Type, Redeem Date, T&C link, sometimes Trade-in, Redeem button, View Sailings button
+      // IMPORTANT: Do NOT filter out promotional elements - they might be near offers
+      // The dividers between offers were causing issues
+      // Instead, we'll find ALL View Sailings buttons and work backwards
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 SCANNING: Finding ALL ' + (expectedOfferCount || 'available') + ' offer cards (ignoring dividers like READY TO PLAY)...',
+        message: '🔍 Scanning entire page for all ' + expectedOfferCount + ' offers (ignoring dividers)...',
         logType: 'info'
       }));
       
-      // STRATEGY: Each offer card MUST have ALL of these elements:
-      // 1. Offer code (format: 26CLS103 or 26CLS103B)
-      // 2. Room type (Balcony, Oceanview, Interior, Suite) + guests ("for two")
-      // 3. Redeem by date (e.g., "Jan 31, 2026")
-      // 4. View Sailings button
-      // We'll find containers that have ALL these signals
-      
-      const pageHTML = document.body.innerHTML;
-      const allOfferCodes = pageHTML.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO)[A-Z0-9]{2,8}[A-Z0-9]\b/gi) || [];
-      const uniqueOfferCodes = [...new Set(allOfferCodes.map(c => c.toUpperCase()))].filter(code => {
-        return !code.match(/^(CURRENT|FEATURED|SAILING|BOOKING|LOYALTY|MEMBER|ROYALE)$/);
-      });
+      // ULTRA AGGRESSIVE: Get ALL possible clickable elements and find View Sailings buttons
+      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div, p'));
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '📋 Detected ' + uniqueOfferCodes.length + ' potential offer codes: ' + uniqueOfferCodes.slice(0, 10).join(', '),
+        message: '🔍 Scanning ' + allClickables.length + ' elements for View Sailings buttons...',
         logType: 'info'
       }));
       
-      // PRIMARY STRATEGY: Find containers with COMPLETE offer card structure
-      // Must have: offer code, room type, redeem date, and View Sailings button
-      // This ensures we get REAL offer cards and not dividers or promotional content
-      
-      const allPossibleContainers = Array.from(document.querySelectorAll('div, article, section, li, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"]'));
-      
-      // Find ALL clickable elements on the page
-      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], span[class*="button"], div[class*="button"]'));
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🔍 Scanning ' + allClickables.length + ' elements across ENTIRE page (ignoring dividers like READY TO PLAY)...',
-        logType: 'info'
-      }));
-      
-      // Find ALL "View Sailings" buttons - EXACT match only
-      // User confirmed: ALL buttons say "View Sailings" - they are all exactly the same
-      const allViewSailingButtons = allClickables.filter(el => {
+      // Find ALL View Sailings buttons - be VERY lenient
+      const viewSailingsButtons = allClickables.filter(el => {
         const text = (el.textContent || '').trim().toLowerCase();
-        // ONLY match "view sailings" or "view sailing" (singular/plural)
-        // Don't try to be clever - the user says they're all the same
-        return text === 'view sailings' || 
-               text === 'view sailing' ||
-               (text.includes('view') && text.includes('sailing') && text.length < 30);
+        const isShortText = text.length < 50;
+        // Check for any sailing-related text
+        const hasSailingText = text.includes('sailing') || text.includes('dates') || text.includes('view');
+        // Match various button patterns
+        return isShortText && (
+               text.includes('view sailing') || 
+               text.includes('see sailing') || 
+               text.includes('show sailing') ||
+               text.includes('view dates') ||
+               text.includes('see dates') ||
+               text.includes('available sailing') ||
+               text === 'view sailings' ||
+               text === 'see sailings' ||
+               text === 'view' ||
+               (text === 'select' && el.closest('[class*="offer"], [class*="card"]')) ||
+               (hasSailingText && text.length < 25)
+        );
       });
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Found ' + allViewSailingButtons.length + ' total "View Sailings" buttons before filtering',
-        logType: 'info'
-      }));
-      
-      // CRITICAL FIX: Only keep buttons that are in COMPLETE offer cards
-      // Be LESS AGGRESSIVE - only filter out obvious non-offer content
-      const viewSailingsButtons = allViewSailingButtons.filter(btn => {
-        let parent = btn.parentElement;
-        let foundOfferSignals = false;
-        let isDefinitelyNotOffer = false;
-        
-        // Check up to 15 levels to find offer signals
-        for (let i = 0; i < 15 && parent; i++) {
-          const parentText = parent.textContent || '';
-          const parentLower = parentText.toLowerCase();
-          
-          // ONLY filter out if it's DEFINITELY not an offer (very specific non-offer text)
-          // User says: ONLY "View Sailings" buttons should be clicked, they're all the same
-          // So if a button has offer-related content nearby, it's likely valid
-          
-          // Check for offer code (STRONGEST signal this is a real offer)
-          const hasOfferCode = parentText.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO)[A-Z0-9]{2,8}[A-Z0-9]\b/i);
-          const hasRedeemDate = parentText.match(/Redeem by\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
-          const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
-          const hasTradeIn = parentText.match(/trade.?in/i);
-          
-          // If we see ANY offer signals, this is likely a valid offer
-          if (hasOfferCode || (hasRedeemDate && hasCabinType) || hasTradeIn) {
-            foundOfferSignals = true;
-            break;
-          }
-          
-          // ONLY mark as "not an offer" if we see VERY specific non-offer text WITHOUT any offer signals
-          // Be VERY conservative here - better to include a false positive than miss real offers
-          if (!hasOfferCode && !hasRedeemDate && !hasCabinType) {
-            const isAccountNavigation = parentLower.includes('my account') || parentLower.includes('sign out') || parentLower.includes('log out');
-            const isFooterLink = parentLower.includes('privacy policy') || parentLower.includes('terms of service');
-            const isHelpText = parentLower.includes('need help') || parentLower.includes('contact us');
-            
-            if (isAccountNavigation || isFooterLink || isHelpText) {
-              isDefinitelyNotOffer = true;
-              break;
-            }
-          }
-          
-          parent = parent.parentElement;
-        }
-        
-        // INCLUDE button if: (has offer signals) OR (not definitely excluded)
-        // This is MUCH more lenient - we want to capture all 8+ offers
-        return foundOfferSignals || !isDefinitelyNotOffer;
-      });
-      
-      const filteredOutCount = allViewSailingButtons.length - viewSailingsButtons.length;
-      if (filteredOutCount > 0) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '🚫 Filtered out ' + filteredOutCount + ' non-offer button(s) (account links, footer, etc.)',
-          logType: 'info'
-        }));
-      }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -778,15 +565,11 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'info'
         }));
         
-        // Look for any additional "View Sailings" buttons we might have missed
+        // AGGRESSIVE: Look for ANY element with sailing in text
         const additionalButtons = allClickables.filter(el => {
           const text = (el.textContent || '').trim().toLowerCase();
           const alreadyFound = viewSailingsButtons.includes(el);
-          // Be more lenient but still focused on "view sailing" text
-          return !alreadyFound && 
-                 text.includes('view') && 
-                 text.includes('sailing') && 
-                 text.length < 50;
+          return !alreadyFound && (text.includes('sailing') && text.length < 40);
         });
         
         if (additionalButtons.length > 0) {
@@ -816,8 +599,7 @@ export const STEP1_OFFERS_SCRIPT = `
           for (let i = 0; i < 10 && parent; i++) {
             const btnsInParent = Array.from(parent.querySelectorAll('button, a, [role="button"], span, div')).filter(btn => {
               const btnText = (btn.textContent || '').trim().toLowerCase();
-              // ONLY match elements with BOTH "view" AND "sailing" text
-              return btnText.length < 50 && btnText.includes('view') && btnText.includes('sailing');
+              return btnText.length < 30 && (btnText.includes('sailing') || btnText.includes('view'));
             });
             
             for (const btn of btnsInParent) {
@@ -832,74 +614,9 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // CRITICAL: Do NOT deduplicate by offer code! Same offer can appear multiple times
-      // (e.g., "2026 January Instant Rewards" can appear twice for different cabin types)
-      // Use DOM element reference as unique identifier instead
-      const offerCodeContainers = [];
+      const seenOfferCodes = new Set();
+      const seenOfferNames = new Set();
       
-      for (const code of uniqueOfferCodes) {
-        // Find the element containing this specific offer code
-        const allElements = Array.from(document.querySelectorAll('*'));
-        for (const el of allElements) {
-          const elText = (el.textContent || '').trim();
-          const elHTML = el.innerHTML || '';
-          
-          // Check if this element contains ONLY this offer code (not parent with multiple)
-          if (elText.includes(code) && elText.length < 5000) {
-            // Count how many offer codes are in this element
-            const codesInElement = uniqueOfferCodes.filter(c => elText.includes(c)).length;
-            
-            // We want containers that have exactly 1 offer code (the offer card itself)
-            if (codesInElement === 1) {
-              // Find the appropriate container level
-              let container = el;
-              for (let i = 0; i < 8; i++) {
-                const containerText = container.textContent || '';
-                const hasButton = Array.from(container.querySelectorAll('button, a, [role="button"]')).some(btn => 
-                  (btn.textContent || '').toLowerCase().includes('sailing')
-                );
-                const hasTradeIn = containerText.toLowerCase().includes('trade-in');
-                const hasExpiry = containerText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+,\s*\d{4}/i);
-                const isReasonableSize = containerText.length > 100 && containerText.length < 3000;
-                
-                if (isReasonableSize && (hasButton || hasTradeIn || hasExpiry)) {
-                  offerCodeContainers.push({ code: code, container: container });
-                  break;
-                }
-                
-                if (!container.parentElement) break;
-                container = container.parentElement;
-              }
-              break;
-            }
-          }
-        }
-      }
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🎯 Found ' + offerCodeContainers.length + ' offer containers by code matching',
-        logType: 'info'
-      }));
-      
-      // Add ALL containers - same offer code can appear multiple times (don't deduplicate)
-      for (const { code, container } of offerCodeContainers) {
-        // Check if this exact container is already in the list
-        if (!offerCards.includes(container)) {
-          offerCards.push(container);
-          
-          const nameEl = container.querySelector('h1, h2, h3, h4');
-          const name = nameEl ? (nameEl.textContent || '').trim() : '';
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '✓ Matched offer container for code ' + code + ': ' + (name || '[No title]'),
-            logType: 'success'
-          }));
-        }
-      }
-      
-      // NOW process remaining buttons that weren't matched by code
       for (const btn of viewSailingsButtons) {
         let parent = btn.parentElement;
         let offerCard = null;
@@ -909,13 +626,12 @@ export const STEP1_OFFERS_SCRIPT = `
           const parentText = parent.textContent || '';
           
           const hasOfferCode = parentText.match(/\\b([A-Z0-9]{6,12}[A-Z])\\b/);
-          const hasTradeIn = parentText.toLowerCase().includes('trade-in value') || parentText.match(/\\$[\\d,]+\\.\\d{2}/);
-          const hasRedeem = parentText.includes('Redeem by') || parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
+          const hasTradeIn = parentText.toLowerCase().includes('trade-in value');
+          const hasRedeem = parentText.includes('Redeem by');
           const hasFeatured = parentText.includes('Featured Offer');
-          const hasOfferTitle = parentText.match(/\\b(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Caribbean|Cruise|Sail|Summer|Winter|Spring|Fall|Holiday|Special|Gamechanger|Instant|Wager|MGM|Reward|Deal|Flash|Getaway)\\b/i);
+          const hasOfferTitle = parentText.match(/\\b(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Caribbean|Cruise|Sail|Summer|Winter|Spring|Fall|Holiday|Special)\\b/i);
           
-          // CRITICAL: More lenient size check to catch offers after dividers
-          const isReasonableSize = parentText.length > 80 && parentText.length < 8000;
+          const isReasonableSize = parentText.length > 100 && parentText.length < 5000;
           
           if (isReasonableSize && (hasOfferCode || hasTradeIn || hasRedeem || hasFeatured)) {
             const buttonsInContainer = Array.from(parent.querySelectorAll('button, a, [role="button"]')).filter(el => 
@@ -951,8 +667,10 @@ export const STEP1_OFFERS_SCRIPT = `
             }
           }
           
-          // Don't deduplicate by code - use element reference instead
-          if (offerCard && !offerCards.includes(offerCard)) {
+          const uniqueKey = offerCode || offerName || '';
+          
+          if (uniqueKey && !seenOfferCodes.has(uniqueKey)) {
+            seenOfferCodes.add(uniqueKey);
             offerCards.push(offerCard);
             
             window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -1007,14 +725,20 @@ export const STEP1_OFFERS_SCRIPT = `
           return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
         });
         
-        // Don't deduplicate by code - check if container already exists
+        const existingCodes = new Set(offerCards.map(card => {
+          const text = card.textContent || '';
+          const match = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
+          return match ? match[1] : '';
+        }).filter(Boolean));
+        
         for (const card of filteredFallback) {
-          if (!offerCards.includes(card)) {
+          const text = card.textContent || '';
+          const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
+          const code = codeMatch ? codeMatch[1] : '';
+          
+          if (code && !existingCodes.has(code)) {
+            existingCodes.add(code);
             offerCards.push(card);
-            
-            const text = card.textContent || '';
-            const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-            const code = codeMatch ? codeMatch[1] : '';
             
             let name = '';
             const headings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6'));
@@ -1064,7 +788,7 @@ export const STEP1_OFFERS_SCRIPT = `
           // For EACH offer code, find its parent container that looks like an offer card
           for (const codeEl of offerCodeElements) {
             const codeText = (codeEl.textContent || '').trim();
-            // Don't skip based on code - same code can appear multiple times
+            if (existingCodes.has(codeText)) continue; // Already found this offer
             
             let parent = codeEl.parentElement;
             let offerContainer = null;
@@ -1094,12 +818,13 @@ export const STEP1_OFFERS_SCRIPT = `
               parent = parent.parentElement;
             }
             
-            if (offerContainer && !offerCards.includes(offerContainer)) {
+            if (offerContainer && !existingCodes.has(codeText)) {
+              existingCodes.add(codeText);
               offerCards.push(offerContainer);
               
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: 'Deep scan found offer by code: ' + codeText + ' (total: ' + offerCards.length + ')',
+                message: 'Deep scan found offer by code: ' + codeText,
                 logType: 'info'
               }));
             }
@@ -1131,13 +856,13 @@ export const STEP1_OFFERS_SCRIPT = `
           });
           
           for (const card of filteredStructural) {
-            // Don't deduplicate - check if container already exists
-            if (!offerCards.includes(card)) {
+            const text = card.textContent || '';
+            const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
+            const code = codeMatch ? codeMatch[1] : '';
+            
+            if (code && !existingCodes.has(code)) {
+              existingCodes.add(code);
               offerCards.push(card);
-              
-              const text = card.textContent || '';
-              const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-              const code = codeMatch ? codeMatch[1] : '';
               
               let name = '';
               const headings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6'));
@@ -1202,16 +927,6 @@ export const STEP1_OFFERS_SCRIPT = `
 
       for (let i = 0; i < offerCards.length; i++) {
         const card = offerCards[i];
-        dismissInterferingBanners();
-
-        if (card && card.scrollIntoView) {
-          try {
-            card.scrollIntoView({ block: 'center', behavior: 'instant' });
-          } catch (e) {
-          }
-          await wait(400);
-        }
-
         const cardText = card.textContent || '';
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -1371,15 +1086,6 @@ export const STEP1_OFFERS_SCRIPT = `
             message: '  ▶ Clicking "View Sailings"...',
             logType: 'info'
           }));
-
-          dismissInterferingBanners();
-          if (viewSailingsBtn && viewSailingsBtn.scrollIntoView) {
-            try {
-              viewSailingsBtn.scrollIntoView({ block: 'center', behavior: 'instant' });
-            } catch (e) {
-            }
-            await wait(300);
-          }
           
           const urlBefore = window.location.href;
           
@@ -1399,35 +1105,23 @@ export const STEP1_OFFERS_SCRIPT = `
               viewSailingsBtn.click();
               await wait(2000);
               
-              let modalOpened = document.querySelector('[class*="modal"]') || 
-                                document.querySelector('[role="dialog"]') ||
-                                document.querySelector('[class*="drawer"]') ||
-                                document.querySelector('[class*="overlay"][class*="sailing"]');
+              const modalOpened = document.querySelector('[class*="modal"]') || 
+                                 document.querySelector('[role="dialog"]') ||
+                                 document.querySelector('[class*="drawer"]') ||
+                                 document.querySelector('[class*="overlay"][class*="sailing"]');
               
               if (!modalOpened) {
-                dismissInterferingBanners();
-                viewSailingsBtn.click();
-                await wait(1500);
-
-                const modalRetryOpened = document.querySelector('[class*="modal"]') || 
-                                       document.querySelector('[role="dialog"]') ||
-                                       document.querySelector('[class*="drawer"]') ||
-                                       document.querySelector('[class*="overlay"][class*="sailing"]');
-
-                if (modalRetryOpened) {
-                  modalOpened = modalRetryOpened;
-                } else {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log',
-                    message: '  ⚠️ No modal opened - skipping sailings for this offer',
-                    logType: 'warning'
-                  }));
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: '  ⚠️ No modal opened - skipping sailings for this offer',
+                  logType: 'warning'
+                }));
                 
-                  if (originalHref) {
-                    viewSailingsBtn.setAttribute('href', originalHref);
-                  }
-                  
-                  const noSailingOffer = {
+                if (originalHref) {
+                  viewSailingsBtn.setAttribute('href', originalHref);
+                }
+                
+                const noSailingOffer = {
                   sourcePage: 'Offers',
                   offerName: offerName,
                   offerCode: offerCode,
@@ -1447,15 +1141,14 @@ export const STEP1_OFFERS_SCRIPT = `
                 totalSailingsScraped++;
                 flushBatch();
                 
-                  processedCount++;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'progress',
-                    current: totalSailingsScraped,
-                    total: offerCards.length,
-                    stepName: 'Offer ' + (i + 1) + '/' + offerCards.length + ': ' + totalSailingsScraped + ' sailings'
-                  }));
-                  continue;
-                }
+                processedCount++;
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'progress',
+                  current: totalSailingsScraped,
+                  total: offerCards.length,
+                  stepName: 'Offer ' + (i + 1) + '/' + offerCards.length + ': ' + totalSailingsScraped + ' sailings'
+                }));
+                continue;
               }
               
               if (originalHref) {
