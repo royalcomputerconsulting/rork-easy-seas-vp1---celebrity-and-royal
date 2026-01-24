@@ -89,29 +89,49 @@ export const STEP1_OFFERS_SCRIPT = `
 
   function dismissInterferingBanners() {
     try {
-      const banners = Array.from(document.querySelectorAll('div, section, article, aside, [role="banner"], [class*="banner"], [class*="promo"], [class*="ready"]')).filter(el => {
+      const bannerTextSignals = [
+        'ready to play',
+        'for more information',
+        'benefits tab'
+      ];
+
+      const bannerElements = Array.from(
+        document.querySelectorAll(
+          'div, section, article, aside, [role="banner"], [class*="banner"], [class*="promo"], [class*="ready"], [class*="alert"], [class*="notice"], [class*="callout"]'
+        )
+      ).filter(el => {
         const text = (el.textContent || '').toLowerCase();
-        if (!text.includes('ready to play')) return false;
+        const hasSignal = bannerTextSignals.some(sig => text.includes(sig));
+        if (!hasSignal) return false;
         const height = el.offsetHeight || 0;
-        return height >= 60;
+        return height >= 40;
       });
 
-      if (banners.length === 0) return;
+      const overlays = Array.from(document.querySelectorAll('*')).filter(el => {
+        const style = window.getComputedStyle(el);
+        const text = (el.textContent || '').toLowerCase();
+        const hasSignal = bannerTextSignals.some(sig => text.includes(sig));
+        if (!hasSignal) return false;
+        if (style.pointerEvents === 'none') return false;
+        return style.position === 'fixed' || style.position === 'sticky';
+      });
+
+      const candidates = [...bannerElements, ...overlays];
+      if (candidates.length === 0) return;
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🚫 Detected ' + banners.length + ' READY TO PLAY banner(s) - disabling interaction to prevent blocking offer clicks',
+        message: '🚫 Detected ' + candidates.length + ' interfering banner/overlay element(s) - disabling interaction to prevent blocking offer clicks',
         logType: 'info'
       }));
 
-      for (const banner of banners.slice(0, 5)) {
-        const closeBtn = banner.querySelector('button, [role="button"], a, svg') as HTMLElement | null;
-        const closeTextBtn = Array.from(banner.querySelectorAll('button, [role="button"], a')).find(b => {
-          const t = (b.textContent || '').trim();
-          return t === '×' || t.toLowerCase() === 'close';
-        }) as HTMLElement | undefined;
+      for (const el of candidates.slice(0, 12)) {
+        const clickableClose = Array.from(el.querySelectorAll('button, [role="button"], a'))
+          .find(b => {
+            const t = (b.textContent || '').trim().toLowerCase();
+            return t === '×' || t === 'close' || t === 'dismiss' || t === 'got it';
+          }) as HTMLElement | undefined;
 
-        const clickableClose = closeTextBtn || closeBtn;
         if (clickableClose) {
           try {
             clickableClose.click();
@@ -119,27 +139,17 @@ export const STEP1_OFFERS_SCRIPT = `
           }
         }
 
-        (banner as HTMLElement).style.pointerEvents = 'none';
-        (banner as HTMLElement).style.visibility = 'hidden';
-        (banner as HTMLElement).style.maxHeight = '0px';
-        (banner as HTMLElement).style.overflow = 'hidden';
-      }
-
-      const fixedOverlays = Array.from(document.querySelectorAll('*')).filter(el => {
-        const style = window.getComputedStyle(el);
-        if (style.position !== 'fixed' && style.position !== 'sticky') return false;
-        if (style.pointerEvents === 'none') return false;
-        const text = (el.textContent || '').toLowerCase();
-        return text.includes('ready to play');
-      });
-
-      for (const overlay of fixedOverlays.slice(0, 5)) {
-        (overlay as HTMLElement).style.pointerEvents = 'none';
+        const h = el as HTMLElement;
+        h.style.pointerEvents = 'none';
+        h.style.visibility = 'hidden';
+        h.style.opacity = '0';
+        h.style.maxHeight = '0px';
+        h.style.overflow = 'hidden';
       }
     } catch (e) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '⚠️ Failed to dismiss READY TO PLAY banner(s): ' + String(e),
+        message: '⚠️ Failed to dismiss interfering banner(s): ' + String(e),
         logType: 'warning'
       }));
     }
