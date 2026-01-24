@@ -399,10 +399,8 @@ export const STEP4_LOYALTY_SCRIPT = `
         // CRITICAL OVERRIDE: If best candidate is < 200, look for MUCH larger alternatives
         // This handles the case where 140 is selected instead of 503
         if (bestCandidate.value < 200 && uniqueCandidates.length > 1) {
-          // Look for ANY 400+ candidate with reasonable priority
-          const muchLargerCandidate = uniqueCandidates.find(c => 
-            c.value >= 400 && c.priority <= 5
-          );
+          // Look for ANY 400+ candidate - NO priority restriction (503 should ALWAYS win over 140)
+          const muchLargerCandidate = uniqueCandidates.find(c => c.value >= 400);
           if (muchLargerCandidate) {
             bestCandidate = muchLargerCandidate;
             window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -411,11 +409,9 @@ export const STEP4_LOYALTY_SCRIPT = `
               logType: 'success'
             }));
           }
-          // If no 400+, look for 300+
+          // If no 400+, look for ANY 300+ (no priority restriction)
           else {
-            const largerCandidate = uniqueCandidates.find(c => 
-              c.value >= 300 && c.priority <= 5
-            );
+            const largerCandidate = uniqueCandidates.find(c => c.value >= 300);
             if (largerCandidate) {
               bestCandidate = largerCandidate;
               window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -423,6 +419,18 @@ export const STEP4_LOYALTY_SCRIPT = `
                 message: '✓ OVERRIDING: Chose larger value ' + bestCandidate.value + ' over ' + uniqueCandidates[0].value,
                 logType: 'success'
               }));
+            }
+            // If no 300+, look for ANY 250+ as last resort
+            else {
+              const largerCandidate250 = uniqueCandidates.find(c => c.value >= 250);
+              if (largerCandidate250) {
+                bestCandidate = largerCandidate250;
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: '✓ OVERRIDING: Chose larger value ' + bestCandidate.value + ' over ' + uniqueCandidates[0].value,
+                  logType: 'success'
+                }));
+              }
             }
           }
         }

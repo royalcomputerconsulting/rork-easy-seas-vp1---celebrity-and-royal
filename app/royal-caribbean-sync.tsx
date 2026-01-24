@@ -161,7 +161,7 @@ function RoyalCaribbeanSyncScreen() {
             </View>
           </View>
           <View style={styles.logsScrollTop}>
-            {state.logs.slice(-3).map((log, index) => (
+            {state.logs.slice(-4).map((log, index) => (
               <View key={`${log.timestamp}-${index}`} style={[styles.logEntry, log.type === 'error' && styles.logError]}>
                 <Text style={styles.logTimestamp}>{log.timestamp}</Text>
                 <Text style={[
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#334155'
   },
   logsScrollTop: {
-    maxHeight: 200,
+    maxHeight: 260,
     padding: 12
   },
   progressText: {
