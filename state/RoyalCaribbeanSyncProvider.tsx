@@ -313,7 +313,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, state.scrapePricingAndItinerary, addLog, state.extractedOffers.length]);
+  }, [state.status, state.scrapePricingAndItinerary, addLog]);
 
   const exportOffersCSV = useCallback(async () => {
     try {

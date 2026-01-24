@@ -923,13 +923,12 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: clusteredViewSailingsButtons.length >= expectedOfferCount ? 'success' : 'warning'
       }));
       
-      // Also find Redeem buttons as backup
+      // Also find "REDEEM OFFER" buttons (yellow buttons) as the most reliable offer anchor.
+      // Per screenshots: there are 9 of these, each next to a "View Sailings" button.
       const redeemButtons = allClickables.filter(el => {
         const text = (el.textContent || '').trim().toLowerCase();
-        const isShortText = text.length < 40;
-        const hasRedeemText = text.includes('redeem') && !text.includes('redeem by') && !text.includes('redeem points');
-        const isRedeemText = text === 'redeem' || text === 'redeem offer' || text === 'redeem now';
-        return isShortText && (isRedeemText || hasRedeemText);
+        const isShortText = text.length < 60;
+        return isShortText && (text === 'redeem offer' || text.includes('redeem offer'));
       });
       
       // Deduplicate Redeem buttons by position
@@ -950,23 +949,23 @@ export const STEP1_OFFERS_SCRIPT = `
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🎯 Found ' + uniqueRedeemButtons.length + ' unique Redeem buttons',
-        logType: 'info'
+        message: '🎯 Found ' + uniqueRedeemButtons.length + ' unique REDEEM OFFER buttons',
+        logType: uniqueRedeemButtons.length > 0 ? 'success' : 'warning'
       }));
       
-      // Use clustered View Sailings buttons as primary source
-      const viewSailingsButtons = clusteredViewSailingsButtons;
+      // Use REDEEM OFFER buttons as PRIMARY source when available (most stable anchor).
+      // Fallback to Y-clustered View Sailings buttons if needed.
+      const primaryOfferAnchorButtons = uniqueRedeemButtons.length > 0 ? uniqueRedeemButtons : clusteredViewSailingsButtons;
+      const primaryAnchorLabel = uniqueRedeemButtons.length > 0 ? 'REDEEM OFFER' : 'View Sailings';
       
-      // STEP 4: PRIMARY METHOD - Use Y-clustered View Sailings buttons to find offer containers
-      // This is the most reliable method since we clustered by Y position to get unique offers
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🎯 Using Y-CLUSTERED View Sailings detection (' + viewSailingsButtons.length + ' offers)...',
+        message: '🎯 Using ' + primaryAnchorLabel + ' buttons as primary offer anchors (' + primaryOfferAnchorButtons.length + ' offers)...',
         logType: 'info'
       }));
       
-      // For each clustered View Sailings button, find its offer container
-      for (const vsBtn of viewSailingsButtons) {
+      // For each primary anchor button, find its offer container
+      for (const vsBtn of primaryOfferAnchorButtons) {
         let parent = vsBtn.parentElement;
         let bestContainer = null;
         let bestScore = 0;
@@ -1794,8 +1793,12 @@ export const STEP1_OFFERS_SCRIPT = `
         const cardText = card.textContent || '';
         
         // Extract offer code IMMEDIATELY after getting cardText
-        const offerCodeMatch = cardText.match(/([A-Z0-9]{5,15})/);
-        let offerCode = offerCodeMatch ? offerCodeMatch[1] : '';
+        // IMPORTANT: Do not use a naive /[A-Z0-9]{5,15}/ match (it often grabs CURRENT/OFFERS/etc.)
+        let offerCode = extractOfferCodeFromText(cardText);
+        if (!offerCode) {
+          const offerCodeMatch = cardText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?|\d{2}[A-Z]{3}\d{3}[A-Z]?)\b/);
+          offerCode = offerCodeMatch ? offerCodeMatch[1] : '';
+        }
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
@@ -1928,13 +1931,16 @@ export const STEP1_OFFERS_SCRIPT = `
         // Also skip if extracted offerCode is clearly not an offer code (like CURRENT)
         const invalidCodePatterns = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER', 'FEATURED', 'BENEFITS'];
         if (offerCode && invalidCodePatterns.includes(offerCode.toUpperCase())) {
-          // Try to find a better offer code using extraction function
-          offerCode = extractOfferCodeFromText(cardText);
+          offerCode = '';
         }
         
         // Validate offer code format
         if (offerCode && !isValidOfferCode(offerCode)) {
-          // Try extraction one more time
+          offerCode = '';
+        }
+        
+        // Last chance: attempt extraction again from full card text
+        if (!offerCode) {
           const betterCode = extractOfferCodeFromText(cardText);
           if (betterCode && isValidOfferCode(betterCode)) {
             offerCode = betterCode;
