@@ -518,17 +518,22 @@ export const STEP1_OFFERS_SCRIPT = `
         document.body.dispatchEvent(new Event('scroll'));
         await wait(300);
         
-        // Count buttons after each pass - be ULTRA lenient in detection
-        const currentOfferButtons = document.querySelectorAll('button, a, [role="button"], span[class*="button"], div[class*="button"], span, div');
+        // Count buttons after each pass - CRITICAL: Be targeted to avoid scanning millions of elements
+        const currentOfferButtons = document.querySelectorAll('button, a, [role="button"], span[class*="button"], div[class*="button"], [class*="cta"], [class*="action"]');
         const viewSailingCount = Array.from(currentOfferButtons).filter(btn => {
           const textContent = (btn.textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
           const ariaLabel = (btn.getAttribute?.('aria-label') || '').toLowerCase();
-          const combined = textContent + ' ' + ariaLabel;
-          // Multiple matching strategies
-          return textContent === 'view sailings' || 
-                 textContent === 'view sailing' || 
-                 combined.includes('view sailing') ||
-                 (combined.includes('view') && combined.includes('sailing'));
+          const dataTestId = (btn.getAttribute?.('data-testid') || '').toLowerCase();
+          const className = (btn.className || '').toLowerCase();
+          const combined = textContent + ' ' + ariaLabel + ' ' + dataTestId + ' ' + className;
+          
+          // CRITICAL: Check if button has "sailing" text AND is likely clickable
+          const hasSailingText = combined.includes('sailing') || combined.includes('sail');
+          const hasViewText = combined.includes('view') || combined.includes('see') || combined.includes('show');
+          const exactMatch = textContent === 'view sailings' || textContent === 'view sailing';
+          const containsMatch = textContent.includes('view sailing');
+          
+          return exactMatch || containsMatch || (hasSailingText && hasViewText && textContent.length < 50);
         }).length;
         
         // Log progress
@@ -636,23 +641,31 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
       
-      // Find ALL "View Sailings" buttons - be VERY lenient in matching
-      // User confirmed: ALL buttons say "View Sailings" - they are all exactly the same
+      // Find ALL "View Sailings" buttons - CRITICAL: Must handle various button implementations
+      // Royal Caribbean uses standard buttons with "View Sailings" text
       const allViewSailingButtons = allClickables.filter(el => {
         const textContent = (el.textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
         const ariaLabel = (el.getAttribute?.('aria-label') || '').toLowerCase();
         const title = (el.getAttribute?.('title') || '').toLowerCase();
         const className = (el.className || '').toLowerCase();
         const dataTestId = (el.getAttribute?.('data-testid') || '').toLowerCase();
-        const combined = textContent + ' ' + ariaLabel + ' ' + title + ' ' + className + ' ' + dataTestId;
+        const href = el.tagName === 'A' ? (el.getAttribute('href') || '').toLowerCase() : '';
+        const combined = textContent + ' ' + ariaLabel + ' ' + title + ' ' + className + ' ' + dataTestId + ' ' + href;
         
-        // Multiple matching strategies
+        // STRATEGY 1: Exact text match (most reliable)
         const exactMatch = textContent === 'view sailings' || textContent === 'view sailing';
-        const containsMatch = combined.includes('view sailing') || combined.includes('viewsailing');
-        const partialMatch = (combined.includes('view') && combined.includes('sailing'));
-        const sailingsOnly = textContent === 'sailings' || textContent.match(/^view\s*$/i);
+        if (exactMatch) return true;
         
-        return exactMatch || containsMatch || partialMatch;
+        // STRATEGY 2: Contains "view sailing" or "viewsailing"
+        const containsViewSailing = combined.includes('view sailing') || combined.includes('viewsailing') || textContent.includes('view sailing');
+        if (containsViewSailing && textContent.length < 50) return true;
+        
+        // STRATEGY 3: Has both "view" and "sailing" words (for split text)
+        const hasView = combined.includes('view') || combined.includes('see');
+        const hasSailing = combined.includes('sailing') || combined.includes('sail');
+        if (hasView && hasSailing && textContent.length < 50) return true;
+        
+        return false;
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -661,23 +674,51 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
       
-      // DEBUG: If no buttons found, log what's on the page
+      // DEBUG: If no buttons found, provide detailed diagnostic information
       if (allViewSailingButtons.length === 0) {
-        const allButtonsText = Array.from(allClickables).slice(0, 50).map(el => (el.textContent || '').trim().substring(0, 30)).filter(t => t.length > 0);
+        const allButtonsText = Array.from(allClickables).slice(0, 30).map(el => (el.textContent || '').trim().substring(0, 40)).filter(t => t.length > 0);
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '🔍 DEBUG: Sample buttons on page: ' + allButtonsText.slice(0, 20).join(' | '),
+          message: '🔍 DEBUG: Found ' + allClickables.length + ' clickable elements. Sample button texts: ' + allButtonsText.slice(0, 15).join(' | '),
           logType: 'warning'
         }));
         
-        // Try alternative detection - look for ANY element with "Sailing" in text
-        const sailingElements = Array.from(document.querySelectorAll('*')).filter(el => {
-          const text = (el.textContent || '').toLowerCase();
-          return text.includes('sailing') && text.length < 100;
+        // Try ULTRA AGGRESSIVE detection - ANY element with "sailing" text
+        const allElementsWithSailing = Array.from(document.querySelectorAll('*')).filter(el => {
+          const text = (el.textContent || '').toLowerCase().trim();
+          // Must be short and contain "sailing"
+          return text.includes('sailing') && text.length > 5 && text.length < 100;
         });
+        
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '🔍 Found ' + sailingElements.length + ' elements containing "sailing"',
+          message: '🔍 Found ' + allElementsWithSailing.length + ' elements with "sailing" text (checking if clickable)',
+          logType: 'info'
+        }));
+        
+        // Try to find clickable sailing elements
+        for (const el of allElementsWithSailing.slice(0, 20)) {
+          const text = (el.textContent || '').trim();
+          const tagName = el.tagName.toLowerCase();
+          const isClickable = tagName === 'button' || tagName === 'a' || el.getAttribute('role') === 'button' || el.onclick !== null;
+          
+          if (text.toLowerCase().includes('view') && text.toLowerCase().includes('sailing') && text.length < 50) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '  → Found potential button: "' + text + '" (tag: ' + tagName + ', clickable: ' + isClickable + ')',
+              logType: 'info'
+            }));
+            
+            // If it looks like a button but wasn't detected, add it
+            if (!allViewSailingButtons.includes(el)) {
+              allViewSailingButtons.push(el);
+            }
+          }
+        }
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '🔧 After aggressive detection: ' + allViewSailingButtons.length + ' buttons found',
           logType: 'info'
         }));
       }

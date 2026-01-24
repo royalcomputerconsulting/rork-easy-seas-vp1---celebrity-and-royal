@@ -81,20 +81,20 @@ export const STEP4_LOYALTY_SCRIPT = `
       // ULTRA AGGRESSIVE: Also scan the entire page text for ANY 2-4 digit numbers
       const fullPageText = document.body.textContent || '';
       const allPageNumbers = fullPageText.match(/\b(\d{2,4})\b/g) || [];
-      const uniquePageNumbers = [...new Set(allPageNumbers.map(n => parseInt(n, 10)))].filter(n => n >= 50 && n <= 2000 && n !== 2025 && n !== 2026 && n !== 2024 && n !== 2023);
+      const uniquePageNumbers = [...new Set(allPageNumbers.map(n => parseInt(n, 10)))].filter(n => n >= 1 && n <= 1000 && n !== 2025 && n !== 2026 && n !== 2024 && n !== 2023);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔢 ALL numbers on page (50-2000): ' + uniquePageNumbers.sort((a,b) => b-a).slice(0, 20).join(', '),
+        message: '🔢 ALL numbers on page (1-1000 valid range): ' + uniquePageNumbers.sort((a,b) => b-a).slice(0, 20).join(', '),
         logType: 'info'
       }));
       
-      // CRITICAL: If we see ANY number >= 400, it's likely the actual cruise points!
-      const largeNumbers = uniquePageNumbers.filter(n => n >= 400);
-      if (largeNumbers.length > 0) {
+      // CRITICAL: Crown & Anchor cruise points are 1-1000 (user confirmed)
+      const validCruisePoints = uniquePageNumbers.filter(n => n >= 100 && n <= 1000);
+      if (validCruisePoints.length > 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '🎯 LARGE NUMBERS FOUND (400+): ' + largeNumbers.sort((a,b) => b-a).join(', ') + ' - One of these is likely cruise points!',
+          message: '🎯 Valid cruise point range (100-1000): ' + validCruisePoints.sort((a,b) => b-a).join(', '),
           logType: 'success'
         }));
       }
@@ -145,12 +145,12 @@ export const STEP4_LOYALTY_SCRIPT = `
         logType: 'info'
       }));
       
-      // ULTRA CRITICAL: If we see 503, 502, 501, 500, or any 400+ number, LOG IT PROMINENTLY
-      const has500Plus = uniqueRawNums.filter(n => n >= 400);
-      if (has500Plus.length > 0) {
+      // CRITICAL: Crown & Anchor cruise points are 1-1000 (user confirmed)
+      const validRangeNums = uniqueRawNums.filter(n => n >= 100 && n <= 1000);
+      if (validRangeNums.length > 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '🎯 FOUND LARGE NUMBERS (400+): ' + has500Plus.join(', ') + ' - These are likely cruise points!',
+          message: '🎯 Valid cruise points found (100-1000): ' + validRangeNums.join(', '),
           logType: 'success'
         }));
       }
@@ -167,21 +167,17 @@ export const STEP4_LOYALTY_SCRIPT = `
         const isToNextTier = parentText.includes('to diamond') || parentText.includes('to platinum') || parentText.includes('to gold') || parentText.includes('to emerald');
         const isDate = parentText.includes('feb') || parentText.includes('jan') || parentText.includes('mar') || parentText.includes('apr');
         
-        // CRITICAL: For large numbers (400+), be VERY lenient - only exclude if EXPLICITLY tier credits
-        // ULTRA CRITICAL: 503 is the actual cruise points - NEVER skip it unless 100% certain it's wrong
-        if (num >= 400) {
-          // For 400+ numbers, ONLY skip if explicitly labeled as tier credits
-          if (isTierCredits) {
+        // CRITICAL: Crown & Anchor cruise points are 1-1000 (user confirmed)
+        // Skip tier credits (like 40,364), points-to-next-tier, and dates
+        if (isTierCredits || isPointsToNext || isToNextTier || isDate) {
+          if (num >= 100) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: '  ⚠️ Skipping ' + num + ' (tier credits)',
+              message: '  ⚠️ Skipping ' + num + ' (tier credits/points-to-next/date)',
               logType: 'warning'
             }));
-            continue;
           }
-          // Otherwise KEEP IT - it's likely the actual cruise points
-        } else if (num < 400 && (isTierCredits || isPointsToNext || isToNextTier || isDate)) {
-          continue; // Skip this number
+          continue;
         }
         
         // Check for positive signals
