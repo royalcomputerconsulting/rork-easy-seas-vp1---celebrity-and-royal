@@ -643,65 +643,40 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
       
-      // CRITICAL FIX: Only keep buttons that are in COMPLETE offer cards
-      // Be LESS AGGRESSIVE - only filter out obvious non-offer content
+      // ULTRA SIMPLE: Keep ALL View Sailings buttons EXCEPT those in obvious promo banners
+      // User confirmed: ALL offers have identical "View Sailings" buttons
+      // Don't overthink - just exclude promotional banners
       const viewSailingsButtons = allViewSailingButtons.filter(btn => {
         let parent = btn.parentElement;
-        let foundOfferSignals = false;
-        let isDefinitelyNotOffer = false;
         
-        // Check up to 15 levels to find offer signals
-        for (let i = 0; i < 15 && parent; i++) {
+        // Check up to 10 levels for promo banner exclusion patterns ONLY
+        for (let i = 0; i < 10 && parent; i++) {
           const parentText = parent.textContent || '';
           const parentLower = parentText.toLowerCase();
           
-          // ONLY filter out if it's DEFINITELY not an offer (very specific non-offer text)
-          // User says: ONLY "View Sailings" buttons should be clicked, they're all the same
-          // So if a button has offer-related content nearby, it's likely valid
+          // ONLY exclude if this is clearly a promotional banner (NOT an offer)
+          const isPromoBanner = parentLower.includes('ready to play') && parentLower.includes('casino credit');
+          const isApplyNowBanner = parentLower.includes('apply now') && parentLower.includes('keep the party going');
+          const isBenefitsBanner = parentLower.includes('for more information click on the benefits tab');
           
-          // Check for offer code (STRONGEST signal this is a real offer)
-          const hasOfferCode = parentText.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO|MAR|WST|GRD|A0)[A-Z0-9]{2,8}[A-Z0-9%]?\b/i);
-          const hasRedeemDate = parentText.match(/Redeem by\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
-          const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Stateroom)/i);
-          const hasTradeIn = parentText.match(/trade.?in/i);
-          const isPromoBanner = parentText.match(/READY TO PLAY|Woman enjoying casino|Playing card symbols|apply for a casino credit|for more information click on the benefits tab/i);
-          
-          // If we see ANY offer signals AND it's NOT a promo banner, this is likely a valid offer
-          if ((hasOfferCode || (hasRedeemDate && hasCabinType) || hasTradeIn) && !isPromoBanner) {
-            foundOfferSignals = true;
-            break;
-          }
-          
-          // Explicitly exclude promotional banners
-          if (isPromoBanner) {
-            isDefinitelyNotOffer = true;
-            break;
-          }
-          
-          // ONLY mark as "not an offer" if we see VERY specific non-offer text WITHOUT any offer signals
-          // Be VERY conservative here - better to include a false positive than miss real offers
-          if (!hasOfferCode && !hasRedeemDate && !hasCabinType) {
-            const isAccountNavigation = parentLower.includes('my account') || parentLower.includes('sign out') || parentLower.includes('log out');
-            const isFooterLink = parentLower.includes('privacy policy') || parentLower.includes('terms of service');
-            const isHelpText = parentLower.includes('need help') || parentLower.includes('contact us');
-            const isPromoBanner = parentLower.includes('ready to play') || 
-                                 parentLower.includes('woman enjoying') || 
-                                 parentLower.includes('playing card symbols') ||
-                                 parentLower.includes('you can apply for a casino credit') ||
-                                 parentLower.includes('for more information click on the benefits tab');
-            
-            if (isAccountNavigation || isFooterLink || isHelpText || isPromoBanner) {
-              isDefinitelyNotOffer = true;
-              break;
+          // If it's a promo banner AND doesn't have offer signals, exclude it
+          if (isPromoBanner || isApplyNowBanner || isBenefitsBanner) {
+            // But double-check: if this container also has offer code + redeem date, it's an offer
+            const hasOfferCode = parentText.match(/\b\d{2}[A-Z]{2,4}\d{2,3}[A-Z]?\b/i) || parentText.match(/\b\d{4}[A-Z]\d{2}[A-Z]?\b/i);
+            const hasRedeemDate = parentText.match(/Redeem by/i);
+            if (hasOfferCode && hasRedeemDate) {
+              // This IS an offer despite having promo-like text
+              return true;
             }
+            // It's a promo banner without offer signals - exclude
+            return false;
           }
           
           parent = parent.parentElement;
         }
         
-        // INCLUDE button if: (has offer signals) OR (not definitely excluded)
-        // This is MUCH more lenient - we want to capture all 8+ offers
-        return foundOfferSignals || !isDefinitelyNotOffer;
+        // Default: INCLUDE the button (assume it's a valid offer)
+        return true;
       });
       
       const filteredOutCount = allViewSailingButtons.length - viewSailingsButtons.length;
