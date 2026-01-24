@@ -80,7 +80,8 @@ export const STEP4_LOYALTY_SCRIPT = `
         while ((match = pattern.exec(pageText)) !== null) {
           if (match[1]) {
             const num = parseInt(match[1], 10);
-            if (num >= 0 && num <= 2000) {
+            // CRITICAL: Minimum 20 points to avoid picking up random small numbers
+            if (num >= 20 && num <= 2000) {
               allCandidates.push({ value: num, str: match[1], source: 'nights-earned', priority: 1 });
             }
           }
@@ -113,11 +114,12 @@ export const STEP4_LOYALTY_SCRIPT = `
           
           for (const el of prominentElements) {
             const elText = (el.textContent || '').trim();
-            // Look for STANDALONE large numbers (like 503 displayed prominently)
-            const standaloneMatch = elText.match(/^(\\d{1,4})$/);
+            // Look for STANDALONE numbers - MUST be at least 2 digits
+            const standaloneMatch = elText.match(/^(\\d{2,4})$/);
             if (standaloneMatch) {
               const num = parseInt(standaloneMatch[1], 10);
-              if (num >= 0 && num <= 2000 && num !== 2025 && num !== 2026) {
+              // CRITICAL: Minimum 50 points to exclude random small numbers, years, etc.
+              if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026) {
                 // Check this isn't tier credits
                 const parentText = (el.parentElement?.textContent || '').toLowerCase();
                 if (!parentText.includes('tier credit') && !parentText.includes('100,000')) {
@@ -129,6 +131,11 @@ export const STEP4_LOYALTY_SCRIPT = `
                     source: 'your-tier-standalone', 
                     priority: isHeading ? 2 : 3 
                   });
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log',
+                    message: '  ➜ Found standalone number near YOUR TIER: ' + num,
+                    logType: 'info'
+                  }));
                 }
               }
             }
@@ -139,7 +146,7 @@ export const STEP4_LOYALTY_SCRIPT = `
       
       // PRIORITY STRATEGY 3: Look near tier name for prominent numbers
       if (loyaltyData.crownAndAnchorLevel) {
-        const tierElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, div[class*="large"], span[class*="large"]');
+        const tierElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, div[class*="large"], span[class*="large"], div[class*="tier"], span[class*="tier"], div[class*="point"], span[class*="point"]');
         for (const el of tierElements) {
           const text = (el.textContent || '').trim();
           if (text.includes(loyaltyData.crownAndAnchorLevel)) {
@@ -147,11 +154,37 @@ export const STEP4_LOYALTY_SCRIPT = `
             const siblings = el.parentElement ? Array.from(el.parentElement.children) : [];
             for (const sibling of siblings) {
               const sibText = (sibling.textContent || '').trim();
-              const standaloneMatch = sibText.match(/^(\\d{1,4})$/);
+              // MUST be at least 2 digits to avoid random small numbers
+              const standaloneMatch = sibText.match(/^(\\d{2,4})$/);
               if (standaloneMatch) {
                 const num = parseInt(standaloneMatch[1], 10);
-                if (num >= 0 && num <= 2000 && num !== 2025 && num !== 2026) {
+                // CRITICAL: Minimum 50 points to exclude small numbers
+                if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026) {
                   allCandidates.push({ value: num, str: standaloneMatch[1], source: 'near-tier', priority: 4 });
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log',
+                    message: '  ➜ Found standalone number near tier: ' + num,
+                    logType: 'info'
+                  }));
+                }
+              }
+            }
+            
+            // Also scan parent container for prominent numbers
+            const parentContainer = el.parentElement?.parentElement;
+            if (parentContainer) {
+              const containerElements = Array.from(parentContainer.querySelectorAll('h1, h2, h3, h4, h5, h6, span, div, p'));
+              for (const contEl of containerElements) {
+                const contText = (contEl.textContent || '').trim();
+                const contMatch = contText.match(/^(\\d{2,4})$/);
+                if (contMatch) {
+                  const num = parseInt(contMatch[1], 10);
+                  if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026) {
+                    const alreadyExists = allCandidates.some(c => c.value === num);
+                    if (!alreadyExists) {
+                      allCandidates.push({ value: num, str: contMatch[1], source: 'tier-container', priority: 5 });
+                    }
+                  }
                 }
               }
             }
@@ -159,17 +192,37 @@ export const STEP4_LOYALTY_SCRIPT = `
         }
       }
       
+      // STRATEGY 4: Look for prominent standalone numbers anywhere on page (2-4 digits)
+      // This catches the big "503" displayed prominently
+      const prominentNumberElements = document.querySelectorAll('h1, h2, h3, h4, h5, strong, b, [class*="large"], [class*="big"], [class*="hero"], [class*="featured"]');
+      for (const el of prominentNumberElements) {
+        const elText = (el.textContent || '').trim();
+        const numMatch = elText.match(/^(\\d{2,4})$/);
+        if (numMatch) {
+          const num = parseInt(numMatch[1], 10);
+          if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026) {
+            const parentText = (el.parentElement?.textContent || '').toLowerCase();
+            // Exclude if it's tier credits or dates
+            if (!parentText.includes('tier credit') && !parentText.includes('100,000') && !parentText.includes('feb') && !parentText.includes('jan')) {
+              allCandidates.push({ value: num, str: numMatch[1], source: 'prominent-number', priority: 6 });
+            }
+          }
+        }
+      }
+      
       // FALLBACK: Pattern matching
       const fallbackPatterns = [
-        /(\\d{1,4})\\s*Cruise Points?/i,
-        /Cruise Points?[:\\s]+(\\d{1,4})/i
+        /(\\d{2,4})\\s*Cruise Points?/i,
+        /Cruise Points?[:\\s]+(\\d{2,4})/i,
+        /(\\d{2,4})\\s*(?:nights?|points?)\\s*earned/i
       ];
       
       for (const pattern of fallbackPatterns) {
         const match = pageText.match(pattern);
         if (match && match[1]) {
           const num = parseInt(match[1], 10);
-          if (num >= 0 && num <= 2000) {
+          // CRITICAL: Minimum 50 points to avoid small random numbers
+          if (num >= 50 && num <= 2000) {
             allCandidates.push({ value: num, str: match[1], source: 'pattern', priority: 10 });
           }
         }
@@ -199,13 +252,41 @@ export const STEP4_LOYALTY_SCRIPT = `
         }));
       }
       
-      // Pick best candidate
+      // Pick best candidate - prefer larger numbers (more likely to be actual points)
+      // Sort by priority first, then by value (larger = better)
+      uniqueCandidates.sort((a, b) => {
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        // For same priority, prefer larger values (more likely to be real points)
+        return b.value - a.value;
+      });
+      
       if (uniqueCandidates.length > 0) {
-        loyaltyData.crownAndAnchorPoints = uniqueCandidates[0].str;
+        // CRITICAL: If the best candidate is very small (< 50), skip it and look for larger ones
+        let bestCandidate = uniqueCandidates[0];
+        if (bestCandidate.value < 50) {
+          const largerCandidate = uniqueCandidates.find(c => c.value >= 50);
+          if (largerCandidate) {
+            bestCandidate = largerCandidate;
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '⚠ Skipping small value ' + uniqueCandidates[0].value + ', using ' + bestCandidate.value + ' instead',
+              logType: 'warning'
+            }));
+          } else {
+            // No candidates >= 50, log warning
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '⚠ All candidates are small values (< 50), may be incorrect',
+              logType: 'warning'
+            }));
+          }
+        }
+        
+        loyaltyData.crownAndAnchorPoints = bestCandidate.str;
         cruisePointsFound = true;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '✓ Found cruise points: ' + uniqueCandidates[0].str + ' (source: ' + uniqueCandidates[0].source + ')',
+          message: '✓ Found cruise points: ' + bestCandidate.str + ' (source: ' + bestCandidate.source + ')',
           logType: 'success'
         }));
       }

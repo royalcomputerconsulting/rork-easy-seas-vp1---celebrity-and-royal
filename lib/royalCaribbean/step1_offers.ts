@@ -470,17 +470,20 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      await scrollUntilComplete(null, 15);
+      await scrollUntilComplete(null, 20);
       await wait(1000);
       
-      for (let scrollPass = 0; scrollPass < 2; scrollPass++) {
+      // AGGRESSIVE scrolling to ensure ALL content is loaded
+      for (let scrollPass = 0; scrollPass < 4; scrollPass++) {
+        window.scrollTo(0, document.body.scrollHeight);
+        await wait(1000);
+        window.scrollTo(0, document.body.scrollHeight / 2);
+        await wait(600);
         window.scrollTo(0, document.body.scrollHeight);
         await wait(800);
-        window.scrollTo(0, document.body.scrollHeight / 2);
-        await wait(500);
       }
       window.scrollTo(0, 0);
-      await wait(800);
+      await wait(1000);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -491,11 +494,11 @@ export const STEP1_OFFERS_SCRIPT = `
       let offerCards = [];
       
       // First, identify and exclude promotional banners/dividers that interrupt offer listings
-      // CRITICAL: Be VERY conservative - only exclude pure marketing banners with NO offer content
+      // ULTRA CONSERVATIVE: Only exclude very specific pure marketing banners
       const promotionalElements = Array.from(document.querySelectorAll('div, section, article')).filter(el => {
         const text = (el.textContent || '').toLowerCase();
         
-        // Check if contains ANY offer-related content
+        // NEVER exclude anything that might be an offer
         const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
           const childText = (child.textContent || '').toLowerCase().trim();
           return childText.length < 50 && (childText.includes('sailing') || childText.includes('view') || childText.includes('select'));
@@ -505,17 +508,18 @@ export const STEP1_OFFERS_SCRIPT = `
         const hasRedeem = text.includes('redeem by') || text.includes('redeem');
         const hasExpiry = text.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
         const hasCabinType = text.match(/(balcony|oceanview|interior|suite|room for two|stateroom)/i);
+        const hasOfferName = text.match(/(january|last chance|gamechanger|instant reward|mgm|exclusive|discounted|ocean view)/i);
         
-        // If it has ANY offer signals, it's NOT promotional
-        if (hasViewSailingsButton || hasOfferCode || hasTradeIn || hasRedeem || hasExpiry || hasCabinType) {
+        // If it has ANY offer signals, it's NOT promotional - NEVER filter it out
+        if (hasViewSailingsButton || hasOfferCode || hasTradeIn || hasRedeem || hasExpiry || hasCabinType || hasOfferName) {
           return false;
         }
         
-        // Only mark as promotional if it's a pure banner with promotional text AND no offer content
+        // Only mark as promotional if it's a VERY specific banner with NO offer content
         const isPurePromo = (text.includes('ready to play') || 
-                            text.includes('apply now and') ||
-                            (text.includes('casino credit') && text.includes('apply for') && text.length < 600)) &&
-                            text.length < 500;  // Pure banners are usually short
+                            text.includes('apply now and')) &&
+                            !text.includes('offer') &&
+                            text.length < 300;  // Pure banners are very short
         return isPurePromo;
       });
       
@@ -525,26 +529,22 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
       
-      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div'));
+      // ULTRA AGGRESSIVE: Get ALL possible clickable elements and find View Sailings buttons
+      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div, p'));
       
-      // Filter out buttons that are inside promotional banners
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '🔍 Scanning ' + allClickables.length + ' elements for View Sailings buttons...',
+        logType: 'info'
+      }));
+      
+      // Find ALL View Sailings buttons - be VERY lenient
       const viewSailingsButtons = allClickables.filter(el => {
-        // CRITICAL: Only skip if button is DIRECTLY inside a pure promo banner (not nested in offer cards)
-        const isDirectlyInsidePromo = promotionalElements.some(promo => {
-          // Check if button is direct child within a few levels
-          let parent = el.parentElement;
-          let depth = 0;
-          while (parent && depth < 3) {
-            if (parent === promo) return true;
-            parent = parent.parentElement;
-            depth++;
-          }
-          return false;
-        });
-        if (isDirectlyInsidePromo) return false;
-        
         const text = (el.textContent || '').trim().toLowerCase();
-        const isShortText = text.length < 30;
+        const isShortText = text.length < 50;
+        // Check for any sailing-related text
+        const hasSailingText = text.includes('sailing') || text.includes('dates') || text.includes('view');
+        // Match various button patterns
         return isShortText && (
                text.includes('view sailing') || 
                text.includes('see sailing') || 
@@ -555,7 +555,8 @@ export const STEP1_OFFERS_SCRIPT = `
                text === 'view sailings' ||
                text === 'see sailings' ||
                text === 'view' ||
-               text === 'select'
+               (text === 'select' && el.closest('[class*="offer"], [class*="card"]')) ||
+               (hasSailingText && text.length < 25)
         );
       });
       
@@ -572,10 +573,11 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'info'
         }));
         
+        // AGGRESSIVE: Look for ANY element with sailing in text
         const additionalButtons = allClickables.filter(el => {
           const text = (el.textContent || '').trim().toLowerCase();
           const alreadyFound = viewSailingsButtons.includes(el);
-          return !alreadyFound && (text.includes('sailing') && text.length < 30);
+          return !alreadyFound && (text.includes('sailing') && text.length < 40);
         });
         
         if (additionalButtons.length > 0) {
@@ -585,6 +587,38 @@ export const STEP1_OFFERS_SCRIPT = `
             logType: 'info'
           }));
           viewSailingsButtons.push(...additionalButtons);
+        }
+        
+        // SECOND PASS: Also look for buttons by their position relative to offer codes
+        const allOfferCodeElements = Array.from(document.querySelectorAll('*')).filter(el => {
+          const text = (el.textContent || '').trim();
+          return text.match(/^[A-Z0-9]{5,12}[A-Z]$/) && text.length < 15;
+        });
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Found ' + allOfferCodeElements.length + ' offer code elements on page',
+          logType: 'info'
+        }));
+        
+        for (const codeEl of allOfferCodeElements) {
+          // Find parent container and look for View Sailings button within
+          let parent = codeEl.parentElement;
+          for (let i = 0; i < 10 && parent; i++) {
+            const btnsInParent = Array.from(parent.querySelectorAll('button, a, [role="button"], span, div')).filter(btn => {
+              const btnText = (btn.textContent || '').trim().toLowerCase();
+              return btnText.length < 30 && (btnText.includes('sailing') || btnText.includes('view'));
+            });
+            
+            for (const btn of btnsInParent) {
+              if (!viewSailingsButtons.includes(btn)) {
+                viewSailingsButtons.push(btn);
+              }
+            }
+            
+            if (btnsInParent.length > 0) break;
+            parent = parent.parentElement;
+          }
         }
       }
       
@@ -666,33 +700,40 @@ export const STEP1_OFFERS_SCRIPT = `
       if (offerCards.length === 0 || (expectedOfferCount > 0 && offerCards.length < expectedOfferCount)) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Button-based detection found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying fallback method...',
+          message: 'Button-based detection found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying ULTRA AGGRESSIVE fallback...',
           logType: 'warning'
         }));
         
-        const allElements = Array.from(document.querySelectorAll('div, article, section, li, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"], [data-testid]'));
+        // ULTRA AGGRESSIVE: Scan ENTIRE page for ANY element that looks like an offer
+        // Include ALL div, article, section elements regardless of class
+        const allElements = Array.from(document.querySelectorAll('div, article, section, li, main > *, body > div > *, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"], [data-testid]'));
         
         const fallbackCards = allElements.filter(el => {
-          // CRITICAL: Only skip if element ITSELF is promotional, not if it's near promotional content
-          const isPromoItself = promotionalElements.includes(el);
-          if (isPromoItself) return false;
-          
           const text = el.textContent || '';
+          const textLower = text.toLowerCase();
+          
+          // Look for ANY View Sailings button
           const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
             const childText = (child.textContent || '').toLowerCase().trim();
-            return childText.length < 30 && (childText.includes('view sailing') || childText.includes('see sailing') || childText.includes('view dates') || childText.includes('sailing') || childText.includes('view') || childText.includes('select'));
+            return childText.length < 50 && (childText.includes('sailing') || childText.includes('view dates'));
           });
-          const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12})\\b/);
-          const hasTradeIn = text.toLowerCase().includes('trade-in value') || text.toLowerCase().includes('trade in');
-          const hasRedeem = text.includes('Redeem by') || text.includes('redeem by') || text.toLowerCase().includes('redeem');
-          const hasFeatured = text.includes('Featured Offer') || text.includes('Featured');
-          const hasOfferKeywords = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom|Exclusive|Discounted)/i);
-          const hasOfferTitle = text.match(/(Offer|Deal|Promotion|Discount|Special|Exclusive)/i);
-          const isReasonableSize = text.length > 80 && text.length < 8000;
           
-          // More lenient: just need button + ANY offer indicator
-          const hasAnyOfferIndicator = hasOfferCode || hasTradeIn || hasRedeem || hasFeatured || hasOfferKeywords || hasOfferTitle;
-          return hasViewSailingsButton && hasAnyOfferIndicator && isReasonableSize;
+          // Offer indicators - be VERY lenient
+          const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
+          const hasTradeIn = textLower.includes('trade-in') || textLower.includes('trade in');
+          const hasRedeem = textLower.includes('redeem');
+          const hasFeatured = textLower.includes('featured');
+          const hasOfferKeywords = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom|Exclusive|Discounted|Ocean View)/i);
+          const hasOfferTitle = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Deal|Flash|Jackpot|Bonus|Getaway)/i);
+          const hasExpiry = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
+          const hasDollarValue = text.match(/\\$[\\d,]+/); // Trade-in values like $500.00
+          const isReasonableSize = text.length > 50 && text.length < 15000;
+          
+          // VERY lenient: just need 1 strong indicator OR button + any indicator
+          const strongIndicators = [hasOfferCode, hasTradeIn, hasRedeem, hasFeatured, hasDollarValue].filter(Boolean).length;
+          const weakIndicators = [hasOfferKeywords, hasOfferTitle, hasExpiry, hasViewSailingsButton].filter(Boolean).length;
+          
+          return isReasonableSize && (strongIndicators >= 1 || (hasViewSailingsButton && weakIndicators >= 1) || weakIndicators >= 2);
         });
         
         const filteredFallback = fallbackCards.filter((el, idx, arr) => {
@@ -735,32 +776,94 @@ export const STEP1_OFFERS_SCRIPT = `
         if (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Still missing offers (' + offerCards.length + '/' + expectedOfferCount + '), trying structure-based detection...',
+            message: 'Still missing offers (' + offerCards.length + '/' + expectedOfferCount + '), trying DEEP structure-based detection...',
             logType: 'warning'
           }));
           
-          const structuralCards = allElements.filter(el => {
-            // CRITICAL: Only skip if element itself is promotional
-            const isPromoItself = promotionalElements.includes(el);
-            if (isPromoItself) return false;
+          // DEEP SCAN: Look for offer codes directly and work backwards to find containers
+          const offerCodeElements = Array.from(document.querySelectorAll('*')).filter(el => {
+            const text = (el.textContent || '').trim();
+            return text.match(/^[A-Z0-9]{5,12}[A-Z]$/) && text.length < 20;
+          });
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Deep scan found ' + offerCodeElements.length + ' potential offer codes on page',
+            logType: 'info'
+          }));
+          
+          // Log each offer code found to help debug
+          const codesFound = offerCodeElements.map(el => (el.textContent || '').trim()).slice(0, 15);
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Offer codes found: ' + codesFound.join(', '),
+            logType: 'info'
+          }));
+          
+          // For EACH offer code, find its parent container that looks like an offer card
+          for (const codeEl of offerCodeElements) {
+            const codeText = (codeEl.textContent || '').trim();
+            if (existingCodes.has(codeText)) continue; // Already found this offer
             
+            let parent = codeEl.parentElement;
+            let offerContainer = null;
+            
+            for (let i = 0; i < 12 && parent; i++) {
+              const parentText = parent.textContent || '';
+              const parentLower = parentText.toLowerCase();
+              
+              // Check if this container has offer signals
+              const hasViewBtn = Array.from(parent.querySelectorAll('button, a, span, div')).some(btn => {
+                const btnText = (btn.textContent || '').toLowerCase().trim();
+                return btnText.length < 40 && (btnText.includes('sailing') || btnText.includes('view'));
+              });
+              const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
+              const hasCabin = parentText.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom)/i);
+              const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
+              
+              if (isReasonableSize && (hasViewBtn || hasExpiry || hasCabin)) {
+                // Check it only contains ONE offer code
+                const codesInContainer = (parentText.match(/\\b[A-Z0-9]{5,12}[A-Z]\\b/g) || []);
+                const uniqueCodes = [...new Set(codesInContainer)];
+                if (uniqueCodes.length === 1 || parentText.length < 2000) {
+                  offerContainer = parent;
+                  break;
+                }
+              }
+              parent = parent.parentElement;
+            }
+            
+            if (offerContainer && !existingCodes.has(codeText)) {
+              existingCodes.add(codeText);
+              offerCards.push(offerContainer);
+              
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Deep scan found offer by code: ' + codeText,
+                logType: 'info'
+              }));
+            }
+          }
+          
+          const structuralCards = allElements.filter(el => {
             const text = el.textContent || '';
-            const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12})\\b/);
-            const hasTradeIn = text.toLowerCase().includes('trade-in value') || text.toLowerCase().includes('trade in');
-            const hasRedeem = text.includes('Redeem by') || text.includes('redeem by') || text.toLowerCase().includes('redeem');
+            const textLower = text.toLowerCase();
+            const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
+            const hasTradeIn = textLower.includes('trade-in') || textLower.includes('trade in');
+            const hasRedeem = textLower.includes('redeem');
             const hasDollarAmount = text.match(/\\$[\\d,]+\\.?\\d*/); 
             const hasExpiry = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
-            const hasCabinType = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom|Exclusive|Discounted)/i);
-            const hasOfferKeyword = text.match(/(Offer|Deal|Promotion|Discount|Special|Exclusive)/i);
+            const hasCabinType = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom|Exclusive|Discounted|Ocean View)/i);
+            const hasOfferName = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Flash|Jackpot|Bonus|Royal|Premium|Getaway)/i);
             const hasViewButton = Array.from(el.querySelectorAll('button, a, span, div')).some(child => {
               const childText = (child.textContent || '').toLowerCase().trim();
-              return childText.length < 50 && (childText.includes('sailing') || childText.includes('view') || childText.includes('select'));
+              return childText.length < 50 && (childText.includes('sailing') || childText.includes('view'));
             });
-            const isReasonableSize = text.length > 60 && text.length < 10000;
-            const offerSignals = [hasOfferCode, hasTradeIn, hasRedeem, hasDollarAmount, hasExpiry, hasCabinType, hasOfferKeyword, hasViewButton].filter(Boolean).length;
+            const isReasonableSize = text.length > 40 && text.length < 15000;
+            const offerSignals = [hasOfferCode, hasTradeIn, hasRedeem, hasDollarAmount, hasExpiry, hasCabinType, hasOfferName, hasViewButton].filter(Boolean).length;
             
-            // More lenient: need fewer signals
-            return offerSignals >= 2 && isReasonableSize;
+            // VERY lenient: just 1 strong signal or 2 weak signals
+            return (hasOfferCode || hasTradeIn || hasRedeem) || (offerSignals >= 2 && isReasonableSize);
           });
           
           const filteredStructural = structuralCards.filter((el, idx, arr) => {
