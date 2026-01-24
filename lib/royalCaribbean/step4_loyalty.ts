@@ -512,26 +512,51 @@ export const STEP4_LOYALTY_SCRIPT = `
         return b.value - a.value;
       });
       
-      // SAFETY CHECK: If top pick is < 200 but there's a 300+ candidate, review
-      if (trulyUnique.length > 0 && trulyUnique[0].value < 200) {
-        const largerCandidate = trulyUnique.find(c => c.value >= 300);
-        if (largerCandidate) {
+      // CRITICAL SAFETY CHECK: Large prominent numbers (300+) should ALWAYS win over small numbers
+      // User's actual cruise points like 503 are displayed PROMINENTLY and should beat small numbers like 140
+      if (trulyUnique.length > 0) {
+        const topPick = trulyUnique[0];
+        
+        // Find any 400+ candidate (very likely to be the actual cruise points)
+        const veryLargeCandidate = trulyUnique.find(c => c.value >= 400);
+        
+        // If top pick is < 300 but we have a 400+ candidate, ALWAYS prefer the larger one
+        if (topPick.value < 300 && veryLargeCandidate) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: '⚠️ WARNING: Top pick is ' + trulyUnique[0].value + ' but found larger value ' + largerCandidate.value + ' - reviewing...',
+            message: '⚠️ OVERRIDE: Top pick is ' + topPick.value + ' but found much larger value ' + veryLargeCandidate.value + ' - switching!',
             logType: 'warning'
           }));
           
-          // If larger number has ANY reasonable priority (< 5), prefer it
-          if (largerCandidate.priority <= 5) {
-            // Move it to front
-            trulyUnique.splice(trulyUnique.indexOf(largerCandidate), 1);
-            trulyUnique.unshift(largerCandidate);
+          trulyUnique.splice(trulyUnique.indexOf(veryLargeCandidate), 1);
+          trulyUnique.unshift(veryLargeCandidate);
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '✓ Switched to larger value: ' + veryLargeCandidate.value + ' (much more likely to be actual cruise points)',
+            logType: 'success'
+          }));
+        }
+        // If top pick is < 200 but we have a 300+ candidate, review
+        else if (topPick.value < 200) {
+          const largerCandidate = trulyUnique.find(c => c.value >= 300);
+          if (largerCandidate) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: '✓ Switched to larger value: ' + largerCandidate.value,
-              logType: 'success'
+              message: '⚠️ WARNING: Top pick is ' + topPick.value + ' but found larger value ' + largerCandidate.value + ' - reviewing...',
+              logType: 'warning'
             }));
+            
+            // If larger number has ANY reasonable priority (< 6), prefer it
+            if (largerCandidate.priority <= 6) {
+              trulyUnique.splice(trulyUnique.indexOf(largerCandidate), 1);
+              trulyUnique.unshift(largerCandidate);
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '✓ Switched to larger value: ' + largerCandidate.value,
+                logType: 'success'
+              }));
+            }
           }
         }
       }

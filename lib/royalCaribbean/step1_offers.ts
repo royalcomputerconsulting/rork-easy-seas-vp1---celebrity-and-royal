@@ -622,7 +622,7 @@ export const STEP1_OFFERS_SCRIPT = `
       
       // Find ALL "View Sailings" buttons - EXACT match only
       // User confirmed: ALL buttons say "View Sailings" - they are all exactly the same
-      const viewSailingsButtons = allClickables.filter(el => {
+      const allViewSailingButtons = allClickables.filter(el => {
         const text = (el.textContent || '').trim().toLowerCase();
         // ONLY match "view sailings" or "view sailing" (singular/plural)
         // Don't try to be clever - the user says they're all the same
@@ -630,6 +630,53 @@ export const STEP1_OFFERS_SCRIPT = `
                text === 'view sailing' ||
                (text.includes('view') && text.includes('sailing') && text.length < 30);
       });
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Found ' + allViewSailingButtons.length + ' total "View Sailings" buttons before filtering',
+        logType: 'info'
+      }));
+      
+      // CRITICAL FIX: Only filter out buttons that are clearly NOT in offer cards
+      // Check if button is inside a promotional banner (no offer code, no cabin type, no redeem date)
+      const viewSailingsButtons = allViewSailingButtons.filter(btn => {
+        let parent = btn.parentElement;
+        let isRealOffer = false;
+        
+        // Check up to 15 levels to find offer card signals
+        for (let i = 0; i < 15 && parent; i++) {
+          const parentText = parent.textContent || '';
+          const parentLower = parentText.toLowerCase();
+          
+          // Strong signals this is a REAL offer card
+          const hasOfferCode = parentText.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO)[A-Z0-9]{2,8}[A-Z0-9]\b/i);
+          const hasTradeInValue = parentText.match(/\$[\d,]+\.\d{2}\s*trade-in/i);
+          const hasRedeemDate = parentText.match(/Redeem by.*?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+          const hasCabinType = parentText.match(/(Balcony|Oceanview|Interior|Suite).*?(for Two|Room)/i);
+          const hasOfferName = parentText.match(/(Last Chance|Instant Rewards|Gamechanger|MGM)/i);
+          
+          // Need at least 2 strong signals to confirm it's a real offer
+          const signals = [hasOfferCode, hasTradeInValue, hasRedeemDate, hasCabinType, hasOfferName].filter(Boolean).length;
+          
+          if (signals >= 2) {
+            isRealOffer = true;
+            break;
+          }
+          
+          parent = parent.parentElement;
+        }
+        
+        return isRealOffer;
+      });
+      
+      const filteredOutCount = allViewSailingButtons.length - viewSailingsButtons.length;
+      if (filteredOutCount > 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '🚫 Filtered out ' + filteredOutCount + ' promotional banner(s) without offer card signals',
+          logType: 'info'
+        }));
+      }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
