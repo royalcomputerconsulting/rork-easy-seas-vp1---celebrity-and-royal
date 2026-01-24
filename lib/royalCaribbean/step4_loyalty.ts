@@ -67,6 +67,118 @@ export const STEP4_LOYALTY_SCRIPT = `
       let cruisePointsFound = false;
       const allCandidates = [];
       
+      // FIRST PASS: Scan ALL elements for ANY standalone 2-4 digit numbers
+      // This ensures we don't miss the main number (like 503)
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '📊 Phase 1: Scanning ALL elements for standalone numbers...',
+        logType: 'info'
+      }));
+      
+      const allPageElements = document.querySelectorAll('*');
+      const rawNumbers = [];
+      for (const el of allPageElements) {
+        const text = (el.textContent || '').trim();
+        // Only look at elements with JUST a number (no other text)
+        if (text.match(/^\d{2,4}$/)) {
+          const num = parseInt(text, 10);
+          if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024 && num !== 2023) {
+            rawNumbers.push({ num, el, text });
+          }
+        }
+      }
+      
+      // Log what we found
+      const uniqueRawNums = [...new Set(rawNumbers.map(r => r.num))].sort((a, b) => b - a);
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '  ➜ Found ' + uniqueRawNums.length + ' unique standalone numbers: ' + uniqueRawNums.slice(0, 10).join(', '),
+        logType: 'info'
+      }));
+      
+      // Now process each number and determine its context
+      for (const { num, el, text } of rawNumbers) {
+        const parentText = (el.parentElement?.textContent || '').toLowerCase();
+        const grandparentText = (el.parentElement?.parentElement?.textContent || '').toLowerCase();
+        const greatGrandparentText = (el.parentElement?.parentElement?.parentElement?.textContent || '').toLowerCase();
+        
+        // CRITICAL EXCLUSIONS (only exclude if we're CERTAIN it's not cruise points)
+        const isTierCredits = parentText.includes('tier credit') || grandparentText.includes('tier credit') || greatGrandparentText.includes('tier credit');
+        const isPointsToNext = parentText.includes('points to') || parentText.includes('points away') || grandparentText.includes('points to') || grandparentText.includes('points away');
+        const isToNextTier = parentText.includes('to diamond') || parentText.includes('to platinum') || parentText.includes('to gold') || parentText.includes('to emerald');
+        const isDate = parentText.includes('feb') || parentText.includes('jan') || parentText.includes('mar') || parentText.includes('apr');
+        
+        if (isTierCredits || isPointsToNext || isToNextTier || isDate) {
+          continue; // Skip this number
+        }
+        
+        // Check for positive signals
+        const nearYourTier = parentText.includes('your tier') || grandparentText.includes('your tier') || greatGrandparentText.includes('your tier');
+        const nearNightsEarned = parentText.includes('nights earned') || grandparentText.includes('nights earned') || parentText.includes('cruise nights') || grandparentText.includes('cruise nights');
+        const nearCrownAnchor = parentText.includes('crown') || parentText.includes('anchor') || grandparentText.includes('crown') || grandparentText.includes('anchor');
+        
+        // Get visual prominence
+        const computedStyle = window.getComputedStyle(el);
+        const fontSize = parseFloat(computedStyle.fontSize) || 0;
+        const fontWeight = computedStyle.fontWeight;
+        const isBold = fontWeight === 'bold' || fontWeight === '700' || fontWeight === '800' || fontWeight === '900';
+        const isHeading = el.tagName.match(/^H[1-6]$/i);
+        const isVeryLarge = fontSize > 40;
+        const isLarge = fontSize > 30;
+        const isMedium = fontSize > 20;
+        
+        // PRIORITY CALCULATION (lower = better)
+        let priority = 10;
+        
+        // ABSOLUTE TOP PRIORITY: Large numbers (400+) with prominent display
+        if (num >= 400 && isVeryLarge) {
+          priority = 0;
+        }
+        // SECOND: 300+ with very large font
+        else if (num >= 300 && (isVeryLarge || (isLarge && isBold))) {
+          priority = 0;
+        }
+        // THIRD: Any number with "nights earned" nearby (strongest text signal)
+        else if (nearNightsEarned && num >= 100) {
+          priority = 0;
+        }
+        // FOURTH: 400+ with large font
+        else if (num >= 400 && (isLarge || nearYourTier)) {
+          priority = 1;
+        }
+        // FIFTH: 300+ with medium+ font
+        else if (num >= 300 && (isLarge || isMedium)) {
+          priority = 2;
+        }
+        // SIXTH: 200-299 with styling
+        else if (num >= 200 && (isLarge || isBold || isHeading)) {
+          priority = 4;
+        }
+        // LOWER: 200+ without much styling
+        else if (num >= 200) {
+          priority = 6;
+        }
+        // VERY LOW: 100-199 (likely NOT the main cruise points)
+        else if (num >= 100) {
+          priority = 8;
+        }
+        // LOWEST: < 100
+        else {
+          priority = 10;
+        }
+        
+        allCandidates.push({
+          value: num,
+          str: text,
+          source: 'page-scan',
+          priority: priority,
+          fontSize: fontSize,
+          isBold: isBold,
+          nearYourTier: nearYourTier,
+          nearNightsEarned: nearNightsEarned
+        });
+      }
+      
       // PRIORITY STRATEGY 1: Look for "nights earned" pattern (most explicit)
       const nightsEarnedPatterns = [
         /(\\d{1,4})\\s*(?:nights?|cruise\\s+nights?)\\s*earned/gi,
@@ -385,50 +497,58 @@ export const STEP4_LOYALTY_SCRIPT = `
         }));
       }
       
-      // ULTRA AGGRESSIVE: Always prefer larger numbers (503 should ALWAYS win over 140)
-      // Sort ONLY by value descending (largest first), ignore priority completely
-      uniqueCandidates.sort((a, b) => b.value - a.value);
+      // Remove duplicates first
+      const seenInUnique = new Set();
+      const trulyUnique = uniqueCandidates.filter(c => {
+        if (seenInUnique.has(c.value)) return false;
+        seenInUnique.add(c.value);
+        return true;
+      });
       
-      if (uniqueCandidates.length > 0) {
-        // ABSOLUTE RULE: Pick the LARGEST number found
-        // The actual cruise points displayed prominently (like 503) are ALWAYS the largest
-        // Smaller numbers like 140 are secondary stats (nights in tier, etc.)
-        let bestCandidate = uniqueCandidates[0];
+      // CRITICAL: Sort by PRIORITY first (best strategy), then by VALUE (largest)
+      // This ensures 503 with good context beats 140 with "nights earned" tag
+      trulyUnique.sort((a, b) => {
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        return b.value - a.value;
+      });
+      
+      // SAFETY CHECK: If top pick is < 200 but there's a 300+ candidate, review
+      if (trulyUnique.length > 0 && trulyUnique[0].value < 200) {
+        const largerCandidate = trulyUnique.find(c => c.value >= 300);
+        if (largerCandidate) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '⚠️ WARNING: Top pick is ' + trulyUnique[0].value + ' but found larger value ' + largerCandidate.value + ' - reviewing...',
+            logType: 'warning'
+          }));
+          
+          // If larger number has ANY reasonable priority (< 5), prefer it
+          if (largerCandidate.priority <= 5) {
+            // Move it to front
+            trulyUnique.splice(trulyUnique.indexOf(largerCandidate), 1);
+            trulyUnique.unshift(largerCandidate);
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '✓ Switched to larger value: ' + largerCandidate.value,
+              logType: 'success'
+            }));
+          }
+        }
+      }
+      
+      if (trulyUnique.length > 0) {
+        // Pick the best candidate (sorted by priority then value)
+        let bestCandidate = trulyUnique[0];
         
         // Log all candidates for debugging
-        const top5 = uniqueCandidates.slice(0, 5).map(c => c.value + ' (' + c.source + ', pri:' + c.priority + ')').join(', ');
+        const top5 = trulyUnique.slice(0, 5).map(c => c.value + ' (' + c.source + ', pri:' + c.priority + ')').join(', ');
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '📊 Top candidates sorted by value: ' + top5,
+          message: '📊 Top candidates: ' + top5,
           logType: 'info'
         }));
         
-        // CRITICAL: If the largest number is < 200 but there's a 250+ candidate, prefer the larger one
-        // This is a safety check but shouldn't be needed with value-first sorting
-        if (bestCandidate.value < 200 && uniqueCandidates.length > 1) {
-          const muchLargerCandidate = uniqueCandidates.find(c => c.value >= 250);
-          if (muchLargerCandidate && muchLargerCandidate !== bestCandidate) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '🚨 CRITICAL: Found ' + muchLargerCandidate.value + ' but initial pick was ' + bestCandidate.value + ' - using larger value',
-              logType: 'warning'
-            }));
-            bestCandidate = muchLargerCandidate;
-          }
-        }
-        
-        // Final validation: if value < 50, warn
-        if (bestCandidate.value < 50) {
-          const largerCandidate = uniqueCandidates.find(c => c.value >= 50);
-          if (largerCandidate) {
-            bestCandidate = largerCandidate;
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '⚠ Skipping very small value ' + uniqueCandidates[0].value + ', using ' + bestCandidate.value + ' instead',
-              logType: 'warning'
-            }));
-          }
-        }
+
         
         loyaltyData.crownAndAnchorPoints = bestCandidate.str;
         cruisePointsFound = true;
