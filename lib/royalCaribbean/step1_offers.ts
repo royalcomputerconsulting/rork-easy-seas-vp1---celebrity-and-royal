@@ -882,15 +882,20 @@ export const STEP1_OFFERS_SCRIPT = `
           logType: 'info'
         }));
         
-        // For each unique offer code, find its container
+        // For each unique offer code, find the BEST container (only ONE per code)
+        // This prevents duplicate offers when the same code appears multiple times on page
         const codeBasedOfferCards = [];
         const seenCodeContainers = new Set();
+        const bestContainerByCode = new Map(); // Track best container per unique code
         
         // Sort codes by their Y position on page to process in order
         const codeElementsWithPosition = [];
         for (const code of uniqueOfferCodes) {
           // Skip codes that look like dates, tier credits, or reservation numbers
           if (code.match(/^\d{4,}$/) || code === 'CURRENT' || code.match(/^\d{6,}$/)) continue;
+          
+          // Skip invalid codes (account numbers, random words)
+          if (!isValidOfferCode(code)) continue;
           
           // Find all elements containing this exact code
           const codeElements = allOfferCodeElements.filter(el => (el.textContent || '').trim() === code);
@@ -910,24 +915,31 @@ export const STEP1_OFFERS_SCRIPT = `
         codeElementsWithPosition.sort((a, b) => a.yPos - b.yPos);
         
         // Process codes in order (top to bottom on page)
+        // Find the BEST container for each unique code
         for (const { code, element: codeEl } of codeElementsWithPosition) {
           let parent = codeEl.parentElement;
           let bestContainer = null;
           let bestScore = 0;
           
           for (let i = 0; i < 15 && parent; i++) {
-            // Skip if this container is already used by another offer
-            if (seenCodeContainers.has(parent)) {
-              parent = parent.parentElement;
-              continue;
-            }
-            
             const parentText = parent.textContent || '';
             const parentLower = parentText.toLowerCase();
             
             // Skip promotional banners
             if (parentLower.includes('ready to play') || parentLower.includes('apply now') ||
                 parentLower.includes('casino credit') || parentLower.includes('keep the party')) {
+              parent = parent.parentElement;
+              continue;
+            }
+            
+            // Skip account status displays
+            if (isAccountStatusDisplay(parent)) {
+              parent = parent.parentElement;
+              continue;
+            }
+            
+            // Skip help/contact text
+            if (isHelpOrContactText(parent)) {
               parent = parent.parentElement;
               continue;
             }
@@ -942,7 +954,7 @@ export const STEP1_OFFERS_SCRIPT = `
               const btnText = (btn.textContent || '').toLowerCase().trim();
               return btnText.length < 40 && (btnText.includes('sailing') || btnText === 'view sailings');
             });
-            const hasOfferKeyword = parentText.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Getaway|Spins|Jackpot)/i);
+            const hasOfferKeyword = parentText.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Getaway|Spins|Jackpot|Discount|Benefit|Gold)/i);
             
             const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
             
@@ -953,7 +965,7 @@ export const STEP1_OFFERS_SCRIPT = `
             if (hasExpiry) score += 2;
             if (hasCabinType) score += 2;
             if (hasDollarValue) score += 2;
-            if (hasViewBtn) score += 4; // High priority for View Sailings button
+            if (hasViewBtn) score += 5; // High priority for View Sailings button
             if (hasOfferKeyword) score += 1;
             
             // Count offer codes in this container - prefer containers with 1-2 codes
@@ -982,15 +994,27 @@ export const STEP1_OFFERS_SCRIPT = `
             parent = parent.parentElement;
           }
           
-          if (bestContainer && !seenCodeContainers.has(bestContainer) && !isAccountStatusDisplay(bestContainer)) {
-            seenCodeContainers.add(bestContainer);
-            codeBasedOfferCards.push({ container: bestContainer, code: code, score: bestScore });
+          // CRITICAL: Only keep the BEST container for each unique code
+          // This prevents duplicate offers when the same code appears in multiple places
+          if (bestContainer && bestScore > 0) {
+            const existingEntry = bestContainerByCode.get(code);
+            if (!existingEntry || bestScore > existingEntry.score) {
+              bestContainerByCode.set(code, { container: bestContainer, code: code, score: bestScore });
+            }
+          }
+        }
+        
+        // Now add ONLY the best container per unique code
+        for (const [code, entry] of bestContainerByCode.entries()) {
+          if (!seenCodeContainers.has(entry.container) && !isAccountStatusDisplay(entry.container) && !isHelpOrContactText(entry.container)) {
+            seenCodeContainers.add(entry.container);
+            codeBasedOfferCards.push(entry);
           }
         }
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '📋 Code-first detection found ' + codeBasedOfferCards.length + ' offer containers',
+          message: '📋 Code-first detection found ' + codeBasedOfferCards.length + ' unique offer codes',
           logType: 'info'
         }));
         
