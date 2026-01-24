@@ -178,7 +178,7 @@ export function createSyncPreview(
   if (loyaltyData) {
     const syncedClubRoyalePoints = loyaltyData.clubRoyalePoints ? parseInt(loyaltyData.clubRoyalePoints, 10) : currentLoyalty.clubRoyalePoints;
     const syncedClubRoyaleTier = loyaltyData.clubRoyaleTier || currentLoyalty.clubRoyaleTier;
-    const syncedCrownAndAnchorPoints = loyaltyData.crownAndAnchorPoints ? parseInt(loyaltyData.crownAndAnchorPoints, 10) : currentLoyalty.crownAndAnchorPoints;
+    const syncedCrownAndAnchorPoints = currentLoyalty.crownAndAnchorPoints;
     const syncedCrownAndAnchorLevel = loyaltyData.crownAndAnchorLevel || currentLoyalty.crownAndAnchorLevel;
 
     loyaltyPreview = {

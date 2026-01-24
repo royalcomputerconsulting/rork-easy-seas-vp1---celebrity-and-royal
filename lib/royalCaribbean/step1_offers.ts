@@ -87,6 +87,64 @@ export const STEP1_OFFERS_SCRIPT = `
     return el?.textContent?.trim() || '';
   }
 
+  function dismissInterferingBanners() {
+    try {
+      const banners = Array.from(document.querySelectorAll('div, section, article, aside, [role="banner"], [class*="banner"], [class*="promo"], [class*="ready"]')).filter(el => {
+        const text = (el.textContent || '').toLowerCase();
+        if (!text.includes('ready to play')) return false;
+        const height = el.offsetHeight || 0;
+        return height >= 60;
+      });
+
+      if (banners.length === 0) return;
+
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '🚫 Detected ' + banners.length + ' READY TO PLAY banner(s) - disabling interaction to prevent blocking offer clicks',
+        logType: 'info'
+      }));
+
+      for (const banner of banners.slice(0, 5)) {
+        const closeBtn = banner.querySelector('button, [role="button"], a, svg') as HTMLElement | null;
+        const closeTextBtn = Array.from(banner.querySelectorAll('button, [role="button"], a')).find(b => {
+          const t = (b.textContent || '').trim();
+          return t === '×' || t.toLowerCase() === 'close';
+        }) as HTMLElement | undefined;
+
+        const clickableClose = closeTextBtn || closeBtn;
+        if (clickableClose) {
+          try {
+            clickableClose.click();
+          } catch (e) {
+          }
+        }
+
+        (banner as HTMLElement).style.pointerEvents = 'none';
+        (banner as HTMLElement).style.visibility = 'hidden';
+        (banner as HTMLElement).style.maxHeight = '0px';
+        (banner as HTMLElement).style.overflow = 'hidden';
+      }
+
+      const fixedOverlays = Array.from(document.querySelectorAll('*')).filter(el => {
+        const style = window.getComputedStyle(el);
+        if (style.position !== 'fixed' && style.position !== 'sticky') return false;
+        if (style.pointerEvents === 'none') return false;
+        const text = (el.textContent || '').toLowerCase();
+        return text.includes('ready to play');
+      });
+
+      for (const overlay of fixedOverlays.slice(0, 5)) {
+        (overlay as HTMLElement).style.pointerEvents = 'none';
+      }
+    } catch (e) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '⚠️ Failed to dismiss READY TO PLAY banner(s): ' + String(e),
+        logType: 'warning'
+      }));
+    }
+  }
+
   async function extractClubRoyaleStatus() {
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -562,6 +620,8 @@ export const STEP1_OFFERS_SCRIPT = `
       }
       window.scrollTo(0, 0);
       await wait(2000);
+
+      dismissInterferingBanners();
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -1132,6 +1192,16 @@ export const STEP1_OFFERS_SCRIPT = `
 
       for (let i = 0; i < offerCards.length; i++) {
         const card = offerCards[i];
+        dismissInterferingBanners();
+
+        if (card && card.scrollIntoView) {
+          try {
+            card.scrollIntoView({ block: 'center', behavior: 'instant' });
+          } catch (e) {
+          }
+          await wait(400);
+        }
+
         const cardText = card.textContent || '';
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -1291,6 +1361,15 @@ export const STEP1_OFFERS_SCRIPT = `
             message: '  ▶ Clicking "View Sailings"...',
             logType: 'info'
           }));
+
+          dismissInterferingBanners();
+          if (viewSailingsBtn && viewSailingsBtn.scrollIntoView) {
+            try {
+              viewSailingsBtn.scrollIntoView({ block: 'center', behavior: 'instant' });
+            } catch (e) {
+            }
+            await wait(300);
+          }
           
           const urlBefore = window.location.href;
           
@@ -1310,23 +1389,35 @@ export const STEP1_OFFERS_SCRIPT = `
               viewSailingsBtn.click();
               await wait(2000);
               
-              const modalOpened = document.querySelector('[class*="modal"]') || 
-                                 document.querySelector('[role="dialog"]') ||
-                                 document.querySelector('[class*="drawer"]') ||
-                                 document.querySelector('[class*="overlay"][class*="sailing"]');
+              let modalOpened = document.querySelector('[class*="modal"]') || 
+                                document.querySelector('[role="dialog"]') ||
+                                document.querySelector('[class*="drawer"]') ||
+                                document.querySelector('[class*="overlay"][class*="sailing"]');
               
               if (!modalOpened) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: '  ⚠️ No modal opened - skipping sailings for this offer',
-                  logType: 'warning'
-                }));
+                dismissInterferingBanners();
+                viewSailingsBtn.click();
+                await wait(1500);
+
+                const modalRetryOpened = document.querySelector('[class*="modal"]') || 
+                                       document.querySelector('[role="dialog"]') ||
+                                       document.querySelector('[class*="drawer"]') ||
+                                       document.querySelector('[class*="overlay"][class*="sailing"]');
+
+                if (modalRetryOpened) {
+                  modalOpened = modalRetryOpened;
+                } else {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log',
+                    message: '  ⚠️ No modal opened - skipping sailings for this offer',
+                    logType: 'warning'
+                  }));
                 
-                if (originalHref) {
-                  viewSailingsBtn.setAttribute('href', originalHref);
-                }
-                
-                const noSailingOffer = {
+                  if (originalHref) {
+                    viewSailingsBtn.setAttribute('href', originalHref);
+                  }
+                  
+                  const noSailingOffer = {
                   sourcePage: 'Offers',
                   offerName: offerName,
                   offerCode: offerCode,
@@ -1346,14 +1437,15 @@ export const STEP1_OFFERS_SCRIPT = `
                 totalSailingsScraped++;
                 flushBatch();
                 
-                processedCount++;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'progress',
-                  current: totalSailingsScraped,
-                  total: offerCards.length,
-                  stepName: 'Offer ' + (i + 1) + '/' + offerCards.length + ': ' + totalSailingsScraped + ' sailings'
-                }));
-                continue;
+                  processedCount++;
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'progress',
+                    current: totalSailingsScraped,
+                    total: offerCards.length,
+                    stepName: 'Offer ' + (i + 1) + '/' + offerCards.length + ': ' + totalSailingsScraped + ' sailings'
+                  }));
+                  continue;
+                }
               }
               
               if (originalHref) {
