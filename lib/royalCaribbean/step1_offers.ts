@@ -728,6 +728,30 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
+      // Helper function to extract offer code from text
+      function extractOfferCodeFromText(text) {
+        if (!text) return '';
+        // Try various RC offer code patterns
+        const patterns = [
+          /\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)\b/,  // 26CLS103, 26MAR103B
+          /\b(\d{4}[A-Z]\d{2}[A-Z]?)\b/,         // 2601C05, 2601A08
+          /\b(\d{2}[A-Z]{3,6}%?)\b/,             // 25GOLD, 25GOLD%
+          /\b(\d{2}[A-Z]{3}\d{3}[A-Z]?)\b/       // 26NEW104, 26NEW104O
+        ];
+        for (const pattern of patterns) {
+          const match = text.match(pattern);
+          if (match && match[1]) {
+            const code = match[1];
+            // Validate it's not a common false positive
+            const invalidCodes = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER'];
+            if (!invalidCodes.includes(code.toUpperCase())) {
+              return code;
+            }
+          }
+        }
+        return '';
+      }
+      
       // CRITICAL: Ignore promotional banners like "READY TO PLAY?"
       // These banners appear BETWEEN offers and should NOT stop our detection
       // NEW STRATEGY: Find ALL offer codes FIRST, then locate their containers and buttons
