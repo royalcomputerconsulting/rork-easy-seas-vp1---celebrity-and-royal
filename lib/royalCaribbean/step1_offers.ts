@@ -923,12 +923,13 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: clusteredViewSailingsButtons.length >= expectedOfferCount ? 'success' : 'warning'
       }));
       
-      // Also find "REDEEM OFFER" buttons (yellow buttons) as the most reliable offer anchor.
-      // Per screenshots: there are 9 of these, each next to a "View Sailings" button.
+      // Also find "REDEEM" buttons (yellow buttons) as an offer anchor.
+      // IMPORTANT: exclude in-progress buttons like "CONTINUE REDEMPTION" / "CANCEL REDEMPTION".
       const redeemButtons = allClickables.filter(el => {
         const text = (el.textContent || '').trim().toLowerCase();
         const isShortText = text.length < 60;
-        return isShortText && (text === 'redeem offer' || text.includes('redeem offer'));
+        const isInProgressRedemption = text.includes('redemption') || text.includes('continue') || text.includes('cancel');
+        return isShortText && !isInProgressRedemption && text === 'redeem';
       });
       
       // Deduplicate Redeem buttons by position
@@ -949,14 +950,14 @@ export const STEP1_OFFERS_SCRIPT = `
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🎯 Found ' + uniqueRedeemButtons.length + ' unique REDEEM OFFER buttons',
+        message: '🎯 Found ' + uniqueRedeemButtons.length + ' unique REDEEM buttons',
         logType: uniqueRedeemButtons.length > 0 ? 'success' : 'warning'
       }));
       
-      // Use REDEEM OFFER buttons as PRIMARY source when available (most stable anchor).
+      // Use REDEEM buttons as PRIMARY source when available (stable anchor).
       // Fallback to Y-clustered View Sailings buttons if needed.
       const primaryOfferAnchorButtons = uniqueRedeemButtons.length > 0 ? uniqueRedeemButtons : clusteredViewSailingsButtons;
-      const primaryAnchorLabel = uniqueRedeemButtons.length > 0 ? 'REDEEM OFFER' : 'View Sailings';
+      const primaryAnchorLabel = uniqueRedeemButtons.length > 0 ? 'REDEEM' : 'View Sailings';
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -997,7 +998,8 @@ export const STEP1_OFFERS_SCRIPT = `
           const hasOfferKeyword = parentText.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Getaway|West Coast|Spins|Gold)/i);
           const hasRedeemButton = Array.from(parent.querySelectorAll('button, a, span, div')).some(btn => {
             const btnText = (btn.textContent || '').trim().toLowerCase();
-            return btnText === 'redeem' || btnText === 'redeem offer';
+            const isInProgressRedemption = btnText.includes('redemption') || btnText.includes('continue') || btnText.includes('cancel');
+            return !isInProgressRedemption && btnText === 'redeem';
           });
           
           const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
