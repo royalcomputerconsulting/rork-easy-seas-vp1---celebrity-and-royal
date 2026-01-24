@@ -631,102 +631,139 @@ export const STEP1_OFFERS_SCRIPT = `
       // This ensures we get REAL offer cards and not dividers or promotional content
       
       const allPossibleContainers = Array.from(document.querySelectorAll('div, article, section, li, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"]'));
-      
-      // Find ALL clickable elements on the page
-      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], span[class*="button"], div[class*="button"]'));
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🔍 Scanning ' + allClickables.length + ' elements across ENTIRE page (ignoring dividers like READY TO PLAY)...',
-        logType: 'info'
-      }));
-      
-      // Find ALL "View Sailings" buttons - CRITICAL: Must handle various button implementations
-      // Royal Caribbean uses standard buttons with "View Sailings" text
-      const allViewSailingButtons = allClickables.filter(el => {
-        const textContent = (el.textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
-        const ariaLabel = (el.getAttribute?.('aria-label') || '').toLowerCase();
-        const title = (el.getAttribute?.('title') || '').toLowerCase();
-        const className = (el.className || '').toLowerCase();
-        const dataTestId = (el.getAttribute?.('data-testid') || '').toLowerCase();
-        const href = el.tagName === 'A' ? (el.getAttribute('href') || '').toLowerCase() : '';
-        const combined = textContent + ' ' + ariaLabel + ' ' + title + ' ' + className + ' ' + dataTestId + ' ' + href;
-        
-        // STRATEGY 1: Exact text match (most reliable)
-        const exactMatch = textContent === 'view sailings' || textContent === 'view sailing';
-        if (exactMatch) return true;
-        
-        // STRATEGY 2: Contains "view sailing" or "viewsailing"
-        const containsViewSailing = combined.includes('view sailing') || combined.includes('viewsailing') || textContent.includes('view sailing');
-        if (containsViewSailing && textContent.length < 50) return true;
-        
-        // STRATEGY 3: Has both "view" and "sailing" words (for split text)
-        const hasView = combined.includes('view') || combined.includes('see');
-        const hasSailing = combined.includes('sailing') || combined.includes('sail');
-        if (hasView && hasSailing && textContent.length < 50) return true;
-        
-        return false;
-      });
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Found ' + allViewSailingButtons.length + ' total "View Sailings" buttons before filtering',
-        logType: 'info'
-      }));
-      
-      // DEBUG: If no buttons found, provide detailed diagnostic information
-      if (allViewSailingButtons.length === 0) {
-        const allButtonsText = Array.from(allClickables).slice(0, 30).map(el => (el.textContent || '').trim().substring(0, 40)).filter(t => t.length > 0);
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '🔍 DEBUG: Found ' + allClickables.length + ' clickable elements. Sample button texts: ' + allButtonsText.slice(0, 15).join(' | '),
-          logType: 'warning'
-        }));
-        
-        // Try ULTRA AGGRESSIVE detection - ANY element with "sailing" text
-        const allElementsWithSailing = Array.from(document.querySelectorAll('*')).filter(el => {
-          const text = (el.textContent || '').toLowerCase().trim();
-          // Must be short and contain "sailing"
-          return text.includes('sailing') && text.length > 5 && text.length < 100;
-        });
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '🔍 Found ' + allElementsWithSailing.length + ' elements with "sailing" text (checking if clickable)',
-          logType: 'info'
-        }));
-        
-        // Try to find clickable sailing elements
-        for (const el of allElementsWithSailing.slice(0, 20)) {
-          const text = (el.textContent || '').trim();
-          const tagName = el.tagName.toLowerCase();
-          const isClickable = tagName === 'button' || tagName === 'a' || el.getAttribute('role') === 'button' || el.onclick !== null;
-          
-          if (text.toLowerCase().includes('view') && text.toLowerCase().includes('sailing') && text.length < 50) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '  → Found potential button: "' + text + '" (tag: ' + tagName + ', clickable: ' + isClickable + ')',
-              logType: 'info'
-            }));
-            
-            // If it looks like a button but wasn't detected, add it
-            if (!allViewSailingButtons.includes(el)) {
-              allViewSailingButtons.push(el);
-            }
+
+      function getElementText(el) {
+        try {
+          const t = (el.innerText || el.textContent || '');
+          return String(t).toLowerCase().replace(/\s+/g, ' ').trim();
+        } catch (e) {
+          return String(el.textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        }
+      }
+
+      function collectElementsDeep(root) {
+        const results = [];
+        const queue = [root];
+        while (queue.length) {
+          const node = queue.shift();
+          if (!node) continue;
+          const children = node.children ? Array.from(node.children) : [];
+          for (const child of children) {
+            results.push(child);
+            queue.push(child);
+            try {
+              if (child.shadowRoot) {
+                queue.push(child.shadowRoot);
+              }
+            } catch (e) {}
+          }
+          // If this is a shadow root, it has its own children
+          if (node.host && node.children) {
+            // noop
           }
         }
-        
+        return results;
+      }
+
+      // Find ALL clickable elements on the page (including inside shadow roots)
+      const allDeep = collectElementsDeep(document);
+      const allClickables = allDeep.filter(el => {
+        const tag = (el.tagName || '').toLowerCase();
+        const role = (el.getAttribute?.('role') || '').toLowerCase();
+        const tabIndex = el.getAttribute?.('tabindex');
+        const onclick = el.onclick;
+
+        const isButtonLike = tag === 'button' || tag === 'a' || role === 'button';
+        const isFocusable = tabIndex !== null && tabIndex !== undefined && String(tabIndex) !== '-1';
+        const isLikelyClickable = isButtonLike || isFocusable || onclick !== null;
+
+        if (!isLikelyClickable) return false;
+
+        const text = getElementText(el);
+        // keep a wide net but avoid giant containers
+        return text.length > 0 && text.length < 200;
+      });
+
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '🔍 Scanning ' + allClickables.length + ' clickable elements across ENTIRE page (deep DOM)...',
+        logType: 'info'
+      }));
+
+      function isViewSailingsElement(el) {
+        const text = getElementText(el);
+        const ariaLabel = String(el.getAttribute?.('aria-label') || '').toLowerCase();
+        const title = String(el.getAttribute?.('title') || '').toLowerCase();
+        const dataTestId = String(el.getAttribute?.('data-testid') || '').toLowerCase();
+        const className = String(el.className || '').toLowerCase();
+        const href = (String(el.tagName || '').toLowerCase() === 'a') ? String(el.getAttribute?.('href') || '').toLowerCase() : '';
+        const combined = text + ' ' + ariaLabel + ' ' + title + ' ' + dataTestId + ' ' + className + ' ' + href;
+
+        // exact / contains
+        if (text === 'view sailings' || text === 'view sailing') return true;
+        if ((combined.includes('view') || combined.includes('see')) && (combined.includes('sailing') || combined.includes('sail')) && text.length < 60) return true;
+        if (combined.includes('view sailings') || combined.includes('view sailing') || combined.includes('see sailings') || combined.includes('see sailing')) return true;
+        return false;
+      }
+
+      function isRedeemElement(el) {
+        const text = getElementText(el);
+        const ariaLabel = String(el.getAttribute?.('aria-label') || '').toLowerCase();
+        const combined = text + ' ' + ariaLabel;
+        return (combined === 'redeem' || combined.includes('redeem')) && combined.length < 60;
+      }
+
+      // Find ALL "View Sailings" buttons (deep)
+      const allViewSailingButtons = allClickables.filter(isViewSailingsElement);
+
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'Found ' + allViewSailingButtons.length + ' total "View Sailings" button(s) before offer-card pairing',
+        logType: 'info'
+      }));
+
+      // DEBUG: If no buttons found, provide detailed diagnostic information
+      if (allViewSailingButtons.length === 0) {
+        const samples = allClickables.slice(0, 40).map(el => getElementText(el).substring(0, 60)).filter(t => t.length > 0);
+        const bodyHasViewSailingsText = (document.body && (document.body.innerText || document.body.textContent || '').toLowerCase().includes('view sail'));
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '🔧 After aggressive detection: ' + allViewSailingButtons.length + ' buttons found',
-          logType: 'info'
+          message: '🔍 DEBUG: 0 View Sailings detected. bodyHasViewSailingsText=' + bodyHasViewSailingsText + '. Sample clickable texts: ' + samples.slice(0, 18).join(' | '),
+          logType: 'warning'
         }));
       }
+
+      // Pairing rule (per screenshots): an offer card has BOTH Redeem + View Sailings.
+      // Keep only "View Sailings" buttons that live near a "Redeem" button.
+      const viewSailingsButtonsPaired = allViewSailingButtons.filter(btn => {
+        let parent = btn.parentElement;
+        for (let i = 0; i < 10 && parent; i++) {
+          const clickablesInParent = collectElementsDeep(parent).filter(el => {
+            const tag = (el.tagName || '').toLowerCase();
+            const role = (el.getAttribute?.('role') || '').toLowerCase();
+            return tag === 'button' || tag === 'a' || role === 'button';
+          });
+
+          const hasRedeem = clickablesInParent.some(isRedeemElement);
+          if (hasRedeem) return true;
+          parent = parent.parentElement;
+        }
+        return false;
+      });
+
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'After pairing with Redeem: ' + viewSailingsButtonsPaired.length + ' View Sailings button(s) look like offer cards',
+        logType: 'info'
+      }));
+
+      // Use paired list for the rest of extraction
+      const allViewSailingButtonsFinal = viewSailingsButtonsPaired.length > 0 ? viewSailingsButtonsPaired : allViewSailingButtons;
       
       // ULTRA SIMPLE: Keep ALL View Sailings buttons EXCEPT those in obvious promo banners
       // User confirmed: ALL offers have identical "View Sailings" buttons
       // Don't overthink - just exclude promotional banners
-      const viewSailingsButtons = allViewSailingButtons.filter(btn => {
+      const viewSailingsButtons = allViewSailingButtonsFinal.filter(btn => {
         let parent = btn.parentElement;
         
         // Check up to 10 levels for promo banner exclusion patterns ONLY
@@ -759,7 +796,7 @@ export const STEP1_OFFERS_SCRIPT = `
         return true;
       });
       
-      const filteredOutCount = allViewSailingButtons.length - viewSailingsButtons.length;
+      const filteredOutCount = allViewSailingButtonsFinal.length - viewSailingsButtons.length;
       if (filteredOutCount > 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
