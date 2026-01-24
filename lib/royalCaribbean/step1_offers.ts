@@ -638,53 +638,42 @@ export const STEP1_OFFERS_SCRIPT = `
       }));
       
       // CRITICAL FIX: Only keep buttons that are in COMPLETE offer cards
-      // Explicitly filter out promotional banners, dividers, and informational sections
+      // Be LESS AGGRESSIVE - only filter out obvious non-offer content
       const viewSailingsButtons = allViewSailingButtons.filter(btn => {
         let parent = btn.parentElement;
-        let foundCompleteOfferCard = false;
-        let isPromotionalBanner = false;
+        let foundOfferSignals = false;
+        let isDefinitelyNotOffer = false;
         
-        // Check up to 15 levels to find complete offer card or banner signals
+        // Check up to 15 levels to find offer signals
         for (let i = 0; i < 15 && parent; i++) {
           const parentText = parent.textContent || '';
           const parentLower = parentText.toLowerCase();
           
-          // FIRST: Check if this is a promotional banner/divider (DISCARD immediately)
-          const bannerKeywords = [
-            'ready to play',
-            'for more information click',
-            'benefits tab',
-            'explore our',
-            'learn more about',
-            'discover',
-            'join us',
-            'sign up',
-            'download app',
-            'stay connected'
-          ];
+          // ONLY filter out if it's DEFINITELY not an offer (very specific non-offer text)
+          // User says: ONLY "View Sailings" buttons should be clicked, they're all the same
+          // So if a button has offer-related content nearby, it's likely valid
           
-          for (const keyword of bannerKeywords) {
-            if (parentLower.includes(keyword)) {
-              isPromotionalBanner = true;
-              break;
-            }
-          }
-          
-          if (isPromotionalBanner) {
-            break; // Stop checking, this is a banner
-          }
-          
-          // SECOND: Check if this is a COMPLETE offer card (ALL required elements)
+          // Check for offer code (STRONGEST signal this is a real offer)
           const hasOfferCode = parentText.match(/\b[12][0-9](CLS|GOLD|C0|NEW|WEST|MAX|GO)[A-Z0-9]{2,8}[A-Z0-9]\b/i);
-          const hasRedeemDate = parentText.match(/Redeem by\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d+,?\s*\d{4}/i);
-          const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite).*?(for Two|for two|Room|room)/i);
+          const hasRedeemDate = parentText.match(/Redeem by\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+          const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
+          const hasTradeIn = parentText.match(/trade.?in/i);
           
-          // MUST have ALL 3 core elements to be a valid offer card
-          if (hasOfferCode && hasRedeemDate && hasCabinType) {
-            // Extra validation: container should be reasonably sized (not too big = page container, not too small = just code element)
-            const containerSize = parentText.length;
-            if (containerSize > 150 && containerSize < 3000) {
-              foundCompleteOfferCard = true;
+          // If we see ANY offer signals, this is likely a valid offer
+          if (hasOfferCode || (hasRedeemDate && hasCabinType) || hasTradeIn) {
+            foundOfferSignals = true;
+            break;
+          }
+          
+          // ONLY mark as "not an offer" if we see VERY specific non-offer text WITHOUT any offer signals
+          // Be VERY conservative here - better to include a false positive than miss real offers
+          if (!hasOfferCode && !hasRedeemDate && !hasCabinType) {
+            const isAccountNavigation = parentLower.includes('my account') || parentLower.includes('sign out') || parentLower.includes('log out');
+            const isFooterLink = parentLower.includes('privacy policy') || parentLower.includes('terms of service');
+            const isHelpText = parentLower.includes('need help') || parentLower.includes('contact us');
+            
+            if (isAccountNavigation || isFooterLink || isHelpText) {
+              isDefinitelyNotOffer = true;
               break;
             }
           }
@@ -692,15 +681,16 @@ export const STEP1_OFFERS_SCRIPT = `
           parent = parent.parentElement;
         }
         
-        // Only return true if we found a complete offer card AND it's NOT a banner
-        return foundCompleteOfferCard && !isPromotionalBanner;
+        // INCLUDE button if: (has offer signals) OR (not definitely excluded)
+        // This is MUCH more lenient - we want to capture all 8+ offers
+        return foundOfferSignals || !isDefinitelyNotOffer;
       });
       
       const filteredOutCount = allViewSailingButtons.length - viewSailingsButtons.length;
       if (filteredOutCount > 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '🚫 Filtered out ' + filteredOutCount + ' promotional banner(s) without offer card signals',
+          message: '🚫 Filtered out ' + filteredOutCount + ' non-offer button(s) (account links, footer, etc.)',
           logType: 'info'
         }));
       }
