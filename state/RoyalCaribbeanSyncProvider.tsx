@@ -173,6 +173,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     addLog('Starting ingestion process...', 'info');
     
+    // Navigate to the offers page first and wait for it to load
+    addLog('Navigating to Club Royale offers page...', 'info');
+    webViewRef.current.injectJavaScript(`
+      window.location.href = 'https://www.royalcaribbean.com/club-royale';
+      true;
+    `);
+    
+    // Wait for navigation and page load
+    await new Promise(resolve => setTimeout(resolve, 8000));
+    
     const waitForStepComplete = (step: number, baseTimeoutMs: number = 600000): Promise<void> => {
       return new Promise((resolve) => {
         let lastProgressTime = Date.now();
@@ -216,7 +226,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog('Loading Offers Page...', 'info');
       addLog('⏱️ Offers may take several minutes with large datasets - using chunked processing', 'info');
       
-      webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
+      // Ensure we're on the offers page before injecting script
+      addLog('Injecting offers extraction script...', 'info');
+      
+      const offersScript = injectOffersExtraction(state.scrapePricingAndItinerary);
+      webViewRef.current.injectJavaScript(offersScript + '; true;');
       
       await waitForStepComplete(1, 900000);
       
