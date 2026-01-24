@@ -511,22 +511,47 @@ export const STEP1_OFFERS_SCRIPT = `
 
       let offerCards = [];
       
-      // IMPORTANT: Do NOT filter out promotional elements - they might be near offers
-      // The dividers between offers were causing issues
-      // Instead, we'll find ALL View Sailings buttons and work backwards
+      // CRITICAL: Ignore promotional banners like "READY TO PLAY?"
+      // These banners appear BETWEEN offers and should NOT stop our detection
+      // Strategy: Find ALL View Sailings buttons on the ENTIRE page, ignoring any promotional content
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 Scanning entire page for all ' + expectedOfferCount + ' offers (ignoring dividers)...',
+        message: '🔍 Scanning entire page for all ' + expectedOfferCount + ' offers (ignoring promotional banners)...',
         logType: 'info'
       }));
       
-      // ULTRA AGGRESSIVE: Get ALL possible clickable elements and find View Sailings buttons
-      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div, p'));
+      // STEP 1: First, explicitly filter out promotional banner containers
+      // These have text like "READY TO PLAY?", "Apply now", "casino credit"
+      const promotionalBanners = Array.from(document.querySelectorAll('*')).filter(el => {
+        const text = (el.textContent || '').toLowerCase();
+        const hasPromoText = text.includes('ready to play') || 
+                            text.includes('apply now') || 
+                            text.includes('casino credit') ||
+                            text.includes('keep the party going') ||
+                            text.includes('onboard you can');
+        const isLargePromo = text.length > 50 && text.length < 500 && hasPromoText;
+        return isLargePromo && !text.includes('view sailing') && !text.match(/\b[A-Z0-9]{5,12}[A-Z]\b/);
+      });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 Scanning ' + allClickables.length + ' elements for View Sailings buttons...',
+        message: '🚫 Filtering out ' + promotionalBanners.length + ' promotional banner(s)...',
+        logType: 'info'
+      }));
+      
+      // Mark these banners so we can skip them
+      const bannersSet = new Set(promotionalBanners);
+      
+      // STEP 2: Get ALL possible clickable elements EXCEPT those inside promotional banners
+      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div, p')).filter(el => {
+        // Exclude elements that are inside promotional banners
+        return !Array.from(bannersSet).some(banner => banner.contains(el) || el.contains(banner));
+      });
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '🔍 Scanning ' + allClickables.length + ' elements (excluding promotional banners) for View Sailings buttons...',
         logType: 'info'
       }));
       
@@ -618,6 +643,17 @@ export const STEP1_OFFERS_SCRIPT = `
       const seenOfferNames = new Set();
       
       for (const btn of viewSailingsButtons) {
+        // Skip if this button is inside a promotional banner
+        const isInsideBanner = Array.from(bannersSet).some(banner => banner.contains(btn));
+        if (isInsideBanner) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Skipping button inside promotional banner',
+            logType: 'info'
+          }));
+          continue;
+        }
+        
         let parent = btn.parentElement;
         let offerCard = null;
         
@@ -685,13 +721,17 @@ export const STEP1_OFFERS_SCRIPT = `
       if (offerCards.length === 0 || (expectedOfferCount > 0 && offerCards.length < expectedOfferCount)) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Button-based detection found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying ULTRA AGGRESSIVE fallback...',
+          message: 'Button-based detection found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying ULTRA AGGRESSIVE fallback (ignoring banners)...',
           logType: 'warning'
         }));
         
         // ULTRA AGGRESSIVE: Scan ENTIRE page for ANY element that looks like an offer
         // Include ALL div, article, section elements regardless of class
-        const allElements = Array.from(document.querySelectorAll('div, article, section, li, main > *, body > div > *, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"], [data-testid]'));
+        // BUT exclude promotional banners
+        const allElements = Array.from(document.querySelectorAll('div, article, section, li, main > *, body > div > *, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"], [data-testid]')).filter(el => {
+          // Skip if inside a promotional banner
+          return !Array.from(bannersSet).some(banner => banner.contains(el) || el === banner);
+        });
         
         const fallbackCards = allElements.filter(el => {
           const text = el.textContent || '';
