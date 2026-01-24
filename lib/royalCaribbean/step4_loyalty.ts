@@ -77,6 +77,28 @@ export const STEP4_LOYALTY_SCRIPT = `
       
       const allPageElements = document.querySelectorAll('*');
       const rawNumbers = [];
+      
+      // ULTRA AGGRESSIVE: Also scan the entire page text for ANY 2-4 digit numbers
+      const fullPageText = document.body.textContent || '';
+      const allPageNumbers = fullPageText.match(/\b(\d{2,4})\b/g) || [];
+      const uniquePageNumbers = [...new Set(allPageNumbers.map(n => parseInt(n, 10)))].filter(n => n >= 50 && n <= 2000 && n !== 2025 && n !== 2026 && n !== 2024 && n !== 2023);
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: '🔢 ALL numbers on page (50-2000): ' + uniquePageNumbers.sort((a,b) => b-a).slice(0, 20).join(', '),
+        logType: 'info'
+      }));
+      
+      // CRITICAL: If we see ANY number >= 400, it's likely the actual cruise points!
+      const largeNumbers = uniquePageNumbers.filter(n => n >= 400);
+      if (largeNumbers.length > 0) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '🎯 LARGE NUMBERS FOUND (400+): ' + largeNumbers.sort((a,b) => b-a).join(', ') + ' - One of these is likely cruise points!',
+          logType: 'success'
+        }));
+      }
+      
       for (const el of allPageElements) {
         // CRITICAL FIX: Don't require leaf node - number like 503 might be split across child elements
         // Instead, check if the DIRECT text content (excluding children) contains a standalone number
@@ -622,6 +644,31 @@ export const STEP4_LOYALTY_SCRIPT = `
         }
       }
       
+      // FINAL SAFETY: If we found large numbers on page but they're not in candidates, ADD THEM
+      for (const largeNum of largeNumbers) {
+        const alreadyInCandidates = trulyUnique.some(c => c.value === largeNum);
+        if (!alreadyInCandidates) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '🚨 CRITICAL: Large number ' + largeNum + ' found on page but NOT in candidates! Adding with TOP priority.',
+            logType: 'warning'
+          }));
+          trulyUnique.unshift({ value: largeNum, str: String(largeNum), source: 'page-text-rescue', priority: 0 });
+        }
+      }
+      
+      // Re-sort after potentially adding rescued numbers
+      trulyUnique.sort((a, b) => {
+        // ALWAYS prefer 400+ numbers - they are DEFINITELY the cruise points
+        if (a.value >= 400 && b.value < 400) return -1;
+        if (b.value >= 400 && a.value < 400) return 1;
+        // If both are 400+, prefer larger
+        if (a.value >= 400 && b.value >= 400) return b.value - a.value;
+        // Otherwise sort by priority then value
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        return b.value - a.value;
+      });
+      
       if (trulyUnique.length > 0) {
         // Pick the best candidate (sorted by priority then value)
         let bestCandidate = trulyUnique[0];
@@ -630,11 +677,20 @@ export const STEP4_LOYALTY_SCRIPT = `
         const top5 = trulyUnique.slice(0, 5).map(c => c.value + ' (' + c.source + ', pri:' + c.priority + ')').join(', ');
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '📊 Top candidates: ' + top5,
+          message: '📊 Top candidates after safety checks: ' + top5,
           logType: 'info'
         }));
         
-
+        // ABSOLUTE FINAL CHECK: If best candidate < 200 but we have ANY number >= 400 on page, USE IT
+        if (bestCandidate.value < 200 && largeNumbers.length > 0) {
+          const bestLarge = Math.max(...largeNumbers);
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '🚨 OVERRIDE: Best candidate is ' + bestCandidate.value + ' but page has ' + bestLarge + ' - USING LARGER!',
+            logType: 'warning'
+          }));
+          bestCandidate = { value: bestLarge, str: String(bestLarge), source: 'page-override', priority: 0 };
+        }
         
         loyaltyData.crownAndAnchorPoints = bestCandidate.str;
         cruisePointsFound = true;

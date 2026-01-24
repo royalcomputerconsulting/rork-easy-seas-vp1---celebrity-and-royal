@@ -499,30 +499,36 @@ export const STEP1_OFFERS_SCRIPT = `
       for (let scrollPass = 0; scrollPass < 30; scrollPass++) {
         // Scroll to multiple positions to trigger lazy loading
         window.scrollTo(0, document.body.scrollHeight);
-        await wait(3000);
+        await wait(2000);
         window.scrollTo(0, document.body.scrollHeight * 0.25);
-        await wait(1500);
+        await wait(1000);
         window.scrollTo(0, document.body.scrollHeight * 0.5);
-        await wait(1500);
+        await wait(1000);
         window.scrollTo(0, document.body.scrollHeight * 0.75);
-        await wait(1500);
+        await wait(1000);
         window.scrollTo(0, document.body.scrollHeight);
-        await wait(3000);
+        await wait(2000);
         
         // Aggressive: scroll PAST the bottom by triggering events
         window.scrollBy(0, 8000);
-        await wait(2000);
+        await wait(1500);
         
         // Trigger scroll events manually to force lazy loading
         window.dispatchEvent(new Event('scroll'));
         document.body.dispatchEvent(new Event('scroll'));
-        await wait(500);
+        await wait(300);
         
-        // Count buttons after each pass - be MORE lenient in detection
-        const currentOfferButtons = document.querySelectorAll('button, a, [role="button"], span[class*="button"], div[class*="button"]');
+        // Count buttons after each pass - be ULTRA lenient in detection
+        const currentOfferButtons = document.querySelectorAll('button, a, [role="button"], span[class*="button"], div[class*="button"], span, div');
         const viewSailingCount = Array.from(currentOfferButtons).filter(btn => {
-          const text = ((btn.textContent || '') + ' ' + (btn.getAttribute?.('aria-label') || '') + ' ' + (btn.getAttribute?.('title') || '')).toLowerCase().replace(/\s+/g, ' ').trim();
-          return text === 'view sailings' || text === 'view sailing' || text.includes('view sailings') || text.includes('view sailing');
+          const textContent = (btn.textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
+          const ariaLabel = (btn.getAttribute?.('aria-label') || '').toLowerCase();
+          const combined = textContent + ' ' + ariaLabel;
+          // Multiple matching strategies
+          return textContent === 'view sailings' || 
+                 textContent === 'view sailing' || 
+                 combined.includes('view sailing') ||
+                 (combined.includes('view') && combined.includes('sailing'));
         }).length;
         
         // Log progress
@@ -630,11 +636,23 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
       
-      // Find ALL "View Sailings" buttons - EXACT match only
+      // Find ALL "View Sailings" buttons - be VERY lenient in matching
       // User confirmed: ALL buttons say "View Sailings" - they are all exactly the same
       const allViewSailingButtons = allClickables.filter(el => {
-        const text = ((el.textContent || '') + ' ' + (el.getAttribute?.('aria-label') || '') + ' ' + (el.getAttribute?.('title') || '')).toLowerCase().replace(/\s+/g, ' ').trim();
-        return text === 'view sailings' || text === 'view sailing' || text.includes('view sailings') || text.includes('view sailing');
+        const textContent = (el.textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        const ariaLabel = (el.getAttribute?.('aria-label') || '').toLowerCase();
+        const title = (el.getAttribute?.('title') || '').toLowerCase();
+        const className = (el.className || '').toLowerCase();
+        const dataTestId = (el.getAttribute?.('data-testid') || '').toLowerCase();
+        const combined = textContent + ' ' + ariaLabel + ' ' + title + ' ' + className + ' ' + dataTestId;
+        
+        // Multiple matching strategies
+        const exactMatch = textContent === 'view sailings' || textContent === 'view sailing';
+        const containsMatch = combined.includes('view sailing') || combined.includes('viewsailing');
+        const partialMatch = (combined.includes('view') && combined.includes('sailing'));
+        const sailingsOnly = textContent === 'sailings' || textContent.match(/^view\s*$/i);
+        
+        return exactMatch || containsMatch || partialMatch;
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -642,6 +660,27 @@ export const STEP1_OFFERS_SCRIPT = `
         message: 'Found ' + allViewSailingButtons.length + ' total "View Sailings" buttons before filtering',
         logType: 'info'
       }));
+      
+      // DEBUG: If no buttons found, log what's on the page
+      if (allViewSailingButtons.length === 0) {
+        const allButtonsText = Array.from(allClickables).slice(0, 50).map(el => (el.textContent || '').trim().substring(0, 30)).filter(t => t.length > 0);
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '🔍 DEBUG: Sample buttons on page: ' + allButtonsText.slice(0, 20).join(' | '),
+          logType: 'warning'
+        }));
+        
+        // Try alternative detection - look for ANY element with "Sailing" in text
+        const sailingElements = Array.from(document.querySelectorAll('*')).filter(el => {
+          const text = (el.textContent || '').toLowerCase();
+          return text.includes('sailing') && text.length < 100;
+        });
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '🔍 Found ' + sailingElements.length + ' elements containing "sailing"',
+          logType: 'info'
+        }));
+      }
       
       // ULTRA SIMPLE: Keep ALL View Sailings buttons EXCEPT those in obvious promo banners
       // User confirmed: ALL offers have identical "View Sailings" buttons
