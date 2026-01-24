@@ -784,68 +784,58 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
-      // CRITICAL: Do NOT deduplicate by offer code! Same offer can appear multiple times
-      // (e.g., "2026 January Instant Rewards" can appear twice for different cabin types)
-      // Use DOM element reference as unique identifier instead
-      const offerCodeContainers = [];
+      // STRATEGY: For EACH View Sailings button, find its parent offer card container
+      // This ensures we capture ALL offers, even after promotional banners like "READY TO PLAY"
+      const seenOfferCodes = new Set();
       
-      for (const code of uniqueOfferCodes) {
-        // Find the element containing this specific offer code
-        const allElements = Array.from(document.querySelectorAll('*'));
-        for (const el of allElements) {
-          const elText = (el.textContent || '').trim();
-          const elHTML = el.innerHTML || '';
+      for (const btn of viewSailingsButtons) {
+        let parent = btn.parentElement;
+        let bestContainer = null;
+        
+        // Walk up the DOM tree to find the complete offer card
+        for (let i = 0; i < 15 && parent; i++) {
+          const parentText = parent.textContent || '';
+          const parentLower = parentText.toLowerCase();
           
-          // Check if this element contains ONLY this offer code (not parent with multiple)
-          if (elText.includes(code) && elText.length < 5000) {
-            // Count how many offer codes are in this element
-            const codesInElement = uniqueOfferCodes.filter(c => elText.includes(c)).length;
-            
-            // We want containers that have exactly 1 offer code (the offer card itself)
-            if (codesInElement === 1) {
-              // Find the appropriate container level
-              let container = el;
-              for (let i = 0; i < 8; i++) {
-                const containerText = container.textContent || '';
-                const hasButton = Array.from(container.querySelectorAll('button, a, [role="button"]')).some(btn => 
-                  (btn.textContent || '').toLowerCase().includes('sailing')
-                );
-                const hasTradeIn = containerText.toLowerCase().includes('trade-in');
-                const hasExpiry = containerText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+,\s*\d{4}/i);
-                const isReasonableSize = containerText.length > 100 && containerText.length < 3000;
-                
-                if (isReasonableSize && (hasButton || hasTradeIn || hasExpiry)) {
-                  offerCodeContainers.push({ code: code, container: container });
-                  break;
-                }
-                
-                if (!container.parentElement) break;
-                container = container.parentElement;
-              }
-              break;
-            }
+          // MUST have offer code
+          const offerCodeMatch = parentText.match(/\b([12][0-9](?:CLS|GOLD|C0|NEW|WEST|MAX|GO|MAR|WST|GRD|A0)[A-Z0-9]{2,8}[A-Z0-9%]?)\b/i);
+          if (!offerCodeMatch) {
+            parent = parent.parentElement;
+            continue;
           }
-        }
-      }
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🎯 Found ' + offerCodeContainers.length + ' offer containers by code matching',
-        logType: 'info'
-      }));
-      
-      // Add ALL containers - same offer code can appear multiple times (don't deduplicate)
-      for (const { code, container } of offerCodeContainers) {
-        // Check if this exact container is already in the list
-        if (!offerCards.includes(container)) {
-          offerCards.push(container);
           
-          const nameEl = container.querySelector('h1, h2, h3, h4');
+          const offerCode = offerCodeMatch[1].toUpperCase();
+          
+          // Skip if we already found this exact offer code (deduplication by DOM element)
+          // BUT allow same code if it's a different DOM container (multiple offers with same name but different sailings)
+          const hasRedeemDate = parentText.match(/Redeem by\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+          const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
+          const isReasonableSize = parentText.length > 100 && parentText.length < 3000;
+          
+          // Check if this container has exactly ONE offer (not a parent with multiple)
+          const offerCodesInContainer = uniqueOfferCodes.filter(c => parentText.includes(c)).length;
+          
+          // Valid offer card if: has offer code, redeem date, cabin type, reasonable size, and ONLY ONE offer code
+          if (offerCodeMatch && hasRedeemDate && hasCabinType && isReasonableSize && offerCodesInContainer === 1) {
+            bestContainer = parent;
+            break;
+          }
+          
+          parent = parent.parentElement;
+        }
+        
+        if (bestContainer && !offerCards.includes(bestContainer)) {
+          const offerCodeMatch = bestContainer.textContent.match(/\b([12][0-9](?:CLS|GOLD|C0|NEW|WEST|MAX|GO|MAR|WST|GRD|A0)[A-Z0-9]{2,8}[A-Z0-9%]?)\b/i);
+          const offerCode = offerCodeMatch ? offerCodeMatch[1] : 'UNKNOWN';
+          
+          offerCards.push(bestContainer);
+          
+          const nameEl = bestContainer.querySelector('h1, h2, h3, h4, h5');
           const name = nameEl ? (nameEl.textContent || '').trim() : '';
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: '✓ Matched offer container for code ' + code + ': ' + (name || '[No title]'),
+            message: '✓ Found offer card: ' + offerCode + ' - ' + (name || '[No title]'),
             logType: 'success'
           }));
         }

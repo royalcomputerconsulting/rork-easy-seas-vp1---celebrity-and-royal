@@ -78,16 +78,38 @@ export const STEP4_LOYALTY_SCRIPT = `
       const allPageElements = document.querySelectorAll('*');
       const rawNumbers = [];
       for (const el of allPageElements) {
-        const text = (el.textContent || '').trim();
-        // Only look at elements with JUST a number (no other text)
-        // CRITICAL: Also check if this is a LEAF node (no children with text) to avoid parent containers
-        const hasTextChildren = Array.from(el.children).some(child => (child.textContent || '').trim().length > 0);
-        const isLeafNode = el.children.length === 0 || !hasTextChildren;
+        // CRITICAL FIX: Don't require leaf node - number like 503 might be split across child elements
+        // Instead, check if the DIRECT text content (excluding children) contains a standalone number
         
-        if (text.match(/^\d{2,4}$/) && isLeafNode) {
-          const num = parseInt(text, 10);
-          if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024 && num !== 2023) {
-            rawNumbers.push({ num, el, text });
+        // Get direct text only (not from children)
+        let directText = '';
+        for (const node of el.childNodes) {
+          if (node.nodeType === Node.TEXT_NODE) {
+            directText += node.textContent || '';
+          }
+        }
+        directText = directText.trim();
+        
+        // Also check the full textContent for numbers
+        const fullText = (el.textContent || '').trim();
+        
+        // CRITICAL: Look for standalone numbers in BOTH direct text AND full text
+        // This catches cases where "503" is the full content OR where it's split
+        const texts = [directText, fullText];
+        
+        for (const text of texts) {
+          // Match 2-4 digit numbers, but be flexible with whitespace
+          const numMatch = text.match(/^\s*(\d{2,4})\s*$/);
+          if (numMatch) {
+            const num = parseInt(numMatch[1], 10);
+            if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024 && num !== 2023) {
+              // Check if we already have this number from this element
+              const alreadyAdded = rawNumbers.some(r => r.num === num && r.el === el);
+              if (!alreadyAdded) {
+                rawNumbers.push({ num, el, text: numMatch[1] });
+                break; // Don't add same element twice
+              }
+            }
           }
         }
       }
