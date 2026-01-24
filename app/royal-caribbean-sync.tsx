@@ -301,7 +301,7 @@ function RoyalCaribbeanSyncScreen() {
                   </View>
                 </View>
 
-                {state.loyaltyData && (
+                {state.loyaltyData && (state.loyaltyData.clubRoyaleTier || state.loyaltyData.crownAndAnchorLevel) && (
                   <View style={styles.loyaltyCard}>
                     <Text style={styles.loyaltyTitle}>Loyalty Status Updates</Text>
                     {state.loyaltyData.clubRoyaleTier && (
@@ -310,22 +310,10 @@ function RoyalCaribbeanSyncScreen() {
                         <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyaleTier}</Text>
                       </View>
                     )}
-                    {state.loyaltyData.clubRoyalePoints && (
-                      <View style={styles.loyaltyRow}>
-                        <Text style={styles.loyaltyLabel}>CR Points:</Text>
-                        <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyalePoints}</Text>
-                      </View>
-                    )}
                     {state.loyaltyData.crownAndAnchorLevel && (
                       <View style={styles.loyaltyRow}>
                         <Text style={styles.loyaltyLabel}>Crown & Anchor:</Text>
                         <Text style={styles.loyaltyValue}>{state.loyaltyData.crownAndAnchorLevel}</Text>
-                      </View>
-                    )}
-                    {state.loyaltyData.crownAndAnchorPoints && (
-                      <View style={styles.loyaltyRow}>
-                        <Text style={styles.loyaltyLabel}>C&A Points:</Text>
-                        <Text style={styles.loyaltyValue}>{state.loyaltyData.crownAndAnchorPoints}</Text>
                       </View>
                     )}
                   </View>
