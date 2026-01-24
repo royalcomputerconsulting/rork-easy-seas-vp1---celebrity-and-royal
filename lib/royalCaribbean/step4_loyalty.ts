@@ -60,140 +60,161 @@ export const STEP4_LOYALTY_SCRIPT = `
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 Searching for cruise points under YOUR TIER...',
+        message: '🔍 Searching for Crown & Anchor cruise points...',
         logType: 'info'
       }));
       
       let cruisePointsFound = false;
+      const allCandidates = [];
       
-      // Strategy 1: Find "YOUR TIER" section and look for the prominent number below it
+      // PRIORITY STRATEGY 1: Look for "nights earned" pattern (most explicit)
+      const nightsEarnedPatterns = [
+        /(\\d{1,4})\\s*(?:nights?|cruise\\s+nights?)\\s*earned/gi,
+        /(?:nights?|cruise\\s+nights?)\\s*earned[:\\s]*(\\d{1,4})/gi,
+        /(\\d{1,4})\\s*cruise\\s*(?:points?|nights?)/gi,
+        /cruise\\s*(?:points?|nights?)[:\\s]*(\\d{1,4})/gi
+      ];
+      
+      for (const pattern of nightsEarnedPatterns) {
+        let match;
+        while ((match = pattern.exec(pageText)) !== null) {
+          if (match[1]) {
+            const num = parseInt(match[1], 10);
+            if (num >= 0 && num <= 2000) {
+              allCandidates.push({ value: num, str: match[1], source: 'nights-earned', priority: 1 });
+            }
+          }
+        }
+      }
+      
+      // PRIORITY STRATEGY 2: Find "YOUR TIER" and scan ALL nearby prominent elements
       const allElements = document.querySelectorAll('*');
       let yourTierElement = null;
       
       for (const el of allElements) {
-        const directText = Array.from(el.childNodes)
-          .filter(n => n.nodeType === Node.TEXT_NODE)
-          .map(n => n.textContent.trim())
-          .join('');
-        if (directText.toLowerCase().includes('your tier')) {
+        const text = (el.textContent || '').trim().toLowerCase();
+        if (text === 'your tier' || (text.includes('your tier') && text.length < 50)) {
           yourTierElement = el;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '✓ Found YOUR TIER section',
+            logType: 'info'
+          }));
           break;
         }
       }
       
       if (yourTierElement) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '✓ Found YOUR TIER section, scanning for points...',
-          logType: 'info'
-        }));
-        
-        // Look at parent container and find numbers
+        // Scan parent containers aggressively
         let container = yourTierElement.parentElement;
-        for (let i = 0; i < 5 && container; i++) {
-          const containerText = container.textContent || '';
-          // Look for a standalone 3-digit number that could be cruise points
-          const nums = containerText.match(/\\b(\\d{1,4})\\b/g);
-          if (nums) {
-            for (const numStr of nums) {
-              const num = parseInt(numStr, 10);
-              // Cruise points typically 0-2000 range, exclude years like 2025, 2026
-              if (num >= 1 && num <= 2000 && num !== 2025 && num !== 2026) {
-                // Check if this number is NOT part of tier credits context
-                const lowerText = containerText.toLowerCase();
-                const numIndex = containerText.indexOf(numStr);
-                const surroundingText = containerText.substring(Math.max(0, numIndex - 50), Math.min(containerText.length, numIndex + 50)).toLowerCase();
-                
-                // Skip if it looks like tier credits
-                if (surroundingText.includes('tier credits') || surroundingText.includes('100,000')) {
-                  continue;
+        for (let level = 0; level < 8 && container; level++) {
+          // Get all prominent elements (headings, large text, standalone numbers)
+          const prominentElements = Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6, div, span, p, strong'));
+          
+          for (const el of prominentElements) {
+            const elText = (el.textContent || '').trim();
+            // Look for STANDALONE large numbers (like 503 displayed prominently)
+            const standaloneMatch = elText.match(/^(\\d{1,4})$/);
+            if (standaloneMatch) {
+              const num = parseInt(standaloneMatch[1], 10);
+              if (num >= 0 && num <= 2000 && num !== 2025 && num !== 2026) {
+                // Check this isn't tier credits
+                const parentText = (el.parentElement?.textContent || '').toLowerCase();
+                if (!parentText.includes('tier credit') && !parentText.includes('100,000')) {
+                  // Higher priority if it's in a heading or large element
+                  const isHeading = el.tagName.match(/^H[1-6]$/i);
+                  allCandidates.push({ 
+                    value: num, 
+                    str: standaloneMatch[1], 
+                    source: 'your-tier-standalone', 
+                    priority: isHeading ? 2 : 3 
+                  });
                 }
-                
-                loyaltyData.crownAndAnchorPoints = numStr;
-                cruisePointsFound = true;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: '✓ Found cruise points in YOUR TIER section: ' + numStr,
-                  logType: 'success'
-                }));
-                break;
               }
             }
           }
-          if (cruisePointsFound) break;
           container = container.parentElement;
         }
       }
       
-      // Strategy 2: Look for prominent numbers near tier name (Diamond Plus, etc)
-      if (!cruisePointsFound && loyaltyData.crownAndAnchorLevel) {
-        const tierElements = document.querySelectorAll('h1, h2, h3, h4, h5, span, div, p');
+      // PRIORITY STRATEGY 3: Look near tier name for prominent numbers
+      if (loyaltyData.crownAndAnchorLevel) {
+        const tierElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, div[class*="large"], span[class*="large"]');
         for (const el of tierElements) {
           const text = (el.textContent || '').trim();
           if (text.includes(loyaltyData.crownAndAnchorLevel)) {
-            let parent = el.parentElement;
-            for (let i = 0; i < 3 && parent; i++) {
-              const parentText = parent.textContent || '';
-              const nums = parentText.match(/\\b(\\d{1,4})\\b/g);
-              if (nums) {
-                for (const numStr of nums) {
-                  const num = parseInt(numStr, 10);
-                  if (num >= 1 && num <= 2000 && num !== 2025 && num !== 2026) {
-                    loyaltyData.crownAndAnchorPoints = numStr;
-                    cruisePointsFound = true;
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'log',
-                      message: '✓ Found cruise points near tier: ' + numStr,
-                      logType: 'success'
-                    }));
-                    break;
-                  }
+            // Look for sibling elements with standalone numbers
+            const siblings = el.parentElement ? Array.from(el.parentElement.children) : [];
+            for (const sibling of siblings) {
+              const sibText = (sibling.textContent || '').trim();
+              const standaloneMatch = sibText.match(/^(\\d{1,4})$/);
+              if (standaloneMatch) {
+                const num = parseInt(standaloneMatch[1], 10);
+                if (num >= 0 && num <= 2000 && num !== 2025 && num !== 2026) {
+                  allCandidates.push({ value: num, str: standaloneMatch[1], source: 'near-tier', priority: 4 });
                 }
               }
-              if (cruisePointsFound) break;
-              parent = parent.parentElement;
             }
-            if (cruisePointsFound) break;
           }
         }
       }
       
-      // Strategy 3: Pattern matching fallback
-      if (!cruisePointsFound) {
+      // FALLBACK: Pattern matching
+      const fallbackPatterns = [
+        /(\\d{1,4})\\s*Cruise Points?/i,
+        /Cruise Points?[:\\s]+(\\d{1,4})/i
+      ];
+      
+      for (const pattern of fallbackPatterns) {
+        const match = pageText.match(pattern);
+        if (match && match[1]) {
+          const num = parseInt(match[1], 10);
+          if (num >= 0 && num <= 2000) {
+            allCandidates.push({ value: num, str: match[1], source: 'pattern', priority: 10 });
+          }
+        }
+      }
+      
+      // Sort candidates by priority (lower = better) and value (higher = better for tie-break)
+      allCandidates.sort((a, b) => {
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        return b.value - a.value;
+      });
+      
+      // Remove duplicates
+      const uniqueCandidates = [];
+      const seenValues = new Set();
+      for (const cand of allCandidates) {
+        if (!seenValues.has(cand.value)) {
+          seenValues.add(cand.value);
+          uniqueCandidates.push(cand);
+        }
+      }
+      
+      if (uniqueCandidates.length > 0) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Trying pattern matching fallback...',
+          message: 'Found ' + uniqueCandidates.length + ' candidate(s): ' + uniqueCandidates.slice(0, 3).map(c => c.value + ' (' + c.source + ')').join(', '),
           logType: 'info'
         }));
-        
-        const cruisePointsPatterns = [
-          /(\\d{1,4})\\s*Cruise Points?/i,
-          /Cruise Points?[:\\s]+(\\d{1,4})/i,
-          /(\\d{1,4})\\s*(?:points?)?\\s*earned/i
-        ];
-        
-        for (const pattern of cruisePointsPatterns) {
-          const match = pageText.match(pattern);
-          if (match && match[1]) {
-            const num = parseInt(match[1], 10);
-            if (num >= 1 && num <= 2000) {
-              loyaltyData.crownAndAnchorPoints = match[1];
-              cruisePointsFound = true;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '✓ Found cruise points via pattern: ' + match[1],
-                logType: 'success'
-              }));
-              break;
-            }
-          }
-        }
+      }
+      
+      // Pick best candidate
+      if (uniqueCandidates.length > 0) {
+        loyaltyData.crownAndAnchorPoints = uniqueCandidates[0].str;
+        cruisePointsFound = true;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '✓ Found cruise points: ' + uniqueCandidates[0].str + ' (source: ' + uniqueCandidates[0].source + ')',
+          logType: 'success'
+        }));
       }
       
       if (!cruisePointsFound) {
+        loyaltyData.crownAndAnchorPoints = '0';
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: '⚠ Could not find cruise points',
+          message: '⚠ Could not find cruise points - defaulting to 0',
           logType: 'warning'
         }));
       }

@@ -491,23 +491,32 @@ export const STEP1_OFFERS_SCRIPT = `
       let offerCards = [];
       
       // First, identify and exclude promotional banners/dividers that interrupt offer listings
-      // Only exclude standalone promotional sections that DON'T contain offer cards
+      // CRITICAL: Be VERY conservative - only exclude pure marketing banners with NO offer content
       const promotionalElements = Array.from(document.querySelectorAll('div, section, article')).filter(el => {
         const text = (el.textContent || '').toLowerCase();
+        
+        // Check if contains ANY offer-related content
         const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
           const childText = (child.textContent || '').toLowerCase().trim();
-          return childText.length < 30 && (childText.includes('view sailing') || childText.includes('see sailing'));
+          return childText.length < 50 && (childText.includes('sailing') || childText.includes('view') || childText.includes('select'));
         });
-        const hasOfferCode = text.match(/\\b([A-Z0-9]{6,12})\\b/);
-        const hasTradeIn = text.includes('trade-in value');
-        const hasRedeem = text.includes('redeem by');
+        const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12})\\b/);
+        const hasTradeIn = text.includes('trade-in value') || text.includes('trade in');
+        const hasRedeem = text.includes('redeem by') || text.includes('redeem');
+        const hasExpiry = text.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
+        const hasCabinType = text.match(/(balcony|oceanview|interior|suite|room for two|stateroom)/i);
         
-        // Only mark as promotional if it's a banner WITHOUT offer content
-        const isPromo = (text.includes('ready to play') || 
-                       text.includes('apply now') ||
-                       (text.includes('casino credit') && text.includes('apply') && text.length < 800)) &&
-                       !hasViewSailingsButton && !hasOfferCode && !hasTradeIn && !hasRedeem;
-        return isPromo;
+        // If it has ANY offer signals, it's NOT promotional
+        if (hasViewSailingsButton || hasOfferCode || hasTradeIn || hasRedeem || hasExpiry || hasCabinType) {
+          return false;
+        }
+        
+        // Only mark as promotional if it's a pure banner with promotional text AND no offer content
+        const isPurePromo = (text.includes('ready to play') || 
+                            text.includes('apply now and') ||
+                            (text.includes('casino credit') && text.includes('apply for') && text.length < 600)) &&
+                            text.length < 500;  // Pure banners are usually short
+        return isPurePromo;
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -520,9 +529,19 @@ export const STEP1_OFFERS_SCRIPT = `
       
       // Filter out buttons that are inside promotional banners
       const viewSailingsButtons = allClickables.filter(el => {
-        // Skip if inside a promotional banner
-        const isInsidePromo = promotionalElements.some(promo => promo.contains(el));
-        if (isInsidePromo) return false;
+        // CRITICAL: Only skip if button is DIRECTLY inside a pure promo banner (not nested in offer cards)
+        const isDirectlyInsidePromo = promotionalElements.some(promo => {
+          // Check if button is direct child within a few levels
+          let parent = el.parentElement;
+          let depth = 0;
+          while (parent && depth < 3) {
+            if (parent === promo) return true;
+            parent = parent.parentElement;
+            depth++;
+          }
+          return false;
+        });
+        if (isDirectlyInsidePromo) return false;
         
         const text = (el.textContent || '').trim().toLowerCase();
         const isShortText = text.length < 30;
@@ -579,9 +598,10 @@ export const STEP1_OFFERS_SCRIPT = `
         for (let i = 0; i < 15 && parent; i++) {
           const parentText = parent.textContent || '';
           
-          // Skip if this parent is inside a promotional banner
-          const isInsidePromo = promotionalElements.some(promo => promo.contains(parent));
-          if (isInsidePromo) {
+          // CRITICAL: Don't skip parents just because they might be near promotional content
+          // Only skip if the parent ITSELF is a pure promotional element
+          const isPromoItself = promotionalElements.includes(parent);
+          if (isPromoItself) {
             parent = parent.parentElement;
             continue;
           }
@@ -653,9 +673,9 @@ export const STEP1_OFFERS_SCRIPT = `
         const allElements = Array.from(document.querySelectorAll('div, article, section, li, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"], [data-testid]'));
         
         const fallbackCards = allElements.filter(el => {
-          // Skip promotional banners
-          const isInsidePromo = promotionalElements.some(promo => promo.contains(el) || promo === el);
-          if (isInsidePromo) return false;
+          // CRITICAL: Only skip if element ITSELF is promotional, not if it's near promotional content
+          const isPromoItself = promotionalElements.includes(el);
+          if (isPromoItself) return false;
           
           const text = el.textContent || '';
           const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
@@ -720,9 +740,9 @@ export const STEP1_OFFERS_SCRIPT = `
           }));
           
           const structuralCards = allElements.filter(el => {
-            // Skip promotional banners
-            const isInsidePromo = promotionalElements.some(promo => promo.contains(el) || promo === el);
-            if (isInsidePromo) return false;
+            // CRITICAL: Only skip if element itself is promotional
+            const isPromoItself = promotionalElements.includes(el);
+            if (isPromoItself) return false;
             
             const text = el.textContent || '';
             const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12})\\b/);
