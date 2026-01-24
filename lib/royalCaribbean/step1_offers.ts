@@ -1603,24 +1603,32 @@ export const STEP1_OFFERS_SCRIPT = `
           continue;
         }
         
-        // CRITICAL: Skip if offer name indicates it's account status, help text, or not an actual offer
+        // CRITICAL: Skip if offer name indicates it's account status or help text (NOT an actual offer)
         const offerNameLower = offerName.toLowerCase();
         if (offerNameLower.includes('your current tier') || 
             offerNameLower.includes('tier credits') ||
             offerName.includes('Club Royale #') ||
-            offerCode === 'CURRENT' ||
             offerNameLower.includes('missing offers') ||
             offerNameLower.includes('contact a club royale') ||
             offerNameLower.includes('representative') ||
             offerNameLower.includes('clubroyale@') ||
-            offerNameLower.includes('@rccl.com') ||
-            (offerCode && !isValidOfferCode(offerCode))) {
+            offerNameLower.includes('@rccl.com')) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: '🚫 Skipping account status display: ' + offerName.substring(0, 50) + '...',
+            message: '🚫 Skipping non-offer content: ' + offerName.substring(0, 50) + '...',
             logType: 'info'
           }));
           continue;
+        }
+        
+        // Also skip if extracted offerCode is clearly not an offer code (like CURRENT)
+        const invalidCodePatterns = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER'];
+        if (offerCode && invalidCodePatterns.includes(offerCode.toUpperCase())) {
+          // Try to find a better offer code in the card text
+          const betterCodeMatch = cardText.match(/\\b(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?)\\b/);
+          if (betterCodeMatch) {
+            offerCode = betterCodeMatch[1];
+          }
         }
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
