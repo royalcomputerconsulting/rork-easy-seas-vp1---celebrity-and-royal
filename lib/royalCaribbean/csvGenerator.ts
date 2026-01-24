@@ -42,7 +42,7 @@ export function generateOffersCSV(offers: OfferRow[], loyaltyData: LoyaltyData |
     escapeCSVField(offer.numberOfGuests),
     escapeCSVField(offer.perks),
     escapeCSVField(offer.loyaltyLevel || loyaltyData?.crownAndAnchorLevel || ''),
-    escapeCSVField(offer.loyaltyPoints || loyaltyData?.crownAndAnchorPoints || '')
+    escapeCSVField(offer.loyaltyPoints || '')
   ]);
 
   const csvContent = [
@@ -83,7 +83,7 @@ export function generateBookedCruisesCSV(cruises: BookedCruiseRow[], loyaltyData
     escapeCSVField(cruise.bookingId),
     escapeCSVField(cruise.status),
     escapeCSVField(cruise.loyaltyLevel || loyaltyData?.crownAndAnchorLevel || ''),
-    escapeCSVField(cruise.loyaltyPoints || loyaltyData?.crownAndAnchorPoints || '')
+    escapeCSVField(cruise.loyaltyPoints || '')
   ]);
 
   const csvContent = [
