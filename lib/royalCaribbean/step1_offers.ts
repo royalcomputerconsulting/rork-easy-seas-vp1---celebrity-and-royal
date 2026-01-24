@@ -699,20 +699,23 @@ export const STEP1_OFFERS_SCRIPT = `
       // Helper function to validate offer code format
       function isValidOfferCode(code) {
         if (!code || code.length < 5 || code.length > 15) return false;
+        // Clean prefix characters first
+        const cleanCode = code.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
         // RC offer codes typically:
         // - Start with year (24, 25, 26) like 26CLS103, 2601C05, 25GOLD%
-        // - Or are alphanumeric promo codes like 26NEW104O, 26MAR103B
+        // - Or are alphanumeric promo codes like 26NEW104O, 26MAR103B, 26GRD103G, 26WST104
         // Invalid: random words like SCOTTS, CURRENT, generic text
         const invalidCodes = ['SCOTTS', 'CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER', 'CHOICE', 'PRIME', 'MASTERS', 'SIGNATURE', 'DIAMOND', 'PLATINUM', 'CONTACT', 'MISSING', 'REPRESENTATIVE'];
-        if (invalidCodes.includes(code.toUpperCase())) return false;
+        if (invalidCodes.includes(cleanCode.toUpperCase())) return false;
         // Valid RC codes usually start with 2-digit year or have specific patterns
+        // Examples: 26CLS103, 26MAR103B, 2601C05, 2601A08, 2601A05, 25GOLD%, 26NEW104O, 26GRD103G, 26WST104
         const validPatterns = [
-          /^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/i,  // 26CLS103, 26MAR103B
-          /^\d{4}[A-Z]\d{2}[A-Z]?$/i,         // 2601C05, 2601A08
+          /^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/i,  // 26CLS103, 26MAR103B, 26GRD103G, 26WST104
+          /^\d{4}[A-Z]\d{2}[A-Z]?$/i,         // 2601C05, 2601A08, 2601A05
           /^\d{2}[A-Z]{3,6}%?$/i,              // 25GOLD, 25GOLD%
           /^\d{2}[A-Z]{3}\d{3}[A-Z]?$/i       // 26NEW104, 26NEW104O
         ];
-        return validPatterns.some(pattern => pattern.test(code));
+        return validPatterns.some(pattern => pattern.test(cleanCode));
       }
       
       // Helper function to get bounding rect Y position for sorting
@@ -769,17 +772,72 @@ export const STEP1_OFFERS_SCRIPT = `
       
       // STEP 2: CODE-FIRST DETECTION - Find ALL offer codes on the page first
       // This is more reliable than button detection for finding all offers
-      const allOfferCodeElements = Array.from(document.querySelectorAll('*')).filter(el => {
+      // RC displays codes with special character prefix like ⊛ or other symbols
+      // IMPROVED: Scan for codes embedded in text, not just standalone elements
+      const allOfferCodeElements = [];
+      const codePatterns = [
+        /\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)\b/g,  // 26CLS103, 26MAR103B, 26GRD103G, 26WST104
+        /\b(\d{4}[A-Z]\d{2}[A-Z]?)\b/g,         // 2601C05, 2601A08, 2601A05
+        /\b(\d{2}[A-Z]{3,6}%?)\b/g,             // 25GOLD, 25GOLD%
+        /\b(\d{2}[A-Z]{3}\d{3}[A-Z]?)\b/g       // 26NEW104, 26NEW104O
+      ];
+      
+      // First try: Find elements with standalone offer codes (exact match)
+      const standaloneCodeElements = Array.from(document.querySelectorAll('span, div, p, [class*="code"], [class*="offer"]')).filter(el => {
         const text = (el.textContent || '').trim();
-        // Match RC offer code patterns: 26CLS103B, 2601C05E, 25GOLD, 26NEW104O, etc.
-        const hasCode = text.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && text.length >= 5 && text.length <= 15;
+        const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
+        const hasCode = cleanText.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && cleanText.length >= 5 && cleanText.length <= 15;
+        const hasCodeOriginal = text.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && text.length >= 5 && text.length <= 15;
         const isNotNav = !el.closest('nav, header, footer, [role="navigation"]');
         const isNotBanner = !Array.from(bannersSet).some(banner => banner.contains(el));
-        return hasCode && isNotNav && isNotBanner;
+        return (hasCode || hasCodeOriginal) && isNotNav && isNotBanner;
       });
+      allOfferCodeElements.push(...standaloneCodeElements);
       
-      // Extract unique offer codes
-      const uniqueOfferCodes = [...new Set(allOfferCodeElements.map(el => (el.textContent || '').trim()))];
+      // Second try: Scan page text for embedded offer codes (more aggressive)
+      const pageTextElements = Array.from(document.querySelectorAll('div, span, p, section, article, [class*="offer"], [class*="card"]')).filter(el => {
+        const text = (el.textContent || '');
+        const isReasonableSize = text.length > 10 && text.length < 500;
+        const isNotNav = !el.closest('nav, header, footer, [role="navigation"]');
+        const isNotBanner = !Array.from(bannersSet).some(banner => banner.contains(el));
+        // Check if text contains any offer code pattern
+        const hasOfferCode = codePatterns.some(pattern => {
+          pattern.lastIndex = 0;
+          return pattern.test(text);
+        });
+        return isReasonableSize && isNotNav && isNotBanner && hasOfferCode;
+      });
+      allOfferCodeElements.push(...pageTextElements);
+      
+      // Extract unique offer codes from all found elements
+      const extractedCodes = new Set();
+      for (const el of allOfferCodeElements) {
+        const text = (el.textContent || '').trim();
+        const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
+        
+        // Try exact match first
+        if (cleanText.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && cleanText.length >= 5 && cleanText.length <= 15) {
+          extractedCodes.add(cleanText);
+          continue;
+        }
+        
+        // Otherwise extract embedded codes
+        for (const pattern of codePatterns) {
+          pattern.lastIndex = 0;
+          let match;
+          while ((match = pattern.exec(text)) !== null) {
+            extractedCodes.add(match[1]);
+          }
+        }
+      }
+      
+      // Filter to only valid RC offer codes
+      const uniqueOfferCodes = [...extractedCodes].filter(code => {
+        return code.match(/^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/) ||  // 26CLS103, 26MAR103B, 26GRD103G, 26WST104
+               code.match(/^\d{4}[A-Z]\d{2}[A-Z]?$/) ||         // 2601C05, 2601A08, 2601A05
+               code.match(/^\d{2}[A-Z]{3,6}%?$/) ||             // 25GOLD, 25GOLD%
+               code.match(/^\d{2}[A-Z]{3}\d{3}[A-Z]?$/);        // 26NEW104, 26NEW104O
+      });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -884,9 +942,12 @@ export const STEP1_OFFERS_SCRIPT = `
         
         // For each unique offer code, find the BEST container (only ONE per code)
         // This prevents duplicate offers when the same code appears multiple times on page
+        // CRITICAL: RC shows offers in a 2-column grid, so each code appears in DOM twice
+        // We need to pick only ONE container per unique code
         const codeBasedOfferCards = [];
         const seenCodeContainers = new Set();
         const bestContainerByCode = new Map(); // Track best container per unique code
+        const processedYPositions = new Set(); // Track Y positions to detect column duplicates
         
         // Sort codes by their Y position on page to process in order
         const codeElementsWithPosition = [];
@@ -897,17 +958,38 @@ export const STEP1_OFFERS_SCRIPT = `
           // Skip invalid codes (account numbers, random words)
           if (!isValidOfferCode(code)) continue;
           
-          // Find all elements containing this exact code
-          const codeElements = allOfferCodeElements.filter(el => (el.textContent || '').trim() === code);
+          // Find all elements containing this exact code (with or without prefix)
+          const codeElements = allOfferCodeElements.filter(el => {
+            const text = (el.textContent || '').trim();
+            const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
+            return text === code || cleanText === code;
+          });
+          
+          // For each code, only take the FIRST element found (leftmost column)
+          // This avoids duplicates from the 2-column grid layout
+          let firstElementForCode = null;
+          let firstYPos = Infinity;
           
           for (const codeEl of codeElements) {
             try {
               const rect = codeEl.getBoundingClientRect();
               const yPos = rect.top + window.scrollY;
-              codeElementsWithPosition.push({ code, element: codeEl, yPos });
+              const xPos = rect.left;
+              // Prefer leftmost element at similar Y position, or topmost element
+              if (yPos < firstYPos - 50 || (Math.abs(yPos - firstYPos) < 50 && xPos < (firstElementForCode ? firstElementForCode.getBoundingClientRect().left : Infinity))) {
+                firstYPos = yPos;
+                firstElementForCode = codeEl;
+              }
             } catch (e) {
-              codeElementsWithPosition.push({ code, element: codeEl, yPos: 0 });
+              if (!firstElementForCode) {
+                firstElementForCode = codeEl;
+                firstYPos = 0;
+              }
             }
+          }
+          
+          if (firstElementForCode) {
+            codeElementsWithPosition.push({ code, element: firstElementForCode, yPos: firstYPos });
           }
         }
         
