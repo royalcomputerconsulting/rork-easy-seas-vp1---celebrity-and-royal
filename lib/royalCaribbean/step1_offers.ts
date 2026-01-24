@@ -1329,7 +1329,7 @@ export const STEP1_OFFERS_SCRIPT = `
       
       // Sort buttons by their Y position on page (top to bottom)
       // This ensures we process offers in order as they appear on page
-      const sortedButtons = [...viewSailingsButtons].sort((a, b) => {
+      const sortedButtons = [...clusteredViewSailingsButtons].sort((a, b) => {
         return getButtonYPosition(a) - getButtonYPosition(b);
       });
       
