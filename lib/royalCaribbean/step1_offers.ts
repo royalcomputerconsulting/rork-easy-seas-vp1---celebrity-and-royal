@@ -479,34 +479,57 @@ export const STEP1_OFFERS_SCRIPT = `
       let lastButtonCount = 0;
       let stableScrollCount = 0;
       
-      for (let scrollPass = 0; scrollPass < 20; scrollPass++) {
+      // FIRST: Try to expand any collapsed sections that might hide offers
+      const expandButtons = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="expand"], [class*="toggle"], [class*="show"]'));
+      for (const btn of expandButtons) {
+        const btnText = (btn.textContent || '').toLowerCase();
+        if (btnText.includes('show') || btnText.includes('expand') || btnText.includes('more') || btnText.includes('all')) {
+          try {
+            btn.click();
+            await wait(800);
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '🔓 Clicked expand/show button: ' + btnText.substring(0, 30),
+              logType: 'info'
+            }));
+          } catch (e) {}
+        }
+      }
+      
+      for (let scrollPass = 0; scrollPass < 30; scrollPass++) {
         // Scroll to multiple positions to trigger lazy loading
         window.scrollTo(0, document.body.scrollHeight);
-        await wait(2500);
+        await wait(3000);
         window.scrollTo(0, document.body.scrollHeight * 0.25);
-        await wait(1200);
+        await wait(1500);
         window.scrollTo(0, document.body.scrollHeight * 0.5);
-        await wait(1200);
+        await wait(1500);
         window.scrollTo(0, document.body.scrollHeight * 0.75);
-        await wait(1200);
+        await wait(1500);
         window.scrollTo(0, document.body.scrollHeight);
-        await wait(2500);
+        await wait(3000);
         
         // Aggressive: scroll PAST the bottom by triggering events
-        window.scrollBy(0, 5000);
-        await wait(1500);
+        window.scrollBy(0, 8000);
+        await wait(2000);
         
-        // Count buttons after each pass
-        const currentOfferButtons = document.querySelectorAll('button, a, [role="button"]');
-        const viewSailingCount = Array.from(currentOfferButtons).filter(btn => 
-          (btn.textContent || '').toLowerCase().includes('sailing')
-        ).length;
+        // Trigger scroll events manually to force lazy loading
+        window.dispatchEvent(new Event('scroll'));
+        document.body.dispatchEvent(new Event('scroll'));
+        await wait(500);
+        
+        // Count buttons after each pass - be MORE lenient in detection
+        const currentOfferButtons = document.querySelectorAll('button, a, [role="button"], span[class*="button"], div[class*="button"]');
+        const viewSailingCount = Array.from(currentOfferButtons).filter(btn => {
+          const text = (btn.textContent || '').toLowerCase();
+          return text.includes('sailing') || text.includes('view dates') || text.includes('see dates');
+        }).length;
         
         // Log progress
         if (scrollPass % 2 === 0) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Scroll pass ' + (scrollPass + 1) + '/20: Found ' + viewSailingCount + ' View Sailings buttons',
+            message: 'Scroll pass ' + (scrollPass + 1) + '/30: Found ' + viewSailingCount + ' View Sailings buttons',
             logType: 'info'
           }));
         }
@@ -514,24 +537,23 @@ export const STEP1_OFFERS_SCRIPT = `
         // Check if button count is stable (no new offers loading)
         if (viewSailingCount === lastButtonCount) {
           stableScrollCount++;
-          if (stableScrollCount >= 3) {
-            // If we've found expected count or more, stop
-            if (expectedOfferCount > 0 && viewSailingCount >= expectedOfferCount) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '✓ Found all expected offers (' + viewSailingCount + ' buttons), stopping scroll',
-                logType: 'success'
-              }));
-              break;
-            }
-            // If count is stable but we haven't reached expected, continue a bit more
-            if (stableScrollCount >= 5) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '⚠️ Button count stable at ' + viewSailingCount + ' (expected: ' + expectedOfferCount + '), continuing...',
-                logType: 'warning'
-              }));
-            }
+          // Only stop if we've reached the expected count
+          if (expectedOfferCount > 0 && viewSailingCount >= expectedOfferCount && stableScrollCount >= 3) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '✓ Found all expected offers (' + viewSailingCount + ' buttons), stopping scroll',
+              logType: 'success'
+            }));
+            break;
+          }
+          // If count is stable but below expected, keep trying until we exhaust all passes
+          if (stableScrollCount >= 8 && viewSailingCount < expectedOfferCount) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '⚠️ Button count stable at ' + viewSailingCount + ' (expected: ' + expectedOfferCount + '), trying more aggressive tactics...',
+              logType: 'warning'
+            }));
+            // Don't break, keep trying
           }
         } else {
           stableScrollCount = 0;
@@ -539,7 +561,7 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       window.scrollTo(0, 0);
-      await wait(1500);
+      await wait(2000);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
