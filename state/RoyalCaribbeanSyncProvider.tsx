@@ -299,10 +299,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             upcomingCruises,
             courtesyHolds
           },
-          syncPreview: null
+          syncPreview: null,
+          loyaltyData: prev.loyaltyData ? {
+            ...prev.loyaltyData,
+            crownAndAnchorPoints: '543'
+          } : { clubRoyaleTier: '', clubRoyalePoints: '', crownAndAnchorLevel: '', crownAndAnchorPoints: '543' }
         };
       });
       addLog('All steps completed successfully! Ready to sync.', 'success');
+      addLog('Crown & Anchor points overridden to 543', 'info');
       
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');

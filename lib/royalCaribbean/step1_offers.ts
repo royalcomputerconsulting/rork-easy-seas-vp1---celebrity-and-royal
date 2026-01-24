@@ -716,9 +716,11 @@ export const STEP1_OFFERS_SCRIPT = `
       }
       
       const seenOfferCodes = new Set();
-      const seenOfferNames = new Set();
+      let buttonIndex = 0;
       
       for (const btn of viewSailingsButtons) {
+        buttonIndex++;
+        
         // Skip if this button is inside a promotional banner
         const isInsideBanner = Array.from(bannersSet).some(banner => banner.contains(btn));
         if (isInsideBanner) {
@@ -779,7 +781,10 @@ export const STEP1_OFFERS_SCRIPT = `
             }
           }
           
-          const uniqueKey = offerCode || offerName || '';
+          // CRITICAL: Use offer CODE as primary unique key
+          // Multiple offers can have the same NAME but different CODES (e.g., "2026 January instant reward certificate")
+          // If no code found, use button index to ensure all offers are captured
+          const uniqueKey = offerCode || ('btn-' + buttonIndex + '-' + (offerName || 'unknown'));
           
           if (uniqueKey && !seenOfferCodes.has(uniqueKey)) {
             seenOfferCodes.add(uniqueKey);
@@ -787,7 +792,7 @@ export const STEP1_OFFERS_SCRIPT = `
             
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'log',
-              message: 'Identified offer card: ' + (offerName || offerCode || '[Unknown]'),
+              message: 'Identified offer card: ' + (offerName || offerCode || '[Unknown]') + ' (code: ' + (offerCode || 'N/A') + ')',
               logType: 'info'
             }));
           }
