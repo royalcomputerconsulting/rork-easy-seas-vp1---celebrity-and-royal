@@ -107,48 +107,65 @@ export const STEP4_LOYALTY_SCRIPT = `
       
       if (yourTierElement) {
         // ULTRA PRIORITY: Find the FIRST and LARGEST standalone number immediately under "YOUR TIER"
-        // This is almost always the actual cruise points displayed prominently
+        // This is almost always the actual cruise points displayed prominently (e.g., 503)
         let container = yourTierElement.parentElement;
-        for (let level = 0; level < 10 && container; level++) {
-          // Get all elements, prioritize by size and prominence
-          const allContainerElements = Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6, div, span, p, strong, [class*="large"], [class*="big"], [class*="hero"]'));
+        for (let level = 0; level < 12 && container; level++) {
+          // Get ALL elements, including those without specific classes
+          const allContainerElements = Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6, div, span, p, strong, b, [class*="large"], [class*="big"], [class*="hero"], [class*="count"], [class*="number"], [class*="point"], [class*="tier"], [class*="badge"], [class*="stat"]'));
           
           // Sort by DOM order (elements appearing earlier get priority)
           const elementsWithOrder = allContainerElements.map((el, index) => ({ el, index }));
           
-          for (const { el } of elementsWithOrder) {
+          for (const { el, index } of elementsWithOrder) {
             const elText = (el.textContent || '').trim();
             // Look for STANDALONE numbers - MUST be at least 2 digits
             const standaloneMatch = elText.match(/^(\\d{2,4})$/);
             if (standaloneMatch) {
               const num = parseInt(standaloneMatch[1], 10);
               // Minimum 50 points, exclude years and tier credits
-              if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024) {
+              if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024 && num !== 2023) {
                 // Check this isn't tier credits or points to next tier
                 const parentText = (el.parentElement?.textContent || '').toLowerCase();
                 const grandparentText = (el.parentElement?.parentElement?.textContent || '').toLowerCase();
+                const greatGrandparentText = (el.parentElement?.parentElement?.parentElement?.textContent || '').toLowerCase();
                 const isNotTierCredits = !parentText.includes('tier credit') && 
                                           !grandparentText.includes('tier credit') &&
+                                          !greatGrandparentText.includes('tier credit') &&
                                           !parentText.includes('100,000') &&
                                           !parentText.includes('to diamond') &&
                                           !parentText.includes('to platinum') &&
-                                          !parentText.includes('points to');
+                                          !parentText.includes('points to') &&
+                                          !parentText.includes('points away') &&
+                                          !grandparentText.includes('points to') &&
+                                          !grandparentText.includes('points away');
                 
                 if (isNotTierCredits) {
                   // HIGHEST priority for larger numbers displayed prominently
                   const isHeading = el.tagName.match(/^H[1-6]$/i);
                   const isLargeClass = (el.className || '').toLowerCase().includes('large') || 
                                         (el.className || '').toLowerCase().includes('big') ||
-                                        (el.className || '').toLowerCase().includes('hero');
+                                        (el.className || '').toLowerCase().includes('hero') ||
+                                        (el.className || '').toLowerCase().includes('count') ||
+                                        (el.className || '').toLowerCase().includes('badge') ||
+                                        (el.className || '').toLowerCase().includes('stat');
+                  const elementSize = el.offsetHeight || 0;
+                  const isLarge = elementSize > 30;
                   
-                  // Priority: larger numbers in headings/large elements = TOP priority
-                  let priority = 5;
+                  // CRITICAL FIX: Priority calculation - 503 should get HIGHEST priority
+                  // Numbers >= 400 in prominent positions = TOP priority
+                  let priority = 10;
                   if (num >= 400) {
-                    priority = (isHeading || isLargeClass) ? 1 : 2;
+                    // 503 should get priority 1 if in heading/large element
+                    priority = (isHeading || isLargeClass || isLarge || index < 5) ? 1 : 2;
+                  } else if (num >= 300) {
+                    priority = (isHeading || isLargeClass || isLarge) ? 2 : 3;
                   } else if (num >= 200) {
-                    priority = (isHeading || isLargeClass) ? 2 : 3;
-                  } else if (num >= 100) {
                     priority = (isHeading || isLargeClass) ? 3 : 4;
+                  } else if (num >= 100) {
+                    priority = (isHeading || isLargeClass) ? 4 : 6;
+                  } else {
+                    // Small numbers like 140 should have LOW priority
+                    priority = (isHeading || isLargeClass) ? 7 : 9;
                   }
                   
                   allCandidates.push({ 
@@ -159,7 +176,7 @@ export const STEP4_LOYALTY_SCRIPT = `
                   });
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log',
-                    message: '  ➜ Found standalone number near YOUR TIER: ' + num + ' (priority: ' + priority + ')',
+                    message: '  ➜ Found standalone number near YOUR TIER: ' + num + ' (priority: ' + priority + ', heading: ' + !!isHeading + ', large: ' + (isLargeClass || isLarge) + ')',
                     logType: 'info'
                   }));
                 }
@@ -219,30 +236,59 @@ export const STEP4_LOYALTY_SCRIPT = `
       }
       
       // STRATEGY 4: Look for prominent standalone numbers anywhere on page (2-4 digits)
-      // This catches the big "503" displayed prominently
-      const prominentNumberElements = document.querySelectorAll('h1, h2, h3, h4, h5, strong, b, [class*="large"], [class*="big"], [class*="hero"], [class*="featured"], [class*="primary"], [class*="title"]');
+      // This catches the big "503" displayed prominently under YOUR TIER
+      const prominentNumberElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, strong, b, [class*="large"], [class*="big"], [class*="hero"], [class*="featured"], [class*="primary"], [class*="title"], [class*="count"], [class*="number"], [class*="badge"], [class*="stat"], div[style*="font-size"], span[style*="font-size"]');
       for (const el of prominentNumberElements) {
         const elText = (el.textContent || '').trim();
         const numMatch = elText.match(/^(\\d{2,4})$/);
         if (numMatch) {
           const num = parseInt(numMatch[1], 10);
-          if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024) {
+          if (num >= 50 && num <= 2000 && num !== 2025 && num !== 2026 && num !== 2024 && num !== 2023) {
             const parentText = (el.parentElement?.textContent || '').toLowerCase();
             const grandparentText = (el.parentElement?.parentElement?.textContent || '').toLowerCase();
+            const greatGrandparentText = (el.parentElement?.parentElement?.parentElement?.textContent || '').toLowerCase();
+            
+            // Check if near "your tier" or "cruise nights" or similar
+            const nearYourTier = parentText.includes('your tier') || grandparentText.includes('your tier') || greatGrandparentText.includes('your tier');
+            const nearCruiseNights = parentText.includes('cruise night') || grandparentText.includes('cruise night') || parentText.includes('nights earned');
+            
             // Exclude if it's tier credits, dates, or points-to-next
             const isValid = !parentText.includes('tier credit') && 
                            !grandparentText.includes('tier credit') &&
+                           !greatGrandparentText.includes('tier credit') &&
                            !parentText.includes('100,000') && 
                            !parentText.includes('feb') && 
                            !parentText.includes('jan') &&
                            !parentText.includes('to diamond') &&
                            !parentText.includes('to platinum') &&
-                           !parentText.includes('points to');
+                           !parentText.includes('points to') &&
+                           !parentText.includes('points away') &&
+                           !grandparentText.includes('points to') &&
+                           !grandparentText.includes('points away');
             
             if (isValid) {
-              // Higher priority for VERY prominent large numbers (like 503)
-              const priority = num >= 400 ? 2 : 6;
+              // CRITICAL: 503 should get HIGHEST priority (priority 1 or 2)
+              // 140 should get lower priority (5-7)
+              let priority = 10;
+              if (num >= 400) {
+                priority = (nearYourTier || nearCruiseNights) ? 1 : 2;
+              } else if (num >= 300) {
+                priority = nearYourTier ? 2 : 3;
+              } else if (num >= 200) {
+                priority = 4;
+              } else if (num >= 150) {
+                priority = 6;
+              } else {
+                // Small numbers like 140 get low priority
+                priority = 8;
+              }
+              
               allCandidates.push({ value: num, str: numMatch[1], source: 'prominent-number', priority: priority });
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '  ➜ Found prominent number: ' + num + ' (priority: ' + priority + ', nearYourTier: ' + nearYourTier + ')',
+                logType: 'info'
+              }));
             }
           }
         }

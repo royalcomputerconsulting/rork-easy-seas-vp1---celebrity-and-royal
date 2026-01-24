@@ -511,22 +511,23 @@ export const STEP1_OFFERS_SCRIPT = `
 
       let offerCards = [];
       
-      // IMPORTANT: Do NOT filter out promotional elements - they might be near offers
-      // The dividers between offers were causing issues
-      // Instead, we'll find ALL View Sailings buttons and work backwards
+      // CRITICAL FIX: Promotional dividers/banners were stopping detection at offer 4
+      // We need to scan the ENTIRE page and ignore all dividers/promotional content
+      // Use the most aggressive detection possible
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 Scanning entire page for all ' + expectedOfferCount + ' offers (ignoring dividers)...',
+        message: '🔍 ULTRA AGGRESSIVE SCAN: Looking for all ' + expectedOfferCount + ' offers (ignoring ALL dividers and promotional content)...',
         logType: 'info'
       }));
       
       // ULTRA AGGRESSIVE: Get ALL possible clickable elements and find View Sailings buttons
-      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div, p'));
+      // CRITICAL: We must find ALL offers even if separated by dividers/promotional content
+      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div, p, [class*="offer"], [class*="card"]'));
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 Scanning ' + allClickables.length + ' elements for View Sailings buttons...',
+        message: '🔍 Scanning ' + allClickables.length + ' elements for ALL View Sailings buttons (ignoring dividers)...',
         logType: 'info'
       }));
       
@@ -626,12 +627,13 @@ export const STEP1_OFFERS_SCRIPT = `
           const parentText = parent.textContent || '';
           
           const hasOfferCode = parentText.match(/\\b([A-Z0-9]{6,12}[A-Z])\\b/);
-          const hasTradeIn = parentText.toLowerCase().includes('trade-in value');
-          const hasRedeem = parentText.includes('Redeem by');
+          const hasTradeIn = parentText.toLowerCase().includes('trade-in value') || parentText.match(/\\$[\\d,]+\\.\\d{2}/);
+          const hasRedeem = parentText.includes('Redeem by') || parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
           const hasFeatured = parentText.includes('Featured Offer');
-          const hasOfferTitle = parentText.match(/\\b(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Caribbean|Cruise|Sail|Summer|Winter|Spring|Fall|Holiday|Special)\\b/i);
+          const hasOfferTitle = parentText.match(/\\b(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Caribbean|Cruise|Sail|Summer|Winter|Spring|Fall|Holiday|Special|Gamechanger|Instant|Wager|MGM|Reward|Deal|Flash|Getaway)\\b/i);
           
-          const isReasonableSize = parentText.length > 100 && parentText.length < 5000;
+          // CRITICAL: More lenient size check to catch offers after dividers
+          const isReasonableSize = parentText.length > 80 && parentText.length < 8000;
           
           if (isReasonableSize && (hasOfferCode || hasTradeIn || hasRedeem || hasFeatured)) {
             const buttonsInContainer = Array.from(parent.querySelectorAll('button, a, [role="button"]')).filter(el => 
