@@ -1075,92 +1075,9 @@ export const STEP1_OFFERS_SCRIPT = `
         }));
       }
       
-      // CRITICAL: If we still don't have enough offers, try finding by View Sailings button position
-      // Some offers may have buttons that don't have proper parent containers
-      if (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Button-based detection found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying POSITION-BASED fallback...',
-          logType: 'warning'
-        }));
-        
-        // Strategy: Group View Sailings buttons by their vertical position on page
-        // Each unique Y position likely represents a different offer
-        // Use absolute page position (including scroll offset)
-        const buttonPositions = viewSailingsButtons.map(btn => {
-          const rect = btn.getBoundingClientRect();
-          const absY = rect.top + window.scrollY;
-          return { btn, y: Math.round(absY / 100) * 100 }; // Group by 100px bands for better separation
-        });
-        
-        // Group buttons by Y position
-        const positionGroups = {};
-        buttonPositions.forEach(({ btn, y }) => {
-          if (!positionGroups[y]) positionGroups[y] = [];
-          positionGroups[y].push(btn);
-        });
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Position fallback found ' + Object.keys(positionGroups).length + ' unique Y positions',
-          logType: 'info'
-        }));
-        
-        // For each unique position, find the offer container
-        for (const [yPos, btns] of Object.entries(positionGroups)) {
-          const btn = btns[0]; // Take first button at this position
-          
-          // Find parent container that looks like an offer - be VERY lenient
-          let parent = btn.parentElement;
-          let bestContainer = null;
-          
-          for (let i = 0; i < 25 && parent; i++) {
-            const parentText = parent.textContent || '';
-            const parentLower = parentText.toLowerCase();
-            
-            // Check for ANY offer signal
-            const hasOfferCode = parentText.match(/\\b([A-Z0-9]{5,12}[A-Z0-9])\\b/);
-            const hasTradeIn = parentLower.includes('trade-in') || parentLower.includes('trade in');
-            const hasRedeem = parentText.includes('Redeem by') || parentText.match(/Redeem\\s+by/i);
-            const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
-            const hasDollarValue = parentText.match(/\\$[\\d,]+\\.?\\d*/);
-            const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Room for Two)/i);
-            const isReasonableSize = parentText.length > 40 && parentText.length < 10000;
-            
-            const hasAnySignal = hasOfferCode || hasTradeIn || hasRedeem || hasExpiry || hasDollarValue || hasCabinType;
-            
-            if (hasAnySignal && isReasonableSize && !seenOfferCards.has(parent) && !isAccountStatusDisplay(parent)) {
-              // Count buttons in this container
-              const btnsInParent = Array.from(parent.querySelectorAll('button, a, [role="button"]')).filter(el => 
-                (el.textContent || '').toLowerCase().includes('sailing')
-              ).length;
-              
-              // Accept containers with 1-4 View Sailings buttons
-              if (btnsInParent >= 1 && btnsInParent <= 4) {
-                bestContainer = parent;
-                // If container has strong signals and reasonable button count, use it
-                if ((hasOfferCode || hasTradeIn) && btnsInParent <= 2) {
-                  break;
-                }
-              }
-            }
-            parent = parent.parentElement;
-          }
-          
-          if (bestContainer && !seenOfferCards.has(bestContainer)) {
-            seenOfferCards.add(bestContainer);
-            offerCards.push(bestContainer);
-            
-            const containerText = bestContainer.textContent || '';
-            const codeMatch = containerText.match(/\\b([A-Z0-9]{5,12}[A-Z0-9])\\b/);
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Position-based detection found offer at Y=' + yPos + ' (code: ' + (codeMatch ? codeMatch[1] : 'N/A') + ')',
-              logType: 'info'
-            }));
-          }
-        }
-      }
+      // NOTE: Position-based fallback DISABLED - it was causing duplicate offers
+      // The button-based detection with code-first approach should find all offers
+      // If we're still missing offers, it's likely due to lazy loading issues, not detection
       
       if (offerCards.length === 0 || (expectedOfferCount > 0 && offerCards.length < expectedOfferCount)) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
