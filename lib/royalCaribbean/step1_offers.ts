@@ -1151,6 +1151,10 @@ export const STEP1_OFFERS_SCRIPT = `
         const card = offerCards[i];
         const cardText = card.textContent || '';
         
+        // Extract offer code IMMEDIATELY after getting cardText to avoid temporal dead zone
+        const offerCodeMatch = cardText.match(/([A-Z0-9]{5,15})/);
+        const offerCode = offerCodeMatch ? offerCodeMatch[1] : '';
+        
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
           message: '━━━━━ Offer ' + (i + 1) + '/' + offerCards.length + ' ━━━━━',
@@ -1244,9 +1248,7 @@ export const STEP1_OFFERS_SCRIPT = `
           }
         }
         
-        // Extract offer code FIRST (before any checks that use it)
-        const codeMatch = cardText.match(/([A-Z0-9]{5,15})/);
-        const offerCode = codeMatch ? codeMatch[1] : '';
+        // offerCode already extracted at start of loop
         
         if (!offerName || offerName.length < 3) {
           if (offerCode) {
