@@ -816,11 +816,13 @@ export const STEP1_OFFERS_SCRIPT = `
               (el.textContent || '').match(/View Sailing|VIEW SAILING|See Sailing/i)
             );
             
-            if (buttonsInContainer.length === 1) {
+            // FIXED: Allow containers with 1-2 View Sailings buttons (RC often has duplicate buttons)
+            if (buttonsInContainer.length >= 1 && buttonsInContainer.length <= 2) {
               offerCard = parent;
               break;
             }
-            if (buttonsInContainer.length > 1 && parentText.length < 3000) {
+            // If more than 2 buttons, this container is too large - keep looking up
+            if (buttonsInContainer.length > 2 && parentText.length < 3000) {
               parent = parent.parentElement;
               continue;
             }
@@ -886,10 +888,63 @@ export const STEP1_OFFERS_SCRIPT = `
         }
       }
       
+      // CRITICAL: If we still don't have enough offers, try finding by View Sailings button position
+      // Some offers may have buttons that don't have proper parent containers
+      if (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Button-based detection found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying POSITION-BASED fallback...',
+          logType: 'warning'
+        }));
+        
+        // Strategy: Group View Sailings buttons by their vertical position on page
+        // Each unique Y position likely represents a different offer
+        const buttonPositions = viewSailingsButtons.map(btn => {
+          const rect = btn.getBoundingClientRect();
+          return { btn, y: Math.round(rect.top / 50) * 50 }; // Group by 50px bands
+        });
+        
+        // Group buttons by Y position
+        const positionGroups = {};
+        buttonPositions.forEach(({ btn, y }) => {
+          if (!positionGroups[y]) positionGroups[y] = [];
+          positionGroups[y].push(btn);
+        });
+        
+        // For each unique position, find the offer container
+        for (const [yPos, btns] of Object.entries(positionGroups)) {
+          const btn = btns[0]; // Take first button at this position
+          
+          // Find parent container that looks like an offer
+          let parent = btn.parentElement;
+          for (let i = 0; i < 20 && parent; i++) {
+            const parentText = parent.textContent || '';
+            const hasOfferSignals = parentText.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/) || 
+                                   parentText.toLowerCase().includes('trade-in') ||
+                                   parentText.includes('Redeem by');
+            const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
+            
+            if (hasOfferSignals && isReasonableSize && !seenOfferCards.has(parent) && !isAccountStatusDisplay(parent)) {
+              seenOfferCards.add(parent);
+              offerCards.push(parent);
+              
+              const codeMatch = parentText.match(/\\b([A-Z0-9]{6,12}[A-Z])\\b/);
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: 'Position-based detection found offer at Y=' + yPos + ' (code: ' + (codeMatch ? codeMatch[1] : 'N/A') + ')',
+                logType: 'info'
+              }));
+              break;
+            }
+            parent = parent.parentElement;
+          }
+        }
+      }
+      
       if (offerCards.length === 0 || (expectedOfferCount > 0 && offerCards.length < expectedOfferCount)) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Button-based detection found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying ULTRA AGGRESSIVE fallback (ignoring banners)...',
+          message: 'Still only found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying ULTRA AGGRESSIVE fallback (ignoring banners)...',
           logType: 'warning'
         }));
         
@@ -978,9 +1033,15 @@ export const STEP1_OFFERS_SCRIPT = `
           }));
           
           // DEEP SCAN: Look for offer codes directly and work backwards to find containers
-          const offerCodeElements = Array.from(document.querySelectorAll('*')).filter(el => {
+          // FIXED: Look for offer codes in larger text contexts, not just exact matches
+          const offerCodeElements = Array.from(document.querySelectorAll('span, div, p, h1, h2, h3, h4, h5, h6')).filter(el => {
             const text = (el.textContent || '').trim();
-            return text.match(/^[A-Z0-9]{5,12}[A-Z]$/) && text.length < 20;
+            // Match standalone codes OR codes within short text
+            const hasCode = text.match(/\\b[A-Z0-9]{5,12}[A-Z]\\b/);
+            const isShortEnough = text.length < 100;
+            // Exclude navigation, header, footer elements
+            const isNotNav = !el.closest('nav, header, footer, [role="navigation"]');
+            return hasCode && isShortEnough && isNotNav;
           });
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
