@@ -197,7 +197,7 @@ export const STEP1_OFFERS_SCRIPT = `
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: headers,
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify(requestBody)
       });
       
@@ -238,7 +238,7 @@ export const STEP1_OFFERS_SCRIPT = `
             const refetchResponse = await fetch(endpoint, {
               method: 'POST',
               headers: headers,
-              credentials: 'include',
+              credentials: 'omit',
               body: JSON.stringify(refetchBody)
             });
             
