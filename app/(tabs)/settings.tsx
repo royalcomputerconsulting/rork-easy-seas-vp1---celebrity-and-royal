@@ -77,9 +77,9 @@ import { UserManualModal } from '@/components/UserManualModal';
 export default function SettingsScreen() {
   const router = useRouter();
   const { settings, updateSettings, clearLocalData, setLocalData, localData } = useAppState();
-  const cruiseStore = useCruiseStore();
-  const { clearAllData, cruises, bookedCruises, setCruises, setOffers, casinoOffers, setBookedCruises } = cruiseStore;
-  const { restoreMockData } = useCoreData();
+  const coreData = useCoreData();
+  const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, restoreMockData, setCasinoOffers } = coreData;
+  const cruises = coreData.cruises;
   const { currentUser, updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
   const { 
     clubRoyalePoints: loyaltyClubRoyalePoints, 
@@ -223,7 +223,7 @@ export default function SettingsScreen() {
       }
 
       setCruises(parsedCruises);
-      setOffers(parsedOffers);
+      setCasinoOffers(parsedOffers);
       setLocalData({
         cruises: parsedCruises,
         offers: parsedOffers,
@@ -244,7 +244,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [setCruises, setOffers, setLocalData]);
+  }, [setCruises, setCasinoOffers, setLocalData]);
 
   const handleImportCalendarFromURL = useCallback(async () => {
     try {
@@ -629,7 +629,7 @@ export default function SettingsScreen() {
         
         console.log('[Settings] Syncing data from storage to all providers...');
         await Promise.all([
-          cruiseStore.syncFromStorage(),
+          coreData.refreshData(),
           syncUserFromStorage(),
           syncLoyaltyFromStorage(),
           reloadMachines(),
@@ -668,7 +668,7 @@ export default function SettingsScreen() {
         
         console.log('[Settings] Triggering additional sync to propagate to UI...');
         await new Promise(resolve => setTimeout(resolve, 500));
-        await cruiseStore.syncFromStorage();
+        await coreData.refreshData();
         
         Alert.alert(
           'Import Successful',
@@ -681,7 +681,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImportingAll(false);
     }
-  }, [cruiseStore, setLocalData, syncUserFromStorage, syncLoyaltyFromStorage, reloadMachines, reloadCasinoSessions]);
+  }, [coreData, setLocalData, syncUserFromStorage, syncLoyaltyFromStorage, reloadMachines, reloadCasinoSessions]);
 
   const handleDownloadExtension = useCallback(async () => {
     try {
