@@ -1781,16 +1781,59 @@ export const STEP1_OFFERS_SCRIPT = `
       }
       
       // Final deduplication: ensure no container appears more than once
-      // IMPORTANT: Do NOT deduplicate by offer name - multiple offers can have similar/same names
-      // Only deduplicate by actual DOM container element to prevent removing valid offers
+      // CRITICAL: Also deduplicate by offer name + code to prevent scraping same offer twice
+      // RC sometimes renders same offer in multiple places on page
       const finalOfferCards = [];
       const finalSeenContainers = new Set();
+      const seenOfferIdentifiers = new Map(); // Track by name+code+expiry
       
       for (const card of offerCards) {
-        if (!finalSeenContainers.has(card)) {
-          finalSeenContainers.add(card);
-          finalOfferCards.push(card);
+        if (finalSeenContainers.has(card)) {
+          continue;
         }
+        
+        // Extract offer identifier (name + code + expiry) to detect duplicates
+        const cardText = card.textContent || '';
+        let offerCode = extractOfferCodeFromText(cardText);
+        if (!offerCode) {
+          const offerCodeMatch = cardText.match(/(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?|\d{2}[A-Z]{3}\d{3}[A-Z]?)(?![a-z])/i);
+          offerCode = offerCodeMatch ? offerCodeMatch[1].toUpperCase() : '';
+        }
+        
+        // Extract offer name
+        let offerName = '';
+        const excludePatterns = /^Featured Offer$|^View Sailing|^View Sailings$|^See Sailing|^Redeem|^Trade-in value|^\$|^My Offers$|^Club Royale Offers$|^Offers$|^Exclusive$|^Available$|^Learn More$|^Book Now$|^Select$|^Close$|^Filter$|^Sort$|^Room for Two$|^\d+\s+NIGHT/i;
+        const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"], [class*="name"], [class*="offer"]'));
+        for (const h of allHeadings) {
+          const hText = (h.textContent || '').trim();
+          if (hText.length >= 5 && hText.length <= 100 && !excludePatterns.test(hText)) {
+            offerName = hText;
+            break;
+          }
+        }
+        
+        // Extract expiry date
+        const expiryMatch = cardText.match(/Redeem by ([A-Za-z]+ \d+, \d{4})/i);
+        const expiryDate = expiryMatch ? expiryMatch[1] : '';
+        
+        // Create unique identifier: name + code (or expiry if no code)
+        const identifier = (offerName + '|' + (offerCode || expiryDate)).toLowerCase();
+        
+        // Skip if we've already seen this offer (by name + code/expiry)
+        if (identifier && identifier.length > 3 && seenOfferIdentifiers.has(identifier)) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '🚫 Skipping DUPLICATE offer: ' + offerName + (offerCode ? ' (' + offerCode + ')' : ''),
+            logType: 'warning'
+          }));
+          continue;
+        }
+        
+        finalSeenContainers.add(card);
+        if (identifier && identifier.length > 3) {
+          seenOfferIdentifiers.set(identifier, true);
+        }
+        finalOfferCards.push(card);
       }
       offerCards = finalOfferCards;
       
