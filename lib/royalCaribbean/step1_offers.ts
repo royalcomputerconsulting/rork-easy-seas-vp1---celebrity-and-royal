@@ -90,20 +90,21 @@ export const STEP1_OFFERS_SCRIPT = `
   // Helper function to extract offer code from text - defined at top level for accessibility
   function extractOfferCodeFromText(text) {
     if (!text) return '';
-    // FIXED: Use negative lookahead instead of \b to catch codes attached to text
+    // ENHANCED: Patterns for all RC offer code formats including Go for Gold (26GLD103G)
     const patterns = [
-      /(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)(?![a-z])/gi,
-      /(\d{4}[A-Z]\d{2}[A-Z]?)(?![a-z])/gi,
-      /(\d{2}[A-Z]{3,6}%?)(?![a-z])/gi,
-      /(\d{2}[A-Z]{3}\d{3}[A-Z]?)(?![a-z])/gi
+      /(\d{2}[A-Z]{3}\d{3}[A-Z])(?![a-z])/gi,     // 26GLD103G, 26GRD103G (Go for Gold - PRIORITY)
+      /(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)(?![a-z])/gi, // 26CLS103, 26MAR103B, 26WST104
+      /(\d{4}[A-Z]\d{2}[A-Z]?)(?![a-z])/gi,       // 2601C05, 2601A08, 2601A05
+      /(\d{2}[A-Z]{3,6}%?)(?![a-z])/gi,            // 25GOLD, 25GOLD%
+      /(\d{2}[A-Z]{3}\d{3})(?![a-z])/gi            // 26NEW104 (no trailing letter)
     ];
     for (const pattern of patterns) {
       pattern.lastIndex = 0;
       const match = pattern.exec(text);
       if (match && match[1]) {
         const code = match[1].toUpperCase();
-        const invalidCodes = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER'];
-        if (!invalidCodes.includes(code)) {
+        const invalidCodes = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'CREDITS', 'POINTS', 'STATUS', 'MEMBER', 'MASTERS', 'CHOICE', 'PRIME', 'SIGNATURE'];
+        if (!invalidCodes.includes(code) && code.length >= 6) {
           return code;
         }
       }
@@ -113,15 +114,20 @@ export const STEP1_OFFERS_SCRIPT = `
 
   // Helper function to validate offer code format
   function isValidOfferCode(code) {
-    if (!code || code.length < 5 || code.length > 15) return false;
+    if (!code || code.length < 6 || code.length > 15) return false;
     const cleanCode = code.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
-    const invalidCodes = ['SCOTTS', 'CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER', 'CHOICE', 'PRIME', 'MASTERS', 'SIGNATURE', 'DIAMOND', 'PLATINUM', 'CONTACT', 'MISSING', 'REPRESENTATIVE'];
+    const invalidCodes = ['SCOTTS', 'CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'CREDITS', 'POINTS', 'STATUS', 'MEMBER', 'CHOICE', 'PRIME', 'MASTERS', 'SIGNATURE', 'DIAMOND', 'PLATINUM', 'CONTACT', 'MISSING', 'REPRESENTATIVE', 'PROGRESS', 'TICKETS'];
     if (invalidCodes.includes(cleanCode.toUpperCase())) return false;
+    // Skip codes that are clearly account/reservation numbers (6+ consecutive digits)
+    if (/^\d{6,}$/.test(cleanCode)) return false;
+    // Skip codes that look like tier progress (e.g., 59636, 40364)
+    if (/^\d{4,5}$/.test(cleanCode)) return false;
     const validPatterns = [
-      /^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/i,
-      /^\d{4}[A-Z]\d{2}[A-Z]?$/i,
-      /^\d{2}[A-Z]{3,6}%?$/i,
-      /^\d{2}[A-Z]{3}\d{3}[A-Z]?$/i
+      /^\d{2}[A-Z]{3}\d{3}[A-Z]$/i,    // 26GLD103G, 26GRD103G (Go for Gold)
+      /^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/i, // 26CLS103, 26MAR103B
+      /^\d{4}[A-Z]\d{2}[A-Z]?$/i,       // 2601C05, 2601A08
+      /^\d{2}[A-Z]{3,6}%?$/i,            // 25GOLD, 25GOLD%
+      /^\d{2}[A-Z]{3}\d{3}$/i            // 26NEW104
     ];
     return validPatterns.some(pattern => pattern.test(cleanCode));
   }
