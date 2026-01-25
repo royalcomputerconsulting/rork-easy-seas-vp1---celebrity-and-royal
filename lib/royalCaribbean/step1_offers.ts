@@ -1,6 +1,5 @@
 export const STEP1_OFFERS_SCRIPT = `
 (function() {
-  const OFFER_TIMEOUT_MS = 900000;
   const BATCH_SIZE = 150;
   
   function wait(ms) {
@@ -29,116 +28,43 @@ export const STEP1_OFFERS_SCRIPT = `
     }));
   }
 
-  async function scrollUntilComplete(container, maxAttempts = 30) {
-    let previousHeight = 0;
-    let stableCount = 0;
-    let attempts = 0;
-    let previousItemCount = 0;
-
-    while (stableCount < 3 && attempts < maxAttempts) {
-      const currentHeight = container ? container.scrollHeight : document.body.scrollHeight;
-      
-      // Also count items to detect if new content is loading
-      const currentItemCount = container 
-        ? container.querySelectorAll('[class*="sailing"], [class*="row"], [class*="card"], tr, li').length
-        : document.querySelectorAll('[class*="sailing"], [class*="row"], [class*="card"], tr, li').length;
-      
-      if (currentHeight === previousHeight && currentItemCount === previousItemCount) {
-        stableCount++;
-      } else {
-        stableCount = 0;
-      }
-      
-      previousHeight = currentHeight;
-      previousItemCount = currentItemCount;
-      
-      // More aggressive scrolling
-      if (container) {
-        container.scrollBy(0, 1200);
-      } else {
-        window.scrollBy(0, 1200);
-      }
-      
-      await wait(600);
-      attempts++;
-      
-      // Log progress every 10 attempts
-      if (attempts % 10 === 0) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Scroll progress: ' + attempts + '/' + maxAttempts + ' attempts, ' + currentItemCount + ' items loaded',
-          logType: 'info'
-        }));
-      }
-    }
-    
-    // Scroll back to top
-    if (container) {
-      container.scrollTo(0, 0);
-    } else {
-      window.scrollTo(0, 0);
-    }
-    await wait(300);
+  function log(message, type = 'info') {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'log',
+      message: message,
+      logType: type
+    }));
   }
 
-  function extractText(element, selector) {
-    if (!element) return '';
-    const el = selector ? element.querySelector(selector) : element;
-    return el?.textContent?.trim() || '';
-  }
-
-  // Helper function to extract offer code from text - defined at top level for accessibility
-  function extractOfferCodeFromText(text) {
-    if (!text) return '';
-    // ENHANCED: Patterns for all RC offer code formats including Go for Gold (26GLD103G)
-    const patterns = [
-      /(\d{2}[A-Z]{3}\d{3}[A-Z])(?![a-z])/gi,     // 26GLD103G, 26GRD103G (Go for Gold - PRIORITY)
-      /(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)(?![a-z])/gi, // 26CLS103, 26MAR103B, 26WST104
-      /(\d{4}[A-Z]\d{2}[A-Z]?)(?![a-z])/gi,       // 2601C05, 2601A08, 2601A05
-      /(\d{2}[A-Z]{3,6}%?)(?![a-z])/gi,            // 25GOLD, 25GOLD%
-      /(\d{2}[A-Z]{3}\d{3})(?![a-z])/gi            // 26NEW104 (no trailing letter)
-    ];
-    for (const pattern of patterns) {
-      pattern.lastIndex = 0;
-      const match = pattern.exec(text);
-      if (match && match[1]) {
-        const code = match[1].toUpperCase();
-        const invalidCodes = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'CREDITS', 'POINTS', 'STATUS', 'MEMBER', 'MASTERS', 'CHOICE', 'PRIME', 'SIGNATURE'];
-        if (!invalidCodes.includes(code) && code.length >= 6) {
-          return code;
-        }
-      }
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return months[date.getMonth()] + ' ' + date.getDate() + ', ' + date.getFullYear();
+    } catch (e) {
+      return dateStr;
     }
-    return '';
   }
 
-  // Helper function to validate offer code format
-  function isValidOfferCode(code) {
-    if (!code || code.length < 6 || code.length > 15) return false;
-    const cleanCode = code.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
-    const invalidCodes = ['SCOTTS', 'CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'CREDITS', 'POINTS', 'STATUS', 'MEMBER', 'CHOICE', 'PRIME', 'MASTERS', 'SIGNATURE', 'DIAMOND', 'PLATINUM', 'CONTACT', 'MISSING', 'REPRESENTATIVE', 'PROGRESS', 'TICKETS'];
-    if (invalidCodes.includes(cleanCode.toUpperCase())) return false;
-    // Skip codes that are clearly account/reservation numbers (6+ consecutive digits)
-    if (/^\d{6,}$/.test(cleanCode)) return false;
-    // Skip codes that look like tier progress (e.g., 59636, 40364)
-    if (/^\d{4,5}$/.test(cleanCode)) return false;
-    const validPatterns = [
-      /^\d{2}[A-Z]{3}\d{3}[A-Z]$/i,    // 26GLD103G, 26GRD103G (Go for Gold)
-      /^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/i, // 26CLS103, 26MAR103B
-      /^\d{4}[A-Z]\d{2}[A-Z]?$/i,       // 2601C05, 2601A08
-      /^\d{2}[A-Z]{3,6}%?$/i,            // 25GOLD, 25GOLD%
-      /^\d{2}[A-Z]{3}\d{3}$/i            // 26NEW104
-    ];
-    return validPatterns.some(pattern => pattern.test(cleanCode));
+  function formatSailDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const year = date.getFullYear();
+      return month + '/' + day + '/' + year;
+    } catch (e) {
+      return dateStr;
+    }
   }
 
   async function extractClubRoyaleStatus() {
     try {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Extracting Club Royale status...',
-        logType: 'info'
-      }));
+      log('Extracting Club Royale status...');
 
       const loyaltyData = {
         clubRoyaleTier: '',
@@ -148,301 +74,36 @@ export const STEP1_OFFERS_SCRIPT = `
       };
 
       const pageText = document.body.textContent || '';
-      const pageHTML = document.body.innerHTML || '';
       
-      // Find tier first
       const tierPatterns = [
-        /Club Royale\\s*(?:Status|Tier)?[:\\s]*(Signature|Premier|Classic)/i,
-        /(Signature|Premier|Classic)\\s*(?:Member|Status|Tier)?/i,
-        /Your\\s+(?:Club Royale\\s+)?(?:Status|Tier)\\s*(?:is)?\\s*(Signature|Premier|Classic)/i
+        /Club Royale\\s*(?:Status|Tier)?[:\\s]*(Signature|Premier|Classic|Prime|Choice|Masters)/i,
+        /(Signature|Premier|Classic|Prime|Choice|Masters)\\s*(?:Member|Status|Tier)?/i
       ];
       
       for (const pattern of tierPatterns) {
         const match = pageText.match(pattern);
         if (match && match[1]) {
           loyaltyData.clubRoyaleTier = match[1];
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Found Club Royale tier: ' + match[1],
-            logType: 'success'
-          }));
+          log('Found Club Royale tier: ' + match[1], 'success');
           break;
         }
       }
       
-      // IMPROVED: Find Club Royale points more accurately
-      // Strategy: Look for the large number at the TOP of the page first (user's actual points)
-      let candidatePoints = [];
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🔍 Starting Club Royale points search...',
-        logType: 'info'
-      }));
-      
-      // PRIORITY 0: Look for large numbers in header/top elements (most reliable)
-      // ULTRA AGGRESSIVE: The user's actual points are displayed PROMINENTLY at top
-      const topElements = Array.from(document.querySelectorAll('header, [class*="header"], [class*="hero"], [class*="banner"], nav, [role="banner"], [class*="top"], [class*="nav"], main > div:first-child, main > section:first-child, body > div:first-child, body > div:nth-child(2), [class*="points"], [class*="balance"], [class*="tier"], [class*="credit"], [class*="loyalty"], [class*="status"], h1, h2, h3, p[class*="point"], span[class*="point"], div[class*="point"]'));
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '📊 Analyzing ' + topElements.length + ' top elements...',
-        logType: 'info'
-      }));
-      
-      // STRATEGY 1: Find ALL numbers >= 1000 in top sections
-      // User's points like 39,728 or 37,928 are displayed prominently
-      for (const topEl of topElements.slice(0, 80)) {
-        const topText = (topEl.textContent || '');
-        // Look for standalone numbers (with or without commas)
-        const numberMatches = topText.match(/\\b([\\d,]{4,})\\b/g);
-        if (numberMatches) {
-          for (const numStr of numberMatches) {
-            const cleanNum = numStr.replace(/,/g, '');
-            const numPoints = parseInt(cleanNum, 10);
-            
-            // Prioritize ANY number >= 5000 (actual user points vs promotional offers like 2500)
-            if (numPoints >= 1000 && numPoints <= 10000000) {
-              const elementClasses = topEl.className || '';
-              const elementText = topEl.textContent || '';
-              const hasPointsContext = elementText.toLowerCase().includes('point') || 
-                                      elementText.toLowerCase().includes('credit') || 
-                                      elementText.toLowerCase().includes('tier') ||
-                                      elementClasses.toLowerCase().includes('point') ||
-                                      elementClasses.toLowerCase().includes('balance');
-              
-              // Calculate priority based on size and context
-              let priority = 10;
-              if (numPoints >= 30000) {
-                priority = hasPointsContext ? 1 : 2;  // Very high with context = top priority
-              } else if (numPoints >= 10000) {
-                priority = hasPointsContext ? 2 : 3;
-              } else if (numPoints >= 5000) {
-                priority = hasPointsContext ? 3 : 5;
-              } else if (numPoints >= 2500) {
-                priority = hasPointsContext ? 4 : 6;
-              } else {
-                priority = hasPointsContext ? 5 : 7;
-              }
-              
-              candidatePoints.push({ 
-                value: numPoints, 
-                str: numStr, 
-                source: 'top-header',
-                priority: priority
-              });
-              
-              if (numPoints >= 10000) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: '  ➜ Found large number: ' + numStr + ' (priority: ' + priority + ', context: ' + hasPointsContext + ')',
-                  logType: 'info'
-                }));
-              }
-            }
-          }
-        }
-      }
-      
-      // STRATEGY 2: Check for numbers with explicit Club Royale / points context
-      for (const topEl of topElements.slice(0, 30)) {
-        const topText = (topEl.textContent || '').toLowerCase();
-        if (topText.includes('club royale') || topText.includes('point') || topText.includes('tier') || topText.includes('credit')) {
-          const numberMatches = topText.match(/([\\d,]{4,})(?![\\d])/g);
-          if (numberMatches) {
-            for (const numStr of numberMatches) {
-              const numPoints = parseInt(numStr.replace(/,/g, ''), 10);
-              if (numPoints >= 1000 && numPoints <= 10000000) {
-                candidatePoints.push({ value: numPoints, str: numStr, source: 'top-context', priority: 2 });
-              }
-            }
-          }
-        }
-      }
-      
-      // PRIORITY 1: Look for Club Royale specific TIER CREDITS
-      // Search in a LIMITED scope near Club Royale mentions to avoid Crown & Anchor confusion
-      const clubRoyaleElements = Array.from(document.querySelectorAll('*')).filter(el => {
-        const text = (el.textContent || '').toLowerCase();
-        return text.includes('club royale') && text.length < 2000;
-      });
-      
-      for (const crEl of clubRoyaleElements.slice(0, 10)) {
-        const crText = crEl.textContent || '';
-        const tierCreditsPatterns = [
-          /YOUR\\s+CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
-          /TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
-          /([\\d,]+)\\s*TIER\\s+CREDITS/gi,
-          /CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi
-        ];
-        
-        for (const pattern of tierCreditsPatterns) {
-          let match;
-          const resetPattern = new RegExp(pattern.source, pattern.flags);
-          while ((match = resetPattern.exec(crText)) !== null) {
-            const pointStr = match[1].replace(/,/g, '');
-            const numPoints = parseInt(pointStr, 10);
-            if (numPoints >= 100 && numPoints <= 10000000) {
-              candidatePoints.push({ value: numPoints, str: match[1], source: 'tier-credits-primary', priority: 0 });
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '  ➜ Found TIER CREDITS near Club Royale: ' + match[1],
-                logType: 'info'
-              }));
-            }
-          }
-        }
-      }
-      
-      // PRIORITY 2: Look for specific Club Royale points patterns
-      const specificPatterns = [
-        /Club Royale[^\\d]{0,30}?([\\d,]+)\\s*(?:points|pts)/gi,
-        /([\\d,]+)\\s*Club Royale\\s*(?:points|pts)/gi,
-        /(?:your|total|current)\\s*(?:Club Royale)?\\s*points[:\\s]*([\\d,]+)/gi,
-        /points[:\\s]*([\\d,]+)/gi
+      const tierCreditsPatterns = [
+        /YOUR\\s+CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
+        /TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
+        /([\\d,]+)\\s*TIER\\s+CREDITS/gi
       ];
       
-      for (const pattern of specificPatterns) {
-        let match;
-        while ((match = pattern.exec(pageText)) !== null) {
+      for (const pattern of tierCreditsPatterns) {
+        let match = pattern.exec(pageText);
+        if (match && match[1]) {
           const pointStr = match[1].replace(/,/g, '');
           const numPoints = parseInt(pointStr, 10);
           if (numPoints >= 100 && numPoints <= 10000000) {
-            candidatePoints.push({ value: numPoints, str: match[1], source: 'regex' });
-          }
-        }
-      }
-      
-      // Look for points in specific DOM elements
-      const pointsElements = document.querySelectorAll('[class*="point"], [class*="loyalty"], [class*="balance"], [class*="royale"], [data-testid*="point"], [aria-label*="point"]');
-      for (const el of pointsElements) {
-        const text = (el.textContent || '').trim();
-        const numMatch = text.match(/^([\\d,]+)$/);
-        if (numMatch) {
-          const numPoints = parseInt(numMatch[1].replace(/,/g, ''), 10);
-          if (numPoints >= 100 && numPoints <= 10000000) {
-            candidatePoints.push({ value: numPoints, str: numMatch[1], source: 'element-class' });
-          }
-        }
-        // Also check for "X points" or "X pts" format
-        const ptsMatch = text.match(/([\\d,]+)\\s*(?:points|pts)/i);
-        if (ptsMatch) {
-          const numPoints = parseInt(ptsMatch[1].replace(/,/g, ''), 10);
-          if (numPoints >= 100 && numPoints <= 10000000) {
-            candidatePoints.push({ value: numPoints, str: ptsMatch[1], source: 'element-pts' });
-          }
-        }
-      }
-      
-      // Look for large numbers near "Club Royale" text (within same container)
-      const clubRoyaleContainers = document.querySelectorAll('[class*="club"], [class*="royale"], [class*="loyalty"], [class*="member"], section, article, div');
-      for (const container of clubRoyaleContainers) {
-        const containerText = (container.textContent || '').toLowerCase();
-        if (containerText.includes('club royale') || containerText.includes('points')) {
-          const numMatches = containerText.match(/([\\d,]{4,})(?![\\d])/g);
-          if (numMatches) {
-            for (const numStr of numMatches) {
-              const numPoints = parseInt(numStr.replace(/,/g, ''), 10);
-              // Looking for points typically > 1000 for active players
-              if (numPoints >= 1000 && numPoints <= 10000000) {
-                // Check if this container mentions points specifically
-                if (containerText.includes('point')) {
-                  candidatePoints.push({ value: numPoints, str: numStr, source: 'container' });
-                }
-              } else if (numPoints >= 10000 && numPoints <= 10000000) {
-                // High value numbers without explicit "point" mention - likely actual points
-                candidatePoints.push({ value: numPoints, str: numStr, source: 'container-high' });
-              }
-            }
-          }
-        }
-      }
-      
-      // Sort candidates: PRIORITIZE tier-credits-primary FIRST (official label), then by priority, source, and value
-      candidatePoints.sort((a, b) => {
-        // HIGHEST PRIORITY: tier-credits-primary source (official RC label)
-        const aIsTierCredits = a.source === 'tier-credits-primary';
-        const bIsTierCredits = b.source === 'tier-credits-primary';
-        if (aIsTierCredits && !bIsTierCredits) return -1;
-        if (!aIsTierCredits && bIsTierCredits) return 1;
-        
-        // CRITICAL: When both are tier-credits, prefer SMALLER value (current points, not points-to-next-tier)
-        if (aIsTierCredits && bIsTierCredits) {
-          return a.value - b.value;
-        }
-        
-        // Second: Sort by priority field (lower number = higher priority)
-        const priorityDiff = (a.priority || 99) - (b.priority || 99);
-        if (priorityDiff !== 0) return priorityDiff;
-        
-        // Third: Prefer top-header sources
-        const sourceOrder = { 'top-header': 1, 'top-context': 2, 'element-class': 3, 'element-pts': 4, 'container-high': 5, 'regex': 6, 'container': 7 };
-        const sourceCompare = (sourceOrder[a.source] || 99) - (sourceOrder[b.source] || 99);
-        if (sourceCompare !== 0) return sourceCompare;
-        
-        // Fourth: Prefer larger values (more likely to be actual accumulated points)
-        return b.value - a.value;
-      });
-      
-      // Remove duplicates
-      const seenValues = new Set();
-      candidatePoints = candidatePoints.filter(p => {
-        if (seenValues.has(p.value)) return false;
-        seenValues.add(p.value);
-        return true;
-      });
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Found ' + candidatePoints.length + ' point candidates: ' + candidatePoints.slice(0, 5).map(p => p.value + ' (' + p.source + ')').join(', '),
-        logType: 'info'
-      }));
-      
-      // Pick the best candidate - after sorting, first one is best
-      if (candidatePoints.length > 0) {
-        loyaltyData.clubRoyalePoints = candidatePoints[0].str;
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Selected Club Royale points: ' + candidatePoints[0].str + ' (value: ' + candidatePoints[0].value + ') from ' + candidatePoints[0].source,
-          logType: 'success'
-        }));
-      }
-      
-      // Fallback: search for standalone number elements with points context
-      if (!loyaltyData.clubRoyalePoints) {
-        const allElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div');
-        
-        for (const el of allElements) {
-          const text = (el.textContent || '').trim();
-          
-          if (!loyaltyData.clubRoyaleTier) {
-            const tierMatch = text.match(/^(Signature|Premier|Classic)$/i);
-            if (tierMatch) {
-              loyaltyData.clubRoyaleTier = tierMatch[1];
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: 'Found Club Royale tier (element): ' + tierMatch[1],
-                logType: 'success'
-              }));
-            }
-          }
-          
-          const pointsMatch = text.match(/^([\\d,]+)$/);  
-          if (pointsMatch) {
-            const num = parseInt(pointsMatch[1].replace(/,/g, ''), 10);
-            if (num >= 1000 && num <= 10000000) {
-              const parentText = (el.parentElement?.textContent || '').toLowerCase();
-              const grandparentText = (el.parentElement?.parentElement?.textContent || '').toLowerCase();
-              if (parentText.includes('point') || grandparentText.includes('point') || parentText.includes('royale')) {
-                loyaltyData.clubRoyalePoints = pointsMatch[1];
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: 'Found Club Royale points (fallback element): ' + pointsMatch[1],
-                  logType: 'success'
-                }));
-                break;
-              }
-            }
+            loyaltyData.clubRoyalePoints = match[1];
+            log('Found Club Royale points: ' + match[1], 'success');
+            break;
           }
         }
       }
@@ -453,2233 +114,382 @@ export const STEP1_OFFERS_SCRIPT = `
           data: loyaltyData
         }));
         
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Club Royale status: ' + (loyaltyData.clubRoyaleTier || 'Unknown') + ', ' + (loyaltyData.clubRoyalePoints || '0') + ' points',
-          logType: 'success'
-        }));
-      } else {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Could not find Club Royale status on page',
-          logType: 'warning'
-        }));
+        log('Club Royale status: ' + (loyaltyData.clubRoyaleTier || 'Unknown') + ', ' + (loyaltyData.clubRoyalePoints || '0') + ' points', 'success');
       }
       
       return loyaltyData;
     } catch (error) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Error extracting Club Royale status: ' + error.message,
-        logType: 'warning'
-      }));
+      log('Error extracting Club Royale status: ' + error.message, 'warning');
       return null;
     }
   }
 
-  async function extractOffers() {
+  async function fetchOffersFromAPI() {
     try {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Extracting Club Royale data...',
-        logType: 'info'
-      }));
-
-      await extractClubRoyaleStatus();
-
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Loading Club Royale Offers page...',
-        logType: 'info'
-      }));
-
-      await wait(4000);
+      log('🔌 Using API-based offer extraction (more reliable)...');
       
-      let expectedOfferCount = 0;
-      let featuredOfferCount = 0;
-      let moreOfferCount = 0;
-      const pageText = document.body.textContent || '';
+      let authToken, accountId, loyaltyId, user;
       
-      // Look for Featured Offers count
-      const featuredMatch = pageText.match(/Featured\\s+Offers?\\s*\\((\\d+)\\)/i) ||
-                           pageText.match(/Featured\\s*\\((\\d+)\\)/i);
-      if (featuredMatch) {
-        featuredOfferCount = parseInt(featuredMatch[1], 10);
-      } else {
-        // Check if there's a Featured Offers section with at least 1 offer
-        const hasFeaturedSection = pageText.match(/Featured\\s+Offer/i);
-        if (hasFeaturedSection) {
-          featuredOfferCount = 1;
+      try {
+        log('Parsing session data from localStorage...');
+        const sessionData = localStorage.getItem('persist:session');
+        
+        if (!sessionData) {
+          throw new Error('No session data found. Please log in again.');
         }
+        
+        const parsedData = JSON.parse(sessionData);
+        authToken = parsedData.token ? JSON.parse(parsedData.token) : null;
+        const tokenExpiration = parsedData.tokenExpiration ? parseInt(parsedData.tokenExpiration) * 1000 : null;
+        user = parsedData.user ? JSON.parse(parsedData.user) : null;
+        accountId = user && user.accountId ? user.accountId : null;
+        loyaltyId = user && user.cruiseLoyaltyId ? user.cruiseLoyaltyId : null;
+        
+        if (!authToken || !accountId) {
+          throw new Error('Invalid session data. Please log in again.');
+        }
+        
+        const currentTime = Date.now();
+        if (tokenExpiration && tokenExpiration < currentTime) {
+          throw new Error('Session expired. Please log in again.');
+        }
+        
+        log('Session data parsed successfully', 'success');
+      } catch (error) {
+        log('Failed to parse session: ' + error.message, 'error');
+        throw error;
       }
       
-      // Look for More Offers count
-      const moreMatch = pageText.match(/More\\s+Offers?\\s*\\((\\d+)\\)/i) ||
-                       pageText.match(/More\\s*\\((\\d+)\\)/i) ||
-                       pageText.match(/All\\s+Offers?\\s*\\((\\d+)\\)/i) ||
-                       pageText.match(/Other\\s+Offers?\\s*\\((\\d+)\\)/i);
-      if (moreMatch) {
-        moreOfferCount = parseInt(moreMatch[1], 10);
-      }
+      const rawAuth = authToken && authToken.toString ? authToken.toString() : '';
+      const networkAuth = rawAuth ? (rawAuth.startsWith('Bearer ') ? rawAuth : 'Bearer ' + rawAuth) : '';
       
-      // Also check for total offers pattern
-      const totalMatch = pageText.match(/Offers\\s*\\((\\d+)\\)/i) ||
-                        pageText.match(/(\\d+)\\s+Offers?\\s+Available/i);
-      if (totalMatch && !moreMatch) {
-        const totalFromPage = parseInt(totalMatch[1], 10);
-        if (totalFromPage > featuredOfferCount) {
-          moreOfferCount = totalFromPage - featuredOfferCount;
-        } else {
-          moreOfferCount = totalFromPage;
-        }
-      }
+      const headers = {
+        'accept': 'application/json',
+        'accept-language': 'en-US,en;q=0.9',
+        'account-id': accountId,
+        'authorization': networkAuth,
+        'content-type': 'application/json',
+      };
       
-      expectedOfferCount = featuredOfferCount + moreOfferCount;
+      const host = location && location.hostname ? location.hostname : '';
+      const brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
+      const relativePath = '/api/casino/casino-offers/v1';
+      const onSupportedDomain = host.includes('royalcaribbean.com') || host.includes('celebritycruises.com');
+      const defaultDomain = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
+      const endpoint = onSupportedDomain ? relativePath : defaultDomain + relativePath;
       
-      if (expectedOfferCount > 0) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '📋 Found ' + featuredOfferCount + ' Featured Offer(s), Found ' + moreOfferCount + ' More = ' + expectedOfferCount + ' Total Offers',
-          logType: 'info'
-        }));
-      } else {
-        // Fallback: count View Sailings buttons directly
-        const quickButtonCount = Array.from(document.querySelectorAll('button, a, [role="button"]')).filter(btn => 
-          (btn.textContent || '').toLowerCase().includes('sailing')
-        ).length;
-        if (quickButtonCount > 0) {
-          expectedOfferCount = quickButtonCount;
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '📋 Detected ' + expectedOfferCount + ' offer(s) from View Sailings buttons',
-            logType: 'info'
-          }));
-        }
-      }
+      log('📡 Calling Royal Caribbean Casino Offers API...');
+      log('Endpoint: ' + endpoint);
       
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Scrolling to load all content...',
-        logType: 'info'
-      }));
-
-      await scrollUntilComplete(null, 3);
-      await wait(1000);
+      const requestBody = {
+        cruiseLoyaltyId: loyaltyId,
+        offerCode: '',
+        brand: brandCode
+      };
       
-      // ULTRA AGGRESSIVE scrolling to ensure ALL 9 offers are loaded
-      // Royal Caribbean uses lazy loading, so we need to scroll multiple times
-      
-      // CRITICAL: Function to close/hide promotional banners blocking the view
-      async function closePromotionalBanners() {
-        const bannerCloseSelectors = [
-          '[class*="close"]',
-          '[class*="dismiss"]',
-          '[aria-label*="close"]',
-          '[aria-label*="dismiss"]',
-          'button[class*="modal"]',
-          '[class*="overlay"] button',
-          '[class*="banner"] button',
-          '[class*="popup"] button'
-        ];
-        
-        for (const selector of bannerCloseSelectors) {
-          try {
-            const closeButtons = document.querySelectorAll(selector);
-            for (const btn of closeButtons) {
-              const btnText = (btn.textContent || '').toLowerCase().trim();
-              const isCloseButton = btnText === 'x' || btnText === '×' || btnText === 'close' || 
-                                   btnText === 'dismiss' || btnText === '' || btnText.length < 5;
-              const parentText = (btn.parentElement?.textContent || '').toLowerCase();
-              const isInPromo = parentText.includes('ready to play') || 
-                               parentText.includes('apply now') || 
-                               parentText.includes('casino credit') ||
-                               parentText.includes('keep the party');
-              if (isCloseButton || isInPromo) {
-                btn.click();
-                await wait(200);
-              }
-            }
-          } catch (e) {}
-        }
-        
-        // Hide promotional banners from DOM
-        const promoElements = document.querySelectorAll('[class*="promo"], [class*="banner"], [class*="overlay"], [class*="modal"]');
-        for (const promo of promoElements) {
-          const promoText = (promo.textContent || '').toLowerCase();
-          if (promoText.includes('ready to play') || promoText.includes('apply now') || 
-              promoText.includes('casino credit') || promoText.includes('keep the party')) {
-            promo.style.display = 'none';
-            promo.style.visibility = 'hidden';
-            promo.style.height = '0';
-            promo.style.overflow = 'hidden';
-          }
-        }
-      }
-      
-      await closePromotionalBanners();
-      
-      for (let scrollPass = 0; scrollPass < 3; scrollPass++) {
-        // Close banners every few passes
-        if (scrollPass % 2 === 0) {
-          await closePromotionalBanners();
-        }
-        
-        // More thorough scrolling pattern to ensure lazy-loaded content appears
-        const docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-        
-        // Scroll to bottom
-        window.scrollTo(0, docHeight);
-        await wait(1200);
-        
-        // Scroll back up in steps to trigger any lazy loading
-        window.scrollTo(0, docHeight * 0.8);
-        await wait(600);
-        window.scrollTo(0, docHeight * 0.6);
-        await wait(600);
-        window.scrollTo(0, docHeight * 0.4);
-        await wait(600);
-        window.scrollTo(0, docHeight * 0.2);
-        await wait(600);
-        
-        // Scroll back down to bottom
-        window.scrollTo(0, docHeight);
-        await wait(1200);
-        
-        // Extra scroll past "bottom" to trigger any additional lazy loading
-        window.scrollBy(0, 500);
-        await wait(800);
-        
-        // Log progress
-        if (scrollPass % 2 === 0) {
-          const currentOfferButtons = document.querySelectorAll('button, a, [role="button"]');
-          const viewSailingCount = Array.from(currentOfferButtons).filter(btn => 
-            (btn.textContent || '').toLowerCase().includes('sailing')
-          ).length;
-          
-          // Also count unique offer codes on page
-          const pageText = document.body.textContent || '';
-          const offerCodes = pageText.match(/\\b[A-Z0-9]{5,12}[A-Z0-9]\\b/g) || [];
-          const uniqueCodes = [...new Set(offerCodes.filter(c => c.length >= 6 && c.length <= 12))].length;
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Scroll pass ' + (scrollPass + 1) + '/3: Found ' + viewSailingCount + ' View Sailings buttons, ~' + uniqueCodes + ' offer codes',
-            logType: 'info'
-          }));
-          
-          // Send progress to prevent timeout during long scroll phase
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'progress',
-            current: 0,
-            total: expectedOfferCount || viewSailingCount,
-            stepName: 'Scrolling to load offers (pass ' + (scrollPass + 1) + '/3)'
-          }));
-          
-          // Stop early if we found enough buttons (2x expected = each offer has 2 buttons)
-          if (expectedOfferCount > 0 && viewSailingCount >= expectedOfferCount * 2) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '✓ Found all expected offer buttons, stopping scroll',
-              logType: 'success'
-            }));
-            break;
-          }
-        }
-      }
-      
-      await closePromotionalBanners();
-      window.scrollTo(0, 0);
-      await wait(1500);
-
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Analyzing offers page structure...',
-        logType: 'info'
-      }));
-      
-      // Send progress to prevent timeout during analysis phase
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
         current: 0,
-        total: expectedOfferCount,
-        stepName: 'Analyzing offers page structure...'
-      }));
-
-      let offerCards = [];
-      
-      // CRITICAL: Track offers by a combination of code + index to handle DUPLICATE CODES
-      // Multiple offers can have the SAME offer code (e.g., multiple "2026 January instant reward certificate")
-      const offerCodeCounts = {}; // Track how many times we've seen each code
-      const seenOfferCards = new Set(); // Track unique card elements to avoid duplicates
-      const seenOfferCodes = new Map(); // Track codes to their card elements
-      
-      // Helper function to check if element is user's account/tier display (NOT an offer)
-      function isAccountStatusDisplay(element) {
-        const text = (element.textContent || '').toLowerCase();
-        const upperText = (element.textContent || '');
-        // Filter out user's tier credits display and account info
-        const isTierCreditsDisplay = text.includes('your current tier credits') || 
-                                     text.includes('current tier credits') ||
-                                     upperText.includes('Club Royale #') ||
-                                     text.includes('club royale #') ||
-                                     (text.includes('tier credits') && text.includes('club royale') && !text.includes('view sailing'));
-        return isTierCreditsDisplay;
-      }
-      
-      // Helper function to check if element is help/contact text (NOT an offer)
-      function isHelpOrContactText(element) {
-        const text = (element.textContent || '').toLowerCase();
-        // Filter out help sections, contact info, and other non-offer content
-        const isHelpText = text.includes('missing offers') ||
-                          text.includes('contact a club royale') ||
-                          text.includes('representative') ||
-                          text.includes('clubroyale@') ||
-                          text.includes('@rccl.com') ||
-                          (text.includes('contact') && text.includes('club royale')) ||
-                          text.includes('need help') ||
-                          text.includes('questions about your offers');
-        return isHelpText;
-      }
-      
-      // Helper function to get bounding rect Y position for sorting
-      function getButtonYPosition(btn) {
-        try {
-          const rect = btn.getBoundingClientRect();
-          return rect.top + window.scrollY;
-        } catch (e) {
-          return 0;
-        }
-      }
-      
-      // CRITICAL: Ignore promotional banners like "READY TO PLAY?"
-      // These banners appear BETWEEN offers and should NOT stop our detection
-      // NEW STRATEGY: Find ALL offer codes FIRST, then locate their containers and buttons
-      // This ensures we don't miss offers even if their View Sailings buttons are hard to detect
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🔍 Scanning entire page for all ' + expectedOfferCount + ' offers (code-first detection)...',
-        logType: 'info'
+        total: 100,
+        stepName: 'Fetching offers from API...'
       }));
       
-      // STEP 1: First, explicitly filter out promotional banner containers
-      // These have text like "READY TO PLAY?", "Apply now", "casino credit"
-      const promotionalBanners = Array.from(document.querySelectorAll('*')).filter(el => {
-        const text = (el.textContent || '').toLowerCase();
-        const hasPromoText = text.includes('ready to play') || 
-                            text.includes('apply now') || 
-                            text.includes('casino credit') ||
-                            text.includes('keep the party going') ||
-                            text.includes('onboard you can') ||
-                            text.includes('sign up') ||
-                            text.includes('join now') ||
-                            text.includes('exclusive benefits');
-        const isLargePromo = text.length > 30 && text.length < 1000 && hasPromoText;
-        return isLargePromo && !text.includes('view sailing') && !text.match(/\b[A-Z0-9]{5,12}[A-Z]\b/);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: headers,
+        credentials: 'include',
+        body: JSON.stringify(requestBody)
       });
       
-      // Hide promotional banners to prevent blocking
-      for (const banner of promotionalBanners) {
-        banner.style.display = 'none';
-        banner.style.visibility = 'hidden';
+      log('API response status: ' + response.status);
+      
+      if (response.status === 403) {
+        throw new Error('Session expired (403). Please log in again.');
       }
       
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🚫 Hidden ' + promotionalBanners.length + ' promotional banner(s)...',
-        logType: 'info'
-      }));
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error('API error: ' + response.status + ' - ' + errorText);
+      }
       
-      // Mark these banners so we can skip them
-      const bannersSet = new Set(promotionalBanners);
+      const data = await response.json();
       
-      // STEP 2: CODE-FIRST DETECTION - Find ALL offer codes on the page first
-      // This is more reliable than button detection for finding all offers
-      // RC displays codes with special character prefix like ⊛ or other symbols
-      // IMPROVED: Scan for codes embedded in text, not just standalone elements
-      const allOfferCodeElements = [];
-      const codePatterns = [
-        /\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)\b/g,  // 26CLS103, 26MAR103B, 26GRD103G, 26WST104
-        /\b(\d{4}[A-Z]\d{2}[A-Z]?)\b/g,         // 2601C05, 2601A08, 2601A05
-        /\b(\d{2}[A-Z]{3,6}%?)\b/g,             // 25GOLD, 25GOLD%
-        /\b(\d{2}[A-Z]{3}\d{3}[A-Z]?)\b/g       // 26NEW104, 26NEW104O
-      ];
+      if (!data || !Array.isArray(data.offers)) {
+        throw new Error('Invalid API response format');
+      }
       
-      // First try: Find elements with standalone offer codes (exact match)
-      const standaloneCodeElements = Array.from(document.querySelectorAll('span, div, p, a, [class*="code"], [class*="offer"], [class*="link"]')).filter(el => {
-        const text = (el.textContent || '').trim();
-        const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
-        const hasCode = cleanText.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && cleanText.length >= 5 && cleanText.length <= 15;
-        const hasCodeOriginal = text.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && text.length >= 5 && text.length <= 15;
-        const isNotNav = !el.closest('nav, header, footer, [role="navigation"]');
-        const isNotBanner = !Array.from(bannersSet).some(banner => banner.contains(el));
-        return (hasCode || hasCodeOriginal) && isNotNav && isNotBanner;
-      });
-      allOfferCodeElements.push(...standaloneCodeElements);
+      log('✅ API returned ' + data.offers.length + ' offers', 'success');
       
-      // Second try: Scan page text for embedded offer codes (more aggressive)
-      const pageTextElements = Array.from(document.querySelectorAll('div, span, p, section, article, [class*="offer"], [class*="card"]')).filter(el => {
-        const text = (el.textContent || '');
-        const isReasonableSize = text.length > 10 && text.length < 500;
-        const isNotNav = !el.closest('nav, header, footer, [role="navigation"]');
-        const isNotBanner = !Array.from(bannersSet).some(banner => banner.contains(el));
-        // Check if text contains any offer code pattern
-        const hasOfferCode = codePatterns.some(pattern => {
-          pattern.lastIndex = 0;
-          return pattern.test(text);
-        });
-        return isReasonableSize && isNotNav && isNotBanner && hasOfferCode;
-      });
-      allOfferCodeElements.push(...pageTextElements);
+      const offersWithEmptySailings = data.offers.filter(o => 
+        o?.campaignOffer?.offerCode && 
+        Array.isArray(o.campaignOffer.sailings) && 
+        (o.campaignOffer.sailings.length === 0 || (o.campaignOffer.sailings[0] && o.campaignOffer.sailings[0].itineraryCode === null))
+      );
       
-      // Extract unique offer codes from all found elements
-      const extractedCodes = new Set();
-      for (const el of allOfferCodeElements) {
-        const text = (el.textContent || '').trim();
-        const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
+      if (offersWithEmptySailings.length > 0) {
+        log('🔄 Refetching ' + offersWithEmptySailings.length + ' offers with empty/incomplete sailings...');
         
-        // Try exact match first
-        if (cleanText.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && cleanText.length >= 5 && cleanText.length <= 15) {
-          extractedCodes.add(cleanText);
-          continue;
-        }
-        
-        // Otherwise extract embedded codes
-        for (const pattern of codePatterns) {
-          pattern.lastIndex = 0;
-          let match;
-          while ((match = pattern.exec(text)) !== null) {
-            extractedCodes.add(match[1]);
-          }
-        }
-      }
-      
-      // Filter to only valid RC offer codes
-      const uniqueOfferCodes = [...extractedCodes].filter(code => {
-        return code.match(/^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/) ||  // 26CLS103, 26MAR103B, 26GRD103G, 26WST104
-               code.match(/^\d{4}[A-Z]\d{2}[A-Z]?$/) ||         // 2601C05, 2601A08, 2601A05
-               code.match(/^\d{2}[A-Z]{3,6}%?$/) ||             // 25GOLD, 25GOLD%
-               code.match(/^\d{2}[A-Z]{3}\d{3}[A-Z]?$/);        // 26NEW104, 26NEW104O
-      });
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🔍 Found ' + uniqueOfferCodes.length + ' unique offer codes: ' + uniqueOfferCodes.slice(0, 10).join(', '),
-        logType: 'info'
-      }));
-      
-      // STEP 3: PRIMARY DETECTION - Use VIEW SAILINGS buttons with Y-position clustering
-      // RC shows exactly 9 View Sailings buttons (one per offer), but may render 18 due to responsive layout
-      // We cluster by Y position to deduplicate
-      const allClickables = Array.from(document.querySelectorAll('button, a, [role="button"], [class*="btn"], [class*="button"], span[onclick], div[onclick], span, div, p')).filter(el => {
-        // Exclude elements that are inside promotional banners
-        return !Array.from(bannersSet).some(banner => banner.contains(el) || el.contains(banner));
-      });
-      
-      // Find ALL View Sailings buttons first - this is more reliable than Redeem buttons
-      const allViewSailingsButtons = allClickables.filter(el => {
-        const text = (el.textContent || '').trim().toLowerCase();
-        const isShortText = text.length < 50;
-        return isShortText && (
-          text === 'view sailings' ||
-          text === 'view sailing' ||
-          text.includes('view sailing') ||
-          text.includes('see sailing')
-        );
-      });
-      
-      // CRITICAL: Cluster View Sailings buttons by Y position
-      // RC renders 2 buttons per offer (responsive layout), so we cluster to get unique offers
-      const yPositionClusters = new Map();
-      const Y_THRESHOLD = 100; // Buttons within 100px Y are considered same offer
-      
-      for (const btn of allViewSailingsButtons) {
-        try {
-          const rect = btn.getBoundingClientRect();
-          const yPos = Math.round(rect.top + window.scrollY);
+        for (const offer of offersWithEmptySailings) {
+          const code = offer.campaignOffer.offerCode.trim();
+          log('  Refetching offer: ' + code);
           
-          // Find existing cluster within threshold
-          let foundCluster = null;
-          for (const [clusterY, buttons] of yPositionClusters.entries()) {
-            if (Math.abs(yPos - clusterY) < Y_THRESHOLD) {
-              foundCluster = clusterY;
-              break;
-            }
-          }
-          
-          if (foundCluster !== null) {
-            yPositionClusters.get(foundCluster).push(btn);
-          } else {
-            yPositionClusters.set(yPos, [btn]);
-          }
-        } catch (e) {
-          // If we can't get position, add to a default cluster
-          if (!yPositionClusters.has(-1)) {
-            yPositionClusters.set(-1, []);
-          }
-          yPositionClusters.get(-1).push(btn);
-        }
-      }
-      
-      // Sort clusters by Y position and take one button per cluster
-      const sortedClusterYs = [...yPositionClusters.keys()].filter(y => y >= 0).sort((a, b) => a - b);
-      const clusteredViewSailingsButtons = sortedClusterYs.map(y => yPositionClusters.get(y)[0]);
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🎯 Found ' + allViewSailingsButtons.length + ' View Sailings buttons → ' + clusteredViewSailingsButtons.length + ' unique offers (Y-clustered)',
-        logType: clusteredViewSailingsButtons.length >= expectedOfferCount ? 'success' : 'warning'
-      }));
-      
-      // Also find "REDEEM" buttons (yellow buttons) as an offer anchor.
-      // IMPORTANT: Filter OUT in-progress offers (Continue/Cancel Redemption) - they have no sailings to scrape
-      const redeemButtons = allClickables.filter(el => {
-        const text = (el.textContent || '').trim().toLowerCase();
-        const isShortText = text.length < 100;
-        // ONLY include actual "Redeem" buttons, NOT "Continue Redemption" or "Cancel Redemption"
-        const isRedeemButton = text === 'redeem' && !text.includes('redemption') && !text.includes('continue') && !text.includes('cancel');
-        return isShortText && isRedeemButton;
-      });
-      
-      // Deduplicate Redeem buttons by position
-      const uniqueRedeemButtons = [];
-      const redeemPositions = new Set();
-      for (const btn of redeemButtons) {
-        try {
-          const rect = btn.getBoundingClientRect();
-          const posKey = Math.round(rect.left / 10) + '|' + Math.round(rect.top / 10);
-          if (!redeemPositions.has(posKey)) {
-            redeemPositions.add(posKey);
-            uniqueRedeemButtons.push(btn);
-          }
-        } catch (e) {
-          uniqueRedeemButtons.push(btn);
-        }
-      }
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🎯 Found ' + uniqueRedeemButtons.length + ' unique REDEEM buttons',
-        logType: uniqueRedeemButtons.length > 0 ? 'success' : 'warning'
-      }));
-      
-      // Use REDEEM buttons as PRIMARY source when available (stable anchor).
-      // Fallback to Y-clustered View Sailings buttons if needed.
-      const primaryOfferAnchorButtons = uniqueRedeemButtons.length > 0 ? uniqueRedeemButtons : clusteredViewSailingsButtons;
-      const primaryAnchorLabel = uniqueRedeemButtons.length > 0 ? 'REDEEM' : 'View Sailings';
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🎯 Using ' + primaryAnchorLabel + ' buttons as primary offer anchors (' + primaryOfferAnchorButtons.length + ' offers)...',
-        logType: 'info'
-      }));
-      
-      // Helper to check if container has in-progress buttons
-      function hasInProgressButtons(container) {
-        const buttons = Array.from(container.querySelectorAll('button, a, [role="button"]'));
-        return buttons.some(btn => {
-          const btnText = (btn.textContent || '').trim().toLowerCase();
-          return btnText.includes('continue redemption') || btnText.includes('cancel redemption');
-        });
-      }
-      
-      // For each primary anchor button, find its offer container
-      for (const vsBtn of primaryOfferAnchorButtons) {
-        let parent = vsBtn.parentElement;
-        let bestContainer = null;
-        let bestScore = 0;
-        
-        for (let i = 0; i < 15 && parent; i++) {
-          const parentText = parent.textContent || '';
-          const parentLower = parentText.toLowerCase();
-          
-          // Skip banners
-          if (parentLower.includes('ready to play') || parentLower.includes('apply now') ||
-              parentLower.includes('casino credit') || parentLower.includes('keep the party')) {
-            parent = parent.parentElement;
-            continue;
-          }
-          
-          // Skip account displays
-          if (isAccountStatusDisplay(parent) || isHelpOrContactText(parent)) {
-            parent = parent.parentElement;
-            continue;
-          }
-          
-          // Check for offer signals
-          const hasOfferCode = parentText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?)\b/);
-          const hasTradeIn = parentLower.includes('trade-in') || parentLower.includes('trade in');
-          const hasRedeem = parentText.includes('Redeem by') || parentText.match(/Redeem\s+by/i);
-          const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+,\s*\d{4}/i);
-          const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Room for Two|Stateroom)/i);
-          const hasDollarValue = parentText.match(/\$[\d,]+\.?\d*/);
-          const hasOfferKeyword = parentText.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Getaway|West Coast|Spins|Gold)/i);
-          const hasRedeemButton = Array.from(parent.querySelectorAll('button, a, span, div')).some(btn => {
-            const btnText = (btn.textContent || '').trim().toLowerCase();
-            const isRedeemButton = btnText === 'redeem' || btnText.includes('redemption') || btnText.includes('continue redeem') || btnText.includes('cancel redeem');
-            return isRedeemButton;
-          });
-          
-          const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
-          
-          let score = 0;
-          if (hasOfferCode) score += 4;
-          if (hasTradeIn) score += 3;
-          if (hasRedeem) score += 3;
-          if (hasExpiry) score += 2;
-          if (hasCabinType) score += 2;
-          if (hasDollarValue) score += 2;
-          if (hasOfferKeyword) score += 1;
-          if (hasRedeemButton) score += 3;
-          
-          // Count View Sailings buttons in this container
-          const vsBtnsInParent = Array.from(parent.querySelectorAll('button, a, span, div')).filter(btn => {
-            const btnText = (btn.textContent || '').trim().toLowerCase();
-            return btnText.length < 40 && (btnText.includes('sailing') || btnText === 'view sailings');
-          }).length;
-          
-          if (isReasonableSize && score >= 2) {
-            // Allow containers with 1-4 buttons (responsive layout may show multiples)
-            if (vsBtnsInParent >= 1 && vsBtnsInParent <= 4) {
-              score += 3;
-            }
-            
-            if (score > bestScore) {
-              bestScore = score;
-              bestContainer = parent;
-            }
-            
-            // If we have a strong match with Redeem button, use it
-            if (score >= 10 && hasRedeemButton) break;
-          }
-          
-          parent = parent.parentElement;
-        }
-        
-        if (bestContainer && !seenOfferCards.has(bestContainer)) {
-          // CRITICAL: Skip in-progress offers (they have no sailings to scrape)
-          if (hasInProgressButtons(bestContainer)) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '🚫 Skipping IN PROGRESS offer (Continue/Cancel Redemption detected)',
-              logType: 'info'
-            }));
-            continue;
-          }
-          
-          const containerText = bestContainer.textContent || '';
-          const codeMatch = containerText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?)\b/);
-          const offerCode = codeMatch ? codeMatch[1] : '';
-          const expiryMatch = containerText.match(/Redeem by ([A-Za-z]+ \d+, \d{4})/i);
-          const expiry = expiryMatch ? expiryMatch[1] : '';
-          
-          seenOfferCards.add(bestContainer);
-          offerCards.push(bestContainer);
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Y-clustered found offer: ' + (offerCode || '[no code]') + ' (expires: ' + (expiry || 'unknown') + ')',
-            logType: 'info'
-          }));
-        }
-      }
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '📋 Y-clustered detection found ' + offerCards.length + ' unique offer containers',
-        logType: offerCards.length >= expectedOfferCount ? 'success' : 'warning'
-      }));
-      
-      // STEP 5: REDEEM-BUTTON SUPPLEMENT - Add any offers found via Redeem buttons not already detected
-      if (uniqueRedeemButtons.length > 0 && offerCards.length < expectedOfferCount) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '🔄 Supplementing with Redeem-button detection (' + uniqueRedeemButtons.length + ' buttons)...',
-          logType: 'info'
-        }));
-        
-        for (const redeemBtn of uniqueRedeemButtons) {
-          let parent = redeemBtn.parentElement;
-          let bestContainer = null;
-          let bestScore = 0;
-          
-          for (let i = 0; i < 15 && parent; i++) {
-            const parentText = parent.textContent || '';
-            const parentLower = parentText.toLowerCase();
-            
-            if (parentLower.includes('ready to play') || parentLower.includes('apply now') ||
-                parentLower.includes('casino credit') || parentLower.includes('keep the party')) {
-              parent = parent.parentElement;
-              continue;
-            }
-            
-            if (isAccountStatusDisplay(parent) || isHelpOrContactText(parent)) {
-              parent = parent.parentElement;
-              continue;
-            }
-            
-            const hasOfferCode = parentText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?)\b/);
-            const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d+,\s*\d{4}/i);
-            const hasViewBtn = Array.from(parent.querySelectorAll('button, a, span, div')).some(btn => {
-              const btnText = (btn.textContent || '').toLowerCase().trim();
-              return btnText.length < 40 && btnText.includes('sailing');
+          try {
+            const refetchBody = { ...requestBody, offerCode: code };
+            const refetchResponse = await fetch(endpoint, {
+              method: 'POST',
+              headers: headers,
+              credentials: 'include',
+              body: JSON.stringify(refetchBody)
             });
             
-            const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
-            
-            let score = 0;
-            if (hasOfferCode) score += 4;
-            if (hasExpiry) score += 3;
-            if (hasViewBtn) score += 5;
-            
-            if (isReasonableSize && score >= 4 && score > bestScore) {
-              bestScore = score;
-              bestContainer = parent;
-            }
-            
-            parent = parent.parentElement;
-          }
-          
-          if (bestContainer && !seenOfferCards.has(bestContainer)) {
-            // CRITICAL: Skip in-progress offers
-            if (hasInProgressButtons(bestContainer)) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '🚫 Skipping IN PROGRESS offer (Continue/Cancel Redemption detected)',
-                logType: 'info'
-              }));
-              continue;
-            }
-            
-            seenOfferCards.add(bestContainer);
-            offerCards.push(bestContainer);
-            
-            const containerText = bestContainer.textContent || '';
-            const codeMatch = containerText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?)\b/);
-            const offerCode = codeMatch ? codeMatch[1] : '';
-            
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Redeem-supplement found: ' + (offerCode || '[no code]'),
-              logType: 'info'
-            }));
-          }
-        }
-      }
-      
-      // FALLBACK: CODE-FIRST APPROACH - Only if Redeem detection didn't find enough
-      // Build offer cards from offer codes directly
-      // IMPROVED: Lower threshold to catch missing offers
-      if (uniqueOfferCodes.length > 0 && (offerCards.length < expectedOfferCount || offerCards.length < 3)) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '🔄 Using CODE-FIRST detection as fallback (found ' + offerCards.length + '/' + expectedOfferCount + ')...',
-          logType: 'info'
-        }));
-        
-        // For each unique offer code, find the BEST container (only ONE per code)
-        // This prevents duplicate offers when the same code appears multiple times on page
-        // CRITICAL: RC shows offers in a 2-column grid, so each code appears in DOM twice
-        // We need to pick only ONE container per unique code
-        const codeBasedOfferCards = [];
-        const seenCodeContainers = new Set();
-        const bestContainerByCode = new Map(); // Track best container per unique code
-        const processedYPositions = new Set(); // Track Y positions to detect column duplicates
-        
-        // Sort codes by their Y position on page to process in order
-        const codeElementsWithPosition = [];
-        for (const code of uniqueOfferCodes) {
-          // Skip codes that look like dates, tier credits, or reservation numbers
-          if (code.match(/^\d{4,}$/) || code === 'CURRENT' || code.match(/^\d{6,}$/)) continue;
-          
-          // Skip invalid codes (account numbers, random words)
-          if (!isValidOfferCode(code)) continue;
-          
-          // Find all elements containing this exact code (with or without prefix)
-          const codeElements = allOfferCodeElements.filter(el => {
-            const text = (el.textContent || '').trim();
-            const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
-            return text === code || cleanText === code;
-          });
-          
-          // For each code, only take the FIRST element found (leftmost column)
-          // This avoids duplicates from the 2-column grid layout
-          let firstElementForCode = null;
-          let firstYPos = Infinity;
-          
-          for (const codeEl of codeElements) {
-            try {
-              const rect = codeEl.getBoundingClientRect();
-              const yPos = rect.top + window.scrollY;
-              const xPos = rect.left;
-              // Prefer leftmost element at similar Y position, or topmost element
-              if (yPos < firstYPos - 50 || (Math.abs(yPos - firstYPos) < 50 && xPos < (firstElementForCode ? firstElementForCode.getBoundingClientRect().left : Infinity))) {
-                firstYPos = yPos;
-                firstElementForCode = codeEl;
-              }
-            } catch (e) {
-              if (!firstElementForCode) {
-                firstElementForCode = codeEl;
-                firstYPos = 0;
-              }
-            }
-          }
-          
-          if (firstElementForCode) {
-            codeElementsWithPosition.push({ code, element: firstElementForCode, yPos: firstYPos });
-          }
-        }
-        
-        // Sort by Y position
-        codeElementsWithPosition.sort((a, b) => a.yPos - b.yPos);
-        
-        // Process codes in order (top to bottom on page)
-        // Find the BEST container for each unique code
-        for (const { code, element: codeEl } of codeElementsWithPosition) {
-          let parent = codeEl.parentElement;
-          let bestContainer = null;
-          let bestScore = 0;
-          
-          for (let i = 0; i < 15 && parent; i++) {
-            const parentText = parent.textContent || '';
-            const parentLower = parentText.toLowerCase();
-            
-            // Skip promotional banners
-            if (parentLower.includes('ready to play') || parentLower.includes('apply now') ||
-                parentLower.includes('casino credit') || parentLower.includes('keep the party')) {
-              parent = parent.parentElement;
-              continue;
-            }
-            
-            // Skip account status displays
-            if (isAccountStatusDisplay(parent)) {
-              parent = parent.parentElement;
-              continue;
-            }
-            
-            // Skip help/contact text
-            if (isHelpOrContactText(parent)) {
-              parent = parent.parentElement;
-              continue;
-            }
-            
-            // Check for offer signals
-            const hasTradeIn = parentLower.includes('trade-in') || parentLower.includes('trade in');
-            const hasRedeem = parentText.includes('Redeem by') || parentText.match(/Redeem\s+by/i);
-            const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
-            const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Room for Two|Stateroom)/i);
-            const hasDollarValue = parentText.match(/\\$[\\d,]+\\.?\\d*/);
-            const hasViewBtn = Array.from(parent.querySelectorAll('button, a, span, div')).some(btn => {
-              const btnText = (btn.textContent || '').toLowerCase().trim();
-              return btnText.length < 40 && (btnText.includes('sailing') || btnText === 'view sailings');
-            });
-            const hasOfferKeyword = parentText.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Getaway|Spins|Jackpot|Discount|Benefit|Gold)/i);
-            
-            const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
-            
-            // Calculate score
-            let score = 0;
-            if (hasTradeIn) score += 3;
-            if (hasRedeem) score += 3;
-            if (hasExpiry) score += 2;
-            if (hasCabinType) score += 2;
-            if (hasDollarValue) score += 2;
-            if (hasViewBtn) score += 5; // High priority for View Sailings button
-            if (hasOfferKeyword) score += 1;
-            
-            // Count offer codes in this container - prefer containers with 1-2 codes
-            const codesInParent = (parentText.match(/\\b[A-Z0-9]{5,12}[A-Z0-9%]\\b/g) || []);
-            const uniqueCodesInParent = [...new Set(codesInParent)].length;
-            
-            if (isReasonableSize && score >= 2) {
-              // Prefer containers with fewer codes (more specific to this offer)
-              if (uniqueCodesInParent <= 2) {
-                score += 2;
-              } else if (uniqueCodesInParent > 4) {
-                score -= 2; // Penalize containers with too many codes
-              }
+            if (refetchResponse.ok) {
+              const refetchData = await refetchResponse.json();
+              const refreshedOffer = refetchData.offers?.find(o => o?.campaignOffer?.offerCode === code);
               
-              if (score > bestScore) {
-                bestScore = score;
-                bestContainer = parent;
-              }
-              
-              // If we have a strong match with View Sailings button, use it
-              if (score >= 8 && hasViewBtn && uniqueCodesInParent <= 2) {
-                break;
-              }
-            }
-            
-            parent = parent.parentElement;
-          }
-          
-          // CRITICAL: Only keep the BEST container for each unique code
-          // This prevents duplicate offers when the same code appears in multiple places
-          if (bestContainer && bestScore > 0) {
-            const existingEntry = bestContainerByCode.get(code);
-            if (!existingEntry || bestScore > existingEntry.score) {
-              bestContainerByCode.set(code, { container: bestContainer, code: code, score: bestScore });
-            }
-          }
-        }
-        
-        // Now add ONLY the best container per unique code
-        for (const [code, entry] of bestContainerByCode.entries()) {
-          if (!seenCodeContainers.has(entry.container) && !isAccountStatusDisplay(entry.container) && !isHelpOrContactText(entry.container)) {
-            // CRITICAL: Skip in-progress offers
-            if (hasInProgressButtons(entry.container)) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '🚫 Skipping IN PROGRESS offer code: ' + code,
-                logType: 'info'
-              }));
-              continue;
-            }
-            
-            seenCodeContainers.add(entry.container);
-            codeBasedOfferCards.push(entry);
-          }
-        }
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '📋 Code-first detection found ' + codeBasedOfferCards.length + ' unique offer codes',
-          logType: 'info'
-        }));
-        
-        // Add code-based cards to offerCards (primary source)
-        for (const { container, code } of codeBasedOfferCards) {
-          if (!seenOfferCards.has(container)) {
-            seenOfferCards.add(container);
-            offerCards.push(container);
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Code-first found offer: ' + code,
-              logType: 'info'
-            }));
-          }
-        }
-      }
-      
-      // BUTTON-BASED DETECTION: Only use if code-first didn't find enough offers
-      // This is now a FALLBACK method
-      const needMoreOffers = expectedOfferCount > 0 && offerCards.length < expectedOfferCount;
-      
-      if (needMoreOffers || offerCards.length === 0) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '🔄 Button-based detection as fallback (found ' + offerCards.length + '/' + expectedOfferCount + ' via code-first)...',
-          logType: 'info'
-        }));
-      }
-      
-      let buttonIndex = 0;
-      
-      // Sort buttons by their Y position on page (top to bottom)
-      // This ensures we process offers in order as they appear on page
-      const sortedButtons = [...clusteredViewSailingsButtons].sort((a, b) => {
-        return getButtonYPosition(a) - getButtonYPosition(b);
-      });
-      
-      // First pass: collect all potential offer cards from buttons
-      const buttonToCard = new Map();
-      
-      for (const btn of sortedButtons) {
-        buttonIndex++;
-        
-        // Skip if this button is inside a promotional banner
-        const isInsideBanner = Array.from(bannersSet).some(banner => banner.contains(btn));
-        if (isInsideBanner) {
-          continue;
-        }
-        
-        let parent = btn.parentElement;
-        let offerCard = null;
-        let bestCandidate = null;
-        let bestCandidateScore = 0;
-        
-        // Work upwards to find the offer container - be MORE lenient
-        for (let i = 0; i < 20 && parent; i++) {
-          const parentText = parent.textContent || '';
-          const parentLower = parentText.toLowerCase();
-          
-          // Check for offer signals
-          const hasOfferCode = parentText.match(/\\b([A-Z0-9]{5,12}[A-Z0-9])\\b/);
-          const hasTradeIn = parentLower.includes('trade-in value') || parentLower.includes('trade in value');
-          const hasRedeem = parentText.includes('Redeem by') || parentText.match(/Redeem\s+by/i);
-          const hasFeatured = parentText.includes('Featured Offer');
-          const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
-          const hasCabinType = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite|Room for Two|Stateroom)/i);
-          const hasDollarValue = parentText.match(/\\$[\\d,]+\\.?\\d*/); // Trade-in values
-          const hasOfferKeyword = parentText.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Gold|Coast|Spins|Getaway)/i);
-          
-          const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
-          
-          // Calculate signal score
-          let score = 0;
-          if (hasOfferCode) score += 3;
-          if (hasTradeIn) score += 3;
-          if (hasRedeem) score += 2;
-          if (hasExpiry) score += 2;
-          if (hasCabinType) score += 1;
-          if (hasDollarValue) score += 2;
-          if (hasOfferKeyword) score += 1;
-          if (hasFeatured) score += 1;
-          
-          if (isReasonableSize && score >= 2) {
-            const buttonsInContainer = Array.from(parent.querySelectorAll('button, a, [role="button"]')).filter(el => 
-              (el.textContent || '').match(/View Sailing|VIEW SAILING|See Sailing/i)
-            );
-            
-            // Allow containers with 1-3 View Sailings buttons (RC sometimes has multiple)
-            if (buttonsInContainer.length >= 1 && buttonsInContainer.length <= 3) {
-              // Prefer smaller containers with higher signal density
-              const density = score / (parentText.length / 100);
-              if (density > bestCandidateScore || (density === bestCandidateScore && parentText.length < (bestCandidate?.textContent?.length || Infinity))) {
-                bestCandidate = parent;
-                bestCandidateScore = density;
-              }
-              
-              // If we have a strong signal, use this container
-              if (score >= 4 && buttonsInContainer.length <= 2) {
-                offerCard = parent;
-                break;
-              }
-            }
-            // If too many buttons, this container is too large - keep looking up
-            if (buttonsInContainer.length > 3) {
-              parent = parent.parentElement;
-              continue;
-            }
-          }
-          
-          parent = parent.parentElement;
-        }
-        
-        // Use best candidate if we didn't find a definitive offer card
-        if (!offerCard && bestCandidate) {
-          offerCard = bestCandidate;
-        }
-        
-        if (offerCard) {
-          buttonToCard.set(btn, offerCard);
-        }
-      }
-      
-      // Second pass: deduplicate and add unique offer cards (ONLY if not already found via code-first)
-      for (const btn of sortedButtons) {
-        const offerCard = buttonToCard.get(btn);
-        if (!offerCard) continue;
-        
-        // Skip if we've already processed this exact card element (including from code-first)
-        if (seenOfferCards.has(offerCard)) {
-          continue;
-        }
-        
-        // CRITICAL: Skip user's account status/tier credits display - it's NOT an offer
-        if (isAccountStatusDisplay(offerCard)) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '🚫 Skipping account status display (not an offer)',
-            logType: 'info'
-          }));
-          continue;
-        }
-        
-        // CRITICAL: Skip help/contact text - it's NOT an offer
-        if (isHelpOrContactText(offerCard)) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '🚫 Skipping help/contact text (not an offer)',
-            logType: 'info'
-          }));
-          continue;
-        }
-        
-        const cardText = offerCard.textContent || '';
-        
-        // Look for offer code - be more flexible with pattern
-        const codeMatch = cardText.match(/\\b([A-Z0-9]{5,12}[A-Z0-9])\\b/);
-        const offerCode = codeMatch ? codeMatch[1] : '';
-        
-        let offerName = '';
-        const headings = Array.from(offerCard.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"]'));
-        for (const h of headings) {
-          const hText = (h.textContent || '').trim();
-          if (hText.length >= 5 && hText.length <= 100 && !hText.match(/Featured Offer|View Sailing|Redeem|Trade-in|^\\$|^\\d+$/i)) {
-            offerName = hText;
-            break;
-          }
-        }
-        
-        // CRITICAL: Handle MULTIPLE offers with the SAME offer code
-        // Each unique card element is a unique offer, even if codes match
-        const baseKey = offerCode || ('btn-' + buttonIndex + '-' + (offerName || 'unknown'));
-        
-        // Initialize or increment the count for this code
-        if (!offerCodeCounts[baseKey]) {
-          offerCodeCounts[baseKey] = 0;
-        }
-        offerCodeCounts[baseKey]++;
-        
-        // Mark this card as seen
-        seenOfferCards.add(offerCard);
-        offerCards.push(offerCard);
-        
-        const duplicateIndex = offerCodeCounts[baseKey];
-        const duplicateLabel = duplicateIndex > 1 ? ' [#' + duplicateIndex + ']' : '';
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Button-based found offer: ' + (offerName || offerCode || '[Unknown]') + duplicateLabel + ' (code: ' + (offerCode || 'N/A') + ')',
-          logType: 'info'
-        }));
-      }
-      
-      // NOTE: Position-based fallback DISABLED - it was causing duplicate offers
-      // The button-based detection with code-first approach should find all offers
-      // If we're still missing offers, it's likely due to lazy loading issues, not detection
-      
-      // ULTRA AGGRESSIVE FALLBACK: Only if we're still significantly short on offers
-      if (offerCards.length === 0 || (expectedOfferCount > 0 && offerCards.length < expectedOfferCount - 1)) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Found ' + offerCards.length + ' offers (expected ' + expectedOfferCount + '), trying ULTRA AGGRESSIVE fallback...',
-          logType: 'warning'
-        }));
-        
-        // ULTRA AGGRESSIVE: Scan ENTIRE page for ANY element that looks like an offer
-        // Include ALL div, article, section elements regardless of class
-        // BUT exclude promotional banners
-        const allElements = Array.from(document.querySelectorAll('div, article, section, li, main > *, body > div > *, [class*="card"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="tile"], [data-testid]')).filter(el => {
-          // Skip if inside a promotional banner
-          return !Array.from(bannersSet).some(banner => banner.contains(el) || el === banner);
-        });
-        
-        const fallbackCards = allElements.filter(el => {
-          const text = el.textContent || '';
-          const textLower = text.toLowerCase();
-          
-          // Look for ANY View Sailings button
-          const hasViewSailingsButton = Array.from(el.querySelectorAll('button, a, [role="button"], span, div')).some(child => {
-            const childText = (child.textContent || '').toLowerCase().trim();
-            return childText.length < 50 && (childText.includes('sailing') || childText.includes('view dates'));
-          });
-          
-          // Offer indicators - be VERY lenient
-          const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-          const hasTradeIn = textLower.includes('trade-in') || textLower.includes('trade in');
-          const hasRedeem = textLower.includes('redeem');
-          const hasFeatured = textLower.includes('featured');
-          const hasOfferKeywords = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom|Exclusive|Discounted|Ocean View)/i);
-          const hasOfferTitle = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Deal|Flash|Jackpot|Bonus|Getaway)/i);
-          const hasExpiry = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
-          const hasDollarValue = text.match(/\\$[\\d,]+/); // Trade-in values like $500.00
-          const isReasonableSize = text.length > 50 && text.length < 15000;
-          
-          // VERY lenient: just need 1 strong indicator OR button + any indicator
-          const strongIndicators = [hasOfferCode, hasTradeIn, hasRedeem, hasFeatured, hasDollarValue].filter(Boolean).length;
-          const weakIndicators = [hasOfferKeywords, hasOfferTitle, hasExpiry, hasViewSailingsButton].filter(Boolean).length;
-          
-          return isReasonableSize && (strongIndicators >= 1 || (hasViewSailingsButton && weakIndicators >= 1) || weakIndicators >= 2);
-        });
-        
-        const filteredFallback = fallbackCards.filter((el, idx, arr) => {
-          return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
-        });
-        
-        // Track seen card elements to avoid duplicates (but allow same code from different cards)
-        const existingCardElements = new Set(offerCards);
-        
-        for (const card of filteredFallback) {
-          // Skip if we've already processed this exact card element
-          if (existingCardElements.has(card)) {
-            continue;
-          }
-          
-          const text = card.textContent || '';
-          const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-          const code = codeMatch ? codeMatch[1] : '';
-          
-          // Allow cards even with duplicate codes - they may be different offers
-          // But skip account status displays, help text, and invalid codes
-          if (code && !isAccountStatusDisplay(card) && !isHelpOrContactText(card) && isValidOfferCode(code)) {
-            existingCardElements.add(card);
-            offerCards.push(card);
-            
-            let name = '';
-            const headings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6'));
-            for (const h of headings) {
-              const hText = (h.textContent || '').trim();
-              if (hText.length >= 5 && hText.length <= 80) {
-                name = hText;
-                break;
-              }
-            }
-            
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: 'Fallback found offer card: ' + (name || code || '[Unknown]'),
-              logType: 'info'
-            }));
-          }
-        }
-        
-        if (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Still missing offers (' + offerCards.length + '/' + expectedOfferCount + '), trying DEEP structure-based detection...',
-            logType: 'warning'
-          }));
-          
-          // DEEP SCAN: Look for offer codes directly and work backwards to find containers
-          // FIXED: Look for offer codes in larger text contexts, not just exact matches
-          // IMPROVED: Also scan for known RC offer code patterns
-          const offerCodeElements = Array.from(document.querySelectorAll('span, div, p, h1, h2, h3, h4, h5, h6, [class*="code"], [class*="offer"]')).filter(el => {
-            const text = (el.textContent || '').trim();
-            // Match various offer code patterns:
-            // - Standard: 26CLS103, 2601C05, 26NEW104, 26WST104, 26GRD103G
-            // - MGM: 25GOLD%
-            // - With letters: 2601A05, 2601A08
-            const hasCode = text.match(/\\b[A-Z0-9]{5,12}[A-Z0-9%]\\b/) || 
-                           text.match(/\\b\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?\\b/) ||
-                           text.match(/\\b\\d{4}[A-Z]\\d{2}[A-Z]?\\b/);
-            const isShortEnough = text.length < 150;
-            // Exclude navigation, header, footer elements
-            const isNotNav = !el.closest('nav, header, footer, [role="navigation"]');
-            // Exclude promotional banners
-            const isNotBanner = !Array.from(bannersSet).some(banner => banner.contains(el));
-            return hasCode && isShortEnough && isNotNav && isNotBanner;
-          });
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Deep scan found ' + offerCodeElements.length + ' potential offer codes on page',
-            logType: 'info'
-          }));
-          
-          // Log each offer code found to help debug
-          const codesFound = offerCodeElements.map(el => (el.textContent || '').trim()).slice(0, 15);
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Offer codes found: ' + codesFound.join(', '),
-            logType: 'info'
-          }));
-          
-          // Track seen containers to avoid duplicates
-          const seenContainers = new Set(offerCards);
-          
-          // For EACH offer code, find its parent container that looks like an offer card
-          for (const codeEl of offerCodeElements) {
-            const codeText = (codeEl.textContent || '').trim();
-            
-            let parent = codeEl.parentElement;
-            let offerContainer = null;
-            
-            for (let i = 0; i < 12 && parent; i++) {
-              const parentText = parent.textContent || '';
-              const parentLower = parentText.toLowerCase();
-              
-              // Check if this container has offer signals
-              const hasViewBtn = Array.from(parent.querySelectorAll('button, a, span, div')).some(btn => {
-                const btnText = (btn.textContent || '').toLowerCase().trim();
-                return btnText.length < 40 && (btnText.includes('sailing') || btnText.includes('view'));
-              });
-              const hasExpiry = parentText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
-              const hasCabin = parentText.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom)/i);
-              const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
-              
-              if (isReasonableSize && (hasViewBtn || hasExpiry || hasCabin)) {
-                // Check it only contains ONE offer code
-                const codesInContainer = (parentText.match(/\\b[A-Z0-9]{5,12}[A-Z]\\b/g) || []);
-                const uniqueCodes = [...new Set(codesInContainer)];
-                if (uniqueCodes.length === 1 || parentText.length < 2000) {
-                  offerContainer = parent;
-                  break;
-                }
-              }
-              parent = parent.parentElement;
-            }
-            
-            // Allow same code from different containers (different offers with same code)
-            if (offerContainer && !seenContainers.has(offerContainer) && !isHelpOrContactText(offerContainer)) {
-              // Validate the code looks like a real RC offer code
-              const codeMatch = codeText.match(/\b([A-Z0-9]{5,12}[A-Z0-9%])\b/);
-              const extractedCode = codeMatch ? codeMatch[1] : codeText;
-              if (isValidOfferCode(extractedCode)) {
-                seenContainers.add(offerContainer);
-                offerCards.push(offerContainer);
-                
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: 'Deep scan found offer by code: ' + codeText,
-                  logType: 'info'
-                }));
-              } else {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: '🚫 Skipping invalid code: ' + extractedCode,
-                  logType: 'info'
-                }));
-              }
-            }
-          }
-          
-          const structuralCards = allElements.filter(el => {
-            const text = el.textContent || '';
-            const textLower = text.toLowerCase();
-            const hasOfferCode = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-            const hasTradeIn = textLower.includes('trade-in') || textLower.includes('trade in');
-            const hasRedeem = textLower.includes('redeem');
-            const hasDollarAmount = text.match(/\\$[\\d,]+\\.?\\d*/); 
-            const hasExpiry = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d+,\\s*\\d{4}/i);
-            const hasCabinType = text.match(/(Balcony|Oceanview|Interior|Suite|Room for Two|Stateroom|Exclusive|Discounted|Ocean View)/i);
-            const hasOfferName = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Flash|Jackpot|Bonus|Royal|Premium|Getaway)/i);
-            const hasViewButton = Array.from(el.querySelectorAll('button, a, span, div')).some(child => {
-              const childText = (child.textContent || '').toLowerCase().trim();
-              return childText.length < 50 && (childText.includes('sailing') || childText.includes('view'));
-            });
-            const isReasonableSize = text.length > 40 && text.length < 15000;
-            const offerSignals = [hasOfferCode, hasTradeIn, hasRedeem, hasDollarAmount, hasExpiry, hasCabinType, hasOfferName, hasViewButton].filter(Boolean).length;
-            
-            // VERY lenient: just 1 strong signal or 2 weak signals
-            return (hasOfferCode || hasTradeIn || hasRedeem) || (offerSignals >= 2 && isReasonableSize);
-          });
-          
-          const filteredStructural = structuralCards.filter((el, idx, arr) => {
-            return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
-          });
-          
-          for (const card of filteredStructural) {
-            // Skip if already seen this card element
-            if (seenContainers.has(card)) {
-              continue;
-            }
-            
-            const text = card.textContent || '';
-            const codeMatch = text.match(/\\b([A-Z0-9]{5,12}[A-Z])\\b/);
-            const code = codeMatch ? codeMatch[1] : '';
-            
-            // Allow same code from different cards (different offers with same code)
-            // But skip account status displays, help text, and invalid codes
-            if (code && !isAccountStatusDisplay(card) && !isHelpOrContactText(card) && isValidOfferCode(code)) {
-              seenContainers.add(card);
-              offerCards.push(card);
-              
-              let name = '';
-              const headings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6'));
-              for (const h of headings) {
-                const hText = (h.textContent || '').trim();
-                if (hText.length >= 5 && hText.length <= 80) {
-                  name = hText;
-                  break;
-                }
-              }
-              
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: 'Structure-based detection found offer: ' + (name || code || '[Unknown]'),
-                logType: 'info'
-              }));
-            }
-          }
-        }
-      }
-      
-      // Final deduplication: ensure no container appears more than once
-      // CRITICAL: Only deduplicate by CONTAINER, not by name+code
-      // IMPORTANT: Multiple offers can have the same name (e.g., "2026 January Instant Rewards")
-      // and even the same code if they're instant rewards/certificates (2601C05, 2601A05, etc.)
-      const finalOfferCards = [];
-      const finalSeenContainers = new Set();
-      
-      for (const card of offerCards) {
-        // Only skip if we've already processed this EXACT DOM element
-        if (finalSeenContainers.has(card)) {
-          continue;
-        }
-        
-        finalSeenContainers.add(card);
-        finalOfferCards.push(card);
-      }
-      offerCards = finalOfferCards;
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '✅ Identified ' + offerCards.length + ' offer cards on page' + (expectedOfferCount > 0 ? ' (expected: ' + expectedOfferCount + ')' : ''),
-        logType: (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) ? 'warning' : 'success'
-      }));
-      
-      if (expectedOfferCount > 0 && offerCards.length < expectedOfferCount) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '⚠️ WARNING: Found ' + offerCards.length + ' offers but expected ' + expectedOfferCount + '. Some offers may not be scraped.',
-          logType: 'warning'
-        }));
-      }
-      
-      if (offerCards.length === 0) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'No offer cards found',
-          logType: 'warning'
-        }));
-        
-        sendOfferBatch([], true, 0, 0);
-        return;
-      }
-      
-      let totalSailingsScraped = 0;
-      let processedCount = 0;
-      let pendingBatch = [];
-
-      function flushBatch(force = false) {
-        if (pendingBatch.length >= BATCH_SIZE || (force && pendingBatch.length > 0)) {
-          sendOfferBatch(pendingBatch, false);
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '📤 Sent batch of ' + pendingBatch.length + ' sailings (total: ' + totalSailingsScraped + ')',
-            logType: 'info'
-          }));
-          pendingBatch = [];
-        }
-      }
-
-      for (let i = 0; i < offerCards.length; i++) {
-        const card = offerCards[i];
-        const cardText = card.textContent || '';
-        
-        // IMPROVED: Extract offer code from SPECIFIC elements within the card
-        // RC displays offer codes in specific locations (usually top-right with link icon)
-        let offerCode = '';
-        
-        // STRATEGY 1: Look for offer code in ALL elements within the card
-        // CRITICAL: RC displays codes in top-right, often in links or spans with icon prefix
-        const codeElements = Array.from(card.querySelectorAll('*'));
-        
-        for (const el of codeElements) {
-          const text = (el.textContent || '').trim();
-          
-          // Skip large elements (likely contain full offer text)
-          if (text.length > 100) continue;
-          
-          // Clean prefix icons/symbols and common words
-          const cleanText = text
-            .replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•🔗\s]+/, '')
-            .replace(/^(Share|Copy|Code|Link)\s+/i, '')
-            .trim();
-          
-          // Skip if too short
-          if (cleanText.length < 5) continue;
-          
-          // AGGRESSIVE: Extract code from text (handles "Share 26CLS103", "🔗2601A08", etc.)
-          const codeMatch = cleanText.match(/(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?|\d{2}[A-Z]{3}\d{3}[A-Z]?)/i);
-          if (codeMatch) {
-            const extractedCode = codeMatch[1].toUpperCase();
-            if (isValidOfferCode(extractedCode)) {
-              offerCode = extractedCode;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '  🔍 Found code in element: "' + text.substring(0, 30) + '..." → ' + offerCode,
-                logType: 'info'
-              }));
-              break;
-            }
-          }
-        }
-        
-        // STRATEGY 2: Extract from card text using patterns if not found
-        if (!offerCode) {
-          offerCode = extractOfferCodeFromText(cardText);
-        }
-        
-        // STRATEGY 3: Try more aggressive pattern matching on card text
-        if (!offerCode) {
-          const offerCodeMatch = cardText.match(/(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?|\d{2}[A-Z]{3}\d{3}[A-Z]?)(?![a-z])/i);
-          if (offerCodeMatch && isValidOfferCode(offerCodeMatch[1])) {
-            offerCode = offerCodeMatch[1].toUpperCase();
-          }
-        }
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '━━━━━ Offer ' + (i + 1) + '/' + offerCards.length + ' ━━━━━',
-          logType: 'info'
-        }));
-        
-        let offerName = '';
-        
-        const excludePatterns = /^Featured Offer$|^View Sailing|^View Sailings$|^See Sailing|^Redeem|^Trade-in value|^\\$|^My Offers$|^Club Royale Offers$|^Offers$|^Exclusive$|^Available$|^Learn More$|^Book Now$|^Select$|^Close$|^Filter$|^Sort$|^Room for Two$|^\\d+\\s+NIGHT/i;
-        
-        const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"], [class*="name"], [class*="offer"], span, p, div'));
-        
-        const sortedHeadings = allHeadings.sort((a, b) => {
-          const depthA = getElementDepth(a, card);
-          const depthB = getElementDepth(b, card);
-          return depthA - depthB;
-        });
-        
-        function getElementDepth(el, container) {
-          let depth = 0;
-          let current = el;
-          while (current && current !== container) {
-            depth++;
-            current = current.parentElement;
-          }
-          return depth;
-        }
-        
-        const offerNamePatterns = /(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Sail|Summer|Winter|Spring|Fall|Holiday|Special|Wager|Deal|Flash|Hot|Golden|Diamond|Platinum|Elite|Premium|VIP|High Roller|All In|Big Win|Cash|Free|Comp|Cruise|Coast|West|Spins|Gamechanger|Getaway|Instant|Rewards?|MGM|Discount|Benefit)/i;
-        
-        for (const heading of sortedHeadings) {
-          let headingText = (heading.textContent || '').trim();
-          const words = headingText.split(/\\s+/).length;
-          
-          if (headingText.length > 150) continue;
-          
-          // CRITICAL: Remove offer code suffix from name if present
-          // Codes like "26CLS103" or "25GOLD%" often get appended to offer names
-          // FIXED: More aggressive pattern to strip codes from the end of offer names
-          
-          // Pattern 1: Try with word boundary (space before code)
-          let codeAtEnd = headingText.match(/^(.+)\\s+(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?|\\d{2}[A-Z]{3}\\d{3}[A-Z]?)$/i);
-          
-          // Pattern 2: Code directly attached without space (e.g., "Max Bet March26MAR103")
-          // Match any text ending with a letter, then a code pattern immediately after
-          if (!codeAtEnd) {
-            codeAtEnd = headingText.match(/^(.+[a-zA-Z])(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?|\\d{2}[A-Z]{3}\\d{3}[A-Z]?)$/i);
-          }
-          
-          // Pattern 3: Very aggressive - any text followed by digits+letters pattern
-          if (!codeAtEnd) {
-            // Match text ending with letter/space, then any alphanumeric code pattern
-            codeAtEnd = headingText.match(/^(.+[a-zA-Z\\s])(\\d{2}[A-Z0-9]{3,}[A-Z%]*)$/i);
-          }
-          
-          // Pattern 4: Ultra aggressive - strip any trailing code-like pattern
-          if (!codeAtEnd) {
-            // Look for text followed by 2digits + 2+letters + optional digits/letters
-            codeAtEnd = headingText.match(/^(.*?)\\s*(\\d{2}[A-Z][A-Z]+\\d*[A-Z%]*)$/i);
-          }
-          
-          if (codeAtEnd && codeAtEnd[1] && codeAtEnd[1].length >= 3) {
-            const extractedName = codeAtEnd[1].trim();
-            const extractedCode = codeAtEnd[2];
-            
-            // Only use if extracted name is reasonable (not just 1-2 chars)
-            if (extractedName.length >= 5) {
-              headingText = extractedName;
-              if (!offerCode && extractedCode && extractedCode.length >= 5) {
-                offerCode = extractedCode.toUpperCase();
-              }
-            }
-          }
-          
-          const looksLikeOfferName = offerNamePatterns.test(headingText) && 
-                                    !headingText.match(/\\d{2}\\/\\d{2}/) &&
-                                    !headingText.match(/of the Seas/i);
-          
-          if (headingText && 
-              headingText.length >= 3 && 
-              headingText.length <= 100 &&
-              words >= 1 &&
-              words <= 12 &&
-              !excludePatterns.test(headingText) &&
-              !headingText.match(/^\\d+$/) &&
-              !headingText.match(/^[A-Z0-9]{5,15}$/) &&
-              (looksLikeOfferName || heading.tagName.match(/^H[1-6]$/i))) {
-            offerName = headingText;
-            break;
-          }
-        }
-        
-        if (!offerName || offerName.length < 3) {
-          const textContent = cardText;
-          const promoPatterns = [
-            /([A-Z][a-z]+\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|Chance|House|Wagers?|Deal|Flash|Jackpot|Bonus))/,
-            /((?:Last Chance|Full House|Lucky|Double|Triple|High Roller|All In|Big Win|Golden|Diamond|Flash)\\s+[A-Za-z]+)/,
-            /([A-Z][a-z]+\\s+[A-Z][a-z]+)(?=\\s*[A-Z0-9]{5,15})/
-          ];
-          
-          for (const pattern of promoPatterns) {
-            const match = textContent.match(pattern);
-            if (match && match[1] && match[1].length >= 5 && match[1].length <= 60) {
-              const candidate = match[1].trim();
-              if (!excludePatterns.test(candidate)) {
-                offerName = candidate;
-                break;
-              }
-            }
-          }
-        }
-        
-        if (!offerName || offerName.length < 3) {
-          const lines = cardText.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
-          for (const line of lines.slice(0, 20)) {
-            const words = line.split(/\\s+/).length;
-            if (line.length >= 3 && 
-                line.length <= 100 && 
-                words >= 1 && 
-                words <= 12 &&
-                !excludePatterns.test(line) &&
-                !line.match(/^\\d+$/) &&
-                !line.match(/^[A-Z0-9]{5,15}$/) &&
-                !line.match(/\\d{2}\\/\\d{2}/) &&
-                offerNamePatterns.test(line)) {
-              offerName = line;
-              break;
-            }
-          }
-        }
-        
-        // offerCode already extracted at start of loop
-        
-        if (!offerName || offerName.length < 3) {
-          if (offerCode) {
-            offerName = 'Offer ' + offerCode;
-          }
-        }
-        
-        if (!offerName || offerName.length < 3) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '⚠️ Skipping - no valid offer name found',
-            logType: 'warning'
-          }));
-          continue;
-        }
-        
-        // CRITICAL: Skip if offer name indicates it's account status or help text (NOT an actual offer)
-        const offerNameLower = offerName.toLowerCase();
-        if (offerNameLower.includes('your current tier') || 
-            offerNameLower.includes('tier credits') ||
-            offerName.includes('Club Royale #') ||
-            offerNameLower.includes('missing offers') ||
-            offerNameLower.includes('contact a club royale') ||
-            offerNameLower.includes('representative') ||
-            offerNameLower.includes('clubroyale@') ||
-            offerNameLower.includes('@rccl.com')) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '🚫 Skipping non-offer content: ' + offerName.substring(0, 50) + '...',
-            logType: 'info'
-          }));
-          continue;
-        }
-        
-        // Also skip if extracted offerCode is clearly not an offer code (like CURRENT)
-        const invalidCodePatterns = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER', 'FEATURED', 'BENEFITS'];
-        if (offerCode && invalidCodePatterns.includes(offerCode.toUpperCase())) {
-          offerCode = '';
-        }
-        
-        // Validate offer code format
-        if (offerCode && !isValidOfferCode(offerCode)) {
-          offerCode = '';
-        }
-        
-        // Last chance: attempt extraction again from full card text
-        if (!offerCode) {
-          const betterCode = extractOfferCodeFromText(cardText);
-          if (betterCode && isValidOfferCode(betterCode)) {
-            offerCode = betterCode;
-          }
-        }
-        
-        if (offerCode) {
-          offerCode = offerCode.toUpperCase();
-        }
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Offer Name: ' + offerName,
-          logType: 'info'
-        }));
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Offer Code: ' + (offerCode || '[NOT FOUND]'),
-          logType: offerCode ? 'info' : 'warning'
-        }));
-        
-        const expiryMatch = cardText.match(/Redeem by ([A-Za-z]+ \\d+, \\d{4})/i);
-        const offerExpiry = expiryMatch ? expiryMatch[1] : '';
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Expiry Date: ' + (offerExpiry || '[NOT FOUND]'),
-          logType: offerExpiry ? 'info' : 'warning'
-        }));
-        
-        const tradeInMatch = cardText.match(/\\$([\\d,]+\\.\\d{2})\\s*trade-in value/i);
-        const tradeInValue = tradeInMatch ? tradeInMatch[1] : '';
-        if (tradeInValue) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '  Trade-in Value: $' + tradeInValue,
-            logType: 'info'
-          }));
-        }
-        
-        const offerType = 'Club Royale';
-        const perks = tradeInValue ? 'Trade-in value: $' + tradeInValue : '';
-
-        // CRITICAL: Check if this offer is "in progress" (has Continue/Cancel Redemption buttons)
-        const inProgressBtn = Array.from(card.querySelectorAll('button, a, [role="button"]')).find(el => {
-          const btnText = (el.textContent || '').trim().toLowerCase();
-          return btnText.includes('continue redemption') || btnText.includes('cancel redemption');
-        });
-        
-        if (inProgressBtn) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '  ⚠️ Skipping IN PROGRESS offer (has Continue/Cancel Redemption button - no sailings to scrape)',
-            logType: 'warning'
-          }));
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: 'Offer ' + (i + 1) + '/' + offerCards.length + ' (' + offerName + '): IN PROGRESS - skipped',
-            logType: 'info'
-          }));
-          
-          processedCount++;
-          continue;
-        }
-        
-        const viewSailingsBtn = Array.from(card.querySelectorAll('button, a, [role="button"]')).find(el => 
-          (el.textContent || '').match(/View Sailing|See Sailing|Show Sailing/i)
-        );
-
-        if (viewSailingsBtn) {
-          const offerStartTime = Date.now();
-          let offerSailingCount = 0;
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '  ▶ Clicking "View Sailings"...',
-            logType: 'info'
-          }));
-          
-          const urlBefore = window.location.href;
-          
-          if (viewSailingsBtn.tagName === 'A') {
-            const href = viewSailingsBtn.getAttribute('href');
-            if (href && !href.startsWith('#') && !href.startsWith('javascript:') && !href.includes('modal')) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '  ⚠️ View Sailings is a navigation link - preventing navigation...',
-                logType: 'warning'
-              }));
-              
-              const originalHref = viewSailingsBtn.getAttribute('href');
-              viewSailingsBtn.removeAttribute('href');
-              viewSailingsBtn.style.cursor = 'pointer';
-              
-              viewSailingsBtn.click();
-              await wait(2000);
-              
-              const modalOpened = document.querySelector('[class*="modal"]') || 
-                                 document.querySelector('[role="dialog"]') ||
-                                 document.querySelector('[class*="drawer"]') ||
-                                 document.querySelector('[class*="overlay"][class*="sailing"]');
-              
-              if (!modalOpened) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: '  ⚠️ No modal opened - skipping sailings for this offer',
-                  logType: 'warning'
-                }));
-                
-                if (originalHref) {
-                  viewSailingsBtn.setAttribute('href', originalHref);
-                }
-                
-                const noSailingOffer = {
-                  sourcePage: 'Offers',
-                  offerName: offerName,
-                  offerCode: offerCode,
-                  offerExpirationDate: offerExpiry,
-                  offerType: offerType,
-                  shipName: '',
-                  sailingDate: '',
-                  itinerary: '',
-                  departurePort: '',
-                  cabinType: '',
-                  numberOfGuests: '',
-                  perks: perks,
-                  loyaltyLevel: '',
-                  loyaltyPoints: ''
-                };
-                pendingBatch.push(noSailingOffer);
-                totalSailingsScraped++;
-                flushBatch();
-                
-                processedCount++;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'progress',
-                  current: totalSailingsScraped,
-                  total: offerCards.length,
-                  stepName: 'Offer ' + (i + 1) + '/' + offerCards.length + ': ' + totalSailingsScraped + ' sailings'
-                }));
-                continue;
-              }
-              
-              if (originalHref) {
-                viewSailingsBtn.setAttribute('href', originalHref);
-              }
-            } else {
-              viewSailingsBtn.click();
-              await wait(3000);
-            }
-          } else {
-            viewSailingsBtn.click();
-            await wait(3000);
-          }
-          
-          if (window.location.href !== urlBefore) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '  ⚠️ Page navigated away unexpectedly - attempting recovery...',
-              logType: 'warning'
-            }));
-            window.history.back();
-            await wait(3000);
-            
-            const navOffer = {
-              sourcePage: 'Offers',
-              offerName: offerName,
-              offerCode: offerCode,
-              offerExpirationDate: offerExpiry,
-              offerType: offerType,
-              shipName: '',
-              sailingDate: '',
-              itinerary: '',
-              departurePort: '',
-              cabinType: '',
-              numberOfGuests: '',
-              perks: perks,
-              loyaltyLevel: '',
-              loyaltyPoints: ''
-            };
-            pendingBatch.push(navOffer);
-            totalSailingsScraped++;
-            flushBatch();
-            
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '  ⚠️ Skipped sailings for this offer (navigation detected)',
-              logType: 'warning'
-            }));
-            
-            processedCount++;
-            continue;
-          }
-
-          let sailingsContainer = document.querySelector('[class*="modal"]') || 
-                                 document.querySelector('[role="dialog"]') || 
-                                 document.querySelector('[class*="sailing"][class*="list"]') ||
-                                 card;
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '  📜 Scrolling sailings container to load all content...',
-            logType: 'info'
-          }));
-          
-          await scrollUntilComplete(sailingsContainer, 100);
-          await wait(1000);
-
-          const allPossibleElements = Array.from(sailingsContainer.querySelectorAll('div, article, section, tr, li, [role="row"]'));
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '  📊 Analyzing ' + allPossibleElements.length + ' elements for sailings...',
-            logType: 'info'
-          }));
-
-          let sailingElements = allPossibleElements.filter(el => {
-            const text = el.textContent || '';
-            const hasDate = text.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
-            const hasNights = text.match(/\\d+\\s+NIGHT/i);
-            const hasShipName = text.match(/\\w+\\s+of the Seas/i);
-            const lengthOk = text.length > 20 && text.length < 600;
-            const hasPortOrItinerary = text.match(/(Miami|Orlando|Fort Lauderdale|Tampa|Galveston|Port Canaveral|Port Cañaveral|Cape Liberty|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan|Bayonne|Caribbean|Mexico|Bahamas|Alaska|Hawaii|Europe)/i);
-            const hasSailingInfo = hasDate && (hasNights || hasShipName || hasPortOrItinerary);
-            return hasSailingInfo && lengthOk;
-          }).filter((el, idx, arr) => {
-            return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
-          });
-          
-          if (sailingElements.length === 0) {
-            sailingElements = allPossibleElements.filter(el => {
-              const text = el.textContent || '';
-              const hasDate = text.match(/\\d{2}\\/\\d{2}\\/\\d{2,4}/);
-              const hasShip = text.match(/\\w+\\s+of the Seas/i);
-              const lengthOk = text.length > 20 && text.length < 800;
-              return hasDate && hasShip && lengthOk;
-            }).filter((el, idx, arr) => {
-              return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
-            });
-          }
-          
-          let cabinTypeSections = {};
-          
-          sailingElements.forEach(el => {
-            const text = el.textContent || '';
-            let cabinType = '';
-            
-            const cabinMatch = text.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
-            if (cabinMatch) {
-              cabinType = cabinMatch[1];
-              if (cabinType.toLowerCase().includes('ocean')) {
-                cabinType = 'Oceanview';
-              }
-            }
-            
-            if (!cabinType) {
-              let parent = el.parentElement;
-              for (let p = 0; p < 3 && parent && !cabinType; p++) {
-                const parentText = parent.textContent || '';
-                const parentCabinMatch = parentText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)(?:\\s+Room|\\s+Stateroom|\\s+Sailings)?/i);
-                if (parentCabinMatch && parentText.length < 500) {
-                  cabinType = parentCabinMatch[1];
-                  if (cabinType.toLowerCase().includes('ocean')) {
-                    cabinType = 'Oceanview';
-                  }
-                  break;
-                }
-                parent = parent.parentElement;
-              }
-            }
-            
-            if (!cabinType && offerName) {
-              const offerCabinMatch = cardText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
-              if (offerCabinMatch) {
-                cabinType = offerCabinMatch[1];
-                if (cabinType.toLowerCase().includes('ocean')) {
-                  cabinType = 'Oceanview';
-                }
-              } else {
-                cabinType = 'Unknown';
-              }
-            }
-            
-            if (!cabinTypeSections[cabinType]) {
-              cabinTypeSections[cabinType] = [];
-            }
-            cabinTypeSections[cabinType].push(el);
-          });
-          
-          let sailingsByType = {};
-          
-          const checkOfferTimeout = () => {
-            const elapsed = Date.now() - offerStartTime;
-            if (elapsed > OFFER_TIMEOUT_MS) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '  ⚠️ Offer timeout reached (' + Math.round(elapsed/1000) + 's) - moving to next offer',
-                logType: 'warning'
-              }));
-              return true;
-            }
-            return false;
-          };
-          
-          for (const [cabinType, sectionElements] of Object.entries(cabinTypeSections)) {
-            if (checkOfferTimeout()) break;
-            const allIndividualDates = [];
-            const seenDates = new Set();
-            
-            for (const sectionEl of sectionElements) {
-              const sectionText = sectionEl.textContent || '';
-              
-              const allDateMatches = [];
-              const dateRegex = /\\d{2}\\/\\d{2}\\/\\d{2,4}/g;
-              let match;
-              while ((match = dateRegex.exec(sectionText)) !== null) {
-                allDateMatches.push(match[0]);
-              }
-              
-              const uniqueDates = [...new Set(allDateMatches)];
-              
-              if (uniqueDates.length > 0) {
-                for (const dateStr of uniqueDates) {
-                  const shipMatch = sectionText.match(/([\\w\\s]+of the Seas)/i);
-                  const shipName = shipMatch ? shipMatch[1].trim() : '';
-                  const key = dateStr + '|' + shipName + '|' + cabinType;
+              if (refreshedOffer?.campaignOffer?.sailings?.length > 0) {
+                const originalIdx = data.offers.findIndex(o => o?.campaignOffer?.offerCode === code);
+                if (originalIdx !== -1) {
+                  const origSailings = data.offers[originalIdx].campaignOffer.sailings || [];
+                  const newSailings = refreshedOffer.campaignOffer.sailings;
                   
-                  if (!seenDates.has(key)) {
-                    seenDates.add(key);
-                    allIndividualDates.push({
-                      element: sectionEl,
-                      date: dateStr,
-                      shipName: shipName,
-                      text: sectionText
-                    });
-                  }
-                }
-              } else {
-                const noDateKey = 'nodate-' + Math.random() + '-' + cabinType;
-                if (!seenDates.has(noDateKey)) {
-                  seenDates.add(noDateKey);
-                  allIndividualDates.push({
-                    element: sectionEl,
-                    date: '',
-                    shipName: '',
-                    text: sectionText
+                  const sailingMap = new Map();
+                  origSailings.forEach(s => {
+                    const key = (s.shipCode || '') + '|' + (s.sailDate || '');
+                    if (key !== '|') sailingMap.set(key, s);
                   });
-                }
-              }
-            }
-            
-            sailingsByType[cabinType] = allIndividualDates;
-          }
-          
-          const totalSailingRows = Object.values(sailingsByType).reduce((sum, arr) => sum + arr.length, 0);
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '  ✓ Found ' + totalSailingRows + ' individual sailing date rows',
-            logType: totalSailingRows > 0 ? 'success' : 'warning'
-          }));
-          
-          const sortedCabinTypes = Object.keys(sailingsByType).sort();
-          sortedCabinTypes.forEach(cabinType => {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '    • ' + cabinType + ': ' + sailingsByType[cabinType].length + ' individual date(s)',
-              logType: 'info'
-            }));
-          });
-          
-          if (totalSailingRows > 0) {
-            let sailingIndex = 0;
-            let lastLoggedCount = 0;
-            let hitLimit = false;
-            
-            for (const [cabinTypeKey, sailingsForType] of Object.entries(sailingsByType)) {
-              if (hitLimit || checkOfferTimeout()) break;
-              
-              for (let j = 0; j < sailingsForType.length; j++) {
-                if (checkOfferTimeout()) {
-                  hitLimit = true;
-                  break;
-                }
-                
-                sailingIndex++;
-                const sailingData = sailingsForType[j];
-                const sailing = sailingData.element;
-                const sailingText = sailingData.text || sailing.textContent || '';
-                
-                let shipName = sailingData.shipName || '';
-                
-                if (!shipName) {
-                  const shipMatch = sailingText.match(/([\\w\\s]+of the Seas)/);
-                  shipName = shipMatch ? shipMatch[1].trim() : '';
-                }
-                
-                if (!shipName) {
-                  let parent = sailing.parentElement;
-                  for (let p = 0; p < 5 && parent && !shipName; p++) {
-                    const parentText = parent.textContent || '';
-                    const parentShipMatch = parentText.match(/([\\w\\s]+of the Seas)/);
-                    if (parentShipMatch) {
-                      shipName = parentShipMatch[1].trim();
-                      break;
-                    }
-                    parent = parent.parentElement;
-                  }
-                }
-                
-                let itineraryMatch = sailingText.match(/(\\d+)\\s+NIGHT\\s+([A-Z\\s&]+?)(?=\\d{2}\\/|$)/i);
-                let itinerary = itineraryMatch ? itineraryMatch[0].trim() : '';
-                
-                if (!itinerary) {
-                  let parent = sailing.parentElement;
-                  for (let p = 0; p < 5 && parent && !itinerary; p++) {
-                    const parentText = parent.textContent || '';
-                    const parentItinMatch = parentText.match(/(\\d+)\\s+NIGHT\\s+([A-Z\\s&]+)/i);
-                    if (parentItinMatch) {
-                      itinerary = parentItinMatch[0].trim();
-                      break;
-                    }
-                    parent = parent.parentElement;
-                  }
-                }
-                
-                let portMatch = sailingText.match(/(Orlando \\(Port Cañaveral\\)|Port Cañaveral|Miami|Fort Lauderdale|Tampa|Galveston|Cape Liberty|Bayonne|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan)/i);
-                let departurePort = portMatch ? portMatch[1] : '';
-                
-                if (!departurePort) {
-                  let parent = sailing.parentElement;
-                  for (let p = 0; p < 5 && parent && !departurePort; p++) {
-                    const parentText = parent.textContent || '';
-                    const parentPortMatch = parentText.match(/(Orlando \\(Port Cañaveral\\)|Port Cañaveral|Miami|Fort Lauderdale|Tampa|Galveston|Cape Liberty|Bayonne|Baltimore|Boston|Seattle|Vancouver|Los Angeles|San Diego|San Juan)/i);
-                    if (parentPortMatch) {
-                      departurePort = parentPortMatch[1];
-                      break;
-                    }
-                    parent = parent.parentElement;
-                  }
-                }
-                
-                const sailingDate = sailingData.date || '';
-                
-                let cabinType = cabinTypeKey || '';
-                
-                if (!cabinType || cabinType === 'Unknown') {
-                  const cabinMatch = sailingText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)/i);
-                  if (cabinMatch) {
-                    cabinType = cabinMatch[1];
-                    if (cabinType.toLowerCase().includes('ocean')) {
-                      cabinType = 'Oceanview';
-                    }
-                  } else {
-                    const offerCabinMatch = cardText.match(/(Balcony|Oceanview|Ocean View|Interior|Suite)(?:\\s+Room for Two|\\s+or\\s+Oceanview\\s+Room\\s+for\\s+Two)?/i);
-                    if (offerCabinMatch) {
-                      cabinType = offerCabinMatch[1];
-                      if (cabinType.toLowerCase().includes('ocean')) {
-                        cabinType = 'Oceanview';
-                      }
-                    } else {
-                      cabinType = '';
-                    }
-                  }
-                }
-                
-                pendingBatch.push({
-                  sourcePage: 'Offers',
-                  offerName: offerName,
-                  offerCode: offerCode,
-                  offerExpirationDate: offerExpiry,
-                  offerType: offerType,
-                  shipName: shipName,
-                  sailingDate: sailingDate,
-                  itinerary: itinerary,
-                  departurePort: departurePort,
-                  cabinType: cabinType,
-                  numberOfGuests: '2',
-                  perks: perks,
-                  loyaltyLevel: '',
-                  loyaltyPoints: ''
-                });
-                totalSailingsScraped++;
-                offerSailingCount++;
-                
-                if (totalSailingsScraped - lastLoggedCount >= 100 || sailingIndex === totalSailingRows) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log',
-                    message: '    ✓ Processed ' + sailingIndex + '/' + totalSailingRows + ' sailings (' + totalSailingsScraped + ' total)',
-                    logType: 'info'
-                  }));
-                  lastLoggedCount = totalSailingsScraped;
+                  newSailings.forEach(s => {
+                    const key = (s.shipCode || '') + '|' + (s.sailDate || '');
+                    if (key !== '|') sailingMap.set(key, s);
+                  });
                   
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'progress',
-                    current: totalSailingsScraped,
-                    total: offerCards.length,
-                    stepName: 'Offer ' + (i + 1) + '/' + offerCards.length + ': ' + sailingIndex + '/' + totalSailingRows + ' sailings'
-                  }));
+                  data.offers[originalIdx].campaignOffer.sailings = Array.from(sailingMap.values());
+                  log('  ✓ Updated ' + code + ': now has ' + data.offers[originalIdx].campaignOffer.sailings.length + ' sailings', 'success');
                 }
-                
-                flushBatch();
               }
             }
-            
-            flushBatch(true);
-            
-            sendOfferProgress(i + 1, offerCards.length, offerName, offerSailingCount, 'complete');
-            
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '  ✓ Offer complete: ' + offerSailingCount + ' sailings added' + (hitLimit ? ' (timeout)' : ''),
-              logType: 'success'
-            }));
-            
-            await wait(500);
-          } else {
-            const noSailingOffer = {
-              sourcePage: 'Offers',
-              offerName: offerName,
-              offerCode: offerCode,
-              offerExpirationDate: offerExpiry,
-              offerType: offerType,
-              shipName: '',
-              sailingDate: '',
-              itinerary: '',
-              departurePort: '',
-              cabinType: '',
-              numberOfGuests: '',
-              perks: perks,
-              loyaltyLevel: '',
-              loyaltyPoints: ''
-            };
-            pendingBatch.push(noSailingOffer);
-            totalSailingsScraped++;
-            flushBatch(true);
+          } catch (refetchErr) {
+            log('  ⚠️ Failed to refetch ' + code + ': ' + refetchErr.message, 'warning');
           }
           
-          const closeBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el =>
-            (el.textContent || '').match(/close|×|✕/i) || el.querySelector('[class*="close"]')
-          );
-          if (closeBtn) {
-            closeBtn.click();
-            await wait(1000);
-          }
-        } else {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '  ⚠️ No "View Sailings" button found',
-            logType: 'warning'
-          }));
-          
-          const noButtonOffer = {
-            sourcePage: 'Offers',
-            offerName: offerName,
-            offerCode: offerCode,
-            offerExpirationDate: offerExpiry,
-            offerType: offerType,
-            shipName: '',
-            sailingDate: '',
-            itinerary: '',
-            departurePort: '',
-            cabinType: '',
-            numberOfGuests: '',
-            perks: perks,
-            loyaltyLevel: '',
-            loyaltyPoints: ''
-          };
-          pendingBatch.push(noButtonOffer);
-          totalSailingsScraped++;
-          flushBatch(true);
+          await wait(300);
         }
-
-        processedCount++;
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'progress',
-          current: totalSailingsScraped,
-          total: offerCards.length,
-          stepName: 'Offers: ' + totalSailingsScraped + ' sailings (' + processedCount + '/' + offerCards.length + ' offers)'
-        }));
-        
-        await wait(150);
       }
-
-      flushBatch(true);
       
-      sendOfferBatch([], true, totalSailingsScraped, offerCards.length);
-
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '✓ Extracted ' + totalSailingsScraped + ' offer rows from ' + offerCards.length + ' offer(s)',
-        logType: 'success'
-      }));
-
+      return data;
     } catch (error) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'error',
-        message: 'Failed to extract offers: ' + error.message
-      }));
+      log('API fetch failed: ' + error.message, 'error');
+      throw error;
     }
+  }
+
+  function processAPIResponse(data) {
+    const allOfferRows = [];
+    let totalSailings = 0;
+    
+    if (!data || !Array.isArray(data.offers)) {
+      return { offerRows: allOfferRows, offerCount: 0, totalSailings: 0 };
+    }
+    
+    const validOffers = data.offers.filter(o => o && o.campaignOffer);
+    
+    log('📊 Processing ' + validOffers.length + ' offers from API response...');
+    
+    for (let i = 0; i < validOffers.length; i++) {
+      const offer = validOffers[i];
+      const co = offer.campaignOffer;
+      
+      const offerName = co.name || '';
+      const offerCode = co.offerCode || '';
+      const offerExpiry = formatDate(co.reserveByDate);
+      const tradeInValue = co.tradeInValue ? '$' + Number(co.tradeInValue).toFixed(2) : '';
+      const perks = tradeInValue ? 'Trade-in value: ' + tradeInValue : '';
+      
+      log('━━━━━ Offer ' + (i + 1) + '/' + validOffers.length + ' ━━━━━');
+      log('  Offer Name: ' + offerName);
+      log('  Offer Code: ' + (offerCode || '[NOT FOUND]'), offerCode ? 'info' : 'warning');
+      log('  Expiry Date: ' + (offerExpiry || '[NOT FOUND]'), offerExpiry ? 'info' : 'warning');
+      if (tradeInValue) {
+        log('  Trade-in Value: ' + tradeInValue);
+      }
+      
+      const sailings = co.sailings || [];
+      
+      if (sailings.length === 0) {
+        log('  ⚠️ No sailings available for this offer', 'warning');
+        
+        allOfferRows.push({
+          sourcePage: 'Offers',
+          offerName: offerName,
+          offerCode: offerCode,
+          offerExpirationDate: offerExpiry,
+          offerType: 'Club Royale',
+          shipName: '',
+          sailingDate: '',
+          itinerary: '',
+          departurePort: '',
+          cabinType: '',
+          numberOfGuests: '2',
+          perks: perks,
+          loyaltyLevel: '',
+          loyaltyPoints: ''
+        });
+        totalSailings++;
+        
+        sendOfferProgress(i + 1, validOffers.length, offerName, 0, 'complete');
+        continue;
+      }
+      
+      log('  📜 Processing ' + sailings.length + ' sailings...');
+      
+      let offerSailingCount = 0;
+      
+      for (const sailing of sailings) {
+        const shipName = sailing.shipName || '';
+        const sailDate = formatSailDate(sailing.sailDate);
+        const departurePort = sailing.departurePort?.name || sailing.departurePortName || '';
+        const itinerary = sailing.itineraryDescription || sailing.sailingType?.name || '';
+        const cabinType = sailing.roomType || sailing.stateroomType || '';
+        
+        const isGOBO = sailing.isGOBO || co.isGOBO || false;
+        const numberOfGuests = isGOBO ? '1' : '2';
+        
+        allOfferRows.push({
+          sourcePage: 'Offers',
+          offerName: offerName,
+          offerCode: offerCode,
+          offerExpirationDate: offerExpiry,
+          offerType: 'Club Royale',
+          shipName: shipName,
+          sailingDate: sailDate,
+          itinerary: itinerary,
+          departurePort: departurePort,
+          cabinType: cabinType,
+          numberOfGuests: numberOfGuests,
+          perks: perks,
+          loyaltyLevel: '',
+          loyaltyPoints: ''
+        });
+        
+        totalSailings++;
+        offerSailingCount++;
+        
+        if (totalSailings % BATCH_SIZE === 0) {
+          const batchStart = totalSailings - BATCH_SIZE;
+          const batch = allOfferRows.slice(batchStart, totalSailings);
+          sendOfferBatch(batch, false);
+          log('📤 Sent batch of ' + batch.length + ' sailings (total: ' + totalSailings + ')');
+        }
+        
+        if (offerSailingCount % 100 === 0) {
+          log('    ✓ Processed ' + offerSailingCount + '/' + sailings.length + ' sailings (' + totalSailings + ' total)');
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'progress',
+            current: totalSailings,
+            total: validOffers.length,
+            stepName: 'Offer ' + (i + 1) + '/' + validOffers.length + ': ' + offerSailingCount + '/' + sailings.length + ' sailings'
+          }));
+        }
+      }
+      
+      const remainingInBatch = totalSailings % BATCH_SIZE;
+      if (remainingInBatch > 0 && offerSailingCount > 0) {
+        const batchStart = totalSailings - remainingInBatch;
+        const batch = allOfferRows.slice(batchStart, totalSailings);
+        if (batch.length > 0) {
+          sendOfferBatch(batch, false);
+          log('📤 Sent batch of ' + batch.length + ' sailings (total: ' + totalSailings + ')');
+        }
+      }
+      
+      sendOfferProgress(i + 1, validOffers.length, offerName, offerSailingCount, 'complete');
+      log('Offer ' + (i + 1) + '/' + validOffers.length + ' (' + offerName + '): ' + offerSailingCount + ' sailings - complete', 'success');
+      log('  ✓ Offer complete: ' + offerSailingCount + ' sailings added', 'success');
+    }
+    
+    return { offerRows: allOfferRows, offerCount: validOffers.length, totalSailings };
+  }
+
+  async function extractOffers() {
+    try {
+      log('Extracting Club Royale data...');
+      
+      await extractClubRoyaleStatus();
+      
+      log('Loading Club Royale Offers page...');
+      await wait(2000);
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'progress',
+        current: 0,
+        total: 100,
+        stepName: 'Connecting to Royal Caribbean API...'
+      }));
+      
+      const apiData = await fetchOffersFromAPI();
+      
+      const { offerRows, offerCount, totalSailings } = processAPIResponse(apiData);
+      
+      sendOfferBatch([], true, totalSailings, offerCount);
+      
+      log('✓ Extracted ' + totalSailings + ' offer rows from ' + offerCount + ' offer(s)', 'success');
+      
+    } catch (error) {
+      log('❌ API extraction failed: ' + error.message, 'error');
+      log('Attempting fallback to DOM scraping...', 'warning');
+      
+      await fallbackDOMExtraction();
+    }
+  }
+
+  async function fallbackDOMExtraction() {
+    log('🔄 Starting DOM-based fallback extraction...', 'warning');
+    
+    const pageText = document.body.textContent || '';
+    
+    let expectedOfferCount = 0;
+    const featuredMatch = pageText.match(/Featured\\s+Offers?\\s*\\((\\d+)\\)/i);
+    const moreMatch = pageText.match(/More\\s+Offers?\\s*\\((\\d+)\\)/i);
+    
+    if (featuredMatch) expectedOfferCount += parseInt(featuredMatch[1], 10);
+    if (moreMatch) expectedOfferCount += parseInt(moreMatch[1], 10);
+    
+    log('Expected offers from page: ' + expectedOfferCount);
+    
+    const viewSailingsButtons = Array.from(document.querySelectorAll('button, a, [role="button"]')).filter(el => {
+      const text = (el.textContent || '').trim().toLowerCase();
+      return text.includes('view sailing') || text.includes('see sailing');
+    });
+    
+    if (viewSailingsButtons.length === 0) {
+      log('No offers found on page', 'warning');
+      sendOfferBatch([], true, 0, 0);
+      return;
+    }
+    
+    log('Found ' + viewSailingsButtons.length + ' View Sailings buttons');
+    
+    const basicOffer = {
+      sourcePage: 'Offers',
+      offerName: 'Unknown Offer',
+      offerCode: '',
+      offerExpirationDate: '',
+      offerType: 'Club Royale',
+      shipName: '',
+      sailingDate: '',
+      itinerary: '',
+      departurePort: '',
+      cabinType: '',
+      numberOfGuests: '2',
+      perks: '',
+      loyaltyLevel: '',
+      loyaltyPoints: ''
+    };
+    
+    sendOfferBatch([basicOffer], false);
+    sendOfferBatch([], true, 1, viewSailingsButtons.length);
+    
+    log('⚠️ DOM fallback completed with limited data. Please try again or check login status.', 'warning');
   }
 
   if (document.readyState === 'loading') {
