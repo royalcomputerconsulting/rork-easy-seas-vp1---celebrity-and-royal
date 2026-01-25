@@ -9,6 +9,7 @@ import {
   applyKnownRetailValues,
   enrichCruisesWithReceiptData,
   enrichCruisesWithMockItineraries,
+  applyFreeplayOBCData,
 } from "./coreData/dataEnrichment";
 import { DEFAULT_FILTERS } from "./coreData/filterLogic";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, type AppSettings } from "./coreData/storageConfig";
@@ -290,7 +291,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         const withTransition = transitionCruisesToCompleted(parsedBooked);
         const withItineraries = enrichCruisesWithMockItineraries(withTransition);
         const withKnownRetail = applyKnownRetailValues(withItineraries);
-        const enrichedBooked = enrichCruisesWithReceiptData(withKnownRetail);
+        const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
+        const enrichedBooked = enrichCruisesWithReceiptData(withFreeplayOBC);
         finalBookedCount = enrichedBooked.length;
         setBookedCruisesState(enrichedBooked);
       } else if (isFirstTimeUser) {
@@ -490,7 +492,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const booked = newCruises.filter(c => c.status !== 'available');
     const withItineraries = enrichCruisesWithMockItineraries(booked);
     const withKnownRetail = applyKnownRetailValues(withItineraries);
-    const enrichedCruises = enrichCruisesWithReceiptData(withKnownRetail);
+    const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
+    const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
     setBookedCruisesState(enrichedCruises);
     persistData(STORAGE_KEYS.BOOKED_CRUISES, enrichedCruises);
     AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
@@ -684,7 +687,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       const withItineraries = enrichCruisesWithMockItineraries(allMockCruises);
       const withKnownRetail = applyKnownRetailValues(withItineraries);
-      const enrichedCruises = enrichCruisesWithReceiptData(withKnownRetail);
+      const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
+      const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
       
       await Promise.all([
         AsyncStorage.setItem(STORAGE_KEYS.BOOKED_CRUISES, JSON.stringify(enrichedCruises)),

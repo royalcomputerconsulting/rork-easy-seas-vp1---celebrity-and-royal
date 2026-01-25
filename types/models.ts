@@ -107,6 +107,7 @@ export interface ItineraryDay {
 export interface BookedCruise extends Cruise {
   reservationNumber?: string;
   bookingId?: string;
+  bwoNumber?: string;
   checkInDate?: string;
   depositPaid?: number;
   depositDate?: string;

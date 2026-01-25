@@ -3,6 +3,7 @@ import { KNOWN_RETAIL_VALUES } from '@/constants/knownRetailValues';
 import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
 import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
 import { findReceiptByShipAndDate } from '@/constants/receiptData';
+import { findFreeplayOBCByOfferCode, findFreeplayOBCByShipAndDate } from '@/constants/freeplayOBCData';
 
 export function applyKnownRetailValues(cruises: BookedCruise[]): BookedCruise[] {
   return cruises.map(cruise => {
@@ -40,6 +41,48 @@ export function enrichCruisesWithReceiptData(cruises: BookedCruise[]): BookedCru
         cabinNumber: cruise.cabinNumber || receipt.cabinNumber,
         retailValue: receipt.totalRetailCost,
       };
+    }
+    
+    return cruise;
+  });
+}
+
+export function applyFreeplayOBCData(cruises: BookedCruise[]): BookedCruise[] {
+  return cruises.map(cruise => {
+    let freeplayRecord = cruise.offerCode 
+      ? findFreeplayOBCByOfferCode(cruise.offerCode)
+      : undefined;
+    
+    if (!freeplayRecord && cruise.shipName && cruise.sailDate) {
+      freeplayRecord = findFreeplayOBCByShipAndDate(cruise.shipName, cruise.sailDate);
+    }
+    
+    if (freeplayRecord) {
+      const updates: Partial<BookedCruise> = {};
+      
+      if (freeplayRecord.freePlay > 0 && (!cruise.freePlay || cruise.freePlay === 0)) {
+        updates.freePlay = freeplayRecord.freePlay;
+      }
+      
+      if (freeplayRecord.obc > 0 && (!cruise.freeOBC || cruise.freeOBC === 0)) {
+        updates.freeOBC = freeplayRecord.obc;
+      }
+      
+      if (!cruise.offerCode && freeplayRecord.offerCode) {
+        updates.offerCode = freeplayRecord.offerCode;
+      }
+      
+      if (Object.keys(updates).length > 0) {
+        console.log('[DataEnrichment] Applied freeplay/OBC data to cruise:', {
+          cruiseId: cruise.id,
+          shipName: cruise.shipName,
+          sailDate: cruise.sailDate,
+          offerCode: freeplayRecord.offerCode,
+          freePlay: freeplayRecord.freePlay,
+          obc: freeplayRecord.obc,
+        });
+        return { ...cruise, ...updates };
+      }
     }
     
     return cruise;

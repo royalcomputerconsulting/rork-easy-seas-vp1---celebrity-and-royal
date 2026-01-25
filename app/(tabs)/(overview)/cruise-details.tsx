@@ -44,6 +44,7 @@ interface EditFormData {
   balconyPrice: string;
   suitePrice: string;
   taxes: string;
+  bwoNumber: string;
   freeOBC: string;
   freePlay: string;
   freeGratuities: boolean;
@@ -80,6 +81,7 @@ export default function CruiseDetailsScreen() {
     balconyPrice: '',
     suitePrice: '',
     taxes: '',
+    bwoNumber: '',
     freeOBC: '',
     freePlay: '',
     freeGratuities: false,
@@ -491,7 +493,8 @@ export default function CruiseDetailsScreen() {
       balconyPrice: String(cruise.balconyPrice || ''),
       suitePrice: String(cruise.suitePrice || ''),
       taxes: String(cruise.taxes || ''),
-      freeOBC: String(cruise.freeOBC || ''),
+      bwoNumber: String((cruise as any).bwoNumber || ''),
+      freeOBC: String(cruise.freeOBC || linkedOffer?.OBC || linkedOffer?.obcAmount || ''),
       freePlay: String(cruise.freePlay || linkedOffer?.freePlay || linkedOffer?.freeplayAmount || ''),
       freeGratuities: cruise.freeGratuities || false,
       freeDrinkPackage: cruise.freeDrinkPackage || false,
@@ -524,6 +527,7 @@ export default function CruiseDetailsScreen() {
       balconyPrice: parseFloat(editForm.balconyPrice) || 0,
       suitePrice: parseFloat(editForm.suitePrice) || 0,
       taxes: parseFloat(editForm.taxes) || 0,
+      bwoNumber: editForm.bwoNumber || '',
       freeOBC: parseFloat(editForm.freeOBC) || 0,
       freeGratuities: editForm.freeGratuities,
       freeDrinkPackage: editForm.freeDrinkPackage,
@@ -718,6 +722,43 @@ export default function CruiseDetailsScreen() {
                 )}
               </View>
             </View>
+          )}
+
+          {((cruise as any).bwoNumber || (cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 || (cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0) && (
+            <TouchableOpacity 
+              style={styles.bwoFpObcCard} 
+              onPress={openFullEditModal}
+              activeOpacity={0.7}
+              testID="bwo-fp-obc-section"
+            >
+              <View style={styles.bwoFpObcHeader}>
+                <Text style={styles.bwoFpObcTitle}>Casino Offer Details</Text>
+                <Edit3 size={14} color={COLORS.textSecondary} />
+              </View>
+              <View style={styles.bwoFpObcRow}>
+                {(cruise as any).bwoNumber && (
+                  <View style={styles.bwoChip}>
+                    <Text style={styles.bwoLabel}>BWO#</Text>
+                    <Text style={styles.bwoValue}>{(cruise as any).bwoNumber}</Text>
+                  </View>
+                )}
+                {(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 && (
+                  <View style={styles.fpChip}>
+                    <Text style={styles.fpChipLabel}>FreePlay</Text>
+                    <Text style={styles.fpChipValue}>${(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0).toLocaleString()}</Text>
+                  </View>
+                )}
+                {(cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0 && (
+                  <View style={styles.obcChip}>
+                    <Text style={styles.obcChipLabel}>OBC</Text>
+                    <Text style={styles.obcChipValue}>${(cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0).toLocaleString()}</Text>
+                  </View>
+                )}
+              </View>
+              {!(cruise as any).bwoNumber && (cruise.freePlay ?? 0) === 0 && (cruise.freeOBC ?? 0) === 0 && (
+                <Text style={styles.bwoFpObcPlaceholder}>Tap to add BWO#, FreePlay, or OBC</Text>
+              )}
+            </TouchableOpacity>
           )}
 
           {isBooked && (
@@ -1396,26 +1437,52 @@ export default function CruiseDetailsScreen() {
                 />
               </View>
 
-              <Text style={styles.sectionLabel}>Perks & Offers</Text>
+              <Text style={styles.sectionLabel}>Casino Offer Details</Text>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Onboard Credit ($)</Text>
+                <Text style={styles.inputLabel}>BWO# (Booking/Offer Reference)</Text>
                 <TextInput
                   style={styles.input}
-                  value={editForm.freeOBC}
-                  onChangeText={(val) => setEditForm(prev => ({ ...prev, freeOBC: val }))}
-                  keyboardType="numeric"
-                  placeholder="0"
+                  value={editForm.bwoNumber}
+                  onChangeText={(val) => setEditForm(prev => ({ ...prev, bwoNumber: val }))}
+                  placeholder="e.g., 2501A01"
                   placeholderTextColor={COLORS.textSecondary}
                 />
               </View>
 
+              <View style={styles.inputRow}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.inputLabel}>FreePlay ($)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.freePlay}
+                    onChangeText={(val) => setEditForm(prev => ({ ...prev, freePlay: val }))}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={COLORS.textSecondary}
+                  />
+                </View>
+                <View style={[styles.inputGroup, { flex: 1, marginLeft: SPACING.md }]}>
+                  <Text style={styles.inputLabel}>OBC ($)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.freeOBC}
+                    onChangeText={(val) => setEditForm(prev => ({ ...prev, freeOBC: val }))}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={COLORS.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.sectionLabel}>Additional Perks</Text>
+
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>FreePlay / FPP ($)</Text>
+                <Text style={styles.inputLabel}>Additional Onboard Credit ($)</Text>
                 <TextInput
                   style={styles.input}
-                  value={editForm.freePlay}
-                  onChangeText={(val) => setEditForm(prev => ({ ...prev, freePlay: val }))}
+                  value={editForm.freeOBC}
+                  onChangeText={(val) => setEditForm(prev => ({ ...prev, freeOBC: val }))}
                   keyboardType="numeric"
                   placeholder="0"
                   placeholderTextColor={COLORS.textSecondary}
@@ -2990,5 +3057,102 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#1E40AF',
+  },
+  bwoFpObcCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
+    ...SHADOW.sm,
+  },
+  bwoFpObcHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  bwoFpObcTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  bwoFpObcRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  bwoChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  bwoLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#92400E',
+  },
+  bwoValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#92400E',
+  },
+  fpChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  fpChipLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#15803D',
+  },
+  fpChipValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#15803D',
+  },
+  obcChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+  },
+  obcChipLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#1E40AF',
+  },
+  obcChipValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#1E40AF',
+  },
+  bwoFpObcPlaceholder: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic' as const,
+    textAlign: 'center' as const,
+    paddingVertical: SPACING.sm,
   },
 });
