@@ -666,6 +666,23 @@ export default function CruiseDetailsScreen() {
             <CompactFact icon={Dice5} value={casinoAvailability ? `${casinoAvailability.casinoOpenDays}/${casinoAvailability.totalDays} casino` : '—'} />
           </View>
 
+          {((cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 || (cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0) && (
+            <View style={styles.fpObcQuickView}>
+              {(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 && (
+                <View style={styles.fpQuickBadge}>
+                  <Text style={styles.fpQuickLabel}>FreePlay</Text>
+                  <Text style={styles.fpQuickValue}>${(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0).toLocaleString()}</Text>
+                </View>
+              )}
+              {(cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0 && (
+                <View style={styles.obcQuickBadge}>
+                  <Text style={styles.obcQuickLabel}>OBC</Text>
+                  <Text style={styles.obcQuickValue}>${(cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0).toLocaleString()}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
           {(cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice || cruise.taxes) && (
             <View style={styles.pricingChipsCard} testID="cruise-pricing-chips">
               <View style={styles.pricingChipsRow}>
@@ -2922,6 +2939,55 @@ const styles = StyleSheet.create({
   },
   obcHighlightValue: {
     fontSize: TYPOGRAPHY.fontSizeTitle,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#1E40AF',
+  },
+  fpObcQuickView: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  fpQuickBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  fpQuickLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#15803D',
+  },
+  fpQuickValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#15803D',
+  },
+  obcQuickBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+  },
+  obcQuickLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#1E40AF',
+  },
+  obcQuickValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#1E40AF',
   },
