@@ -222,42 +222,50 @@ export const STEP2_UPCOMING_SCRIPT = `
           );
           
           if (viewMoreBtn) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '  ▶ Clicking "View Details" to get cabin info...',
-              logType: 'info'
-            }));
-            
-            viewMoreBtn.click();
-            await wait(2000);
-            
-            const detailsText = document.body.textContent || '';
-            
-            if (!cabinType) {
-              const detailCabinTypeMatch = detailsText.match(/(Interior|Ocean View|Oceanview|Balcony|Suite|Junior Suite|Grand Suite|GTY|Gty)/i);
-              if (detailCabinTypeMatch) {
-                cabinType = detailCabinTypeMatch[1].trim();
-              }
-            }
-            
-            if (!cabinNumber) {
-              const detailCabinNumMatch = detailsText.match(/(?:Cabin|Room|Stateroom)[:\\s]*(\\d{4,5})/i);
-              if (detailCabinNumMatch) {
-                cabinNumber = detailCabinNumMatch[1];
-              } else {
-                const directNumMatch2 = detailsText.match(/(Interior|Balcony|Suite|Ocean View|Oceanview)[^\\n]*?(\\d{4,5})/i);
-                if (directNumMatch2) {
-                  cabinNumber = directNumMatch2[2];
+            try {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '  ▶ Clicking "View Details" to get cabin info (timeout: 5s)...',
+                logType: 'info'
+              }));
+              
+              viewMoreBtn.click();
+              await wait(1500);
+              
+              const detailsText = document.body.textContent || '';
+              
+              if (!cabinType) {
+                const detailCabinTypeMatch = detailsText.match(/(Interior|Ocean View|Oceanview|Balcony|Suite|Junior Suite|Grand Suite|GTY|Gty)/i);
+                if (detailCabinTypeMatch) {
+                  cabinType = detailCabinTypeMatch[1].trim();
                 }
               }
-            }
-            
-            const closeBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el =>
-              (el.textContent || '').match(/close|back|×|✕/i) || el.querySelector('[class*="close"]')
-            );
-            if (closeBtn) {
-              closeBtn.click();
-              await wait(1000);
+              
+              if (!cabinNumber) {
+                const detailCabinNumMatch = detailsText.match(/(?:Cabin|Room|Stateroom)[:\\s]*(\\d{4,5})/i);
+                if (detailCabinNumMatch) {
+                  cabinNumber = detailCabinNumMatch[1];
+                } else {
+                  const directNumMatch2 = detailsText.match(/(Interior|Balcony|Suite|Ocean View|Oceanview)[^\\n]*?(\\d{4,5})/i);
+                  if (directNumMatch2) {
+                    cabinNumber = directNumMatch2[2];
+                  }
+                }
+              }
+              
+              const closeBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el =>
+                (el.textContent || '').match(/close|back|×|✕/i) || el.querySelector('[class*="close"]')
+              );
+              if (closeBtn) {
+                closeBtn.click();
+                await wait(500);
+              }
+            } catch (error) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '  ⚠️ Failed to get details: ' + error.message + ' (continuing anyway)',
+                logType: 'warning'
+              }));
             }
           }
         }
@@ -274,11 +282,18 @@ export const STEP2_UPCOMING_SCRIPT = `
         }));
 
         const guestsMatch = fullText.match(/(\\d+)\\s+Guest/i);
-        const numberOfGuests = guestsMatch ? guestsMatch[1] : '';
+        const numberOfGuests = guestsMatch ? guestsMatch[1] : bookingId;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
           message: '  Guests: ' + (numberOfGuests || '[NOT FOUND]'),
           logType: numberOfGuests ? 'info' : 'warning'
+        }));
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'progress',
+          current: i + 1,
+          total: cruiseCards.length,
+          stepName: 'Processing cruise ' + (i + 1) + '/' + cruiseCards.length
         }));
 
         const daysMatch = fullText.match(/(\\d+)\\s+Days?\\s+to\\s+go/i);

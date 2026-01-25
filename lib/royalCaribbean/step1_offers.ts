@@ -1781,39 +1781,14 @@ export const STEP1_OFFERS_SCRIPT = `
       }
       
       // Final deduplication: ensure no container appears more than once
-      // CRITICAL: Also deduplicate by offer name to prevent duplicate offers with same title
+      // IMPORTANT: Do NOT deduplicate by offer name - multiple offers can have similar/same names
+      // Only deduplicate by actual DOM container element to prevent removing valid offers
       const finalOfferCards = [];
       const finalSeenContainers = new Set();
-      const seenOfferNames = new Set();
       
       for (const card of offerCards) {
         if (!finalSeenContainers.has(card)) {
-          // Extract offer name to check for duplicates
-          const cardText = card.textContent || '';
-          let offerNameCheck = '';
-          const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"]'));
-          for (const h of allHeadings) {
-            const hText = (h.textContent || '').trim();
-            if (hText.length >= 5 && hText.length <= 100) {
-              offerNameCheck = hText.toLowerCase();
-              break;
-            }
-          }
-          
-          // Skip if we've already seen this offer name (prevent duplicates like "2026 January Instant Rewards")
-          if (offerNameCheck && seenOfferNames.has(offerNameCheck)) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'log',
-              message: '🚫 Skipping duplicate offer: ' + offerNameCheck,
-              logType: 'warning'
-            }));
-            continue;
-          }
-          
           finalSeenContainers.add(card);
-          if (offerNameCheck) {
-            seenOfferNames.add(offerNameCheck);
-          }
           finalOfferCards.push(card);
         }
       }
