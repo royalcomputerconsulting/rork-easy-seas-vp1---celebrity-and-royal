@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download } from 'lucide-react-native';
@@ -140,6 +140,12 @@ function RoyalCaribbeanSyncScreen() {
   const canExport = state.status === 'complete' || state.status === 'awaiting_confirmation';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
+
+  useEffect(() => {
+    console.log('[RoyalCaribbeanSync Screen] Status changed:', state.status);
+    console.log('[RoyalCaribbeanSync Screen] showConfirmation:', showConfirmation);
+    console.log('[RoyalCaribbeanSync Screen] syncCounts:', state.syncCounts);
+  }, [state.status, showConfirmation, state.syncCounts]);
 
   return (
     <>
