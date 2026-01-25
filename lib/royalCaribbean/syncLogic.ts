@@ -95,25 +95,32 @@ function findMatchingBookedCruise(
   existingCruises: BookedCruise[]
 ): BookedCruise | null {
   return existingCruises.find(existing => {
+    // PRIORITY 1: Match by reservation number (most reliable)
     if (cruise.reservationNumber && existing.reservationNumber) {
-      const match = cruise.reservationNumber.toString().trim() === existing.reservationNumber.toString().trim();
-      if (match) {
+      const cruiseRes = cruise.reservationNumber.toString().trim();
+      const existingRes = existing.reservationNumber.toString().trim();
+      if (cruiseRes && existingRes && cruiseRes === existingRes) {
         console.log(`[Dedup] Matched by reservation number: ${cruise.reservationNumber}`);
         return true;
       }
     }
     
+    // PRIORITY 2: Match by booking ID
     if (cruise.bookingId && existing.bookingId) {
-      const match = cruise.bookingId.toString().trim() === existing.bookingId.toString().trim();
-      if (match) {
+      const cruiseBook = cruise.bookingId.toString().trim();
+      const existingBook = existing.bookingId.toString().trim();
+      if (cruiseBook && existingBook && cruiseBook === existingBook) {
         console.log(`[Dedup] Matched by booking ID: ${cruise.bookingId}`);
         return true;
       }
     }
     
+    // PRIORITY 3: Match by ship name + sail date (exact match)
     if (
-      cruise.shipName === existing.shipName &&
-      cruise.sailDate === existing.sailDate
+      cruise.shipName && existing.shipName &&
+      cruise.sailDate && existing.sailDate &&
+      cruise.shipName.trim() === existing.shipName.trim() &&
+      cruise.sailDate.trim() === existing.sailDate.trim()
     ) {
       console.log(`[Dedup] Matched by ship + date: ${cruise.shipName} on ${cruise.sailDate}`);
       return true;
@@ -245,9 +252,14 @@ export function createSyncPreview(
       ? (typeof loyaltyData.clubRoyalePoints === 'number' 
           ? loyaltyData.clubRoyalePoints 
           : parseInt(String(loyaltyData.clubRoyalePoints).replace(/,/g, ''), 10) || 0)
-      : Number(currentLoyalty.clubRoyalePoints);
+      : currentLoyalty.clubRoyalePoints;
     const syncedClubRoyaleTier = loyaltyData.clubRoyaleTier || currentLoyalty.clubRoyaleTier;
     const syncedCrownAndAnchorLevel = loyaltyData.crownAndAnchorLevel || currentLoyalty.crownAndAnchorLevel;
+    const syncedCrownAndAnchorPoints = loyaltyData.crownAndAnchorPoints != null
+      ? (typeof loyaltyData.crownAndAnchorPoints === 'number'
+          ? loyaltyData.crownAndAnchorPoints
+          : parseInt(String(loyaltyData.crownAndAnchorPoints).replace(/,/g, ''), 10) || 0)
+      : currentLoyalty.crownAndAnchorPoints;
 
     loyaltyPreview = {
       clubRoyalePoints: {
@@ -262,8 +274,8 @@ export function createSyncPreview(
       },
       crownAndAnchorPoints: {
         current: currentLoyalty.crownAndAnchorPoints,
-        synced: currentLoyalty.crownAndAnchorPoints,
-        changed: false
+        synced: syncedCrownAndAnchorPoints,
+        changed: syncedCrownAndAnchorPoints !== currentLoyalty.crownAndAnchorPoints
       },
       crownAndAnchorLevel: {
         current: currentLoyalty.crownAndAnchorLevel,

@@ -38,12 +38,12 @@ export const STEP4_LOYALTY_SCRIPT = `
 
       const pageText = document.body.textContent || '';
 
-      // CRITICAL: First find Club Royale tier (Signature/Premier/Classic)
-      // This is DIFFERENT from Crown & Anchor (Diamond Plus/Diamond/Platinum/etc)
+      // CRITICAL: First find Club Royale tier (Classic, Prime, Signature, Masters)
+      // This is DIFFERENT from Crown & Anchor (Gold, Platinum, Emerald, Diamond, Diamond Plus, Pinnacle)
       const clubRoyaleTierPatterns = [
-        /Club Royale[\s\S]{0,100}?(Signature|Premier|Classic)/i,
-        /(Signature|Premier|Classic)[\s\S]{0,50}?Club Royale/i,
-        /Your Club Royale Status[\s\S]{0,50}?(Signature|Premier|Classic)/i
+        /Club Royale[\s\S]{0,100}?(Classic|Prime|Signature|Masters)/i,
+        /(Classic|Prime|Signature|Masters)[\s\S]{0,50}?Club Royale/i,
+        /Your Club Royale Status[\s\S]{0,50}?(Classic|Prime|Signature|Masters)/i
       ];
       
       for (const pattern of clubRoyaleTierPatterns) {
@@ -59,11 +59,11 @@ export const STEP4_LOYALTY_SCRIPT = `
         }
       }
 
-      // Then find Crown & Anchor level (Diamond Plus/Diamond/Platinum/etc)
+      // Then find Crown & Anchor level (Gold, Platinum, Emerald, Diamond, Diamond Plus, Pinnacle)
       const crownAnchorTierPatterns = [
-        /Crown & Anchor[\s\S]{0,100}?(Diamond Plus|Diamond|Platinum|Gold|Silver|Emerald)/i,
-        /(Diamond Plus|Diamond|Platinum|Gold|Silver|Emerald)[\s\S]{0,50}?Crown & Anchor/i,
-        /Your Tier[\s\S]{0,30}?(Diamond Plus|Diamond|Platinum|Gold|Silver|Emerald)/i
+        /Crown & Anchor[\s\S]{0,100}?(Diamond Plus|Diamond|Platinum|Emerald|Gold|Pinnacle)/i,
+        /(Diamond Plus|Diamond|Platinum|Emerald|Gold|Pinnacle)[\s\S]{0,50}?Crown & Anchor/i,
+        /Your Tier[\s\S]{0,30}?(Diamond Plus|Diamond|Platinum|Emerald|Gold|Pinnacle)/i
       ];
       
       for (const pattern of crownAnchorTierPatterns) {
@@ -80,13 +80,14 @@ export const STEP4_LOYALTY_SCRIPT = `
       }
       
       // Fallback: If we didn't find Crown & Anchor in context, look for standalone tier
+      // CRITICAL: Only match Crown & Anchor tiers, NOT Club Royale tiers!
       if (!loyaltyData.crownAndAnchorLevel) {
-        const tierMatch = pageText.match(/(Diamond Plus|Diamond|Platinum|Gold|Silver|Emerald)(?!.*Member:)/);
+        const tierMatch = pageText.match(/(Diamond Plus|Diamond|Platinum|Emerald|Gold|Pinnacle)(?!.*Member:)/);
         if (tierMatch) {
           loyaltyData.crownAndAnchorLevel = tierMatch[1];
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Found tier (fallback): ' + tierMatch[1],
+            message: 'Found Crown & Anchor tier (fallback): ' + tierMatch[1],
             logType: 'info'
           }));
         }
@@ -442,7 +443,7 @@ export const STEP4_LOYALTY_SCRIPT = `
           foundClubRoyale = true;
         }
         
-        if (text.match(/^(Signature|Premier|Classic)$/i) && !loyaltyData.clubRoyaleTier) {
+        if (text.match(/^(Classic|Prime|Signature|Masters)$/i) && !loyaltyData.clubRoyaleTier) {
           loyaltyData.clubRoyaleTier = text;
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
@@ -466,7 +467,7 @@ export const STEP4_LOYALTY_SCRIPT = `
       });
       
       if (!loyaltyData.clubRoyaleTier) {
-        const tierPattern = /(Signature|Premier|Classic)\\s+Club Royale|Club Royale\\s+(Signature|Premier|Classic)/i;
+        const tierPattern = /(Classic|Prime|Signature|Masters)\\s+Club Royale|Club Royale\\s+(Classic|Prime|Signature|Masters)/i;
         const tierMatch = pageText.match(tierPattern);
         if (tierMatch) {
           loyaltyData.clubRoyaleTier = tierMatch[1] || tierMatch[2];
@@ -498,7 +499,7 @@ export const STEP4_LOYALTY_SCRIPT = `
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Loyalty extraction complete: ' + loyaltyData.crownAndAnchorLevel + ', ' + loyaltyData.crownAndAnchorPoints + ' pts, ' + loyaltyData.cruiseNights + ' nights',
+        message: 'Loyalty extraction complete: Club Royale=' + (loyaltyData.clubRoyaleTier || 'N/A') + ', Crown&Anchor=' + (loyaltyData.crownAndAnchorLevel || 'N/A') + ', ' + loyaltyData.crownAndAnchorPoints + ' pts, ' + loyaltyData.cruiseNights + ' nights',
         logType: 'success'
       }));
 
