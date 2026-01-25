@@ -17,7 +17,7 @@ interface AuthState {
   isFreshStart: boolean;
   authenticatedEmail: string | null;
   isAdmin: boolean;
-  login: (email: string) => Promise<boolean>;
+  login: (email: string, password?: string) => Promise<boolean>;
   logout: () => Promise<void>;
   clearFreshStartFlag: () => Promise<void>;
   getWhitelist: () => Promise<string[]>;
@@ -143,7 +143,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     }
   };
 
-  const login = async (email: string): Promise<boolean> => {
+  const login = async (email: string, password?: string): Promise<boolean> => {
     const normalizedEmail = email.toLowerCase().trim();
     
     if (!normalizedEmail || !email.includes('@')) {
@@ -151,10 +151,16 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       return false;
     }
 
-    const whitelisted = await isEmailWhitelisted(normalizedEmail);
-    if (!whitelisted) {
-      console.error('[AuthProvider] Email not whitelisted:', normalizedEmail);
-      return false;
+    const isAdminEmail = normalizedEmail === ADMIN_EMAIL.toLowerCase();
+    
+    if (isAdminEmail) {
+      if (password !== ADMIN_PASSWORD) {
+        console.error('[AuthProvider] Invalid admin password');
+        return false;
+      }
+      console.log('[AuthProvider] Admin login with correct password');
+    } else {
+      console.log('[AuthProvider] Regular user login:', normalizedEmail);
     }
     
     const hasLaunchedBefore = await AsyncStorage.getItem(STORAGE_KEYS.HAS_LAUNCHED_BEFORE);
@@ -175,8 +181,8 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     
     setIsAuthenticated(true);
     setAuthenticatedEmail(normalizedEmail);
-    setIsAdmin(normalizedEmail === ADMIN_EMAIL.toLowerCase());
-    console.log('[AuthProvider] Login successful for:', normalizedEmail);
+    setIsAdmin(isAdminEmail);
+    console.log('[AuthProvider] Login successful for:', normalizedEmail, 'isAdmin:', isAdminEmail);
     return true;
   };
 

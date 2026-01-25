@@ -5,11 +5,16 @@ import { useAuth } from '@/state/AuthProvider';
 
 const { width, height } = Dimensions.get('window');
 
+const ADMIN_EMAIL = 'scott.merlis1@gmail.com';
+
 export function LoginScreen() {
   const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
   const { login } = useAuth();
+  
+  const isAdminEmail = email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase();
 
   const handleLogin = async () => {
     setError('');
@@ -24,9 +29,18 @@ export function LoginScreen() {
       return;
     }
     
-    const success = await login(email);
+    if (isAdminEmail && !password) {
+      setError('Please enter the admin password.');
+      return;
+    }
+    
+    const success = await login(email, password || undefined);
     if (!success) {
-      setError('Unable to log in. Please check your email or purchase a subscription.');
+      if (isAdminEmail) {
+        setError('Incorrect admin password.');
+      } else {
+        setError('Unable to log in. Please check your email.');
+      }
     }
   };
 
@@ -104,8 +118,28 @@ export function LoginScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="email"
-              onSubmitEditing={handleLogin}
+              onSubmitEditing={isAdminEmail ? undefined : handleLogin}
             />
+
+            {isAdminEmail && (
+              <>
+                <Text style={styles.passwordLabel}>Admin Password</Text>
+                <TextInput
+                  style={[styles.input, error ? styles.inputError : null]}
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setError('');
+                  }}
+                  placeholder="Enter admin password"
+                  placeholderTextColor={COLORS.textSecondary}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onSubmitEditing={handleLogin}
+                />
+              </>
+            )}
 
             {error ? (
               <Text style={styles.errorText}>{error}</Text>
@@ -562,6 +596,14 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold as any,
     color: COLORS.textPrimary,
     marginBottom: SPACING.sm,
+    letterSpacing: 0.5,
+  },
+  passwordLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.md,
     letterSpacing: 0.5,
   },
   input: {
