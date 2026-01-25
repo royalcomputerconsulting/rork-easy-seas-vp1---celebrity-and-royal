@@ -157,7 +157,7 @@ export function OfferCard({
     if (recommended) {
       return { text: 'RECOMMENDED', bg: COLORS.gold };
     }
-    return { text: 'CASINO OFFER', bg: COLORS.loyalty };
+    return { text: offer.offerName || 'CASINO OFFER', bg: COLORS.loyalty };
   };
 
   const statusBadge = getStatusBadge();
@@ -228,7 +228,7 @@ export function OfferCard({
       {(offer.offerName || offer.offerCode) && (
         <View style={styles.offerHeaderSection}>
           <Text style={styles.offerNameHeader}>
-            {offer.offerName && offer.offerName !== offer.offerCode ? offer.offerName : 'Casino Offer'}
+            {offer.offerName || offer.destination || 'Casino Offer'}
           </Text>
           <View style={styles.offerCodeRow}>
             {offer.offerCode && (

@@ -251,8 +251,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.log('[CoreData] Storage promises resolved');
 
       const hasImported = hasImportedData === 'true';
-      const isFirstTimeUser = hasImportedData === null;
-      console.log('[CoreData] Has imported data flag:', hasImported, 'isFirstTimeUser:', isFirstTimeUser);
+      const hasAnyExistingData = !!(bookedData || offersData || profileData || pointsData || cruisesData);
+      const isFirstTimeUser = hasImportedData === null && !hasAnyExistingData;
+      console.log('[CoreData] Has imported data flag:', hasImported, 'isFirstTimeUser:', isFirstTimeUser, 'hasAnyExistingData:', hasAnyExistingData);
 
       const parsedOffers: CasinoOffer[] = offersData ? JSON.parse(offersData) : [];
       console.log('[CoreData] Parsed offers:', parsedOffers.length);
@@ -317,13 +318,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         setUserPointsState(parseInt(pointsData, 10));
       }
       
-      if (profileData && !isFirstTimeUser) {
+      if (profileData) {
         setClubRoyaleProfileState(JSON.parse(profileData));
+        console.log('[CoreData] Loaded existing loyalty profile');
       } else if (isFirstTimeUser) {
-        console.log('[CoreData] First time user - resetting loyalty profile to defaults');
+        console.log('[CoreData] First time user - initializing with default loyalty profile');
         setClubRoyaleProfileState(SAMPLE_CLUB_ROYALE_PROFILE);
-        await AsyncStorage.removeItem(STORAGE_KEYS.CLUB_PROFILE);
-        await AsyncStorage.removeItem(STORAGE_KEYS.USER_POINTS);
+      } else {
+        console.log('[CoreData] No profile data, but not first time user - keeping current state');
       }
 
       console.log('[CoreData] === LOAD COMPLETE ===');

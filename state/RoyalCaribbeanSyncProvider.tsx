@@ -267,11 +267,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Step 3 error: ${step3Error} - continuing with collected data`, 'warning');
       }
       
+      // Step 4 (Loyalty) has been removed per user request
+      addLog('All steps completed successfully! Ready to sync.', 'success');
+      
       setState(prev => {
         const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
         const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
-        const uniqueOfferNames = new Set(prev.extractedOffers.map(o => o.offerName || o.offerCode).filter(Boolean));
-        const uniqueOffers = uniqueOfferNames.size;
+        
+        // Group by offer name to get unique offer count
+        const offersByName = new Map<string, number>();
+        prev.extractedOffers.forEach(offer => {
+          const key = offer.offerName || offer.offerCode || 'Unknown';
+          offersByName.set(key, (offersByName.get(key) || 0) + 1);
+        });
+        const uniqueOffers = offersByName.size;
+        
+        console.log('[RoyalCaribbeanSync] Offer grouping:', {
+          totalRows: prev.extractedOffers.length,
+          uniqueOffers,
+          offerBreakdown: Array.from(offersByName.entries()).map(([name, count]) => ({ name, count }))
+        });
         
         const newState = {
           ...prev, 
@@ -290,12 +305,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           offerRows: prev.extractedOffers.length,
           upcomingCruises,
           courtesyHolds,
-          uniqueOfferNames: Array.from(uniqueOfferNames),
           status: 'awaiting_confirmation'
         });
         
-        addLog('All steps completed successfully! Ready to sync.', 'success');
-        addLog(`📊 Extracted: ${prev.extractedOffers.length} offer rows from ${uniqueOffers} offer(s), ${prev.extractedBookedCruises.length} cruises`, 'info');
+        addLog(`📊 Extracted: ${prev.extractedOffers.length} offer rows from ${uniqueOffers} unique offer(s), ${prev.extractedBookedCruises.length} cruises`, 'info');
         addLog('⏳ Awaiting user confirmation to sync data...', 'info');
         
         return newState;

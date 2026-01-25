@@ -71,7 +71,7 @@ const KEYS = {
 
 const DEFAULT_OWNER = {
   name: 'Player',
-  email: '',
+  email: 'player@easyseas.app',
   crownAnchorNumber: '',
   celebrityEmail: '',
   celebrityCaptainsClubNumber: '',

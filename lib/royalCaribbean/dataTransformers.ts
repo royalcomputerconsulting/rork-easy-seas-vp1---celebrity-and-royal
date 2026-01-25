@@ -100,11 +100,15 @@ export function transformOfferRowsToCruisesAndOffers(
 
     const offerKey = (offer.offerCode || offer.offerName || `UNNAMED_${Date.now()}`).trim();
     if (!offerMap.has(offerKey)) {
+      const displayName = offer.offerName && offer.offerName.trim() && offer.offerName !== offer.offerCode 
+        ? offer.offerName 
+        : (offer.offerCode || 'Royal Caribbean Offer');
+      
       const casinoOffer: CasinoOffer = {
         id: `offer_${offerKey.replace(/\s+/g, '_')}_${Date.now()}`,
-        title: offer.offerName || offer.offerCode || 'Royal Caribbean Offer',
-        offerCode: offer.offerCode || offerKey,
-        offerName: offer.offerName || offer.offerCode || 'Unnamed Offer',
+        title: displayName,
+        offerCode: offer.offerCode || '',
+        offerName: displayName,
         offerType: determineOfferType(offer.perks),
         category: offer.offerType,
         perks: offer.perks ? [offer.perks] : [],

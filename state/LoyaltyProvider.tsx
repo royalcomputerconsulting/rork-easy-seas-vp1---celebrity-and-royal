@@ -78,6 +78,9 @@ const DEFAULT_LOYALTY = {
   crownAnchorPoints: 0,
 };
 
+const DEFAULT_TIER = 'Choice' as ClubRoyaleTier;
+const DEFAULT_LEVEL = 'Gold' as CrownAnchorLevel;
+
 export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState => {
   const { bookedCruises: storedBookedCruises, isLoading: cruisesLoading } = useCruiseStore();
   
