@@ -64,7 +64,8 @@ export const STEP3_HOLDS_SCRIPT = `
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'step_complete',
           step: 3,
-          data: []
+          data: [],
+          totalCount: 0
         }));
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
@@ -227,6 +228,11 @@ export const STEP3_HOLDS_SCRIPT = `
             total: holdCards.length,
             stepName: 'Holds: ' + processedCount + ' of ' + expectedCount + ' scraped'
           }));
+
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'cruise_batch',
+            data: [hold]
+          }));
         } else {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
@@ -244,7 +250,8 @@ export const STEP3_HOLDS_SCRIPT = `
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete',
         step: 3,
-        data: holds
+        data: holds,
+        totalCount: holds.length
       }));
 
       const statusType = holds.length === expectedCount ? 'success' : 'warning';

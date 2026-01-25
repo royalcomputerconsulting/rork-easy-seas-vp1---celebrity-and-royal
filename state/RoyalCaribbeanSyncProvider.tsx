@@ -93,6 +93,22 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
         break;
 
+      case 'cruise_batch':
+        if (message.data && message.data.length > 0) {
+          setState(prev => {
+            const newCruises = [...prev.extractedBookedCruises, ...(message.data as BookedCruiseRow[])];
+            console.log(`[RoyalCaribbeanSync] Cruise batch received: ${message.data.length} items, total now: ${newCruises.length}`);
+            return {
+              ...prev,
+              extractedBookedCruises: newCruises
+            };
+          });
+        }
+        if (progressCallbacks.current.onProgress) {
+          progressCallbacks.current.onProgress();
+        }
+        break;
+
       case 'offer_progress':
         addLog(`Offer ${message.offerIndex}/${message.totalOffers} (${message.offerName}): ${message.sailingsCount} sailings - ${message.status}`, 'info');
         if (progressCallbacks.current.onProgress) {

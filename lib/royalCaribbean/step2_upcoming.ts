@@ -325,6 +325,11 @@ export const STEP2_UPCOMING_SCRIPT = `
             total: cruiseCards.length,
             stepName: 'Upcoming: ' + processedCount + ' of ' + expectedCount + ' scraped'
           }));
+
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'cruise_batch',
+            data: [cruise]
+          }));
         } else {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
@@ -342,7 +347,8 @@ export const STEP2_UPCOMING_SCRIPT = `
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete',
         step: 2,
-        data: cruises
+        data: cruises,
+        totalCount: cruises.length
       }));
 
       const statusType = cruises.length === expectedCount ? 'success' : 'warning';
