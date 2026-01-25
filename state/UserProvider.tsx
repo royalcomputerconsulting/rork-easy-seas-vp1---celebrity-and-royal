@@ -70,7 +70,7 @@ const KEYS = {
 };
 
 const DEFAULT_OWNER = {
-  name: '',
+  name: 'Player',
   email: '',
   crownAnchorNumber: '',
   celebrityEmail: '',

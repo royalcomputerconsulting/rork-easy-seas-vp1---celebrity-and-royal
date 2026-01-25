@@ -1886,21 +1886,26 @@ export const STEP1_OFFERS_SCRIPT = `
           // CRITICAL: Remove offer code suffix from name if present
           // Codes like "26CLS103" or "25GOLD%" often get appended to offer names
           // FIXED: More aggressive pattern to strip codes from the end of offer names
-          // Use greedy match (.+) instead of non-greedy (.+?) to capture full name
           
           // Pattern 1: Try with word boundary (space before code)
           let codeAtEnd = headingText.match(/^(.+)\\s+(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?|\\d{2}[A-Z]{3}\\d{3}[A-Z]?)$/i);
           
-          // Pattern 2: Try without space (code directly attached to name)
-          // Match greedily up to the last occurrence of a code pattern
+          // Pattern 2: Code directly attached without space (e.g., "Max Bet March26MAR103")
+          // Match any text ending with a letter, then a code pattern immediately after
           if (!codeAtEnd) {
-            codeAtEnd = headingText.match(/^(.+?[a-z])\\s*(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?|\\d{2}[A-Z]{3}\\d{3}[A-Z]?)$/i);
+            codeAtEnd = headingText.match(/^(.+[a-zA-Z])(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?|\\d{2}[A-Z]{3}\\d{3}[A-Z]?)$/i);
           }
           
-          // Pattern 3: Very aggressive - strip anything that looks like a code from the end
+          // Pattern 3: Very aggressive - any text followed by digits+letters pattern
           if (!codeAtEnd) {
-            // Match text ending with lowercase letter, then a code pattern
-            codeAtEnd = headingText.match(/^(.*[a-z])\\s*(\\d{2}[A-Z]{2,}\\d*[A-Z%]*)$/i);
+            // Match text ending with letter/space, then any alphanumeric code pattern
+            codeAtEnd = headingText.match(/^(.+[a-zA-Z\\s])(\\d{2}[A-Z0-9]{3,}[A-Z%]*)$/i);
+          }
+          
+          // Pattern 4: Ultra aggressive - strip any trailing code-like pattern
+          if (!codeAtEnd) {
+            // Look for text followed by 2digits + 2+letters + optional digits/letters
+            codeAtEnd = headingText.match(/^(.*?)\\s*(\\d{2}[A-Z][A-Z]+\\d*[A-Z%]*)$/i);
           }
           
           if (codeAtEnd && codeAtEnd[1] && codeAtEnd[1].length >= 3) {

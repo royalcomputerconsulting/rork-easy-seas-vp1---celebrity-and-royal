@@ -63,7 +63,7 @@ export function transformOfferRowsToCruisesAndOffers(
 ): { cruises: Cruise[]; offers: CasinoOffer[] } {
   const cruises: Cruise[] = [];
   const offerMap = new Map<string, CasinoOffer>();
-  const cruiseIdsByOfferName = new Map<string, string[]>();
+  const cruiseIdsByOfferKey = new Map<string, string[]>();
 
   for (const offer of offerRows) {
     const cruiseId = generateId();
@@ -98,13 +98,13 @@ export function transformOfferRowsToCruisesAndOffers(
 
     cruises.push(cruise);
 
-    const offerKey = offer.offerName || offer.offerCode || 'Unknown Offer';
+    const offerKey = (offer.offerCode || offer.offerName || `UNNAMED_${Date.now()}`).trim();
     if (!offerMap.has(offerKey)) {
       const casinoOffer: CasinoOffer = {
         id: `offer_${offerKey.replace(/\s+/g, '_')}_${Date.now()}`,
-        title: offer.offerName || 'Royal Caribbean Offer',
-        offerCode: offer.offerCode,
-        offerName: offer.offerName,
+        title: offer.offerName || offer.offerCode || 'Royal Caribbean Offer',
+        offerCode: offer.offerCode || offerKey,
+        offerName: offer.offerName || offer.offerCode || 'Unnamed Offer',
         offerType: determineOfferType(offer.perks),
         category: offer.offerType,
         perks: offer.perks ? [offer.perks] : [],
@@ -123,14 +123,14 @@ export function transformOfferRowsToCruisesAndOffers(
         updatedAt: new Date().toISOString()
       };
       offerMap.set(offerKey, casinoOffer);
-      cruiseIdsByOfferName.set(offerKey, []);
+      cruiseIdsByOfferKey.set(offerKey, []);
     }
 
-    cruiseIdsByOfferName.get(offerKey)?.push(cruiseId);
+    cruiseIdsByOfferKey.get(offerKey)?.push(cruiseId);
   }
 
   offerMap.forEach((offer, key) => {
-    offer.cruiseIds = cruiseIdsByOfferName.get(key) || [];
+    offer.cruiseIds = cruiseIdsByOfferKey.get(key) || [];
   });
 
   return {

@@ -267,18 +267,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Step 3 error: ${step3Error} - continuing with collected data`, 'warning');
       }
       
-      let extractionSummary = { offerRows: 0, cruises: 0 };
-      
       setState(prev => {
         const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
         const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
         const uniqueOfferNames = new Set(prev.extractedOffers.map(o => o.offerName || o.offerCode).filter(Boolean));
         const uniqueOffers = uniqueOfferNames.size;
-        
-        extractionSummary = {
-          offerRows: prev.extractedOffers.length,
-          cruises: prev.extractedBookedCruises.length
-        };
         
         const newState = {
           ...prev, 
@@ -301,12 +294,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           status: 'awaiting_confirmation'
         });
         
+        addLog('All steps completed successfully! Ready to sync.', 'success');
+        addLog(`📊 Extracted: ${prev.extractedOffers.length} offer rows from ${uniqueOffers} offer(s), ${prev.extractedBookedCruises.length} cruises`, 'info');
+        addLog('⏳ Awaiting user confirmation to sync data...', 'info');
+        
         return newState;
       });
-      
-      addLog('All steps completed successfully! Ready to sync.', 'success');
-      addLog(`📊 Extracted: ${extractionSummary.offerRows} offer rows, ${extractionSummary.cruises} cruises`, 'info');
-      addLog('⏳ Awaiting user confirmation to sync data...', 'info');
       
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');

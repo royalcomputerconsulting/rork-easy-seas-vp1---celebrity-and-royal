@@ -36,9 +36,11 @@ import { SlotMachineLibraryProvider } from "@/state/SlotMachineLibraryProvider";
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 
-SplashScreen.preventAutoHideAsync().catch((error) => {
-  console.warn('[SplashScreen] Failed to prevent auto hide:', error);
-});
+try {
+  SplashScreen.preventAutoHideAsync();
+} catch (error) {
+  // Safe to ignore - splash screen may not be available in all contexts
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -215,7 +217,7 @@ function AppContent() {
         await SplashScreen.hideAsync();
         console.log('[AppContent] Native splash hidden');
       } catch (error) {
-        console.warn('[AppContent] Splash screen error (safe to ignore):', error);
+        // Safe to ignore - splash screen may not be registered
       }
     };
     
