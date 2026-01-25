@@ -966,6 +966,15 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
       
+      // Helper to check if container has in-progress buttons
+      function hasInProgressButtons(container) {
+        const buttons = Array.from(container.querySelectorAll('button, a, [role="button"]'));
+        return buttons.some(btn => {
+          const btnText = (btn.textContent || '').trim().toLowerCase();
+          return btnText.includes('continue redemption') || btnText.includes('cancel redemption');
+        });
+      }
+      
       // For each primary anchor button, find its offer container
       for (const vsBtn of primaryOfferAnchorButtons) {
         let parent = vsBtn.parentElement;
@@ -1040,6 +1049,16 @@ export const STEP1_OFFERS_SCRIPT = `
         }
         
         if (bestContainer && !seenOfferCards.has(bestContainer)) {
+          // CRITICAL: Skip in-progress offers (they have no sailings to scrape)
+          if (hasInProgressButtons(bestContainer)) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '🚫 Skipping IN PROGRESS offer (Continue/Cancel Redemption detected)',
+              logType: 'info'
+            }));
+            continue;
+          }
+          
           const containerText = bestContainer.textContent || '';
           const codeMatch = containerText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?)\b/);
           const offerCode = codeMatch ? codeMatch[1] : '';
@@ -1114,6 +1133,16 @@ export const STEP1_OFFERS_SCRIPT = `
           }
           
           if (bestContainer && !seenOfferCards.has(bestContainer)) {
+            // CRITICAL: Skip in-progress offers
+            if (hasInProgressButtons(bestContainer)) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '🚫 Skipping IN PROGRESS offer (Continue/Cancel Redemption detected)',
+                logType: 'info'
+              }));
+              continue;
+            }
+            
             seenOfferCards.add(bestContainer);
             offerCards.push(bestContainer);
             
@@ -1289,6 +1318,16 @@ export const STEP1_OFFERS_SCRIPT = `
         // Now add ONLY the best container per unique code
         for (const [code, entry] of bestContainerByCode.entries()) {
           if (!seenCodeContainers.has(entry.container) && !isAccountStatusDisplay(entry.container) && !isHelpOrContactText(entry.container)) {
+            // CRITICAL: Skip in-progress offers
+            if (hasInProgressButtons(entry.container)) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '🚫 Skipping IN PROGRESS offer code: ' + code,
+                logType: 'info'
+              }));
+              continue;
+            }
+            
             seenCodeContainers.add(entry.container);
             codeBasedOfferCards.push(entry);
           }
