@@ -765,9 +765,16 @@ export default function AnalyticsScreen() {
         
         {filteredCruises.length > 0 ? (
           <View style={styles.portfolioList}>
-            {(showAllCruises ? filteredCruises : filteredCruises.slice(0, 5)).map((cruise) => (
+            {(showAllCruises ? filteredCruises.slice(0, 25) : filteredCruises.slice(0, 5)).map((cruise) => (
               <CruisePortfolioCard key={cruise.id} cruise={cruise} />
             ))}
+            {showAllCruises && filteredCruises.length > 25 && (
+              <View style={styles.portfolioLimitNotice}>
+                <Text style={styles.portfolioLimitText}>
+                  Showing top 25 of {filteredCruises.length} cruises (sorted by value)
+                </Text>
+              </View>
+            )}
             {filteredCruises.length > 5 && (
               <TouchableOpacity 
                 style={styles.viewMoreButton} 
@@ -775,7 +782,7 @@ export default function AnalyticsScreen() {
                 onPress={() => setShowAllCruises(!showAllCruises)}
               >
                 <Text style={styles.viewMoreText}>
-                  {showAllCruises ? 'Show fewer cruises' : `View ${filteredCruises.length - 5} more cruises`}
+                  {showAllCruises ? 'Show fewer cruises' : `View ${Math.min(filteredCruises.length - 5, 20)} more cruises`}
                 </Text>
                 <ChevronDown 
                   size={16} 
@@ -2014,6 +2021,18 @@ const styles = StyleSheet.create({
   },
   portfolioList: {
     gap: SPACING.sm,
+  },
+  portfolioLimitNotice: {
+    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+  },
+  portfolioLimitText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: '#64748B',
+    fontStyle: 'italic' as const,
   },
   portfolioCard: {
     backgroundColor: COLORS.white,
