@@ -36,7 +36,9 @@ import { SlotMachineLibraryProvider } from "@/state/SlotMachineLibraryProvider";
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch((error) => {
+  console.warn('[SplashScreen] Failed to prevent auto hide:', error);
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -213,10 +215,13 @@ function AppContent() {
         await SplashScreen.hideAsync();
         console.log('[AppContent] Native splash hidden');
       } catch (error) {
-        console.error('[AppContent] Error hiding splash:', error);
+        console.warn('[AppContent] Splash screen error (safe to ignore):', error);
       }
     };
-    hideSplash();
+    
+    const timer = setTimeout(() => {
+      hideSplash();
+    }, 100);
     
     const timeout = setTimeout(() => {
       console.log('[AppContent] === TIMEOUT: Forcing splash to hide after 1.8s ===');
@@ -225,6 +230,7 @@ function AppContent() {
     
     return () => {
       console.log('[AppContent] === UNMOUNT ===');
+      clearTimeout(timer);
       clearTimeout(timeout);
     };
   }, []);
