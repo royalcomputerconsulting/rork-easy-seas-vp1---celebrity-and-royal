@@ -241,7 +241,7 @@ export function createSyncPreview(
 
   let loyaltyPreview = null;
   if (loyaltyData) {
-    const syncedClubRoyalePoints = loyaltyData.clubRoyalePoints != null
+    const syncedClubRoyalePoints: number = loyaltyData.clubRoyalePoints != null
       ? (typeof loyaltyData.clubRoyalePoints === 'number' 
           ? loyaltyData.clubRoyalePoints 
           : parseInt(String(loyaltyData.clubRoyalePoints).replace(/,/g, ''), 10))
