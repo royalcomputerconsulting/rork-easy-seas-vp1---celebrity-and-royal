@@ -110,23 +110,72 @@ function findMatchingOffer(
   }) || null;
 }
 
+function normalizeCabinType(cabinType: string | undefined): string {
+  if (!cabinType) return 'unknown';
+  return cabinType.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function normalizeShipName(shipName: string | undefined): string {
+  if (!shipName) return '';
+  return shipName.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function normalizeSailDate(sailDate: string | undefined): string {
+  if (!sailDate) return '';
+  // Try to normalize to YYYY-MM-DD format
+  try {
+    const date = new Date(sailDate);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+  } catch {
+    // Fall through
+  }
+  return sailDate.trim();
+}
+
 function findMatchingCruise(
   cruise: Cruise,
   existingCruises: Cruise[]
 ): Cruise | null {
+  const cruiseShip = normalizeShipName(cruise.shipName);
+  const cruiseDate = normalizeSailDate(cruise.sailDate);
+  const cruiseCabin = normalizeCabinType(cruise.cabinType);
+  
   return existingCruises.find(existing => {
-    if (cruise.offerCode && existing.offerCode && cruise.offerCode === existing.offerCode) {
-      if (cruise.shipName === existing.shipName && cruise.sailDate === existing.sailDate) {
-        return true;
-      }
+    const existingShip = normalizeShipName(existing.shipName);
+    const existingDate = normalizeSailDate(existing.sailDate);
+    const existingCabin = normalizeCabinType(existing.cabinType);
+    
+    // PRIORITY 1: Match by ship + sail date + cabin type (normalized)
+    if (
+      cruiseShip && existingShip &&
+      cruiseDate && existingDate &&
+      cruiseShip === existingShip &&
+      cruiseDate === existingDate &&
+      cruiseCabin === existingCabin
+    ) {
+      console.log(`[Dedup Cruise] Matched by ship+date+cabin: ${cruise.shipName} on ${cruise.sailDate} (${cruise.cabinType})`);
+      return true;
     }
     
+    // PRIORITY 2: Match by ship + sail date only (same sailing, different cabin type is still same cruise)
+    // This catches cases where cabin type formatting differs
     if (
-      cruise.shipName === existing.shipName &&
-      cruise.sailDate === existing.sailDate &&
-      cruise.cabinType === existing.cabinType
+      cruiseShip && existingShip &&
+      cruiseDate && existingDate &&
+      cruiseShip === existingShip &&
+      cruiseDate === existingDate
     ) {
-      return true;
+      // Only match if cabin types are similar or one is unknown
+      const cabinsSimilar = cruiseCabin === existingCabin ||
+        cruiseCabin === 'unknown' || existingCabin === 'unknown' ||
+        cruiseCabin.includes(existingCabin) || existingCabin.includes(cruiseCabin);
+      
+      if (cabinsSimilar) {
+        console.log(`[Dedup Cruise] Matched by ship+date (similar cabin): ${cruise.shipName} on ${cruise.sailDate}`);
+        return true;
+      }
     }
     
     return false;
@@ -231,8 +280,23 @@ export function createSyncPreview(
     console.log(`[SyncLogic] Filtered out ${inProgressCount} IN PROGRESS offer(s) from sync`);
   }
 
-  const { cruises: transformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(filteredOffers, loyaltyData);
+  const { cruises: rawTransformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(filteredOffers, loyaltyData);
   const transformedBookedCruises = transformBookedCruisesToAppFormat(extractedBookedCruises, loyaltyData);
+
+  // Deduplicate cruises within the transformed batch itself
+  // The same sailing can appear in multiple offers - we only want unique sailings
+  const transformedCruises: Cruise[] = [];
+  const seenCruiseKeys = new Set<string>();
+  
+  for (const cruise of rawTransformedCruises) {
+    const key = `${normalizeShipName(cruise.shipName)}|${normalizeSailDate(cruise.sailDate)}|${normalizeCabinType(cruise.cabinType)}`;
+    if (!seenCruiseKeys.has(key)) {
+      seenCruiseKeys.add(key);
+      transformedCruises.push(cruise);
+    }
+  }
+  
+  console.log(`[SyncLogic] Deduplicated cruises: ${rawTransformedCruises.length} raw -> ${transformedCruises.length} unique`);
 
   const offersNew: CasinoOffer[] = [];
   const offersUpdates: { existing: CasinoOffer; updated: CasinoOffer }[] = [];
