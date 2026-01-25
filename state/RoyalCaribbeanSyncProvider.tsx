@@ -119,19 +119,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       case 'step_complete':
         const itemCount = message.totalCount ?? message.data?.length ?? 0;
         addLog(`Step ${message.step} completed with ${itemCount} items`, 'success');
-        if (message.step === 1) {
-          if (message.data && message.data.length > 0) {
-            setState(prev => ({ ...prev, extractedOffers: [...prev.extractedOffers, ...(message.data as OfferRow[])] }));
-          }
-        } else if (message.step === 2 || message.step === 3) {
-          setState(prev => ({
-            ...prev,
-            extractedBookedCruises: [
-              ...prev.extractedBookedCruises,
-              ...(message.data as BookedCruiseRow[])
-            ]
-          }));
-        }
         if (stepCompleteResolvers.current[message.step]) {
           stepCompleteResolvers.current[message.step]();
           delete stepCompleteResolvers.current[message.step];
@@ -280,33 +267,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Step 3 error: ${step3Error} - continuing with collected data`, 'warning');
       }
       
-      setState(prev => ({ ...prev, status: 'running_step_4' }));
-      addLog('Step 4: Navigating to loyalty programs page...', 'info');
-      addLog('Loading Loyalty Programs Page...', 'info');
-      
-      try {
-        if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`
-            window.location.href = 'https://www.royalcaribbean.com/account/loyalty-programs';
-            true;
-          `);
-          
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          
-          webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
-          
-          await waitForStepComplete(4, 60000);
-        }
-      } catch (step4Error) {
-        addLog(`Step 4 error: ${step4Error} - continuing with collected data`, 'warning');
-      }
-      
       let extractionSummary = { offerRows: 0, cruises: 0 };
       
       setState(prev => {
         const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
         const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
-        const uniqueOffers = new Set(prev.extractedOffers.map(o => o.offerName)).size;
+        const uniqueOfferNames = new Set(prev.extractedOffers.map(o => o.offerName || o.offerCode).filter(Boolean));
+        const uniqueOffers = uniqueOfferNames.size;
         
         extractionSummary = {
           offerRows: prev.extractedOffers.length,
@@ -330,6 +297,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           offerRows: prev.extractedOffers.length,
           upcomingCruises,
           courtesyHolds,
+          uniqueOfferNames: Array.from(uniqueOfferNames),
           status: 'awaiting_confirmation'
         });
         
@@ -458,18 +426,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       if (preview.loyalty) {
         if (preview.loyalty.clubRoyalePoints.changed) {
           addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
-          await loyaltyContext.setClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
+          await loyaltyContext.setManualClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
         }
         
-        if (preview.loyalty.clubRoyaleTier.changed) {
-          addLog(`Updating Club Royale tier: ${preview.loyalty.clubRoyaleTier.current} → ${preview.loyalty.clubRoyaleTier.synced}`, 'info');
-          await loyaltyContext.setClubRoyaleTier(preview.loyalty.clubRoyaleTier.synced);
-        }
-        
-        if (preview.loyalty.crownAndAnchorLevel.changed) {
-          addLog(`Updating Crown & Anchor level: ${preview.loyalty.crownAndAnchorLevel.current} → ${preview.loyalty.crownAndAnchorLevel.synced}`, 'info');
-          await loyaltyContext.setCrownAnchorLevel(preview.loyalty.crownAndAnchorLevel.synced);
-        }
+        // Crown & Anchor sync disabled - user requested to skip Step 4
+        // if (preview.loyalty.crownAndAnchorPoints.changed) {
+        //   addLog(`Updating Crown & Anchor points: ${preview.loyalty.crownAndAnchorPoints.current} → ${preview.loyalty.crownAndAnchorPoints.synced}`, 'info');
+        //   await loyaltyContext.setManualCrownAnchorPoints(preview.loyalty.crownAndAnchorPoints.synced);
+        // }
       }
 
       setState(prev => ({ 
