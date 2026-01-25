@@ -90,18 +90,20 @@ export const STEP1_OFFERS_SCRIPT = `
   // Helper function to extract offer code from text - defined at top level for accessibility
   function extractOfferCodeFromText(text) {
     if (!text) return '';
+    // FIXED: Use negative lookahead instead of \b to catch codes attached to text
     const patterns = [
-      /\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)\b/,
-      /\b(\d{4}[A-Z]\d{2}[A-Z]?)\b/,
-      /\b(\d{2}[A-Z]{3,6}%?)\b/,
-      /\b(\d{2}[A-Z]{3}\d{3}[A-Z]?)\b/
+      /(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)(?![a-z])/gi,
+      /(\d{4}[A-Z]\d{2}[A-Z]?)(?![a-z])/gi,
+      /(\d{2}[A-Z]{3,6}%?)(?![a-z])/gi,
+      /(\d{2}[A-Z]{3}\d{3}[A-Z]?)(?![a-z])/gi
     ];
     for (const pattern of patterns) {
-      const match = text.match(pattern);
+      pattern.lastIndex = 0;
+      const match = pattern.exec(text);
       if (match && match[1]) {
-        const code = match[1];
+        const code = match[1].toUpperCase();
         const invalidCodes = ['CURRENT', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER'];
-        if (!invalidCodes.includes(code.toUpperCase())) {
+        if (!invalidCodes.includes(code)) {
           return code;
         }
       }
@@ -1866,8 +1868,8 @@ export const STEP1_OFFERS_SCRIPT = `
         // IMPORTANT: Do not use a naive /[A-Z0-9]{5,15}/ match (it often grabs CURRENT/OFFERS/etc.)
         let offerCode = extractOfferCodeFromText(cardText);
         if (!offerCode) {
-          const offerCodeMatch = cardText.match(/\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?|\d{2}[A-Z]{3}\d{3}[A-Z]?)\b/);
-          offerCode = offerCodeMatch ? offerCodeMatch[1] : '';
+          const offerCodeMatch = cardText.match(/(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?|\d{2}[A-Z]{3}\d{3}[A-Z]?)(?![a-z])/i);
+          offerCode = offerCodeMatch ? offerCodeMatch[1].toUpperCase() : '';
         }
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -1909,9 +1911,12 @@ export const STEP1_OFFERS_SCRIPT = `
           // CRITICAL: Remove offer code suffix from name if present
           // Codes like "26CLS103" or "25GOLD%" often get appended to offer names
           // FIXED: More flexible pattern to catch codes after offer names like "West Coast Spins26WST104"
-          const codeAtEnd = headingText.match(/^(.+?)(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?)$/);  
+          const codeAtEnd = headingText.match(/^(.+?)(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?|\\d{2}[A-Z]{3}\\d{3}[A-Z]?)$/i);  
           if (codeAtEnd && codeAtEnd[1] && codeAtEnd[1].length >= 5) {
             headingText = codeAtEnd[1].trim();
+            if (!offerCode && codeAtEnd[2]) {
+              offerCode = codeAtEnd[2].toUpperCase();
+            }
           }
           
           const looksLikeOfferName = offerNamePatterns.test(headingText) && 
@@ -2023,6 +2028,10 @@ export const STEP1_OFFERS_SCRIPT = `
           if (betterCode && isValidOfferCode(betterCode)) {
             offerCode = betterCode;
           }
+        }
+        
+        if (offerCode) {
+          offerCode = offerCode.toUpperCase();
         }
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
