@@ -724,7 +724,7 @@ export default function CruiseDetailsScreen() {
             </View>
           )}
 
-          {((cruise as any).bwoNumber || (cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 || (cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0) && (
+          {isBooked && (
             <TouchableOpacity 
               style={styles.bwoFpObcCard} 
               onPress={openFullEditModal}
@@ -732,31 +732,37 @@ export default function CruiseDetailsScreen() {
               testID="bwo-fp-obc-section"
             >
               <View style={styles.bwoFpObcHeader}>
-                <Text style={styles.bwoFpObcTitle}>Casino Offer Details</Text>
+                <Text style={styles.bwoFpObcTitle}>Cruise Receipt Details</Text>
                 <Edit3 size={14} color={COLORS.textSecondary} />
               </View>
-              <View style={styles.bwoFpObcRow}>
-                {(cruise as any).bwoNumber && (
-                  <View style={styles.bwoChip}>
-                    <Text style={styles.bwoLabel}>BWO#</Text>
-                    <Text style={styles.bwoValue}>{(cruise as any).bwoNumber}</Text>
+              {((cruise as any).bwoNumber || (cruise.freePlay ?? 0) > 0 || (cruise.freeOBC ?? 0) > 0) ? (
+                <View style={styles.bwoFpObcRow}>
+                  {(cruise as any).bwoNumber ? (
+                    <View style={styles.bwoChip}>
+                      <Text style={styles.bwoLabel}>BWO#</Text>
+                      <Text style={styles.bwoValue}>{(cruise as any).bwoNumber}</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.bwoChipEmpty}>
+                      <Text style={styles.bwoLabelEmpty}>BWO#</Text>
+                      <Text style={styles.bwoValueEmpty}>—</Text>
+                    </View>
+                  )}
+                  <View style={(cruise.freePlay ?? 0) > 0 ? styles.fpChip : styles.fpChipEmpty}>
+                    <Text style={(cruise.freePlay ?? 0) > 0 ? styles.fpChipLabel : styles.fpChipLabelEmpty}>FreePlay</Text>
+                    <Text style={(cruise.freePlay ?? 0) > 0 ? styles.fpChipValue : styles.fpChipValueEmpty}>
+                      {(cruise.freePlay ?? 0) > 0 ? `${(cruise.freePlay ?? 0).toLocaleString()}` : '—'}
+                    </Text>
                   </View>
-                )}
-                {(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 && (
-                  <View style={styles.fpChip}>
-                    <Text style={styles.fpChipLabel}>FreePlay</Text>
-                    <Text style={styles.fpChipValue}>${(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0).toLocaleString()}</Text>
+                  <View style={(cruise.freeOBC ?? 0) > 0 ? styles.obcChip : styles.obcChipEmpty}>
+                    <Text style={(cruise.freeOBC ?? 0) > 0 ? styles.obcChipLabel : styles.obcChipLabelEmpty}>OBC</Text>
+                    <Text style={(cruise.freeOBC ?? 0) > 0 ? styles.obcChipValue : styles.obcChipValueEmpty}>
+                      {(cruise.freeOBC ?? 0) > 0 ? `${(cruise.freeOBC ?? 0).toLocaleString()}` : '—'}
+                    </Text>
                   </View>
-                )}
-                {(cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0 && (
-                  <View style={styles.obcChip}>
-                    <Text style={styles.obcChipLabel}>OBC</Text>
-                    <Text style={styles.obcChipValue}>${(cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0).toLocaleString()}</Text>
-                  </View>
-                )}
-              </View>
-              {!(cruise as any).bwoNumber && (cruise.freePlay ?? 0) === 0 && (cruise.freeOBC ?? 0) === 0 && (
-                <Text style={styles.bwoFpObcPlaceholder}>Tap to add BWO#, FreePlay, or OBC</Text>
+                </View>
+              ) : (
+                <Text style={styles.bwoFpObcPlaceholder}>Tap to add BWO#, FreePlay, or OBC from your receipt</Text>
               )}
             </TouchableOpacity>
           )}
@@ -3154,5 +3160,71 @@ const styles = StyleSheet.create({
     fontStyle: 'italic' as const,
     textAlign: 'center' as const,
     paddingVertical: SPACING.sm,
+  },
+  bwoChipEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(254, 243, 199, 0.4)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(252, 211, 77, 0.4)',
+    borderStyle: 'dashed',
+  },
+  bwoLabelEmpty: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: 'rgba(146, 64, 14, 0.5)',
+  },
+  bwoValueEmpty: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: 'rgba(146, 64, 14, 0.4)',
+  },
+  fpChipEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(220, 252, 231, 0.4)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(134, 239, 172, 0.4)',
+    borderStyle: 'dashed',
+  },
+  fpChipLabelEmpty: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: 'rgba(21, 128, 61, 0.5)',
+  },
+  fpChipValueEmpty: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: 'rgba(21, 128, 61, 0.4)',
+  },
+  obcChipEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(219, 234, 254, 0.4)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(147, 197, 253, 0.4)',
+    borderStyle: 'dashed',
+  },
+  obcChipLabelEmpty: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: 'rgba(30, 64, 175, 0.5)',
+  },
+  obcChipValueEmpty: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: 'rgba(30, 64, 175, 0.4)',
   },
 });
