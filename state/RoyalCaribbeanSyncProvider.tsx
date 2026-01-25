@@ -15,7 +15,6 @@ import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbea
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectUpcomingCruisesExtraction } from '@/lib/royalCaribbean/step2_upcoming';
 import { injectCourtesyHoldsExtraction } from '@/lib/royalCaribbean/step3_holds';
-import { injectLoyaltyExtraction } from '@/lib/royalCaribbean/step4_loyalty';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 
 const INITIAL_STATE: RoyalCaribbeanSyncState = {
