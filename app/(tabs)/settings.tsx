@@ -194,13 +194,22 @@ export default function SettingsScreen() {
 
   const dataStats = useMemo(() => {
     const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
-    const uniqueOffers = new Set(allOffers.map(o => o.offerName || o.offerCode || o.title)).size;
+    // Count unique offers by offerCode - this is the true unique identifier for an offer
+    // Multiple sailings can share the same offerCode (e.g., 2601C05 applies to multiple cruises)
+    const uniqueOfferCodes = new Set(allOffers.map(o => o.offerCode).filter(Boolean));
+    const uniqueOfferCount = uniqueOfferCodes.size || allOffers.length;
+    
+    console.log('[Settings] Data stats calculation:', {
+      totalOffers: allOffers.length,
+      uniqueOfferCodes: Array.from(uniqueOfferCodes),
+      uniqueCount: uniqueOfferCount,
+    });
     
     return {
       cruises: cruises.length || localData.cruises?.length || 0,
       booked: bookedCruises.length || localData.booked?.length || 0,
       sailings: allOffers.length,
-      uniqueOffers: uniqueOffers,
+      uniqueOffers: uniqueOfferCount,
       events: localData.calendar?.length || 0,
       machines: myAtlasMachines.length || 0,
     };
