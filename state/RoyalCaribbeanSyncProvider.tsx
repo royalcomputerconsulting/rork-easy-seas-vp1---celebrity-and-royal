@@ -394,29 +394,35 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         state.extractedBookedCruises,
         state.loyaltyData,
         coreDataContext.casinoOffers,
+        coreDataContext.cruises,
         coreDataContext.bookedCruises,
         currentLoyalty
       );
 
       const counts = calculateSyncCounts(preview);
       addLog(`Preview: ${counts.offersNew} new offers, ${counts.offersUpdated} updated offers`, 'info');
-      addLog(`Preview: ${counts.cruisesNew} new cruises, ${counts.cruisesUpdated} updated cruises`, 'info');
+      addLog(`Preview: ${counts.cruisesNew} new available cruises, ${counts.cruisesUpdated} updated available cruises`, 'info');
+      addLog(`Preview: ${counts.bookedCruisesNew} new booked cruises, ${counts.bookedCruisesUpdated} updated booked cruises`, 'info');
       addLog(`Preview: ${counts.upcomingCruises} upcoming, ${counts.courtesyHolds} holds`, 'info');
 
       setState(prev => ({ ...prev, syncPreview: preview }));
 
       addLog('Applying sync...', 'info');
-      const { offers: finalOffers, cruises: finalCruises } = applySyncPreview(
+      const { offers: finalOffers, cruises: finalCruises, bookedCruises: finalBookedCruises } = applySyncPreview(
         preview,
         coreDataContext.casinoOffers,
+        coreDataContext.cruises,
         coreDataContext.bookedCruises
       );
 
       addLog(`Setting ${finalOffers.length} total offers in app`, 'info');
       coreDataContext.setCasinoOffers(finalOffers);
 
-      addLog(`Setting ${finalCruises.length} total cruises in app`, 'info');
-      coreDataContext.setBookedCruises(finalCruises);
+      addLog(`Setting ${finalCruises.length} total available cruises in app`, 'info');
+      coreDataContext.setCruises(finalCruises);
+
+      addLog(`Setting ${finalBookedCruises.length} total booked cruises in app`, 'info');
+      coreDataContext.setBookedCruises(finalBookedCruises);
 
       if (preview.loyalty) {
         if (preview.loyalty.clubRoyalePoints.changed) {

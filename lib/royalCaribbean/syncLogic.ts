@@ -1,6 +1,6 @@
-import { CasinoOffer, BookedCruise } from '@/types/models';
+import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
-import { transformOffersToCasinoOffers, transformBookedCruisesToAppFormat } from './dataTransformers';
+import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat } from './dataTransformers';
 
 export interface SyncPreview {
   offers: {
@@ -9,6 +9,11 @@ export interface SyncPreview {
     unchanged: CasinoOffer[];
   };
   cruises: {
+    new: Cruise[];
+    updates: { existing: Cruise; updated: Cruise }[];
+    unchanged: Cruise[];
+  };
+  bookedCruises: {
     new: BookedCruise[];
     updates: { existing: BookedCruise; updated: BookedCruise }[];
     unchanged: BookedCruise[];
@@ -28,10 +33,14 @@ export interface SyncPreviewCounts {
   cruisesNew: number;
   cruisesUpdated: number;
   cruisesUnchanged: number;
+  bookedCruisesNew: number;
+  bookedCruisesUpdated: number;
+  bookedCruisesUnchanged: number;
   upcomingCruises: number;
   courtesyHolds: number;
   totalOffers: number;
   totalCruises: number;
+  totalBookedCruises: number;
 }
 
 function findMatchingOffer(
@@ -59,6 +68,29 @@ function findMatchingOffer(
 }
 
 function findMatchingCruise(
+  cruise: Cruise,
+  existingCruises: Cruise[]
+): Cruise | null {
+  return existingCruises.find(existing => {
+    if (cruise.offerCode && existing.offerCode && cruise.offerCode === existing.offerCode) {
+      if (cruise.shipName === existing.shipName && cruise.sailDate === existing.sailDate) {
+        return true;
+      }
+    }
+    
+    if (
+      cruise.shipName === existing.shipName &&
+      cruise.sailDate === existing.sailDate &&
+      cruise.cabinType === existing.cabinType
+    ) {
+      return true;
+    }
+    
+    return false;
+  }) || null;
+}
+
+function findMatchingBookedCruise(
   cruise: BookedCruise,
   existingCruises: BookedCruise[]
 ): BookedCruise | null {
@@ -102,7 +134,17 @@ function mergeOffer(existing: CasinoOffer, synced: CasinoOffer): CasinoOffer {
   };
 }
 
-function mergeCruise(existing: BookedCruise, synced: BookedCruise): BookedCruise {
+function mergeCruise(existing: Cruise, synced: Cruise): Cruise {
+  return {
+    ...existing,
+    ...synced,
+    id: existing.id,
+    updatedAt: new Date().toISOString(),
+    createdAt: existing.createdAt
+  };
+}
+
+function mergeBookedCruise(existing: BookedCruise, synced: BookedCruise): BookedCruise {
   return {
     ...existing,
     ...synced,
@@ -119,14 +161,15 @@ function mergeCruise(existing: BookedCruise, synced: BookedCruise): BookedCruise
 
 export function createSyncPreview(
   extractedOffers: OfferRow[],
-  extractedCruises: BookedCruiseRow[],
+  extractedBookedCruises: BookedCruiseRow[],
   loyaltyData: LoyaltyData | null,
   existingOffers: CasinoOffer[],
-  existingCruises: BookedCruise[],
+  existingCruises: Cruise[],
+  existingBookedCruises: BookedCruise[],
   currentLoyalty: { clubRoyalePoints: number; clubRoyaleTier: string; crownAndAnchorPoints: number; crownAndAnchorLevel: string }
 ): SyncPreview {
-  const transformedOffers = transformOffersToCasinoOffers(extractedOffers, loyaltyData);
-  const transformedCruises = transformBookedCruisesToAppFormat(extractedCruises, loyaltyData);
+  const { cruises: transformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(extractedOffers, loyaltyData);
+  const transformedBookedCruises = transformBookedCruisesToAppFormat(extractedBookedCruises, loyaltyData);
 
   const offersNew: CasinoOffer[] = [];
   const offersUpdates: { existing: CasinoOffer; updated: CasinoOffer }[] = [];
@@ -151,9 +194,9 @@ export function createSyncPreview(
     }
   }
 
-  const cruisesNew: BookedCruise[] = [];
-  const cruisesUpdates: { existing: BookedCruise; updated: BookedCruise }[] = [];
-  const cruisesUnchanged: BookedCruise[] = [];
+  const cruisesNew: Cruise[] = [];
+  const cruisesUpdates: { existing: Cruise; updated: Cruise }[] = [];
+  const cruisesUnchanged: Cruise[] = [];
 
   for (const cruise of transformedCruises) {
     const match = findMatchingCruise(cruise, existingCruises);
@@ -171,6 +214,29 @@ export function createSyncPreview(
       cruisesUnchanged.push(existing);
     } else if (!isMatched) {
       cruisesUnchanged.push(existing);
+    }
+  }
+
+  const bookedCruisesNew: BookedCruise[] = [];
+  const bookedCruisesUpdates: { existing: BookedCruise; updated: BookedCruise }[] = [];
+  const bookedCruisesUnchanged: BookedCruise[] = [];
+
+  for (const cruise of transformedBookedCruises) {
+    const match = findMatchingBookedCruise(cruise, existingBookedCruises);
+    if (match) {
+      const merged = mergeBookedCruise(match, cruise);
+      bookedCruisesUpdates.push({ existing: match, updated: merged });
+    } else {
+      bookedCruisesNew.push(cruise);
+    }
+  }
+
+  for (const existing of existingBookedCruises) {
+    const isMatched = transformedBookedCruises.some(cruise => findMatchingBookedCruise(cruise, [existing]));
+    if (!isMatched && existing.cruiseSource === 'royal') {
+      bookedCruisesUnchanged.push(existing);
+    } else if (!isMatched) {
+      bookedCruisesUnchanged.push(existing);
     }
   }
 
@@ -216,15 +282,20 @@ export function createSyncPreview(
       updates: cruisesUpdates,
       unchanged: cruisesUnchanged
     },
+    bookedCruises: {
+      new: bookedCruisesNew,
+      updates: bookedCruisesUpdates,
+      unchanged: bookedCruisesUnchanged
+    },
     loyalty: loyaltyPreview
   };
 }
 
 export function calculateSyncCounts(preview: SyncPreview): SyncPreviewCounts {
-  const upcomingCruises = preview.cruises.new.filter(c => c.status === 'booked').length + 
-                          preview.cruises.updates.filter(u => u.updated.status === 'booked').length;
-  const courtesyHolds = preview.cruises.new.filter(c => c.status === 'available').length + 
-                        preview.cruises.updates.filter(u => u.updated.status === 'available').length;
+  const upcomingCruises = preview.bookedCruises.new.filter(c => c.status === 'booked').length + 
+                          preview.bookedCruises.updates.filter(u => u.updated.status === 'booked').length;
+  const courtesyHolds = preview.bookedCruises.new.filter(c => c.status === 'available').length + 
+                        preview.bookedCruises.updates.filter(u => u.updated.status === 'available').length;
 
   return {
     offersNew: preview.offers.new.length,
@@ -233,18 +304,23 @@ export function calculateSyncCounts(preview: SyncPreview): SyncPreviewCounts {
     cruisesNew: preview.cruises.new.length,
     cruisesUpdated: preview.cruises.updates.length,
     cruisesUnchanged: preview.cruises.unchanged.length,
+    bookedCruisesNew: preview.bookedCruises.new.length,
+    bookedCruisesUpdated: preview.bookedCruises.updates.length,
+    bookedCruisesUnchanged: preview.bookedCruises.unchanged.length,
     upcomingCruises,
     courtesyHolds,
     totalOffers: preview.offers.new.length + preview.offers.updates.length,
-    totalCruises: preview.cruises.new.length + preview.cruises.updates.length
+    totalCruises: preview.cruises.new.length + preview.cruises.updates.length,
+    totalBookedCruises: preview.bookedCruises.new.length + preview.bookedCruises.updates.length
   };
 }
 
 export function applySyncPreview(
   preview: SyncPreview,
   existingOffers: CasinoOffer[],
-  existingCruises: BookedCruise[]
-): { offers: CasinoOffer[]; cruises: BookedCruise[] } {
+  existingCruises: Cruise[],
+  existingBookedCruises: BookedCruise[]
+): { offers: CasinoOffer[]; cruises: Cruise[]; bookedCruises: BookedCruise[] } {
   const updatedOfferIds = new Set(preview.offers.updates.map(u => u.existing.id));
   const finalOffers = [
     ...existingOffers
@@ -273,5 +349,19 @@ export function applySyncPreview(
     ...preview.cruises.new
   ];
 
-  return { offers: finalOffers, cruises: finalCruises };
+  const updatedBookedCruiseIds = new Set(preview.bookedCruises.updates.map(u => u.existing.id));
+  const finalBookedCruises = [
+    ...existingBookedCruises
+      .filter(c => !updatedBookedCruiseIds.has(c.id))
+      .filter(c => {
+        const isBeingReplaced = preview.bookedCruises.new.some(newCruise => 
+          findMatchingBookedCruise(newCruise, [c])
+        );
+        return !isBeingReplaced;
+      }),
+    ...preview.bookedCruises.updates.map(u => u.updated),
+    ...preview.bookedCruises.new
+  ];
+
+  return { offers: finalOffers, cruises: finalCruises, bookedCruises: finalBookedCruises };
 }
