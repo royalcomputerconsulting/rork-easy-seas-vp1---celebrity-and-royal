@@ -60,10 +60,11 @@ export const STEP4_LOYALTY_SCRIPT = `
       }
 
       // Then find Crown & Anchor level (Gold, Platinum, Emerald, Diamond, Diamond Plus, Pinnacle)
+      // IMPORTANT: Diamond Plus must come before Diamond in patterns to match correctly
       const crownAnchorTierPatterns = [
-        /Crown & Anchor[\s\S]{0,100}?(Diamond Plus|Diamond|Platinum|Emerald|Gold|Pinnacle)/i,
-        /(Diamond Plus|Diamond|Platinum|Emerald|Gold|Pinnacle)[\s\S]{0,50}?Crown & Anchor/i,
-        /Your Tier[\s\S]{0,30}?(Diamond Plus|Diamond|Platinum|Emerald|Gold|Pinnacle)/i
+        /Crown & Anchor[\s\S]{0,100}?(Diamond Plus|Pinnacle|Diamond|Platinum|Emerald|Gold)/i,
+        /(Diamond Plus|Pinnacle|Diamond|Platinum|Emerald|Gold)[\s\S]{0,50}?Crown & Anchor/i,
+        /Your Tier[\s\S]{0,30}?(Diamond Plus|Pinnacle|Diamond|Platinum|Emerald|Gold)/i
       ];
       
       for (const pattern of crownAnchorTierPatterns) {
@@ -81,8 +82,9 @@ export const STEP4_LOYALTY_SCRIPT = `
       
       // Fallback: If we didn't find Crown & Anchor in context, look for standalone tier
       // CRITICAL: Only match Crown & Anchor tiers, NOT Club Royale tiers!
+      // IMPORTANT: Diamond Plus must come before Diamond to match correctly
       if (!loyaltyData.crownAndAnchorLevel) {
-        const tierMatch = pageText.match(/(Diamond Plus|Diamond|Platinum|Emerald|Gold|Pinnacle)(?!.*Member:)/);
+        const tierMatch = pageText.match(/(Diamond Plus|Pinnacle|Diamond|Platinum|Emerald|Gold)(?!.*Member:)/);
         if (tierMatch) {
           loyaltyData.crownAndAnchorLevel = tierMatch[1];
           window.ReactNativeWebView.postMessage(JSON.stringify({

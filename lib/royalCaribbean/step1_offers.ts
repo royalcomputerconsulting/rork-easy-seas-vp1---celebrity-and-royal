@@ -555,7 +555,7 @@ export const STEP1_OFFERS_SCRIPT = `
         logType: 'info'
       }));
 
-      await scrollUntilComplete(null, 20);
+      await scrollUntilComplete(null, 3);
       await wait(1000);
       
       // ULTRA AGGRESSIVE scrolling to ensure ALL 9 offers are loaded
@@ -610,7 +610,7 @@ export const STEP1_OFFERS_SCRIPT = `
       
       await closePromotionalBanners();
       
-      for (let scrollPass = 0; scrollPass < 20; scrollPass++) {
+      for (let scrollPass = 0; scrollPass < 3; scrollPass++) {
         // Close banners every few passes
         if (scrollPass % 2 === 0) {
           await closePromotionalBanners();
@@ -655,7 +655,7 @@ export const STEP1_OFFERS_SCRIPT = `
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Scroll pass ' + (scrollPass + 1) + '/20: Found ' + viewSailingCount + ' View Sailings buttons, ~' + uniqueCodes + ' offer codes',
+            message: 'Scroll pass ' + (scrollPass + 1) + '/3: Found ' + viewSailingCount + ' View Sailings buttons, ~' + uniqueCodes + ' offer codes',
             logType: 'info'
           }));
           
@@ -664,7 +664,7 @@ export const STEP1_OFFERS_SCRIPT = `
             type: 'progress',
             current: 0,
             total: expectedOfferCount || viewSailingCount,
-            stepName: 'Scrolling to load offers (pass ' + (scrollPass + 1) + '/20)'
+            stepName: 'Scrolling to load offers (pass ' + (scrollPass + 1) + '/3)'
           }));
           
           // Stop early if we found enough buttons (2x expected = each offer has 2 buttons)
@@ -1779,11 +1779,39 @@ export const STEP1_OFFERS_SCRIPT = `
       }
       
       // Final deduplication: ensure no container appears more than once
+      // CRITICAL: Also deduplicate by offer name to prevent duplicate offers with same title
       const finalOfferCards = [];
       const finalSeenContainers = new Set();
+      const seenOfferNames = new Set();
+      
       for (const card of offerCards) {
         if (!finalSeenContainers.has(card)) {
+          // Extract offer name to check for duplicates
+          const cardText = card.textContent || '';
+          let offerNameCheck = '';
+          const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"]'));
+          for (const h of allHeadings) {
+            const hText = (h.textContent || '').trim();
+            if (hText.length >= 5 && hText.length <= 100) {
+              offerNameCheck = hText.toLowerCase();
+              break;
+            }
+          }
+          
+          // Skip if we've already seen this offer name (prevent duplicates like "2026 January Instant Rewards")
+          if (offerNameCheck && seenOfferNames.has(offerNameCheck)) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'log',
+              message: '🚫 Skipping duplicate offer: ' + offerNameCheck,
+              logType: 'warning'
+            }));
+            continue;
+          }
+          
           finalSeenContainers.add(card);
+          if (offerNameCheck) {
+            seenOfferNames.add(offerNameCheck);
+          }
           finalOfferCards.push(card);
         }
       }
