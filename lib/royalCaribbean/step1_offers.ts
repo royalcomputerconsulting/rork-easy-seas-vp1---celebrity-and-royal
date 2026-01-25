@@ -1882,12 +1882,39 @@ export const STEP1_OFFERS_SCRIPT = `
         const card = offerCards[i];
         const cardText = card.textContent || '';
         
-        // Extract offer code IMMEDIATELY after getting cardText
-        // IMPORTANT: Do not use a naive /[A-Z0-9]{5,15}/ match (it often grabs CURRENT/OFFERS/etc.)
-        let offerCode = extractOfferCodeFromText(cardText);
+        // IMPROVED: Extract offer code from SPECIFIC elements within the card
+        // RC displays offer codes in specific locations (usually top-right with link icon)
+        let offerCode = '';
+        
+        // STRATEGY 1: Look for offer code in small text elements (usually standalone codes)
+        const codeElements = Array.from(card.querySelectorAll('span, div, p, [class*="code"], [class*="offer"]')).filter(el => {
+          const text = (el.textContent || '').trim();
+          const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•🔗\s]+/, '').trim();
+          return cleanText.length >= 5 && cleanText.length <= 15 && !el.querySelector('button, a[href]');
+        });
+        
+        for (const el of codeElements) {
+          const text = (el.textContent || '').trim();
+          const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•🔗\s]+/, '').trim();
+          
+          // Check if this looks like an offer code (not a date, not a phrase)
+          if (cleanText.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && isValidOfferCode(cleanText)) {
+            offerCode = cleanText.toUpperCase();
+            break;
+          }
+        }
+        
+        // STRATEGY 2: Extract from card text using patterns if not found
+        if (!offerCode) {
+          offerCode = extractOfferCodeFromText(cardText);
+        }
+        
+        // STRATEGY 3: Try more aggressive pattern matching on card text
         if (!offerCode) {
           const offerCodeMatch = cardText.match(/(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?|\d{2}[A-Z]{3}\d{3}[A-Z]?)(?![a-z])/i);
-          offerCode = offerCodeMatch ? offerCodeMatch[1].toUpperCase() : '';
+          if (offerCodeMatch && isValidOfferCode(offerCodeMatch[1])) {
+            offerCode = offerCodeMatch[1].toUpperCase();
+          }
         }
         
         window.ReactNativeWebView.postMessage(JSON.stringify({

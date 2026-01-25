@@ -43,11 +43,37 @@ export interface SyncPreviewCounts {
   totalBookedCruises: number;
 }
 
+function isInstantRewardOrCertificate(offerCode: string | undefined, offerName: string | undefined): boolean {
+  if (!offerCode && !offerName) return false;
+  
+  const normalizedCode = (offerCode || '').toUpperCase().trim();
+  const normalizedName = (offerName || '').toLowerCase().trim();
+  
+  if (normalizedName.includes('instant reward') || normalizedName.includes('instant certificate')) {
+    return true;
+  }
+  
+  const instantRewardPattern = /^\d{2,4}[AC]\d{2,3}[A-Z]?$/;
+  if (instantRewardPattern.test(normalizedCode)) {
+    return true;
+  }
+  
+  return false;
+}
+
 function findMatchingOffer(
   offer: CasinoOffer,
   existingOffers: CasinoOffer[]
 ): CasinoOffer | null {
+  if (isInstantRewardOrCertificate(offer.offerCode, offer.offerName)) {
+    return null;
+  }
+  
   return existingOffers.find(existing => {
+    if (isInstantRewardOrCertificate(existing.offerCode, existing.offerName)) {
+      return false;
+    }
+    
     if (offer.offerCode && existing.offerCode && offer.offerCode === existing.offerCode) {
       if (offer.shipName === existing.shipName && offer.sailingDate === existing.sailingDate) {
         return true;
