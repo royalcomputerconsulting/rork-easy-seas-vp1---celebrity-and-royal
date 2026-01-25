@@ -1055,9 +1055,9 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                 <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(212, 165, 116, 0.15)' }]}>
                   <Tag size={14} color={COLORS.goldDark} />
                 </View>
-                <Text style={styles.dataOverviewValue}>{dataStats.sailings}</Text>
-                <Text style={styles.dataOverviewLabel}>Sailings</Text>
-                <Text style={styles.dataOverviewSubLabel}>({dataStats.uniqueOffers} offers)</Text>
+                <Text style={styles.dataOverviewValue}>{dataStats.uniqueOffers}</Text>
+                <Text style={styles.dataOverviewLabel}>Offers</Text>
+                <Text style={styles.dataOverviewSubLabel}>({dataStats.sailings} sailings)</Text>
               </View>
               <View style={styles.dataOverviewItem}>
                 <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(156, 39, 176, 0.1)' }]}>

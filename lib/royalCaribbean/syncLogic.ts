@@ -61,6 +61,23 @@ function isInstantRewardOrCertificate(offerCode: string | undefined, offerName: 
   return false;
 }
 
+// Offer codes that represent "IN PROGRESS" offers that should not be synced
+const IN_PROGRESS_OFFER_CODES = ['2601C05', '2601A05'];
+
+function isInProgressOffer(offerCode: string | undefined, offerName: string | undefined): boolean {
+  if (!offerCode && !offerName) return false;
+  
+  const normalizedCode = (offerCode || '').toUpperCase().trim();
+  
+  // Check against known IN PROGRESS offer codes
+  if (IN_PROGRESS_OFFER_CODES.some(code => normalizedCode.includes(code.toUpperCase()))) {
+    console.log(`[SyncLogic] Detected IN PROGRESS offer: ${offerCode}`);
+    return true;
+  }
+  
+  return false;
+}
+
 function findMatchingOffer(
   offer: CasinoOffer,
   existingOffers: CasinoOffer[]
@@ -200,7 +217,21 @@ export function createSyncPreview(
   existingBookedCruises: BookedCruise[],
   currentLoyalty: { clubRoyalePoints: number; clubRoyaleTier: string; crownAndAnchorPoints: number; crownAndAnchorLevel: string }
 ): SyncPreview {
-  const { cruises: transformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(extractedOffers, loyaltyData);
+  // Filter out IN PROGRESS offers before transformation
+  const filteredOffers = extractedOffers.filter(offer => {
+    if (isInProgressOffer(offer.offerCode, offer.offerName)) {
+      console.log(`[SyncLogic] Skipping IN PROGRESS offer: ${offer.offerCode} - ${offer.offerName}`);
+      return false;
+    }
+    return true;
+  });
+  
+  const inProgressCount = extractedOffers.length - filteredOffers.length;
+  if (inProgressCount > 0) {
+    console.log(`[SyncLogic] Filtered out ${inProgressCount} IN PROGRESS offer(s) from sync`);
+  }
+
+  const { cruises: transformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(filteredOffers, loyaltyData);
   const transformedBookedCruises = transformBookedCruisesToAppFormat(extractedBookedCruises, loyaltyData);
 
   const offersNew: CasinoOffer[] = [];
@@ -208,6 +239,12 @@ export function createSyncPreview(
   const offersUnchanged: CasinoOffer[] = [];
 
   for (const offer of transformedOffers) {
+    // Skip IN PROGRESS offers during sync
+    if (isInProgressOffer(offer.offerCode, offer.offerName)) {
+      console.log(`[SyncLogic] Skipping IN PROGRESS offer in sync: ${offer.offerCode}`);
+      continue;
+    }
+    
     const match = findMatchingOffer(offer, existingOffers);
     if (match) {
       const merged = mergeOffer(match, offer);
