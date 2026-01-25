@@ -317,8 +317,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         setUserPointsState(parseInt(pointsData, 10));
       }
       
-      if (profileData) {
+      if (profileData && !isFirstTimeUser) {
         setClubRoyaleProfileState(JSON.parse(profileData));
+      } else if (isFirstTimeUser) {
+        console.log('[CoreData] First time user - resetting loyalty profile to defaults');
+        setClubRoyaleProfileState(SAMPLE_CLUB_ROYALE_PROFILE);
+        await AsyncStorage.removeItem(STORAGE_KEYS.CLUB_PROFILE);
+        await AsyncStorage.removeItem(STORAGE_KEYS.USER_POINTS);
       }
 
       console.log('[CoreData] === LOAD COMPLETE ===');
@@ -367,6 +372,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setBookedCruisesState([]);
       setCasinoOffersState([]);
       setCalendarEventsState([]);
+      setClubRoyaleProfileState(SAMPLE_CLUB_ROYALE_PROFILE);
+      setUserPointsState(0);
     }
 
     console.log('[CoreData] === MOUNT: Starting initial load ===');

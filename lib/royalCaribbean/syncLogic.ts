@@ -246,12 +246,12 @@ export function createSyncPreview(
     }
   }
 
-  let loyaltyPreview = null;
+  let loyaltyPreview: SyncPreview['loyalty'] = null;
   if (loyaltyData) {
     const syncedClubRoyalePoints: number = loyaltyData.clubRoyalePoints != null
       ? (typeof loyaltyData.clubRoyalePoints === 'number' 
           ? loyaltyData.clubRoyalePoints 
-          : (parseInt(String(loyaltyData.clubRoyalePoints).replace(/,/g, ''), 10) || 0))
+          : parseInt(String(loyaltyData.clubRoyalePoints).replace(/,/g, ''), 10) || 0)
       : currentLoyalty.clubRoyalePoints;
     const syncedClubRoyaleTier = loyaltyData.clubRoyaleTier || currentLoyalty.clubRoyaleTier;
     const syncedCrownAndAnchorLevel = loyaltyData.crownAndAnchorLevel || currentLoyalty.crownAndAnchorLevel;
