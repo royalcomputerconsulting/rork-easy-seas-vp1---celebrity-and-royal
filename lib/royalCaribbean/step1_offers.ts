@@ -610,7 +610,7 @@ export const STEP1_OFFERS_SCRIPT = `
       
       await closePromotionalBanners();
       
-      for (let scrollPass = 0; scrollPass < 15; scrollPass++) {
+      for (let scrollPass = 0; scrollPass < 20; scrollPass++) {
         // Close banners every few passes
         if (scrollPass % 2 === 0) {
           await closePromotionalBanners();
@@ -655,7 +655,7 @@ export const STEP1_OFFERS_SCRIPT = `
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: 'Scroll pass ' + (scrollPass + 1) + '/15: Found ' + viewSailingCount + ' View Sailings buttons, ~' + uniqueCodes + ' offer codes',
+            message: 'Scroll pass ' + (scrollPass + 1) + '/20: Found ' + viewSailingCount + ' View Sailings buttons, ~' + uniqueCodes + ' offer codes',
             logType: 'info'
           }));
           
@@ -664,7 +664,7 @@ export const STEP1_OFFERS_SCRIPT = `
             type: 'progress',
             current: 0,
             total: expectedOfferCount || viewSailingCount,
-            stepName: 'Scrolling to load offers (pass ' + (scrollPass + 1) + '/15)'
+            stepName: 'Scrolling to load offers (pass ' + (scrollPass + 1) + '/20)'
           }));
           
           // Stop early if we found enough buttons (2x expected = each offer has 2 buttons)
@@ -924,12 +924,12 @@ export const STEP1_OFFERS_SCRIPT = `
       }));
       
       // Also find "REDEEM" buttons (yellow buttons) as an offer anchor.
-      // IMPORTANT: exclude in-progress buttons like "CONTINUE REDEMPTION" / "CANCEL REDEMPTION".
+      // IMPORTANT: INCLUDE in-progress buttons like "CONTINUE REDEMPTION" / "CANCEL REDEMPTION" - they are still valid offers!
       const redeemButtons = allClickables.filter(el => {
         const text = (el.textContent || '').trim().toLowerCase();
-        const isShortText = text.length < 60;
-        const isInProgressRedemption = text.includes('redemption') || text.includes('continue') || text.includes('cancel');
-        return isShortText && !isInProgressRedemption && text === 'redeem';
+        const isShortText = text.length < 100;
+        const isRedeemButton = text === 'redeem' || text.includes('redemption') || text.includes('continue redeem') || text.includes('cancel redeem');
+        return isShortText && isRedeemButton;
       });
       
       // Deduplicate Redeem buttons by position
@@ -998,8 +998,8 @@ export const STEP1_OFFERS_SCRIPT = `
           const hasOfferKeyword = parentText.match(/(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Gamechanger|Instant|Reward|MGM|Wager|Getaway|West Coast|Spins|Gold)/i);
           const hasRedeemButton = Array.from(parent.querySelectorAll('button, a, span, div')).some(btn => {
             const btnText = (btn.textContent || '').trim().toLowerCase();
-            const isInProgressRedemption = btnText.includes('redemption') || btnText.includes('continue') || btnText.includes('cancel');
-            return !isInProgressRedemption && btnText === 'redeem';
+            const isRedeemButton = btnText === 'redeem' || btnText.includes('redemption') || btnText.includes('continue redeem') || btnText.includes('cancel redeem');
+            return isRedeemButton;
           });
           
           const isReasonableSize = parentText.length > 50 && parentText.length < 8000;
@@ -1840,8 +1840,9 @@ export const STEP1_OFFERS_SCRIPT = `
           
           // CRITICAL: Remove offer code suffix from name if present
           // Codes like "26CLS103" or "25GOLD%" often get appended to offer names
-          const codeAtEnd = headingText.match(/([A-Z][a-z\\s]+)(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?)$/);  
-          if (codeAtEnd && codeAtEnd[1]) {
+          // FIXED: More flexible pattern to catch codes after offer names like "West Coast Spins26WST104"
+          const codeAtEnd = headingText.match(/^(.+?)(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?)$/);  
+          if (codeAtEnd && codeAtEnd[1] && codeAtEnd[1].length >= 5) {
             headingText = codeAtEnd[1].trim();
           }
           
