@@ -38,14 +38,58 @@ export const STEP4_LOYALTY_SCRIPT = `
 
       const pageText = document.body.textContent || '';
 
-      const tierMatch = pageText.match(/(Diamond Plus|Diamond|Platinum|Gold|Silver|Emerald)(?!.*Member:)/);
-      if (tierMatch) {
-        loyaltyData.crownAndAnchorLevel = tierMatch[1];
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Found tier: ' + tierMatch[1],
-          logType: 'info'
-        }));
+      // CRITICAL: First find Club Royale tier (Signature/Premier/Classic)
+      // This is DIFFERENT from Crown & Anchor (Diamond Plus/Diamond/Platinum/etc)
+      const clubRoyaleTierPatterns = [
+        /Club Royale[\s\S]{0,100}?(Signature|Premier|Classic)/i,
+        /(Signature|Premier|Classic)[\s\S]{0,50}?Club Royale/i,
+        /Your Club Royale Status[\s\S]{0,50}?(Signature|Premier|Classic)/i
+      ];
+      
+      for (const pattern of clubRoyaleTierPatterns) {
+        const match = pageText.match(pattern);
+        if (match && match[1]) {
+          loyaltyData.clubRoyaleTier = match[1];
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found Club Royale tier: ' + match[1],
+            logType: 'success'
+          }));
+          break;
+        }
+      }
+
+      // Then find Crown & Anchor level (Diamond Plus/Diamond/Platinum/etc)
+      const crownAnchorTierPatterns = [
+        /Crown & Anchor[\s\S]{0,100}?(Diamond Plus|Diamond|Platinum|Gold|Silver|Emerald)/i,
+        /(Diamond Plus|Diamond|Platinum|Gold|Silver|Emerald)[\s\S]{0,50}?Crown & Anchor/i,
+        /Your Tier[\s\S]{0,30}?(Diamond Plus|Diamond|Platinum|Gold|Silver|Emerald)/i
+      ];
+      
+      for (const pattern of crownAnchorTierPatterns) {
+        const match = pageText.match(pattern);
+        if (match && match[1]) {
+          loyaltyData.crownAndAnchorLevel = match[1];
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found Crown & Anchor tier: ' + match[1],
+            logType: 'success'
+          }));
+          break;
+        }
+      }
+      
+      // Fallback: If we didn't find Crown & Anchor in context, look for standalone tier
+      if (!loyaltyData.crownAndAnchorLevel) {
+        const tierMatch = pageText.match(/(Diamond Plus|Diamond|Platinum|Gold|Silver|Emerald)(?!.*Member:)/);
+        if (tierMatch) {
+          loyaltyData.crownAndAnchorLevel = tierMatch[1];
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Found tier (fallback): ' + tierMatch[1],
+            logType: 'info'
+          }));
+        }
       }
 
       const memberMatch = pageText.match(/Member:\\s*(\\d+)/);

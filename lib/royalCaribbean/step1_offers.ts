@@ -1830,13 +1830,20 @@ export const STEP1_OFFERS_SCRIPT = `
           return depth;
         }
         
-        const offerNamePatterns = /(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Sail|Summer|Winter|Spring|Fall|Holiday|Special|Wager|Deal|Flash|Hot|Golden|Diamond|Platinum|Elite|Premium|VIP|High Roller|All In|Big Win|Cash|Free|Comp|Cruise)/i;
+        const offerNamePatterns = /(January|February|March|April|May|June|July|August|September|October|November|December|Last Chance|Full House|Lucky|Jackpot|Double|Triple|Bonus|Winner|Royal|Sail|Summer|Winter|Spring|Fall|Holiday|Special|Wager|Deal|Flash|Hot|Golden|Diamond|Platinum|Elite|Premium|VIP|High Roller|All In|Big Win|Cash|Free|Comp|Cruise|Coast|West|Spins|Gamechanger|Getaway|Instant|Rewards?|MGM|Discount|Benefit)/i;
         
         for (const heading of sortedHeadings) {
-          const headingText = (heading.textContent || '').trim();
+          let headingText = (heading.textContent || '').trim();
           const words = headingText.split(/\\s+/).length;
           
           if (headingText.length > 150) continue;
+          
+          // CRITICAL: Remove offer code suffix from name if present
+          // Codes like "26CLS103" or "25GOLD%" often get appended to offer names
+          const codeAtEnd = headingText.match(/([A-Z][a-z\\s]+)(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?)$/);  
+          if (codeAtEnd && codeAtEnd[1]) {
+            headingText = codeAtEnd[1].trim();
+          }
           
           const looksLikeOfferName = offerNamePatterns.test(headingText) && 
                                     !headingText.match(/\\d{2}\\/\\d{2}/) &&
