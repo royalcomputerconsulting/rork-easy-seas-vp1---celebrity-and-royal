@@ -1886,18 +1886,33 @@ export const STEP1_OFFERS_SCRIPT = `
           // CRITICAL: Remove offer code suffix from name if present
           // Codes like "26CLS103" or "25GOLD%" often get appended to offer names
           // FIXED: More aggressive pattern to strip codes from the end of offer names
+          // Use greedy match (.+) instead of non-greedy (.+?) to capture full name
+          
           // Pattern 1: Try with word boundary (space before code)
-          let codeAtEnd = headingText.match(/^(.+?)\\s+(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?|\\d{2}[A-Z]{3}\\d{3}[A-Z]?)$/i);
+          let codeAtEnd = headingText.match(/^(.+)\\s+(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?|\\d{2}[A-Z]{3}\\d{3}[A-Z]?)$/i);
           
           // Pattern 2: Try without space (code directly attached to name)
+          // Match greedily up to the last occurrence of a code pattern
           if (!codeAtEnd) {
-            codeAtEnd = headingText.match(/^(.+?)(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?|\\d{2}[A-Z]{3}\\d{3}[A-Z]?)$/i);
+            codeAtEnd = headingText.match(/^(.+?[a-z])\\s*(\\d{2}[A-Z]{2,5}\\d{2,3}[A-Z]?|\\d{4}[A-Z]\\d{2}[A-Z]?|\\d{2}[A-Z]{3,6}%?|\\d{2}[A-Z]{3}\\d{3}[A-Z]?)$/i);
           }
           
-          if (codeAtEnd && codeAtEnd[1] && codeAtEnd[1].length >= 5) {
-            headingText = codeAtEnd[1].trim();
-            if (!offerCode && codeAtEnd[2]) {
-              offerCode = codeAtEnd[2].toUpperCase();
+          // Pattern 3: Very aggressive - strip anything that looks like a code from the end
+          if (!codeAtEnd) {
+            // Match text ending with lowercase letter, then a code pattern
+            codeAtEnd = headingText.match(/^(.*[a-z])\\s*(\\d{2}[A-Z]{2,}\\d*[A-Z%]*)$/i);
+          }
+          
+          if (codeAtEnd && codeAtEnd[1] && codeAtEnd[1].length >= 3) {
+            const extractedName = codeAtEnd[1].trim();
+            const extractedCode = codeAtEnd[2];
+            
+            // Only use if extracted name is reasonable (not just 1-2 chars)
+            if (extractedName.length >= 5) {
+              headingText = extractedName;
+              if (!offerCode && extractedCode && extractedCode.length >= 5) {
+                offerCode = extractedCode.toUpperCase();
+              }
             }
           }
           

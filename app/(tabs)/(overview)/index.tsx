@@ -177,7 +177,7 @@ function OverviewScreenContent() {
         offersMap.set(key, {
           id: offer.id,
           offerCode: offer.offerCode || offer.id,
-          offerName: offer.offerName || offer.title || offer.offerCode || 'Casino Offer',
+          offerName: offer.offerName || offer.title || 'Casino Offer',
           expiryDate: offer.expiryDate,
           tradeInValue: offer.value,
           freePlay: 0,
