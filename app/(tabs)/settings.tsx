@@ -192,13 +192,19 @@ export default function SettingsScreen() {
     preferredBrand: currentUser?.preferredBrand || 'royal',
   }), [currentUser, loyaltyClubRoyalePoints, loyaltyClubRoyaleTier, loyaltyCrownAnchorPoints, loyaltyCrownAnchorLevel]);
 
-  const dataStats = useMemo(() => ({
-    cruises: cruises.length || localData.cruises?.length || 0,
-    booked: bookedCruises.length || localData.booked?.length || 0,
-    offers: casinoOffers.length || localData.offers?.length || 0,
-    events: localData.calendar?.length || 0,
-    machines: myAtlasMachines.length || 0,
-  }), [cruises, bookedCruises, casinoOffers, localData, myAtlasMachines]);
+  const dataStats = useMemo(() => {
+    const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
+    const uniqueOffers = new Set(allOffers.map(o => o.offerName || o.offerCode || o.title)).size;
+    
+    return {
+      cruises: cruises.length || localData.cruises?.length || 0,
+      booked: bookedCruises.length || localData.booked?.length || 0,
+      sailings: allOffers.length,
+      uniqueOffers: uniqueOffers,
+      events: localData.calendar?.length || 0,
+      machines: myAtlasMachines.length || 0,
+    };
+  }, [cruises, bookedCruises, casinoOffers, localData, myAtlasMachines]);
 
   const handleImportOffersCSV = useCallback(async () => {
     try {
@@ -1049,8 +1055,9 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                 <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(212, 165, 116, 0.15)' }]}>
                   <Tag size={14} color={COLORS.goldDark} />
                 </View>
-                <Text style={styles.dataOverviewValue}>{dataStats.offers}</Text>
-                <Text style={styles.dataOverviewLabel}>Offers</Text>
+                <Text style={styles.dataOverviewValue}>{dataStats.sailings}</Text>
+                <Text style={styles.dataOverviewLabel}>Sailings</Text>
+                <Text style={styles.dataOverviewSubLabel}>({dataStats.uniqueOffers} offers)</Text>
               </View>
               <View style={styles.dataOverviewItem}>
                 <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(156, 39, 176, 0.1)' }]}>
@@ -1224,7 +1231,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                   <ActivityIndicator size="small" color={COLORS.navyDeep} />
                 ) : (
                   <Text style={styles.countBadge}>
-                    {dataStats.cruises} cruises
+                    {dataStats.sailings} sailings
                   </Text>
                 ),
                 handleExportOffersCSV
@@ -1899,6 +1906,12 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: CLEAN_THEME.text.secondary,
     marginTop: 2,
+  },
+  dataOverviewSubLabel: {
+    fontSize: 9,
+    color: CLEAN_THEME.text.secondary,
+    marginTop: 1,
+    opacity: 0.7,
   },
   quickActionsSection: {
     marginBottom: SPACING.md,
