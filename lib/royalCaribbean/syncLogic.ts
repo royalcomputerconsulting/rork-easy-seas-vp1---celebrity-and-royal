@@ -242,18 +242,20 @@ export function createSyncPreview(
 
   let loyaltyPreview = null;
   if (loyaltyData) {
+    const syncedClubRoyalePoints = loyaltyData.clubRoyalePoints ?? currentLoyalty.clubRoyalePoints;
+    const syncedClubRoyaleTier = loyaltyData.clubRoyaleTier || currentLoyalty.clubRoyaleTier;
     const syncedCrownAndAnchorLevel = loyaltyData.crownAndAnchorLevel || currentLoyalty.crownAndAnchorLevel;
 
     loyaltyPreview = {
       clubRoyalePoints: {
         current: currentLoyalty.clubRoyalePoints,
-        synced: currentLoyalty.clubRoyalePoints,
-        changed: false
+        synced: syncedClubRoyalePoints,
+        changed: syncedClubRoyalePoints !== currentLoyalty.clubRoyalePoints
       },
       clubRoyaleTier: {
         current: currentLoyalty.clubRoyaleTier,
-        synced: currentLoyalty.clubRoyaleTier,
-        changed: false
+        synced: syncedClubRoyaleTier,
+        changed: syncedClubRoyaleTier !== currentLoyalty.clubRoyaleTier
       },
       crownAndAnchorPoints: {
         current: currentLoyalty.crownAndAnchorPoints,

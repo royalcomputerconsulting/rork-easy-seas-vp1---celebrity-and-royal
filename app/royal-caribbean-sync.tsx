@@ -305,14 +305,28 @@ function RoyalCaribbeanSyncScreen() {
                   </View>
                 </View>
 
-                {state.loyaltyData && state.loyaltyData.crownAndAnchorLevel && (
+                {state.loyaltyData && (
                   <View style={styles.loyaltyCard}>
                     <Text style={styles.loyaltyTitle}>Loyalty Status Updates</Text>
-                    <View style={styles.loyaltyRow}>
-                      <Text style={styles.loyaltyLabel}>Crown & Anchor Level:</Text>
-                      <Text style={styles.loyaltyValue}>{state.loyaltyData.crownAndAnchorLevel}</Text>
-                    </View>
-                    <Text style={styles.loyaltyNote}>Club Royale data and points are not modified</Text>
+                    {state.loyaltyData.clubRoyaleTier && (
+                      <View style={styles.loyaltyRow}>
+                        <Text style={styles.loyaltyLabel}>Club Royale Tier:</Text>
+                        <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyaleTier}</Text>
+                      </View>
+                    )}
+                    {state.loyaltyData.clubRoyalePoints !== undefined && (
+                      <View style={styles.loyaltyRow}>
+                        <Text style={styles.loyaltyLabel}>Club Royale Points:</Text>
+                        <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyalePoints.toLocaleString()}</Text>
+                      </View>
+                    )}
+                    {state.loyaltyData.crownAndAnchorLevel && (
+                      <View style={styles.loyaltyRow}>
+                        <Text style={styles.loyaltyLabel}>Crown & Anchor Level:</Text>
+                        <Text style={styles.loyaltyValue}>{state.loyaltyData.crownAndAnchorLevel}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.loyaltyNote}>Crown & Anchor points are not modified</Text>
                   </View>
                 )}
 

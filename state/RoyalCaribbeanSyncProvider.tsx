@@ -420,6 +420,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       coreDataContext.setBookedCruises(finalBookedCruises);
 
       if (preview.loyalty) {
+        if (preview.loyalty.clubRoyalePoints.changed) {
+          addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
+          await loyaltyContext.setClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
+        }
+        
+        if (preview.loyalty.clubRoyaleTier.changed) {
+          addLog(`Updating Club Royale tier: ${preview.loyalty.clubRoyaleTier.current} → ${preview.loyalty.clubRoyaleTier.synced}`, 'info');
+          await loyaltyContext.setClubRoyaleTier(preview.loyalty.clubRoyaleTier.synced);
+        }
+        
         if (preview.loyalty.crownAndAnchorLevel.changed) {
           addLog(`Updating Crown & Anchor level: ${preview.loyalty.crownAndAnchorLevel.current} → ${preview.loyalty.crownAndAnchorLevel.synced}`, 'info');
           await loyaltyContext.setCrownAnchorLevel(preview.loyalty.crownAndAnchorLevel.synced);
