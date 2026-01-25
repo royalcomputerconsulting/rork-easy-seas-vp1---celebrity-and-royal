@@ -67,7 +67,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         logType: 'info'
       }));
 
-      const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="cruise"], button, a, [role="button"]'));
+      const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="cruise"]'));
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -75,95 +75,35 @@ export const STEP2_UPCOMING_SCRIPT = `
         logType: 'info'
       }));
 
-      // Step 2 now uses a Step-1-style anchor approach:
-      // Use "View Details"-like buttons as anchors, then walk up to a stable container.
-      const actionEls = Array.from(document.querySelectorAll('button, a, [role="button"]'));
-      const detailButtons = actionEls.filter(el => {
-        const t = (el.textContent || '').trim();
-        return /View\s+Details|View\s+Detail|More\s+Details|View\s+More|Manage\s+Cruise|View\s+Booking/i.test(t);
+      let cruiseCards = allElements.filter(el => {
+        const text = el.textContent || '';
+        const hasShip = text.includes('of the Seas');
+        const hasNight = text.match(/\\d+\\s+Night/i);
+        const hasReservation = text.match(/Reservation[:\\s]*\\d+/i);
+        const hasDaysToGo = text.includes('Days to go') || text.includes('Day to go');
+        const hasGuests = text.includes('Guests') || text.includes('Guest');
+        const hasCheckIn = text.includes('CHECK-IN NOT AVAILABLE') || text.includes('Check-In');
+        const textLength = text.length;
+        
+        return hasShip && hasNight && hasReservation && textLength > 100 && textLength < 4000;
       });
-
+      
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + detailButtons.length + ' detail button(s) as anchors',
+        message: 'Found ' + cruiseCards.length + ' potential cruise cards (before deduplication)',
         logType: 'info'
       }));
-
-      function findCruiseContainerFromAnchor(anchor) {
-        if (!anchor) return null;
-        const selectors = ['article', 'section', '[class*="card"]', '[class*="cruise"]', 'div'];
-        for (const sel of selectors) {
-          const c = anchor.closest(sel);
-          if (c && (c.textContent || '').length > 80) return c;
-        }
-        let p = anchor.parentElement;
-        let hops = 0;
-        while (p && hops < 12) {
-          const txt = (p.textContent || '');
-          if (txt.length > 120 && txt.length < 12000 && /Reservation[:\s]*\d+/i.test(txt)) {
-            return p;
-          }
-          p = p.parentElement;
-          hops++;
-        }
-        return null;
-      }
-
-      const reservationRegex = /Reservation[:\s]*(\d+)/i;
-      const candidates = [];
-
-      for (const btn of detailButtons) {
-        const container = findCruiseContainerFromAnchor(btn);
-        if (!container) continue;
-        const text = container.textContent || '';
-        const resMatch = text.match(reservationRegex);
-        if (!resMatch || !resMatch[1]) continue;
-        candidates.push({ container, bookingId: resMatch[1] });
-      }
-
-      // Fallback to heuristic scan if anchors are missing (A/B page variants)
-      if (candidates.length < Math.max(1, expectedCount)) {
-        const blocks = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="cruise"]'));
-        for (const el of blocks) {
-          const text = el.textContent || '';
-          const hasShip = text.includes('of the Seas');
-          const hasNight = /\d+\s+Night/i.test(text);
-          const resMatch = text.match(reservationRegex);
-          const textLength = text.length;
-          if (hasShip && hasNight && resMatch && textLength > 100 && textLength < 12000) {
-            candidates.push({ container: el, bookingId: resMatch[1] });
-          }
-        }
-      }
-
-      const byBooking = new Map();
-      for (const c of candidates) {
-        if (!c.bookingId) continue;
-        if (!byBooking.has(c.bookingId)) {
-          byBooking.set(c.bookingId, c.container);
-        }
-      }
-
-      let cruiseCards = Array.from(byBooking.values());
-
+      
       const beforeDedup = cruiseCards.length;
       cruiseCards = cruiseCards.filter((el, idx, arr) => {
         return !arr.some((other, otherIdx) => otherIdx !== idx && (other.contains(el) || el.contains(other)));
       });
-
+      
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Found ' + byBooking.size + ' unique reservation(s) → ' + cruiseCards.length + ' card container(s) after nesting dedupe',
+        message: 'After deduplication: ' + cruiseCards.length + ' unique cruise cards (removed ' + (beforeDedup - cruiseCards.length) + ' duplicates)',
         logType: 'info'
       }));
-
-      if (beforeDedup !== cruiseCards.length) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: 'Removed ' + (beforeDedup - cruiseCards.length) + ' nested duplicate container(s)',
-          logType: 'info'
-        }));
-      }
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',

@@ -789,61 +789,33 @@ export const STEP1_OFFERS_SCRIPT = `
       
       // STEP 2: CODE-FIRST DETECTION - Find ALL offer codes on the page first
       // This is more reliable than button detection for finding all offers
-      // RC displays codes with special character prefix like ⊛ or chain-link icons
-      // ULTRA AGGRESSIVE: Scan entire page for offer code patterns
+      // RC displays codes with special character prefix like ⊛ or other symbols
+      // IMPROVED: Scan for codes embedded in text, not just standalone elements
       const allOfferCodeElements = [];
-      
-      // Extended icon/symbol cleanup pattern - includes chain link, various unicode symbols
-      const symbolCleanupPattern = /^[⊛✦●◆■□▪▫★☆→►▶︎·•🔗⛓️🔗💠🏷️📎🔖\u2000-\u206F\u2E00-\u2E7F\u00A0\s]+/;
-      
       const codePatterns = [
-        /(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)(?![a-z])/gi,  // 26CLS103, 26MAR103B, 26GRD103G, 26WST104
-        /(\d{4}[A-Z]\d{2}[A-Z]?)(?![a-z])/gi,         // 2601C05, 2601A08, 2601A05
-        /(\d{2}[A-Z]{3,6}%?)(?![a-z])/gi,             // 25GOLD, 25GOLD%
-        /(\d{2}[A-Z]{3}\d{3}[A-Z]?)(?![a-z])/gi      // 26NEW104, 26NEW104O
+        /\b(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?)\b/g,  // 26CLS103, 26MAR103B, 26GRD103G, 26WST104
+        /\b(\d{4}[A-Z]\d{2}[A-Z]?)\b/g,         // 2601C05, 2601A08, 2601A05
+        /\b(\d{2}[A-Z]{3,6}%?)\b/g,             // 25GOLD, 25GOLD%
+        /\b(\d{2}[A-Z]{3}\d{3}[A-Z]?)\b/g       // 26NEW104, 26NEW104O
       ];
       
-      // Invalid codes to filter out (account info, not offers)
-      const invalidCodesList = ['CURRENT', 'CREDITS', 'OFFERS', 'ROYALE', 'CRUISE', 'CASINO', 'CREDIT', 'POINTS', 'STATUS', 'MEMBER', 'CHOICE', 'PRIME', 'MASTERS', 'SIGNATURE', 'DIAMOND', 'PLATINUM', 'CONTACT', 'MISSING', 'REPRESENTATIVE', 'BALANCE', 'PROGRESS', 'SCOTTS'];
-      
-      function isValidRCOfferCode(code) {
-        if (!code || code.length < 5 || code.length > 15) return false;
-        const upperCode = code.toUpperCase();
-        if (invalidCodesList.includes(upperCode)) return false;
-        // Must match one of the RC offer code patterns
-        return upperCode.match(/^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/) ||  // 26CLS103, 26GRD103G
-               upperCode.match(/^\d{4}[A-Z]\d{2}[A-Z]?$/) ||         // 2601C05, 2601A08
-               upperCode.match(/^\d{2}[A-Z]{3,6}%?$/) ||             // 25GOLD%
-               upperCode.match(/^\d{2}[A-Z]{3}\d{3}[A-Z]?$/);        // 26NEW104
-      }
-      
-      // STRATEGY 1: Find ALL small elements that might contain just an offer code
-      // Look for spans, divs, links that have short text matching code pattern
-      const smallCodeElements = Array.from(document.querySelectorAll('span, div, p, a, li, td, th, label, [class*="code"], [class*="offer"], [class*="link"], [class*="promo"], [class*="id"]')).filter(el => {
+      // First try: Find elements with standalone offer codes (exact match)
+      const standaloneCodeElements = Array.from(document.querySelectorAll('span, div, p, a, [class*="code"], [class*="offer"], [class*="link"]')).filter(el => {
         const text = (el.textContent || '').trim();
-        // Skip very long elements (likely contain multiple things)
-        if (text.length > 50) return false;
-        // Clean symbols from start
-        const cleanText = text.replace(symbolCleanupPattern, '').trim();
-        // Check if it looks like an offer code
-        const looksLikeCode = cleanText.match(/^\d{2}[A-Z]{2,6}\d{0,3}[A-Z]?%?$/i) && cleanText.length >= 5;
-        const isNotNav = !el.closest('nav, [role="navigation"]');
+        const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
+        const hasCode = cleanText.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && cleanText.length >= 5 && cleanText.length <= 15;
+        const hasCodeOriginal = text.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && text.length >= 5 && text.length <= 15;
+        const isNotNav = !el.closest('nav, header, footer, [role="navigation"]');
         const isNotBanner = !Array.from(bannersSet).some(banner => banner.contains(el));
-        return looksLikeCode && isNotNav && isNotBanner;
+        return (hasCode || hasCodeOriginal) && isNotNav && isNotBanner;
       });
-      allOfferCodeElements.push(...smallCodeElements);
+      allOfferCodeElements.push(...standaloneCodeElements);
       
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🔍 Strategy 1: Found ' + smallCodeElements.length + ' small code elements',
-        logType: 'info'
-      }));
-      
-      // STRATEGY 2: Scan page text for embedded offer codes (medium-sized elements)
-      const pageTextElements = Array.from(document.querySelectorAll('div, span, p, section, article, [class*="offer"], [class*="card"], [class*="tile"]')).filter(el => {
+      // Second try: Scan page text for embedded offer codes (more aggressive)
+      const pageTextElements = Array.from(document.querySelectorAll('div, span, p, section, article, [class*="offer"], [class*="card"]')).filter(el => {
         const text = (el.textContent || '');
-        const isReasonableSize = text.length >= 5 && text.length < 1000;
-        const isNotNav = !el.closest('nav, [role="navigation"]');
+        const isReasonableSize = text.length > 10 && text.length < 500;
+        const isNotNav = !el.closest('nav, header, footer, [role="navigation"]');
         const isNotBanner = !Array.from(bannersSet).some(banner => banner.contains(el));
         // Check if text contains any offer code pattern
         const hasOfferCode = codePatterns.some(pattern => {
@@ -854,40 +826,14 @@ export const STEP1_OFFERS_SCRIPT = `
       });
       allOfferCodeElements.push(...pageTextElements);
       
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🔍 Strategy 2: Found ' + pageTextElements.length + ' medium elements with codes',
-        logType: 'info'
-      }));
-      
-      // STRATEGY 3: ULTRA AGGRESSIVE - Scan ENTIRE page body for any RC offer code pattern
-      const bodyText = document.body.textContent || '';
-      const foundCodesInBody = new Set();
-      for (const pattern of codePatterns) {
-        pattern.lastIndex = 0;
-        let match;
-        while ((match = pattern.exec(bodyText)) !== null) {
-          const code = match[1].toUpperCase();
-          if (isValidRCOfferCode(code)) {
-            foundCodesInBody.add(code);
-          }
-        }
-      }
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '🔍 Strategy 3: Body scan found codes: ' + [...foundCodesInBody].join(', '),
-        logType: 'info'
-      }));
-      
       // Extract unique offer codes from all found elements
       const extractedCodes = new Set();
       for (const el of allOfferCodeElements) {
         const text = (el.textContent || '').trim();
-        const cleanText = text.replace(symbolCleanupPattern, '').trim().toUpperCase();
+        const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
         
         // Try exact match first
-        if (isValidRCOfferCode(cleanText)) {
+        if (cleanText.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && cleanText.length >= 5 && cleanText.length <= 15) {
           extractedCodes.add(cleanText);
           continue;
         }
@@ -897,26 +843,23 @@ export const STEP1_OFFERS_SCRIPT = `
           pattern.lastIndex = 0;
           let match;
           while ((match = pattern.exec(text)) !== null) {
-            const code = match[1].toUpperCase();
-            if (isValidRCOfferCode(code)) {
-              extractedCodes.add(code);
-            }
+            extractedCodes.add(match[1]);
           }
         }
       }
       
-      // Add codes from body scan
-      for (const code of foundCodesInBody) {
-        extractedCodes.add(code);
-      }
-      
-      // Filter to only valid RC offer codes (final validation)
-      const uniqueOfferCodes = [...extractedCodes].filter(code => isValidRCOfferCode(code));
+      // Filter to only valid RC offer codes
+      const uniqueOfferCodes = [...extractedCodes].filter(code => {
+        return code.match(/^\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?$/) ||  // 26CLS103, 26MAR103B, 26GRD103G, 26WST104
+               code.match(/^\d{4}[A-Z]\d{2}[A-Z]?$/) ||         // 2601C05, 2601A08, 2601A05
+               code.match(/^\d{2}[A-Z]{3,6}%?$/) ||             // 25GOLD, 25GOLD%
+               code.match(/^\d{2}[A-Z]{3}\d{3}[A-Z]?$/);        // 26NEW104, 26NEW104O
+      });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: '🔍 Found ' + uniqueOfferCodes.length + ' unique offer codes: ' + uniqueOfferCodes.join(', '),
-        logType: uniqueOfferCodes.length >= 5 ? 'success' : 'warning'
+        message: '🔍 Found ' + uniqueOfferCodes.length + ' unique offer codes: ' + uniqueOfferCodes.slice(0, 10).join(', '),
+        logType: 'info'
       }));
       
       // STEP 3: PRIMARY DETECTION - Use VIEW SAILINGS buttons with Y-position clustering
