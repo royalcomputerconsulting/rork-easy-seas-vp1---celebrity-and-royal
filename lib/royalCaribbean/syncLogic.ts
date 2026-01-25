@@ -96,27 +96,26 @@ function findMatchingBookedCruise(
 ): BookedCruise | null {
   return existingCruises.find(existing => {
     if (cruise.reservationNumber && existing.reservationNumber) {
-      return cruise.reservationNumber === existing.reservationNumber;
+      const match = cruise.reservationNumber.toString().trim() === existing.reservationNumber.toString().trim();
+      if (match) {
+        console.log(`[Dedup] Matched by reservation number: ${cruise.reservationNumber}`);
+        return true;
+      }
     }
     
     if (cruise.bookingId && existing.bookingId) {
-      return cruise.bookingId === existing.bookingId;
+      const match = cruise.bookingId.toString().trim() === existing.bookingId.toString().trim();
+      if (match) {
+        console.log(`[Dedup] Matched by booking ID: ${cruise.bookingId}`);
+        return true;
+      }
     }
     
     if (
       cruise.shipName === existing.shipName &&
-      cruise.sailDate === existing.sailDate &&
-      cruise.cabinNumber === existing.cabinNumber &&
-      cruise.cabinNumber !== undefined
+      cruise.sailDate === existing.sailDate
     ) {
-      return true;
-    }
-    
-    if (
-      cruise.shipName === existing.shipName &&
-      cruise.sailDate === existing.sailDate &&
-      cruise.cabinType === existing.cabinType
-    ) {
+      console.log(`[Dedup] Matched by ship + date: ${cruise.shipName} on ${cruise.sailDate}`);
       return true;
     }
     

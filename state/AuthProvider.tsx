@@ -160,11 +160,12 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       }
       console.log('[AuthProvider] Admin login with correct password');
     } else {
-      console.log('[AuthProvider] Regular user login:', normalizedEmail);
+      console.log('[AuthProvider] Regular user login (no password required):', normalizedEmail);
     }
     
     const hasLaunchedBefore = await AsyncStorage.getItem(STORAGE_KEYS.HAS_LAUNCHED_BEFORE);
-    const shouldFreshStart = !hasLaunchedBefore;
+    const isReturningUser = await AsyncStorage.getItem(AUTH_EMAIL_KEY);
+    const shouldFreshStart = !hasLaunchedBefore && !isReturningUser;
     
     await AsyncStorage.setItem(AUTH_KEY, "true");
     await AsyncStorage.setItem(AUTH_EMAIL_KEY, normalizedEmail);
