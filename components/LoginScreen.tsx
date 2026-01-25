@@ -7,7 +7,6 @@ const { width, height } = Dimensions.get('window');
 
 export function LoginScreen() {
   const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
   const { login } = useAuth();
@@ -25,15 +24,9 @@ export function LoginScreen() {
       return;
     }
     
-    if (!password) {
-      setError('Please enter your password.');
-      return;
-    }
-    
-    const success = await login(email, password);
+    const success = await login(email);
     if (!success) {
-      setError('Incorrect email or password. Please try again or purchase a subscription.');
-      setPassword('');
+      setError('Unable to log in. Please check your email or purchase a subscription.');
     }
   };
 
@@ -96,7 +89,7 @@ export function LoginScreen() {
 
             <View style={styles.divider} />
 
-            <Text style={styles.loginLabel}>REQUIRED EMAIL</Text>
+            <Text style={styles.loginLabel}>Please Enter your Email Address</Text>
             
             <TextInput
               style={[styles.input, error ? styles.inputError : null]}
@@ -111,22 +104,6 @@ export function LoginScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="email"
-            />
-
-            <Text style={styles.loginLabel}>REQUIRED PASSWORD</Text>
-            
-            <TextInput
-              style={[styles.input, error ? styles.inputError : null]}
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setError('');
-              }}
-              placeholder="Enter your password"
-              placeholderTextColor={COLORS.textSecondary}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
               onSubmitEditing={handleLogin}
             />
 

@@ -17,7 +17,7 @@ interface AuthState {
   isFreshStart: boolean;
   authenticatedEmail: string | null;
   isAdmin: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string) => Promise<boolean>;
   logout: () => Promise<void>;
   clearFreshStartFlag: () => Promise<void>;
   getWhitelist: () => Promise<string[]>;
@@ -143,7 +143,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     }
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string): Promise<boolean> => {
     const normalizedEmail = email.toLowerCase().trim();
     
     if (!normalizedEmail || !email.includes('@')) {
@@ -157,40 +157,27 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       return false;
     }
     
-    if (password === ADMIN_PASSWORD) {
-      await AsyncStorage.setItem(AUTH_KEY, "true");
-      await AsyncStorage.setItem(AUTH_EMAIL_KEY, normalizedEmail);
+    const hasLaunchedBefore = await AsyncStorage.getItem(STORAGE_KEYS.HAS_LAUNCHED_BEFORE);
+    const shouldFreshStart = !hasLaunchedBefore;
+    
+    await AsyncStorage.setItem(AUTH_KEY, "true");
+    await AsyncStorage.setItem(AUTH_EMAIL_KEY, normalizedEmail);
+    
+    if (shouldFreshStart) {
+      await AsyncStorage.setItem(FRESH_START_KEY, "true");
+      setIsFreshStart(true);
+      console.log('[AuthProvider] First-time user login - will trigger fresh start');
+    } else {
       await AsyncStorage.removeItem(FRESH_START_KEY);
-      setIsAuthenticated(true);
-      setAuthenticatedEmail(normalizedEmail);
       setIsFreshStart(false);
-      setIsAdmin(normalizedEmail === ADMIN_EMAIL.toLowerCase());
-      console.log('[AuthProvider] Admin login successful for:', normalizedEmail);
-      return true;
+      console.log('[AuthProvider] Returning user login - preserving data');
     }
-    if (password === APP_PASSWORD) {
-      const hasLaunchedBefore = await AsyncStorage.getItem(STORAGE_KEYS.HAS_LAUNCHED_BEFORE);
-      const shouldFreshStart = !hasLaunchedBefore;
-      
-      await AsyncStorage.setItem(AUTH_KEY, "true");
-      await AsyncStorage.setItem(AUTH_EMAIL_KEY, normalizedEmail);
-      
-      if (shouldFreshStart) {
-        await AsyncStorage.setItem(FRESH_START_KEY, "true");
-        setIsFreshStart(true);
-        console.log('[AuthProvider] First-time user login - will trigger fresh start');
-      } else {
-        await AsyncStorage.removeItem(FRESH_START_KEY);
-        setIsFreshStart(false);
-        console.log('[AuthProvider] Returning user login - preserving data');
-      }
-      
-      setIsAuthenticated(true);
-      setAuthenticatedEmail(normalizedEmail);
-      setIsAdmin(normalizedEmail === ADMIN_EMAIL.toLowerCase());
-      return true;
-    }
-    return false;
+    
+    setIsAuthenticated(true);
+    setAuthenticatedEmail(normalizedEmail);
+    setIsAdmin(normalizedEmail === ADMIN_EMAIL.toLowerCase());
+    console.log('[AuthProvider] Login successful for:', normalizedEmail);
+    return true;
   };
 
   const logout = async () => {
