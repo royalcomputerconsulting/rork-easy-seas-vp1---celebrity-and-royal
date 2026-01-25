@@ -241,7 +241,11 @@ export function createSyncPreview(
 
   let loyaltyPreview = null;
   if (loyaltyData) {
-    const syncedClubRoyalePoints = loyaltyData.clubRoyalePoints ?? currentLoyalty.clubRoyalePoints;
+    const syncedClubRoyalePoints = loyaltyData.clubRoyalePoints != null
+      ? (typeof loyaltyData.clubRoyalePoints === 'number' 
+          ? loyaltyData.clubRoyalePoints 
+          : parseInt(String(loyaltyData.clubRoyalePoints).replace(/,/g, ''), 10))
+      : currentLoyalty.clubRoyalePoints;
     const syncedClubRoyaleTier = loyaltyData.clubRoyaleTier || currentLoyalty.clubRoyaleTier;
     const syncedCrownAndAnchorLevel = loyaltyData.crownAndAnchorLevel || currentLoyalty.crownAndAnchorLevel;
 
