@@ -924,11 +924,12 @@ export const STEP1_OFFERS_SCRIPT = `
       }));
       
       // Also find "REDEEM" buttons (yellow buttons) as an offer anchor.
-      // IMPORTANT: INCLUDE in-progress buttons like "CONTINUE REDEMPTION" / "CANCEL REDEMPTION" - they are still valid offers!
+      // IMPORTANT: Filter OUT in-progress offers (Continue/Cancel Redemption) - they have no sailings to scrape
       const redeemButtons = allClickables.filter(el => {
         const text = (el.textContent || '').trim().toLowerCase();
         const isShortText = text.length < 100;
-        const isRedeemButton = text === 'redeem' || text.includes('redemption') || text.includes('continue redeem') || text.includes('cancel redeem');
+        // ONLY include actual "Redeem" buttons, NOT "Continue Redemption" or "Cancel Redemption"
+        const isRedeemButton = text === 'redeem' && !text.includes('redemption') && !text.includes('continue') && !text.includes('cancel');
         return isShortText && isRedeemButton;
       });
       
@@ -1989,6 +1990,29 @@ export const STEP1_OFFERS_SCRIPT = `
         const offerType = 'Club Royale';
         const perks = tradeInValue ? 'Trade-in value: $' + tradeInValue : '';
 
+        // CRITICAL: Check if this offer is "in progress" (has Continue/Cancel Redemption buttons)
+        const inProgressBtn = Array.from(card.querySelectorAll('button, a, [role="button"]')).find(el => {
+          const btnText = (el.textContent || '').trim().toLowerCase();
+          return btnText.includes('continue redemption') || btnText.includes('cancel redemption');
+        });
+        
+        if (inProgressBtn) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '  ⚠️ Skipping IN PROGRESS offer (has Continue/Cancel Redemption button - no sailings to scrape)',
+            logType: 'warning'
+          }));
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: 'Offer ' + (i + 1) + '/' + offerCards.length + ' (' + offerName + '): IN PROGRESS - skipped',
+            logType: 'info'
+          }));
+          
+          processedCount++;
+          continue;
+        }
+        
         const viewSailingsBtn = Array.from(card.querySelectorAll('button, a, [role="button"]')).find(el => 
           (el.textContent || '').match(/View Sailing|See Sailing|Show Sailing/i)
         );
