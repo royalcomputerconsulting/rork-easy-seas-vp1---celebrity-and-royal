@@ -800,7 +800,7 @@ export const STEP1_OFFERS_SCRIPT = `
       ];
       
       // First try: Find elements with standalone offer codes (exact match)
-      const standaloneCodeElements = Array.from(document.querySelectorAll('span, div, p, [class*="code"], [class*="offer"]')).filter(el => {
+      const standaloneCodeElements = Array.from(document.querySelectorAll('span, div, p, a, [class*="code"], [class*="offer"], [class*="link"]')).filter(el => {
         const text = (el.textContent || '').trim();
         const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•\s]+/, '').trim();
         const hasCode = cleanText.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && cleanText.length >= 5 && cleanText.length <= 15;
@@ -1781,58 +1781,19 @@ export const STEP1_OFFERS_SCRIPT = `
       }
       
       // Final deduplication: ensure no container appears more than once
-      // CRITICAL: Also deduplicate by offer name + code to prevent scraping same offer twice
-      // RC sometimes renders same offer in multiple places on page
+      // CRITICAL: Only deduplicate by CONTAINER, not by name+code
+      // IMPORTANT: Multiple offers can have the same name (e.g., "2026 January Instant Rewards")
+      // and even the same code if they're instant rewards/certificates (2601C05, 2601A05, etc.)
       const finalOfferCards = [];
       const finalSeenContainers = new Set();
-      const seenOfferIdentifiers = new Map(); // Track by name+code+expiry
       
       for (const card of offerCards) {
+        // Only skip if we've already processed this EXACT DOM element
         if (finalSeenContainers.has(card)) {
           continue;
         }
         
-        // Extract offer identifier (name + code + expiry) to detect duplicates
-        const cardText = card.textContent || '';
-        let offerCode = extractOfferCodeFromText(cardText);
-        if (!offerCode) {
-          const offerCodeMatch = cardText.match(/(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?|\d{2}[A-Z]{3}\d{3}[A-Z]?)(?![a-z])/i);
-          offerCode = offerCodeMatch ? offerCodeMatch[1].toUpperCase() : '';
-        }
-        
-        // Extract offer name
-        let offerName = '';
-        const excludePatterns = /^Featured Offer$|^View Sailing|^View Sailings$|^See Sailing|^Redeem|^Trade-in value|^\$|^My Offers$|^Club Royale Offers$|^Offers$|^Exclusive$|^Available$|^Learn More$|^Book Now$|^Select$|^Close$|^Filter$|^Sort$|^Room for Two$|^\d+\s+NIGHT/i;
-        const allHeadings = Array.from(card.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"], [class*="name"], [class*="offer"]'));
-        for (const h of allHeadings) {
-          const hText = (h.textContent || '').trim();
-          if (hText.length >= 5 && hText.length <= 100 && !excludePatterns.test(hText)) {
-            offerName = hText;
-            break;
-          }
-        }
-        
-        // Extract expiry date
-        const expiryMatch = cardText.match(/Redeem by ([A-Za-z]+ \d+, \d{4})/i);
-        const expiryDate = expiryMatch ? expiryMatch[1] : '';
-        
-        // Create unique identifier: name + code (or expiry if no code)
-        const identifier = (offerName + '|' + (offerCode || expiryDate)).toLowerCase();
-        
-        // Skip if we've already seen this offer (by name + code/expiry)
-        if (identifier && identifier.length > 3 && seenOfferIdentifiers.has(identifier)) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '🚫 Skipping DUPLICATE offer: ' + offerName + (offerCode ? ' (' + offerCode + ')' : ''),
-            logType: 'warning'
-          }));
-          continue;
-        }
-        
         finalSeenContainers.add(card);
-        if (identifier && identifier.length > 3) {
-          seenOfferIdentifiers.set(identifier, true);
-        }
         finalOfferCards.push(card);
       }
       offerCards = finalOfferCards;
@@ -1886,21 +1847,38 @@ export const STEP1_OFFERS_SCRIPT = `
         // RC displays offer codes in specific locations (usually top-right with link icon)
         let offerCode = '';
         
-        // STRATEGY 1: Look for offer code in small text elements (usually standalone codes)
-        const codeElements = Array.from(card.querySelectorAll('span, div, p, [class*="code"], [class*="offer"]')).filter(el => {
-          const text = (el.textContent || '').trim();
-          const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•🔗\s]+/, '').trim();
-          return cleanText.length >= 5 && cleanText.length <= 15 && !el.querySelector('button, a[href]');
-        });
+        // STRATEGY 1: Look for offer code in ALL elements within the card
+        // CRITICAL: RC displays codes in top-right, often in links or spans with icon prefix
+        const codeElements = Array.from(card.querySelectorAll('*'));
         
         for (const el of codeElements) {
           const text = (el.textContent || '').trim();
-          const cleanText = text.replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•🔗\s]+/, '').trim();
           
-          // Check if this looks like an offer code (not a date, not a phrase)
-          if (cleanText.match(/^[A-Z0-9]{5,12}[A-Z0-9%]?$/) && isValidOfferCode(cleanText)) {
-            offerCode = cleanText.toUpperCase();
-            break;
+          // Skip large elements (likely contain full offer text)
+          if (text.length > 100) continue;
+          
+          // Clean prefix icons/symbols and common words
+          const cleanText = text
+            .replace(/^[⊛✦●◆■□▪▫★☆→►▶︎·•🔗\s]+/, '')
+            .replace(/^(Share|Copy|Code|Link)\s+/i, '')
+            .trim();
+          
+          // Skip if too short
+          if (cleanText.length < 5) continue;
+          
+          // AGGRESSIVE: Extract code from text (handles "Share 26CLS103", "🔗2601A08", etc.)
+          const codeMatch = cleanText.match(/(\d{2}[A-Z]{2,5}\d{2,3}[A-Z]?|\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{3,6}%?|\d{2}[A-Z]{3}\d{3}[A-Z]?)/i);
+          if (codeMatch) {
+            const extractedCode = codeMatch[1].toUpperCase();
+            if (isValidOfferCode(extractedCode)) {
+              offerCode = extractedCode;
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '  🔍 Found code in element: "' + text.substring(0, 30) + '..." → ' + offerCode,
+                logType: 'info'
+              }));
+              break;
+            }
           }
         }
         
