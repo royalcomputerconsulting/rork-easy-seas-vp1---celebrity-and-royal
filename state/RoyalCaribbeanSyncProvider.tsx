@@ -299,15 +299,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             upcomingCruises,
             courtesyHolds
           },
-          syncPreview: null,
-          loyaltyData: prev.loyaltyData ? {
-            ...prev.loyaltyData,
-            crownAndAnchorPoints: '543'
-          } : { clubRoyaleTier: '', clubRoyalePoints: '', crownAndAnchorLevel: '', crownAndAnchorPoints: '543' }
+          syncPreview: null
         };
       });
       addLog('All steps completed successfully! Ready to sync.', 'success');
-      addLog('Crown & Anchor points overridden to 543', 'info');
       
     } catch (error) {
       addLog(`Ingestion failed: ${error}`, 'error');
@@ -425,13 +420,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       coreDataContext.setBookedCruises(finalBookedCruises);
 
       if (preview.loyalty) {
-        if (preview.loyalty.clubRoyalePoints.changed) {
-          addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
-          await loyaltyContext.setManualClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
-        }
-        if (preview.loyalty.crownAndAnchorPoints.changed) {
-          addLog(`Updating Crown & Anchor points: ${preview.loyalty.crownAndAnchorPoints.current} → ${preview.loyalty.crownAndAnchorPoints.synced}`, 'info');
-          await loyaltyContext.setManualCrownAnchorPoints(preview.loyalty.crownAndAnchorPoints.synced);
+        if (preview.loyalty.crownAndAnchorLevel.changed) {
+          addLog(`Updating Crown & Anchor level: ${preview.loyalty.crownAndAnchorLevel.current} → ${preview.loyalty.crownAndAnchorLevel.synced}`, 'info');
+          await loyaltyContext.setCrownAnchorLevel(preview.loyalty.crownAndAnchorLevel.synced);
         }
       }
 

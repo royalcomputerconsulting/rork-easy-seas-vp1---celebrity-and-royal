@@ -305,33 +305,14 @@ function RoyalCaribbeanSyncScreen() {
                   </View>
                 </View>
 
-                {state.loyaltyData && (
+                {state.loyaltyData && state.loyaltyData.crownAndAnchorLevel && (
                   <View style={styles.loyaltyCard}>
                     <Text style={styles.loyaltyTitle}>Loyalty Status Updates</Text>
-                    {state.loyaltyData.clubRoyaleTier && (
-                      <View style={styles.loyaltyRow}>
-                        <Text style={styles.loyaltyLabel}>Club Royale:</Text>
-                        <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyaleTier}</Text>
-                      </View>
-                    )}
-                    {state.loyaltyData.clubRoyalePoints && (
-                      <View style={styles.loyaltyRow}>
-                        <Text style={styles.loyaltyLabel}>CR Points:</Text>
-                        <Text style={styles.loyaltyValue}>{state.loyaltyData.clubRoyalePoints}</Text>
-                      </View>
-                    )}
-                    {state.loyaltyData.crownAndAnchorLevel && (
-                      <View style={styles.loyaltyRow}>
-                        <Text style={styles.loyaltyLabel}>Crown & Anchor:</Text>
-                        <Text style={styles.loyaltyValue}>{state.loyaltyData.crownAndAnchorLevel}</Text>
-                      </View>
-                    )}
-                    {state.loyaltyData.crownAndAnchorPoints && (
-                      <View style={styles.loyaltyRow}>
-                        <Text style={styles.loyaltyLabel}>C&A Points:</Text>
-                        <Text style={styles.loyaltyValue}>{state.loyaltyData.crownAndAnchorPoints}</Text>
-                      </View>
-                    )}
+                    <View style={styles.loyaltyRow}>
+                      <Text style={styles.loyaltyLabel}>Crown & Anchor Level:</Text>
+                      <Text style={styles.loyaltyValue}>{state.loyaltyData.crownAndAnchorLevel}</Text>
+                    </View>
+                    <Text style={styles.loyaltyNote}>Club Royale data and points are not modified</Text>
                   </View>
                 )}
 
@@ -706,6 +687,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600' as const
+  },
+  loyaltyNote: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 8,
+    fontStyle: 'italic' as const
   },
   warningBox: {
     backgroundColor: '#78350f',
