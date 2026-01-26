@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 
 export const calendarRouter = createTRPCRouter({
@@ -28,39 +29,74 @@ export const calendarRouter = createTRPCRouter({
         clearTimeout(timeoutId);
 
         console.log('[Calendar API] Response status:', response.status, response.statusText);
-        console.log('[Calendar API] Response headers:', Object.fromEntries(response.headers.entries()));
+        
+        const headersObj: Record<string, string> = {};
+        response.headers.forEach((value, key) => {
+          headersObj[key] = value;
+        });
+        console.log('[Calendar API] Response headers:', headersObj);
 
         if (!response.ok) {
           console.error('[Calendar API] Fetch failed:', response.status, response.statusText);
-          const errorBody = await response.text().catch(() => 'Unable to read error body');
-          console.error('[Calendar API] Error body:', errorBody.substring(0, 500));
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `HTTP ${response.status}: ${response.statusText}`,
+          });
         }
 
         const content = await response.text();
         console.log('[Calendar API] Fetched', content.length, 'characters');
         console.log('[Calendar API] Content preview:', content.substring(0, 200));
 
+        // Check if content is HTML (login page, error page, etc.)
+        const lowerContent = content.toLowerCase();
+        if (lowerContent.includes('<!doctype') || lowerContent.includes('<html') || lowerContent.includes('<head>')) {
+          console.error('[Calendar API] Received HTML instead of ICS');
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'The URL returned an HTML page instead of calendar data. This usually means the URL requires authentication. Please try downloading the .ics file manually and importing it.',
+          });
+        }
+
         if (!content.includes('BEGIN:VCALENDAR') && !content.includes('BEGIN:VEVENT')) {
           console.error('[Calendar API] Invalid content - not ICS format');
-          console.error('[Calendar API] Content starts with:', content.substring(0, 500));
-          throw new Error('Invalid ICS file format - not a valid calendar file. The URL may require authentication or returned HTML instead of calendar data.');
+          console.error('[Calendar API] Content starts with:', content.substring(0, 200));
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid ICS file format. The URL did not return valid calendar data.',
+          });
         }
 
         return { content };
       } catch (error) {
         console.error('[Calendar API] Error fetching ICS:', error);
         
-        if (error instanceof Error) {
-          if (error.name === 'AbortError') {
-            throw new Error('Request timed out after 30 seconds. The server may be slow or unreachable.');
-          }
-          if (error.message.includes('fetch')) {
-            throw new Error(`Network error: Unable to connect to the URL. Please check the URL is correct and accessible.`);
-          }
+        // Re-throw TRPCErrors as-is
+        if (error instanceof TRPCError) {
+          throw error;
         }
         
-        throw error;
+        if (error instanceof Error) {
+          if (error.name === 'AbortError') {
+            throw new TRPCError({
+              code: 'TIMEOUT',
+              message: 'Request timed out after 30 seconds.',
+            });
+          }
+          // Sanitize error message to avoid JSON parsing issues
+          const sanitizedMessage = error.message
+            .replace(/[<>]/g, '')
+            .substring(0, 200);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Failed to fetch: ${sanitizedMessage}`,
+          });
+        }
+        
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Unknown error occurred while fetching calendar data.',
+        });
       }
     }),
 });

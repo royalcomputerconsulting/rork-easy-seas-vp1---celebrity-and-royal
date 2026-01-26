@@ -119,7 +119,8 @@ export async function downloadFromURL(url: string): Promise<{ content: string; s
     
     // Native: Use FileSystem.downloadAsync which can access device cookies/credentials
     const fileName = `ics_import_${Date.now()}.ics`;
-    const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+    const tempFile = new File(Paths.cache, fileName);
+    const fileUri = tempFile.uri;
     
     console.log('[FileIO] Native download to:', fileUri);
     
