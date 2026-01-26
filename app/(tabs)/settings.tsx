@@ -579,6 +579,9 @@ export default function SettingsScreen() {
                 await setManualClubRoyalePoints(0);
                 await setManualCrownAnchorPoints(0);
                 
+                console.log('[Settings] Re-syncing loyalty provider from storage...');
+                await syncLoyaltyFromStorage();
+                
                 Alert.alert(
                   'Data Cleared', 
                   `Successfully cleared ${result.clearedKeys.length} data stores. All data has been reset to blank values.`
@@ -597,7 +600,7 @@ export default function SettingsScreen() {
         },
       ]
     );
-  }, [clearAllData, clearLocalData, syncUserFromStorage, ensureOwner, updateUser, setManualClubRoyalePoints, setManualCrownAnchorPoints]);
+  }, [clearAllData, clearLocalData, syncUserFromStorage, ensureOwner, updateUser, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncLoyaltyFromStorage]);
 
 
 
