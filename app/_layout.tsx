@@ -32,7 +32,7 @@ import { BankrollProvider } from "@/state/BankrollProvider";
 import { TaxProvider } from "@/state/TaxProvider";
 import { MachineStrategyProvider } from "@/state/MachineStrategyProvider";
 import { SlotMachineProvider } from "@/state/SlotMachineProvider";
-import { SlotMachineLibraryProvider } from "@/state/SlotMachineLibraryProvider";
+import { SlotMachineLibraryProvider, useSlotMachineLibrary } from "@/state/SlotMachineLibraryProvider";
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 
@@ -246,7 +246,8 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   isClearing: boolean;
   setIsClearing: (clearing: boolean) => void;
 }) {
-  const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail, isWhitelisted } = useAuth();
+  const { setIsUserWhitelisted } = useSlotMachineLibrary();
   const { updateUser, ensureOwner } = useUser();
   const [showLandingPage, setShowLandingPage] = useState(true);
 
@@ -266,6 +267,11 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
     };
     syncEmailToProfile();
   }, [isAuthenticated, authenticatedEmail, ensureOwner, updateUser]);
+
+  useEffect(() => {
+    console.log('[AppContent] Syncing whitelist status to machine library:', isWhitelisted);
+    setIsUserWhitelisted(isWhitelisted);
+  }, [isWhitelisted, setIsUserWhitelisted]);
 
   const handleSplashComplete = () => {
     console.log('[AppContent] === SPLASH COMPLETE: Setting showSplash to false ===');

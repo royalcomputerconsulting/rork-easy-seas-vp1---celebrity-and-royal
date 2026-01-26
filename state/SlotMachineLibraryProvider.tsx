@@ -17,6 +17,8 @@ const STORAGE_KEY_ENCYCLOPEDIA = 'easyseas_machine_encyclopedia_v2_262_only';
 const STORAGE_KEY_MY_ATLAS = 'easyseas_my_slot_atlas_v2_262_only';
 const STORAGE_KEY_INDEX_LOADED = 'easyseas_machine_index_loaded_v2_262_only';
 
+const FREE_USER_MACHINE_LIMIT = 4;
+
 function convertGlobalToEncyclopedia(global: GlobalSlotMachine, addedToAtlas: boolean = false): MachineEncyclopediaEntry {
   return {
     id: global.id,
@@ -73,6 +75,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
   const [wizardOpen, setWizardOpen] = useState<boolean>(false);
   const [wizardData, setWizardData] = useState<AddGameWizardData>({ step: 1 });
+  const [isUserWhitelisted, setIsUserWhitelisted] = useState<boolean>(false);
 
   const loadMachinesFromIndex = useCallback(async (
     currentEncyclopedia: MachineEncyclopediaEntry[],
@@ -497,19 +500,24 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       
       for (const machine of machines) {
         try {
-          if (!machine.id && !machine.name && !machine.machineName) {
+          const header = machine.header || {};
+          const hasValidId = machine.id || machine.name || machine.machineName || header.machineName;
+          
+          if (!hasValidId) {
             console.warn('[SlotMachineLibrary] Skipping machine with no id or name:', machine);
             errorCount++;
             continue;
           }
 
           const machineId = machine.id?.toString() || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          const machineName = machine.name || machine.machineName || 'Unknown Machine';
+          const machineName = machine.name || machine.machineName || header.machineName || 'Unknown Machine';
+          const manufacturer = machine.manufacturer || header.manufacturer || 'Other';
+          const releaseYear = machine.release_year || machine.releaseYear || header.releaseYear || new Date().getFullYear();
           
           const existingEntry = encyclopedia.find(
             e => e.globalMachineId === machineId || 
                  (e.machineName.toLowerCase() === machineName.toLowerCase() &&
-                  e.manufacturer === (machine.manufacturer || 'Other'))
+                  e.manufacturer === manufacturer)
           );
           
           if (existingEntry) {
@@ -518,26 +526,36 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
             continue;
           }
 
+          const apTriggers = machine.ap_triggers || machine.apTriggers || [];
+          const walkAway = machine.walk_away || machine.walkAway || [];
+          const simpleSummary = machine.simple_summary || machine.simpleSummary || machine.description || '';
+          const coreMechanics = machine.core_mechanics || machine.coreMechanics;
+          const jackpotReset = machine.jackpot_reset || machine.jackpotReset;
+
           const newEntry: MachineEncyclopediaEntry = {
             id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             globalMachineId: machineId,
             machineName: machineName,
-            manufacturer: machine.manufacturer || 'Other',
+            manufacturer: manufacturer,
             volatility: machine.volatility || 'Medium',
             cabinetType: machine.cabinet_type || machine.cabinetType || 'Standard Upright',
-            releaseYear: machine.release_year || machine.releaseYear || new Date().getFullYear(),
+            releaseYear: releaseYear,
             denominationFamilies: machine.denominations || machine.denominationFamilies || [],
-            jackpotTypes: machine.jackpot_reset ? Object.keys(machine.jackpot_reset).map(k => k) : (machine.jackpotTypes || []),
-            bonusMechanics: machine.core_mechanics || machine.bonusMechanics,
+            jackpotTypes: jackpotReset ? Object.keys(jackpotReset).map(k => k) : (machine.jackpotTypes || []),
+            bonusMechanics: coreMechanics,
             apMetadata: {
               persistenceType: machine.persistenceType || 'True',
               hasMustHitBy: machine.hasMHB || false,
-              entryConditions: machine.ap_triggers || [],
-              exitConditions: machine.walk_away || [],
-              notesAndTips: machine.simple_summary || machine.description || '',
+              entryConditions: apTriggers,
+              exitConditions: walkAway,
+              notesAndTips: simpleSummary,
             },
-            description: machine.simple_summary || machine.description,
-            userNotes: machine.ship_notes,
+            description: simpleSummary,
+            userNotes: machine.ship_notes || machine.userNotes,
+            shipAssignments: machine.shipAssignments,
+            images: machine.images,
+            rtpRanges: machine.rtpRanges || machine.rtpRange,
+            basePaytable: machine.basePaytable || machine.basePay,
             source: 'user',
             isInMyAtlas: true,
             addedToAtlasAt: new Date().toISOString(),
@@ -616,8 +634,11 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   }, []);
 
   const globalLibrary = useMemo(() => {
-    return encyclopedia;
-  }, [encyclopedia]);
+    if (isUserWhitelisted) {
+      return encyclopedia;
+    }
+    return encyclopedia.slice(0, FREE_USER_MACHINE_LIMIT);
+  }, [encyclopedia, isUserWhitelisted]);
 
   const filteredGlobalLibrary = useMemo(() => {
     let filtered = [...globalLibrary];
@@ -713,7 +734,19 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   ]);
 
   const myAtlasMachines = useMemo(() => {
-    return encyclopedia.filter(entry => entry.isInMyAtlas);
+    const atlasMachines = encyclopedia.filter(entry => entry.isInMyAtlas);
+    if (isUserWhitelisted) {
+      return atlasMachines;
+    }
+    return atlasMachines.slice(0, FREE_USER_MACHINE_LIMIT);
+  }, [encyclopedia, isUserWhitelisted]);
+
+  const totalMachineCount = useMemo(() => {
+    return encyclopedia.length;
+  }, [encyclopedia]);
+
+  const totalAtlasMachineCount = useMemo(() => {
+    return encyclopedia.filter(entry => entry.isInMyAtlas).length;
   }, [encyclopedia]);
 
   const favoriteMachines = useMemo(() => {
@@ -881,6 +914,11 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     globalLibrary,
     filteredGlobalLibrary,
     isLoading,
+    isUserWhitelisted,
+    setIsUserWhitelisted,
+    totalMachineCount,
+    totalAtlasMachineCount,
+    freeUserMachineLimit: FREE_USER_MACHINE_LIMIT,
 
     searchQuery,
     setSearchQuery,
