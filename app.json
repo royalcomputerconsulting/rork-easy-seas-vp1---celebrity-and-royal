@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.rork.easy-seas-vp1-celebrity-and-royal",
+      "bundleIdentifier": "app.rork.easy-seas",
       "usesIcloudStorage": true
     },
     "android": {
