@@ -5,6 +5,7 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { IMAGES } from '@/constants/images';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCruiseStore } from '@/state/CruiseStore';
@@ -478,9 +480,11 @@ export default function OfferDetailsScreen() {
 
           {/* Featured Offer Name & Code */}
           <View style={styles.featuredOfferSection}>
-            <View style={styles.offerIconBadge}>
-              <Tag size={24} color={COLORS.white} />
-            </View>
+            <Image 
+              source={{ uri: IMAGES.logo }}
+              style={styles.offerLogo}
+              resizeMode="contain"
+            />
             <View style={styles.offerNameRow}>
               <Text style={styles.featuredOfferName} numberOfLines={2}>{offerInfo.offerName}</Text>
               {offerInfo.totalValue > 0 && (
@@ -629,15 +633,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     gap: SPACING.md,
   },
-  offerIconBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.navyDeep,
-    justifyContent: 'center',
-    alignItems: 'center',
+  offerLogo: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
     marginBottom: SPACING.sm,
-    ...SHADOW.md,
   },
   featuredOfferName: {
     fontSize: 22,

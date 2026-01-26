@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
@@ -11,6 +11,7 @@ import { CELEBRITY_BLUE_CHIP_TIERS, CELEBRITY_TIER_ORDER, getCelebrityBlueChipTi
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
 import { BrandToggle } from '@/components/ui/BrandToggle';
+import { IMAGES } from '@/constants/images';
 
 interface CompactDashboardHeaderProps {
   memberName?: string;
@@ -99,8 +100,17 @@ export function CompactDashboardHeader({
     >
       <View style={styles.topRow}>
         <View style={styles.memberInfoInline}>
-          <Text style={styles.memberGreeting}>{displayName}</Text>
-          <Text style={styles.memberSubtitle}>{displayNumberLabel} {displayNumber}</Text>
+          {!hideLogo && (
+            <Image 
+              source={{ uri: IMAGES.logo }}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
+          )}
+          <View style={styles.memberTextInfo}>
+            <Text style={styles.memberGreeting}>{displayName}</Text>
+            <Text style={styles.memberSubtitle}>{displayNumberLabel} {displayNumber}</Text>
+          </View>
         </View>
         
         <View style={styles.actionsSection}>
@@ -564,6 +574,17 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   memberInfoInline: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  headerLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+  },
+  memberTextInfo: {
     flex: 1,
   },
   memberGreeting: {

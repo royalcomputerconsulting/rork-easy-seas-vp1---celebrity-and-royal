@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Linking, Image, Dimensions, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
+import { IMAGES } from '@/constants/images';
 import { useAuth } from '@/state/AuthProvider';
 
 const { width, height } = Dimensions.get('window');
@@ -60,7 +61,7 @@ export function LoginScreen() {
         <View style={styles.content}>
           <View style={styles.logoContainer}>
             <Image 
-              source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/zf6f5olpoe2u2crfpswo2' }}
+              source={{ uri: IMAGES.logo }}
               style={styles.logoImage}
               resizeMode="contain"
             />
