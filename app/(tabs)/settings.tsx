@@ -54,7 +54,8 @@ import {
   generateOffersCSV, 
   generateCalendarICS,
   generateBookedCSV,
-  exportFile 
+  exportFile,
+  downloadFromURL 
 } from '@/lib/importExport';
 import {
   clearAllAppData,
@@ -294,10 +295,21 @@ export default function SettingsScreen() {
 
               try {
                 const trimmedUrl = url.trim();
-                console.log('[Settings] Fetching ICS from URL via backend proxy:', trimmedUrl);
+                let content: string;
                 
-                const result = await fetchICSMutation.mutateAsync({ url: trimmedUrl });
-                const content = result.content;
+                // Try native download first (works better for authenticated URLs)
+                console.log('[Settings] Attempting native download first:', trimmedUrl);
+                const nativeResult = await downloadFromURL(trimmedUrl);
+                
+                if (nativeResult.success && nativeResult.content) {
+                  console.log('[Settings] Native download successful, length:', nativeResult.content.length);
+                  content = nativeResult.content;
+                } else {
+                  // Fall back to backend proxy
+                  console.log('[Settings] Native download failed, trying backend proxy:', nativeResult.error);
+                  const proxyResult = await fetchICSMutation.mutateAsync({ url: trimmedUrl });
+                  content = proxyResult.content;
+                }
                 
                 console.log('[Settings] Fetched', content.length, 'characters via backend');
                 

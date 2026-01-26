@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { 
@@ -91,6 +92,65 @@ export async function pickAndReadFile(fileType: 'csv' | 'ics' | 'json'): Promise
   } catch (error) {
     console.error('[FileIO] Error picking/reading file:', error);
     throw error;
+  }
+}
+
+export async function downloadFromURL(url: string): Promise<{ content: string; success: boolean; error?: string }> {
+  try {
+    console.log('[FileIO] Attempting native download from URL:', url);
+    
+    if (Platform.OS === 'web') {
+      console.log('[FileIO] Web platform - using fetch');
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/calendar, text/plain, */*',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const content = await response.text();
+      console.log('[FileIO] Web fetch successful, length:', content.length);
+      return { content, success: true };
+    }
+    
+    // Native: Use FileSystem.downloadAsync which can access device cookies/credentials
+    const fileName = `ics_import_${Date.now()}.ics`;
+    const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+    
+    console.log('[FileIO] Native download to:', fileUri);
+    
+    const downloadResult = await FileSystem.downloadAsync(url, fileUri, {
+      headers: {
+        'Accept': 'text/calendar, text/plain, application/octet-stream, */*',
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+      },
+    });
+    
+    console.log('[FileIO] Download result status:', downloadResult.status);
+    
+    if (downloadResult.status !== 200) {
+      throw new Error(`Download failed with status ${downloadResult.status}`);
+    }
+    
+    // Read the downloaded file
+    const content = await FileSystem.readAsStringAsync(fileUri);
+    console.log('[FileIO] Native download successful, length:', content.length);
+    
+    // Clean up temp file
+    await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+    
+    return { content, success: true };
+  } catch (error) {
+    console.error('[FileIO] Download error:', error);
+    return { 
+      content: '', 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown download error' 
+    };
   }
 }
 
