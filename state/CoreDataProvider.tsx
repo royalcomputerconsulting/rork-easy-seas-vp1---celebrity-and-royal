@@ -30,6 +30,111 @@ const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUI
   }
 };
 
+const getFirstTimeUserSampleData = (): { sampleCruises: BookedCruise[]; sampleOffers: CasinoOffer[] } => {
+  const today = new Date();
+  const futureDate = new Date(today);
+  futureDate.setDate(today.getDate() + 60);
+  const futureReturnDate = new Date(futureDate);
+  futureReturnDate.setDate(futureDate.getDate() + 5);
+  
+  const pastDate = new Date(today);
+  pastDate.setDate(today.getDate() - 30);
+  const pastReturnDate = new Date(pastDate);
+  pastReturnDate.setDate(pastDate.getDate() + 4);
+
+  const formatDate = (d: Date) => d.toISOString().split('T')[0];
+
+  const sampleCruises: BookedCruise[] = [
+    {
+      id: 'demo-upcoming-nowhere',
+      reservationNumber: 'DEMO123',
+      shipName: 'Demo Ship of the Seas',
+      sailDate: formatDate(futureDate),
+      returnDate: formatDate(futureReturnDate),
+      departurePort: 'Miami, Florida',
+      destination: 'Cruise to Nowhere',
+      itineraryName: '5 Night Demo Cruise to Nowhere',
+      nights: 5,
+      cabinType: 'Balcony',
+      cabinNumber: 'D100',
+      guestNames: ['Demo Guest'],
+      guests: 1,
+      status: 'booked',
+      completionState: 'upcoming',
+      ports: ['Miami, Florida', 'At Sea', 'At Sea', 'At Sea', 'At Sea'],
+      taxes: 250.00,
+      offerCode: 'DEMO25',
+      freePlay: 100,
+      freeOBC: 50,
+      cruiseSource: 'royal',
+    },
+    {
+      id: 'demo-completed-nowhere',
+      reservationNumber: 'DEMO456',
+      shipName: 'Demo Ship of the Seas',
+      sailDate: formatDate(pastDate),
+      returnDate: formatDate(pastReturnDate),
+      departurePort: 'Miami, Florida',
+      destination: 'Completed Demo Cruise',
+      itineraryName: '4 Night Completed Demo Cruise',
+      nights: 4,
+      cabinType: 'Balcony',
+      guestNames: ['Demo Guest'],
+      guests: 1,
+      status: 'completed',
+      completionState: 'completed',
+      ports: ['Miami, Florida', 'Nassau, Bahamas', 'At Sea', 'At Sea'],
+      casinoPoints: 10,
+      cruiseSource: 'royal',
+    },
+  ];
+
+  const offerExpiry = new Date(today);
+  offerExpiry.setDate(today.getDate() + 90);
+  
+  const offerSailDate = new Date(today);
+  offerSailDate.setDate(today.getDate() + 120);
+
+  const sampleOffers: CasinoOffer[] = [
+    {
+      id: 'demo-offer-1',
+      offerCode: 'DEMO2025',
+      offerName: 'Demo Casino Offer',
+      offerType: 'comped',
+      title: '7 Night Demo Caribbean Cruise',
+      description: 'This is a sample casino offer to help you explore the app. Import your real offers to see your actual deals!',
+      category: 'Comped Cruise',
+      shipName: 'Demo Ship of the Seas',
+      sailingDate: formatDate(offerSailDate),
+      itineraryName: '7 Night Demo Caribbean Cruise',
+      nights: 7,
+      ports: ['Miami, Florida', 'At Sea', 'Nassau, Bahamas', 'At Sea', 'At Sea'],
+      roomType: 'Balcony',
+      guests: 2,
+      guestsInfo: '2 Guests',
+      interiorPrice: 0,
+      oceanviewPrice: 0,
+      balconyPrice: 0,
+      suitePrice: 500,
+      taxesFees: 350,
+      freePlay: 200,
+      freeplayAmount: 200,
+      OBC: 100,
+      obcAmount: 100,
+      retailCabinValue: 2500,
+      totalValue: 3150,
+      received: formatDate(today),
+      expires: formatDate(offerExpiry),
+      expiryDate: formatDate(offerExpiry),
+      status: 'active',
+      offerSource: 'royal',
+      createdAt: new Date().toISOString(),
+    },
+  ];
+
+  return { sampleCruises, sampleOffers };
+};
+
 
 
 interface CoreDataState {
@@ -296,10 +401,19 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         finalBookedCount = enrichedBooked.length;
         setBookedCruisesState(enrichedBooked);
       } else if (isFirstTimeUser) {
-        console.log('[CoreData] First time user detected - starting with empty data');
-        finalBookedCount = 0;
-        setBookedCruisesState([]);
+        console.log('[CoreData] First time user detected - loading sample demo data');
+        const { sampleCruises, sampleOffers } = getFirstTimeUserSampleData();
+        const withItineraries = enrichCruisesWithMockItineraries(sampleCruises);
+        const withKnownRetail = applyKnownRetailValues(withItineraries);
+        const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
+        const enrichedSample = enrichCruisesWithReceiptData(withFreeplayOBC);
+        finalBookedCount = enrichedSample.length;
+        setBookedCruisesState(enrichedSample);
+        setCasinoOffersState(sampleOffers);
+        await AsyncStorage.setItem(STORAGE_KEYS.BOOKED_CRUISES, JSON.stringify(enrichedSample));
+        await AsyncStorage.setItem(STORAGE_KEYS.CASINO_OFFERS, JSON.stringify(sampleOffers));
         await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true');
+        console.log('[CoreData] Sample demo data loaded:', enrichedSample.length, 'cruises,', sampleOffers.length, 'offers');
       } else {
         console.log('[CoreData] No booked cruises, keeping empty state');
         finalBookedCount = 0;
