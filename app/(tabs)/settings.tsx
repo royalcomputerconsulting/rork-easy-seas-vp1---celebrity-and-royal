@@ -70,6 +70,7 @@ import { PlayingHoursCard } from '@/components/ui/PlayingHoursCard';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { saveMockData } from '@/lib/saveMockData';
+import { generateSampleData, SAMPLE_LOYALTY_POINTS } from '@/lib/sampleData';
 import { useAuth } from '@/state/AuthProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
@@ -551,7 +552,7 @@ export default function SettingsScreen() {
   const handleClearData = useCallback(() => {
     Alert.alert(
       'Clear All Data',
-      'Are you sure you want to delete ALL app data including:\n\n• Cruises & Offers\n• Booked Cruises\n• Calendar Events\n• Certificates\n• User Profile (Name, C&A #)\n• Club Royale Points\n• Loyalty Points\n• Settings & Preferences\n\nThis action cannot be undone.',
+      'Are you sure you want to delete ALL app data including:\n\n• Cruises & Offers\n• Booked Cruises\n• Calendar Events\n• Certificates\n• User Profile (Name, C&A #)\n• Club Royale Points\n• Loyalty Points\n• Settings & Preferences\n\nSample demo data will be added so you can explore the app.\n\nThis action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -575,16 +576,28 @@ export default function SettingsScreen() {
                   crownAnchorNumber: '',
                 });
                 
-                console.log('[Settings] Resetting loyalty points to zero...');
-                await setManualClubRoyalePoints(0);
-                await setManualCrownAnchorPoints(0);
+                console.log('[Settings] Setting loyalty points to 1 (sample data)...');
+                await setManualClubRoyalePoints(SAMPLE_LOYALTY_POINTS.clubRoyale);
+                await setManualCrownAnchorPoints(SAMPLE_LOYALTY_POINTS.crownAnchor);
+                
+                console.log('[Settings] Generating sample demo data...');
+                const sampleData = generateSampleData();
+                
+                console.log('[Settings] Populating sample cruises, offers, and events...');
+                setBookedCruises(sampleData.bookedCruises);
+                setCasinoOffers(sampleData.casinoOffers);
+                setLocalData({
+                  booked: sampleData.bookedCruises,
+                  offers: sampleData.casinoOffers,
+                  calendar: sampleData.calendarEvents,
+                });
                 
                 console.log('[Settings] Re-syncing loyalty provider from storage...');
                 await syncLoyaltyFromStorage();
                 
                 Alert.alert(
-                  'Data Cleared', 
-                  `Successfully cleared ${result.clearedKeys.length} data stores. All data has been reset to blank values.`
+                  'Data Reset Complete', 
+                  `Successfully cleared ${result.clearedKeys.length} data stores.\n\nSample demo data has been added:\n• 3 sample cruises (1 completed, 2 booked)\n• 2 sample casino offers\n• 1 sample calendar event\n• Crown & Anchor: 1 point\n• Club Royale: 1 point\n\nDelete the sample data and import your real data to get started!`
                 );
               } else {
                 Alert.alert(
@@ -600,7 +613,7 @@ export default function SettingsScreen() {
         },
       ]
     );
-  }, [clearAllData, clearLocalData, syncUserFromStorage, ensureOwner, updateUser, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncLoyaltyFromStorage]);
+  }, [clearAllData, clearLocalData, syncUserFromStorage, ensureOwner, updateUser, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncLoyaltyFromStorage, setBookedCruises, setCasinoOffers, setLocalData]);
 
 
 
