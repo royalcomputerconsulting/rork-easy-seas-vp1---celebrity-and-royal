@@ -67,7 +67,7 @@ export function LoginScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.title}>Easy Seas - Your AI Offer Agent</Text>
+            <Text style={styles.title}>Easy Seas - V1.0.0</Text>
             
             <Text style={styles.loginLabel}>Please Enter your Email Address</Text>
             
@@ -473,8 +473,8 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xxl,
   },
   logoContainer: {
-    width: width * 0.7,
-    height: height * 0.25,
+    width: width * 0.85,
+    height: height * 0.5,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.xl,
@@ -486,8 +486,8 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
     borderRadius: 20,
-    padding: SPACING.xxl,
-    paddingVertical: SPACING.xxl * 1.5,
+    padding: SPACING.xl,
+    paddingVertical: SPACING.lg,
     width: '100%',
     maxWidth: 500,
     shadowColor: '#000',
