@@ -781,8 +781,8 @@ const styles = StyleSheet.create({
   },
   centeredLogo: {
     width: '100%',
-    height: 200,
-    maxWidth: 320,
+    height: 400,
+    maxWidth: 640,
   },
   sectionHeader: {
     flexDirection: 'row',
