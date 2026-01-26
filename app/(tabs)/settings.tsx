@@ -74,6 +74,7 @@ import { generateSampleData, SAMPLE_LOYALTY_POINTS } from '@/lib/sampleData';
 import { useAuth } from '@/state/AuthProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
+import { trpc } from '@/lib/trpc';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -262,6 +263,8 @@ export default function SettingsScreen() {
     }
   }, [setCruises, setCasinoOffers, setLocalData]);
 
+  const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
+
   const handleImportCalendarFromURL = useCallback(async () => {
     try {
       setIsImporting(true);
@@ -270,7 +273,7 @@ export default function SettingsScreen() {
       
       Alert.prompt(
         'Import Calendar from URL',
-        'Enter the URL of the .ics calendar file:',
+        'Enter the URL of the .ics calendar file (TripIt, Google Calendar, etc.):',
         [
           {
             text: 'Cancel',
@@ -290,15 +293,13 @@ export default function SettingsScreen() {
               }
 
               try {
-                console.log('[Settings] Fetching ICS from URL:', url);
-                const response = await fetch(url.trim());
+                const trimmedUrl = url.trim();
+                console.log('[Settings] Fetching ICS from URL via backend proxy:', trimmedUrl);
                 
-                if (!response.ok) {
-                  throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+                const result = await fetchICSMutation.mutateAsync({ url: trimmedUrl });
+                const content = result.content;
                 
-                const content = await response.text();
-                console.log('[Settings] Fetched', content.length, 'characters');
+                console.log('[Settings] Fetched', content.length, 'characters via backend');
                 
                 const events = parseICSFile(content);
                 
@@ -339,7 +340,7 @@ export default function SettingsScreen() {
       Alert.alert('Import Error', 'Failed to start import. Please try again.');
       setIsImporting(false);
     }
-  }, [setLocalData, localData.calendar]);
+  }, [setLocalData, localData.calendar, fetchICSMutation]);
 
   const handleImportCalendarFromFile = useCallback(async () => {
     try {
