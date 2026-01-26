@@ -48,14 +48,6 @@ export function LoginScreen() {
     Linking.openURL('https://buy.stripe.com/3cIeVc4RtcXT3QH54Y0VO00');
   };
 
-  const handleFirstBookPress = () => {
-    Linking.openURL('https://www.amazon.com/Smooth-Sailing-Rough-Waters-Consistently/dp/B0G4NMSM31/ref=sr_1_1?crid=BWS5ZWAQCC46&dib=eyJ2IjoiMSJ9.pTShQ0uJgtzeHg_EAFai2a6YTAan0h_35hcv7ZH0QKfGjHj071QN20LucGBJIEps.F_tIgnCOSc3EqGF6wUtOWK_hXH-5Ti3Miy6KYQ_JaLY&dib_tag=se&keywords=smooth+sailing+in+rough+waters&qid=1766758613&s=books&sprefix=smooth+sailing+in+rough+water%2Cstripbooks%2C189&sr=1-1');
-  };
-
-  const handleSecondBookPress = () => {
-    Linking.openURL('https://www.amazon.com/dp/B0GCL69TV9');
-  };
-
   return (
     <KeyboardAvoidingView 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -77,32 +69,6 @@ export function LoginScreen() {
           <View style={styles.card}>
             <Text style={styles.title}>Welcome to EasySeas</Text>
             
-            <TouchableOpacity 
-              style={styles.bookButton}
-              onPress={handleFirstBookPress}
-            >
-              <Image
-                source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/oic7unx2zzywwvnggcltz' }}
-                style={styles.bookImage}
-                resizeMode="cover"
-              />
-              <Text style={styles.bookButtonText}>Purchase &quot;Smooth Sailing (In Rough Waters)&quot;</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.bookButton}
-              onPress={handleSecondBookPress}
-            >
-              <Image
-                source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/nwr75zec478bb6b42540i' }}
-                style={styles.bookImage}
-                resizeMode="cover"
-              />
-              <Text style={styles.bookButtonText}>Purchase &quot;Smooth Sailing in Calm Seas&quot;</Text>
-            </TouchableOpacity>
-
-            <View style={styles.divider} />
-
             <Text style={styles.loginLabel}>Please Enter your Email Address</Text>
             
             <TextInput
@@ -563,34 +529,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
   },
-  bookButton: {
-    backgroundColor: '#00A8E8',
-    borderRadius: 12,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  bookImage: {
-    width: 80,
-    height: 120,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  bookButtonText: {
-    color: COLORS.white,
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.borderLight,
-    marginVertical: SPACING.lg,
-  },
+
   loginLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold as any,
