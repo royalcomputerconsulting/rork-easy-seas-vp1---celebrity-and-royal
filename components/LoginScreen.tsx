@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Linking, Image, Dimensions, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { IMAGES } from '@/constants/images';
+
 import { useAuth } from '@/state/AuthProvider';
 
 const { width, height } = Dimensions.get('window');
@@ -16,7 +16,7 @@ export function LoginScreen() {
   const [logoError, setLogoError] = useState<boolean>(false);
   const { login } = useAuth();
 
-  console.log('Logo URL:', IMAGES.logo);
+  
   
   const isAdminEmail = email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase();
 
@@ -65,14 +65,9 @@ export function LoginScreen() {
           <View style={styles.logoContainer}>
             {!logoError ? (
               <Image 
-                source={{ uri: IMAGES.logo }}
+                source={require('@/assets/images/splash-icon.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
-                onError={(e) => {
-                  console.log('Logo failed to load:', e.nativeEvent.error);
-                  setLogoError(true);
-                }}
-                onLoad={() => console.log('Logo loaded successfully')}
               />
             ) : (
               <View style={styles.logoFallback}>
