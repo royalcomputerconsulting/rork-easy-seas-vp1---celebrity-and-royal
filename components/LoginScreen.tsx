@@ -82,7 +82,8 @@ export function LoginScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.title}>Easy Seas - V1.0.0</Text>
+            <Text style={styles.title}>Easy Seas</Text>
+            <Text style={styles.tagline}>Manage your Nautical Lifestyle</Text>
             
             <Text style={styles.loginLabel}>Please Enter your Email Address</Text>
             
@@ -141,9 +142,7 @@ export function LoginScreen() {
             <Text style={styles.aboutButtonText}>What is Easy Seas?</Text>
           </TouchableOpacity>
 
-          <Text style={styles.footer}>
-            Manage your Nautical Lifestyle
-          </Text>
+          
         </View>
       </ScrollView>
 
@@ -528,7 +527,7 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold as any,
     color: COLORS.textPrimary,
     textAlign: 'center',
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.xs,
   },
   description: {
     fontSize: TYPOGRAPHY.fontSizeMD,
@@ -622,12 +621,11 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
     textAlign: 'center',
   },
-  footer: {
-    color: COLORS.white,
+  tagline: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    marginTop: SPACING.md,
+    color: COLORS.textSecondary,
     textAlign: 'center',
-    opacity: 0.9,
+    marginBottom: SPACING.lg,
   },
   modalContainer: {
     flex: 1,

@@ -566,6 +566,7 @@ export default function OfferDetailsScreen() {
           data={offerData.cruises}
           renderItem={renderCruiseCard}
           keyExtractor={(item) => item.id}
+          extraData={sortBy}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
