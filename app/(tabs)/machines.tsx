@@ -12,6 +12,7 @@ import {
   View,
   Image,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
@@ -381,7 +382,7 @@ export default function AtlasScreen() {
         </View>
 
         <View style={styles.header}>
-          <Text style={styles.title}>Slot Machine AP Play</Text>
+          <Text style={styles.title}>Slot Machine Advantage Players Handbook</Text>
           <Text style={styles.subtitle}>
             {filteredMachines.length} machine{filteredMachines.length !== 1 ? 's' : ''}
           </Text>
@@ -604,7 +605,12 @@ export default function AtlasScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <LinearGradient
+          colors={['#1E3A8A', '#60A5FA', '#E8F4FC']}
+          locations={[0, 0.5, 1]}
+          style={styles.gradientContainer}
+        >
+        <SafeAreaView style={styles.container} edges={['top']}>
         <View
           style={styles.listShell}
           onLayout={(e) => {
@@ -733,6 +739,8 @@ export default function AtlasScreen() {
         </View>
       </SafeAreaView>
 
+      </LinearGradient>
+
       <EditMachineSessionModal
         visible={editingSession !== null}
         session={editingSession}
@@ -747,9 +755,12 @@ export default function AtlasScreen() {
 }
 
 const styles = StyleSheet.create({
+  gradientContainer: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#E8F4FC',
+    backgroundColor: 'transparent',
   },
 
   listShell: {
@@ -905,8 +916,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   logoHeaderImage: {
-    width: 80,
-    height: 80,
+    width: 160,
+    height: 160,
   },
   logoHeaderTextContainer: {
     marginLeft: SPACING.md,
@@ -935,7 +946,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   title: {
-    fontSize: 28,
+    fontSize: 14,
     fontWeight: '700' as const,
     color: COLORS.navyDeep,
     marginBottom: 4,
