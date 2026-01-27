@@ -15,8 +15,28 @@ import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbea
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectUpcomingCruisesExtraction } from '@/lib/royalCaribbean/step2_upcoming';
 import { injectCourtesyHoldsExtraction } from '@/lib/royalCaribbean/step3_holds';
-import { injectLoyaltyExtraction } from '@/lib/royalCaribbean/step4_loyalty';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
+
+export type CruiseLine = 'royal_caribbean' | 'celebrity';
+
+export const CRUISE_LINE_CONFIG = {
+  royal_caribbean: {
+    name: 'Royal Caribbean',
+    loginUrl: 'https://www.royalcaribbean.com/club-royale',
+    offersUrl: 'https://www.royalcaribbean.com/club-royale/offers',
+    upcomingUrl: 'https://www.royalcaribbean.com/account/upcoming-cruises',
+    holdsUrl: 'https://www.royalcaribbean.com/account/courtesy-holds',
+    loyaltyClubName: 'Club Royale',
+  },
+  celebrity: {
+    name: 'Celebrity Cruises',
+    loginUrl: 'https://www.celebritycruises.com/blue-chip-club/offers',
+    offersUrl: 'https://www.celebritycruises.com/blue-chip-club/offers',
+    upcomingUrl: 'https://www.celebritycruises.com/account/upcoming-cruises',
+    holdsUrl: 'https://www.celebritycruises.com/account/courtesy-holds',
+    loyaltyClubName: 'Blue Chip Club',
+  }
+} as const;
 
 const INITIAL_STATE: RoyalCaribbeanSyncState = {
   status: 'not_logged_in',
@@ -33,12 +53,17 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
   scrapePricingAndItinerary: true
 };
 
+const DEFAULT_CRUISE_LINE: CruiseLine = 'royal_caribbean';
+
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
   console.log('[RoyalCaribbeanSync] Provider initializing...');
   const [state, setState] = useState<RoyalCaribbeanSyncState>(INITIAL_STATE);
+  const [cruiseLine, setCruiseLine] = useState<CruiseLine>(DEFAULT_CRUISE_LINE);
   const webViewRef = useRef<WebView | null>(null);
   const stepCompleteResolvers = useRef<{ [key: number]: () => void }>({});
   const progressCallbacks = useRef<{ onProgress?: () => void }>({});
+  
+  const config = CRUISE_LINE_CONFIG[cruiseLine];
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     rcLogger.log(message, type);
@@ -149,11 +174,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const openLogin = useCallback(() => {
     if (webViewRef.current) {
       webViewRef.current.injectJavaScript(`
-        window.location.href = 'https://www.royalcaribbean.com/club-royale';
+        window.location.href = '${config.loginUrl}';
       `);
-      addLog('Navigating to Club Royale page', 'info');
+      addLog(`Navigating to ${config.loyaltyClubName} page`, 'info');
     }
-  }, [addLog]);
+  }, [addLog, config]);
 
   const runIngestion = useCallback(async () => {
     if (state.status !== 'logged_in') {
@@ -215,7 +240,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     };
     
     try {
-      addLog('Step 1: Extracting offers from Club Royale page...', 'info');
+      addLog(`Step 1: Extracting offers from ${config.loyaltyClubName} page...`, 'info');
       addLog('Loading Offers Page...', 'info');
       addLog('⏱️ Offers may take several minutes with large datasets - using chunked processing', 'info');
       
@@ -232,7 +257,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       try {
         if (webViewRef.current) {
           webViewRef.current.injectJavaScript(`
-            window.location.href = 'https://www.royalcaribbean.com/account/upcoming-cruises';
+            window.location.href = '${config.upcomingUrl}';
             true;
           `);
           
@@ -253,7 +278,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       try {
         if (webViewRef.current) {
           webViewRef.current.injectJavaScript(`
-            window.location.href = 'https://www.royalcaribbean.com/account/courtesy-holds';
+            window.location.href = '${config.holdsUrl}';
             true;
           `);
           
@@ -318,7 +343,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, state.scrapePricingAndItinerary, addLog]);
+  }, [state.status, state.scrapePricingAndItinerary, addLog, config]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
@@ -471,6 +496,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   return {
     state,
     webViewRef,
+    cruiseLine,
+    setCruiseLine,
+    config,
     openLogin,
     runIngestion,
     exportOffersCSV,

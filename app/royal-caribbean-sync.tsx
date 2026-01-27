@@ -1,10 +1,10 @@
-import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Switch } from 'react-native';
 import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download, Anchor } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -15,16 +15,19 @@ function RoyalCaribbeanSyncScreen() {
   const {
     state,
     webViewRef,
+    cruiseLine,
+    setCruiseLine,
+    config,
     openLogin,
     runIngestion,
-    exportOffersCSV,
-    exportBookedCruisesCSV,
     exportLog,
-    resetState,
     syncToApp,
     cancelSync,
     handleWebViewMessage
   } = useRoyalCaribbeanSync();
+  
+  const isCelebrity = cruiseLine === 'celebrity';
+  const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
 
   const [webViewVisible, setWebViewVisible] = useState(true);
 
@@ -137,7 +140,6 @@ function RoyalCaribbeanSyncScreen() {
   };
 
   const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
-  const canExport = state.status === 'complete' || state.status === 'awaiting_confirmation';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
 
@@ -151,13 +153,39 @@ function RoyalCaribbeanSyncScreen() {
     <>
       <Stack.Screen 
         options={{
-          title: 'Royal Caribbean Sync',
+          title: isCelebrity ? 'Celebrity Cruises Sync' : 'Royal Caribbean Sync',
           headerStyle: { backgroundColor: '#0f172a' },
           headerTintColor: '#fff'
         }}
       />
       
       <View style={styles.container}>
+        <View style={styles.cruiseLineToggleContainer}>
+          <View style={styles.cruiseLineOption}>
+            <Anchor size={18} color={!isCelebrity ? '#60a5fa' : '#64748b'} />
+            <Text style={[styles.cruiseLineLabel, !isCelebrity && styles.cruiseLineLabelActive]}>
+              Royal Caribbean
+            </Text>
+          </View>
+          <Switch
+            value={isCelebrity}
+            onValueChange={(value) => {
+              if (!isRunningOrSyncing) {
+                setCruiseLine(value ? 'celebrity' : 'royal_caribbean');
+              }
+            }}
+            disabled={isRunningOrSyncing}
+            trackColor={{ false: '#1e40af', true: '#065f46' }}
+            thumbColor={isCelebrity ? '#10b981' : '#3b82f6'}
+          />
+          <View style={styles.cruiseLineOption}>
+            <Ship size={18} color={isCelebrity ? '#10b981' : '#64748b'} />
+            <Text style={[styles.cruiseLineLabel, isCelebrity && styles.cruiseLineLabelCelebrity]}>
+              Celebrity
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.logsContainerTop}>
           <View style={styles.logsHeaderRow}>
             <Text style={styles.logsTitle}>Sync Log</Text>
@@ -203,7 +231,7 @@ function RoyalCaribbeanSyncScreen() {
                   webViewRef.current = ref;
                 }
               }}
-              source={{ uri: 'https://www.royalcaribbean.com/club-royale' }}
+              source={{ uri: config.loginUrl }}
               style={styles.webView}
               onMessage={onMessage}
               javaScriptEnabled={true}
@@ -280,7 +308,7 @@ function RoyalCaribbeanSyncScreen() {
                     <Text style={styles.countNumber}>
                       {state.syncCounts?.offerRows || 0} sailings
                     </Text>
-                    <Text style={styles.countLabel}>Club Royale Offers</Text>
+                    <Text style={styles.countLabel}>{config.loyaltyClubName} Offers</Text>
                     {state.syncCounts && state.syncCounts.offerRows > 0 && (
                       <Text style={styles.countDetail}>
                         {state.syncCounts.offerCount} unique offer{state.syncCounts.offerCount !== 1 ? 's' : ''}
@@ -758,6 +786,39 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 12,
     lineHeight: 16
+  },
+  cruiseLineToggleContainer: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155'
+  },
+  cruiseLineOption: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    flex: 1
+  },
+  cruiseLineLabel: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '500' as const
+  },
+  cruiseLineLabelActive: {
+    color: '#60a5fa',
+    fontWeight: '600' as const
+  },
+  cruiseLineLabelCelebrity: {
+    color: '#10b981',
+    fontWeight: '600' as const
   }
 });
 
