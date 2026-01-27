@@ -436,7 +436,7 @@ function OverviewScreenContent() {
       />
 
       <CollapsibleSection
-        title="Agent X Analysis"
+        title="AI Analysis"
         subtitle="Performance insights"
         icon={<Bot size={18} color="#FFFFFF" />}
         defaultExpanded={true}

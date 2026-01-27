@@ -174,7 +174,7 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
                   <Bot size={18} color="#FFFFFF" />
                 </View>
                 <View>
-                  <Text style={styles.title}>Agent X Analysis</Text>
+                  <Text style={styles.title}>AI Analysis</Text>
                   <Text style={styles.subtitle}>No Recent Data</Text>
                 </View>
               </View>
@@ -222,7 +222,7 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
                 <Bot size={18} color="#FFFFFF" />
               </View>
               <View>
-                <Text style={styles.title}>Agent X Analysis</Text>
+                <Text style={styles.title}>AI Analysis</Text>
                 <Text style={styles.subtitle}>
                   {analysis.totalBookedCount} Total • {analysis.cruiseCount} Completed • {analysis.totalPoints.toLocaleString()} Points
                 </Text>

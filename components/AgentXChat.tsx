@@ -64,7 +64,7 @@ export function AgentXChat({
   onToggleExpand,
   onClose,
   showHeader = true,
-  placeholder = 'Ask Agent X anything about cruises...',
+  placeholder = 'Ask about cruises, tier progress, offers...',
 }: AgentXChatProps) {
   const [inputText, setInputText] = useState('');
   const insets = useSafeAreaInsets();
@@ -173,7 +173,7 @@ export function AgentXChat({
         </LinearGradient>
       </View>
       
-      <Text style={styles.welcomeTitle}>Agent X</Text>
+      <Text style={styles.welcomeTitle}>AI Analysis</Text>
       <Text style={styles.welcomeSubtitle}>
         Your intelligent cruise advisor. Ask me anything about cruises, offers, tier progress, or portfolio optimization.
       </Text>
@@ -223,7 +223,7 @@ export function AgentXChat({
                 <Bot size={20} color={COLORS.white} />
               </View>
               <View>
-                <Text style={styles.headerTitle}>Agent X</Text>
+                <Text style={styles.headerTitle}>AI Analysis</Text>
                 <Text style={styles.headerSubtitle}>Cruise Intelligence</Text>
               </View>
             </View>
@@ -300,7 +300,7 @@ export function AgentXChat({
         </View>
         
         <Text style={styles.disclaimer}>
-          Agent X uses AI to provide cruise recommendations. Verify important details.
+          AI Analysis provides cruise recommendations. Verify important details.
         </Text>
       </View>
     </KeyboardAvoidingView>
