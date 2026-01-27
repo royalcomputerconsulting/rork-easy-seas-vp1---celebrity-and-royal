@@ -1050,7 +1050,17 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
-        <CasinoIntelligenceCard analytics={sessionAnalytics} />
+        <CasinoIntelligenceCard 
+          analytics={sessionAnalytics} 
+          completedCruises={bookedCruises.filter(c => {
+            if (c.completionState === 'completed' || c.status === 'completed') return true;
+            if (c.returnDate) {
+              const returnDate = new Date(c.returnDate);
+              return returnDate < new Date();
+            }
+            return false;
+          })}
+        />
       </View>
 
       <View style={styles.sessionStatsSection}>

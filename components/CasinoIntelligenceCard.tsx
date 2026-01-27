@@ -19,11 +19,25 @@ import {
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import type { SessionAnalytics, MachineType } from '@/state/CasinoSessionProvider';
+import type { BookedCruise } from '@/types/models';
 
 
 interface CasinoIntelligenceCardProps {
   analytics: SessionAnalytics;
   onViewDetails?: () => void;
+  completedCruises?: BookedCruise[];
+}
+
+interface CruiseBasedMetrics {
+  totalWinLoss: number;
+  totalPointsEarned: number;
+  totalHoursPlayed: number;
+  totalTheoreticalLoss: number;
+  cruiseCount: number;
+  avgWinLossPerCruise: number;
+  avgPointsPerCruise: number;
+  valueVsTimeRatio: number;
+  predictiveScore: number;
 }
 
 const MACHINE_TYPE_LABELS: Record<MachineType, string> = {
@@ -56,26 +70,32 @@ const MACHINE_HOUSE_EDGES: Record<MachineType, number> = {
   'other': 0.08,
 };
 
-function HouseEdgeSection({ analytics }: { analytics: SessionAnalytics }) {
-  const { theoreticalVsActual } = analytics;
+function HouseEdgeSection({ analytics, cruiseMetrics }: { analytics: SessionAnalytics; cruiseMetrics?: CruiseBasedMetrics }) {
+  const theoreticalLoss = cruiseMetrics?.totalTheoreticalLoss || analytics.theoreticalVsActual.theoreticalLoss;
+  const actualResult = cruiseMetrics?.totalWinLoss ?? analytics.netWinLoss;
+  const variance = actualResult - (-theoreticalLoss);
+  const isRunningHot = variance > theoreticalLoss * 0.2;
+  const isRunningCold = variance < -theoreticalLoss * 0.2;
   
-  const statusIcon = theoreticalVsActual.isRunningHot 
+  const statusIcon = isRunningHot 
     ? Flame 
-    : theoreticalVsActual.isRunningCold 
+    : isRunningCold 
       ? Snowflake 
       : CheckCircle;
   
-  const statusColor = theoreticalVsActual.isRunningHot 
+  const statusColor = isRunningHot 
     ? '#F59E0B' 
-    : theoreticalVsActual.isRunningCold 
+    : isRunningCold 
       ? '#3B82F6' 
       : '#10B981';
   
-  const statusText = theoreticalVsActual.isRunningHot 
+  const statusText = isRunningHot 
     ? 'Running Hot!' 
-    : theoreticalVsActual.isRunningCold 
+    : isRunningCold 
       ? 'Running Cold' 
       : 'Normal Variance';
+
+  const sourceText = cruiseMetrics ? `Based on ${cruiseMetrics.cruiseCount} cruise${cruiseMetrics.cruiseCount !== 1 ? 's' : ''}` : 'Based on 8% avg edge';
 
   return (
     <View style={styles.section}>
@@ -90,18 +110,18 @@ function HouseEdgeSection({ analytics }: { analytics: SessionAnalytics }) {
         <View style={styles.edgeCard}>
           <Text style={styles.edgeLabel}>Theoretical Loss</Text>
           <Text style={styles.edgeValue}>
-            {formatCurrency(theoreticalVsActual.theoreticalLoss)}
+            {formatCurrency(theoreticalLoss)}
           </Text>
-          <Text style={styles.edgeSubtext}>Based on 8% avg edge</Text>
+          <Text style={styles.edgeSubtext}>{sourceText}</Text>
         </View>
         
         <View style={styles.edgeCard}>
           <Text style={styles.edgeLabel}>Actual Result</Text>
           <Text style={[
             styles.edgeValue,
-            { color: analytics.netWinLoss >= 0 ? COLORS.success : COLORS.error }
+            { color: actualResult >= 0 ? COLORS.success : COLORS.error }
           ]}>
-            {analytics.netWinLoss >= 0 ? '+' : ''}{formatCurrency(analytics.netWinLoss)}
+            {actualResult >= 0 ? '+' : ''}{formatCurrency(actualResult)}
           </Text>
           <Text style={styles.edgeSubtext}>Your real outcome</Text>
         </View>
@@ -112,10 +132,10 @@ function HouseEdgeSection({ analytics }: { analytics: SessionAnalytics }) {
         <View style={styles.statusContent}>
           <Text style={[styles.statusTitle, { color: statusColor }]}>{statusText}</Text>
           <Text style={styles.statusDescription}>
-            {theoreticalVsActual.isRunningHot 
-              ? `You're ${formatCurrency(Math.abs(theoreticalVsActual.variance))} ahead of expected!`
-              : theoreticalVsActual.isRunningCold
-                ? `You're ${formatCurrency(Math.abs(theoreticalVsActual.variance))} behind expected`
+            {isRunningHot 
+              ? `You're ${formatCurrency(Math.abs(variance))} ahead of expected!`
+              : isRunningCold
+                ? `You're ${formatCurrency(Math.abs(variance))} behind expected`
                 : 'Results are within normal variance range'}
           </Text>
         </View>
@@ -338,13 +358,15 @@ function WinRateSection({ analytics }: { analytics: SessionAnalytics }) {
   );
 }
 
-function PointsEfficiencySection({ analytics }: { analytics: SessionAnalytics }) {
-  const hoursPlayed = analytics.totalPlayTimeMinutes / 60;
-  const efficiency = analytics.pointsPerHour > 50 
+function PointsEfficiencySection({ analytics, cruiseMetrics }: { analytics: SessionAnalytics; cruiseMetrics?: CruiseBasedMetrics }) {
+  const hoursPlayed = cruiseMetrics?.totalHoursPlayed || (analytics.totalPlayTimeMinutes / 60);
+  const totalPointsEarned = cruiseMetrics?.totalPointsEarned || analytics.totalPointsEarned;
+  const pointsPerHour = hoursPlayed > 0 ? totalPointsEarned / hoursPlayed : analytics.pointsPerHour;
+  const efficiency = pointsPerHour > 50 
     ? 'Excellent' 
-    : analytics.pointsPerHour > 25 
+    : pointsPerHour > 25 
       ? 'Good' 
-      : analytics.pointsPerHour > 10 
+      : pointsPerHour > 10 
         ? 'Average' 
         : 'Low';
   
@@ -370,7 +392,7 @@ function PointsEfficiencySection({ analytics }: { analytics: SessionAnalytics })
           <View style={styles.efficiencyCircle}>
             <Award size={24} color={efficiencyColor} />
             <Text style={[styles.efficiencyValue, { color: efficiencyColor }]}>
-              {analytics.pointsPerHour.toFixed(1)}
+              {pointsPerHour.toFixed(1)}
             </Text>
             <Text style={styles.efficiencyUnit}>pts/hr</Text>
           </View>
@@ -394,7 +416,7 @@ function PointsEfficiencySection({ analytics }: { analytics: SessionAnalytics })
         
         <View style={styles.efficiencyStats}>
           <View style={styles.efficiencyStat}>
-            <Text style={styles.efficiencyStatValue}>{formatNumber(analytics.totalPointsEarned)}</Text>
+            <Text style={styles.efficiencyStatValue}>{formatNumber(totalPointsEarned)}</Text>
             <Text style={styles.efficiencyStatLabel}>Total Points</Text>
           </View>
           <View style={styles.efficiencyStatDivider} />
@@ -404,8 +426,8 @@ function PointsEfficiencySection({ analytics }: { analytics: SessionAnalytics })
           </View>
           <View style={styles.efficiencyStatDivider} />
           <View style={styles.efficiencyStat}>
-            <Text style={styles.efficiencyStatValue}>{formatCurrency(analytics.avgBuyIn)}</Text>
-            <Text style={styles.efficiencyStatLabel}>Avg Buy-In</Text>
+            <Text style={styles.efficiencyStatValue}>{cruiseMetrics ? `${cruiseMetrics.cruiseCount} cruises` : formatCurrency(analytics.avgBuyIn)}</Text>
+            <Text style={styles.efficiencyStatLabel}>{cruiseMetrics ? 'Data Source' : 'Avg Buy-In'}</Text>
           </View>
         </View>
       </View>
@@ -413,8 +435,53 @@ function PointsEfficiencySection({ analytics }: { analytics: SessionAnalytics })
   );
 }
 
-export function CasinoIntelligenceCard({ analytics, onViewDetails }: CasinoIntelligenceCardProps) {
-  if (analytics.totalSessions === 0) {
+export function CasinoIntelligenceCard({ analytics, onViewDetails, completedCruises }: CasinoIntelligenceCardProps) {
+  const cruiseMetrics = useMemo((): CruiseBasedMetrics | undefined => {
+    if (!completedCruises || completedCruises.length === 0) return undefined;
+    
+    const cruisesWithData = completedCruises.filter(c => {
+      const hasWinnings = c.winnings !== undefined;
+      const hasPoints = (c.earnedPoints !== undefined && c.earnedPoints > 0) || 
+                       (c.casinoPoints !== undefined && c.casinoPoints > 0);
+      return hasWinnings || hasPoints;
+    });
+    
+    if (cruisesWithData.length === 0) return undefined;
+    
+    const totalWinLoss = cruisesWithData.reduce((sum, c) => sum + (c.winnings || 0), 0);
+    const totalPointsEarned = cruisesWithData.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
+    const totalHoursPlayed = cruisesWithData.reduce((sum, c) => sum + (c.hoursPlayed || (c.nights || 0) * 4), 0);
+    
+    const totalTheoreticalLoss = cruisesWithData.reduce((sum, c) => {
+      if (c.theoreticalLoss) return sum + c.theoreticalLoss;
+      const estimatedCoinIn = (c.actualSpend || 0) * 5;
+      return sum + (estimatedCoinIn * 0.08);
+    }, 0);
+    
+    const cruiseCount = cruisesWithData.length;
+    const avgWinLossPerCruise = cruiseCount > 0 ? totalWinLoss / cruiseCount : 0;
+    const avgPointsPerCruise = cruiseCount > 0 ? totalPointsEarned / cruiseCount : 0;
+    const valueVsTimeRatio = totalHoursPlayed > 0 ? totalPointsEarned / totalHoursPlayed : 0;
+    
+    const winningCruises = cruisesWithData.filter(c => (c.winnings || 0) > 0).length;
+    const winRate = cruiseCount > 0 ? (winningCruises / cruiseCount) * 100 : 0;
+    const consistencyFactor = Math.min(cruiseCount / 5, 1);
+    const predictiveScore = (winRate * 0.4) + (valueVsTimeRatio * 0.3) + (consistencyFactor * 30);
+    
+    return {
+      totalWinLoss,
+      totalPointsEarned,
+      totalHoursPlayed,
+      totalTheoreticalLoss,
+      cruiseCount,
+      avgWinLossPerCruise,
+      avgPointsPerCruise,
+      valueVsTimeRatio,
+      predictiveScore,
+    };
+  }, [completedCruises]);
+
+  if (analytics.totalSessions === 0 && !cruiseMetrics) {
     return (
       <View style={styles.emptyContainer}>
         <LinearGradient
@@ -454,10 +521,51 @@ export function CasinoIntelligenceCard({ analytics, onViewDetails }: CasinoIntel
       </View>
 
       <View style={styles.content}>
-        <HouseEdgeSection analytics={analytics} />
+        <HouseEdgeSection analytics={analytics} cruiseMetrics={cruiseMetrics} />
         <VarianceSection analytics={analytics} />
         <WinRateSection analytics={analytics} />
-        <PointsEfficiencySection analytics={analytics} />
+        <PointsEfficiencySection analytics={analytics} cruiseMetrics={cruiseMetrics} />
+        
+        {cruiseMetrics && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                <TrendingUp size={16} color="#10B981" />
+              </View>
+              <Text style={styles.sectionTitle}>Predictive Score Factors</Text>
+            </View>
+            
+            <View style={styles.predictiveGrid}>
+              <View style={styles.predictiveCard}>
+                <Text style={styles.predictiveLabel}>Value vs Time</Text>
+                <Text style={styles.predictiveValue}>{cruiseMetrics.valueVsTimeRatio.toFixed(1)}</Text>
+                <Text style={styles.predictiveSubtext}>pts/hour played</Text>
+              </View>
+              
+              <View style={styles.predictiveCard}>
+                <Text style={styles.predictiveLabel}>Avg Win/Loss</Text>
+                <Text style={[
+                  styles.predictiveValue,
+                  { color: cruiseMetrics.avgWinLossPerCruise >= 0 ? COLORS.success : COLORS.error }
+                ]}>
+                  {cruiseMetrics.avgWinLossPerCruise >= 0 ? '+' : ''}{formatCurrency(cruiseMetrics.avgWinLossPerCruise)}
+                </Text>
+                <Text style={styles.predictiveSubtext}>per cruise</Text>
+              </View>
+              
+              <View style={styles.predictiveCard}>
+                <Text style={styles.predictiveLabel}>Predictive Score</Text>
+                <Text style={[
+                  styles.predictiveValue,
+                  { color: cruiseMetrics.predictiveScore >= 50 ? COLORS.success : cruiseMetrics.predictiveScore >= 30 ? '#F59E0B' : COLORS.error }
+                ]}>
+                  {cruiseMetrics.predictiveScore.toFixed(0)}
+                </Text>
+                <Text style={styles.predictiveSubtext}>out of 100</Text>
+              </View>
+            </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -856,5 +964,31 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  predictiveGrid: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  predictiveCard: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    alignItems: 'center',
+  },
+  predictiveLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  predictiveValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#1E293B',
+  },
+  predictiveSubtext: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    marginTop: 2,
   },
 });

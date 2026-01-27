@@ -27,6 +27,7 @@ import {
 } from 'lucide-react-native';
 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
+import { IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { useAuth } from '@/state/AuthProvider';
@@ -409,7 +410,7 @@ function OverviewScreenContent() {
       {/* Centered Logo at half splash size */}
       <View style={styles.centeredLogoContainer}>
         <Image
-          source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/drzllmgo03ok1wemgb3s9' }}
+          source={{ uri: IMAGES.logo }}
           style={styles.centeredLogo}
           resizeMode="contain"
         />
@@ -777,12 +778,13 @@ const styles = StyleSheet.create({
   },
   centeredLogoContainer: {
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.sm,
   },
   centeredLogo: {
     width: '100%',
-    height: 400,
-    maxWidth: 640,
+    height: 160,
+    maxWidth: 400,
   },
   sectionHeader: {
     flexDirection: 'row',

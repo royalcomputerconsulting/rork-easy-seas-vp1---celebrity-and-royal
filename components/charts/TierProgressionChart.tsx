@@ -50,11 +50,20 @@ export function TierProgressionChart({
     const chartWidth = SCREEN_WIDTH - SPACING.md * 4 - CHART_PADDING * 2;
     const chartHeight = CHART_HEIGHT - CHART_PADDING * 2;
 
+    const logScale = (value: number, max: number): number => {
+      if (value <= 0) return 0;
+      const minLog = Math.log10(100);
+      const maxLog = Math.log10(Math.max(max, 100001));
+      const valueLog = Math.log10(Math.max(value, 100));
+      return (valueLog - minLog) / (maxLog - minLog);
+    };
+
     const points: { x: number; y: number; month: number; pointValue: number; tier: string }[] = [];
 
     projections.forEach((proj, index) => {
       const x = (index / (projections.length - 1)) * chartWidth + CHART_PADDING;
-      const y = chartHeight - (proj.points / maxPoints) * chartHeight + CHART_PADDING;
+      const normalizedY = logScale(proj.points, maxPoints);
+      const y = chartHeight - normalizedY * chartHeight + CHART_PADDING;
       points.push({
         x,
         y,
@@ -66,7 +75,8 @@ export function TierProgressionChart({
 
     const tierLines = TIER_ORDER.slice(1).map((tier) => {
       const threshold = CLUB_ROYALE_TIERS[tier].threshold;
-      const y = chartHeight - (threshold / maxPoints) * chartHeight + CHART_PADDING;
+      const normalizedY = logScale(threshold, maxPoints);
+      const y = chartHeight - normalizedY * chartHeight + CHART_PADDING;
       return {
         tier,
         y,
