@@ -622,7 +622,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   tagline: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
     color: COLORS.textSecondary,
     textAlign: 'center',
     marginBottom: SPACING.lg,
