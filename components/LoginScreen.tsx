@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   tagline: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold as any,
     color: COLORS.textSecondary,
     textAlign: 'center',
