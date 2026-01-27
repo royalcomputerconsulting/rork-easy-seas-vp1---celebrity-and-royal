@@ -10,11 +10,13 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Database, Search, X, Star, Ship, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
-import { COLORS } from '@/constants/theme';
+import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions, type CasinoSession } from '@/state/CasinoSessionProvider';
 import { AtlasCard } from '@/components/AtlasCard';
@@ -335,7 +337,7 @@ export default function AtlasScreen() {
     }
   }, [myAtlasMachines]);
 
-  const hasActiveFilters = searchQuery || activeFilter !== 'all' || selectedManufacturer || selectedShip;
+  const hasActiveFilters = searchQuery || activeFilter !== 'all';
 
   const [uiError, setUiError] = useState<string | null>(null);
 
@@ -366,8 +368,20 @@ export default function AtlasScreen() {
   const listHeader = useMemo(() => {
     return (
       <>
+        <View style={styles.logoHeaderContainer}>
+          <Image
+            source={{ uri: IMAGES.logo }}
+            style={styles.logoHeaderImage}
+            resizeMode="contain"
+          />
+          <View style={styles.logoHeaderTextContainer}>
+            <Text style={styles.logoHeaderTitle}>Easy Seas™</Text>
+            <Text style={styles.logoHeaderSubtitle}>Manage your Nautical Lifestyle™</Text>
+          </View>
+        </View>
+
         <View style={styles.header}>
-          <Text style={styles.title}>Atlas</Text>
+          <Text style={styles.title}>Slot Machine AP Play</Text>
           <Text style={styles.subtitle}>
             {filteredMachines.length} machine{filteredMachines.length !== 1 ? 's' : ''}
           </Text>
@@ -410,7 +424,7 @@ export default function AtlasScreen() {
               activeOpacity={0.7}
               testID="machines.sessions.toggle"
             >
-              <Text style={styles.sectionToggleText}>Machine Sessions</Text>
+              <Text style={styles.sectionToggleText}>Slot Play Sessions</Text>
               {showSessionsSection ? (
                 <ChevronUp size={20} color={COLORS.navyDeep} />
               ) : (
@@ -466,8 +480,6 @@ export default function AtlasScreen() {
             data={[
               { key: 'all' as const },
               { key: 'favorites' as const },
-              ...manufacturers.slice(0, 4).map((mfr) => ({ key: `mfr:${mfr}` as const, mfr })),
-              ...ships.slice(0, 3).map((ship) => ({ key: `ship:${ship}` as const, ship })),
               ...(hasActiveFilters ? [{ key: 'clear' as const }] : []),
             ]}
             horizontal
@@ -555,43 +567,6 @@ export default function AtlasScreen() {
                   >
                     <X size={14} color={COLORS.white} />
                     <Text style={[styles.filterChipText, styles.filterChipTextActive]}>Clear</Text>
-                  </TouchableOpacity>
-                );
-              }
-
-              if ('mfr' in item && item.mfr) {
-                const isSelected = selectedManufacturer === item.mfr;
-                return (
-                  <TouchableOpacity
-                    style={[styles.filterChip, isSelected && styles.filterChipActive]}
-                    onPress={() => {
-                      setSelectedManufacturer(item.mfr as SlotManufacturer);
-                      setActiveFilter('all');
-                      setSelectedShip('');
-                    }}
-                    activeOpacity={0.7}
-                    testID={`machines.filter.mfr.${item.mfr}`}
-                  >
-                    <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>{item.mfr}</Text>
-                  </TouchableOpacity>
-                );
-              }
-
-              if ('ship' in item && item.ship) {
-                const isSelected = selectedShip === item.ship;
-                return (
-                  <TouchableOpacity
-                    style={[styles.filterChip, isSelected && styles.filterChipActive]}
-                    onPress={() => {
-                      setSelectedShip(item.ship);
-                      setActiveFilter('all');
-                      setSelectedManufacturer('');
-                    }}
-                    activeOpacity={0.7}
-                    testID={`machines.filter.ship.${item.ship}`}
-                  >
-                    <Ship size={14} color={isSelected ? COLORS.white : COLORS.navyDeep} />
-                    <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>{item.ship}</Text>
                   </TouchableOpacity>
                 );
               }
@@ -774,7 +749,7 @@ export default function AtlasScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.bgSecondary,
+    backgroundColor: '#0A1628',
   },
 
   listShell: {
@@ -877,7 +852,7 @@ const styles = StyleSheet.create({
 
   sessionsSection: {
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 0,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -890,12 +865,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
   },
   addSessionButton: {
     backgroundColor: COLORS.money,
@@ -924,13 +897,45 @@ const styles = StyleSheet.create({
   sessionsContent: {
     marginBottom: 16,
   },
+  logoHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.sm,
+    paddingHorizontal: 20,
+  },
+  logoHeaderImage: {
+    width: 80,
+    height: 80,
+  },
+  logoHeaderTextContainer: {
+    marginLeft: SPACING.md,
+    flex: 1,
+  },
+  logoHeaderTitle: {
+    fontSize: 24,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  logoHeaderSubtitle: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+    letterSpacing: 0.3,
+  },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 16,
     paddingBottom: 16,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: BORDER_RADIUS.lg,
+    marginHorizontal: 20,
+    marginBottom: SPACING.md,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700' as const,
     color: COLORS.navyDeep,
     marginBottom: 4,
@@ -947,13 +952,11 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
   },
   searchInput: {
     flex: 1,
@@ -961,7 +964,7 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
   },
   filtersContainer: {
-    backgroundColor: COLORS.bgSecondary,
+    backgroundColor: 'transparent',
     paddingBottom: 12,
     zIndex: 10,
   },
@@ -973,9 +976,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
@@ -1004,6 +1005,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: BORDER_RADIUS.lg,
+    marginHorizontal: 20,
   },
   emptyText: {
     marginTop: 16,
@@ -1049,9 +1053,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     borderRadius: 12,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    backgroundColor: 'rgba(255,255,255,0.95)',
   },
   initialLoadingText: {
     fontSize: 14,
