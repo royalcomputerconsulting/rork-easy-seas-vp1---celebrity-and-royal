@@ -440,7 +440,7 @@ export default function EventsScreen() {
                 />
               </View>
               <View style={styles.heroTextSection}>
-                <Text style={styles.heroTitle}>Easy Seas</Text>
+                <Text style={styles.heroTitle}>Easy Seas™</Text>
                 <Text style={styles.heroSubtitle}>Manage Your Nautical Lifestyle</Text>
                 <View style={styles.tierBadgesRow}>
                   <TierBadgeGroup 
