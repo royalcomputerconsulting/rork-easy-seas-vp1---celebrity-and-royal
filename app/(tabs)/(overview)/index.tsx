@@ -407,13 +407,17 @@ function OverviewScreenContent() {
 
   const renderHeader = () => (
     <View style={styles.headerContent}>
-      {/* Centered Logo at half splash size */}
-      <View style={styles.centeredLogoContainer}>
+      {/* Logo with branding text */}
+      <View style={styles.logoHeaderContainer}>
         <Image
           source={{ uri: IMAGES.logo }}
-          style={styles.centeredLogo}
+          style={styles.logoHeaderImage}
           resizeMode="contain"
         />
+        <View style={styles.logoHeaderTextContainer}>
+          <Text style={styles.logoHeaderTitle}>Easy Seas™</Text>
+          <Text style={styles.logoHeaderSubtitle}>Manage your Nautical Lifestyle™</Text>
+        </View>
       </View>
 
       <CompactDashboardHeader
@@ -785,6 +789,34 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 160,
     maxWidth: 400,
+  },
+  logoHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+  },
+  logoHeaderImage: {
+    width: 80,
+    height: 80,
+  },
+  logoHeaderTextContainer: {
+    marginLeft: SPACING.md,
+    flex: 1,
+  },
+  logoHeaderTitle: {
+    fontSize: 24,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  logoHeaderSubtitle: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+    letterSpacing: 0.3,
   },
   sectionHeader: {
     flexDirection: 'row',
