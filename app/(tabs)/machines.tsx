@@ -749,7 +749,7 @@ export default function AtlasScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A1628',
+    backgroundColor: '#E8F4FC',
   },
 
   listShell: {
@@ -915,13 +915,13 @@ const styles = StyleSheet.create({
   logoHeaderTitle: {
     fontSize: 24,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: COLORS.navyDeep,
     letterSpacing: 0.5,
   },
   logoHeaderSubtitle: {
     fontSize: 14,
     fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.8)',
+    color: COLORS.textDarkGrey,
     marginTop: 2,
     letterSpacing: 0.3,
   },
