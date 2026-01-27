@@ -13,7 +13,10 @@ export function LoginScreen() {
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
+  const [logoError, setLogoError] = useState<boolean>(false);
   const { login } = useAuth();
+
+  console.log('Logo URL:', IMAGES.logo);
   
   const isAdminEmail = email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase();
 
@@ -60,11 +63,22 @@ export function LoginScreen() {
       >
         <View style={styles.content}>
           <View style={styles.logoContainer}>
-            <Image 
-              source={{ uri: IMAGES.logo }}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
+            {!logoError ? (
+              <Image 
+                source={{ uri: IMAGES.logo }}
+                style={styles.logoImage}
+                resizeMode="contain"
+                onError={(e) => {
+                  console.log('Logo failed to load:', e.nativeEvent.error);
+                  setLogoError(true);
+                }}
+                onLoad={() => console.log('Logo loaded successfully')}
+              />
+            ) : (
+              <View style={styles.logoFallback}>
+                <Text style={styles.logoFallbackText}>Easy Seas</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.card}>
@@ -483,6 +497,18 @@ const styles = StyleSheet.create({
   logoImage: {
     width: '100%',
     height: '100%',
+  },
+  logoFallback: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoFallbackText: {
+    fontSize: 48,
+    fontWeight: '800' as const,
+    color: COLORS.white,
+    textAlign: 'center',
   },
   card: {
     backgroundColor: COLORS.white,
