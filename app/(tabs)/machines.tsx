@@ -926,13 +926,13 @@ const styles = StyleSheet.create({
   logoHeaderTitle: {
     fontSize: 24,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     letterSpacing: 0.5,
   },
   logoHeaderSubtitle: {
     fontSize: 14,
     fontWeight: '500' as const,
-    color: COLORS.textDarkGrey,
+    color: COLORS.white,
     marginTop: 2,
     letterSpacing: 0.3,
   },
