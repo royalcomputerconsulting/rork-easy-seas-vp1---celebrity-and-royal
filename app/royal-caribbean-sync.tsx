@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
@@ -12,6 +12,7 @@ import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { trpc } from '@/lib/trpc';
 
 function RoyalCaribbeanSyncScreen() {
+  const router = useRouter();
   const coreData = useCoreData();
   const loyalty = useLoyalty();
   const {
@@ -36,12 +37,67 @@ function RoyalCaribbeanSyncScreen() {
   
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
+  const [browserLoginWindow, setBrowserLoginWindow] = useState<Window | null>(null);
+  const [showBrowserLoginInstructions, setShowBrowserLoginInstructions] = useState(false);
   
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
   
+  const isBackendAvailable = !!process.env.EXPO_PUBLIC_RORK_API_BASE_URL && 
+    !process.env.EXPO_PUBLIC_RORK_API_BASE_URL.includes('fallback');
+  
+  const handleBrowserLogin = () => {
+    const loginUrl = isCelebrity 
+      ? 'https://www.celebritycruises.com/account/sign-in'
+      : 'https://www.royalcaribbean.com/account/sign-in';
+    
+    const width = 500;
+    const height = 700;
+    const left = (window.innerWidth - width) / 2 + window.screenX;
+    const top = (window.innerHeight - height) / 2 + window.screenY;
+    
+    const popup = window.open(
+      loginUrl,
+      'RCLogin',
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
+    );
+    
+    if (popup) {
+      setBrowserLoginWindow(popup);
+      setShowBrowserLoginInstructions(true);
+      addLog('Browser login window opened - complete login there', 'info');
+      
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          setBrowserLoginWindow(null);
+          addLog('Browser login window closed', 'info');
+        }
+      }, 500);
+    } else {
+      addLog('Could not open popup - check popup blocker settings', 'warning');
+    }
+  };
+  
+  const closeBrowserLoginInstructions = () => {
+    setShowBrowserLoginInstructions(false);
+    if (browserLoginWindow && !browserLoginWindow.closed) {
+      browserLoginWindow.close();
+    }
+    setBrowserLoginWindow(null);
+  };
+  
   const handleWebSync = async (username: string, password: string) => {
     console.log('[WebSync] Starting web-based sync...');
+    console.log('[WebSync] Backend URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
     setWebSyncError(null);
+    
+    if (!isBackendAvailable) {
+      const noBackendMsg = 'This deployment does not have a backend server. Please use the Easy Seas™ Browser Extension to sync your data:\n\n1. Download the extension below\n2. Open the Royal Caribbean website\n3. Use the extension to scrape your data';
+      setWebSyncError(noBackendMsg);
+      addLog('Backend not available - use browser extension', 'warning');
+      return;
+    }
+    
     addLog('Starting web-based sync...', 'info');
     
     try {
@@ -79,6 +135,10 @@ function RoyalCaribbeanSyncScreen() {
       if (error instanceof Error) {
         if (error.message.includes('transform') || error.message.includes('JSON')) {
           errorMessage = 'Server returned an invalid response. Please try again or use the browser extension.';
+        } else if (error.message.includes('Failed to fetch') || error.message.includes('Unable to connect') || error.message.includes('NetworkError') || error.message.includes('CORS')) {
+          errorMessage = 'Cannot connect to the sync server.\n\nThis is a static web deployment without backend support. Please use the Easy Seas™ Browser Extension instead:\n\n1. Click "Download Chrome Extension" below\n2. Install the extension in Chrome\n3. Visit the Royal Caribbean website and use the extension to sync';
+        } else if (error.message.includes('Backend is not available')) {
+          errorMessage = 'Backend server is not configured for this deployment. Please use the browser extension to sync your data.';
         } else {
           errorMessage = error.message;
         }
@@ -335,16 +395,98 @@ function RoyalCaribbeanSyncScreen() {
 
 <View style={styles.actionsContainer}>
           {Platform.OS === 'web' ? (
+            showBrowserLoginInstructions ? (
+              <View style={styles.webActionsContainer}>
+                <Text style={styles.webActionsTitle}>Browser Login Active</Text>
+                
+                <View style={styles.browserLoginActiveCard}>
+                  <View style={styles.browserLoginActiveHeader}>
+                    <View style={styles.browserLoginPulse} />
+                    <Text style={styles.browserLoginActiveTitle}>Login Window Open</Text>
+                  </View>
+                  <Text style={styles.browserLoginActiveDesc}>
+                    Complete your login in the popup window. Once logged in, use the browser extension to scrape your data.
+                  </Text>
+                  
+                  <View style={styles.browserLoginSteps}>
+                    <Text style={styles.browserLoginStep}>1. Log in to {isCelebrity ? 'Celebrity Cruises' : 'Royal Caribbean'} in the popup</Text>
+                    <Text style={styles.browserLoginStep}>2. Navigate to the offers page after login</Text>
+                    <Text style={styles.browserLoginStep}>3. Use the Easy Seas™ extension to scrape</Text>
+                    <Text style={styles.browserLoginStep}>4. Export and import the CSV</Text>
+                  </View>
+                  
+                  <View style={styles.browserLoginActions}>
+                    <Pressable
+                      style={styles.browserLoginOpenOffers}
+                      onPress={() => {
+                        const url = isCelebrity 
+                          ? 'https://www.celebritycruises.com/blue-chip-club/offers'
+                          : 'https://www.royalcaribbean.com/club-royale/offers';
+                        if (browserLoginWindow && !browserLoginWindow.closed) {
+                          browserLoginWindow.location.href = url;
+                          browserLoginWindow.focus();
+                        } else {
+                          Linking.openURL(url);
+                        }
+                      }}
+                    >
+                      <Ship size={18} color="#fff" />
+                      <Text style={styles.browserLoginOpenOffersText}>Go to Offers Page</Text>
+                    </Pressable>
+                    
+                    <Pressable
+                      style={styles.browserLoginClose}
+                      onPress={closeBrowserLoginInstructions}
+                    >
+                      <Text style={styles.browserLoginCloseText}>Done / Close</Text>
+                    </Pressable>
+                  </View>
+                </View>
+                
+                <Pressable
+                  style={styles.webBackButton}
+                  onPress={() => {
+                    closeBrowserLoginInstructions();
+                    router.back();
+                  }}
+                >
+                  <Text style={styles.webBackButtonText}>← Back</Text>
+                </Pressable>
+              </View>
+            ) : (
             <View style={styles.webActionsContainer}>
               <Text style={styles.webActionsTitle}>Web Sync Options</Text>
               
               <View style={styles.webSyncOption}>
                 <View style={styles.webSyncOptionHeader}>
-                  <LogIn size={20} color="#3b82f6" />
-                  <Text style={styles.webSyncOptionTitle}>Option 1: Sign In & Sync</Text>
+                  <ExternalLink size={20} color="#10b981" />
+                  <Text style={styles.webSyncOptionTitle}>Option 1: Browser Login</Text>
                 </View>
                 <Text style={styles.webSyncOptionDesc}>
-                  Enter your {isCelebrity ? 'Celebrity Cruises' : 'Royal Caribbean'} credentials and we&apos;ll sync your data automatically.
+                  Open {isCelebrity ? 'Celebrity Cruises' : 'Royal Caribbean'} in a popup to log in with your browser, then use the extension to scrape.
+                </Text>
+                <Pressable
+                  style={styles.webBrowserLoginButton}
+                  onPress={handleBrowserLogin}
+                >
+                  <ExternalLink size={18} color="#fff" />
+                  <Text style={styles.webBrowserLoginButtonText}>Open Login Window</Text>
+                </Pressable>
+              </View>
+              
+              <View style={styles.webSyncDivider}>
+                <View style={styles.webSyncDividerLine} />
+                <Text style={styles.webSyncDividerText}>OR</Text>
+                <View style={styles.webSyncDividerLine} />
+              </View>
+              
+              <View style={styles.webSyncOption}>
+                <View style={styles.webSyncOptionHeader}>
+                  <LogIn size={20} color="#3b82f6" />
+                  <Text style={styles.webSyncOptionTitle}>Option 2: Direct Credentials</Text>
+                </View>
+                <Text style={styles.webSyncOptionDesc}>
+                  Enter your credentials and we&apos;ll attempt to sync automatically (requires backend).
                 </Text>
                 <Pressable
                   style={[styles.webPrimaryButton, webLoginMutation.isPending && styles.buttonDisabled]}
@@ -373,18 +515,12 @@ function RoyalCaribbeanSyncScreen() {
               
               <View style={styles.webSyncOption}>
                 <View style={styles.webSyncOptionHeader}>
-                  <ExternalLink size={20} color="#64748b" />
-                  <Text style={styles.webSyncOptionTitle}>Option 2: Browser Extension</Text>
+                  <Download size={20} color="#64748b" />
+                  <Text style={styles.webSyncOptionTitle}>Option 3: Extension Only</Text>
                 </View>
                 <Text style={styles.webSyncOptionDesc}>
-                  Use the Easy Seas™ Browser Extension to scrape data manually.
+                  Already logged in? Just use the browser extension directly.
                 </Text>
-                <View style={styles.webInstructionsList}>
-                  <Text style={styles.webInstruction}>1. Install the Easy Seas™ Browser Extension</Text>
-                  <Text style={styles.webInstruction}>2. Navigate to the offers page</Text>
-                  <Text style={styles.webInstruction}>3. Click &ldquo;Scrape Website&rdquo; in the extension</Text>
-                  <Text style={styles.webInstruction}>4. Export and import the CSV</Text>
-                </View>
                 <Pressable
                   style={styles.webSecondaryButton}
                   onPress={() => {
@@ -395,10 +531,18 @@ function RoyalCaribbeanSyncScreen() {
                   }}
                 >
                   <ExternalLink size={18} color="#cbd5e1" />
-                  <Text style={styles.webSecondaryButtonText}>Open Website</Text>
+                  <Text style={styles.webSecondaryButtonText}>Open Offers Page</Text>
                 </Pressable>
               </View>
+              
+              <Pressable
+                style={styles.webBackButton}
+                onPress={() => router.back()}
+              >
+                <Text style={styles.webBackButtonText}>← Back</Text>
+              </Pressable>
             </View>
+            )
           ) : (
             <View style={styles.quickActionsGrid}>
               <Pressable 
@@ -1095,6 +1239,104 @@ const styles = StyleSheet.create({
   cruiseLineLabelCelebrity: {
     color: '#10b981',
     fontWeight: '600' as const
+  },
+  webBackButton: {
+    marginTop: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#475569',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const
+  },
+  webBackButtonText: {
+    color: '#94a3b8',
+    fontSize: 15,
+    fontWeight: '500' as const
+  },
+  webBrowserLoginButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    backgroundColor: '#059669',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8
+  },
+  webBrowserLoginButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600' as const
+  },
+  browserLoginActiveCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#10b981',
+    gap: 16
+  },
+  browserLoginActiveHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10
+  },
+  browserLoginPulse: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10b981'
+  },
+  browserLoginActiveTitle: {
+    color: '#10b981',
+    fontSize: 16,
+    fontWeight: '600' as const
+  },
+  browserLoginActiveDesc: {
+    color: '#94a3b8',
+    fontSize: 14,
+    lineHeight: 20
+  },
+  browserLoginSteps: {
+    gap: 8
+  },
+  browserLoginStep: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    lineHeight: 18
+  },
+  browserLoginActions: {
+    gap: 10
+  },
+  browserLoginOpenOffers: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    backgroundColor: '#3b82f6',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8
+  },
+  browserLoginOpenOffersText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600' as const
+  },
+  browserLoginClose: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#475569',
+    alignItems: 'center' as const
+  },
+  browserLoginCloseText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '500' as const
   }
 });
 

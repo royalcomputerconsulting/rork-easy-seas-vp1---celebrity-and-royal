@@ -32,12 +32,31 @@ export const getTrpcClient = () => {
           fetch: async (url, options) => {
             if (baseUrl === "https://fallback.local") {
               console.warn("Backend not available in static deployment");
-              return new Response(JSON.stringify({ error: "Backend not available" }), {
-                status: 503,
-                headers: { "Content-Type": "application/json" },
-              });
+              throw new Error("Backend is not available. Please use the mobile app or browser extension for this feature.");
             }
-            return fetch(url, options);
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 30000);
+              
+              const response = await fetch(url, {
+                ...options,
+                signal: controller.signal,
+              });
+              
+              clearTimeout(timeoutId);
+              return response;
+            } catch (error) {
+              console.error('[tRPC] Fetch error:', error);
+              if (error instanceof Error) {
+                if (error.name === 'AbortError') {
+                  throw new Error('Request timed out. The server may be unavailable.');
+                }
+                if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
+                  throw new Error('Unable to connect to server. Please check your internet connection or try again later.');
+                }
+              }
+              throw error;
+            }
           },
         }),
       ],
