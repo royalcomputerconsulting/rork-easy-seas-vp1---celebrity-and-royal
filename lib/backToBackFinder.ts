@@ -120,11 +120,23 @@ function normalizeShipName(name: string | undefined): string {
     .trim();
 }
 
+function isMGMGoldOffer(offerName: string | undefined): boolean {
+  if (!offerName) return false;
+  const lowerName = offerName.toLowerCase();
+  return lowerName.includes('mgm gold') || lowerName.includes('mgm gold%');
+}
+
 function groupCruisesIntoSlots(cruises: Cruise[]): SailingSlot[] {
   const slotMap = new Map<string, SailingSlot>();
   
   for (const cruise of cruises) {
     if (!cruise.shipName || !cruise.sailDate) continue;
+    
+    // Skip MGM Gold% offers entirely
+    if (isMGMGoldOffer(cruise.offerName)) {
+      console.log('[B2B Finder] Skipping MGM Gold offer:', cruise.offerName, 'for', cruise.shipName, cruise.sailDate);
+      continue;
+    }
     
     const normalizedShip = normalizeShipName(cruise.shipName);
     const key = `${normalizedShip}_${cruise.sailDate}`;
@@ -305,32 +317,73 @@ export function findBackToBackSets(
 
   console.log('[B2B Finder] Slots with potential followers:', adjacencyMap.size);
 
-  const allChains: { slots: SailingSlot[]; gapDays: number[] }[] = [];
+  const allChains: { slots: SailingSlot[]; gapDays: number[]; usedOfferCodes: Set<string> }[] = [];
   const visitedInCurrentPath = new Set<string>();
 
-  function findChains(currentSlot: SailingSlot, currentChain: SailingSlot[], currentGaps: number[]) {
+  function getAvailableOfferCodes(slot: SailingSlot, usedCodes: Set<string>): string[] {
+    const codes: string[] = [];
+    for (const offer of slot.offers) {
+      const code = offer.offerCode || 'NO_CODE';
+      if (!usedCodes.has(code) && !codes.includes(code)) {
+        codes.push(code);
+      }
+    }
+    return codes;
+  }
+
+  function findChains(
+    currentSlot: SailingSlot, 
+    currentChain: SailingSlot[], 
+    currentGaps: number[],
+    usedOfferCodes: Set<string>
+  ) {
+    // Get available codes for this slot (codes not yet used in the chain)
+    const availableCodes = getAvailableOfferCodes(currentSlot, usedOfferCodes);
+    
+    // If no available codes for this slot, we can't continue
+    if (availableCodes.length === 0 && currentChain.length > 0) {
+      console.log('[B2B Finder] No unique offer codes left for slot', currentSlot.key);
+      return;
+    }
+    
     currentChain.push(currentSlot);
     visitedInCurrentPath.add(currentSlot.key);
     
+    // Use one offer code from this slot (mark ALL available codes as used for this slot)
+    // Actually, we only need to mark ONE code as used - the slot "consumes" one code
+    // Pick the first available code to mark as used for this slot
+    const codeToUse = availableCodes[0] || 'NO_CODE';
+    const newUsedCodes = new Set(usedOfferCodes);
+    newUsedCodes.add(codeToUse);
+    
     const followers = adjacencyMap.get(currentSlot.key) || [];
-    let extended = false;
     
     for (const { slot: nextSlot, gapDays } of followers) {
       if (visitedInCurrentPath.has(nextSlot.key)) continue;
       
-      extended = true;
-      findChains(nextSlot, [...currentChain], [...currentGaps, gapDays]);
+      // Check if next slot has at least one offer code not yet used
+      const nextAvailableCodes = getAvailableOfferCodes(nextSlot, newUsedCodes);
+      if (nextAvailableCodes.length === 0) {
+        console.log('[B2B Finder] Next slot', nextSlot.key, 'has no unique codes, skipping chain extension');
+        continue;
+      }
+      
+      findChains(nextSlot, [...currentChain], [...currentGaps, gapDays], newUsedCodes);
     }
     
     if (currentChain.length >= minChainLength) {
-      allChains.push({ slots: [...currentChain], gapDays: [...currentGaps] });
+      allChains.push({ 
+        slots: [...currentChain], 
+        gapDays: [...currentGaps],
+        usedOfferCodes: newUsedCodes
+      });
     }
     
     visitedInCurrentPath.delete(currentSlot.key);
   }
 
   for (const slot of sortedSlots) {
-    findChains(slot, [], []);
+    findChains(slot, [], [], new Set());
   }
 
   console.log('[B2B Finder] Found', allChains.length, 'total chains before deduplication');
@@ -350,8 +403,6 @@ export function findBackToBackSets(
   });
 
   const longestChains = uniqueChains.filter((chain, index) => {
-    const chainKeys = new Set(chain.slots.map(s => s.key));
-    
     for (let i = 0; i < uniqueChains.length; i++) {
       if (i === index) continue;
       const otherChain = uniqueChains[i];
@@ -366,9 +417,44 @@ export function findBackToBackSets(
     return true;
   });
 
-  console.log('[B2B Finder] Unique chains after deduplication:', longestChains.length);
+  // Filter slots' offers to only include non-MGM Gold offers and track unique codes per chain
+  const chainsWithFilteredOffers = longestChains.map(chain => {
+    const usedCodesInChain = new Set<string>();
+    const filteredSlots = chain.slots.map(slot => {
+      // Filter out MGM Gold offers and already-used offer codes
+      const availableOffers = slot.offers.filter(o => {
+        if (isMGMGoldOffer(o.offerName)) return false;
+        const code = o.offerCode || 'NO_CODE';
+        return !usedCodesInChain.has(code);
+      });
+      
+      // Mark codes from this slot as used (only the ones we're keeping)
+      availableOffers.forEach(o => {
+        const code = o.offerCode || 'NO_CODE';
+        usedCodesInChain.add(code);
+      });
+      
+      return {
+        ...slot,
+        offers: availableOffers.length > 0 ? availableOffers : slot.offers.filter(o => !isMGMGoldOffer(o.offerName)),
+      };
+    });
+    
+    return {
+      ...chain,
+      slots: filteredSlots,
+    };
+  });
 
-  const b2bSets: BackToBackSet[] = longestChains.map((chain, index) => {
+  // Filter out chains where any slot has no valid offers
+  const validChains = chainsWithFilteredOffers.filter(chain => 
+    chain.slots.every(slot => slot.offers.length > 0)
+  );
+
+  console.log('[B2B Finder] Unique chains after deduplication:', longestChains.length);
+  console.log('[B2B Finder] Valid chains with unique offer codes:', validChains.length);
+
+  const b2bSets: BackToBackSet[] = validChains.map((chain, index) => {
     const setSlots = chain.slots;
     const setId = `b2b_${index}_${setSlots[0].sailDate}`;
     
