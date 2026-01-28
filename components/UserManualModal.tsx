@@ -143,19 +143,19 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
           >
             <ImportantBox title="What is a Chrome Extension?">
               <Paragraph>
-                A Chrome extension is a small browser add-on that adds extra buttons and features to websites. This app requires installing TWO Chrome extensions to automatically collect your cruise and casino data.
+                A Chrome extension is a small browser add-on that adds extra buttons and features to websites. This app requires installing TWO Chrome extensions to automatically collect your cruise and casino data. Both extensions are downloaded together when you click &quot;Download Chrome Extension&quot; in Settings.
               </Paragraph>
             </ImportantBox>
 
-            <Subsection title="Extension #1: Show All Offers Button">
+            <Subsection title="Extension #1: Grid Builder (Show All Offers)">
               <Paragraph style={styles.highlightParagraph}>
-                Downloaded from: Settings → CR LINK button
+                File: EasySeas_Grid_Builder_Extension_v2.0.zip
               </Paragraph>
               <Paragraph>
                 This extension creates the &quot;Show All Offers&quot; button on the Club Royale/Blue Chip Club website. When clicked, this button displays a grid view of ALL your available casino cruise offers at once, instead of having to scroll through them one by one.
               </Paragraph>
               <BulletList title="How to use:" items={[
-                'Install the extension from the CR LINK in Settings',
+                'Install this extension first (see Installation Instructions below)',
                 'Go to the Club Royale or Blue Chip Club website',
                 'Log in to your account',
                 'Navigate to your Offers page',
@@ -164,12 +164,12 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
               ]} />
             </Subsection>
 
-            <Subsection title="Extension #2: Scrape Website Button">
+            <Subsection title="Extension #2: Scraper (Scrape Website)">
               <Paragraph style={styles.highlightParagraph}>
-                Downloaded from: Settings → &quot;Download Chrome Extension&quot; button
+                File: EasySeas_Scraper_Extension_v5.6.3.zip
               </Paragraph>
               <Paragraph>
-                This extension creates the &quot;Scrape Website&quot; button. This powerful button extracts data from different pages depending on where you are on the website:
+                This extension creates the &quot;Scrape Website&quot; button. This powerful button extracts data from the grid created by Extension #1. It works on different pages depending on where you are on the website:
               </Paragraph>
               
               <FeatureList items={[
@@ -189,17 +189,22 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
             </Subsection>
 
             <Subsection title="Installation Instructions">
+              <Paragraph style={styles.highlightParagraph}>
+                IMPORTANT: You must install BOTH extensions for full functionality!
+              </Paragraph>
               <NumberedList items={[
                 'Go to Settings → Data Management → Browser Extension section',
-                'Click "Download Chrome Extension" to download the ZIP file',
-                'Save the ZIP file to your computer (e.g., Desktop or Downloads folder)',
-                'Extract/unzip the file to create a folder',
+                'Click "Download Chrome Extension" - TWO ZIP files will download',
+                'Save both ZIP files to your computer (e.g., Desktop or Downloads folder)',
+                'Extract/unzip BOTH files to create two separate folders',
                 'Open Google Chrome browser',
                 'Type chrome://extensions in the address bar and press Enter',
                 'Enable "Developer mode" using the toggle switch in the top right corner',
                 'Click the "Load unpacked" button',
-                'Navigate to and select the extracted extension folder',
-                'The extension icon will appear in your Chrome toolbar',
+                'Select the Grid Builder extension folder first (EasySeas_Grid_Builder_Extension)',
+                'Click "Load unpacked" again',
+                'Select the Scraper extension folder (EasySeas_Scraper_Extension)',
+                'Both extension icons will appear in your Chrome toolbar',
               ]} />
             </Subsection>
 

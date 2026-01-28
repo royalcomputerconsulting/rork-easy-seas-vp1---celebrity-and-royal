@@ -730,27 +730,27 @@ export default function SettingsScreen() {
   const handleDownloadExtension = useCallback(async () => {
     try {
       setIsDownloadingExtension(true);
-      console.log('[Settings] Starting Chrome extension download...');
+      console.log('[Settings] Starting Chrome extensions download (both extensions)...');
       
       const result = await downloadChromeExtension();
       
       if (result.success) {
         Alert.alert(
-          'Download Started',
-          `The Chrome extension ZIP file is downloading (${result.filesAdded} files included).\n\nTo install:\n1. Unzip the downloaded file\n2. Open Chrome and go to chrome://extensions\n3. Enable "Developer mode"\n4. Click "Load unpacked"\n5. Select the unzipped folder`
+          'Downloads Started',
+          `TWO Chrome extensions are downloading:\n\n1. Grid Builder Extension ("Show All Offers" button)\n2. Scraper Extension ("Scrape Website" button)\n\nTotal files: ${result.filesAdded}\n\nTo install EACH extension:\n1. Unzip the downloaded file\n2. Open Chrome and go to chrome://extensions\n3. Enable "Developer mode"\n4. Click "Load unpacked"\n5. Select the unzipped folder\n\nRepeat for both extensions.`
         );
       } else {
         console.error('[Settings] Download failed:', result.error);
         Alert.alert(
           'Download Failed', 
-          result.error || 'Unable to download Chrome extension. Please make sure you are using a desktop web browser.\n\nTip: Check the browser console for detailed error logs.'
+          result.error || 'Unable to download Chrome extensions. Please make sure you are using a desktop web browser.\n\nTip: Check the browser console for detailed error logs.'
         );
       }
     } catch (error) {
       console.error('[Settings] Extension download error:', error);
       Alert.alert(
         'Download Error', 
-        `Failed to download extension: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or check the browser console for details.`
+        `Failed to download extensions: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or check the browser console for details.`
       );
     } finally {
       setIsDownloadingExtension(false);
