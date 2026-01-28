@@ -89,11 +89,26 @@ function areSamePort(port1: string | undefined, port2: string | undefined): bool
   return false;
 }
 
-function getDaysDifference(date1: string, date2: string): number {
-  const d1 = createDateFromString(date1);
-  const d2 = createDateFromString(date2);
-  const diffTime = d2.getTime() - d1.getTime();
-  return Math.round(diffTime / (1000 * 60 * 60 * 24));
+function getDaysDifference(date1: string | undefined, date2: string | undefined): number {
+  if (!date1 || !date2) return 999;
+  try {
+    const d1 = createDateFromString(date1);
+    const d2 = createDateFromString(date2);
+    const diffTime = d2.getTime() - d1.getTime();
+    return Math.round(diffTime / (1000 * 60 * 60 * 24));
+  } catch {
+    return 999;
+  }
+}
+
+function calculateReturnDate(sailDate: string, nights: number): string {
+  try {
+    const sail = createDateFromString(sailDate);
+    sail.setDate(sail.getDate() + nights);
+    return sail.toISOString().split('T')[0];
+  } catch {
+    return sailDate;
+  }
 }
 
 function normalizeShipName(name: string | undefined): string {
@@ -113,6 +128,9 @@ function groupCruisesIntoSlots(cruises: Cruise[]): SailingSlot[] {
     
     const normalizedShip = normalizeShipName(cruise.shipName);
     const key = `${normalizedShip}_${cruise.sailDate}`;
+    
+    const nights = cruise.nights || 7;
+    const returnDate = cruise.returnDate || calculateReturnDate(cruise.sailDate, nights);
     
     const offer: CruiseOffer = {
       cruiseId: cruise.id,
@@ -141,8 +159,8 @@ function groupCruisesIntoSlots(cruises: Cruise[]): SailingSlot[] {
         key,
         shipName: cruise.shipName,
         sailDate: cruise.sailDate,
-        returnDate: cruise.returnDate,
-        nights: cruise.nights || 0,
+        returnDate: returnDate,
+        nights: nights,
         departurePort: cruise.departurePort || '',
         offers: [offer],
       });
@@ -155,15 +173,20 @@ function groupCruisesIntoSlots(cruises: Cruise[]): SailingSlot[] {
 function slotConflictsWithBookedDates(slot: SailingSlot, bookedDates: Set<string>): boolean {
   if (bookedDates.size === 0) return false;
   
-  const sailDate = createDateFromString(slot.sailDate);
-  const returnDate = createDateFromString(slot.returnDate);
-  let currentDate = new Date(sailDate);
-  
-  while (currentDate <= returnDate) {
-    if (bookedDates.has(currentDate.toISOString().split('T')[0])) {
-      return true;
+  try {
+    const sailDate = createDateFromString(slot.sailDate);
+    const returnDateStr = slot.returnDate || calculateReturnDate(slot.sailDate, slot.nights || 7);
+    const returnDate = createDateFromString(returnDateStr);
+    let currentDate = new Date(sailDate);
+    
+    while (currentDate <= returnDate) {
+      if (bookedDates.has(currentDate.toISOString().split('T')[0])) {
+        return true;
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
     }
-    currentDate.setDate(currentDate.getDate() + 1);
+  } catch (e) {
+    console.log('[B2B Finder] Error checking conflicts for slot:', slot.key, e);
   }
   
   return false;
@@ -180,7 +203,7 @@ export function findBackToBackSets(
   } = {}
 ): BackToBackSet[] {
   const {
-    maxGapDays = 1,
+    maxGapDays = 2,
     excludeConflicts = true,
     minChainLength = 2,
   } = options;
@@ -190,7 +213,7 @@ export function findBackToBackSets(
   console.log('[B2B Finder] Booked dates count:', bookedDates.size);
 
   const validCruises = cruises.filter(cruise => {
-    if (!cruise.sailDate || !cruise.returnDate) return false;
+    if (!cruise.sailDate) return false;
     if (isDateInPast(cruise.sailDate)) return false;
     return true;
   });
@@ -225,30 +248,58 @@ export function findBackToBackSets(
     offerCodes: s.offers.map(o => o.offerCode).filter(Boolean).join(', '),
   })));
 
+  const shipGroups = new Map<string, SailingSlot[]>();
+  for (const slot of sortedSlots) {
+    const shipKey = normalizeShipName(slot.shipName);
+    if (!shipGroups.has(shipKey)) {
+      shipGroups.set(shipKey, []);
+    }
+    shipGroups.get(shipKey)!.push(slot);
+  }
+
+  console.log('[B2B Finder] Ships found:', Array.from(shipGroups.keys()));
+  console.log('[B2B Finder] Slots per ship:', Array.from(shipGroups.entries()).map(([ship, slots]) => `${ship}: ${slots.length}`));
+
   const adjacencyMap = new Map<string, { slot: SailingSlot; gapDays: number }[]>();
   
-  for (const slot of sortedSlots) {
-    const followers: { slot: SailingSlot; gapDays: number }[] = [];
+  for (const [shipKey, shipSlots] of shipGroups) {
+    const sortedShipSlots = [...shipSlots].sort((a, b) => 
+      createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime()
+    );
     
-    for (const candidate of sortedSlots) {
-      if (slot.key === candidate.key) continue;
-      
-      const daysDiff = getDaysDifference(slot.returnDate, candidate.sailDate);
-      
-      if (daysDiff < 0 || daysDiff > maxGapDays) continue;
-      
-      const sameShip = normalizeShipName(slot.shipName) === normalizeShipName(candidate.shipName);
-      if (!sameShip) continue;
-      
-      const samePort = areSamePort(slot.departurePort, candidate.departurePort);
-      if (!samePort) continue;
-      
-      followers.push({ slot: candidate, gapDays: daysDiff });
-    }
+    console.log(`[B2B Finder] Processing ${shipKey} with ${sortedShipSlots.length} sailings`);
     
-    if (followers.length > 0) {
-      adjacencyMap.set(slot.key, followers);
-      console.log(`[B2B Finder] Slot ${slot.shipName} ${slot.sailDate} can chain to ${followers.length} following slots`);
+    for (let i = 0; i < sortedShipSlots.length; i++) {
+      const slot = sortedShipSlots[i];
+      const followers: { slot: SailingSlot; gapDays: number }[] = [];
+      
+      for (let j = i + 1; j < sortedShipSlots.length; j++) {
+        const candidate = sortedShipSlots[j];
+        
+        const daysDiff = getDaysDifference(slot.returnDate, candidate.sailDate);
+        
+        if (daysDiff < 0) {
+          console.log(`[B2B Finder] OVERLAP: ${slot.sailDate}→${slot.returnDate} overlaps with ${candidate.sailDate}, gap=${daysDiff}`);
+          continue;
+        }
+        
+        if (daysDiff > maxGapDays) {
+          break;
+        }
+        
+        const samePort = areSamePort(slot.departurePort, candidate.departurePort);
+        if (!samePort) {
+          console.log(`[B2B Finder] Port mismatch: ${slot.departurePort} vs ${candidate.departurePort}`);
+          continue;
+        }
+        
+        console.log(`[B2B Finder] MATCH: ${slot.shipName} ${slot.sailDate}→${slot.returnDate} can chain to ${candidate.sailDate} (gap=${daysDiff}d)`);
+        followers.push({ slot: candidate, gapDays: daysDiff });
+      }
+      
+      if (followers.length > 0) {
+        adjacencyMap.set(slot.key, followers);
+      }
     }
   }
 
