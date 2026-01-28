@@ -10,7 +10,7 @@ import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER, getCelebrityCapt
 import { CELEBRITY_BLUE_CHIP_TIERS, CELEBRITY_TIER_ORDER, getCelebrityBlueChipTierByLevel } from '@/constants/celebrityBlueChipClub';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
-import { BrandToggle } from '@/components/ui/BrandToggle';
+import { BrandToggle, BrandType } from '@/components/ui/BrandToggle';
 import { IMAGES } from '@/constants/images';
 
 interface CompactDashboardHeaderProps {
@@ -54,10 +54,10 @@ export function CompactDashboardHeader({
     projectedBookedPoints,
   } = useLoyalty();
   const { currentUser } = useUser();
-  const [activeBrand, setActiveBrand] = useState<'royal' | 'celebrity'>(currentUser?.preferredBrand || 'royal');
+  const [activeBrand, setActiveBrand] = useState<BrandType>((currentUser?.preferredBrand === 'silversea' ? 'royal' : currentUser?.preferredBrand) || 'royal');
 
   useEffect(() => {
-    setActiveBrand(currentUser?.preferredBrand || 'royal');
+    setActiveBrand((currentUser?.preferredBrand === 'silversea' ? 'royal' : currentUser?.preferredBrand) || 'royal');
   }, [currentUser?.preferredBrand]);
 
   const celebrityCaptainsClubPoints = currentUser?.celebrityCaptainsClubPoints || 0;

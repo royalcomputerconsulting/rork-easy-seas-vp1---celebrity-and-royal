@@ -193,25 +193,30 @@ export function transformBookedCruisesToAppFormat(
     const endDate = parseDate(cruise.sailingEndDate);
     
     // Calculate nights with multiple fallbacks:
-    // 1. Calculate from start and end dates
-    // 2. Extract from cruise title (e.g., "12 Night Hawaii Cruise")
-    // 3. Extract from itinerary
-    // 4. Default to 7 only as last resort
+    // 1. Use numberOfNights directly from API if available (most reliable)
+    // 2. Calculate from start and end dates
+    // 3. Extract from cruise title (e.g., "12 Night Hawaii Cruise")
+    // 4. Extract from itinerary
+    // 5. Default to 7 only as last resort
+    const apiNights = cruise.numberOfNights && cruise.numberOfNights > 0 ? cruise.numberOfNights : null;
     const dateNights = calculateNightsFromDates(startDate, endDate);
     const titleNights = extractNightsFromText(cruise.cruiseTitle || '');
     const itineraryNights = extractNightsFromText(cruise.itinerary || '');
     
-    const nights = dateNights !== null 
-      ? dateNights 
-      : (titleNights !== null 
-          ? titleNights 
-          : (itineraryNights !== null 
-              ? itineraryNights 
-              : 7));
+    const nights = apiNights !== null
+      ? apiNights
+      : (dateNights !== null 
+          ? dateNights 
+          : (titleNights !== null 
+              ? titleNights 
+              : (itineraryNights !== null 
+                  ? itineraryNights 
+                  : 7)));
     
-    console.log(`[DataTransformer] Booked cruise nights: ship=${cruise.shipName}, dates=${startDate} to ${endDate}, dateCalc=${dateNights}, title=${titleNights}, itinerary=${itineraryNights}, final=${nights}`);
+    console.log(`[DataTransformer] Booked cruise nights: ship=${cruise.shipName}, dates=${startDate} to ${endDate}, apiNights=${apiNights}, dateCalc=${dateNights}, title=${titleNights}, itinerary=${itineraryNights}, final=${nights}`);
     
-    const isCourtesyHold = cruise.status === 'Courtesy Hold';
+    // Check for courtesy hold - both 'Courtesy Hold' and 'Offer' statuses are courtesy holds
+    const isCourtesyHold = cruise.status === 'Courtesy Hold' || cruise.status === 'Offer';
     
     // If we don't have an end date, calculate it from the nights
     const finalEndDate = endDate || calculateReturnDate(startDate, nights);
@@ -227,16 +232,28 @@ export function transformBookedCruisesToAppFormat(
       
       cabinType: cruise.cabinType,
       cabinNumber: cruise.cabinNumberOrGTY && cruise.cabinNumberOrGTY !== 'GTY' ? cruise.cabinNumberOrGTY : undefined,
+      cabinCategory: cruise.cabinCategory || cruise.stateroomCategoryCode,
+      deckNumber: cruise.deckNumber,
       bookingId: cruise.bookingId,
       reservationNumber: cruise.bookingId,
       
       status: 'booked',
       completionState: 'upcoming',
       isCourtesyHold: isCourtesyHold,
-      notes: isCourtesyHold ? 'Courtesy Hold' : undefined,
+      holdExpiration: cruise.holdExpiration || undefined,
+      notes: isCourtesyHold ? `Courtesy Hold${cruise.holdExpiration ? ` (expires ${cruise.holdExpiration})` : ''}` : undefined,
       
       itineraryName: cruise.itinerary,
       itineraryRaw: cruise.itinerary ? [cruise.itinerary] : [],
+      
+      // New enrichment fields from API
+      bookingStatus: cruise.bookingStatus,
+      packageCode: cruise.packageCode,
+      passengerStatus: cruise.passengerStatus,
+      stateroomNumber: cruise.stateroomNumber,
+      stateroomCategoryCode: cruise.stateroomCategoryCode,
+      stateroomType: cruise.stateroomType,
+      musterStation: cruise.musterStation,
       
       cruiseSource: 'royal' as const,
       

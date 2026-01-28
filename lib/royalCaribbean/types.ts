@@ -131,12 +131,15 @@ export interface BookedCruiseRow {
   sailingDates: string;
   itinerary: string;
   departurePort: string;
+  arrivalPort?: string;
+  isOneWay?: string;
   cabinType: string;
   cabinCategory?: string;
   cabinNumberOrGTY: string;
   deckNumber?: string;
   bookingId: string;
   numberOfGuests?: string;
+  numberOfNights?: number;
   daysToGo?: string;
   status: string;
   loyaltyLevel: string;
@@ -144,6 +147,13 @@ export interface BookedCruiseRow {
   paidInFull?: string;
   balanceDue?: string;
   musterStation?: string;
+  holdExpiration?: string;
+  bookingStatus?: string;
+  packageCode?: string;
+  passengerStatus?: string;
+  stateroomNumber?: string;
+  stateroomCategoryCode?: string;
+  stateroomType?: string;
 }
 
 export interface ProgressInfo {

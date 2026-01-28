@@ -109,6 +109,7 @@ export interface BookedCruise extends Cruise {
   bookingId?: string;
   bwoNumber?: string;
   isCourtesyHold?: boolean;
+  holdExpiration?: string;
   checkInDate?: string;
   casinoLevel?: string;
   casinoHost?: string;
@@ -121,6 +122,13 @@ export interface BookedCruise extends Cruise {
   cabinNumber?: string;
   cabinCategory?: string;
   deckNumber?: string;
+  bookingStatus?: string;
+  packageCode?: string;
+  passengerStatus?: string;
+  stateroomNumber?: string;
+  stateroomCategoryCode?: string;
+  stateroomType?: string;
+  musterStation?: string;
   guestNames?: string[];
   specialRequests?: string;
   airfare?: {

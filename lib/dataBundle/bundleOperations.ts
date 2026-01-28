@@ -39,7 +39,7 @@ export interface FullAppDataBundle {
     celebrityCaptainsClubNumber?: string;
     celebrityCaptainsClubPoints?: number;
     celebrityBlueChipPoints?: number;
-    preferredBrand?: 'royal' | 'celebrity';
+    preferredBrand?: 'royal' | 'celebrity' | 'silversea';
   } | null;
   users: UserProfile[];
   playingHours?: import('@/state/UserProvider').PlayingHours;

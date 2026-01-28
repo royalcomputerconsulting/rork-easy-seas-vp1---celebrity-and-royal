@@ -357,7 +357,18 @@ export const STEP2_UPCOMING_SCRIPT = `
       var deckNumber = booking.deckNumber || '';
       
       var status = 'Upcoming';
-      if (booking.bookingStatus === 'OF') status = 'Offer';
+      var holdExpiration = '';
+      if (booking.bookingStatus === 'OF') {
+        status = 'Courtesy Hold';
+        // Format offer expiration date if available (YYYYMMDD -> MM/DD/YYYY)
+        if (booking.offerExpirationDate && booking.offerExpirationDate.length === 8) {
+          var expYear = booking.offerExpirationDate.substring(0, 4);
+          var expMonth = booking.offerExpirationDate.substring(4, 6);
+          var expDay = booking.offerExpirationDate.substring(6, 8);
+          holdExpiration = expMonth + '/' + expDay + '/' + expYear;
+        }
+        log('   📋 Booking ' + booking.bookingId + ' is a Courtesy Hold (OF status), expires: ' + (holdExpiration || 'N/A'), 'info');
+      }
       else if (booking.bookingStatus === 'HD' || booking.bookingStatus === 'HO') status = 'Courtesy Hold';
       else if (booking.bookingStatus === 'PD') status = 'Pending';
       else if (booking.bookingStatus === 'WL') status = 'Waitlist';
@@ -398,6 +409,12 @@ export const STEP2_UPCOMING_SCRIPT = `
         log('   ⚠️ No port info in enrichment for ' + shipCode + '_' + booking.sailDate, 'warning');
       }
 
+      // Extract passenger status from first passenger
+      var passengerStatus = '';
+      if (booking.passengers && booking.passengers.length > 0 && booking.passengers[0].passengerStatus) {
+        passengerStatus = booking.passengers[0].passengerStatus;
+      }
+
       var cruise = {
         sourcePage: 'Upcoming',
         shipName: shipName,
@@ -416,13 +433,21 @@ export const STEP2_UPCOMING_SCRIPT = `
         deckNumber: deckNumber,
         bookingId: booking.bookingId || '',
         numberOfGuests: numberOfGuests,
+        numberOfNights: nights,
         daysToGo: daysToGo,
         status: status,
+        holdExpiration: holdExpiration,
         loyaltyLevel: '',
         loyaltyPoints: '',
         paidInFull: booking.paidInFull ? 'Yes' : 'No',
         balanceDue: booking.balanceDueAmount ? booking.balanceDueAmount.toString() : '0',
-        musterStation: booking.musterStation || ''
+        musterStation: booking.musterStation || '',
+        bookingStatus: booking.bookingStatus || '',
+        packageCode: packageCode,
+        passengerStatus: passengerStatus,
+        stateroomNumber: stateroomNumber,
+        stateroomCategoryCode: stateroomCategoryCode,
+        stateroomType: stateroomType
       };
       
       cruises.push(cruise);
