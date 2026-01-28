@@ -36,7 +36,18 @@ export const getTrpcClient = () => {
             }
             try {
               const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 30000);
+              const timeoutId = setTimeout(() => controller.abort(), 60000);
+              
+              const existingSignal = options?.signal;
+              if (existingSignal?.aborted) {
+                clearTimeout(timeoutId);
+                throw new DOMException('Request was cancelled', 'AbortError');
+              }
+              
+              existingSignal?.addEventListener('abort', () => {
+                controller.abort();
+                clearTimeout(timeoutId);
+              });
               
               const response = await fetch(url, {
                 ...options,
@@ -46,11 +57,12 @@ export const getTrpcClient = () => {
               clearTimeout(timeoutId);
               return response;
             } catch (error) {
+              if (error instanceof Error && error.name === 'AbortError') {
+                console.log('[tRPC] Request aborted');
+                throw error;
+              }
               console.error('[tRPC] Fetch error:', error);
               if (error instanceof Error) {
-                if (error.name === 'AbortError') {
-                  throw new Error('Request timed out. The server may be unavailable.');
-                }
                 if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
                   throw new Error('Unable to connect to server. Please check your internet connection or try again later.');
                 }

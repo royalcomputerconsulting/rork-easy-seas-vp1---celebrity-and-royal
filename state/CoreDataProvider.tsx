@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
+import { useUserDataSync } from "@/state/UserDataSyncProvider";
 import type { Cruise, BookedCruise, CasinoOffer, CalendarEvent, ClubRoyaleProfile, CruiseFilter } from "@/types/models";
 import { SAMPLE_CLUB_ROYALE_PROFILE } from "@/types/models";
 import {
@@ -236,6 +237,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   console.log('[CoreData] === CONTEXT HOOK INITIALIZING ===');
   console.log('[CoreData] === CREATING STATE ===');
   const { authenticatedEmail, isAuthenticated } = useAuth();
+  const { initialCheckComplete, hasCloudData } = useUserDataSync();
   const [cruises, setCruisesState] = useState<Cruise[]>([]);
   const [bookedCruises, setBookedCruisesState] = useState<BookedCruise[]>([]);
   const [casinoOffers, setCasinoOffersState] = useState<CasinoOffer[]>([]);
@@ -387,8 +389,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
       const hasImported = hasImportedData === 'true';
       const hasAnyExistingData = !!(bookedData || offersData || profileData || pointsData || cruisesData);
-      const isFirstTimeUser = hasImportedData === null && !hasAnyExistingData;
-      console.log('[CoreData] Has imported data flag:', hasImported, 'isFirstTimeUser:', isFirstTimeUser, 'hasAnyExistingData:', hasAnyExistingData);
+      
+      // Don't treat as first time user if cloud sync hasn't completed yet or if cloud has data
+      // This prevents showing sample data to returning users on new devices
+      const isFirstTimeUser = hasImportedData === null && !hasAnyExistingData && initialCheckComplete && !hasCloudData;
+      console.log('[CoreData] Has imported data flag:', hasImported, 'isFirstTimeUser:', isFirstTimeUser, 'hasAnyExistingData:', hasAnyExistingData, 'initialCheckComplete:', initialCheckComplete, 'hasCloudData:', hasCloudData);
 
       const parsedOffers: CasinoOffer[] = offersData ? JSON.parse(offersData) : [];
       console.log('[CoreData] Parsed offers:', parsedOffers.length);
@@ -497,7 +502,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setIsLoading(false);
       console.log('[CoreData] === isLoading set to FALSE ===');
     }, 0);
-  }, [loadFromBackend]);
+  }, [loadFromBackend, initialCheckComplete, hasCloudData]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -536,6 +541,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     
     const doLoad = async () => {
       try {
+        // Wait for cloud sync check to complete before loading
+        // This prevents showing sample data to returning users
+        if (!initialCheckComplete) {
+          console.log('[CoreData] === Waiting for cloud sync check to complete ===');
+          return;
+        }
+        
         console.log('[CoreData] === Calling loadFromStorage ===');
         await loadFromStorage();
         console.log('[CoreData] === loadFromStorage completed ===');
@@ -558,7 +570,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       isMounted = false;
       clearTimeout(loadTimeout);
     };
-  }, [loadFromStorage, isAuthenticated, authenticatedEmail]);
+  }, [loadFromStorage, isAuthenticated, authenticatedEmail, initialCheckComplete]);
 
   useEffect(() => {
     const handleSessionPointsUpdate = (event: any) => {
@@ -589,17 +601,25 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       });
     };
 
+    const handleCloudDataRestored = () => {
+      console.log('[CoreDataProvider] Cloud data restored event received, reloading data...');
+      loadAttemptedRef.current = false;
+      loadFromStorage(true);
+    };
+
     try {
       if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
         window.addEventListener('casinoSessionPointsUpdated', handleSessionPointsUpdate as EventListener);
+        window.addEventListener('cloudDataRestored', handleCloudDataRestored as EventListener);
         return () => {
           window.removeEventListener('casinoSessionPointsUpdated', handleSessionPointsUpdate as EventListener);
+          window.removeEventListener('cloudDataRestored', handleCloudDataRestored as EventListener);
         };
       }
     } catch (error) {
       console.log('[CoreDataProvider] Could not set up event listener (not on web):', error);
     }
-  }, [persistData]);
+  }, [persistData, loadFromStorage]);
 
   const setCruises = useCallback((newCruises: Cruise[]) => {
     setCruisesState(newCruises);

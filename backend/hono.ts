@@ -1,33 +1,29 @@
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import { trpcServer } from "@hono/trpc-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 import { appRouter } from "./trpc/app-router";
 import { createContext } from "./trpc/create-context";
 
+// app will be mounted at /api
 const app = new Hono();
 
-app.use("*", cors({
-  origin: "*",
-  allowMethods: ["GET", "POST", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization"],
-}));
+// Enable CORS for all routes
+app.use("*", cors());
 
-app.all("/api/trpc/*", async (c) => {
-  const response = await fetchRequestHandler({
+// Mount tRPC router at /trpc
+app.use(
+  "/trpc/*",
+  trpcServer({
     endpoint: "/api/trpc",
-    req: c.req.raw,
     router: appRouter,
-    createContext: (opts) => createContext(opts),
-    onError: ({ error, path }) => {
-      console.error(`[tRPC] Error in ${path}:`, error);
-    },
-  });
-  return response;
-});
+    createContext,
+  }),
+);
 
+// Simple health check endpoint
 app.get("/", (c) => {
-  return c.json({ status: "ok", message: "API is running" });
+  return c.json({ status: "ok", message: "API is running", timestamp: Date.now() });
 });
 
 export default app;

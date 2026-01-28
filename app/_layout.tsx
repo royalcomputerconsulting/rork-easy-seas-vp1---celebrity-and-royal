@@ -34,6 +34,7 @@ import { MachineStrategyProvider } from "@/state/MachineStrategyProvider";
 import { SlotMachineProvider } from "@/state/SlotMachineProvider";
 import { SlotMachineLibraryProvider, useSlotMachineLibrary } from "@/state/SlotMachineLibraryProvider";
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
+import { UserDataSyncProvider } from "@/state/UserDataSyncProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 
 try {
@@ -319,8 +320,9 @@ export default function RootLayout() {
       <GestureHandlerRootView style={rootStyles.gestureHandler}>
         <ErrorBoundary>
           <AuthProvider>
-            <UserProvider>
-              <CoreDataProvider>
+            <UserDataSyncProvider>
+              <UserProvider>
+                <CoreDataProvider>
                 <HistoricalPerformanceProvider>
                   <PriceHistoryProvider>
                     <FinancialsProvider>
@@ -361,7 +363,8 @@ export default function RootLayout() {
                   </PriceHistoryProvider>
                 </HistoricalPerformanceProvider>
               </CoreDataProvider>
-            </UserProvider>
+              </UserProvider>
+            </UserDataSyncProvider>
           </AuthProvider>
         </ErrorBoundary>
       </GestureHandlerRootView>

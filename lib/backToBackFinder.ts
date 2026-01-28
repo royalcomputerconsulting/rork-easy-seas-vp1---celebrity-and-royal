@@ -120,10 +120,20 @@ function normalizeShipName(name: string | undefined): string {
     .trim();
 }
 
-function isMGMGoldOffer(offerName: string | undefined): boolean {
-  if (!offerName) return false;
-  const lowerName = offerName.toLowerCase();
-  return lowerName.includes('mgm gold') || lowerName.includes('mgm gold%');
+function isMGMGoldOffer(offerName: string | undefined, offerCode: string | undefined): boolean {
+  const lowerName = (offerName || '').toLowerCase();
+  const lowerCode = (offerCode || '').toLowerCase();
+  
+  // Check offer name for MGM Gold variations
+  if (lowerName.includes('mgm') && lowerName.includes('gold')) return true;
+  if (lowerName.includes('gold%')) return true;
+  if (lowerName.includes('gold ')) return true;
+  
+  // Check offer code for any GOLD% pattern (e.g., "25GOLD%", "50GOLD%", "GOLD25%")
+  // Match any code containing "gold" with a percent sign or number
+  if (lowerCode.includes('gold')) return true;
+  
+  return false;
 }
 
 function groupCruisesIntoSlots(cruises: Cruise[]): SailingSlot[] {
@@ -133,8 +143,8 @@ function groupCruisesIntoSlots(cruises: Cruise[]): SailingSlot[] {
     if (!cruise.shipName || !cruise.sailDate) continue;
     
     // Skip MGM Gold% offers entirely
-    if (isMGMGoldOffer(cruise.offerName)) {
-      console.log('[B2B Finder] Skipping MGM Gold offer:', cruise.offerName, 'for', cruise.shipName, cruise.sailDate);
+    if (isMGMGoldOffer(cruise.offerName, cruise.offerCode)) {
+      console.log('[B2B Finder] Skipping MGM Gold offer:', cruise.offerCode, cruise.offerName, 'for', cruise.shipName, cruise.sailDate);
       continue;
     }
     
@@ -423,7 +433,7 @@ export function findBackToBackSets(
     const filteredSlots = chain.slots.map(slot => {
       // Filter out MGM Gold offers and already-used offer codes
       const availableOffers = slot.offers.filter(o => {
-        if (isMGMGoldOffer(o.offerName)) return false;
+        if (isMGMGoldOffer(o.offerName, o.offerCode)) return false;
         const code = o.offerCode || 'NO_CODE';
         return !usedCodesInChain.has(code);
       });
@@ -436,7 +446,7 @@ export function findBackToBackSets(
       
       return {
         ...slot,
-        offers: availableOffers.length > 0 ? availableOffers : slot.offers.filter(o => !isMGMGoldOffer(o.offerName)),
+        offers: availableOffers.length > 0 ? availableOffers : slot.offers.filter(o => !isMGMGoldOffer(o.offerName, o.offerCode)),
       };
     });
     

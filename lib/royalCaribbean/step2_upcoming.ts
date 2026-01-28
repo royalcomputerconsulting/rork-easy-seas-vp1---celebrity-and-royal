@@ -4,12 +4,12 @@ export const STEP2_UPCOMING_SCRIPT = `
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async function scrollUntilComplete(maxAttempts = 20) {
+  async function scrollUntilComplete(maxAttempts = 30) {
     let previousHeight = 0;
     let stableCount = 0;
     let attempts = 0;
 
-    while (stableCount < 3 && attempts < maxAttempts) {
+    while (stableCount < 4 && attempts < maxAttempts) {
       const currentHeight = document.body.scrollHeight;
       
       if (currentHeight === previousHeight) {
@@ -19,10 +19,14 @@ export const STEP2_UPCOMING_SCRIPT = `
       }
       
       previousHeight = currentHeight;
-      window.scrollBy(0, 800);
-      await wait(800);
+      window.scrollBy(0, 1000);
+      await wait(1000);
       attempts++;
     }
+    
+    // Scroll back to top and do one more pass
+    window.scrollTo(0, 0);
+    await wait(500);
   }
 
   function parseDate(dateStr, year) {
@@ -49,7 +53,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         logType: 'info'
       }));
       
-      await scrollUntilComplete(20);
+      await scrollUntilComplete(30);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
@@ -85,7 +89,8 @@ export const STEP2_UPCOMING_SCRIPT = `
         const hasCheckIn = text.includes('CHECK-IN NOT AVAILABLE') || text.includes('Check-In');
         const textLength = text.length;
         
-        return hasShip && hasNight && hasReservation && textLength > 100 && textLength < 4000;
+        // More lenient text length filter to catch all cruise cards
+        return hasShip && hasNight && hasReservation && textLength > 80 && textLength < 8000;
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -96,7 +101,9 @@ export const STEP2_UPCOMING_SCRIPT = `
       
       const beforeDedup = cruiseCards.length;
       cruiseCards = cruiseCards.filter((el, idx, arr) => {
-        return !arr.some((other, otherIdx) => otherIdx !== idx && (other.contains(el) || el.contains(other)));
+        // Only remove if another element CONTAINS this one (keep parents, remove children)
+        // This preserves the outermost cruise card and removes nested duplicates
+        return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
       });
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -140,7 +147,8 @@ export const STEP2_UPCOMING_SCRIPT = `
           logType: shipName ? 'info' : 'warning'
         }));
 
-        const cruiseTitleMatch = fullText.match(/(\\d+)\\s+Night\\s+([^\\n]+?)(?=VANCOUVER|LOS ANGELES|MIAMI|SEATTLE|TAMPA|ORLANDO|FORT LAUDERDALE|GALVESTON|NEW YORK|BOSTON|BALTIMORE|CHECK-IN|\\d+ Days|$)/i);
+        // Extended port list to catch all cruise destinations
+        const cruiseTitleMatch = fullText.match(/(\\d+)\\s+Night\\s+([^\\n]+?)(?=VANCOUVER|LOS ANGELES|MIAMI|SEATTLE|TAMPA|ORLANDO|FORT LAUDERDALE|GALVESTON|NEW YORK|BOSTON|BALTIMORE|SEWARD|HONOLULU|SAN JUAN|NASSAU|COZUMEL|BAYONNE|CAPE LIBERTY|PORT CANAVERAL|SINGAPORE|SYDNEY|SOUTHAMPTON|BARCELONA|ROME|CIVITAVECCHIA|CHECK-IN|\\d+ Days|$)/i);
         const cruiseTitle = cruiseTitleMatch ? cruiseTitleMatch[0].trim() : '';
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
