@@ -159,11 +159,12 @@ export default function SchedulingScreen() {
 
   const getBackToBackSets = useCallback((cruises: Cruise[]): BackToBackSet[] => {
     console.log('[Scheduling] Finding back-to-back cruise sets...');
+    console.log('[Scheduling] Total cruises to search:', cruises.length);
     
     const sets = findBackToBackSets(cruises, bookedDates, {
       maxGapDays: 1,
-      requireDifferentOffers: true,
-      excludeConflicts: true,
+      requireDifferentOffers: false,
+      excludeConflicts: bookedDates.size > 0,
     });
     
     console.log('[Scheduling] Found', sets.length, 'back-to-back sets');
