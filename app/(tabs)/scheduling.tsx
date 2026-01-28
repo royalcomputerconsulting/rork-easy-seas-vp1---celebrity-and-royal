@@ -38,7 +38,7 @@ import { useAgentX } from '@/state/AgentXProvider';
 import { getRecommendedCruises, type RecommendationScore } from '@/lib/recommendationEngine';
 import { AgentXChat } from '@/components/AgentXChat';
 import { AlertsManagerModal } from '@/components/AlertsManagerModal';
-import { findBackToBackSets, type BackToBackSet } from '@/lib/backToBackFinder';
+import { findBackToBackSets, type BackToBackSet, type SailingSlot, type CruiseOffer } from '@/lib/backToBackFinder';
 import { Link2, Calendar, Users, Tag, Anchor } from 'lucide-react-native';
 
 type ViewTab = 'available' | 'all' | 'foryou' | 'booked';
@@ -343,7 +343,48 @@ export default function SchedulingScreen() {
     );
   }, [bookedIds, handleCruisePress, activeTab]);
 
+  const renderSlotOffers = useCallback((offers: CruiseOffer[]) => {
+    const groupedByCode = offers.reduce((acc, offer) => {
+      const code = offer.offerCode || 'NO_CODE';
+      if (!acc[code]) acc[code] = [];
+      acc[code].push(offer);
+      return acc;
+    }, {} as Record<string, CruiseOffer[]>);
+
+    return (
+      <View style={styles.slotOffersContainer}>
+        <Text style={styles.slotOffersTitle}>Available Offers ({offers.length} options):</Text>
+        {Object.entries(groupedByCode).map(([code, codeOffers]) => (
+          <View key={code} style={styles.offerGroup}>
+            <View style={styles.offerCodeHeader}>
+              <Tag size={10} color={COLORS.goldDark} />
+              <Text style={styles.offerCodeText}>{code === 'NO_CODE' ? 'Standard' : code}</Text>
+            </View>
+            {codeOffers.map((offer, i) => (
+              <TouchableOpacity
+                key={`${offer.cruiseId}_${i}`}
+                style={styles.offerOption}
+                onPress={() => handleCruisePress(offer.cruise)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.offerOptionLeft}>
+                  <Text style={styles.offerCabinType}>{offer.cabinType || 'Any Room'}</Text>
+                  <Text style={styles.offerGuests}>{offer.guestsInfo}</Text>
+                </View>
+                {offer.offerName && (
+                  <Text style={styles.offerNameSmall} numberOfLines={1}>{offer.offerName}</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        ))}
+      </View>
+    );
+  }, [handleCruisePress]);
+
   const renderB2BSetCard = useCallback((set: BackToBackSet, index: number) => {
+    const slots = set.slots || [];
+    
     return (
       <View key={set.id} style={styles.b2bSetCard}>
         <LinearGradient
@@ -356,35 +397,38 @@ export default function SchedulingScreen() {
           </View>
           <View style={styles.b2bSetSummary}>
             <View style={styles.b2bSummaryItem}>
+              <Ship size={12} color={COLORS.beigeWarm} />
+              <Text style={styles.b2bSummaryText}>{slots[0]?.shipName || 'Unknown Ship'}</Text>
+            </View>
+            <View style={styles.b2bSummaryItem}>
               <Calendar size={12} color={COLORS.beigeWarm} />
               <Text style={styles.b2bSummaryText}>{set.totalNights} nights total</Text>
             </View>
             <View style={styles.b2bSummaryItem}>
               <Anchor size={12} color={COLORS.beigeWarm} />
-              <Text style={styles.b2bSummaryText}>From {set.departurePort}</Text>
+              <Text style={styles.b2bSummaryText}>{set.departurePort}</Text>
             </View>
           </View>
+          <Text style={styles.b2bDateRange}>{set.startDate} → {set.endDate}</Text>
         </LinearGradient>
         
-        {set.cruises.map((cruise, cruiseIndex) => (
-          <TouchableOpacity
-            key={cruise.id}
+        {slots.map((slot, slotIndex) => (
+          <View
+            key={slot.key}
             style={[
               styles.b2bCruiseItem,
-              cruiseIndex === set.cruises.length - 1 && styles.b2bCruiseItemLast
+              slotIndex === slots.length - 1 && styles.b2bCruiseItemLast
             ]}
-            onPress={() => handleCruisePress(cruise)}
-            activeOpacity={0.7}
           >
             <View style={styles.b2bCruisePosition}>
-              <Text style={styles.b2bPositionNumber}>{cruiseIndex + 1}</Text>
-              {cruiseIndex < set.cruises.length - 1 && (
+              <Text style={styles.b2bPositionNumber}>{slotIndex + 1}</Text>
+              {slotIndex < slots.length - 1 && (
                 <View style={styles.b2bConnectorContainer}>
                   <View style={styles.b2bConnector} />
-                  {set.gapDays && set.gapDays[cruiseIndex] !== undefined && (
+                  {set.gapDays && set.gapDays[slotIndex] !== undefined && (
                     <View style={styles.b2bGapBadge}>
                       <Text style={styles.b2bGapText}>
-                        {set.gapDays[cruiseIndex] === 0 ? 'Same day' : `${set.gapDays[cruiseIndex]}d gap`}
+                        {set.gapDays[slotIndex] === 0 ? 'Same day' : `${set.gapDays[slotIndex]}d gap`}
                       </Text>
                     </View>
                   )}
@@ -394,57 +438,22 @@ export default function SchedulingScreen() {
             
             <View style={styles.b2bCruiseContent}>
               <View style={styles.b2bCruiseHeader}>
-                <Ship size={16} color={COLORS.navyDeep} />
-                <Text style={styles.b2bShipName}>{cruise.shipName}</Text>
+                <Calendar size={14} color={COLORS.navyDeep} />
+                <Text style={styles.b2bShipName}>
+                  {slot.sailDate} → {slot.returnDate}
+                </Text>
+                <View style={styles.nightsBadge}>
+                  <Text style={styles.nightsBadgeText}>{slot.nights}N</Text>
+                </View>
               </View>
               
-              <View style={styles.b2bCruiseDetails}>
-                <View style={styles.b2bDetailRow}>
-                  <Calendar size={12} color={COLORS.navyDeep} />
-                  <Text style={styles.b2bDetailText}>
-                    {cruise.sailDate} → {cruise.returnDate} ({cruise.nights}N)
-                  </Text>
-                </View>
-                
-                {cruise.cabinType && (
-                  <View style={styles.b2bDetailRow}>
-                    <View style={styles.b2bRoomBadge}>
-                      <Text style={styles.b2bRoomText}>{cruise.cabinType}</Text>
-                    </View>
-                  </View>
-                )}
-                
-                {(cruise.guests || cruise.guestsInfo) && (
-                  <View style={styles.b2bDetailRow}>
-                    <Users size={12} color={COLORS.navyDeep} />
-                    <Text style={styles.b2bDetailText}>
-                      {cruise.guestsInfo || `${cruise.guests} guests`}
-                    </Text>
-                  </View>
-                )}
-                
-                {(cruise.offerCode || cruise.offerName) && (
-                  <View style={styles.b2bOfferSection}>
-                    <Tag size={12} color={COLORS.goldDark} />
-                    <View style={styles.b2bOfferInfo}>
-                      {cruise.offerCode && (
-                        <Text style={styles.b2bOfferCode}>{cruise.offerCode}</Text>
-                      )}
-                      {cruise.offerName && (
-                        <Text style={styles.b2bOfferName} numberOfLines={1}>
-                          {cruise.offerName}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                )}
-              </View>
+              {renderSlotOffers(slot.offers)}
             </View>
-          </TouchableOpacity>
+          </View>
         ))}
         
         <View style={styles.b2bSetFooter}>
-          <Text style={styles.b2bFooterLabel}>Different Offer Codes:</Text>
+          <Text style={styles.b2bFooterLabel}>All Available Offer Codes in this Set:</Text>
           <View style={styles.b2bOfferTags}>
             {set.offerCodes.map((code, i) => (
               <View key={i} style={styles.b2bOfferTag}>
@@ -455,10 +464,13 @@ export default function SchedulingScreen() {
               <Text style={styles.b2bNoOfferText}>No offer codes specified</Text>
             )}
           </View>
+          <Text style={styles.b2bFooterHint}>
+            Pick ONE offer per sailing. Each sailing in the chain can use a different code.
+          </Text>
         </View>
       </View>
     );
-  }, [handleCruisePress]);
+  }, [handleCruisePress, renderSlotOffers]);
 
   const renderHeader = () => (
     <View style={styles.headerContent}>
@@ -1482,6 +1494,96 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
     opacity: 0.5,
     fontStyle: 'italic' as const,
+  },
+  b2bFooterHint: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.6,
+    marginTop: SPACING.sm,
+    fontStyle: 'italic' as const,
+  },
+  b2bDateRange: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.goldAccent,
+    marginTop: SPACING.xs,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  nightsBadge: {
+    backgroundColor: COLORS.navyDeep,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: SPACING.xs,
+  },
+  nightsBadgeText: {
+    fontSize: 10,
+    color: COLORS.white,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  slotOffersContainer: {
+    marginTop: SPACING.sm,
+    backgroundColor: 'rgba(0, 31, 63, 0.03)',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+  },
+  slotOffersTitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+    marginBottom: SPACING.xs,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  offerGroup: {
+    marginBottom: SPACING.xs,
+  },
+  offerCodeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+    paddingBottom: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(212, 165, 116, 0.2)',
+  },
+  offerCodeText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.goldDark,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  offerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    paddingHorizontal: SPACING.xs,
+    marginLeft: SPACING.sm,
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  offerOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  offerCabinType: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    backgroundColor: 'rgba(0, 31, 63, 0.08)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  offerGuests: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+  },
+  offerNameSmall: {
+    fontSize: 10,
+    color: COLORS.navyDeep,
+    opacity: 0.5,
+    maxWidth: 120,
   },
   b2bExplanation: {
     flexDirection: 'row',
