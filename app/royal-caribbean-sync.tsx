@@ -51,10 +51,13 @@ function RoyalCaribbeanSyncScreen() {
         cruiseLine,
       });
       
+      console.log('[WebSync] Result received:', result);
+      
       if (!result.success) {
-        console.log('[WebSync] Login failed:', result.error);
-        setWebSyncError(result.error || 'Login failed');
-        addLog(`Web sync failed: ${result.error}`, 'error');
+        console.log('[WebSync] Sync not available:', result.error);
+        const errorMsg = result.error || 'Web sync is not available';
+        setWebSyncError(errorMsg);
+        addLog('Web sync is not available - use mobile app or browser extension', 'warning');
         return;
       }
       
@@ -62,8 +65,8 @@ function RoyalCaribbeanSyncScreen() {
       addLog(`Retrieved ${result.offers.length} offers and ${result.bookedCruises.length} cruises`, 'info');
       
       if (result.offers.length === 0 && result.bookedCruises.length === 0) {
-        setWebSyncError('Authentication succeeded but no data was retrieved. The cruise line API may have changed or is blocking automated access. Please try the mobile app or browser extension instead.');
-        addLog('No data retrieved from web sync - API may be restricted', 'warning');
+        setWebSyncError('Authentication succeeded but no data was retrieved. Please try the mobile app or browser extension instead.');
+        addLog('No data retrieved from web sync', 'warning');
         return;
       }
       
@@ -72,7 +75,14 @@ function RoyalCaribbeanSyncScreen() {
       
     } catch (error) {
       console.error('[WebSync] Error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      let errorMessage = 'Unable to connect to sync service';
+      if (error instanceof Error) {
+        if (error.message.includes('transform') || error.message.includes('JSON')) {
+          errorMessage = 'Server returned an invalid response. Please try again or use the browser extension.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
       setWebSyncError(errorMessage);
       addLog(`Web sync error: ${errorMessage}`, 'error');
     }
