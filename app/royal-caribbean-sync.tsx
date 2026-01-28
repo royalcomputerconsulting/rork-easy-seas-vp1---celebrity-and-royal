@@ -1211,17 +1211,6 @@ const styles = StyleSheet.create({
   webSyncOptionContent: {
     flex: 1
   },
-  webSyncOptionTitle: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600' as const,
-    marginBottom: 4
-  },
-  webSyncOptionDesc: {
-    color: '#94a3b8',
-    fontSize: 13,
-    lineHeight: 18
-  },
   webInputGroup: {
     gap: 8
   },

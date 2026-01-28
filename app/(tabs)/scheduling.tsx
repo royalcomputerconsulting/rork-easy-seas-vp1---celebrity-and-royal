@@ -162,9 +162,10 @@ export default function SchedulingScreen() {
     console.log('[Scheduling] Total cruises to search:', cruises.length);
     
     const sets = findBackToBackSets(cruises, bookedDates, {
-      maxGapDays: 1,
+      maxGapDays: 2,
       requireDifferentOffers: false,
       excludeConflicts: bookedDates.size > 0,
+      minChainLength: 2,
     });
     
     console.log('[Scheduling] Found', sets.length, 'back-to-back sets');
@@ -251,28 +252,26 @@ export default function SchedulingScreen() {
       );
     }
 
-    if (activeTab !== 'foryou') {
-      result.sort((a, b) => {
-        switch (filters.sortBy) {
-          case 'date-asc':
-            return createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime();
-          case 'date-desc':
-            return createDateFromString(b.sailDate).getTime() - createDateFromString(a.sailDate).getTime();
-          case 'value-asc': {
-            const valueA = calculateCruiseValue(a as Cruise | BookedCruise).totalRetailValue;
-            const valueB = calculateCruiseValue(b as Cruise | BookedCruise).totalRetailValue;
-            return valueA - valueB;
-          }
-          case 'value-desc': {
-            const valueA = calculateCruiseValue(a as Cruise | BookedCruise).totalRetailValue;
-            const valueB = calculateCruiseValue(b as Cruise | BookedCruise).totalRetailValue;
-            return valueB - valueA;
-          }
-          default:
-            return createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime();
+    result.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'date-asc':
+          return createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime();
+        case 'date-desc':
+          return createDateFromString(b.sailDate).getTime() - createDateFromString(a.sailDate).getTime();
+        case 'value-asc': {
+          const valueA = calculateCruiseValue(a as Cruise | BookedCruise).totalRetailValue;
+          const valueB = calculateCruiseValue(b as Cruise | BookedCruise).totalRetailValue;
+          return valueA - valueB;
         }
-      });
-    }
+        case 'value-desc': {
+          const valueA = calculateCruiseValue(a as Cruise | BookedCruise).totalRetailValue;
+          const valueB = calculateCruiseValue(b as Cruise | BookedCruise).totalRetailValue;
+          return valueB - valueA;
+        }
+        default:
+          return createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime();
+      }
+    });
     return result;
   }, [enrichedCruises, activeTab, filters, bookedIds, hasConflict, getSmartRecommendations, bookedCruisesData]);
 
@@ -380,7 +379,16 @@ export default function SchedulingScreen() {
             <View style={styles.b2bCruisePosition}>
               <Text style={styles.b2bPositionNumber}>{cruiseIndex + 1}</Text>
               {cruiseIndex < set.cruises.length - 1 && (
-                <View style={styles.b2bConnector} />
+                <View style={styles.b2bConnectorContainer}>
+                  <View style={styles.b2bConnector} />
+                  {set.gapDays && set.gapDays[cruiseIndex] !== undefined && (
+                    <View style={styles.b2bGapBadge}>
+                      <Text style={styles.b2bGapText}>
+                        {set.gapDays[cruiseIndex] === 0 ? 'Same day' : `${set.gapDays[cruiseIndex]}d gap`}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               )}
             </View>
             
@@ -1338,7 +1346,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   b2bCruisePosition: {
-    width: 32,
+    width: 40,
     alignItems: 'center',
     marginRight: SPACING.sm,
   },
@@ -1354,11 +1362,29 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     overflow: 'hidden',
   },
+  b2bConnectorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    marginTop: 4,
+  },
   b2bConnector: {
     width: 2,
     flex: 1,
     backgroundColor: COLORS.goldAccent,
-    marginTop: 4,
+  },
+  b2bGapBadge: {
+    position: 'absolute' as const,
+    top: '50%',
+    backgroundColor: 'rgba(212, 165, 116, 0.2)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    transform: [{ translateY: -8 }],
+  },
+  b2bGapText: {
+    fontSize: 8,
+    color: COLORS.goldDark,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   b2bCruiseContent: {
     flex: 1,

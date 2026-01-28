@@ -1,5 +1,5 @@
 import type { Cruise } from '@/types/models';
-import { createDateFromString } from '@/lib/date';
+import { createDateFromString, isDateInPast } from '@/lib/date';
 
 export interface BackToBackSet {
   id: string;
@@ -10,6 +10,7 @@ export interface BackToBackSet {
   offerNames: string[];
   startDate: string;
   endDate: string;
+  gapDays: number[];
 }
 
 export interface BackToBackCruiseDisplay extends Cruise {
@@ -73,9 +74,9 @@ function getDaysDifference(date1: string, date2: string): number {
   return Math.round(diffTime / (1000 * 60 * 60 * 24));
 }
 
-function isConsecutive(cruise1: Cruise, cruise2: Cruise): boolean {
+function isConsecutive(cruise1: Cruise, cruise2: Cruise, maxGap: number = 2): boolean {
   const daysDiff = getDaysDifference(cruise1.returnDate, cruise2.sailDate);
-  return daysDiff >= 0 && daysDiff <= 1;
+  return daysDiff >= 0 && daysDiff <= maxGap;
 }
 
 function hasDifferentOfferCodes(cruise1: Cruise, cruise2: Cruise): boolean {
@@ -94,36 +95,32 @@ export function findBackToBackSets(
     maxGapDays?: number;
     requireDifferentOffers?: boolean;
     excludeConflicts?: boolean;
+    minChainLength?: number;
   } = {}
 ): BackToBackSet[] {
   const {
-    maxGapDays = 1,
+    maxGapDays = 2,
     requireDifferentOffers = false,
     excludeConflicts = true,
+    minChainLength = 2,
   } = options;
 
   console.log('[B2B Finder] Starting search with', cruises.length, 'cruises');
-  console.log('[B2B Finder] Options:', { maxGapDays, requireDifferentOffers, excludeConflicts });
+  console.log('[B2B Finder] Options:', { maxGapDays, requireDifferentOffers, excludeConflicts, minChainLength });
 
-  // Log sample cruise data for debugging
-  if (cruises.length > 0) {
-    const sample = cruises.slice(0, 3);
-    console.log('[B2B Finder] Sample cruise data:', sample.map(c => ({
-      id: c.id,
-      ship: c.shipName,
-      sailDate: c.sailDate,
-      returnDate: c.returnDate,
-      departurePort: c.departurePort,
-      offerCode: c.offerCode,
-    })));
-  }
-
+  // Filter to future cruises with valid dates
   const validCruises = cruises.filter(cruise => {
     if (!cruise.sailDate || !cruise.returnDate) {
+      console.log('[B2B Finder] Skipping cruise without dates:', cruise.id);
       return false;
     }
-    // Allow cruises without departure port - we'll try to match by ship
     
+    // Skip past cruises
+    if (isDateInPast(cruise.sailDate)) {
+      return false;
+    }
+    
+    // Check for conflicts with booked dates
     if (excludeConflicts && bookedDates.size > 0) {
       const sailDate = createDateFromString(cruise.sailDate);
       const returnDate = createDateFromString(cruise.returnDate);
@@ -139,86 +136,178 @@ export function findBackToBackSets(
     return true;
   });
 
-  console.log('[B2B Finder] Valid cruises after filtering:', validCruises.length);
+  console.log('[B2B Finder] Valid future cruises after filtering:', validCruises.length);
   console.log('[B2B Finder] Booked dates count:', bookedDates.size);
+  
+  if (validCruises.length === 0) {
+    console.log('[B2B Finder] No valid cruises to search');
+    return [];
+  }
 
+  // Log sample cruise data for debugging
+  const sample = validCruises.slice(0, 5);
+  console.log('[B2B Finder] Sample cruise data:', sample.map(c => ({
+    id: c.id,
+    ship: c.shipName,
+    sailDate: c.sailDate,
+    returnDate: c.returnDate,
+    nights: c.nights,
+    departurePort: c.departurePort,
+    offerCode: c.offerCode,
+  })));
+
+  // Sort by sail date
   const sortedCruises = [...validCruises].sort((a, b) => 
     createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime()
   );
 
-  const b2bSets: BackToBackSet[] = [];
-  const usedCruiseIds = new Set<string>();
-
-  for (let i = 0; i < sortedCruises.length; i++) {
-    const firstCruise = sortedCruises[i];
+  // Build adjacency list - which cruises can follow which
+  const adjacencyMap = new Map<string, { cruise: Cruise; gapDays: number }[]>();
+  
+  for (const cruise of sortedCruises) {
+    const followers: { cruise: Cruise; gapDays: number }[] = [];
     
-    if (usedCruiseIds.has(firstCruise.id)) continue;
-
-    const potentialPartners = sortedCruises.filter((candidate, j) => {
-      if (j <= i) return false;
-      if (usedCruiseIds.has(candidate.id)) return false;
+    for (const candidate of sortedCruises) {
+      if (cruise.id === candidate.id) continue;
       
-      const daysDiff = getDaysDifference(firstCruise.returnDate, candidate.sailDate);
-      if (daysDiff < 0 || daysDiff > maxGapDays) {
-        return false;
-      }
+      const daysDiff = getDaysDifference(cruise.returnDate, candidate.sailDate);
       
-      // Check if same port (or same ship for flexibility)
-      const samePort = areSamePort(firstCruise.departurePort, candidate.departurePort);
-      const sameShip = firstCruise.shipName === candidate.shipName;
+      // Must be consecutive (0-2 day gap by default)
+      if (daysDiff < 0 || daysDiff > maxGapDays) continue;
       
-      if (!samePort && !sameShip) {
-        return false;
-      }
+      // Must be same departure port (be permissive - if no port, allow it)
+      const samePort = areSamePort(cruise.departurePort, candidate.departurePort);
+      if (!samePort) continue;
       
-      // Only filter by different offers if explicitly required
-      if (requireDifferentOffers && !hasDifferentOfferCodes(firstCruise, candidate)) {
-        return false;
-      }
+      // Check for different offers if required
+      if (requireDifferentOffers && !hasDifferentOfferCodes(cruise, candidate)) continue;
       
-      console.log('[B2B Finder] Found potential B2B pair:', {
-        cruise1: { ship: firstCruise.shipName, return: firstCruise.returnDate, port: firstCruise.departurePort, offer: firstCruise.offerCode },
-        cruise2: { ship: candidate.shipName, sail: candidate.sailDate, port: candidate.departurePort, offer: candidate.offerCode },
-        daysDiff,
-      });
-      
-      return true;
-    });
-
-    if (potentialPartners.length > 0) {
-      for (const partner of potentialPartners) {
-        if (usedCruiseIds.has(partner.id)) continue;
-        
-        const setCruises = [firstCruise, partner];
-        const setId = `b2b_${firstCruise.id}_${partner.id}`;
-        
-        const totalNights = setCruises.reduce((sum, c) => sum + (c.nights || 0), 0);
-        const offerCodes = setCruises
-          .map(c => c.offerCode)
-          .filter((code): code is string => !!code);
-        const offerNames = setCruises
-          .map(c => c.offerName)
-          .filter((name): name is string => !!name);
-
-        b2bSets.push({
-          id: setId,
-          cruises: setCruises,
-          totalNights,
-          departurePort: firstCruise.departurePort || 'Unknown',
-          offerCodes,
-          offerNames,
-          startDate: firstCruise.sailDate,
-          endDate: partner.returnDate,
-        });
-
-        usedCruiseIds.add(firstCruise.id);
-        usedCruiseIds.add(partner.id);
-        break;
-      }
+      followers.push({ cruise: candidate, gapDays: daysDiff });
+    }
+    
+    if (followers.length > 0) {
+      adjacencyMap.set(cruise.id, followers);
     }
   }
 
-  console.log('[B2B Finder] Found', b2bSets.length, 'back-to-back sets');
+  console.log('[B2B Finder] Cruises with potential followers:', adjacencyMap.size);
+
+  // Find all chains using DFS
+  const allChains: { cruises: Cruise[]; gapDays: number[] }[] = [];
+  const visitedInCurrentPath = new Set<string>();
+
+  function findChains(currentCruise: Cruise, currentChain: Cruise[], currentGaps: number[]) {
+    currentChain.push(currentCruise);
+    visitedInCurrentPath.add(currentCruise.id);
+    
+    const followers = adjacencyMap.get(currentCruise.id) || [];
+    let extended = false;
+    
+    for (const { cruise: nextCruise, gapDays } of followers) {
+      if (visitedInCurrentPath.has(nextCruise.id)) continue;
+      
+      // Check the chain doesn't conflict with booked dates including the new cruise
+      if (excludeConflicts && bookedDates.size > 0) {
+        const chainDates = new Set<string>();
+        for (const c of currentChain) {
+          const sailDate = createDateFromString(c.sailDate);
+          const returnDate = createDateFromString(c.returnDate);
+          let d = new Date(sailDate);
+          while (d <= returnDate) {
+            chainDates.add(d.toISOString().split('T')[0]);
+            d.setDate(d.getDate() + 1);
+          }
+        }
+        
+        // Check if next cruise overlaps with chain dates
+        const nextSail = createDateFromString(nextCruise.sailDate);
+        const nextReturn = createDateFromString(nextCruise.returnDate);
+        let nd = new Date(nextSail);
+        let hasOverlap = false;
+        while (nd <= nextReturn) {
+          if (chainDates.has(nd.toISOString().split('T')[0])) {
+            hasOverlap = true;
+            break;
+          }
+          nd.setDate(nd.getDate() + 1);
+        }
+        if (hasOverlap) continue;
+      }
+      
+      extended = true;
+      findChains(nextCruise, [...currentChain], [...currentGaps, gapDays]);
+    }
+    
+    // If we couldn't extend and chain is long enough, save it
+    if (!extended && currentChain.length >= minChainLength) {
+      allChains.push({ cruises: [...currentChain], gapDays: [...currentGaps] });
+    }
+    
+    visitedInCurrentPath.delete(currentCruise.id);
+  }
+
+  // Start DFS from each cruise
+  for (const cruise of sortedCruises) {
+    findChains(cruise, [], []);
+  }
+
+  console.log('[B2B Finder] Found', allChains.length, 'total chains before deduplication');
+
+  // Remove duplicate/subset chains - keep longest chains
+  const uniqueChains = allChains.filter((chain, index) => {
+    const chainIds = new Set(chain.cruises.map(c => c.id));
+    
+    // Check if any other chain is a superset of this one
+    for (let i = 0; i < allChains.length; i++) {
+      if (i === index) continue;
+      const otherIds = allChains[i].cruises.map(c => c.id);
+      
+      // If other chain is longer and contains all our cruises, skip this chain
+      if (otherIds.length > chain.cruises.length) {
+        const isSubset = chain.cruises.every(c => otherIds.includes(c.id));
+        if (isSubset) return false;
+      }
+    }
+    return true;
+  });
+
+  console.log('[B2B Finder] Unique chains after deduplication:', uniqueChains.length);
+
+  // Convert chains to BackToBackSet format
+  const b2bSets: BackToBackSet[] = uniqueChains.map((chain, index) => {
+    const setCruises = chain.cruises;
+    const setId = `b2b_${setCruises.map(c => c.id).join('_')}`;
+    
+    const totalNights = setCruises.reduce((sum, c) => sum + (c.nights || 0), 0);
+    const offerCodes = [...new Set(setCruises
+      .map(c => c.offerCode)
+      .filter((code): code is string => !!code))];
+    const offerNames = [...new Set(setCruises
+      .map(c => c.offerName)
+      .filter((name): name is string => !!name))];
+
+    const firstCruise = setCruises[0];
+    const lastCruise = setCruises[setCruises.length - 1];
+
+    console.log(`[B2B Finder] Set ${index + 1}: ${setCruises.length} cruises, ${totalNights} nights, ${firstCruise.sailDate} to ${lastCruise.returnDate}`);
+    setCruises.forEach((c, i) => {
+      console.log(`  ${i + 1}. ${c.shipName} ${c.sailDate}-${c.returnDate} (${c.nights}N) ${c.departurePort || 'Unknown port'} - ${c.offerCode || 'No offer'}`);
+    });
+
+    return {
+      id: setId,
+      cruises: setCruises,
+      totalNights,
+      departurePort: firstCruise.departurePort || 'Unknown',
+      offerCodes,
+      offerNames,
+      startDate: firstCruise.sailDate,
+      endDate: lastCruise.returnDate,
+      gapDays: chain.gapDays,
+    };
+  });
+
+  console.log('[B2B Finder] Final result:', b2bSets.length, 'back-to-back sets');
 
   return b2bSets.sort((a, b) => 
     createDateFromString(a.startDate).getTime() - createDateFromString(b.startDate).getTime()
