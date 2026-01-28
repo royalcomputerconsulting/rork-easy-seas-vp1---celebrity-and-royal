@@ -45,11 +45,15 @@ export default function TabLayout() {
           shadowRadius: 8,
         },
         tabBarLabelStyle: {
-          fontSize: 10,
+          fontSize: 9,
           fontWeight: '600' as const,
           marginTop: 2,
           marginBottom: Platform.OS === 'ios' ? 0 : 2,
-          letterSpacing: 0.2,
+          letterSpacing: 0,
+        },
+        tabBarItemStyle: {
+          paddingHorizontal: 0,
+          minWidth: 0,
         },
         tabBarIconStyle: {
           marginTop: 0,
@@ -84,7 +88,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="booked"
         options={{
-          title: "My Cruises",
+          title: "Booked",
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
               <Ship color={color} size={22} strokeWidth={focused ? 2.5 : 2} />

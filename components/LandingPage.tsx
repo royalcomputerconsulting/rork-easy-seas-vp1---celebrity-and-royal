@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 
 interface LandingPageProps {
@@ -14,6 +14,11 @@ export function LandingPage({ onContinue }: LandingPageProps) {
         showsVerticalScrollIndicator={true}
       >
         <View style={styles.content}>
+          <Image 
+            source={require('@/assets/images/splash-icon.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>EASY SEAS™</Text>
           
           <View style={styles.disclaimerCard}>
@@ -58,6 +63,12 @@ const styles = StyleSheet.create({
     maxWidth: 800,
     width: '100%',
     alignSelf: 'center',
+  },
+  logo: {
+    width: 180,
+    height: 180,
+    alignSelf: 'center',
+    marginBottom: SPACING.lg,
   },
   title: {
     fontSize: 48,

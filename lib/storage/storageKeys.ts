@@ -28,6 +28,15 @@ export const ALL_STORAGE_KEYS = {
   CELEBRITY_CAPTAINS_CLUB_POINTS: 'easyseas_celebrity_captains_club_points',
   CELEBRITY_BLUE_CHIP_POINTS: 'easyseas_celebrity_blue_chip_points',
   PREFERRED_BRAND: 'easyseas_preferred_brand',
+  
+  CROWN_ANCHOR_TIER: 'easyseas_crown_anchor_tier',
+  CLUB_ROYALE_TIER: 'easyseas_club_royale_tier',
+  VENETIAN_SOCIETY_TIER: 'easyseas_venetian_society_tier',
+  VENETIAN_SOCIETY_MEMBER_NUMBER: 'easyseas_venetian_society_member_number',
+  VENETIAN_SOCIETY_ENROLLED: 'easyseas_venetian_society_enrolled',
+  LOYALTY_ACCOUNT_ID: 'easyseas_loyalty_account_id',
+  CROWN_ANCHOR_ID: 'easyseas_crown_anchor_id',
+  EXTENDED_LOYALTY_DATA: 'easyseas_extended_loyalty_data',
 } as const;
 
 export const STORAGE_KEYS = ALL_STORAGE_KEYS;

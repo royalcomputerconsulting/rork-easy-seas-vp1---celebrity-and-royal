@@ -236,17 +236,9 @@ export function calculateUrgencyScore(cruise: Cruise, offers: CasinoOffer[]): { 
 }
 
 export function calculatePortPreferenceScore(cruise: Cruise): number {
-  const port = cruise.departurePort || '';
-  
-  if (isPreferredPort(port)) {
-    return 100;
-  }
-  
-  if (isEastCoastPort(port)) {
-    return 30;
-  }
-  
-  return 50;
+  // All ports are valid - no preference given to specific ports
+  // Any departure port is equally acceptable
+  return 100;
 }
 
 export function scoreCruiseForRecommendation(

@@ -16,6 +16,7 @@ import {
 import { createDateFromString } from "@/lib/date";
 import { isRoyalCaribbeanShip } from "@/constants/shipInfo";
 import { ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
+import type { ExtendedLoyaltyData } from "@/lib/royalCaribbean/types";
 
 // Crown & Anchor uses cruise nights directly (1 credit per night)
 
@@ -61,16 +62,35 @@ interface LoyaltyState {
     projectedDate: Date | null;
   };
   
+  extendedLoyalty: ExtendedLoyaltyData | null;
+  
+  venetianSociety: {
+    tier: string | null;
+    nextTier: string | null;
+    memberNumber: string | null;
+    enrolled: boolean;
+  };
+  
+  captainsClub: {
+    tier: string | null;
+    points: number;
+    nextTier: string | null;
+    remainingPoints: number;
+    trackerPercentage: number;
+  };
+  
   isLoading: boolean;
   
   setManualClubRoyalePoints: (points: number) => void;
   setManualCrownAnchorPoints: (points: number) => void;
+  setExtendedLoyaltyData: (data: ExtendedLoyaltyData) => Promise<void>;
   syncFromStorage: () => Promise<void>;
 }
 
 const STORAGE_KEYS = {
   MANUAL_CLUB_ROYALE_POINTS: ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS,
   MANUAL_CROWN_ANCHOR_POINTS: ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS,
+  EXTENDED_LOYALTY_DATA: ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA,
 };
 
 const DEFAULT_LOYALTY = {
@@ -86,6 +106,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
   
   const [manualClubRoyalePoints, setManualClubRoyalePointsState] = useState<number | null>(null);
   const [manualCrownAnchorPoints, setManualCrownAnchorPointsState] = useState<number | null>(null);
+  const [extendedLoyalty, setExtendedLoyaltyState] = useState<ExtendedLoyaltyData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
   const bookedCruises = useMemo((): BookedCruise[] => {
@@ -100,9 +121,10 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      const [clubRoyale, crownAnchor] = await Promise.all([
+      const [clubRoyale, crownAnchor, extendedData] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS),
         AsyncStorage.getItem(STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS),
+        AsyncStorage.getItem(STORAGE_KEYS.EXTENDED_LOYALTY_DATA),
       ]);
       
       console.log('[LoyaltyProvider] Raw storage values:', { 
@@ -147,9 +169,20 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       setManualClubRoyalePointsState(loadedClubRoyale);
       setManualCrownAnchorPointsState(loadedCrownAnchor);
       
+      if (extendedData) {
+        try {
+          const parsed = JSON.parse(extendedData) as ExtendedLoyaltyData;
+          setExtendedLoyaltyState(parsed);
+          console.log('[LoyaltyProvider] ✓ Loaded extended loyalty data from storage');
+        } catch (parseError) {
+          console.warn('[LoyaltyProvider] Failed to parse extended loyalty data:', parseError);
+        }
+      }
+      
       console.log('[LoyaltyProvider] ✓ Manual points loaded successfully:', {
         clubRoyale: loadedClubRoyale,
-        crownAnchor: loadedCrownAnchor
+        crownAnchor: loadedCrownAnchor,
+        hasExtendedData: !!extendedData
       });
       console.log('[LoyaltyProvider] ==================== LOAD COMPLETE ====================');
     } catch (error) {
@@ -226,6 +259,32 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       throw error;
     }
   }, []);
+
+  const setExtendedLoyaltyData = useCallback(async (data: ExtendedLoyaltyData) => {
+    try {
+      console.log('[LoyaltyProvider] ==================== SAVING EXTENDED LOYALTY DATA ====================');
+      console.log('[LoyaltyProvider] Data to save:', data);
+      
+      setExtendedLoyaltyState(data);
+      
+      const jsonValue = JSON.stringify(data);
+      await AsyncStorage.setItem(STORAGE_KEYS.EXTENDED_LOYALTY_DATA, jsonValue);
+      console.log('[LoyaltyProvider] ✓ Extended loyalty data saved to storage');
+      
+      if (data.clubRoyalePointsFromApi !== undefined) {
+        await setManualClubRoyalePoints(data.clubRoyalePointsFromApi);
+      }
+      
+      if (data.crownAndAnchorPointsFromApi !== undefined) {
+        await setManualCrownAnchorPoints(data.crownAndAnchorPointsFromApi);
+      }
+      
+      console.log('[LoyaltyProvider] ==================== SAVE COMPLETE ====================');
+    } catch (error) {
+      console.error('[LoyaltyProvider] ✗ Failed to save extended loyalty data:', error);
+      throw error;
+    }
+  }, [setManualClubRoyalePoints, setManualCrownAnchorPoints]);
 
   const calculatedData = useMemo(() => {
     let calculatedClubRoyalePoints = 0;
@@ -490,6 +549,21 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       upcomingCruisesCount: upcomingBookedCruises.length,
     });
 
+    const venetianSociety = {
+      tier: extendedLoyalty?.venetianSocietyTier || null,
+      nextTier: extendedLoyalty?.venetianSocietyNextTier || null,
+      memberNumber: extendedLoyalty?.venetianSocietyMemberNumber || null,
+      enrolled: extendedLoyalty?.venetianSocietyEnrolled || false,
+    };
+    
+    const captainsClub = {
+      tier: extendedLoyalty?.captainsClubTier || null,
+      points: extendedLoyalty?.captainsClubPoints || 0,
+      nextTier: extendedLoyalty?.captainsClubNextTier || null,
+      remainingPoints: extendedLoyalty?.captainsClubRemainingPoints || 0,
+      trackerPercentage: extendedLoyalty?.captainsClubTrackerPercentage || 0,
+    };
+
     return {
       clubRoyalePoints: effectiveClubRoyalePoints,
       clubRoyaleTier,
@@ -504,14 +578,18 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       crownAnchorProgress,
       pinnacleProgress,
       mastersProgress,
+      venetianSociety,
+      captainsClub,
     };
-  }, [bookedCruises, manualClubRoyalePoints, manualCrownAnchorPoints]);
+  }, [bookedCruises, manualClubRoyalePoints, manualCrownAnchorPoints, extendedLoyalty]);
 
   return {
     ...calculatedData,
+    extendedLoyalty,
     isLoading: isLoading || cruisesLoading,
     setManualClubRoyalePoints,
     setManualCrownAnchorPoints,
+    setExtendedLoyaltyData,
     syncFromStorage: loadManualPoints,
   };
 });

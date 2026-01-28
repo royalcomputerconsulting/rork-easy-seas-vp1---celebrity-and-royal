@@ -24,6 +24,86 @@ export interface LoyaltyData {
   clubRoyalePoints?: string;
 }
 
+export interface RoyalCaribbeanLoyaltyApiResponse {
+  status: number;
+  errors: string[];
+  payload: {
+    accountId: string;
+    loyaltyInformation: LoyaltyApiInformation;
+    coBrandCardInfo?: {
+      status: number;
+      errorMessage?: string;
+      activeCardHolder: boolean;
+    };
+  };
+}
+
+export interface LoyaltyApiInformation {
+  captainsClubId?: string;
+  crownAndAnchorId?: string;
+  
+  captainsClubLoyaltyTier?: string;
+  captainsClubLoyaltyIndividualPoints?: number;
+  captainsClubLoyaltyRelationshipPoints?: number;
+  captainsClubNextTier?: string;
+  captainsClubRemainingPoints?: number;
+  captainsClubTrackerPercentage?: number;
+  captainsClubLoyaltyMatchTier?: string;
+  
+  celebrityBlueChipLoyaltyTier?: string;
+  celebrityBlueChipLoyaltyIndividualPoints?: number;
+  celebrityBlueChipLoyaltyRelationshipPoints?: number;
+  
+  clubRoyaleLoyaltyTier?: string;
+  clubRoyaleLoyaltyIndividualPoints?: number;
+  clubRoyaleLoyaltyRelationshipPoints?: number;
+  
+  crownAndAnchorSocietyLoyaltyTier?: string;
+  crownAndAnchorSocietyLoyaltyIndividualPoints?: number;
+  crownAndAnchorSocietyLoyaltyRelationshipPoints?: number;
+  crownAndAnchorSocietyNextTier?: string;
+  crownAndAnchorSocietyRemainingPoints?: number;
+  crownAndAnchorTrackerPercentage?: number;
+  crownAndAnchorLoyaltyMatchTier?: string;
+  
+  venetianSocietyLoyaltyTier?: string;
+  venetianSocietyNextTier?: string;
+  venetianSocietyLoyaltyMatchTier?: string;
+  venetianSocietyEnrollmentSubmitted?: boolean;
+  vsMemberNumber?: string;
+}
+
+export interface ExtendedLoyaltyData extends LoyaltyData {
+  accountId?: string;
+  
+  captainsClubId?: string;
+  captainsClubTier?: string;
+  captainsClubPoints?: number;
+  captainsClubNextTier?: string;
+  captainsClubRemainingPoints?: number;
+  captainsClubTrackerPercentage?: number;
+  
+  celebrityBlueChipTier?: string;
+  celebrityBlueChipPoints?: number;
+  
+  clubRoyaleTierFromApi?: string;
+  clubRoyalePointsFromApi?: number;
+  
+  crownAndAnchorId?: string;
+  crownAndAnchorTier?: string;
+  crownAndAnchorPointsFromApi?: number;
+  crownAndAnchorNextTier?: string;
+  crownAndAnchorRemainingPoints?: number;
+  crownAndAnchorTrackerPercentage?: number;
+  
+  venetianSocietyTier?: string;
+  venetianSocietyNextTier?: string;
+  venetianSocietyMemberNumber?: string;
+  venetianSocietyEnrolled?: boolean;
+  
+  hasCoBrandCard?: boolean;
+}
+
 export interface OfferRow {
   sourcePage: string;
   offerName: string;
@@ -44,17 +124,26 @@ export interface OfferRow {
 export interface BookedCruiseRow {
   sourcePage: string;
   shipName: string;
+  shipCode?: string;
+  cruiseTitle?: string;
   sailingStartDate: string;
   sailingEndDate: string;
   sailingDates: string;
   itinerary: string;
   departurePort: string;
   cabinType: string;
+  cabinCategory?: string;
   cabinNumberOrGTY: string;
+  deckNumber?: string;
   bookingId: string;
+  numberOfGuests?: string;
+  daysToGo?: string;
   status: string;
   loyaltyLevel: string;
   loyaltyPoints: string;
+  paidInFull?: string;
+  balanceDue?: string;
+  musterStation?: string;
 }
 
 export interface ProgressInfo {
@@ -72,6 +161,7 @@ export type WebViewMessage =
   | { type: 'step_complete'; step: number; data: any[]; totalCount?: number; offerCount?: number }
   | { type: 'offer_progress'; offerIndex: number; totalOffers: number; offerName: string; sailingsCount: number; status: string }
   | { type: 'loyalty_data'; data: LoyaltyData }
+  | { type: 'extended_loyalty_data'; data: LoyaltyApiInformation; accountId?: string }
   | { type: 'error'; message: string }
   | { type: 'complete' };
 

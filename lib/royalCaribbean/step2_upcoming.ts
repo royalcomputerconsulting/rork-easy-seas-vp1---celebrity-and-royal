@@ -1,16 +1,447 @@
+const SHIP_CODE_MAP: Record<string, string> = {
+  'AL': 'Allure of the Seas',
+  'AN': 'Anthem of the Seas',
+  'AD': 'Adventure of the Seas',
+  'BR': 'Brilliance of the Seas',
+  'EN': 'Enchantment of the Seas',
+  'EX': 'Explorer of the Seas',
+  'FR': 'Freedom of the Seas',
+  'GR': 'Grandeur of the Seas',
+  'HM': 'Harmony of the Seas',
+  'IC': 'Icon of the Seas',
+  'ID': 'Independence of the Seas',
+  'JW': 'Jewel of the Seas',
+  'LB': 'Liberty of the Seas',
+  'LE': 'Legend of the Seas',
+  'MJ': 'Majesty of the Seas',
+  'MR': 'Mariner of the Seas',
+  'NV': 'Navigator of the Seas',
+  'OA': 'Oasis of the Seas',
+  'OV': 'Ovation of the Seas',
+  'OY': 'Odyssey of the Seas',
+  'QN': 'Quantum of the Seas',
+  'RD': 'Radiance of the Seas',
+  'RH': 'Rhapsody of the Seas',
+  'SE': 'Serenade of the Seas',
+  'SP': 'Spectrum of the Seas',
+  'SY': 'Symphony of the Seas',
+  'UT': 'Utopia of the Seas',
+  'VI': 'Vision of the Seas',
+  'VY': 'Voyager of the Seas',
+  'WN': 'Wonder of the Seas',
+};
+
+const STATEROOM_TYPE_MAP: Record<string, string> = {
+  'I': 'Interior',
+  'O': 'Ocean View',
+  'B': 'Balcony',
+  'S': 'Suite',
+};
+
 export const STEP2_UPCOMING_SCRIPT = `
 (function() {
-  function wait(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  const SHIP_CODE_MAP = ${JSON.stringify(SHIP_CODE_MAP)};
+  const STATEROOM_TYPE_MAP = ${JSON.stringify(STATEROOM_TYPE_MAP)};
+
+  function log(message, type) {
+    type = type || 'info';
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log',
+        message: message,
+        logType: type
+      }));
+    } catch (e) {
+      console.log('[Step2]', message);
+    }
   }
 
-  async function scrollUntilComplete(maxAttempts = 30) {
-    let previousHeight = 0;
-    let stableCount = 0;
-    let attempts = 0;
+  function wait(ms) {
+    return new Promise(function(resolve) { setTimeout(resolve, ms); });
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr || dateStr.length !== 8) return '';
+    var year = dateStr.substring(0, 4);
+    var month = dateStr.substring(4, 6);
+    var day = dateStr.substring(6, 8);
+    var date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return monthNames[date.getMonth()] + ' ' + date.getDate() + ', ' + year;
+  }
+
+  function calculateEndDate(startDateStr, nights) {
+    if (!startDateStr || startDateStr.length !== 8) return '';
+    var year = parseInt(startDateStr.substring(0, 4));
+    var month = parseInt(startDateStr.substring(4, 6)) - 1;
+    var day = parseInt(startDateStr.substring(6, 8));
+    var startDate = new Date(year, month, day);
+    startDate.setDate(startDate.getDate() + nights);
+    var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return monthNames[startDate.getMonth()] + ' ' + startDate.getDate() + ', ' + startDate.getFullYear();
+  }
+
+  function calculateDaysToGo(sailDateStr) {
+    if (!sailDateStr || sailDateStr.length !== 8) return '';
+    var year = parseInt(sailDateStr.substring(0, 4));
+    var month = parseInt(sailDateStr.substring(4, 6)) - 1;
+    var day = parseInt(sailDateStr.substring(6, 8));
+    var sailDate = new Date(year, month, day);
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var diffTime = sailDate.getTime() - today.getTime();
+    var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays.toString() : '0';
+  }
+
+  function getCabinTypeFromCategory(categoryCode, stateroomType) {
+    if (!categoryCode && !stateroomType) return '';
+    
+    if (stateroomType) {
+      var mapped = STATEROOM_TYPE_MAP[stateroomType];
+      if (mapped) return mapped;
+    }
+    
+    if (categoryCode) {
+      var firstChar = categoryCode.charAt(0);
+      if (firstChar === 'G' || categoryCode.indexOf('GT') >= 0) return 'GTY';
+      if (['1', '2', '3', '4', '5'].indexOf(firstChar) >= 0) {
+        var secondChar = categoryCode.charAt(1);
+        if (secondChar === 'N' || secondChar === 'O') return 'Ocean View';
+        if (secondChar === 'D' || secondChar === 'B' || secondChar === 'C') return 'Balcony';
+        if (secondChar === 'S') return 'Suite';
+        if (secondChar === 'I') return 'Interior';
+      }
+    }
+    
+    return stateroomType ? (STATEROOM_TYPE_MAP[stateroomType] || stateroomType) : '';
+  }
+
+  async function fetchProfileBookings() {
+    log('🔄 Step 2: Fetching booking data via API...', 'info');
+
+    try {
+      log('📡 Calling /api/profile/bookings...', 'info');
+      var response = await fetch('https://www.royalcaribbean.com/api/profile/bookings', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      log('📡 API Response status: ' + response.status, 'info');
+
+      if (!response.ok) {
+        log('⚠️ API returned non-OK status: ' + response.status, 'warning');
+        throw new Error('API response not OK: ' + response.status);
+      }
+
+      var text = await response.text();
+      log('📦 Response received, length: ' + text.length + ' chars', 'info');
+      
+      if (!text || text.length < 10) {
+        log('⚠️ Empty or very short response', 'warning');
+        throw new Error('Empty response');
+      }
+      
+      var data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        log('❌ Failed to parse JSON: ' + parseError.message, 'error');
+        log('📝 Response preview: ' + text.substring(0, 300), 'info');
+        throw new Error('JSON parse error');
+      }
+      
+      log('📊 Parsed response - status: ' + data.status + ', has payload: ' + !!data.payload, 'info');
+      
+      if (data && data.payload && data.payload.profileBookings) {
+        var bookings = data.payload.profileBookings;
+        log('✅ API returned ' + bookings.length + ' bookings from profileBookings', 'success');
+        
+        var confirmedCount = 0;
+        var offerCount = 0;
+        var cancelledCount = 0;
+        for (var i = 0; i < bookings.length; i++) {
+          var status = bookings[i].bookingStatus;
+          if (status === 'BK') confirmedCount++;
+          else if (status === 'OF') offerCount++;
+          else if (status === 'CX' || status === 'CN') cancelledCount++;
+          log('   📋 Booking ' + (i+1) + ': ' + bookings[i].shipCode + ' - ' + bookings[i].sailDate + ' - Status: ' + status, 'info');
+        }
+        log('   Summary - Confirmed: ' + confirmedCount + ', Offers: ' + offerCount + ', Cancelled: ' + cancelledCount, 'info');
+        
+        return { bookings: bookings, vdsId: data.payload.vdsId };
+      }
+      
+      log('⚠️ No profileBookings in response payload', 'warning');
+      if (data.payload) {
+        log('📝 Payload keys: ' + Object.keys(data.payload).join(', '), 'info');
+      }
+      throw new Error('No profileBookings in response');
+      
+    } catch (error) {
+      log('❌ API fetch failed: ' + error.message, 'error');
+      log('📝 Will try DOM scraping as fallback...', 'info');
+      return null;
+    }
+  }
+
+  async function fetchEnrichmentData(bookings) {
+    if (!bookings || bookings.length === 0) {
+      log('⚠️ No bookings to enrich', 'warning');
+      return {};
+    }
+
+    log('🔄 Fetching enrichment data for ' + bookings.length + ' bookings...', 'info');
+
+    try {
+      var sailingKeys = [];
+      for (var i = 0; i < bookings.length; i++) {
+        var b = bookings[i];
+        if (b.shipCode && b.sailDate) {
+          sailingKeys.push({ shipCode: b.shipCode, sailDate: b.sailDate });
+          log('   📋 Adding sailing key: ' + b.shipCode + ' - ' + b.sailDate, 'info');
+        }
+      }
+
+      if (sailingKeys.length === 0) {
+        log('⚠️ No valid sailing keys for enrichment', 'warning');
+        return {};
+      }
+
+      log('📡 Calling enrichment API with ' + sailingKeys.length + ' sailings...', 'info');
+      
+      var response = await fetch('https://www.royalcaribbean.com/api/profile/bookings/enrichment', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ sailings: sailingKeys })
+      });
+
+      log('📡 Enrichment API Response status: ' + response.status, 'info');
+
+      if (!response.ok) {
+        log('⚠️ Enrichment API returned: ' + response.status + ' - continuing without enrichment', 'warning');
+        return {};
+      }
+
+      var text = await response.text();
+      log('📦 Enrichment response length: ' + text.length + ' chars', 'info');
+      
+      var data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        log('⚠️ Failed to parse enrichment JSON: ' + parseError.message, 'warning');
+        return {};
+      }
+      
+      log('📊 Enrichment parsed - status: ' + data.status + ', has payload: ' + !!data.payload, 'info');
+      
+      if (data && data.payload && data.payload.sailingInfo) {
+        var enrichmentMap = {};
+        var sailingInfo = data.payload.sailingInfo;
+        log('✅ Enrichment returned ' + sailingInfo.length + ' sailing details', 'success');
+        
+        for (var j = 0; j < sailingInfo.length; j++) {
+          var info = sailingInfo[j];
+          var key = info.shipCode + '_' + info.sailDate;
+          enrichmentMap[key] = info;
+          
+          var itinDesc = info.itinerary && info.itinerary.description ? info.itinerary.description : 'N/A';
+          var portCount = info.itinerary && info.itinerary.portInfo ? info.itinerary.portInfo.length : 0;
+          var isOneWayEnrich = info.departurePortName && info.arrivalPortName && info.departurePortName !== info.arrivalPortName;
+          var portInfo = isOneWayEnrich 
+            ? info.departurePortName + ' → ' + info.arrivalPortName + ' (one-way)'
+            : (info.departurePortName || 'N/A');
+          log('   ✓ ' + info.shipName + ' (' + info.shipCode + ') - ' + info.sailDate + ' - ' + portInfo + ' - ' + itinDesc + ' (' + portCount + ' ports)', 'info');
+        }
+        
+        return enrichmentMap;
+      }
+      
+      log('⚠️ No sailingInfo in enrichment response', 'warning');
+      if (data.payload) {
+        log('📝 Enrichment payload keys: ' + Object.keys(data.payload).join(', '), 'info');
+      }
+      return {};
+      
+    } catch (error) {
+      log('⚠️ Enrichment fetch failed: ' + error.message + ' - continuing without enrichment', 'warning');
+      return {};
+    }
+  }
+
+  function parseBookingsWithEnrichment(bookings, enrichmentMap) {
+    var cruises = [];
+    
+    log('🔄 Processing ' + bookings.length + ' bookings...', 'info');
+    
+    // Log all booking statuses for debugging
+    var statusCounts = {};
+    for (var j = 0; j < bookings.length; j++) {
+      var status = bookings[j].bookingStatus || 'UNKNOWN';
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    }
+    log('📊 Booking statuses: ' + JSON.stringify(statusCounts), 'info');
+    
+    for (var i = 0; i < bookings.length; i++) {
+      var booking = bookings[i];
+      
+      // Include all valid booking statuses:
+      // BK = Booked/Confirmed, OF = Offer, PD = Pending, HD/HO = Hold
+      // Only exclude cancelled (CX, CN) and explicitly rejected statuses
+      var validStatuses = ['BK', 'OF', 'PD', 'HD', 'HO', 'CF', 'DP', 'WL'];
+      var isValid = validStatuses.indexOf(booking.bookingStatus) >= 0;
+      
+      // If status is unknown but booking has valid data, include it
+      if (!isValid && booking.bookingStatus) {
+        var isCancelled = booking.bookingStatus === 'CX' || booking.bookingStatus === 'CN' || booking.bookingStatus === 'XX';
+        if (!isCancelled) {
+          log('⚠️ Including booking with unknown status: ' + booking.bookingStatus + ' (Ship: ' + booking.shipCode + ', Date: ' + booking.sailDate + ')', 'warning');
+          isValid = true;
+        }
+      }
+      
+      if (!isValid) {
+        log('⏭️ Skipping booking with status: ' + booking.bookingStatus + ' (Ship: ' + booking.shipCode + ', Date: ' + booking.sailDate + ')', 'info');
+        continue;
+      }
+      
+      var shipCode = booking.shipCode || '';
+      var shipName = SHIP_CODE_MAP[shipCode] || (shipCode ? shipCode + ' of the Seas' : '');
+      
+      var nights = booking.numberOfNights || 0;
+      var packageCode = booking.packageCode || '';
+      
+      var enrichmentKey = shipCode + '_' + booking.sailDate;
+      var enrichment = enrichmentMap[enrichmentKey] || {};
+      
+      if (enrichment.shipName) {
+        shipName = enrichment.shipName;
+      }
+      
+      var cruiseTitle = nights + ' Night Cruise';
+      if (enrichment.itinerary && enrichment.itinerary.description) {
+        cruiseTitle = enrichment.itinerary.description;
+      } else if (packageCode) {
+        cruiseTitle = nights + ' Night ' + packageCode;
+      }
+      
+      var sailingStartDate = formatDate(booking.sailDate);
+      var sailingEndDate = calculateEndDate(booking.sailDate, nights);
+      
+      if (enrichment.sailingEndDate) {
+        sailingEndDate = formatDate(enrichment.sailingEndDate);
+      }
+      
+      var stateroomNumber = booking.stateroomNumber || '';
+      var stateroomCategoryCode = booking.stateroomCategoryCode || '';
+      var stateroomType = booking.stateroomType || '';
+      
+      var cabinType = getCabinTypeFromCategory(stateroomCategoryCode, stateroomType);
+      var cabinNumber = stateroomNumber === 'GTY' ? '' : stateroomNumber;
+      var isGTY = stateroomNumber === 'GTY' || !stateroomNumber;
+      
+      var numberOfGuests = booking.passengers ? booking.passengers.length.toString() : '1';
+      var daysToGo = calculateDaysToGo(booking.sailDate);
+      
+      var deckNumber = booking.deckNumber || '';
+      
+      var status = 'Upcoming';
+      if (booking.bookingStatus === 'OF') status = 'Offer';
+      else if (booking.bookingStatus === 'HD' || booking.bookingStatus === 'HO') status = 'Courtesy Hold';
+      else if (booking.bookingStatus === 'PD') status = 'Pending';
+      else if (booking.bookingStatus === 'WL') status = 'Waitlist';
+      
+      var departurePort = '';
+      var arrivalPort = '';
+      if (enrichment.departurePortName) {
+        departurePort = enrichment.departurePortName;
+      }
+      if (enrichment.arrivalPortName) {
+        arrivalPort = enrichment.arrivalPortName;
+      }
+      
+      // Check for one-way cruise (different embark/disembark)
+      var isOneWay = departurePort && arrivalPort && departurePort !== arrivalPort;
+      if (isOneWay) {
+        log('   📍 One-way cruise detected: ' + departurePort + ' → ' + arrivalPort, 'info');
+      }
+      
+      var itinerary = '';
+      if (enrichment.itinerary && enrichment.itinerary.portInfo) {
+        var ports = [];
+        var seenPorts = {};
+        for (var p = 0; p < enrichment.itinerary.portInfo.length; p++) {
+          var port = enrichment.itinerary.portInfo[p];
+          // Include all ports except CRUISING days
+          if (port.title && port.portType !== 'CRUISING' && port.portType !== 'SEA') {
+            // Avoid duplicates (consecutive days at same port)
+            if (!seenPorts[port.title]) {
+              ports.push(port.title);
+              seenPorts[port.title] = true;
+            }
+          }
+        }
+        itinerary = ports.join(' → ');
+        log('   📍 Ports extracted: ' + ports.length + ' unique ports', 'info');
+      } else {
+        log('   ⚠️ No port info in enrichment for ' + shipCode + '_' + booking.sailDate, 'warning');
+      }
+
+      var cruise = {
+        sourcePage: 'Upcoming',
+        shipName: shipName,
+        shipCode: shipCode,
+        cruiseTitle: cruiseTitle,
+        sailingStartDate: sailingStartDate,
+        sailingEndDate: sailingEndDate,
+        sailingDates: sailingStartDate && sailingEndDate ? sailingStartDate + ' - ' + sailingEndDate : '',
+        itinerary: itinerary,
+        departurePort: departurePort,
+        arrivalPort: isOneWay ? arrivalPort : departurePort,
+        isOneWay: isOneWay ? 'Yes' : 'No',
+        cabinType: cabinType,
+        cabinCategory: stateroomCategoryCode,
+        cabinNumberOrGTY: isGTY ? 'GTY' : cabinNumber,
+        deckNumber: deckNumber,
+        bookingId: booking.bookingId || '',
+        numberOfGuests: numberOfGuests,
+        daysToGo: daysToGo,
+        status: status,
+        loyaltyLevel: '',
+        loyaltyPoints: '',
+        paidInFull: booking.paidInFull ? 'Yes' : 'No',
+        balanceDue: booking.balanceDueAmount ? booking.balanceDueAmount.toString() : '0',
+        musterStation: booking.musterStation || ''
+      };
+      
+      cruises.push(cruise);
+
+      var portSummary = departurePort ? (isOneWay ? departurePort + ' → ' + arrivalPort : departurePort) : 'No port data';
+      log('  ✓ ' + shipName + ' - ' + sailingStartDate + ' - ' + portSummary + ' - Cabin: ' + (cabinNumber || 'GTY') + ' (' + cabinType + ')', 'success');
+    }
+    
+    return cruises;
+  }
+
+  async function scrollUntilComplete(maxAttempts) {
+    maxAttempts = maxAttempts || 30;
+    var previousHeight = 0;
+    var stableCount = 0;
+    var attempts = 0;
 
     while (stableCount < 4 && attempts < maxAttempts) {
-      const currentHeight = document.body.scrollHeight;
+      var currentHeight = document.body.scrollHeight;
       
       if (currentHeight === previousHeight) {
         stableCount++;
@@ -24,347 +455,287 @@ export const STEP2_UPCOMING_SCRIPT = `
       attempts++;
     }
     
-    // Scroll back to top and do one more pass
     window.scrollTo(0, 0);
     await wait(500);
   }
 
   function parseDate(dateStr, year) {
-    const match = dateStr.match(/(\\w+)\\s+(\\d+)/);
+    var match = dateStr.match(/(\\w+)\\s+(\\d+)/);
     if (!match) return dateStr;
-    const month = match[1];
-    const day = match[2];
+    var month = match[1];
+    var day = match[2];
     return month + ' ' + day + ', ' + year;
+  }
+
+  async function extractViaDOM() {
+    log('📄 Falling back to DOM scraping method...', 'info');
+
+    await wait(3000);
+    await scrollUntilComplete(30);
+
+    var countText = document.body.textContent || '';
+    var countMatch = countText.match(/You have (\\d+) upcoming cruise/i);
+    var expectedCount = countMatch ? parseInt(countMatch[1], 10) : 0;
+
+    log('📊 Expected cruises from page: ' + expectedCount, 'info');
+
+    var allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="cruise"]'));
+
+    var cruiseCards = allElements.filter(function(el) {
+      var text = el.textContent || '';
+      var hasShip = text.indexOf('of the Seas') >= 0;
+      var hasNight = text.match(/\\d+\\s+Night/i);
+      var hasReservation = text.match(/Reservation[:\\s]*\\d+/i);
+      var textLength = text.length;
+      
+      return hasShip && hasNight && hasReservation && textLength > 80 && textLength < 8000;
+    });
+    
+    cruiseCards = cruiseCards.filter(function(el) {
+      var text = el.textContent || '';
+      var reservationMatches = text.match(/Reservation[:\\s]*\\d+/gi) || [];
+      return reservationMatches.length <= 1;
+    });
+    
+    cruiseCards = cruiseCards.filter(function(el, idx, arr) {
+      for (var i = 0; i < arr.length; i++) {
+        if (i !== idx && el.contains(arr[i])) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    log('📊 Found ' + cruiseCards.length + ' cruise cards via DOM', 'info');
+
+    var cruises = [];
+
+    for (var i = 0; i < cruiseCards.length; i++) {
+      var card = cruiseCards[i];
+      var fullText = card.textContent || '';
+
+      var shipMatch = fullText.match(/([\\w\\s]+of the Seas)/);
+      var shipName = shipMatch ? shipMatch[1].trim() : '';
+
+      var cruiseTitleMatch = fullText.match(/(\\d+)\\s+Night\\s+([^\\n]+?)(?=VANCOUVER|LOS ANGELES|MIAMI|SEATTLE|TAMPA|ORLANDO|FORT LAUDERDALE|GALVESTON|NEW YORK|BOSTON|BALTIMORE|SEWARD|HONOLULU|SAN JUAN|NASSAU|COZUMEL|BAYONNE|CAPE LIBERTY|PORT CANAVERAL|SINGAPORE|SYDNEY|SOUTHAMPTON|BARCELONA|ROME|CIVITAVECCHIA|CHECK-IN|\\d+ Days|$)/i);
+      var cruiseTitle = cruiseTitleMatch ? cruiseTitleMatch[0].trim() : '';
+
+      var dateMatch = fullText.match(/(\\w{3})\\s+(\\d+)\\s*—\\s*(\\w{3})\\s+(\\d+),?\\s*(\\d{4})/);
+      var sailingStartDate = '';
+      var sailingEndDate = '';
+      var year = '';
+      
+      if (dateMatch) {
+        year = dateMatch[5];
+        sailingStartDate = parseDate(dateMatch[1] + ' ' + dateMatch[2], year);
+        sailingEndDate = dateMatch[3] + ' ' + dateMatch[4] + ', ' + year;
+      }
+
+      var reservationMatch = fullText.match(/Reservation[:\\s]*(\\d+)/i);
+      var bookingId = reservationMatch ? reservationMatch[1] : '';
+
+      var cabinType = '';
+      var cabinNumber = '';
+      
+      var cabinTypeMatch = fullText.match(/(Interior|Ocean View|Oceanview|Balcony|Suite|Junior Suite|GTY|Gty|Grand Suite)/i);
+      if (cabinTypeMatch) {
+        cabinType = cabinTypeMatch[1].trim();
+      }
+      
+      var cabinNumMatch = fullText.match(/(Interior|Balcony|Suite|Ocean View|Oceanview|GTY|Gty|Grand Suite)[^\\n]*?(\\d{4,5})/i);
+      if (cabinNumMatch) {
+        cabinNumber = cabinNumMatch[2];
+      }
+
+      var guestsMatch = fullText.match(/(\\d+)\\s+Guest/i);
+      var numberOfGuests = guestsMatch ? guestsMatch[1] : '1';
+
+      var daysMatch = fullText.match(/(\\d+)\\s+Days?\\s+to\\s+go/i);
+      var daysToGo = daysMatch ? daysMatch[1] : '';
+
+      if (shipName && cruiseTitle && bookingId) {
+        var cruise = {
+          sourcePage: 'Upcoming',
+          shipName: shipName,
+          cruiseTitle: cruiseTitle,
+          sailingStartDate: sailingStartDate,
+          sailingEndDate: sailingEndDate,
+          sailingDates: sailingStartDate && sailingEndDate ? sailingStartDate + ' - ' + sailingEndDate : '',
+          itinerary: '',
+          departurePort: '',
+          cabinType: cabinType,
+          cabinNumberOrGTY: cabinNumber || (cabinType.match(/GTY/i) ? 'GTY' : ''),
+          bookingId: bookingId,
+          numberOfGuests: numberOfGuests,
+          daysToGo: daysToGo,
+          status: 'Upcoming',
+          loyaltyLevel: '',
+          loyaltyPoints: ''
+        };
+        
+        cruises.push(cruise);
+        log('  ✓ DOM: ' + shipName + ' - ' + sailingStartDate + ' - Booking: ' + bookingId, 'success');
+      }
+    }
+
+    return cruises;
+  }
+
+  async function fetchLoyaltyData() {
+    log('🔄 Fetching loyalty data via API...', 'info');
+
+    try {
+      var response = await fetch('https://www.royalcaribbean.com/api/profile/loyalty', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      log('📡 Loyalty API Response status: ' + response.status, 'info');
+
+      if (!response.ok) {
+        log('⚠️ Loyalty API returned non-OK status: ' + response.status, 'warning');
+        return null;
+      }
+
+      var text = await response.text();
+      log('📦 Loyalty response length: ' + text.length + ' chars', 'info');
+      
+      var data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        log('⚠️ Failed to parse loyalty JSON: ' + parseError.message, 'warning');
+        return null;
+      }
+      
+      if (data && data.payload && data.payload.loyaltyInformation) {
+        var loyalty = data.payload.loyaltyInformation;
+        log('✅ Loyalty API returned data', 'success');
+        
+        // Log the key loyalty info
+        if (loyalty.crownAndAnchorSocietyLoyaltyTier) {
+          log('   → Crown & Anchor: ' + loyalty.crownAndAnchorSocietyLoyaltyTier + ' - ' + (loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints || 0) + ' pts', 'info');
+        }
+        if (loyalty.clubRoyaleLoyaltyTier) {
+          log('   → Club Royale: ' + loyalty.clubRoyaleLoyaltyTier + ' - ' + (loyalty.clubRoyaleLoyaltyIndividualPoints || 0) + ' pts', 'info');
+        }
+        if (loyalty.captainsClubLoyaltyTier) {
+          log('   → Captains Club: ' + loyalty.captainsClubLoyaltyTier + ' - ' + (loyalty.captainsClubLoyaltyIndividualPoints || 0) + ' pts', 'info');
+        }
+        
+        // Send extended loyalty data to app
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'extended_loyalty_data',
+          data: loyalty,
+          accountId: data.payload.accountId
+        }));
+        
+        return loyalty;
+      }
+      
+      log('⚠️ No loyaltyInformation in response', 'warning');
+      return null;
+      
+    } catch (error) {
+      log('⚠️ Loyalty fetch failed: ' + error.message, 'warning');
+      return null;
+    }
   }
 
   async function extractUpcomingCruises() {
     try {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Loading Upcoming Cruises page...',
-        logType: 'info'
-      }));
+      log('🚀 ====== STEP 2: UPCOMING CRUISES ======', 'info');
+      log('🔍 Starting upcoming cruises extraction...', 'info');
+      log('📍 Current URL: ' + window.location.href, 'info');
 
-      await wait(3000);
+      await wait(2000);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Scrolling page to load all cruises...',
-        logType: 'info'
-      }));
-      
-      await scrollUntilComplete(30);
-
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Analyzing page structure...',
-        logType: 'info'
+        type: 'progress',
+        current: 0,
+        total: 100,
+        stepName: 'Fetching booking data...'
       }));
 
-      const countText = document.body.textContent || '';
-      const countMatch = countText.match(/You have (\\d+) upcoming cruise/i);
-      const expectedCount = countMatch ? parseInt(countMatch[1], 10) : 0;
-
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Expected cruises: ' + expectedCount,
-        logType: 'info'
-      }));
-
-      const allElements = Array.from(document.querySelectorAll('div, article, section, [class*="card"], [class*="cruise"]'));
+      // Also fetch loyalty data in parallel
+      var loyaltyPromise = fetchLoyaltyData();
       
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '📊 Scanning ' + allElements.length + ' elements for cruise cards...',
-        logType: 'info'
-      }));
-
-      let cruiseCards = allElements.filter(el => {
-        const text = el.textContent || '';
-        const hasShip = text.includes('of the Seas');
-        const hasNight = text.match(/\\d+\\s+Night/i);
-        const hasReservation = text.match(/Reservation[:\\s]*\\d+/i);
-        const hasDaysToGo = text.includes('Days to go') || text.includes('Day to go');
-        const hasGuests = text.includes('Guests') || text.includes('Guest');
-        const hasCheckIn = text.includes('CHECK-IN NOT AVAILABLE') || text.includes('Check-In');
-        const textLength = text.length;
-        
-        // More lenient text length filter to catch all cruise cards
-        return hasShip && hasNight && hasReservation && textLength > 80 && textLength < 8000;
-      });
+      var apiResult = await fetchProfileBookings();
       
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'Found ' + cruiseCards.length + ' potential cruise cards (before deduplication)',
-        logType: 'info'
-      }));
+      var cruises = [];
       
-      const beforeDedup = cruiseCards.length;
-      cruiseCards = cruiseCards.filter((el, idx, arr) => {
-        // Only remove if another element CONTAINS this one (keep parents, remove children)
-        // This preserves the outermost cruise card and removes nested duplicates
-        return !arr.some((other, otherIdx) => otherIdx !== idx && other.contains(el));
-      });
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: 'After deduplication: ' + cruiseCards.length + ' unique cruise cards (removed ' + (beforeDedup - cruiseCards.length) + ' duplicates)',
-        logType: 'info'
-      }));
-
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '📊 CRUISE COUNT: Found ' + cruiseCards.length + ' / Expected ' + expectedCount,
-        logType: cruiseCards.length === expectedCount ? 'success' : 'warning'
-      }));
-      
-      if (cruiseCards.length !== expectedCount) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '⚠️ WARNING: Missing ' + (expectedCount - cruiseCards.length) + ' cruise(s)',
-          logType: 'warning'
-        }));
-      }
-      
-      const cruises = [];
-      let processedCount = 0;
-
-      for (let i = 0; i < cruiseCards.length; i++) {
-        const card = cruiseCards[i];
-        const fullText = card.textContent || '';
-
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '━━━━━ Cruise ' + (i + 1) + '/' + cruiseCards.length + ' ━━━━━',
-          logType: 'info'
-        }));
-
-        const shipMatch = fullText.match(/([\\w\\s]+of the Seas)/);
-        const shipName = shipMatch ? shipMatch[1].trim() : '';
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Ship: ' + (shipName || '[NOT FOUND]'),
-          logType: shipName ? 'info' : 'warning'
-        }));
-
-        // Extended port list to catch all cruise destinations
-        const cruiseTitleMatch = fullText.match(/(\\d+)\\s+Night\\s+([^\\n]+?)(?=VANCOUVER|LOS ANGELES|MIAMI|SEATTLE|TAMPA|ORLANDO|FORT LAUDERDALE|GALVESTON|NEW YORK|BOSTON|BALTIMORE|SEWARD|HONOLULU|SAN JUAN|NASSAU|COZUMEL|BAYONNE|CAPE LIBERTY|PORT CANAVERAL|SINGAPORE|SYDNEY|SOUTHAMPTON|BARCELONA|ROME|CIVITAVECCHIA|CHECK-IN|\\d+ Days|$)/i);
-        const cruiseTitle = cruiseTitleMatch ? cruiseTitleMatch[0].trim() : '';
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Title: ' + (cruiseTitle || '[NOT FOUND]'),
-          logType: cruiseTitle ? 'info' : 'warning'
-        }));
-
-        const dateMatch = fullText.match(/(\\w{3})\\s+(\\d+)\\s*—\\s*(\\w{3})\\s+(\\d+),?\\s*(\\d{4})/);
-        let sailingStartDate = '';
-        let sailingEndDate = '';
-        let year = '';
-        
-        if (dateMatch) {
-          year = dateMatch[5];
-          sailingStartDate = parseDate(dateMatch[1] + ' ' + dateMatch[2], year);
-          sailingEndDate = dateMatch[3] + ' ' + dateMatch[4] + ', ' + year;
-        }
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Start Date: ' + (sailingStartDate || '[NOT FOUND]'),
-          logType: sailingStartDate ? 'info' : 'warning'
-        }));
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  End Date: ' + (sailingEndDate || '[NOT FOUND]'),
-          logType: sailingEndDate ? 'info' : 'warning'
-        }));
-
-        let itinerary = '';
-        const itineraryPattern = /([A-Z][A-Z\\s,()]+?)(?=Reservation|Interior|Balcony|Suite|Ocean View|GTY|Gty|\\d+ Gty|CHECK-IN|Guests|Days to go)/i;
-        const itineraryMatch = fullText.match(itineraryPattern);
-        
-        if (itineraryMatch) {
-          itinerary = itineraryMatch[1].trim();
-          itinerary = itinerary.replace(/\\s+/g, ' ');
-          
-          if (itinerary.length > 150) {
-            const parts = itinerary.split('|');
-            if (parts.length > 0) {
-              itinerary = parts.slice(0, Math.min(5, parts.length)).join(' | ').trim();
-            }
-          }
-        }
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Itinerary: ' + (itinerary || '[NOT FOUND]'),
-          logType: itinerary ? 'info' : 'warning'
-        }));
-
-        const reservationMatch = fullText.match(/Reservation[:\\s]*(\\d+)/i);
-        const bookingId = reservationMatch ? reservationMatch[1] : '';
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Reservation: ' + (bookingId || '[NOT FOUND]'),
-          logType: bookingId ? 'info' : 'warning'
-        }));
-
-        let cabinType = '';
-        let cabinNumber = '';
-        
-        const cabinTypeMatch = fullText.match(/(Interior|Ocean View|Oceanview|Balcony|Suite|Junior Suite|GTY|Gty|Grand Suite)/i);
-        if (cabinTypeMatch) {
-          cabinType = cabinTypeMatch[1].trim();
-        }
-        
-        const cabinNumMatch = fullText.match(/(Interior|Balcony|Suite|Ocean View|Oceanview|GTY|Gty|Grand Suite)[^\\n]*?(\\d{4,5})/i);
-        if (cabinNumMatch) {
-          cabinNumber = cabinNumMatch[2];
-        } else {
-          const directNumMatch = fullText.match(/(?:Cabin|Room|Stateroom)[:\\s]*(\\d{4,5})/i);
-          if (directNumMatch) {
-            cabinNumber = directNumMatch[1];
-          }
-        }
-        
-        if (!cabinType || !cabinNumber) {
-          const viewMoreBtn = Array.from(card.querySelectorAll('button, a, [role="button"]')).find(el => 
-            (el.textContent || '').match(/View More|More Details|View Details/i)
-          );
-          
-          if (viewMoreBtn) {
-            try {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '  ▶ Clicking "View Details" to get cabin info (timeout: 5s)...',
-                logType: 'info'
-              }));
-              
-              viewMoreBtn.click();
-              await wait(1500);
-              
-              const detailsText = document.body.textContent || '';
-              
-              if (!cabinType) {
-                const detailCabinTypeMatch = detailsText.match(/(Interior|Ocean View|Oceanview|Balcony|Suite|Junior Suite|Grand Suite|GTY|Gty)/i);
-                if (detailCabinTypeMatch) {
-                  cabinType = detailCabinTypeMatch[1].trim();
-                }
-              }
-              
-              if (!cabinNumber) {
-                const detailCabinNumMatch = detailsText.match(/(?:Cabin|Room|Stateroom)[:\\s]*(\\d{4,5})/i);
-                if (detailCabinNumMatch) {
-                  cabinNumber = detailCabinNumMatch[1];
-                } else {
-                  const directNumMatch2 = detailsText.match(/(Interior|Balcony|Suite|Ocean View|Oceanview)[^\\n]*?(\\d{4,5})/i);
-                  if (directNumMatch2) {
-                    cabinNumber = directNumMatch2[2];
-                  }
-                }
-              }
-              
-              const closeBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el =>
-                (el.textContent || '').match(/close|back|×|✕/i) || el.querySelector('[class*="close"]')
-              );
-              if (closeBtn) {
-                closeBtn.click();
-                await wait(500);
-              }
-            } catch (error) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '  ⚠️ Failed to get details: ' + error.message + ' (continuing anyway)',
-                logType: 'warning'
-              }));
-            }
-          }
-        }
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Cabin Type: ' + (cabinType || '[NOT FOUND]'),
-          logType: cabinType ? 'info' : 'warning'
-        }));
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Cabin Number: ' + (cabinNumber || '[NOT FOUND]'),
-          logType: cabinNumber ? 'info' : 'warning'
-        }));
-
-        const guestsMatch = fullText.match(/(\\d+)\\s+Guest/i);
-        const numberOfGuests = guestsMatch ? guestsMatch[1] : bookingId;
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Guests: ' + (numberOfGuests || '[NOT FOUND]'),
-          logType: numberOfGuests ? 'info' : 'warning'
-        }));
+      if (apiResult && apiResult.bookings && apiResult.bookings.length > 0) {
+        log('📊 API method: Processing ' + apiResult.bookings.length + ' bookings...', 'info');
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'progress',
-          current: i + 1,
-          total: cruiseCards.length,
-          stepName: 'Processing cruise ' + (i + 1) + '/' + cruiseCards.length
+          current: 25,
+          total: 100,
+          stepName: 'Fetching enrichment data...'
         }));
-
-        const daysMatch = fullText.match(/(\\d+)\\s+Days?\\s+to\\s+go/i);
-        const daysToGo = daysMatch ? daysMatch[1] : '';
+        
+        var enrichmentMap = await fetchEnrichmentData(apiResult.bookings);
+        
+        var enrichmentCount = Object.keys(enrichmentMap).length;
+        log('📊 Enrichment map has ' + enrichmentCount + ' entries', 'info');
+        
         window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: '  Days to Go: ' + (daysToGo || '[NOT FOUND]'),
-          logType: daysToGo ? 'info' : 'warning'
+          type: 'progress',
+          current: 50,
+          total: 100,
+          stepName: 'Processing ' + apiResult.bookings.length + ' cruises...'
         }));
+        
+        cruises = parseBookingsWithEnrichment(apiResult.bookings, enrichmentMap);
+        
+        log('✅ API method extracted ' + cruises.length + ' cruises with details', 'success');
+      } else {
+        log('⚠️ API method failed or returned no data - trying DOM scraping', 'warning');
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'progress',
+          current: 25,
+          total: 100,
+          stepName: 'API failed, trying DOM scraping...'
+        }));
+        
+        cruises = await extractViaDOM();
+        
+        log('📄 DOM method extracted ' + cruises.length + ' cruises', 'info');
+      }
 
-        if (shipName && cruiseTitle && bookingId) {
-          const cruise = {
-            sourcePage: 'Upcoming',
-            shipName: shipName,
-            cruiseTitle: cruiseTitle,
-            sailingStartDate: sailingStartDate,
-            sailingEndDate: sailingEndDate,
-            sailingDates: sailingStartDate && sailingEndDate ? sailingStartDate + ' - ' + sailingEndDate : '',
-            itinerary: itinerary,
-            departurePort: '',
-            cabinType: cabinType,
-            cabinNumberOrGTY: cabinNumber || (cabinType.match(/GTY/i) ? 'GTY' : ''),
-            bookingId: bookingId,
-            numberOfGuests: numberOfGuests,
-            daysToGo: daysToGo,
-            status: 'Upcoming',
-            loyaltyLevel: '',
-            loyaltyPoints: ''
-          };
-          
-          cruises.push(cruise);
-
-          processedCount++;
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '  ✓ Cruise scraped successfully (' + processedCount + '/' + expectedCount + ')',
-            logType: 'success'
-          }));
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'progress',
-            current: processedCount,
-            total: cruiseCards.length,
-            stepName: 'Upcoming: ' + processedCount + ' of ' + expectedCount + ' scraped'
-          }));
-
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'cruise_batch',
-            data: [cruise]
-          }));
+      // Wait for loyalty data to complete
+      try {
+        var loyaltyResult = await loyaltyPromise;
+        if (loyaltyResult) {
+          log('✅ Loyalty data fetched successfully', 'success');
         } else {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '  ❌ SKIPPED - Missing fields: ship=' + !!shipName + ', title=' + !!cruiseTitle + ', booking=' + !!bookingId,
-            logType: 'error'
-          }));
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '  📝 Card text preview: ' + fullText.substring(0, 200) + '...',
-            logType: 'info'
-          }));
+          log('⚠️ No loyalty data from API - will try DOM extraction in step 4', 'warning');
         }
+      } catch (loyaltyError) {
+        log('⚠️ Loyalty fetch error: ' + loyaltyError.message, 'warning');
+      }
+
+      log('📤 Sending ' + cruises.length + ' cruises to app...', 'info');
+
+      for (var i = 0; i < cruises.length; i++) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'cruise_batch',
+          data: [cruises[i]]
+        }));
+        
+        var progressPercent = 75 + Math.floor((i / cruises.length) * 25);
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'progress',
+          current: progressPercent,
+          total: 100,
+          stepName: 'Sending cruise ' + (i + 1) + '/' + cruises.length
+        }));
       }
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -374,18 +745,22 @@ export const STEP2_UPCOMING_SCRIPT = `
         totalCount: cruises.length
       }));
 
-      const statusType = cruises.length === expectedCount ? 'success' : 'warning';
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log',
-        message: '✓ Extracted ' + cruises.length + ' cruises (expected ' + expectedCount + ')',
-        logType: statusType
-      }));
+      log('✅ Step 2 Complete: Extracted ' + cruises.length + ' upcoming cruises', 'success');
 
     } catch (error) {
+      log('❌ CRITICAL ERROR in Step 2: ' + error.message, 'error');
+      log('📝 Error stack: ' + (error.stack || 'N/A'), 'error');
+      
+      // Still send step_complete even on error so the sync continues
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'error',
-        message: 'Failed to extract upcoming cruises: ' + error.message
+        type: 'step_complete',
+        step: 2,
+        data: [],
+        totalCount: 0
       }));
+      
+      // Don't send error message that would stop the whole sync
+      log('⚠️ Step 2 completed with errors - continuing to Step 3', 'warning');
     }
   }
 
@@ -400,3 +775,5 @@ export const STEP2_UPCOMING_SCRIPT = `
 export function injectUpcomingCruisesExtraction() {
   return STEP2_UPCOMING_SCRIPT;
 }
+
+export { SHIP_CODE_MAP, STATEROOM_TYPE_MAP };

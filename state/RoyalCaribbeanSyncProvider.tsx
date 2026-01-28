@@ -8,8 +8,11 @@ import {
   SyncStatus,
   OfferRow, 
   BookedCruiseRow,
-  WebViewMessage
+  WebViewMessage,
+  ExtendedLoyaltyData,
+  LoyaltyApiInformation
 } from '@/lib/royalCaribbean/types';
+import { convertLoyaltyInfoToExtended } from '@/lib/royalCaribbean/loyaltyConverter';
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
@@ -53,12 +56,18 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
   scrapePricingAndItinerary: true
 };
 
+const INITIAL_EXTENDED_LOYALTY: ExtendedLoyaltyData | null = null;
+
+// Flag to track if we've received API loyalty data (which should take precedence)
+let hasReceivedApiLoyaltyData = false;
+
 const DEFAULT_CRUISE_LINE: CruiseLine = 'royal_caribbean';
 
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
   console.log('[RoyalCaribbeanSync] Provider initializing...');
   const [state, setState] = useState<RoyalCaribbeanSyncState>(INITIAL_STATE);
   const [cruiseLine, setCruiseLine] = useState<CruiseLine>(DEFAULT_CRUISE_LINE);
+  const [extendedLoyaltyData, setExtendedLoyaltyData] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
   const webViewRef = useRef<WebView | null>(null);
   const stepCompleteResolvers = useRef<{ [key: number]: () => void }>({});
   const progressCallbacks = useRef<{ onProgress?: () => void }>({});
@@ -73,10 +82,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }));
   }, []);
 
-  const setStatus = useCallback((status: SyncStatus) => {
-    setState(prev => ({ ...prev, status }));
-  }, []);
-
   const setProgress = useCallback((current: number, total: number, stepName?: string) => {
     setState(prev => ({
       ...prev,
@@ -87,8 +92,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const handleWebViewMessage = useCallback((message: WebViewMessage) => {
     switch (message.type) {
       case 'auth_status':
-        setStatus(message.loggedIn ? 'logged_in' : 'not_logged_in');
-        addLog(message.loggedIn ? 'User logged in successfully' : 'User not logged in', 'info');
+        setState(prev => {
+          const isActiveSync = prev.status.startsWith('running_') || prev.status === 'syncing' || prev.status === 'awaiting_confirmation';
+          if (isActiveSync) {
+            console.log('[RoyalCaribbeanSync] Ignoring auth_status during active sync:', prev.status);
+            return prev;
+          }
+          addLog(message.loggedIn ? 'User logged in successfully' : 'User not logged in', 'info');
+          return { ...prev, status: message.loggedIn ? 'logged_in' : 'not_logged_in' };
+        });
         break;
 
       case 'log':
@@ -151,8 +163,47 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
 
       case 'loyalty_data':
-        setState(prev => ({ ...prev, loyaltyData: message.data }));
-        addLog('Loyalty data extracted', 'success');
+        // Only use DOM-scraped loyalty data if we haven't received API data
+        if (!hasReceivedApiLoyaltyData) {
+          setState(prev => ({ ...prev, loyaltyData: message.data }));
+          addLog('Loyalty data extracted (DOM fallback)', 'info');
+        } else {
+          addLog('Ignoring DOM loyalty data - API data already received', 'info');
+        }
+        break;
+
+      case 'extended_loyalty_data':
+        const extData = message.data as LoyaltyApiInformation;
+        const converted = convertLoyaltyInfoToExtended(extData, (message as any).accountId);
+        setExtendedLoyaltyData(converted);
+        
+        // Mark that we've received API data - this takes precedence over DOM scraping
+        hasReceivedApiLoyaltyData = true;
+        
+        setState(prev => ({
+          ...prev,
+          loyaltyData: {
+            ...prev.loyaltyData,
+            clubRoyaleTier: converted.clubRoyaleTierFromApi,
+            clubRoyalePoints: converted.clubRoyalePointsFromApi?.toString(),
+            crownAndAnchorLevel: converted.crownAndAnchorTier,
+            crownAndAnchorPoints: converted.crownAndAnchorPointsFromApi?.toString(),
+          }
+        }));
+        
+        addLog('✅ Loyalty data from API (authoritative source)', 'success');
+        if (converted.clubRoyalePointsFromApi !== undefined) {
+          addLog(`   → Club Royale: ${converted.clubRoyaleTierFromApi || 'N/A'} - ${converted.clubRoyalePointsFromApi.toLocaleString()} points`, 'info');
+        }
+        if (converted.crownAndAnchorPointsFromApi !== undefined) {
+          addLog(`   → Crown & Anchor: ${converted.crownAndAnchorTier || 'N/A'} - ${converted.crownAndAnchorPointsFromApi.toLocaleString()} points`, 'info');
+        }
+        if (converted.captainsClubPoints !== undefined && converted.captainsClubPoints > 0) {
+          addLog(`   → Captain's Club: ${converted.captainsClubTier || 'N/A'} - ${converted.captainsClubPoints.toLocaleString()} points`, 'info');
+        }
+        if (converted.celebrityBlueChipPoints !== undefined && converted.celebrityBlueChipPoints > 0) {
+          addLog(`   → Blue Chip Club: ${converted.celebrityBlueChipTier || 'N/A'} - ${converted.celebrityBlueChipPoints.toLocaleString()} points`, 'info');
+        }
         break;
 
       case 'error':
@@ -169,7 +220,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Ingestion completed successfully', 'success');
         break;
     }
-  }, [addLog, setStatus, setProgress]);
+  }, [addLog, setProgress]);
 
   const openLogin = useCallback(() => {
     if (webViewRef.current) {
@@ -404,10 +455,30 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
   const resetState = useCallback(() => {
     setState(INITIAL_STATE);
+    setExtendedLoyaltyData(null);
+    hasReceivedApiLoyaltyData = false;
     rcLogger.clear();
   }, []);
 
-  const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any) => {
+  const setExtendedLoyalty = useCallback((data: ExtendedLoyaltyData | null) => {
+    setExtendedLoyaltyData(data);
+    
+    if (data) {
+      setState(prev => ({
+        ...prev,
+        loyaltyData: {
+          ...prev.loyaltyData,
+          clubRoyaleTier: data.clubRoyaleTierFromApi,
+          clubRoyalePoints: data.clubRoyalePointsFromApi?.toString(),
+          crownAndAnchorLevel: data.crownAndAnchorTier,
+          crownAndAnchorPoints: data.crownAndAnchorPointsFromApi?.toString(),
+        }
+      }));
+    }
+  }, []);
+
+  const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any, providedExtendedLoyalty?: ExtendedLoyaltyData | null) => {
+    const loyaltyToSync = providedExtendedLoyalty ?? extendedLoyaltyData;
     try {
       setState(prev => ({ ...prev, status: 'syncing' }));
       addLog('Creating sync preview...', 'info');
@@ -460,11 +531,30 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           await loyaltyContext.setManualClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
         }
         
-        // Crown & Anchor sync disabled - user requested to skip Step 4
-        // if (preview.loyalty.crownAndAnchorPoints.changed) {
-        //   addLog(`Updating Crown & Anchor points: ${preview.loyalty.crownAndAnchorPoints.current} → ${preview.loyalty.crownAndAnchorPoints.synced}`, 'info');
-        //   await loyaltyContext.setManualCrownAnchorPoints(preview.loyalty.crownAndAnchorPoints.synced);
-        // }
+        if (preview.loyalty.crownAndAnchorPoints.changed) {
+          addLog(`Updating Crown & Anchor points: ${preview.loyalty.crownAndAnchorPoints.current} → ${preview.loyalty.crownAndAnchorPoints.synced}`, 'info');
+          await loyaltyContext.setManualCrownAnchorPoints(preview.loyalty.crownAndAnchorPoints.synced);
+        }
+      }
+      
+      if (loyaltyToSync && loyaltyContext.setExtendedLoyaltyData) {
+        addLog('Syncing extended loyalty data...', 'info');
+        
+        if (loyaltyToSync.clubRoyalePointsFromApi !== undefined) {
+          addLog(`  → Club Royale: ${loyaltyToSync.clubRoyaleTierFromApi || 'N/A'} - ${loyaltyToSync.clubRoyalePointsFromApi.toLocaleString()} points`, 'info');
+        }
+        if (loyaltyToSync.crownAndAnchorPointsFromApi !== undefined) {
+          addLog(`  → Crown & Anchor: ${loyaltyToSync.crownAndAnchorTier || 'N/A'} - ${loyaltyToSync.crownAndAnchorPointsFromApi} points`, 'info');
+        }
+        if (loyaltyToSync.captainsClubPoints !== undefined && loyaltyToSync.captainsClubPoints > 0) {
+          addLog(`  → Captain's Club: ${loyaltyToSync.captainsClubTier || 'N/A'} - ${loyaltyToSync.captainsClubPoints} points`, 'info');
+        }
+        if (loyaltyToSync.celebrityBlueChipPoints !== undefined && loyaltyToSync.celebrityBlueChipPoints > 0) {
+          addLog(`  → Blue Chip Club: ${loyaltyToSync.celebrityBlueChipTier || 'N/A'} - ${loyaltyToSync.celebrityBlueChipPoints} points`, 'info');
+        }
+        
+        await loyaltyContext.setExtendedLoyaltyData(loyaltyToSync);
+        addLog('Extended loyalty data synced successfully', 'success');
       }
 
       setState(prev => ({ 
@@ -484,7 +574,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Failed to sync data: ${error}`, 'error');
       console.error('[RoyalCaribbeanSync] Sync error:', error);
     }
-  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, addLog]);
+  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog]);
 
   const cancelSync = useCallback(() => {
     setState(prev => ({ ...prev, status: 'logged_in', syncCounts: null }));
@@ -508,6 +598,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     syncToApp,
     cancelSync,
     handleWebViewMessage,
-    addLog
+    addLog,
+    extendedLoyaltyData,
+    setExtendedLoyalty
   };
 });
