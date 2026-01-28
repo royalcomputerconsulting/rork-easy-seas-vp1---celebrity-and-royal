@@ -1,10 +1,10 @@
-import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, TextInput } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download, Anchor, LogIn } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download, Anchor, LogIn, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -37,54 +37,15 @@ function RoyalCaribbeanSyncScreen() {
   
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
-  const [browserLoginWindow, setBrowserLoginWindow] = useState<Window | null>(null);
-  const [showBrowserLoginInstructions, setShowBrowserLoginInstructions] = useState(false);
+  
+  const [webUsername, setWebUsername] = useState('');
+  const [webPassword, setWebPassword] = useState('');
+  const [showWebPassword, setShowWebPassword] = useState(false);
   
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
   
   const isBackendAvailable = !!process.env.EXPO_PUBLIC_RORK_API_BASE_URL && 
     !process.env.EXPO_PUBLIC_RORK_API_BASE_URL.includes('fallback');
-  
-  const handleBrowserLogin = () => {
-    const loginUrl = isCelebrity 
-      ? 'https://www.celebritycruises.com/account/sign-in'
-      : 'https://www.royalcaribbean.com/account/sign-in';
-    
-    const width = 500;
-    const height = 700;
-    const left = (window.innerWidth - width) / 2 + window.screenX;
-    const top = (window.innerHeight - height) / 2 + window.screenY;
-    
-    const popup = window.open(
-      loginUrl,
-      'RCLogin',
-      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
-    );
-    
-    if (popup) {
-      setBrowserLoginWindow(popup);
-      setShowBrowserLoginInstructions(true);
-      addLog('Browser login window opened - complete login there', 'info');
-      
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          setBrowserLoginWindow(null);
-          addLog('Browser login window closed', 'info');
-        }
-      }, 500);
-    } else {
-      addLog('Could not open popup - check popup blocker settings', 'warning');
-    }
-  };
-  
-  const closeBrowserLoginInstructions = () => {
-    setShowBrowserLoginInstructions(false);
-    if (browserLoginWindow && !browserLoginWindow.closed) {
-      browserLoginWindow.close();
-    }
-    setBrowserLoginWindow(null);
-  };
   
   const handleWebSync = async (username: string, password: string) => {
     console.log('[WebSync] Starting web-based sync...');
@@ -395,154 +356,108 @@ function RoyalCaribbeanSyncScreen() {
 
 <View style={styles.actionsContainer}>
           {Platform.OS === 'web' ? (
-            showBrowserLoginInstructions ? (
-              <View style={styles.webActionsContainer}>
-                <Text style={styles.webActionsTitle}>Browser Login Active</Text>
-                
-                <View style={styles.browserLoginActiveCard}>
-                  <View style={styles.browserLoginActiveHeader}>
-                    <View style={styles.browserLoginPulse} />
-                    <Text style={styles.browserLoginActiveTitle}>Login Window Open</Text>
+            <View style={styles.webCredentialsContainer}>
+              <View style={styles.webCredentialsHeader}>
+                <View style={[styles.webCredentialsIcon, isCelebrity && styles.webCredentialsIconCelebrity]}>
+                  <Ship size={28} color={isCelebrity ? '#10b981' : '#3b82f6'} />
+                </View>
+                <Text style={styles.webCredentialsTitle}>
+                  Sign In to {isCelebrity ? 'Celebrity Cruises' : 'Royal Caribbean'}
+                </Text>
+                <Text style={styles.webCredentialsSubtitle}>
+                  Enter your credentials to sync your {isCelebrity ? 'Blue Chip Club' : 'Club Royale'} data
+                </Text>
+              </View>
+
+              <View style={styles.webCredentialsForm}>
+                <View style={styles.webInputGroup}>
+                  <Text style={styles.webInputLabel}>Email / Username</Text>
+                  <View style={styles.webInputContainer}>
+                    <TextInput
+                      style={styles.webInput}
+                      value={webUsername}
+                      onChangeText={setWebUsername}
+                      placeholder="Enter your email"
+                      placeholderTextColor="#475569"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      editable={!webLoginMutation.isPending}
+                    />
                   </View>
-                  <Text style={styles.browserLoginActiveDesc}>
-                    Complete your login in the popup window. Once logged in, use the browser extension to scrape your data.
-                  </Text>
-                  
-                  <View style={styles.browserLoginSteps}>
-                    <Text style={styles.browserLoginStep}>1. Log in to {isCelebrity ? 'Celebrity Cruises' : 'Royal Caribbean'} in the popup</Text>
-                    <Text style={styles.browserLoginStep}>2. Navigate to the offers page after login</Text>
-                    <Text style={styles.browserLoginStep}>3. Use the Easy Seas™ extension to scrape</Text>
-                    <Text style={styles.browserLoginStep}>4. Export and import the CSV</Text>
-                  </View>
-                  
-                  <View style={styles.browserLoginActions}>
+                </View>
+
+                <View style={styles.webInputGroup}>
+                  <Text style={styles.webInputLabel}>Password</Text>
+                  <View style={styles.webInputContainer}>
+                    <TextInput
+                      style={styles.webInput}
+                      value={webPassword}
+                      onChangeText={setWebPassword}
+                      placeholder="Enter your password"
+                      placeholderTextColor="#475569"
+                      secureTextEntry={!showWebPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      editable={!webLoginMutation.isPending}
+                    />
                     <Pressable
-                      style={styles.browserLoginOpenOffers}
-                      onPress={() => {
-                        const url = isCelebrity 
-                          ? 'https://www.celebritycruises.com/blue-chip-club/offers'
-                          : 'https://www.royalcaribbean.com/club-royale/offers';
-                        if (browserLoginWindow && !browserLoginWindow.closed) {
-                          browserLoginWindow.location.href = url;
-                          browserLoginWindow.focus();
-                        } else {
-                          Linking.openURL(url);
-                        }
-                      }}
+                      onPress={() => setShowWebPassword(!showWebPassword)}
+                      style={styles.webEyeButton}
                     >
-                      <Ship size={18} color="#fff" />
-                      <Text style={styles.browserLoginOpenOffersText}>Go to Offers Page</Text>
-                    </Pressable>
-                    
-                    <Pressable
-                      style={styles.browserLoginClose}
-                      onPress={closeBrowserLoginInstructions}
-                    >
-                      <Text style={styles.browserLoginCloseText}>Done / Close</Text>
+                      {showWebPassword ? (
+                        <EyeOff size={18} color="#64748b" />
+                      ) : (
+                        <Eye size={18} color="#64748b" />
+                      )}
                     </Pressable>
                   </View>
                 </View>
-                
+
+                {webSyncError && (
+                  <View style={styles.webErrorContainer}>
+                    <AlertCircle size={16} color="#ef4444" />
+                    <Text style={styles.webErrorText}>{webSyncError}</Text>
+                  </View>
+                )}
+
+                <View style={styles.webSecurityNote}>
+                  <Lock size={14} color="#64748b" />
+                  <Text style={styles.webSecurityText}>
+                    Your credentials are used only for this sync session and are not stored.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.webCredentialsActions}>
+                <Pressable
+                  style={[
+                    styles.webSyncButton,
+                    isCelebrity && styles.webSyncButtonCelebrity,
+                    (!webUsername.trim() || !webPassword.trim() || webLoginMutation.isPending) && styles.buttonDisabled
+                  ]}
+                  onPress={() => handleWebSync(webUsername.trim(), webPassword.trim())}
+                  disabled={!webUsername.trim() || !webPassword.trim() || webLoginMutation.isPending}
+                >
+                  {webLoginMutation.isPending ? (
+                    <Loader2 size={20} color="#fff" />
+                  ) : (
+                    <LogIn size={20} color="#fff" />
+                  )}
+                  <Text style={styles.webSyncButtonText}>
+                    {webLoginMutation.isPending ? 'Syncing...' : 'Sign In & Sync'}
+                  </Text>
+                </Pressable>
+
                 <Pressable
                   style={styles.webBackButton}
-                  onPress={() => {
-                    closeBrowserLoginInstructions();
-                    router.back();
-                  }}
+                  onPress={() => router.back()}
+                  disabled={webLoginMutation.isPending}
                 >
                   <Text style={styles.webBackButtonText}>← Back</Text>
                 </Pressable>
               </View>
-            ) : (
-            <View style={styles.webActionsContainer}>
-              <Text style={styles.webActionsTitle}>Web Sync Options</Text>
-              
-              <View style={styles.webSyncOption}>
-                <View style={styles.webSyncOptionHeader}>
-                  <ExternalLink size={20} color="#10b981" />
-                  <Text style={styles.webSyncOptionTitle}>Option 1: Browser Login</Text>
-                </View>
-                <Text style={styles.webSyncOptionDesc}>
-                  Open {isCelebrity ? 'Celebrity Cruises' : 'Royal Caribbean'} in a popup to log in with your browser, then use the extension to scrape.
-                </Text>
-                <Pressable
-                  style={styles.webBrowserLoginButton}
-                  onPress={handleBrowserLogin}
-                >
-                  <ExternalLink size={18} color="#fff" />
-                  <Text style={styles.webBrowserLoginButtonText}>Open Login Window</Text>
-                </Pressable>
-              </View>
-              
-              <View style={styles.webSyncDivider}>
-                <View style={styles.webSyncDividerLine} />
-                <Text style={styles.webSyncDividerText}>OR</Text>
-                <View style={styles.webSyncDividerLine} />
-              </View>
-              
-              <View style={styles.webSyncOption}>
-                <View style={styles.webSyncOptionHeader}>
-                  <LogIn size={20} color="#3b82f6" />
-                  <Text style={styles.webSyncOptionTitle}>Option 2: Direct Credentials</Text>
-                </View>
-                <Text style={styles.webSyncOptionDesc}>
-                  Enter your credentials and we&apos;ll attempt to sync automatically (requires backend).
-                </Text>
-                <Pressable
-                  style={[styles.webPrimaryButton, webLoginMutation.isPending && styles.buttonDisabled]}
-                  onPress={() => {
-                    setWebSyncError(null);
-                    setShowCredentialsModal(true);
-                  }}
-                  disabled={webLoginMutation.isPending}
-                >
-                  {webLoginMutation.isPending ? (
-                    <Loader2 size={18} color="#fff" />
-                  ) : (
-                    <LogIn size={18} color="#fff" />
-                  )}
-                  <Text style={styles.webPrimaryButtonText}>
-                    {webLoginMutation.isPending ? 'Syncing...' : 'Sign In & Sync'}
-                  </Text>
-                </Pressable>
-              </View>
-              
-              <View style={styles.webSyncDivider}>
-                <View style={styles.webSyncDividerLine} />
-                <Text style={styles.webSyncDividerText}>OR</Text>
-                <View style={styles.webSyncDividerLine} />
-              </View>
-              
-              <View style={styles.webSyncOption}>
-                <View style={styles.webSyncOptionHeader}>
-                  <Download size={20} color="#64748b" />
-                  <Text style={styles.webSyncOptionTitle}>Option 3: Extension Only</Text>
-                </View>
-                <Text style={styles.webSyncOptionDesc}>
-                  Already logged in? Just use the browser extension directly.
-                </Text>
-                <Pressable
-                  style={styles.webSecondaryButton}
-                  onPress={() => {
-                    const url = isCelebrity 
-                      ? 'https://www.celebritycruises.com/blue-chip-club/offers'
-                      : 'https://www.royalcaribbean.com/club-royale/offers';
-                    Linking.openURL(url);
-                  }}
-                >
-                  <ExternalLink size={18} color="#cbd5e1" />
-                  <Text style={styles.webSecondaryButtonText}>Open Offers Page</Text>
-                </Pressable>
-              </View>
-              
-              <Pressable
-                style={styles.webBackButton}
-                onPress={() => router.back()}
-              >
-                <Text style={styles.webBackButtonText}>← Back</Text>
-              </Pressable>
             </View>
-            )
           ) : (
             <View style={styles.quickActionsGrid}>
               <Pressable 
@@ -1254,6 +1169,120 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 15,
     fontWeight: '500' as const
+  },
+  webCredentialsContainer: {
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#334155'
+  },
+  webCredentialsHeader: {
+    alignItems: 'center' as const,
+    marginBottom: 24
+  },
+  webCredentialsIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#1e40af20',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginBottom: 12
+  },
+  webCredentialsIconCelebrity: {
+    backgroundColor: '#05966920'
+  },
+  webCredentialsTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700' as const,
+    marginBottom: 6,
+    textAlign: 'center' as const
+  },
+  webCredentialsSubtitle: {
+    color: '#94a3b8',
+    fontSize: 14,
+    textAlign: 'center' as const,
+    lineHeight: 20
+  },
+  webCredentialsForm: {
+    gap: 16,
+    marginBottom: 20
+  },
+  webInputGroup: {
+    gap: 8
+  },
+  webInputLabel: {
+    color: '#cbd5e1',
+    fontSize: 14,
+    fontWeight: '500' as const
+  },
+  webInputContainer: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 14
+  },
+  webInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 15,
+    paddingVertical: 14
+  },
+  webEyeButton: {
+    padding: 6
+  },
+  webErrorContainer: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: 8,
+    backgroundColor: '#7f1d1d40',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ef4444'
+  },
+  webErrorText: {
+    flex: 1,
+    color: '#fca5a5',
+    fontSize: 13,
+    lineHeight: 18
+  },
+  webSecurityNote: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: 8,
+    paddingTop: 4
+  },
+  webSecurityText: {
+    flex: 1,
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 16
+  },
+  webCredentialsActions: {
+    gap: 12
+  },
+  webSyncButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 10,
+    backgroundColor: '#3b82f6',
+    paddingVertical: 16,
+    borderRadius: 10
+  },
+  webSyncButtonCelebrity: {
+    backgroundColor: '#059669'
+  },
+  webSyncButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600' as const
   },
   webBrowserLoginButton: {
     flexDirection: 'row' as const,
