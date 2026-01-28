@@ -362,101 +362,78 @@ function RoyalCaribbeanSyncScreen() {
                   <Ship size={28} color={isCelebrity ? '#10b981' : '#3b82f6'} />
                 </View>
                 <Text style={styles.webCredentialsTitle}>
-                  Sign In to {isCelebrity ? 'Celebrity Cruises' : 'Royal Caribbean'}
+                  Sync Options
                 </Text>
                 <Text style={styles.webCredentialsSubtitle}>
-                  Enter your credentials to sync your {isCelebrity ? 'Blue Chip Club' : 'Club Royale'} data
+                  {isCelebrity ? 'Celebrity Cruises' : 'Royal Caribbean'} doesn&apos;t provide a public API. Use one of these methods:
                 </Text>
               </View>
 
-              <View style={styles.webCredentialsForm}>
-                <View style={styles.webInputGroup}>
-                  <Text style={styles.webInputLabel}>Email / Username</Text>
-                  <View style={styles.webInputContainer}>
-                    <TextInput
-                      style={styles.webInput}
-                      value={webUsername}
-                      onChangeText={setWebUsername}
-                      placeholder="Enter your email"
-                      placeholderTextColor="#475569"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType="email-address"
-                      editable={!webLoginMutation.isPending}
-                    />
+              <View style={styles.webSyncOptionsContainer}>
+                <View style={styles.webSyncOptionCard}>
+                  <View style={styles.webSyncOptionIconContainer}>
+                    <Download size={24} color="#3b82f6" />
                   </View>
-                </View>
-
-                <View style={styles.webInputGroup}>
-                  <Text style={styles.webInputLabel}>Password</Text>
-                  <View style={styles.webInputContainer}>
-                    <TextInput
-                      style={styles.webInput}
-                      value={webPassword}
-                      onChangeText={setWebPassword}
-                      placeholder="Enter your password"
-                      placeholderTextColor="#475569"
-                      secureTextEntry={!showWebPassword}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      editable={!webLoginMutation.isPending}
-                    />
+                  <View style={styles.webSyncOptionContent}>
+                    <Text style={styles.webSyncOptionTitle}>Browser Extension</Text>
+                    <Text style={styles.webSyncOptionDesc}>
+                      Install the Easy Seas™ Chrome Extension to scrape data directly from the {isCelebrity ? 'Celebrity' : 'Royal Caribbean'} website.
+                    </Text>
                     <Pressable
-                      onPress={() => setShowWebPassword(!showWebPassword)}
-                      style={styles.webEyeButton}
+                      style={[styles.webSyncButton, { marginTop: 12 }]}
+                      onPress={() => {
+                        Linking.openURL('https://chromewebstore.google.com/detail/easy-seas/your-extension-id');
+                      }}
                     >
-                      {showWebPassword ? (
-                        <EyeOff size={18} color="#64748b" />
-                      ) : (
-                        <Eye size={18} color="#64748b" />
-                      )}
+                      <Download size={18} color="#fff" />
+                      <Text style={styles.webSyncButtonText}>Download Extension</Text>
                     </Pressable>
                   </View>
                 </View>
 
-                {webSyncError && (
-                  <View style={styles.webErrorContainer}>
-                    <AlertCircle size={16} color="#ef4444" />
-                    <Text style={styles.webErrorText}>{webSyncError}</Text>
+                <View style={styles.webSyncOptionCard}>
+                  <View style={[styles.webSyncOptionIconContainer, { backgroundColor: '#10b98120' }]}>
+                    <ExternalLink size={24} color="#10b981" />
                   </View>
-                )}
+                  <View style={styles.webSyncOptionContent}>
+                    <Text style={styles.webSyncOptionTitle}>Mobile App</Text>
+                    <Text style={styles.webSyncOptionDesc}>
+                      Use the Easy Seas™ mobile app to sync via the in-app browser. Download from the App Store or scan the QR code.
+                    </Text>
+                  </View>
+                </View>
 
-                <View style={styles.webSecurityNote}>
-                  <Lock size={14} color="#64748b" />
-                  <Text style={styles.webSecurityText}>
-                    Your credentials are used only for this sync session and are not stored.
-                  </Text>
+                <View style={styles.webSyncOptionCard}>
+                  <View style={[styles.webSyncOptionIconContainer, { backgroundColor: '#f59e0b20' }]}>
+                    <Calendar size={24} color="#f59e0b" />
+                  </View>
+                  <View style={styles.webSyncOptionContent}>
+                    <Text style={styles.webSyncOptionTitle}>Manual Import</Text>
+                    <Text style={styles.webSyncOptionDesc}>
+                      Export your data from the {isCelebrity ? 'Celebrity' : 'Royal Caribbean'} website and import via CSV in the app settings.
+                    </Text>
+                    <Pressable
+                      style={[styles.webSecondaryButton, { marginTop: 12 }]}
+                      onPress={() => {
+                        const url = isCelebrity 
+                          ? 'https://www.celebritycruises.com/blue-chip-club/offers'
+                          : 'https://www.royalcaribbean.com/club-royale/offers';
+                        Linking.openURL(url);
+                      }}
+                    >
+                      <ExternalLink size={16} color="#cbd5e1" />
+                      <Text style={styles.webSecondaryButtonText}>Open Website</Text>
+                    </Pressable>
+                  </View>
                 </View>
               </View>
 
-              <View style={styles.webCredentialsActions}>
-                <Pressable
-                  style={[
-                    styles.webSyncButton,
-                    isCelebrity && styles.webSyncButtonCelebrity,
-                    (!webUsername.trim() || !webPassword.trim() || webLoginMutation.isPending) && styles.buttonDisabled
-                  ]}
-                  onPress={() => handleWebSync(webUsername.trim(), webPassword.trim())}
-                  disabled={!webUsername.trim() || !webPassword.trim() || webLoginMutation.isPending}
-                >
-                  {webLoginMutation.isPending ? (
-                    <Loader2 size={20} color="#fff" />
-                  ) : (
-                    <LogIn size={20} color="#fff" />
-                  )}
-                  <Text style={styles.webSyncButtonText}>
-                    {webLoginMutation.isPending ? 'Syncing...' : 'Sign In & Sync'}
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  style={styles.webBackButton}
-                  onPress={() => router.back()}
-                  disabled={webLoginMutation.isPending}
-                >
-                  <Text style={styles.webBackButtonText}>← Back</Text>
-                </Pressable>
-              </View>
+              <Pressable
+                style={styles.webBackButton}
+                onPress={() => router.back()}
+              >
+                <Text style={styles.webBackButtonText}>← Back</Text>
+              </Pressable>
             </View>
           ) : (
             <View style={styles.quickActionsGrid}>
@@ -1209,6 +1186,41 @@ const styles = StyleSheet.create({
   webCredentialsForm: {
     gap: 16,
     marginBottom: 20
+  },
+  webSyncOptionsContainer: {
+    gap: 16,
+    marginBottom: 20
+  },
+  webSyncOptionCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row' as const,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: '#334155'
+  },
+  webSyncOptionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#3b82f620',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const
+  },
+  webSyncOptionContent: {
+    flex: 1
+  },
+  webSyncOptionTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600' as const,
+    marginBottom: 4
+  },
+  webSyncOptionDesc: {
+    color: '#94a3b8',
+    fontSize: 13,
+    lineHeight: 18
   },
   webInputGroup: {
     gap: 8

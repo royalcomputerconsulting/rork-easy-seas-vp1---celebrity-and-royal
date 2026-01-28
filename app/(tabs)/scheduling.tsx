@@ -38,6 +38,8 @@ import { useAgentX } from '@/state/AgentXProvider';
 import { getRecommendedCruises, type RecommendationScore } from '@/lib/recommendationEngine';
 import { AgentXChat } from '@/components/AgentXChat';
 import { AlertsManagerModal } from '@/components/AlertsManagerModal';
+import { findBackToBackSets, type BackToBackSet } from '@/lib/backToBackFinder';
+import { Link2, Calendar, Users, Tag, Anchor } from 'lucide-react-native';
 
 type ViewTab = 'available' | 'all' | 'foryou' | 'booked';
 type CabinFilter = 'all' | 'Interior' | 'Oceanview' | 'Balcony' | 'Suite';
@@ -53,7 +55,7 @@ interface FilterState {
 const TABS: { key: ViewTab; label: string; icon?: any }[] = [
   { key: 'available', label: 'Available', icon: Ship },
   { key: 'all', label: 'All', icon: ListFilter },
-  { key: 'foryou', label: 'For You', icon: Sparkles },
+  { key: 'foryou', label: 'Back 2 Back', icon: Sparkles },
   { key: 'booked', label: 'Booked', icon: Bookmark },
 ];
 
@@ -125,6 +127,7 @@ export default function SchedulingScreen() {
   }, [bookedDates]);
 
   const [, setRecommendationScores] = useState<Map<string, RecommendationScore>>(new Map());
+  const [b2bSets, setB2bSets] = useState<BackToBackSet[]>([]);
 
   const getSmartRecommendations = useCallback((cruises: Cruise[]): Cruise[] => {
     const allBooked = [...(localData.booked || []), ...(bookedCruises || [])];
@@ -153,6 +156,21 @@ export default function SchedulingScreen() {
     
     return recommendations.map(r => r.cruise);
   }, [bookedDates, localData.booked, localData.offers, bookedCruises]);
+
+  const getBackToBackSets = useCallback((cruises: Cruise[]): BackToBackSet[] => {
+    console.log('[Scheduling] Finding back-to-back cruise sets...');
+    
+    const sets = findBackToBackSets(cruises, bookedDates, {
+      maxGapDays: 1,
+      requireDifferentOffers: true,
+      excludeConflicts: true,
+    });
+    
+    console.log('[Scheduling] Found', sets.length, 'back-to-back sets');
+    setB2bSets(sets);
+    
+    return sets;
+  }, [bookedDates]);
 
   const enrichedCruises = useMemo(() => {
     const offers = localData.offers || [];
@@ -208,7 +226,8 @@ export default function SchedulingScreen() {
     } else if (activeTab === 'all') {
       result = result.filter(c => !isDateInPast(c.sailDate));
     } else if (activeTab === 'foryou') {
-      result = getSmartRecommendations(enrichedCruises);
+      getBackToBackSets(enrichedCruises);
+      return [];
     } else if (activeTab === 'booked') {
       return bookedCruisesData.filter(c => !isDateInPast(c.returnDate || c.sailDate)) as Cruise[];
     }
@@ -324,6 +343,114 @@ export default function SchedulingScreen() {
     );
   }, [bookedIds, handleCruisePress, activeTab]);
 
+  const renderB2BSetCard = useCallback((set: BackToBackSet, index: number) => {
+    return (
+      <View key={set.id} style={styles.b2bSetCard}>
+        <LinearGradient
+          colors={['#001F3F', '#0A2540']}
+          style={styles.b2bSetHeader}
+        >
+          <View style={styles.b2bSetBadge}>
+            <Link2 size={14} color={COLORS.goldAccent} />
+            <Text style={styles.b2bSetBadgeText}>BACK-TO-BACK SET #{index + 1}</Text>
+          </View>
+          <View style={styles.b2bSetSummary}>
+            <View style={styles.b2bSummaryItem}>
+              <Calendar size={12} color={COLORS.beigeWarm} />
+              <Text style={styles.b2bSummaryText}>{set.totalNights} nights total</Text>
+            </View>
+            <View style={styles.b2bSummaryItem}>
+              <Anchor size={12} color={COLORS.beigeWarm} />
+              <Text style={styles.b2bSummaryText}>From {set.departurePort}</Text>
+            </View>
+          </View>
+        </LinearGradient>
+        
+        {set.cruises.map((cruise, cruiseIndex) => (
+          <TouchableOpacity
+            key={cruise.id}
+            style={[
+              styles.b2bCruiseItem,
+              cruiseIndex === set.cruises.length - 1 && styles.b2bCruiseItemLast
+            ]}
+            onPress={() => handleCruisePress(cruise)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.b2bCruisePosition}>
+              <Text style={styles.b2bPositionNumber}>{cruiseIndex + 1}</Text>
+              {cruiseIndex < set.cruises.length - 1 && (
+                <View style={styles.b2bConnector} />
+              )}
+            </View>
+            
+            <View style={styles.b2bCruiseContent}>
+              <View style={styles.b2bCruiseHeader}>
+                <Ship size={16} color={COLORS.navyDeep} />
+                <Text style={styles.b2bShipName}>{cruise.shipName}</Text>
+              </View>
+              
+              <View style={styles.b2bCruiseDetails}>
+                <View style={styles.b2bDetailRow}>
+                  <Calendar size={12} color={COLORS.navyDeep} />
+                  <Text style={styles.b2bDetailText}>
+                    {cruise.sailDate} → {cruise.returnDate} ({cruise.nights}N)
+                  </Text>
+                </View>
+                
+                {cruise.cabinType && (
+                  <View style={styles.b2bDetailRow}>
+                    <View style={styles.b2bRoomBadge}>
+                      <Text style={styles.b2bRoomText}>{cruise.cabinType}</Text>
+                    </View>
+                  </View>
+                )}
+                
+                {(cruise.guests || cruise.guestsInfo) && (
+                  <View style={styles.b2bDetailRow}>
+                    <Users size={12} color={COLORS.navyDeep} />
+                    <Text style={styles.b2bDetailText}>
+                      {cruise.guestsInfo || `${cruise.guests} guests`}
+                    </Text>
+                  </View>
+                )}
+                
+                {(cruise.offerCode || cruise.offerName) && (
+                  <View style={styles.b2bOfferSection}>
+                    <Tag size={12} color={COLORS.goldDark} />
+                    <View style={styles.b2bOfferInfo}>
+                      {cruise.offerCode && (
+                        <Text style={styles.b2bOfferCode}>{cruise.offerCode}</Text>
+                      )}
+                      {cruise.offerName && (
+                        <Text style={styles.b2bOfferName} numberOfLines={1}>
+                          {cruise.offerName}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                )}
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+        
+        <View style={styles.b2bSetFooter}>
+          <Text style={styles.b2bFooterLabel}>Different Offer Codes:</Text>
+          <View style={styles.b2bOfferTags}>
+            {set.offerCodes.map((code, i) => (
+              <View key={i} style={styles.b2bOfferTag}>
+                <Text style={styles.b2bOfferTagText}>{code}</Text>
+              </View>
+            ))}
+            {set.offerCodes.length === 0 && (
+              <Text style={styles.b2bNoOfferText}>No offer codes specified</Text>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  }, [handleCruisePress]);
+
   const renderHeader = () => (
     <View style={styles.headerContent}>
       <CompactDashboardHeader
@@ -423,40 +550,68 @@ export default function SchedulingScreen() {
       
       <View style={styles.cruiseListHeader}>
         <Text style={styles.cruiseListTitle}>
-          {activeTab === 'booked' ? 'BOOKED CRUISES' : activeTab === 'foryou' ? 'RECOMMENDED FOR YOU' : 'ALL CRUISES'}
+          {activeTab === 'booked' ? 'BOOKED CRUISES' : activeTab === 'foryou' ? 'BACK-TO-BACK SETS' : 'ALL CRUISES'}
         </Text>
         <Text style={styles.cruiseListSubtitle}>
-          {filteredCruises.length} {filteredCruises.length === 1 ? 'cruise' : 'cruises'} • Tap to view details
+          {activeTab === 'foryou' 
+            ? `${b2bSets.length} ${b2bSets.length === 1 ? 'set' : 'sets'} found • Different offers on each cruise`
+            : `${filteredCruises.length} ${filteredCruises.length === 1 ? 'cruise' : 'cruises'} • Tap to view details`
+          }
         </Text>
       </View>
-    </View>
-  );
-
-  const renderEmpty = () => (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIconContainer}>
-        <Ship size={56} color={COLORS.navyDeep} />
-      </View>
-      <Text style={styles.emptyTitle}>No Cruises Found</Text>
-      <Text style={styles.emptyText}>
-        {filters.searchQuery || filters.cabinType !== 'all' || filters.noConflicts
-            ? 'Try adjusting your filters or search.'
-            : 'Import cruise data to see available voyages.'}
-      </Text>
-      {(filters.searchQuery || filters.cabinType !== 'all' || filters.noConflicts) && (
-        <TouchableOpacity style={styles.clearFiltersButton} onPress={clearFilters}>
-          <LinearGradient
-            colors={[COLORS.beigeWarm, COLORS.goldDark]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.clearFiltersGradient}
-          >
-            <Text style={styles.clearFiltersText}>Clear Filters</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+      
+      {activeTab === 'foryou' && b2bSets.length > 0 && (
+        <View style={styles.b2bExplanation}>
+          <Link2 size={14} color={COLORS.navyDeep} />
+          <Text style={styles.b2bExplanationText}>
+            Each set shows consecutive cruises with different offer codes that you can book back-to-back.
+          </Text>
+        </View>
       )}
     </View>
   );
+
+  const renderEmpty = () => {
+    if (activeTab === 'foryou') {
+      return (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIconContainer}>
+            <Link2 size={56} color={COLORS.navyDeep} />
+          </View>
+          <Text style={styles.emptyTitle}>No Back-to-Back Sets Found</Text>
+          <Text style={styles.emptyText}>
+            No consecutive cruise pairs with different offer codes were found that don't conflict with your booked cruises.
+          </Text>
+        </View>
+      );
+    }
+    
+    return (
+      <View style={styles.emptyState}>
+        <View style={styles.emptyIconContainer}>
+          <Ship size={56} color={COLORS.navyDeep} />
+        </View>
+        <Text style={styles.emptyTitle}>No Cruises Found</Text>
+        <Text style={styles.emptyText}>
+          {filters.searchQuery || filters.cabinType !== 'all' || filters.noConflicts
+              ? 'Try adjusting your filters or search.'
+              : 'Import cruise data to see available voyages.'}
+        </Text>
+        {(filters.searchQuery || filters.cabinType !== 'all' || filters.noConflicts) && (
+          <TouchableOpacity style={styles.clearFiltersButton} onPress={clearFilters}>
+            <LinearGradient
+              colors={[COLORS.beigeWarm, COLORS.goldDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.clearFiltersGradient}
+            >
+              <Text style={styles.clearFiltersText}>Clear Filters</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   const handleAgentClose = useCallback(() => {
     setVisible(false);
@@ -480,27 +635,47 @@ export default function SchedulingScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <FlatList
-          data={filteredCruises}
-          renderItem={renderCruiseCard}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          ListHeaderComponent={renderHeader}
-          ListEmptyComponent={renderEmpty}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={COLORS.navyDeep}
-              colors={[COLORS.navyDeep]}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews={Platform.OS === 'android'}
-          initialNumToRender={8}
-          maxToRenderPerBatch={8}
-          windowSize={10}
-        />
+        {activeTab === 'foryou' ? (
+          <FlatList
+            data={b2bSets}
+            renderItem={({ item, index }) => renderB2BSetCard(item, index)}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            ListHeaderComponent={renderHeader}
+            ListEmptyComponent={renderEmpty}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={COLORS.navyDeep}
+                colors={[COLORS.navyDeep]}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          />
+        ) : (
+          <FlatList
+            data={filteredCruises}
+            renderItem={renderCruiseCard}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            ListHeaderComponent={renderHeader}
+            ListEmptyComponent={renderEmpty}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={COLORS.navyDeep}
+                colors={[COLORS.navyDeep]}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews={Platform.OS === 'android'}
+            initialNumToRender={8}
+            maxToRenderPerBatch={8}
+            windowSize={10}
+          />
+        )}
       </SafeAreaView>
 
       {/* Agent X Floating Button */}
@@ -1111,5 +1286,191 @@ const styles = StyleSheet.create({
   },
   agentChatExpanded: {
     height: '95%',
+  },
+  b2bSetCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.goldAccent,
+    ...SHADOW.md,
+  },
+  b2bSetHeader: {
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(212, 165, 116, 0.3)',
+  },
+  b2bSetBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  b2bSetBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.goldAccent,
+    letterSpacing: 1,
+  },
+  b2bSetSummary: {
+    flexDirection: 'row',
+    gap: SPACING.lg,
+  },
+  b2bSummaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  b2bSummaryText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.beigeWarm,
+  },
+  b2bCruiseItem: {
+    flexDirection: 'row',
+    padding: SPACING.md,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  b2bCruiseItemLast: {
+    borderBottomWidth: 0,
+  },
+  b2bCruisePosition: {
+    width: 32,
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  b2bPositionNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.navyDeep,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textAlign: 'center' as const,
+    lineHeight: 24,
+    overflow: 'hidden',
+  },
+  b2bConnector: {
+    width: 2,
+    flex: 1,
+    backgroundColor: COLORS.goldAccent,
+    marginTop: 4,
+  },
+  b2bCruiseContent: {
+    flex: 1,
+  },
+  b2bCruiseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.xs,
+  },
+  b2bShipName: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  b2bCruiseDetails: {
+    gap: 6,
+  },
+  b2bDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  b2bDetailText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.8,
+  },
+  b2bRoomBadge: {
+    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  b2bRoomText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  b2bOfferSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 31, 63, 0.05)',
+  },
+  b2bOfferInfo: {
+    flex: 1,
+  },
+  b2bOfferCode: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.goldDark,
+  },
+  b2bOfferName: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  b2bSetFooter: {
+    padding: SPACING.md,
+    backgroundColor: 'rgba(0, 31, 63, 0.03)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  b2bFooterLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.6,
+    marginBottom: SPACING.xs,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  b2bOfferTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+  },
+  b2bOfferTag: {
+    backgroundColor: COLORS.goldAccent,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  b2bOfferTagText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  b2bNoOfferText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.5,
+    fontStyle: 'italic' as const,
+  },
+  b2bExplanation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    backgroundColor: 'rgba(212, 165, 116, 0.15)',
+    borderRadius: BORDER_RADIUS.md,
+    marginTop: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 165, 116, 0.3)',
+  },
+  b2bExplanationText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    lineHeight: 18,
   },
 });
