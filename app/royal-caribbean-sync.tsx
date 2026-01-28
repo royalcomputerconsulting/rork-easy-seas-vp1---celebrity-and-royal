@@ -525,7 +525,7 @@ function RoyalCaribbeanSyncScreen() {
                   <View style={styles.countInfo}>
                     <Text style={styles.countNumber}>{state.syncCounts?.courtesyHolds || 0}</Text>
                     <Text style={styles.countLabel}>Courtesy Holds</Text>
-                    <Text style={styles.countDetail}>Marked as &ldquo;On Hold&rdquo;</Text>
+                    <Text style={styles.countDetail}>Added as Booked (marked as hold)</Text>
                   </View>
                 </View>
 

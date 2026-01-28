@@ -46,7 +46,11 @@ export interface UserProfile {
   celebrityCaptainsClubNumber?: string;
   celebrityCaptainsClubPoints?: number;
   celebrityBlueChipPoints?: number;
-  preferredBrand?: 'royal' | 'celebrity';
+  preferredBrand?: 'royal' | 'celebrity' | 'silversea';
+  silverseaEmail?: string;
+  silverseaVenetianNumber?: string;
+  silverseaVenetianTier?: string;
+  silverseaVenetianPoints?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -78,6 +82,10 @@ const DEFAULT_OWNER = {
   celebrityCaptainsClubPoints: 0,
   celebrityBlueChipPoints: 0,
   preferredBrand: 'royal' as const,
+  silverseaEmail: '',
+  silverseaVenetianNumber: '',
+  silverseaVenetianTier: '',
+  silverseaVenetianPoints: 0,
 };
 
 export const [UserProvider, useUser] = createContextHook((): UserState => {
@@ -165,6 +173,10 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
           celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
           celebrityBlueChipPoints: DEFAULT_OWNER.celebrityBlueChipPoints,
           preferredBrand: DEFAULT_OWNER.preferredBrand,
+          silverseaEmail: DEFAULT_OWNER.silverseaEmail,
+          silverseaVenetianNumber: DEFAULT_OWNER.silverseaVenetianNumber,
+          silverseaVenetianTier: DEFAULT_OWNER.silverseaVenetianTier,
+          silverseaVenetianPoints: DEFAULT_OWNER.silverseaVenetianPoints,
           createdAt: now,
           updatedAt: now,
         };
@@ -323,6 +335,10 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
       celebrityBlueChipPoints: DEFAULT_OWNER.celebrityBlueChipPoints,
       preferredBrand: DEFAULT_OWNER.preferredBrand,
+      silverseaEmail: DEFAULT_OWNER.silverseaEmail,
+      silverseaVenetianNumber: DEFAULT_OWNER.silverseaVenetianNumber,
+      silverseaVenetianTier: DEFAULT_OWNER.silverseaVenetianTier,
+      silverseaVenetianPoints: DEFAULT_OWNER.silverseaVenetianPoints,
       createdAt: now,
       updatedAt: now,
     };

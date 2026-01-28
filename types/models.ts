@@ -108,6 +108,7 @@ export interface BookedCruise extends Cruise {
   reservationNumber?: string;
   bookingId?: string;
   bwoNumber?: string;
+  isCourtesyHold?: boolean;
   checkInDate?: string;
   casinoLevel?: string;
   casinoHost?: string;

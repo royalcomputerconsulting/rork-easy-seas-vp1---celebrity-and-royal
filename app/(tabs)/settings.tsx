@@ -92,6 +92,9 @@ export default function SettingsScreen() {
     setManualClubRoyalePoints,
     setManualCrownAnchorPoints,
     syncFromStorage: syncLoyaltyFromStorage,
+    extendedLoyalty,
+    venetianSociety,
+    captainsClub,
   } = useLoyalty();
   
   const [isImporting, setIsImporting] = useState(false);
@@ -193,7 +196,39 @@ export default function SettingsScreen() {
     celebrityBlueChipTier: 'Pearl',
     celebrityCaptainsClubLevel: 'Preview',
     preferredBrand: currentUser?.preferredBrand || 'royal',
+    silverseaEmail: currentUser?.silverseaEmail || '',
+    silverseaVenetianNumber: currentUser?.silverseaVenetianNumber || '',
+    silverseaVenetianTier: currentUser?.silverseaVenetianTier || '',
+    silverseaVenetianPoints: currentUser?.silverseaVenetianPoints || 0,
   }), [currentUser, loyaltyClubRoyalePoints, loyaltyClubRoyaleTier, loyaltyCrownAnchorPoints, loyaltyCrownAnchorLevel]);
+
+  const enrichmentData = useMemo(() => {
+    if (!extendedLoyalty) return null;
+    
+    return {
+      accountId: extendedLoyalty.accountId,
+      captainsClubId: extendedLoyalty.captainsClubId,
+      crownAndAnchorId: extendedLoyalty.crownAndAnchorId,
+      crownAndAnchorTier: extendedLoyalty.crownAndAnchorTier,
+      crownAndAnchorNextTier: extendedLoyalty.crownAndAnchorNextTier,
+      crownAndAnchorRemainingPoints: extendedLoyalty.crownAndAnchorRemainingPoints,
+      crownAndAnchorTrackerPercentage: extendedLoyalty.crownAndAnchorTrackerPercentage,
+      clubRoyaleTierFromApi: extendedLoyalty.clubRoyaleTierFromApi,
+      clubRoyalePointsFromApi: extendedLoyalty.clubRoyalePointsFromApi,
+      captainsClubTier: captainsClub?.tier || extendedLoyalty.captainsClubTier,
+      captainsClubPoints: captainsClub?.points || extendedLoyalty.captainsClubPoints,
+      captainsClubNextTier: captainsClub?.nextTier || extendedLoyalty.captainsClubNextTier,
+      captainsClubRemainingPoints: captainsClub?.remainingPoints || extendedLoyalty.captainsClubRemainingPoints,
+      captainsClubTrackerPercentage: captainsClub?.trackerPercentage || extendedLoyalty.captainsClubTrackerPercentage,
+      celebrityBlueChipTier: extendedLoyalty.celebrityBlueChipTier,
+      celebrityBlueChipPoints: extendedLoyalty.celebrityBlueChipPoints,
+      venetianSocietyTier: venetianSociety?.tier || extendedLoyalty.venetianSocietyTier,
+      venetianSocietyNextTier: venetianSociety?.nextTier || extendedLoyalty.venetianSocietyNextTier,
+      venetianSocietyMemberNumber: venetianSociety?.memberNumber || extendedLoyalty.venetianSocietyMemberNumber,
+      venetianSocietyEnrolled: venetianSociety?.enrolled || extendedLoyalty.venetianSocietyEnrolled,
+      hasCoBrandCard: extendedLoyalty.hasCoBrandCard,
+    };
+  }, [extendedLoyalty, venetianSociety, captainsClub]);
 
   const dataStats = useMemo(() => {
     const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
@@ -799,7 +834,11 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
     celebrityBlueChipPoints: number;
     celebrityBlueChipTier: string;
     celebrityCaptainsClubLevel: string;
-    preferredBrand?: 'royal' | 'celebrity';
+    preferredBrand?: 'royal' | 'celebrity' | 'silversea';
+    silverseaEmail?: string;
+    silverseaVenetianNumber?: string;
+    silverseaVenetianTier?: string;
+    silverseaVenetianPoints?: number;
   }) => {
     try {
       setIsSaving(true);
@@ -815,6 +854,10 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
           celebrityBlueChipPoints: profileData.celebrityBlueChipPoints,
           preferredBrand: profileData.preferredBrand,
+          silverseaEmail: profileData.silverseaEmail,
+          silverseaVenetianNumber: profileData.silverseaVenetianNumber,
+          silverseaVenetianTier: profileData.silverseaVenetianTier,
+          silverseaVenetianPoints: profileData.silverseaVenetianPoints,
         });
       } else {
         const owner = await ensureOwner();
@@ -827,6 +870,10 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
           celebrityBlueChipPoints: profileData.celebrityBlueChipPoints,
           preferredBrand: profileData.preferredBrand,
+          silverseaEmail: profileData.silverseaEmail,
+          silverseaVenetianNumber: profileData.silverseaVenetianNumber,
+          silverseaVenetianTier: profileData.silverseaVenetianTier,
+          silverseaVenetianPoints: profileData.silverseaVenetianPoints,
         });
       }
       
@@ -1163,6 +1210,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
 
           <UserProfileCard
             currentValues={currentProfileValues}
+            enrichmentData={enrichmentData}
             onSave={handleSaveProfile}
             isSaving={isSaving}
           />

@@ -2,12 +2,15 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 
+export type BrandType = 'royal' | 'celebrity' | 'silversea';
+
 interface BrandToggleProps {
-  activeBrand: 'royal' | 'celebrity';
-  onToggle: (brand: 'royal' | 'celebrity') => void;
+  activeBrand: BrandType;
+  onToggle: (brand: BrandType) => void;
+  showSilversea?: boolean;
 }
 
-export function BrandToggle({ activeBrand, onToggle }: BrandToggleProps) {
+export function BrandToggle({ activeBrand, onToggle, showSilversea = true }: BrandToggleProps) {
   return (
     <View style={styles.container}>
       <View style={styles.toggleContainer}>
@@ -25,6 +28,7 @@ export function BrandToggle({ activeBrand, onToggle }: BrandToggleProps) {
               styles.toggleText,
               activeBrand === 'royal' && styles.activeText,
             ]}
+            numberOfLines={1}
           >
             Royal Caribbean
           </Text>
@@ -33,7 +37,7 @@ export function BrandToggle({ activeBrand, onToggle }: BrandToggleProps) {
         <TouchableOpacity
           style={[
             styles.toggleButton,
-            styles.rightButton,
+            styles.middleButton,
             activeBrand === 'celebrity' && styles.activeButton,
           ]}
           onPress={() => onToggle('celebrity')}
@@ -44,10 +48,33 @@ export function BrandToggle({ activeBrand, onToggle }: BrandToggleProps) {
               styles.toggleText,
               activeBrand === 'celebrity' && styles.activeText,
             ]}
+            numberOfLines={1}
           >
-            Celebrity Cruises
+            Celebrity
           </Text>
         </TouchableOpacity>
+
+        {showSilversea && (
+          <TouchableOpacity
+            style={[
+              styles.toggleButton,
+              styles.rightButton,
+              activeBrand === 'silversea' && styles.activeButton,
+            ]}
+            onPress={() => onToggle('silversea')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.toggleText,
+                activeBrand === 'silversea' && styles.activeText,
+              ]}
+              numberOfLines={1}
+            >
+              Silversea
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -69,13 +96,16 @@ const styles = StyleSheet.create({
   toggleButton: {
     flex: 1,
     paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: BORDER_RADIUS.md,
   },
   leftButton: {
     marginRight: 2,
+  },
+  middleButton: {
+    marginHorizontal: 2,
   },
   rightButton: {
     marginLeft: 2,

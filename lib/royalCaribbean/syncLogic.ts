@@ -433,10 +433,10 @@ export function createSyncPreview(
 }
 
 export function calculateSyncCounts(preview: SyncPreview): SyncPreviewCounts {
-  const upcomingCruises = preview.bookedCruises.new.filter(c => c.status === 'booked').length + 
-                          preview.bookedCruises.updates.filter(u => u.updated.status === 'booked').length;
-  const courtesyHolds = preview.bookedCruises.new.filter(c => c.status === 'available').length + 
-                        preview.bookedCruises.updates.filter(u => u.updated.status === 'available').length;
+  const upcomingCruises = preview.bookedCruises.new.filter(c => c.status === 'booked' && !c.isCourtesyHold).length + 
+                          preview.bookedCruises.updates.filter(u => u.updated.status === 'booked' && !u.updated.isCourtesyHold).length;
+  const courtesyHolds = preview.bookedCruises.new.filter(c => c.isCourtesyHold === true).length + 
+                        preview.bookedCruises.updates.filter(u => u.updated.isCourtesyHold === true).length;
 
   return {
     offersNew: preview.offers.new.length,

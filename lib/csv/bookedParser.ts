@@ -16,6 +16,38 @@ function stripOuterQuotes(value: string): string {
   return trimmed;
 }
 
+function calculateNightsFromDates(startDate: string, endDate: string): number | null {
+  if (!startDate || !endDate) return null;
+  
+  try {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+    
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays > 0 ? diffDays : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractNightsFromItinerary(itineraryName: string): number | null {
+  if (!itineraryName) return null;
+  
+  const nightsMatch = itineraryName.match(/(\d+)\s*night/i);
+  if (nightsMatch) {
+    const nights = parseInt(nightsMatch[1], 10);
+    if (nights > 0 && nights <= 365) {
+      return nights;
+    }
+  }
+  
+  return null;
+}
+
 function normalizeRowLength(
   values: string[],
   expectedLen: number,
@@ -185,8 +217,28 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     const ship = getValue(colIndices.ship);
     const departureDateRaw = getValue(colIndices.departureDate);
     const returnDateRaw = getValue(colIndices.returnDate);
-    const nights = getNumericValue(colIndices.nights) || 7;
     const itineraryName = getValue(colIndices.itineraryName);
+    
+    // Calculate nights with multiple fallbacks:
+    // 1. Use explicit nights column if available
+    // 2. Calculate from departure and return dates
+    // 3. Extract from itinerary name (e.g., "12 Night Hawaii Cruise")
+    // 4. Default to 7 only as last resort
+    const explicitNights = getNumericValue(colIndices.nights);
+    const sailDate = normalizeDateString(departureDateRaw);
+    const returnDate = returnDateRaw ? normalizeDateString(returnDateRaw) : '';
+    const calculatedNights = calculateNightsFromDates(sailDate, returnDate);
+    const itineraryNights = extractNightsFromItinerary(itineraryName);
+    
+    const nights = explicitNights > 0 
+      ? explicitNights 
+      : (calculatedNights !== null 
+          ? calculatedNights 
+          : (itineraryNights !== null 
+              ? itineraryNights 
+              : 7));
+    
+    console.log(`[BookedParser] Nights calculation for ${ship}: explicit=${explicitNights}, calculated=${calculatedNights}, itinerary=${itineraryNights}, final=${nights}`);
     const departurePort = getValue(colIndices.departurePort);
     const portsRoute = getValue(colIndices.portsRoute);
     const reservationNumber = getValue(colIndices.reservationNumber);
@@ -215,8 +267,8 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
       continue;
     }
 
-    const sailDate = normalizeDateString(departureDateRaw);
-    const returnDate = returnDateRaw ? normalizeDateString(returnDateRaw) : calculateReturnDate(sailDate, nights);
+    // Use already calculated sailDate and returnDate, or calculate returnDate from nights
+    const finalReturnDate = returnDate || calculateReturnDate(sailDate, nights);
 
     const ports = portsRoute
       ? portsRoute
@@ -233,7 +285,7 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
       id,
       shipName: ship,
       sailDate,
-      returnDate,
+      returnDate: finalReturnDate,
       departurePort,
       destination: itineraryName,
       nights,
