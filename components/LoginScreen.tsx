@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Linking, Image, Dimensions, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 
 import { useAuth } from '@/state/AuthProvider';
@@ -53,15 +54,19 @@ export function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <LinearGradient
+      colors={['#001F54', '#003D82', '#0077B6']}
       style={styles.container}
     >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
       >
-        <View style={styles.content}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.content}>
           <View style={styles.logoContainer}>
             {!logoError ? (
               <Image 
@@ -74,6 +79,19 @@ export function LoginScreen() {
                 <Text style={styles.logoFallbackText}>Easy Seas</Text>
               </View>
             )}
+          </View>
+
+          <Text style={styles.brandTitle}>EASY SEAS™</Text>
+          <Text style={styles.brandTagline}>Manage your Nautical Lifestyle</Text>
+
+          <View style={styles.disclaimerSection}>
+            <Text style={styles.disclaimerText}>
+              DISCLAIMER: This app is for informational purposes only. Not a gambling manual. Royal Computer Consulting, Scott Merlis, and all associated parties take no responsibility. Use at your own risk. If you have a gambling problem, call 1-800-522-4700 or visit www.gamblersanonymous.org
+            </Text>
+            
+            <Text style={styles.trademarkText}>
+              TRADEMARK NOTICE: All trademarks, service marks, trade names, ship names, and logos, including but not limited to "Club Royale," "Blue Chip Club," "Royal Caribbean," "Celebrity Cruises," and all associated cruise ship names, are the property of their respective owners. Royal Computer Consulting and Scott Merlis have no affiliation, association, authorization, endorsement, or sponsorship with or by Royal Caribbean International, Celebrity Cruises, or any of their parent companies, subsidiaries, or affiliates.
+            </Text>
           </View>
 
           <View style={styles.card}>
@@ -138,8 +156,9 @@ export function LoginScreen() {
           </TouchableOpacity>
 
           
-        </View>
-      </ScrollView>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <Modal
         visible={showAboutModal}
@@ -462,14 +481,13 @@ export function LoginScreen() {
           </ScrollView>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0077B6',
   },
   scrollContent: {
     flexGrow: 1,
@@ -482,11 +500,11 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xxl,
   },
   logoContainer: {
-    width: width * 0.85,
-    height: height * 0.5,
+    width: width * 0.7,
+    height: height * 0.35,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.md,
   },
   logoImage: {
     width: '100%',
@@ -622,6 +640,44 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     marginBottom: SPACING.lg,
+  },
+  brandTitle: {
+    fontSize: 36,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: COLORS.white,
+    textAlign: 'center',
+    marginBottom: SPACING.xs,
+    letterSpacing: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  brandTagline: {
+    fontSize: 18,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
+    color: COLORS.white,
+    textAlign: 'center',
+    marginBottom: SPACING.lg,
+    opacity: 0.95,
+  },
+  disclaimerSection: {
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+  },
+  disclaimerText: {
+    fontSize: 11,
+    color: COLORS.white,
+    textAlign: 'center',
+    lineHeight: 16,
+    opacity: 0.85,
+    marginBottom: SPACING.md,
+  },
+  trademarkText: {
+    fontSize: 10,
+    color: COLORS.white,
+    textAlign: 'center',
+    lineHeight: 14,
+    opacity: 0.75,
   },
   modalContainer: {
     flex: 1,

@@ -119,6 +119,11 @@ export interface OfferRow {
   perks: string;
   loyaltyLevel: string;
   loyaltyPoints: string;
+  interiorPrice?: string;
+  oceanviewPrice?: string;
+  balconyPrice?: string;
+  suitePrice?: string;
+  portList?: string;
 }
 
 export interface BookedCruiseRow {

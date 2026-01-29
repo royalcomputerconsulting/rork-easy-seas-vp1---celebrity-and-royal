@@ -25,7 +25,12 @@ export function generateOffersCSV(offers: OfferRow[], loyaltyData: LoyaltyData |
     'Number of Guests',
     'Perks',
     'Loyalty Level',
-    'Loyalty Points'
+    'Loyalty Points',
+    'Interior Price',
+    'Oceanview Price',
+    'Balcony Price',
+    'Suite Price',
+    'Port List'
   ];
 
   const rows = offers.map(offer => [
@@ -42,7 +47,12 @@ export function generateOffersCSV(offers: OfferRow[], loyaltyData: LoyaltyData |
     escapeCSVField(offer.numberOfGuests),
     escapeCSVField(offer.perks),
     escapeCSVField(offer.loyaltyLevel || loyaltyData?.crownAndAnchorLevel || ''),
-    escapeCSVField(offer.loyaltyPoints || loyaltyData?.crownAndAnchorPoints || '')
+    escapeCSVField(offer.loyaltyPoints || loyaltyData?.crownAndAnchorPoints || ''),
+    escapeCSVField(offer.interiorPrice || ''),
+    escapeCSVField(offer.oceanviewPrice || ''),
+    escapeCSVField(offer.balconyPrice || ''),
+    escapeCSVField(offer.suitePrice || ''),
+    escapeCSVField(offer.portList || '')
   ]);
 
   const csvContent = [
