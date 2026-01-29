@@ -177,7 +177,7 @@ export interface BookedCruiseRow {
   isBoardingExpressEnabled?: boolean;
   isInternationalBooking?: boolean;
   amendToken?: string;
-  passengers?: Array<{
+  passengers?: {
     birthdate?: string;
     consumerId?: string;
     email?: string;
@@ -190,8 +190,8 @@ export interface BookedCruiseRow {
     stateroomCategoryCode?: string;
     stateroomType?: string;
     title?: string;
-  }>;
-  passengersInStateroom?: Array<{
+  }[];
+  passengersInStateroom?: {
     birthdate?: string;
     consumerId?: string;
     email?: string;
@@ -204,7 +204,7 @@ export interface BookedCruiseRow {
     stateroomCategoryCode?: string;
     stateroomType?: string;
     title?: string;
-  }>;
+  }[];
 }
 
 export interface ProgressInfo {
