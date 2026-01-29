@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
     flex: 1
   },
   scrollContent: {
-    paddingBottom: 20
+    paddingBottom: 40
   },
   statusBadge: {
     flexDirection: 'row' as const,
@@ -759,7 +759,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#334155'
   },
   logsScrollTop: {
-    maxHeight: 50,
+    maxHeight: 60,
     padding: 12
   },
   progressText: {
@@ -782,7 +782,7 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const
   },
   webViewContainer: {
-    height: 400,
+    height: 500,
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b'
   },

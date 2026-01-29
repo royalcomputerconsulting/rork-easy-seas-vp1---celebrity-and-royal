@@ -680,8 +680,8 @@ export const STEP2_UPCOMING_SCRIPT = `
       log('📍 Current URL: ' + window.location.href, 'info');
 
       // Wait for page to load and make API calls naturally
-      log('⏳ Waiting 8 seconds for page to load and make API calls...', 'info');
-      await wait(8000);
+      log('⏳ Waiting 12 seconds for page to load and make API calls...', 'info');
+      await wait(12000);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
@@ -695,6 +695,12 @@ export const STEP2_UPCOMING_SCRIPT = `
       log('📡 Network monitor should have captured API calls from page load', 'info');
       
       // FIRST: Check if we have captured payloads from network monitor
+      log('🔍 Checking captured payloads...', 'info');
+      log('📦 window.capturedPayloads exists: ' + !!window.capturedPayloads, 'info');
+      if (window.capturedPayloads) {
+        log('📦 Available captured endpoints: ' + Object.keys(window.capturedPayloads).filter(function(k) { return window.capturedPayloads[k]; }).join(', '), 'info');
+      }
+      
       if (window.capturedPayloads && window.capturedPayloads.upcomingCruises) {
         log('✅ Found captured payload from network monitor!', 'success');
         var capturedData = window.capturedPayloads.upcomingCruises;
@@ -752,7 +758,10 @@ export const STEP2_UPCOMING_SCRIPT = `
           return;
         }
       } else {
-        log('📝 No captured payload available, trying other methods...', 'info');
+        log('📝 No upcomingCruises payload captured yet', 'warning');
+        if (window.capturedPayloads) {
+          log('📝 Available payloads: offers=' + !!window.capturedPayloads.offers + ', upcomingCruises=' + !!window.capturedPayloads.upcomingCruises + ', courtesyHolds=' + !!window.capturedPayloads.courtesyHolds + ', loyalty=' + !!window.capturedPayloads.loyalty, 'info');
+        }
       }
       
       // Try embedded page data
