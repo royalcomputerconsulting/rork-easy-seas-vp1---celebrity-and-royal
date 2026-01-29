@@ -117,6 +117,64 @@ export const STEP4_LOYALTY_SCRIPT = `
       log('⏳ Waiting 8 seconds for page to load and make loyalty API calls...', 'info');
       await wait(8000);
       
+      // FIRST: Check if we have captured loyalty payload from network monitor
+      if (window.capturedPayloads && window.capturedPayloads.loyalty) {
+        log('✅ Found captured loyalty payload from network monitor!', 'success');
+        var capturedData = window.capturedPayloads.loyalty;
+        log('📦 Captured data keys: ' + Object.keys(capturedData).join(', '), 'info');
+        
+        // Extract loyalty information from captured payload
+        var loyaltyInfo = null;
+        var accountId = '';
+        
+        if (capturedData.payload && capturedData.payload.loyaltyInformation) {
+          loyaltyInfo = capturedData.payload.loyaltyInformation;
+          accountId = capturedData.payload.accountId || '';
+          log('✅ Found loyalty data in payload.loyaltyInformation', 'success');
+        } else if (capturedData.loyaltyInformation) {
+          loyaltyInfo = capturedData.loyaltyInformation;
+          accountId = capturedData.accountId || '';
+          log('✅ Found loyalty data in loyaltyInformation', 'success');
+        } else {
+          log('⚠️ Captured payload does not contain loyaltyInformation', 'warning');
+          log('📦 Payload keys: ' + Object.keys(capturedData).join(', '), 'info');
+        }
+        
+        if (loyaltyInfo) {
+          log('✅ Using loyalty data from captured payload', 'success');
+          
+          // Log loyalty data summary
+          if (loyaltyInfo.crownAndAnchorSocietyLoyaltyTier) {
+            log('   👑 Crown & Anchor: ' + loyaltyInfo.crownAndAnchorSocietyLoyaltyTier + ' - ' + (loyaltyInfo.crownAndAnchorSocietyLoyaltyIndividualPoints || 0).toLocaleString() + ' pts', 'info');
+          }
+          if (loyaltyInfo.clubRoyaleLoyaltyTier) {
+            log('   🎰 Club Royale: ' + loyaltyInfo.clubRoyaleLoyaltyTier + ' - ' + (loyaltyInfo.clubRoyaleLoyaltyIndividualPoints || 0).toLocaleString() + ' pts', 'info');
+          }
+          if (loyaltyInfo.captainsClubLoyaltyTier) {
+            log('   ⭐ Captain\'s Club: ' + loyaltyInfo.captainsClubLoyaltyTier + ' - ' + (loyaltyInfo.captainsClubLoyaltyIndividualPoints || 0).toLocaleString() + ' pts', 'info');
+          }
+          
+          // Send to app
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'extended_loyalty_data',
+            data: loyaltyInfo,
+            accountId: accountId
+          }));
+          
+          // Complete step
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'step_complete',
+            step: 4,
+            data: []
+          }));
+          
+          log('✅ Step 4 Complete - Loyalty data from captured payload', 'success');
+          return;
+        }
+      } else {
+        log('📝 No captured loyalty payload, trying other methods...', 'info');
+      }
+      
       // Try to extract from embedded page state
       var pageState = extractFromPageState();
       if (pageState && pageState.loyalty) {
@@ -131,7 +189,7 @@ export const STEP4_LOYALTY_SCRIPT = `
       }
       
       // Network monitor should have captured any loyalty API calls
-      log('📡 Network monitor should have captured loyalty API calls', 'info');
+      log('📡 Network monitor should have captured loyalty API calls during page load', 'info');
       
       // Complete step
       window.ReactNativeWebView.postMessage(JSON.stringify({

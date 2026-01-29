@@ -499,46 +499,58 @@ export const STEP3_HOLDS_SCRIPT = `
       await wait(2000);
 
       // FIRST: Check if we have captured payloads from network monitor
+      // Courtesy holds are in the upcomingCruises payload with bookingStatus === 'OF'
+      var holdsFromCapture = null;
+      
+      // Check dedicated courtesy holds endpoint first
       if (window.capturedPayloads && window.capturedPayloads.courtesyHolds) {
         log('✅ Found captured courtesy holds payload from network monitor!', 'success');
         var capturedData = window.capturedPayloads.courtesyHolds;
-        log('📦 Captured data keys: ' + Object.keys(capturedData).join(', '), 'info');
         
-        // Extract courtesy holds from captured payload
-        var holdsFromCapture = null;
         if (capturedData.payload && capturedData.payload.sailingInfo) {
           holdsFromCapture = capturedData.payload.sailingInfo;
-          log('✅ Found ' + holdsFromCapture.length + ' holds in payload.sailingInfo', 'success');
         } else if (capturedData.sailingInfo) {
           holdsFromCapture = capturedData.sailingInfo;
-          log('✅ Found ' + holdsFromCapture.length + ' holds in sailingInfo', 'success');
+        }
+      }
+      
+      // Check upcomingCruises payload for holds (bookings with status='OF')
+      if (!holdsFromCapture && window.capturedPayloads && window.capturedPayloads.upcomingCruises) {
+        log('ℹ️ Checking upcomingCruises payload for courtesy holds...', 'info');
+        var upcomingData = window.capturedPayloads.upcomingCruises;
+        var allBookings = null;
+        
+        if (upcomingData.payload && upcomingData.payload.sailingInfo) {
+          allBookings = upcomingData.payload.sailingInfo;
+        } else if (upcomingData.sailingInfo) {
+          allBookings = upcomingData.sailingInfo;
         }
         
-        if (holdsFromCapture && holdsFromCapture.length > 0) {
-          log('✅ Using ' + holdsFromCapture.length + ' holds from captured payload', 'success');
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'step_complete',
-            step: 3,
-            totalCount: holdsFromCapture.length
-          }));
-          
-          log('✅ Step 3 Complete: Extracted ' + holdsFromCapture.length + ' courtesy holds', 'success');
-          return;
-        } else {
-          log('ℹ️ Captured payload shows 0 courtesy holds', 'info');
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'step_complete',
-            step: 3,
-            totalCount: 0
-          }));
-          
-          log('✅ Step 3 Complete: No courtesy holds found', 'info');
-          return;
+        if (allBookings && allBookings.length > 0) {
+          // Filter for courtesy holds (bookingStatus === 'OF')
+          holdsFromCapture = allBookings.filter(function(b) { return b.bookingStatus === 'OF'; });
+          log('✅ Found ' + holdsFromCapture.length + ' courtesy holds in upcomingCruises payload', 'success');
         }
+      }
+      
+      if (holdsFromCapture) {
+        if (holdsFromCapture.length > 0) {
+          log('✅ Courtesy holds already processed in Step 2 (included in bookings)', 'success');
+          log('ℹ️ Step 3: ' + holdsFromCapture.length + ' holds were captured', 'info');
+        } else {
+          log('ℹ️ No courtesy holds found in captured payloads', 'info');
+        }
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'step_complete',
+          step: 3,
+          totalCount: holdsFromCapture.length
+        }));
+        
+        log('✅ Step 3 Complete: ' + holdsFromCapture.length + ' courtesy holds', 'success');
+        return;
       } else {
-        log('📝 No captured courtesy holds payload, trying fallback methods...', 'info');
+        log('📝 No captured payloads available, trying fallback methods...', 'info');
       }
 
       // Try API extraction first (more reliable, gets enrichment data)

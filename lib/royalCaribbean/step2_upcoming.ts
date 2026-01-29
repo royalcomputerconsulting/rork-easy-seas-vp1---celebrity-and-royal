@@ -723,8 +723,16 @@ export const STEP2_UPCOMING_SCRIPT = `
             stepName: 'Processing ' + bookingsFromCapture.length + ' cruises from API...'
           }));
           
-          // These are already enriched bookings from the API, so we can parse them directly
-          var cruises = parseBookingsWithEnrichment(bookingsFromCapture, {});
+          // These bookings are already enriched - create enrichment map from them
+          var enrichmentMapFromCapture = {};
+          for (var j = 0; j < bookingsFromCapture.length; j++) {
+            var bookingItem = bookingsFromCapture[j];
+            var enrichKey = bookingItem.shipCode + '_' + bookingItem.sailDate;
+            enrichmentMapFromCapture[enrichKey] = bookingItem;
+          }
+          log('✅ Created enrichment map with ' + Object.keys(enrichmentMapFromCapture).length + ' entries', 'success');
+          
+          var cruises = parseBookingsWithEnrichment(bookingsFromCapture, enrichmentMapFromCapture);
           
           log('📤 Sending ' + cruises.length + ' cruises to app...', 'info');
           for (var i = 0; i < cruises.length; i++) {
