@@ -279,6 +279,126 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
         break;
 
+      case 'network_payload':
+        const { endpoint, data, url } = message as any;
+        console.log(`[RoyalCaribbeanSync] Network payload captured: ${endpoint}`, url);
+        
+        if (endpoint === 'bookings' && data) {
+          addLog(`📦 Processing captured Bookings API payload...`, 'info');
+          
+          if (Array.isArray(data)) {
+            const formattedCruises = data.map((booking: any) => ({
+              sourcePage: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
+              shipName: booking.shipName || booking.shipCode + ' of the Seas',
+              shipCode: booking.shipCode,
+              cruiseTitle: booking.cruiseTitle || booking.numberOfNights + ' Night Cruise',
+              sailingStartDate: booking.sailDate,
+              sailingEndDate: booking.sailingEndDate || '',
+              sailingDates: booking.sailingDates || '',
+              itinerary: booking.itinerary || '',
+              departurePort: booking.departurePort || '',
+              arrivalPort: booking.arrivalPort || '',
+              cabinType: booking.stateroomType || '',
+              cabinCategory: booking.stateroomCategoryCode || '',
+              cabinNumberOrGTY: booking.stateroomNumber === 'GTY' ? 'GTY' : booking.stateroomNumber,
+              deckNumber: booking.deckNumber || '',
+              bookingId: booking.bookingId,
+              numberOfGuests: booking.passengers?.length.toString() || '1',
+              numberOfNights: booking.numberOfNights,
+              daysToGo: '',
+              status: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
+              holdExpiration: booking.offerExpirationDate || '',
+              loyaltyLevel: '',
+              loyaltyPoints: '',
+              paidInFull: booking.paidInFull ? 'Yes' : 'No',
+              balanceDue: booking.balanceDueAmount?.toString() || '0',
+              musterStation: booking.musterStation || '',
+              bookingStatus: booking.bookingStatus,
+              packageCode: booking.packageCode || '',
+              passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
+              stateroomNumber: booking.stateroomNumber,
+              stateroomCategoryCode: booking.stateroomCategoryCode,
+              stateroomType: booking.stateroomType
+            }));
+            
+            setState(prev => ({
+              ...prev,
+              extractedBookedCruises: [...prev.extractedBookedCruises, ...formattedCruises]
+            }));
+            
+            addLog(`✅ Processed ${data.length} bookings from network capture`, 'success');
+          } else if (data.bookings && Array.isArray(data.bookings)) {
+            const formattedCruises = data.bookings.map((booking: any) => ({
+              sourcePage: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
+              shipName: booking.shipName || booking.shipCode + ' of the Seas',
+              shipCode: booking.shipCode,
+              cruiseTitle: booking.cruiseTitle || booking.numberOfNights + ' Night Cruise',
+              sailingStartDate: booking.sailDate,
+              sailingEndDate: booking.sailingEndDate || '',
+              sailingDates: booking.sailingDates || '',
+              itinerary: booking.itinerary || '',
+              departurePort: booking.departurePort || '',
+              arrivalPort: booking.arrivalPort || '',
+              cabinType: booking.stateroomType || '',
+              cabinCategory: booking.stateroomCategoryCode || '',
+              cabinNumberOrGTY: booking.stateroomNumber === 'GTY' ? 'GTY' : booking.stateroomNumber,
+              deckNumber: booking.deckNumber || '',
+              bookingId: booking.bookingId,
+              numberOfGuests: booking.passengers?.length.toString() || '1',
+              numberOfNights: booking.numberOfNights,
+              daysToGo: '',
+              status: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
+              holdExpiration: booking.offerExpirationDate || '',
+              loyaltyLevel: '',
+              loyaltyPoints: '',
+              paidInFull: booking.paidInFull ? 'Yes' : 'No',
+              balanceDue: booking.balanceDueAmount?.toString() || '0',
+              musterStation: booking.musterStation || '',
+              bookingStatus: booking.bookingStatus,
+              packageCode: booking.packageCode || '',
+              passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
+              stateroomNumber: booking.stateroomNumber,
+              stateroomCategoryCode: booking.stateroomCategoryCode,
+              stateroomType: booking.stateroomType
+            }));
+            
+            setState(prev => ({
+              ...prev,
+              extractedBookedCruises: [...prev.extractedBookedCruises, ...formattedCruises]
+            }));
+            
+            addLog(`✅ Processed ${data.bookings.length} bookings from network capture`, 'success');
+          }
+        }
+        
+        if (endpoint === 'loyalty' && data) {
+          addLog(`📦 Processing captured Loyalty API payload...`, 'info');
+          const loyaltyInfo = data as LoyaltyApiInformation;
+          const convertedLoyalty = convertLoyaltyInfoToExtended(loyaltyInfo, '');
+          setExtendedLoyaltyData(convertedLoyalty);
+          hasReceivedApiLoyaltyData = true;
+          
+          setState(prev => ({
+            ...prev,
+            loyaltyData: {
+              ...prev.loyaltyData,
+              clubRoyaleTier: convertedLoyalty.clubRoyaleTierFromApi,
+              clubRoyalePoints: convertedLoyalty.clubRoyalePointsFromApi?.toString(),
+              crownAndAnchorLevel: convertedLoyalty.crownAndAnchorTier,
+              crownAndAnchorPoints: convertedLoyalty.crownAndAnchorPointsFromApi?.toString(),
+            }
+          }));
+          
+          addLog('✅ Loyalty data from network capture (authoritative)', 'success');
+          if (convertedLoyalty.clubRoyalePointsFromApi !== undefined) {
+            addLog(`   → Club Royale: ${convertedLoyalty.clubRoyaleTierFromApi || 'N/A'} - ${convertedLoyalty.clubRoyalePointsFromApi.toLocaleString()} points`, 'info');
+          }
+          if (convertedLoyalty.crownAndAnchorPointsFromApi !== undefined) {
+            addLog(`   → Crown & Anchor: ${convertedLoyalty.crownAndAnchorTier || 'N/A'} - ${convertedLoyalty.crownAndAnchorPointsFromApi.toLocaleString()} points`, 'info');
+          }
+        }
+        break;
+
       case 'error':
         setState(prev => ({ ...prev, error: message.message, status: 'error' }));
         addLog(`Error: ${message.message}`, 'error');

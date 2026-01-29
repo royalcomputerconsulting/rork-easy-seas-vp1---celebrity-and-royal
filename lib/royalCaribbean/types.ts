@@ -224,6 +224,7 @@ export type WebViewMessage =
   | { type: 'all_bookings_data'; bookings: any[]; vdsId?: string }
   | { type: 'loyalty_data'; data?: LoyaltyData; loyalty?: LoyaltyApiInformation }
   | { type: 'extended_loyalty_data'; data: LoyaltyApiInformation; accountId?: string }
+  | { type: 'network_payload'; endpoint: string; data: any; url: string }
   | { type: 'error'; message: string }
   | { type: 'complete' };
 

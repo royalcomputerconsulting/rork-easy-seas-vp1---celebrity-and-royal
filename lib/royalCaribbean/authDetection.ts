@@ -2,6 +2,141 @@ export const AUTH_DETECTION_SCRIPT = `
 (function() {
   let lastAuthState = null;
   let checkCount = 0;
+  const capturedPayloads = {
+    offers: null,
+    bookings: null,
+    loyalty: null
+  };
+
+  function interceptNetworkCalls() {
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+      return originalFetch.apply(this, args).then(response => {
+        const clonedResponse = response.clone();
+        const url = args[0];
+        
+        if (typeof url === 'string') {
+          if (url.includes('/api/casino/casino-offers')) {
+            clonedResponse.json().then(data => {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'network_payload',
+                endpoint: 'offers',
+                data: data,
+                url: url
+              }));
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '📦 Captured Casino Offers API payload with ' + (data?.offers?.length || 0) + ' offers',
+                logType: 'success'
+              }));
+            }).catch(() => {});
+          }
+          
+          if (url.includes('/api/profile/bookings')) {
+            clonedResponse.json().then(data => {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'network_payload',
+                endpoint: 'bookings',
+                data: data,
+                url: url
+              }));
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '📦 Captured Bookings API payload',
+                logType: 'success'
+              }));
+            }).catch(() => {});
+          }
+          
+          if (url.includes('/api/loyalty') || url.includes('/api/profile/loyalty')) {
+            clonedResponse.json().then(data => {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'network_payload',
+                endpoint: 'loyalty',
+                data: data,
+                url: url
+              }));
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '📦 Captured Loyalty API payload',
+                logType: 'success'
+              }));
+            }).catch(() => {});
+          }
+        }
+        
+        return response;
+      });
+    };
+
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    const originalXHRSend = XMLHttpRequest.prototype.send;
+    
+    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+      this._url = url;
+      return originalXHROpen.apply(this, [method, url, ...rest]);
+    };
+    
+    XMLHttpRequest.prototype.send = function(...args) {
+      this.addEventListener('load', function() {
+        if (this.status === 200 && this._url) {
+          try {
+            const data = JSON.parse(this.responseText);
+            
+            if (this._url.includes('/api/casino/casino-offers')) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'network_payload',
+                endpoint: 'offers',
+                data: data,
+                url: this._url
+              }));
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '📦 [XHR] Captured Casino Offers API payload',
+                logType: 'success'
+              }));
+            }
+            
+            if (this._url.includes('/api/profile/bookings')) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'network_payload',
+                endpoint: 'bookings',
+                data: data,
+                url: this._url
+              }));
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '📦 [XHR] Captured Bookings API payload',
+                logType: 'success'
+              }));
+            }
+            
+            if (this._url.includes('/api/loyalty') || this._url.includes('/api/profile/loyalty')) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'network_payload',
+                endpoint: 'loyalty',
+                data: data,
+                url: this._url
+              }));
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '📦 [XHR] Captured Loyalty API payload',
+                logType: 'success'
+              }));
+            }
+          } catch (e) {}
+        }
+      });
+      
+      return originalXHRSend.apply(this, args);
+    };
+    
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'log',
+      message: '🌐 Network monitoring active - will capture all API payloads',
+      logType: 'info'
+    }));
+  }
   
   function checkAuthStatus() {
     checkCount++;
@@ -95,6 +230,8 @@ export const AUTH_DETECTION_SCRIPT = `
   }
 
   function initAuthDetection() {
+    interceptNetworkCalls();
+    
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
         setTimeout(checkAuthStatus, 1500);
