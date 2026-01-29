@@ -67,10 +67,6 @@ export const STEP1_OFFERS_SCRIPT = `
       log('Extracting Club Royale status...');
       log('⚠️ Note: Loyalty data will be fetched via API in Step 4 for accuracy', 'info');
 
-      // Don't extract loyalty data from DOM in Step 1 - it's unreliable
-      // The API-based extraction in Step 4 is the authoritative source
-      // This prevents incorrect data (like CHOICE/200) from being sent
-      
       return null;
     } catch (error) {
       log('Error extracting Club Royale status: ' + error.message, 'warning');
@@ -239,8 +235,6 @@ export const STEP1_OFFERS_SCRIPT = `
     }
   }
 
-
-
   function processAPIResponse(data) {
     const allOfferRows = [];
     let totalSailings = 0;
@@ -326,7 +320,46 @@ export const STEP1_OFFERS_SCRIPT = `
           for (const priceInfo of sailing.pricing) {
             const type = (priceInfo.roomType || priceInfo.cabinType || '').toLowerCase();
             const price = priceInfo.price || priceInfo.amount || priceInfo.rate;
-            const priceStr = price ? '
+            const priceStr = price ? '$' + Number(price).toFixed(2) : '';
+            
+            if (type.includes('interior') || type.includes('inside')) {
+              interiorPrice = priceStr;
+            } else if (type.includes('oceanview') || type.includes('ocean view')) {
+              oceanviewPrice = priceStr;
+            } else if (type.includes('balcony')) {
+              balconyPrice = priceStr;
+            } else if (type.includes('suite')) {
+              suitePrice = priceStr;
+            }
+          }
+        }
+        
+        const ports = sailing.ports || sailing.itinerary?.ports || [];
+        const portList = Array.isArray(ports) ? ports.map(p => p.name || p.portName || '').filter(n => n).join(', ') : '';
+        
+        allOfferRows.push({
+          sourcePage: 'Offers',
+          offerName: offerName,
+          offerCode: offerCode,
+          offerExpirationDate: offerExpiry,
+          offerType: 'Club Royale',
+          shipName: shipName,
+          sailingDate: sailDate,
+          itinerary: itinerary,
+          departurePort: departurePort,
+          cabinType: cabinType,
+          numberOfGuests: numberOfGuests,
+          perks: perks,
+          loyaltyLevel: '',
+          loyaltyPoints: '',
+          interiorPrice: interiorPrice,
+          oceanviewPrice: oceanviewPrice,
+          balconyPrice: balconyPrice,
+          suitePrice: suitePrice,
+          portList: portList
+        });
+        
+        totalSailings++;
         offerSailingCount++;
         
         if (totalSailings % BATCH_SIZE === 0) {
