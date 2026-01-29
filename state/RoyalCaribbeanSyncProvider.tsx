@@ -530,32 +530,23 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       addLog(`✅ Step 1 complete!`, 'success');
       
-      // Step 2: Navigate to account page first, then upcoming cruises to establish session
+      // Step 2: Navigate to upcoming cruises page
       setState(prev => ({ ...prev, status: 'running_step_2' }));
-      addLog('Step 2: Navigating to account page to establish session...', 'info');
+      addLog('🚀 ====== STEP 2: UPCOMING CRUISES ======', 'info');
+      addLog('Step 2: Navigating to upcoming cruises page...', 'info');
       
       try {
         if (webViewRef.current) {
-          // First go to account page
-          webViewRef.current.injectJavaScript(`
-            window.location.href = 'https://www.royalcaribbean.com/account';
-            true;
-          `);
-          
-          addLog('⏳ Waiting 10 seconds for account page to load and establish session...', 'info');
-          await new Promise(resolve => setTimeout(resolve, 10000));
-          
-          // Now navigate to upcoming cruises page
-          addLog('Loading Upcoming Cruises Page...', 'info');
+          addLog('📍 Loading Upcoming Cruises Page...', 'info');
           webViewRef.current.injectJavaScript(`
             window.location.href = '${config.upcomingUrl}';
             true;
           `);
           
-          addLog('⏳ Waiting 5 seconds for upcoming cruises page to load...', 'info');
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          addLog('⏳ Waiting 8 seconds for upcoming cruises page to load and make API calls...', 'info');
+          await new Promise(resolve => setTimeout(resolve, 8000));
           
-          // Now call the API with proper session established
+          addLog('📡 Injecting extraction script (will use captured API payload)...', 'info');
           webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
           
           await waitForStepComplete(2, 120000);
@@ -599,8 +590,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }
       
-      // Step 4: Navigate to loyalty programs page to establish session
+      // Step 4: Navigate to loyalty programs page
       setState(prev => ({ ...prev, status: 'running_step_4' }));
+      addLog('🚀 ====== STEP 4: LOYALTY PROGRAMS ======', 'info');
       addLog('Step 4: Navigating to loyalty programs page...', 'info');
       
       try {
@@ -609,18 +601,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             ? 'https://www.celebritycruises.com/account/loyalty-programs'
             : 'https://www.royalcaribbean.com/account/loyalty-programs';
           
+          addLog('📍 Loading Loyalty Programs Page...', 'info');
           webViewRef.current.injectJavaScript(`
             window.location.href = '${loyaltyPageUrl}';
             true;
           `);
           
-          addLog('⏳ Waiting 5 seconds for loyalty programs page to load...', 'info');
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          addLog('⏳ Waiting 8 seconds for loyalty page to load and make API calls...', 'info');
+          await new Promise(resolve => setTimeout(resolve, 8000));
           
-          // Now call the API with proper session established
+          addLog('📡 Injecting loyalty extraction script (will use captured API payload)...', 'info');
           webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
           
-          await waitForStepComplete(4, 45000);
+          await waitForStepComplete(4, 60000);
         }
       } catch (step4Error) {
         addLog(`Step 4 error: ${step4Error} - continuing without loyalty data`, 'warning');

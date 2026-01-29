@@ -38,7 +38,7 @@ export const AUTH_DETECTION_SCRIPT = `
             }).catch(() => {});
           }
           
-          if (url.includes('/api/account/upcoming-cruises') || url.includes('/api/profile/bookings/enrichment') || url.includes('/api/profile/bookings')) {
+          if (url.includes('/api/account/upcoming-cruises') || url.includes('/api/profile/bookings')) {
             clonedResponse.json().then(data => {
               window.capturedPayloads.upcomingCruises = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -74,7 +74,7 @@ export const AUTH_DETECTION_SCRIPT = `
             }).catch(() => {});
           }
           
-          if (url.includes('/account/loyalty-programs') || url.includes('/api/loyalty') || url.includes('/api/profile/loyalty') || url.includes('/api/account/info')) {
+          if (url.includes('/api/account/loyalty-programs') || url.includes('/api/loyalty-programs') || url.includes('/api/account/info')) {
             clonedResponse.json().then(data => {
               window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -125,7 +125,7 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
             }
             
-            if (this._url.includes('/api/account/upcoming-cruises') || this._url.includes('/api/profile/bookings/enrichment') || this._url.includes('/api/profile/bookings')) {
+            if (this._url.includes('/api/account/upcoming-cruises') || this._url.includes('/api/profile/bookings')) {
               window.capturedPayloads.upcomingCruises = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
@@ -157,7 +157,7 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
             }
             
-            if (this._url.includes('/account/loyalty-programs') || this._url.includes('/api/loyalty') || this._url.includes('/api/profile/loyalty') || this._url.includes('/api/account/info')) {
+            if (this._url.includes('/api/account/loyalty-programs') || this._url.includes('/api/loyalty-programs') || this._url.includes('/api/account/info')) {
               window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',

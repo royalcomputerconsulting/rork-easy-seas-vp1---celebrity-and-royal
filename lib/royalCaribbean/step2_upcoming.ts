@@ -620,58 +620,9 @@ export const STEP2_UPCOMING_SCRIPT = `
 
 
 
-  // Extract bookings from page's embedded JSON (Next.js __NEXT_DATA__)
-  function extractFromPageState() {
-    try {
-      log('📄 Checking for embedded page data (__NEXT_DATA__)...', 'info');
-      var nextDataEl = document.getElementById('__NEXT_DATA__');
-      if (!nextDataEl) {
-        log('⚠️ No __NEXT_DATA__ element found on page', 'warning');
-        return null;
-      }
-      
-      var nextData = JSON.parse(nextDataEl.textContent || '');
-      if (!nextData || !nextData.props || !nextData.props.pageProps) {
-        log('⚠️ __NEXT_DATA__ has unexpected structure', 'warning');
-        return null;
-      }
-      
-      var pageProps = nextData.props.pageProps;
-      
-      // Look for bookings in various locations
-      if (pageProps.payload && pageProps.payload.sailingInfo) {
-        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.payload.sailingInfo', 'success');
-        return { bookings: pageProps.payload.sailingInfo, vdsId: pageProps.payload.vdsId };
-      }
-      if (pageProps.payload && pageProps.payload.profileBookings) {
-        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.payload.profileBookings', 'success');
-        return { bookings: pageProps.payload.profileBookings, vdsId: pageProps.payload.vdsId };
-      }
-      if (pageProps.sailingInfo) {
-        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.sailingInfo', 'success');
-        return { bookings: pageProps.sailingInfo, vdsId: pageProps.vdsId };
-      }
-      if (pageProps.profileBookings) {
-        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.profileBookings', 'success');
-        return { bookings: pageProps.profileBookings, vdsId: pageProps.vdsId };
-      }
-      if (pageProps.initialData && pageProps.initialData.profileBookings) {
-        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.initialData', 'success');
-        return { bookings: pageProps.initialData.profileBookings, vdsId: pageProps.initialData.vdsId };
-      }
-      if (pageProps.initialData && pageProps.initialData.sailingInfo) {
-        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.initialData.sailingInfo', 'success');
-        return { bookings: pageProps.initialData.sailingInfo, vdsId: pageProps.initialData.vdsId };
-      }
-      
-      log('⚠️ No sailingInfo or profileBookings found in __NEXT_DATA__', 'warning');
-      log('📝 Available keys in pageProps: ' + Object.keys(pageProps).slice(0, 10).join(', '), 'info');
-      return null;
-    } catch (e) {
-      log('⚠️ Page state extraction failed: ' + e.message, 'warning');
-      return null;
-    }
-  }
+  // NOTE: DO NOT extract from __NEXT_DATA__ - it's not reliable for Royal Caribbean
+  // The correct approach is to capture API payloads via network monitoring
+  // This function is kept as a last-resort fallback only
 
   async function extractUpcomingCruises() {
     try {
@@ -680,8 +631,8 @@ export const STEP2_UPCOMING_SCRIPT = `
       log('📍 Current URL: ' + window.location.href, 'info');
 
       // Wait for page to load and make API calls naturally
-      log('⏳ Waiting 12 seconds for page to load and make API calls...', 'info');
-      await wait(12000);
+      log('⏳ Waiting 8 seconds for page to load and make API calls...', 'info');
+      await wait(8000);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
@@ -694,11 +645,13 @@ export const STEP2_UPCOMING_SCRIPT = `
       // We don't need to make manual API calls here
       log('📡 Network monitor should have captured API calls from page load', 'info');
       
-      // FIRST: Check if we have captured payloads from network monitor
-      log('🔍 Checking captured payloads...', 'info');
-      log('📦 window.capturedPayloads exists: ' + !!window.capturedPayloads, 'info');
+      // Check if network monitor captured the API payload
+      log('🔍 Checking for captured API payload from network monitor...', 'info');
+      log('📦 window.capturedPayloads: ' + (window.capturedPayloads ? 'EXISTS' : 'MISSING'), 'info');
+      
       if (window.capturedPayloads) {
-        log('📦 Available captured endpoints: ' + Object.keys(window.capturedPayloads).filter(function(k) { return window.capturedPayloads[k]; }).join(', '), 'info');
+        var availableEndpoints = Object.keys(window.capturedPayloads).filter(function(k) { return window.capturedPayloads[k]; });
+        log('📦 Captured endpoints: ' + (availableEndpoints.length > 0 ? availableEndpoints.join(', ') : 'NONE'), 'info');
       }
       
       if (window.capturedPayloads && window.capturedPayloads.upcomingCruises) {
@@ -758,42 +711,33 @@ export const STEP2_UPCOMING_SCRIPT = `
           return;
         }
       } else {
-        log('📝 No upcomingCruises payload captured yet', 'warning');
+        log('⚠️ No upcomingCruises payload captured from network monitor', 'warning');
+        log('⚠️ The page may not have loaded properly or API calls were blocked', 'warning');
+        
         if (window.capturedPayloads) {
-          log('📝 Available payloads: offers=' + !!window.capturedPayloads.offers + ', upcomingCruises=' + !!window.capturedPayloads.upcomingCruises + ', courtesyHolds=' + !!window.capturedPayloads.courtesyHolds + ', loyalty=' + !!window.capturedPayloads.loyalty, 'info');
+          log('📊 Debug - Captured payloads status:', 'info');
+          log('   - offers: ' + (window.capturedPayloads.offers ? 'YES' : 'NO'), 'info');
+          log('   - upcomingCruises: ' + (window.capturedPayloads.upcomingCruises ? 'YES' : 'NO'), 'info');
+          log('   - courtesyHolds: ' + (window.capturedPayloads.courtesyHolds ? 'YES' : 'NO'), 'info');
+          log('   - loyalty: ' + (window.capturedPayloads.loyalty ? 'YES' : 'NO'), 'info');
+        } else {
+          log('⚠️ window.capturedPayloads object does not exist!', 'error');
+          log('⚠️ Network monitoring may not be active', 'error');
         }
       }
       
-      // Try embedded page data
-      log('📄 Trying to extract from embedded page data...', 'info');
-      var pageStateResult = extractFromPageState();
+      // CRITICAL: Do NOT use __NEXT_DATA__ - it's not where the data is
+      // The data MUST come from captured API responses
+      log('⚠️ No API payload captured - falling back to DOM scraping', 'warning');
+      log('💡 Tip: If this happens consistently, try refreshing the page before syncing', 'info');
       
       var cruises = [];
       
-      if (pageStateResult && pageStateResult.bookings && pageStateResult.bookings.length > 0) {
-        log('✅ Successfully extracted ' + pageStateResult.bookings.length + ' bookings from page data', 'success');
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'progress',
-          current: 30,
-          total: 100,
-          stepName: 'Fetching enrichment data...'
-        }));
-        
-        var enrichmentMap = await fetchEnrichmentData(pageStateResult.bookings);
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'progress',
-          current: 60,
-          total: 100,
-          stepName: 'Processing ' + pageStateResult.bookings.length + ' cruises...'
-        }));
-        
-        cruises = parseBookingsWithEnrichment(pageStateResult.bookings, enrichmentMap);
-        
-        log('✅ Extracted ' + cruises.length + ' cruises with details', 'success');
+      if (false) {
+        // This block is disabled - __NEXT_DATA__ approach doesn't work
+        log('⚠️ DOM extraction disabled - API payload required', 'warning');
       } else {
-        log('⚠️ No embedded page data found - falling back to DOM scraping', 'warning');
+        log('⚠️ Using DOM scraping as last resort (less reliable)', 'warning');
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'progress',
