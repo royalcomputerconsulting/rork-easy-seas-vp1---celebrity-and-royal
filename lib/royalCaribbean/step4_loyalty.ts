@@ -127,6 +127,7 @@ export const STEP4_LOYALTY_SCRIPT = `
         var loyaltyInfo = null;
         var accountId = '';
         
+        // Try multiple possible structures
         if (capturedData.payload && capturedData.payload.loyaltyInformation) {
           loyaltyInfo = capturedData.payload.loyaltyInformation;
           accountId = capturedData.payload.accountId || '';
@@ -135,6 +136,11 @@ export const STEP4_LOYALTY_SCRIPT = `
           loyaltyInfo = capturedData.loyaltyInformation;
           accountId = capturedData.accountId || '';
           log('✅ Found loyalty data in loyaltyInformation', 'success');
+        } else if (capturedData.accountId) {
+          // Direct structure from /guestAccounts/loyalty/info endpoint
+          loyaltyInfo = capturedData;
+          accountId = capturedData.accountId || '';
+          log('✅ Found loyalty data in root (direct structure)', 'success');
         } else {
           log('⚠️ Captured payload does not contain loyaltyInformation', 'warning');
           log('📦 Payload keys: ' + Object.keys(capturedData).join(', '), 'info');

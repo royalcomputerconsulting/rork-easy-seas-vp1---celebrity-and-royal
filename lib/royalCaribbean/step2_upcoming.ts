@@ -151,112 +151,11 @@ export const STEP2_UPCOMING_SCRIPT = `
     }
   }
 
-  // Removed manual API calls - we now rely on network monitor to capture
-  // the page's natural API calls instead of making our own (which fail with 403)
-
-  async function fetchEnrichmentData(bookings) {
-    if (!bookings || bookings.length === 0) {
-      log('⚠️ No bookings to enrich', 'warning');
-      return {};
-    }
-
-    log('🔄 Fetching enrichment data for ' + bookings.length + ' bookings...', 'info');
-
-    var headers = getAuthHeaders();
-    if (!headers) {
-      log('⚠️ Could not obtain auth headers for enrichment', 'warning');
-      return {};
-    }
-
-    try {
-      var sailingKeys = [];
-      for (var i = 0; i < bookings.length; i++) {
-        var b = bookings[i];
-        if (b.shipCode && b.sailDate) {
-          sailingKeys.push({ shipCode: b.shipCode, sailDate: b.sailDate });
-          log('   📋 Adding sailing key: ' + b.shipCode + ' - ' + b.sailDate, 'info');
-        }
-      }
-
-      if (sailingKeys.length === 0) {
-        log('⚠️ No valid sailing keys for enrichment', 'warning');
-        return {};
-      }
-
-      var host = location && location.hostname ? location.hostname : '';
-      var brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
-      var baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
-      var endpoint = baseUrl + '/api/profile/bookings/enrichment';
-
-      log('📡 Calling enrichment API with ' + sailingKeys.length + ' sailings...', 'info');
-      
-      var response = await fetch(endpoint, {
-        method: 'POST',
-        credentials: 'omit',
-        headers: headers,
-        body: JSON.stringify({ sailings: sailingKeys })
-      });
-
-      log('📡 Enrichment API Response status: ' + response.status, 'info');
-
-      if (!response.ok) {
-        log('⚠️ Enrichment API returned: ' + response.status + ' - continuing without enrichment', 'warning');
-        return {};
-      }
-
-      var text = await response.text();
-      log('📦 Enrichment response length: ' + text.length + ' chars', 'info');
-      
-      var data;
-      try {
-        data = JSON.parse(text);
-      } catch (parseError) {
-        log('⚠️ Failed to parse enrichment JSON: ' + parseError.message, 'warning');
-        return {};
-      }
-      
-      log('📊 Enrichment parsed - status: ' + data.status + ', has payload: ' + !!data.payload, 'info');
-      
-      if (data && data.payload && data.payload.sailingInfo) {
-        var enrichmentMap = {};
-        var sailingInfo = data.payload.sailingInfo;
-        log('✅ Enrichment returned ' + sailingInfo.length + ' sailing details', 'success');
-        
-        for (var j = 0; j < sailingInfo.length; j++) {
-          var info = sailingInfo[j];
-          var key = info.shipCode + '_' + info.sailDate;
-          enrichmentMap[key] = info;
-          
-          var itinDesc = info.itinerary && info.itinerary.description ? info.itinerary.description : 'N/A';
-          var portCount = info.itinerary && info.itinerary.portInfo ? info.itinerary.portInfo.length : 0;
-          var isOneWayEnrich = info.departurePortName && info.arrivalPortName && info.departurePortName !== info.arrivalPortName;
-          var portInfo = isOneWayEnrich 
-            ? info.departurePortName + ' → ' + info.arrivalPortName + ' (one-way)'
-            : (info.departurePortName || 'N/A');
-          log('   ✓ ' + info.shipName + ' (' + info.shipCode + ') - ' + info.sailDate + ' - ' + portInfo + ' - ' + itinDesc + ' (' + portCount + ' ports)', 'info');
-        }
-        
-        return enrichmentMap;
-      }
-      
-      log('⚠️ No sailingInfo in enrichment response', 'warning');
-      if (data.payload) {
-        log('📝 Enrichment payload keys: ' + Object.keys(data.payload).join(', '), 'info');
-      }
-      return {};
-      
-    } catch (error) {
-      log('⚠️ Enrichment fetch failed: ' + error.message + ' - continuing without enrichment', 'warning');
-      return {};
-    }
-  }
-
   function parseBookingsWithEnrichment(bookings, enrichmentMap) {
     var cruises = [];
     
     log('🔄 Processing ' + bookings.length + ' bookings from API...', 'info');
     
-    // Log all booking statuses for debugging
     var statusCounts = {};
     var skippedBookings = [];
     var processedBookings = [];
@@ -272,9 +171,6 @@ export const STEP2_UPCOMING_SCRIPT = `
       var booking = bookings[i];
       var bookingInfo = booking.shipCode + ' ' + booking.sailDate + ' (ID: ' + booking.bookingId + ', Status: ' + booking.bookingStatus + ')';
       
-      // Include all valid booking statuses:
-      // BK = Booked/Confirmed, OF = Offer/Courtesy Hold, PD = Pending, HD/HO = Hold
-      // Only exclude cancelled (CX, CN, XX) statuses
       var cancelledStatuses = ['CX', 'CN', 'XX'];
       var isCancelled = cancelledStatuses.indexOf(booking.bookingStatus) >= 0;
       
@@ -284,7 +180,6 @@ export const STEP2_UPCOMING_SCRIPT = `
         continue;
       }
       
-      // All non-cancelled bookings should be included
       log('✓ Processing booking ' + (i + 1) + '/' + bookings.length + ': ' + bookingInfo, 'info');
       
       var shipCode = booking.shipCode || '';
@@ -331,7 +226,6 @@ export const STEP2_UPCOMING_SCRIPT = `
       var holdExpiration = '';
       if (booking.bookingStatus === 'OF') {
         status = 'Courtesy Hold';
-        // Format offer expiration date if available (YYYYMMDD -> MM/DD/YYYY)
         if (booking.offerExpirationDate && booking.offerExpirationDate.length === 8) {
           var expYear = booking.offerExpirationDate.substring(0, 4);
           var expMonth = booking.offerExpirationDate.substring(4, 6);
@@ -353,23 +247,22 @@ export const STEP2_UPCOMING_SCRIPT = `
         arrivalPort = enrichment.arrivalPortName;
       }
       
-      // Check for one-way cruise (different embark/disembark)
       var isOneWay = departurePort && arrivalPort && departurePort !== arrivalPort;
       if (isOneWay) {
         log('   📍 One-way cruise detected: ' + departurePort + ' → ' + arrivalPort, 'info');
       }
       
       var itinerary = '';
+      var portList = [];
       if (enrichment.itinerary && enrichment.itinerary.portInfo) {
         var ports = [];
         var seenPorts = {};
         for (var p = 0; p < enrichment.itinerary.portInfo.length; p++) {
           var port = enrichment.itinerary.portInfo[p];
-          // Include all ports except CRUISING days
           if (port.title && port.portType !== 'CRUISING' && port.portType !== 'SEA') {
-            // Avoid duplicates (consecutive days at same port)
             if (!seenPorts[port.title]) {
               ports.push(port.title);
+              portList.push(port.title);
               seenPorts[port.title] = true;
             }
           }
@@ -380,7 +273,70 @@ export const STEP2_UPCOMING_SCRIPT = `
         log('   ⚠️ No port info in enrichment for ' + shipCode + '_' + booking.sailDate, 'warning');
       }
 
-      // Extract passenger status from first passenger
+      var interiorPrice = '';
+      var oceanviewPrice = '';
+      var balconyPrice = '';
+      var suitePrice = '';
+      
+      if (enrichment.stateroomCategories && Array.isArray(enrichment.stateroomCategories)) {
+        log('   💰 Found ' + enrichment.stateroomCategories.length + ' stateroom categories with pricing', 'info');
+        for (var sc = 0; sc < enrichment.stateroomCategories.length; sc++) {
+          var category = enrichment.stateroomCategories[sc];
+          var catCode = category.code || category.categoryCode || '';
+          var price = category.price || category.amount || category.lowestPrice || category.minPrice || 0;
+          
+          if (price > 0) {
+            var priceStr = '$' + price.toFixed(2);
+            
+            if (catCode.includes('I') || category.type === 'interior' || (category.name && category.name.toLowerCase().includes('interior'))) {
+              if (!interiorPrice || price < parseFloat(interiorPrice.replace('$', ''))) {
+                interiorPrice = priceStr;
+              }
+            } else if (catCode.includes('O') || category.type === 'oceanview' || (category.name && category.name.toLowerCase().includes('ocean'))) {
+              if (!oceanviewPrice || price < parseFloat(oceanviewPrice.replace('$', ''))) {
+                oceanviewPrice = priceStr;
+              }
+            } else if (catCode.includes('B') || category.type === 'balcony' || (category.name && category.name.toLowerCase().includes('balcony'))) {
+              if (!balconyPrice || price < parseFloat(balconyPrice.replace('$', ''))) {
+                balconyPrice = priceStr;
+              }
+            } else if (catCode.includes('S') || category.type === 'suite' || (category.name && category.name.toLowerCase().includes('suite'))) {
+              if (!suitePrice || price < parseFloat(suitePrice.replace('$', ''))) {
+                suitePrice = priceStr;
+              }
+            }
+          }
+        }
+        if (interiorPrice || oceanviewPrice || balconyPrice || suitePrice) {
+          log('   💰 Pricing - I: ' + (interiorPrice || 'N/A') + ', O: ' + (oceanviewPrice || 'N/A') + ', B: ' + (balconyPrice || 'N/A') + ', S: ' + (suitePrice || 'N/A'), 'success');
+        }
+      } else if (enrichment.pricing && Array.isArray(enrichment.pricing)) {
+        log('   💰 Found pricing array with ' + enrichment.pricing.length + ' entries', 'info');
+        for (var pr = 0; pr < enrichment.pricing.length; pr++) {
+          var priceInfo = enrichment.pricing[pr];
+          var type = (priceInfo.roomType || priceInfo.cabinType || priceInfo.type || '').toLowerCase();
+          var price = priceInfo.price || priceInfo.amount || priceInfo.rate || 0;
+          if (price > 0) {
+            var priceStr = '$' + price.toFixed(2);
+            
+            if (type.includes('interior') || type.includes('inside')) {
+              interiorPrice = priceStr;
+            } else if (type.includes('oceanview') || type.includes('ocean view')) {
+              oceanviewPrice = priceStr;
+            } else if (type.includes('balcony')) {
+              balconyPrice = priceStr;
+            } else if (type.includes('suite')) {
+              suitePrice = priceStr;
+            }
+          }
+        }
+        if (interiorPrice || oceanviewPrice || balconyPrice || suitePrice) {
+          log('   💰 Pricing - I: ' + (interiorPrice || 'N/A') + ', O: ' + (oceanviewPrice || 'N/A') + ', B: ' + (balconyPrice || 'N/A') + ', S: ' + (suitePrice || 'N/A'), 'success');
+        }
+      } else {
+        log('   ℹ️ No pricing data available in enrichment', 'info');
+      }
+
       var passengerStatus = '';
       if (booking.passengers && booking.passengers.length > 0 && booking.passengers[0].passengerStatus) {
         passengerStatus = booking.passengers[0].passengerStatus;
@@ -418,13 +374,17 @@ export const STEP2_UPCOMING_SCRIPT = `
         passengerStatus: passengerStatus,
         stateroomNumber: stateroomNumber,
         stateroomCategoryCode: stateroomCategoryCode,
-        stateroomType: stateroomType
+        stateroomType: stateroomType,
+        interiorPrice: interiorPrice,
+        oceanviewPrice: oceanviewPrice,
+        balconyPrice: balconyPrice,
+        suitePrice: suitePrice,
+        portList: portList.join(', ')
       };
       
       cruises.push(cruise);
       processedBookings.push(bookingInfo);
 
-      var portSummary = departurePort ? (isOneWay ? departurePort + ' → ' + arrivalPort : departurePort) : 'No port data';
       var cabinDisplay = cabinNumber ? cabinNumber : 'GTY';
       var cabinTypeDisplay = cabinType || 'Unknown';
       var cabinCategoryDisplay = stateroomCategoryCode ? ' (Cat: ' + stateroomCategoryCode + ')' : '';
@@ -449,7 +409,6 @@ export const STEP2_UPCOMING_SCRIPT = `
       log('  📋 Skipped details: ' + skippedBookings.join(', '), 'info');
     }
     
-    // Count by status for verification
     var upcomingCount = 0;
     var holdCount = 0;
     var otherCount = 0;
@@ -460,7 +419,6 @@ export const STEP2_UPCOMING_SCRIPT = `
     }
     log('  📊 By Status - Upcoming: ' + upcomingCount + ', Courtesy Holds: ' + holdCount + ', Other: ' + otherCount, 'success');
     
-    // Verification check
     if (processedBookings.length !== cruises.length) {
       log('  ⚠️ MISMATCH: Processed ' + processedBookings.length + ' but created ' + cruises.length + ' cruises!', 'error');
     }
@@ -518,7 +476,6 @@ export const STEP2_UPCOMING_SCRIPT = `
     var cruiseCards = allElements.filter(function(el) {
       var text = el.textContent || '';
       var hasShip = text.indexOf('of the Seas') >= 0;
-      // Match both "7 Night" and "7 nt" abbreviation formats
       var hasNight = text.match(/\\d+\\s+(Night|nt)\\b/i);
       var hasReservation = text.match(/Reservation[:\\s]*\\d+/i);
       var textLength = text.length;
@@ -552,7 +509,6 @@ export const STEP2_UPCOMING_SCRIPT = `
       var shipMatch = fullText.match(/([\\w\\s]+of the Seas)/);
       var shipName = shipMatch ? shipMatch[1].trim() : '';
 
-      // Match both "7 Night" and "7 nt" cruise title formats
       var cruiseTitleMatch = fullText.match(/(\\d+)\\s+(?:Night|nt)\\s+([^\\n]+?)(?=VANCOUVER|LOS ANGELES|MIAMI|SEATTLE|TAMPA|ORLANDO|FORT LAUDERDALE|GALVESTON|NEW YORK|BOSTON|BALTIMORE|SEWARD|HONOLULU|SAN JUAN|NASSAU|COZUMEL|BAYONNE|CAPE LIBERTY|PORT CANAVERAL|SINGAPORE|SYDNEY|SOUTHAMPTON|BARCELONA|ROME|CIVITAVECCHIA|CHECK-IN|\\d+ Days|$)/i);
       var cruiseTitle = cruiseTitleMatch ? cruiseTitleMatch[0].trim() : '';
 
@@ -618,19 +574,12 @@ export const STEP2_UPCOMING_SCRIPT = `
     return cruises;
   }
 
-
-
-  // NOTE: DO NOT extract from __NEXT_DATA__ - it's not reliable for Royal Caribbean
-  // The correct approach is to capture API payloads via network monitoring
-  // This function is kept as a last-resort fallback only
-
   async function extractUpcomingCruises() {
     try {
       log('🚀 ====== STEP 2: UPCOMING CRUISES ======', 'info');
       log('🔍 Starting upcoming cruises extraction...', 'info');
       log('📍 Current URL: ' + window.location.href, 'info');
 
-      // Wait for page to load and make API calls naturally
       log('⏳ Waiting 8 seconds for page to load and make API calls...', 'info');
       await wait(8000);
       
@@ -641,11 +590,8 @@ export const STEP2_UPCOMING_SCRIPT = `
         stepName: 'Page loaded, checking for data...'
       }));
 
-      // The page will make its own API calls which are captured by network monitor
-      // We don't need to make manual API calls here
       log('📡 Network monitor should have captured API calls from page load', 'info');
       
-      // Check if network monitor captured the API payload
       log('🔍 Checking for captured API payload from network monitor...', 'info');
       log('📦 window.capturedPayloads: ' + (window.capturedPayloads ? 'EXISTS' : 'MISSING'), 'info');
       
@@ -659,17 +605,22 @@ export const STEP2_UPCOMING_SCRIPT = `
         var capturedData = window.capturedPayloads.upcomingCruises;
         log('📦 Captured data structure: ' + JSON.stringify(Object.keys(capturedData)).substring(0, 200), 'info');
         
-        // Extract bookings from captured payload
         var bookingsFromCapture = null;
-        if (capturedData.payload && capturedData.payload.sailingInfo) {
+        if (capturedData.profileBookings && Array.isArray(capturedData.profileBookings)) {
+          bookingsFromCapture = capturedData.profileBookings;
+          log('✅ Found ' + bookingsFromCapture.length + ' bookings in profileBookings', 'success');
+        } else if (capturedData.payload && capturedData.payload.sailingInfo && Array.isArray(capturedData.payload.sailingInfo)) {
           bookingsFromCapture = capturedData.payload.sailingInfo;
           log('✅ Found ' + bookingsFromCapture.length + ' bookings in payload.sailingInfo', 'success');
-        } else if (capturedData.sailingInfo) {
+        } else if (capturedData.sailingInfo && Array.isArray(capturedData.sailingInfo)) {
           bookingsFromCapture = capturedData.sailingInfo;
           log('✅ Found ' + bookingsFromCapture.length + ' bookings in sailingInfo', 'success');
         } else {
-          log('⚠️ Captured payload does not contain sailingInfo', 'warning');
+          log('⚠️ Captured payload does not contain bookings data', 'warning');
           log('📦 Payload keys: ' + Object.keys(capturedData).join(', '), 'info');
+          if (capturedData.payload) {
+            log('📦 Payload.* keys: ' + Object.keys(capturedData.payload).join(', '), 'info');
+          }
         }
         
         if (bookingsFromCapture && bookingsFromCapture.length > 0) {
@@ -682,14 +633,29 @@ export const STEP2_UPCOMING_SCRIPT = `
             stepName: 'Processing ' + bookingsFromCapture.length + ' cruises from API...'
           }));
           
-          // These bookings are already enriched - create enrichment map from them
           var enrichmentMapFromCapture = {};
-          for (var j = 0; j < bookingsFromCapture.length; j++) {
-            var bookingItem = bookingsFromCapture[j];
-            var enrichKey = bookingItem.shipCode + '_' + bookingItem.sailDate;
-            enrichmentMapFromCapture[enrichKey] = bookingItem;
+          if (window.capturedPayloads.voyageEnrichment) {
+            log('✅ Found voyage enrichment data', 'success');
+            var voyages = window.capturedPayloads.voyageEnrichment;
+            log('📦 Voyage enrichment keys: ' + Object.keys(voyages).join(', '), 'info');
+            for (var vKey in voyages) {
+              if (voyages.hasOwnProperty(vKey) && vKey.length > 2) {
+                var shipCode = vKey.substring(0, 2);
+                var sailDate = vKey.substring(2);
+                var enrichKey = shipCode + '_' + sailDate;
+                enrichmentMapFromCapture[enrichKey] = voyages[vKey];
+                log('   📋 Enrichment for ' + vKey + ' -> ' + enrichKey, 'info');
+              }
+            }
+            log('✅ Created enrichment map with ' + Object.keys(enrichmentMapFromCapture).length + ' entries from voyage API', 'success');
+          } else {
+            for (var j = 0; j < bookingsFromCapture.length; j++) {
+              var bookingItem = bookingsFromCapture[j];
+              var enrichKey = bookingItem.shipCode + '_' + bookingItem.sailDate;
+              enrichmentMapFromCapture[enrichKey] = bookingItem;
+            }
+            log('ℹ️ No separate enrichment data, using booking data itself', 'info');
           }
-          log('✅ Created enrichment map with ' + Object.keys(enrichmentMapFromCapture).length + ' entries', 'success');
           
           var cruises = parseBookingsWithEnrichment(bookingsFromCapture, enrichmentMapFromCapture);
           
@@ -726,15 +692,12 @@ export const STEP2_UPCOMING_SCRIPT = `
         }
       }
       
-      // CRITICAL: Do NOT use __NEXT_DATA__ - it's not where the data is
-      // The data MUST come from captured API responses
       log('⚠️ No API payload captured - falling back to DOM scraping', 'warning');
       log('💡 Tip: If this happens consistently, try refreshing the page before syncing', 'info');
       
       var cruises = [];
       
       if (false) {
-        // This block is disabled - __NEXT_DATA__ approach doesn't work
         log('⚠️ DOM extraction disabled - API payload required', 'warning');
       } else {
         log('⚠️ Using DOM scraping as last resort (less reliable)', 'warning');
@@ -750,8 +713,6 @@ export const STEP2_UPCOMING_SCRIPT = `
         
         log('📄 DOM method extracted ' + cruises.length + ' cruises', 'info');
       }
-
-      // Loyalty data will be fetched in Step 4 after navigating to Crown & Anchor page
 
       log('📤 Sending ' + cruises.length + ' cruises to app...', 'info');
 
@@ -783,7 +744,6 @@ export const STEP2_UPCOMING_SCRIPT = `
       log('❌ CRITICAL ERROR in Step 2: ' + error.message, 'error');
       log('📝 Error stack: ' + (error.stack || 'N/A'), 'error');
       
-      // Still send step_complete even on error so the sync continues
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete',
         step: 2,
@@ -791,7 +751,6 @@ export const STEP2_UPCOMING_SCRIPT = `
         totalCount: 0
       }));
       
-      // Don't send error message that would stop the whole sync
       log('⚠️ Step 2 completed with errors - continuing to Step 3', 'warning');
     }
   }

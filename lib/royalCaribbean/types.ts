@@ -163,6 +163,11 @@ export interface BookedCruiseRow {
   stateroomCategoryCode?: string;
   stateroomType?: string;
   stateroomSubtype?: string;
+  interiorPrice?: string;
+  oceanviewPrice?: string;
+  balconyPrice?: string;
+  suitePrice?: string;
+  portList?: string;
   stateroomDescription?: string;
   bookingChannel?: string;
   bookingCurrency?: string;
