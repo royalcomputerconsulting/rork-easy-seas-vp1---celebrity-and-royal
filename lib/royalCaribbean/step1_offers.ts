@@ -239,92 +239,7 @@ export const STEP1_OFFERS_SCRIPT = `
     }
   }
 
-  async function fetchAllAPIsInStep1(authContext) {
-    log('🚀 Making all API calls with authenticated session...', 'info');
-    const results = { offers: null, bookings: null, loyalty: null };
-    
-    try {
-      // 1. Fetch Casino Offers (Step 1)
-      log('📡 Calling Casino Offers API...', 'info');
-      results.offers = await fetchOffersFromAPI(authContext);
-      log('✅ Casino Offers API successful', 'success');
-    } catch (error) {
-      log('❌ Casino Offers API failed: ' + error.message, 'error');
-    }
-    
-    try {
-      // 2. Fetch Bookings (Step 2 + 3) - using same auth immediately
-      log('📡 Calling Bookings API (Steps 2+3)...', 'info');
-      const endpoint = authContext.baseUrl + '/api/profile/bookings';
-      
-      const response = await fetch(endpoint, {
-        method: 'GET',
-        credentials: 'omit',
-        headers: authContext.headers
-      });
-      
-      log('📡 Bookings API response status: ' + response.status, 'info');
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.payload && data.payload.profileBookings) {
-          results.bookings = data.payload.profileBookings;
-          log('✅ Bookings API returned ' + results.bookings.length + ' bookings', 'success');
-          
-          // Send bookings immediately
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'all_bookings_data',
-            bookings: results.bookings,
-            vdsId: data.payload.vdsId
-          }));
-        } else {
-          log('⚠️ Bookings API: No profileBookings in response', 'warning');
-        }
-      } else {
-        log('⚠️ Bookings API returned: ' + response.status, 'warning');
-      }
-    } catch (error) {
-      log('⚠️ Bookings API failed: ' + error.message + ' - will use DOM fallback', 'warning');
-    }
-    
-    try {
-      // 3. Fetch Loyalty (Step 4) - using same auth immediately
-      log('📡 Calling Loyalty API (Step 4)...', 'info');
-      const endpoint = authContext.baseUrl + '/api/account/loyalty-programs';
-      
-      const response = await fetch(endpoint, {
-        method: 'GET',
-        credentials: 'omit',
-        headers: authContext.headers
-      });
-      
-      log('📡 Loyalty API response status: ' + response.status, 'info');
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.payload && data.payload.loyaltyInformation) {
-          results.loyalty = data.payload.loyaltyInformation;
-          log('✅ Loyalty API successful', 'success');
-          log('   Crown & Anchor: ' + results.loyalty.crownAndAnchorSocietyLoyaltyTier + ' - ' + results.loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints + ' pts', 'info');
-          log('   Club Royale: ' + results.loyalty.clubRoyaleLoyaltyTier + ' - ' + results.loyalty.clubRoyaleLoyaltyIndividualPoints + ' pts', 'info');
-          
-          // Send loyalty data immediately
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'loyalty_data',
-            loyalty: results.loyalty
-          }));
-        } else {
-          log('⚠️ Loyalty API: No loyaltyInformation in response', 'warning');
-        }
-      } else {
-        log('⚠️ Loyalty API returned: ' + response.status, 'warning');
-      }
-    } catch (error) {
-      log('⚠️ Loyalty API failed: ' + error.message + ' - will use DOM fallback', 'warning');
-    }
-    
-    return results;
-  }
+
 
   function processAPIResponse(data) {
     const allOfferRows = [];
@@ -470,34 +385,15 @@ export const STEP1_OFFERS_SCRIPT = `
         stepName: 'Authenticating and fetching all data...'
       }));
       
-      // Get auth context once
       const authContext = await getAuthContext();
       
-      // Make ALL API calls immediately with the same authenticated session
-      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-      log('🔐 CONSOLIDATED API CALLS (Steps 1-4)', 'success');
-      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-      log('✓ Using single authenticated session for all APIs', 'info');
-      log('✓ No page navigation needed!', 'info');
-      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+      const offersData = await fetchOffersFromAPI(authContext);
       
-      const allResults = await fetchAllAPIsInStep1(authContext);
-      
-      // Process offers
-      const { offerRows, offerCount, totalSailings } = processAPIResponse(allResults.offers);
+      const { offerRows, offerCount, totalSailings } = processAPIResponse(offersData);
       
       sendOfferBatch([], true, totalSailings, offerCount);
       
       log('✓ Extracted ' + totalSailings + ' offer rows from ' + offerCount + ' offer(s)', 'success');
-      
-      // Log summary
-      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'success');
-      log('📊 ALL APIS COMPLETED', 'success');
-      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'success');
-      log('  ✅ Offers: ' + offerCount + ' offers with ' + totalSailings + ' sailings', 'success');
-      log('  ' + (allResults.bookings ? '✅' : '⚠️') + ' Bookings: ' + (allResults.bookings ? allResults.bookings.length : 'Failed (will use DOM)'), allResults.bookings ? 'success' : 'warning');
-      log('  ' + (allResults.loyalty ? '✅' : '⚠️') + ' Loyalty: ' + (allResults.loyalty ? 'Success' : 'Failed (will use DOM)'), allResults.loyalty ? 'success' : 'warning');
-      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'success');
       
     } catch (error) {
       log('❌ API extraction failed: ' + error.message, 'error');
