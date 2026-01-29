@@ -283,19 +283,22 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         const { endpoint, data, url } = message as any;
         console.log(`[RoyalCaribbeanSync] Network payload captured: ${endpoint}`, url);
         console.log(`[RoyalCaribbeanSync] Data structure:`, JSON.stringify(data).substring(0, 500));
+        console.log(`[RoyalCaribbeanSync] Full data keys:`, Object.keys(data));
+        if (data.payload) {
+          console.log(`[RoyalCaribbeanSync] Payload keys:`, Object.keys(data.payload));
+        }
         
         if ((endpoint === 'bookings' || endpoint === 'upcomingCruises' || endpoint === 'courtesyHolds') && data) {
           addLog(`📦 Processing captured ${endpoint} API payload...`, 'info');
           addLog(`📦 Data keys: ${Object.keys(data).join(', ')}`, 'info');
           
           // Check for error responses first
-          if (data.message && !data.payload && !data.status) {
+          if (data.message && !data.payload && !data.status && data.status !== 200) {
             addLog(`⚠️ Captured error response: ${data.message}`, 'warning');
-            addLog(`📦 Captured ${endpoint} API payload (ERROR)`, 'warning');
             break;
           }
           
-          // Royal Caribbean API structure: data.payload.sailingInfo (new) or data.payload.profileBookings (old)
+          // Royal Caribbean API structure: data.payload.sailingInfo (enriched bookings)
           let bookings = null;
           if (data.payload && Array.isArray(data.payload.sailingInfo)) {
             bookings = data.payload.sailingInfo;
@@ -328,44 +331,57 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
           
           if (bookings && bookings.length > 0) {
+            console.log(`[RoyalCaribbeanSync] Processing ${bookings.length} bookings from enriched API`);
+            console.log(`[RoyalCaribbeanSync] First booking sample:`, JSON.stringify(bookings[0]).substring(0, 300));
+            
             const formattedCruises = bookings.map((booking: any) => {
-              // Handle both sailingInfo and profileBookings structures
-              const isCourtesyHold = booking.bookingStatus === 'OF' || endpoint === 'courtesyHolds';
-              const nights = booking.numberOfNights || booking.duration || 0;
-              const itineraryDesc = booking.itinerary?.description || booking.cruiseTitle || (nights ? `${nights} Night Cruise` : 'Cruise');
+              // Handle enriched sailingInfo structure from /api/profile/bookings/enrichment
+              const nights = booking.duration || booking.numberOfNights || 0;
+              const itineraryDesc = booking.itinerary?.description || (nights ? `${nights} Night Cruise` : 'Cruise');
+              
+              // Extract port information
+              let itineraryPorts = '';
+              if (booking.itinerary?.portInfo && Array.isArray(booking.itinerary.portInfo)) {
+                const ports = booking.itinerary.portInfo
+                  .filter((p: any) => p.portType !== 'CRUISING' && p.portType !== 'SEA' && p.title)
+                  .map((p: any) => p.title);
+                // Remove duplicates
+                const uniquePorts = [...new Set(ports)];
+                itineraryPorts = uniquePorts.join(' → ');
+              }
               
               return {
-                sourcePage: isCourtesyHold ? 'Courtesy Hold' : 'Upcoming',
+                sourcePage: 'Upcoming',
                 shipName: booking.shipName || (booking.shipCode ? booking.shipCode + ' of the Seas' : 'Unknown Ship'),
                 shipCode: booking.shipCode || '',
                 cruiseTitle: itineraryDesc,
                 sailingStartDate: booking.sailDate || '',
                 sailingEndDate: booking.sailingEndDate || '',
-                sailingDates: booking.sailingDates || '',
-                itinerary: itineraryDesc,
+                sailingDates: `${booking.sailDate || ''} - ${booking.sailingEndDate || ''}`,
+                itinerary: itineraryPorts || itineraryDesc,
                 departurePort: booking.departurePort || booking.departurePortName || '',
                 arrivalPort: booking.arrivalPort || booking.arrivalPortName || '',
-                cabinType: booking.stateroomType || '',
-                cabinCategory: booking.stateroomCategoryCode || '',
-                cabinNumberOrGTY: booking.stateroomNumber === 'GTY' ? 'GTY' : (booking.stateroomNumber || ''),
-                deckNumber: booking.deckNumber || '',
-                bookingId: booking.bookingId || booking.voyageId?.toString() || '',
-                numberOfGuests: booking.passengers?.length.toString() || '1',
+                cabinType: '',
+                cabinCategory: '',
+                cabinNumberOrGTY: '',
+                deckNumber: '',
+                bookingId: booking.voyageId?.toString() || '',
+                numberOfGuests: '1',
                 numberOfNights: nights.toString(),
                 daysToGo: '',
-                status: isCourtesyHold ? 'Courtesy Hold' : 'Upcoming',
-                holdExpiration: booking.offerExpirationDate || '',
+                status: 'Upcoming',
+                holdExpiration: '',
                 loyaltyLevel: '',
                 loyaltyPoints: '',
-                paidInFull: booking.paidInFull ? 'Yes' : 'No',
-                balanceDue: booking.balanceDueAmount?.toString() || '0',
-                musterStation: booking.musterStation || '',
-                bookingStatus: booking.bookingStatus || (isCourtesyHold ? 'OF' : 'BK'),
+                paidInFull: 'No',
+                balanceDue: '0',
+                musterStation: '',
+                bookingStatus: 'BK',
                 packageCode: booking.packageCode || '',
-                passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
-                stateroomNumber: booking.stateroomNumber || '',
-                stateroomCategoryCode: booking.stateroomCategoryCode || '',
-                stateroomType: booking.stateroomType || ''
+                passengerStatus: '',
+                stateroomNumber: '',
+                stateroomCategoryCode: '',
+                stateroomType: ''
               };
             });
             
@@ -374,20 +390,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               extractedBookedCruises: [...prev.extractedBookedCruises, ...formattedCruises]
             }));
             
-            // Determine status based on endpoint
-            const isCourtesyHold = endpoint === 'courtesyHolds';
-            const formattedCruisesWithStatus = formattedCruises.map((c: BookedCruiseRow) => ({
-              ...c,
-              status: isCourtesyHold ? 'Courtesy Hold' : c.status,
-              sourcePage: isCourtesyHold ? 'Courtesy' : c.sourcePage
-            }));
-            
-            setState(prev => ({
-              ...prev,
-              extractedBookedCruises: [...prev.extractedBookedCruises, ...formattedCruisesWithStatus]
-            }));
-            
-            addLog(`✅ Processed ${bookings.length} ${endpoint === 'courtesyHolds' ? 'courtesy holds' : 'bookings'} from network capture`, 'success');
+            addLog(`✅ Processed ${bookings.length} bookings from enriched API`, 'success');
+            bookings.slice(0, 3).forEach((b: any, i: number) => {
+              addLog(`   ${i + 1}. ${b.shipName} - ${b.sailDate} - ${b.duration}N - ${b.itinerary?.description || 'N/A'}`, 'info');
+            });
           } else {
             addLog(`⚠️ No bookings found after structure detection`, 'warning');
           }
@@ -395,8 +401,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         
         if (endpoint === 'loyalty' && data) {
           addLog(`📦 Processing captured Loyalty API payload...`, 'info');
-          const loyaltyInfo = data as LoyaltyApiInformation;
-          const convertedLoyalty = convertLoyaltyInfoToExtended(loyaltyInfo, '');
+          console.log(`[RoyalCaribbeanSync] Loyalty data structure:`, JSON.stringify(data).substring(0, 500));
+          
+          // Extract from payload if present
+          const loyaltyPayload = data.payload || data;
+          const loyaltyInfo = loyaltyPayload.loyaltyInformation || loyaltyPayload;
+          const accountId = loyaltyPayload.accountId || '';
+          
+          addLog(`📦 Loyalty payload keys: ${Object.keys(loyaltyPayload).join(', ')}`, 'info');
+          
+          const convertedLoyalty = convertLoyaltyInfoToExtended(loyaltyInfo, accountId);
           setExtendedLoyaltyData(convertedLoyalty);
           hasReceivedApiLoyaltyData = true;
           

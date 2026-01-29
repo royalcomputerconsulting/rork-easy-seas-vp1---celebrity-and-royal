@@ -33,7 +33,7 @@ export const AUTH_DETECTION_SCRIPT = `
             }).catch(() => {});
           }
           
-          if (url.includes('/api/account/upcoming-cruises')) {
+          if (url.includes('/api/account/upcoming-cruises') || url.includes('/api/profile/bookings/enrichment') || url.includes('/api/profile/bookings')) {
             clonedResponse.json().then(data => {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
@@ -44,7 +44,7 @@ export const AUTH_DETECTION_SCRIPT = `
               const count = (data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: '📦 Captured Upcoming Cruises API payload with ' + count + ' bookings',
+                message: '📦 Captured Bookings API payload with ' + count + ' bookings',
                 logType: 'success'
               }));
             }).catch(() => {});
@@ -67,7 +67,7 @@ export const AUTH_DETECTION_SCRIPT = `
             }).catch(() => {});
           }
           
-          if (url.includes('/account/loyalty-programs') || url.includes('/api/loyalty') || url.includes('/api/profile/loyalty')) {
+          if (url.includes('/account/loyalty-programs') || url.includes('/api/loyalty') || url.includes('/api/profile/loyalty') || url.includes('/api/account/info')) {
             clonedResponse.json().then(data => {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
@@ -116,7 +116,7 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
             }
             
-            if (this._url.includes('/api/account/upcoming-cruises')) {
+            if (this._url.includes('/api/account/upcoming-cruises') || this._url.includes('/api/profile/bookings/enrichment') || this._url.includes('/api/profile/bookings')) {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
                 endpoint: 'upcomingCruises',
@@ -126,7 +126,7 @@ export const AUTH_DETECTION_SCRIPT = `
               const count = (data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: '📦 [XHR] Captured Upcoming Cruises API payload with ' + count + ' bookings',
+                message: '📦 [XHR] Captured Bookings API payload with ' + count + ' bookings',
                 logType: 'success'
               }));
             }
@@ -146,7 +146,7 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
             }
             
-            if (this._url.includes('/account/loyalty-programs') || this._url.includes('/api/loyalty') || this._url.includes('/api/profile/loyalty')) {
+            if (this._url.includes('/account/loyalty-programs') || this._url.includes('/api/loyalty') || this._url.includes('/api/profile/loyalty') || this._url.includes('/api/account/info')) {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
                 endpoint: 'loyalty',
