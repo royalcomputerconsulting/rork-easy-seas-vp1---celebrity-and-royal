@@ -333,6 +333,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           if (bookings && bookings.length > 0) {
             console.log(`[RoyalCaribbeanSync] Processing ${bookings.length} bookings from enriched API`);
             console.log(`[RoyalCaribbeanSync] First booking sample:`, JSON.stringify(bookings[0]).substring(0, 300));
+            console.log(`[RoyalCaribbeanSync] First booking FULL:`, JSON.stringify(bookings[0]));
+            console.log(`[RoyalCaribbeanSync] First booking keys:`, Object.keys(bookings[0]));
+            addLog(`🔍 DIAGNOSTIC - First booking fields: ${Object.keys(bookings[0]).join(', ')}`, 'info');
+            addLog(`🔍 DIAGNOSTIC - First booking sample: ${JSON.stringify(bookings[0]).substring(0, 200)}`, 'info');
+            console.log(`[RoyalCaribbeanSync] First booking FULL:`, JSON.stringify(bookings[0]));
+            console.log(`[RoyalCaribbeanSync] First booking keys:`, Object.keys(bookings[0]));
+            addLog(`🔍 DIAGNOSTIC - First booking fields: ${Object.keys(bookings[0]).join(', ')}`, 'info');
+            addLog(`🔍 Sample booking data: ${JSON.stringify(bookings[0]).substring(0, 200)}`, 'info');
             
             const formattedCruises = bookings.map((booking: any) => {
               // Handle enriched sailingInfo structure from /api/profile/bookings/enrichment
@@ -397,6 +405,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           } else {
             addLog(`⚠️ No bookings found after structure detection`, 'warning');
           }
+        }
+        
+        if (endpoint === 'voyageEnrichment' && data) {
+          addLog(`📦 Processing captured Voyage Enrichment data...`, 'info');
+          console.log(`[RoyalCaribbeanSync] Voyage enrichment data received`);
+          console.log(`[RoyalCaribbeanSync] Voyage enrichment keys:`, Object.keys(data));
+          addLog(`✅ Voyage enrichment data stored for merging with bookings`, 'success');
         }
         
         if (endpoint === 'loyalty' && data) {
