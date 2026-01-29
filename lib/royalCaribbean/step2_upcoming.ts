@@ -155,10 +155,6 @@ export const STEP2_UPCOMING_SCRIPT = `
     log('🔄 Step 2: Fetching booking data via API...', 'info');
 
     var headers = getAuthHeaders();
-    if (!headers) {
-      log('⚠️ Could not obtain auth headers - will try DOM fallback', 'warning');
-      return null;
-    }
 
     try {
       var host = location && location.hostname ? location.hostname : '';
@@ -166,14 +162,31 @@ export const STEP2_UPCOMING_SCRIPT = `
       var baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
       var endpoint = baseUrl + '/api/profile/bookings';
       
-      log('📡 Calling ' + endpoint + '...', 'info');
+      // Try cookie-based auth first (most reliable when on the page)
+      log('📡 Trying cookie-based auth for ' + endpoint + '...', 'info');
       var response = await fetch(endpoint, {
         method: 'GET',
-        credentials: 'omit',
-        headers: headers
+        credentials: 'include',
+        headers: {
+          'accept': 'application/json, text/plain, */*',
+          'accept-language': 'en-US,en;q=0.9',
+          'cache-control': 'no-cache',
+          'pragma': 'no-cache'
+        }
       });
 
-      log('📡 API Response status: ' + response.status, 'info');
+      log('📡 Cookie auth response status: ' + response.status, 'info');
+
+      // If cookie auth fails, try bearer token auth
+      if (!response.ok && headers) {
+        log('📡 Cookie auth failed, trying bearer token auth...', 'info');
+        response = await fetch(endpoint, {
+          method: 'GET',
+          credentials: 'omit',
+          headers: headers
+        });
+        log('📡 Bearer auth response status: ' + response.status, 'info');
+      }
 
       if (!response.ok) {
         log('⚠️ API returned non-OK status: ' + response.status, 'warning');
@@ -504,7 +517,7 @@ export const STEP2_UPCOMING_SCRIPT = `
       var portSummary = departurePort ? (isOneWay ? departurePort + ' → ' + arrivalPort : departurePort) : 'No port data';
       var cabinDisplay = cabinNumber ? cabinNumber : 'GTY';
       var cabinTypeDisplay = cabinType || 'Unknown';
-      log('  ✓ ' + shipName + ' - ' + sailingStartDate + ' - Room: ' + cabinTypeDisplay + ' #' + cabinDisplay + ' - Booking: ' + booking.bookingId + ' - Status: ' + status, 'success');
+      log('  ✓ ' + shipName + ' - ' + sailingStartDate + ' - ' + cabinTypeDisplay + ' #' + cabinDisplay + ' - Deck ' + (deckNumber || 'N/A') + ' - Booking: ' + booking.bookingId + ' - ' + status, 'success');
     }
     
     log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
@@ -680,7 +693,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         
         cruises.push(cruise);
         var domCabinDisplay = cabinNumber ? cabinNumber : (cabinType && cabinType.match(/GTY/i) ? 'GTY' : 'Unknown');
-        log('  ✓ DOM: ' + shipName + ' - ' + sailingStartDate + ' - Room: ' + (cabinType || 'Unknown') + ' #' + domCabinDisplay + ' - Booking: ' + bookingId, 'success');
+        log('  ✓ DOM: ' + shipName + ' - ' + sailingStartDate + ' - ' + (cabinType || 'Unknown') + ' #' + domCabinDisplay + ' - Booking: ' + bookingId, 'success');
       }
     }
 

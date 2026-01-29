@@ -108,45 +108,60 @@ export const STEP4_LOYALTY_SCRIPT = `
   async function fetchLoyaltyData() {
     log('📡 Fetching loyalty data...', 'info');
     
-    // First try to extract from embedded page state
+    // First try to extract from embedded page state (Next.js SSR data)
     var pageState = extractFromPageState();
     if (pageState && pageState.loyalty) {
       return { data: { payload: { loyaltyInformation: pageState.loyalty, accountId: pageState.accountId } }, accountId: pageState.accountId };
     }
 
     var authInfo = getAuthHeaders();
-    if (!authInfo) {
-      log('⚠️ Could not obtain auth headers - will try DOM fallback', 'warning');
-      return null;
-    }
-
-    var headers = authInfo.headers;
+    var accountId = authInfo ? authInfo.accountId : null;
 
     try {
       var host = location && location.hostname ? location.hostname : '';
       var brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
       var baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
       
-      // The loyalty-programs page fetches from this API - use credentials: include to send cookies
+      // Try multiple API endpoints - the loyalty-programs page uses these
+      // IMPORTANT: Use credentials: 'include' AND same-origin headers for cookie auth
       var endpoints = [
-        { url: baseUrl + '/api/account/loyalty-programs', useCookies: true },
-        { url: baseUrl + '/api/profile/loyalty-programs', useCookies: true },
-        { url: baseUrl + '/api/profile/loyalty', useCookies: true },
-        { url: baseUrl + '/api/profile/loyalty', useCookies: false }
+        { url: baseUrl + '/api/account/loyalty-programs', method: 'cookie' },
+        { url: baseUrl + '/api/profile/loyalty-programs', method: 'cookie' },
+        { url: baseUrl + '/api/profile/loyalty', method: 'cookie' },
+        { url: baseUrl + '/api/profile/loyalty', method: 'bearer' }
       ];
       
       var loyaltyResult = null;
       
       for (var i = 0; i < endpoints.length; i++) {
         var ep = endpoints[i];
-        log('📡 Trying endpoint ' + (i + 1) + '/' + endpoints.length + ': ' + ep.url + (ep.useCookies ? ' (with cookies)' : ''), 'info');
+        log('📡 Trying endpoint ' + (i + 1) + '/' + endpoints.length + ': ' + ep.url + ' (' + ep.method + ' auth)', 'info');
         
         try {
-          var fetchOpts = {
-            method: 'GET',
-            credentials: ep.useCookies ? 'include' : 'omit',
-            headers: ep.useCookies ? { 'accept': 'application/json' } : headers
-          };
+          var fetchOpts;
+          if (ep.method === 'cookie') {
+            // Cookie-based auth - must include credentials and proper headers
+            fetchOpts = {
+              method: 'GET',
+              credentials: 'include',
+              headers: {
+                'accept': 'application/json, text/plain, */*',
+                'accept-language': 'en-US,en;q=0.9',
+                'cache-control': 'no-cache',
+                'pragma': 'no-cache'
+              }
+            };
+          } else if (authInfo) {
+            // Bearer token auth
+            fetchOpts = {
+              method: 'GET',
+              credentials: 'omit',
+              headers: authInfo.headers
+            };
+          } else {
+            log('⚠️ Skipping bearer auth - no auth headers available', 'warning');
+            continue;
+          }
           
           var response = await fetch(ep.url, fetchOpts);
 
@@ -159,22 +174,22 @@ export const STEP4_LOYALTY_SCRIPT = `
             if (text && text.length > 10) {
               var data = JSON.parse(text);
               
+              // Log raw response structure for debugging
+              if (data && data.payload) {
+                log('📋 Response has payload with keys: ' + Object.keys(data.payload).slice(0, 10).join(', '), 'info');
+              }
+              
               if (data && data.payload && data.payload.loyaltyInformation) {
-                loyaltyResult = { data: data, accountId: data.payload.accountId || authInfo.accountId };
+                loyaltyResult = { data: data, accountId: data.payload.accountId || accountId };
                 log('✅ Found loyalty data at ' + ep.url, 'success');
                 break;
               } else if (data && data.loyaltyInformation) {
                 // Handle direct response without payload wrapper
-                loyaltyResult = { data: { payload: data }, accountId: data.accountId || authInfo.accountId };
+                loyaltyResult = { data: { payload: data }, accountId: data.accountId || accountId };
                 log('✅ Found loyalty data at ' + ep.url + ' (unwrapped)', 'success');
                 break;
               } else {
                 log('⚠️ No loyaltyInformation in response from ' + ep.url, 'warning');
-                if (data && data.payload) {
-                  log('   Payload keys: ' + Object.keys(data.payload).join(', '), 'info');
-                } else if (data) {
-                  log('   Response keys: ' + Object.keys(data).slice(0, 5).join(', '), 'info');
-                }
               }
             }
           } else if (response.status === 403) {
@@ -415,6 +430,7 @@ export const STEP4_LOYALTY_SCRIPT = `
   function extractLoyaltyFromDOM() {
     try {
       var pageText = document.body.textContent || '';
+      var pageHTML = document.body.innerHTML || '';
       var result = {
         crownAndAnchorLevel: '',
         crownAndAnchorPoints: '',
@@ -425,16 +441,21 @@ export const STEP4_LOYALTY_SCRIPT = `
       log('📄 Scanning page for loyalty data...', 'info');
       log('📄 Page text length: ' + pageText.length + ' chars', 'info');
       
-      // First check for "Diamond Plus" explicitly (multi-word tier)
+      // First check for "Diamond Plus" or "Pinnacle Club" explicitly (multi-word tiers)
       var diamondPlusMatch = pageText.match(/Diamond\\s+Plus/i);
-      if (diamondPlusMatch) {
+      var pinnacleClubMatch = pageText.match(/Pinnacle\\s+Club/i);
+      
+      if (pinnacleClubMatch) {
+        result.crownAndAnchorLevel = 'Pinnacle Club';
+        log('📄 Found Crown & Anchor tier: Pinnacle Club', 'success');
+      } else if (diamondPlusMatch) {
         result.crownAndAnchorLevel = 'Diamond Plus';
         log('📄 Found Crown & Anchor tier: Diamond Plus', 'success');
       } else {
         // Crown & Anchor tier patterns - more specific patterns
         var caTierPatterns = [
-          /Crown\\s*(?:&|and)?\\s*Anchor[^a-zA-Z]{0,30}(Pinnacle|Emerald|Diamond|Platinum|Gold)/i,
-          /(?:Your|My)?\\s*(?:current\\s*)?(?:status|tier|level|membership)[:\\s\\-]{0,10}(Pinnacle|Emerald|Diamond|Platinum|Gold)/i,
+          /Crown\\s*(?:&|and)?\\s*Anchor[^a-zA-Z]{0,50}(Pinnacle|Emerald|Diamond|Platinum|Gold)/i,
+          /(?:Your|My)?\\s*(?:current\\s*)?(?:C&A|Crown\\s*&?\\s*Anchor)?\\s*(?:status|tier|level|membership)[:\\s\\-]{0,10}(Pinnacle|Emerald|Diamond|Platinum|Gold)/i,
           /(Pinnacle|Emerald|Diamond|Platinum|Gold)\\s*(?:Member|Status|Tier|Level)/i,
           /\\b(Pinnacle|Emerald|Diamond|Platinum|Gold)\\s+member\\b/i
         ];
@@ -453,10 +474,15 @@ export const STEP4_LOYALTY_SCRIPT = `
         }
       }
       
-      // Crown & Anchor points patterns - look for cruise credits/points
+      // Crown & Anchor points patterns - MUST be more specific to avoid matching random numbers
+      // Look for "X cruise credits" or "cruise credits: X" patterns near Crown & Anchor content
       var caPointsPatterns = [
-        /([\\d,]+)\\s*(?:cruise\\s*)?(?:credits|points)(?:\\s*earned)?/i,
-        /(?:total|earned|current|lifetime)\\s*(?:cruise\\s*)?(?:credits|points)[:\\s]*([\\d,]+)/i
+        // Very specific: near "Crown & Anchor" or "C&A"
+        /(?:Crown\\s*(?:&|and)?\\s*Anchor|C&A)[^0-9]{0,100}?([\\d,]+)\\s*(?:cruise\\s*)?(?:credits|points)/i,
+        /(?:cruise\\s*)?(?:credits|points)[:\\s]*([\\d,]+)(?:[^0-9]{0,50}Crown|[^0-9]{0,50}C&A)/i,
+        // "You have X cruise credits" or "X total cruise credits"
+        /(?:you\\s+have|total|earned|current|lifetime)\\s*([\\d,]+)\\s*(?:cruise\\s*)?(?:credits|points)/i,
+        /([\\d,]+)\\s*(?:total\\s*)?cruise\\s*credits/i
       ];
       
       for (var j = 0; j < caPointsPatterns.length; j++) {
@@ -465,10 +491,31 @@ export const STEP4_LOYALTY_SCRIPT = `
           var pointVal = pMatch[1] || pMatch[2];
           if (pointVal) {
             var numPoints = parseInt(pointVal.replace(/,/g, ''), 10);
-            // Crown & Anchor points are typically in the range of 1-100000+
-            if (numPoints >= 1 && numPoints <= 10000000) {
+            // Crown & Anchor points are typically 1-10000+ range, filter out small numbers that might be days/nights
+            // Points below 50 are likely "X days to go" or similar, not actual loyalty points
+            if (numPoints >= 50 && numPoints <= 10000000) {
               result.crownAndAnchorPoints = numPoints.toString();
               log('📄 Found Crown & Anchor points: ' + numPoints, 'success');
+              break;
+            } else {
+              log('📄 Skipping potential C&A points value ' + numPoints + ' (too small, likely not points)', 'info');
+            }
+          }
+        }
+      }
+      
+      // If we still don't have C&A points, try looking at structured data on the page
+      if (!result.crownAndAnchorPoints) {
+        // Look for elements with specific data attributes or classes
+        var pointElements = document.querySelectorAll('[class*="point"], [class*="credit"], [data-testid*="point"], [data-testid*="credit"]');
+        for (var pe = 0; pe < pointElements.length; pe++) {
+          var elText = pointElements[pe].textContent || '';
+          var elPointMatch = elText.match(/(\\d{2,})/); // At least 2 digits
+          if (elPointMatch && elText.toLowerCase().indexOf('cruise') >= 0) {
+            var elPoints = parseInt(elPointMatch[1], 10);
+            if (elPoints >= 50 && elPoints <= 10000000) {
+              result.crownAndAnchorPoints = elPoints.toString();
+              log('📄 Found C&A points from DOM element: ' + elPoints, 'success');
               break;
             }
           }
@@ -477,9 +524,10 @@ export const STEP4_LOYALTY_SCRIPT = `
       
       // Club Royale tier patterns
       var crTierPatterns = [
-        /Club\\s*Royale[^a-zA-Z]{0,30}(Masters|Signature|Premier|Prime|Classic|Choice)/i,
+        /Club\\s*Royale[^a-zA-Z]{0,50}(Masters|Signature|Premier|Prime|Classic|Choice)/i,
         /(?:Casino|CR)\\s*(?:Status|Tier|Level)[:\\s\\-]{0,10}(Masters|Signature|Premier|Prime|Classic|Choice)/i,
-        /(Masters|Signature|Premier|Prime|Classic|Choice)\\s*(?:Member|Status|Tier)/i
+        /(Masters|Signature|Premier|Prime|Classic|Choice)\\s*(?:Member|Status|Tier)/i,
+        /\\b(Masters|Signature|Premier|Prime|Classic|Choice)\\s+casino\\s+tier\\b/i
       ];
       
       for (var k = 0; k < crTierPatterns.length; k++) {
@@ -494,8 +542,9 @@ export const STEP4_LOYALTY_SCRIPT = `
         }
       }
       
-      // Club Royale points/credits patterns
+      // Club Royale points/credits patterns - more specific
       var crPointsPatterns = [
+        /(?:Club\\s*Royale|casino)[^0-9]{0,100}?([\\d,]+)\\s*(?:tier\\s*)?credits/i,
         /tier\\s*credits[:\\s]*([\\d,]+)/i,
         /([\\d,]+)\\s*tier\\s*credits/i
       ];
@@ -504,8 +553,8 @@ export const STEP4_LOYALTY_SCRIPT = `
         var crpMatch = pageText.match(crPointsPatterns[l]);
         if (crpMatch && crpMatch[1]) {
           var crPoints = parseInt(crpMatch[1].replace(/,/g, ''), 10);
-          // Club Royale tier credits are typically 0-100000+
-          if (crPoints >= 0 && crPoints <= 10000000) {
+          // Club Royale tier credits typically in hundreds to tens of thousands
+          if (crPoints >= 100 && crPoints <= 10000000) {
             result.clubRoyalePoints = crPoints.toString();
             log('📄 Found Club Royale points: ' + crPoints, 'success');
             break;
