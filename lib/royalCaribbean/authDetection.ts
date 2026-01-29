@@ -15,7 +15,7 @@ export const AUTH_DETECTION_SCRIPT = `
         const clonedResponse = response.clone();
         const url = args[0];
         
-        if (typeof url === 'string') {
+        if (typeof url === 'string' && response.ok && response.status === 200) {
           if (url.includes('/api/casino/casino-offers')) {
             clonedResponse.json().then(data => {
               window.ReactNativeWebView.postMessage(JSON.stringify({
