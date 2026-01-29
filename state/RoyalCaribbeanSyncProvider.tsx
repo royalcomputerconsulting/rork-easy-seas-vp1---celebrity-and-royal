@@ -342,54 +342,66 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`🔍 DIAGNOSTIC - First booking fields: ${Object.keys(bookings[0]).join(', ')}`, 'info');
             addLog(`🔍 Sample booking data: ${JSON.stringify(bookings[0]).substring(0, 200)}`, 'info');
             
+            const SHIP_CODE_MAP: Record<string, string> = {
+              'AL': 'Allure of the Seas', 'AN': 'Anthem of the Seas', 'AD': 'Adventure of the Seas',
+              'BR': 'Brilliance of the Seas', 'EN': 'Enchantment of the Seas', 'EX': 'Explorer of the Seas',
+              'FR': 'Freedom of the Seas', 'GR': 'Grandeur of the Seas', 'HM': 'Harmony of the Seas',
+              'IC': 'Icon of the Seas', 'ID': 'Independence of the Seas', 'JW': 'Jewel of the Seas',
+              'LB': 'Liberty of the Seas', 'LE': 'Legend of the Seas', 'MJ': 'Majesty of the Seas',
+              'MR': 'Mariner of the Seas', 'NV': 'Navigator of the Seas', 'OA': 'Oasis of the Seas',
+              'OV': 'Ovation of the Seas', 'OY': 'Odyssey of the Seas', 'QN': 'Quantum of the Seas',
+              'RD': 'Radiance of the Seas', 'RH': 'Rhapsody of the Seas', 'SE': 'Serenade of the Seas',
+              'SP': 'Spectrum of the Seas', 'SY': 'Symphony of the Seas', 'UT': 'Utopia of the Seas',
+              'VI': 'Vision of the Seas', 'VY': 'Voyager of the Seas', 'WN': 'Wonder of the Seas'
+            };
+            
+            const STATEROOM_TYPE_MAP: Record<string, string> = {
+              'I': 'Interior', 'O': 'Ocean View', 'B': 'Balcony', 'S': 'Suite'
+            };
+            
             const formattedCruises = bookings.map((booking: any) => {
-              // Handle enriched sailingInfo structure from /api/profile/bookings/enrichment
-              const nights = booking.duration || booking.numberOfNights || 0;
-              const itineraryDesc = booking.itinerary?.description || (nights ? `${nights} Night Cruise` : 'Cruise');
+              const nights = booking.numberOfNights || 0;
+              const shipCode = booking.shipCode || '';
+              const shipName = SHIP_CODE_MAP[shipCode] || (shipCode ? `${shipCode} of the Seas` : 'Unknown Ship');
+              const stateroomType = booking.stateroomType || '';
+              const cabinType = STATEROOM_TYPE_MAP[stateroomType] || stateroomType || '';
               
-              // Extract port information
-              let itineraryPorts = '';
-              if (booking.itinerary?.portInfo && Array.isArray(booking.itinerary.portInfo)) {
-                const ports = booking.itinerary.portInfo
-                  .filter((p: any) => p.portType !== 'CRUISING' && p.portType !== 'SEA' && p.title)
-                  .map((p: any) => p.title);
-                // Remove duplicates
-                const uniquePorts = [...new Set(ports)];
-                itineraryPorts = uniquePorts.join(' → ');
-              }
+              const stateroomNumber = booking.stateroomNumber || '';
+              const cabinNumber = stateroomNumber === 'GTY' ? '' : stateroomNumber;
+              const isGTY = stateroomNumber === 'GTY' || !stateroomNumber;
               
               return {
                 sourcePage: 'Upcoming',
-                shipName: booking.shipName || (booking.shipCode ? booking.shipCode + ' of the Seas' : 'Unknown Ship'),
-                shipCode: booking.shipCode || '',
-                cruiseTitle: itineraryDesc,
+                shipName,
+                shipCode,
+                cruiseTitle: nights ? `${nights} Night Cruise` : 'Cruise',
                 sailingStartDate: booking.sailDate || '',
-                sailingEndDate: booking.sailingEndDate || '',
-                sailingDates: `${booking.sailDate || ''} - ${booking.sailingEndDate || ''}`,
-                itinerary: itineraryPorts || itineraryDesc,
-                departurePort: booking.departurePort || booking.departurePortName || '',
-                arrivalPort: booking.arrivalPort || booking.arrivalPortName || '',
-                cabinType: '',
-                cabinCategory: '',
-                cabinNumberOrGTY: '',
-                deckNumber: '',
-                bookingId: booking.voyageId?.toString() || '',
-                numberOfGuests: '1',
+                sailingEndDate: '',
+                sailingDates: booking.sailDate || '',
+                itinerary: '',
+                departurePort: '',
+                arrivalPort: '',
+                cabinType,
+                cabinCategory: booking.stateroomCategoryCode || '',
+                cabinNumberOrGTY: isGTY ? 'GTY' : cabinNumber,
+                deckNumber: booking.deckNumber || '',
+                bookingId: booking.bookingId?.toString() || '',
+                numberOfGuests: booking.passengers?.length?.toString() || '1',
                 numberOfNights: nights.toString(),
                 daysToGo: '',
-                status: 'Upcoming',
+                status: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
                 holdExpiration: '',
                 loyaltyLevel: '',
                 loyaltyPoints: '',
-                paidInFull: 'No',
-                balanceDue: '0',
-                musterStation: '',
-                bookingStatus: 'BK',
+                paidInFull: booking.paidInFull ? 'Yes' : 'No',
+                balanceDue: booking.balanceDueAmount?.toString() || '0',
+                musterStation: booking.musterStation || '',
+                bookingStatus: booking.bookingStatus || 'BK',
                 packageCode: booking.packageCode || '',
-                passengerStatus: '',
-                stateroomNumber: '',
-                stateroomCategoryCode: '',
-                stateroomType: ''
+                passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
+                stateroomNumber,
+                stateroomCategoryCode: booking.stateroomCategoryCode || '',
+                stateroomType
               };
             });
             
@@ -399,8 +411,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             }));
             
             addLog(`✅ Processed ${bookings.length} bookings from enriched API`, 'success');
-            bookings.slice(0, 3).forEach((b: any, i: number) => {
-              addLog(`   ${i + 1}. ${b.shipName} - ${b.sailDate} - ${b.duration}N - ${b.itinerary?.description || 'N/A'}`, 'info');
+            formattedCruises.slice(0, 3).forEach((c: any, i: number) => {
+              addLog(`   ${i + 1}. ${c.shipName} - ${c.sailingStartDate} - ${c.cabinType} #${c.cabinNumberOrGTY} - Booking: ${c.bookingId}`, 'info');
             });
           } else {
             addLog(`⚠️ No bookings found after structure detection`, 'warning');
