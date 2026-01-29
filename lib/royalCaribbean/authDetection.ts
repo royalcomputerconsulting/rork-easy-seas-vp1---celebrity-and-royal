@@ -4,7 +4,8 @@ export const AUTH_DETECTION_SCRIPT = `
   let checkCount = 0;
   const capturedPayloads = {
     offers: null,
-    bookings: null,
+    upcomingCruises: null,
+    courtesyHolds: null,
     loyalty: null
   };
 
@@ -32,23 +33,41 @@ export const AUTH_DETECTION_SCRIPT = `
             }).catch(() => {});
           }
           
-          if (url.includes('/api/profile/bookings')) {
+          if (url.includes('/api/account/upcoming-cruises')) {
             clonedResponse.json().then(data => {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
-                endpoint: 'bookings',
+                endpoint: 'upcomingCruises',
                 data: data,
                 url: url
               }));
+              const count = (data?.payload?.profileBookings?.length || data?.profileBookings?.length || 0);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: '📦 Captured Bookings API payload',
+                message: '📦 Captured Upcoming Cruises API payload with ' + count + ' bookings',
                 logType: 'success'
               }));
             }).catch(() => {});
           }
           
-          if (url.includes('/api/loyalty') || url.includes('/api/profile/loyalty')) {
+          if (url.includes('/api/account/courtesy-holds')) {
+            clonedResponse.json().then(data => {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'network_payload',
+                endpoint: 'courtesyHolds',
+                data: data,
+                url: url
+              }));
+              const count = (data?.payload?.profileBookings?.length || data?.profileBookings?.length || 0);
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '📦 Captured Courtesy Holds API payload with ' + count + ' holds',
+                logType: 'success'
+              }));
+            }).catch(() => {});
+          }
+          
+          if (url.includes('/account/loyalty-programs') || url.includes('/api/loyalty') || url.includes('/api/profile/loyalty')) {
             clonedResponse.json().then(data => {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
@@ -97,21 +116,37 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
             }
             
-            if (this._url.includes('/api/profile/bookings')) {
+            if (this._url.includes('/api/account/upcoming-cruises')) {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
-                endpoint: 'bookings',
+                endpoint: 'upcomingCruises',
                 data: data,
                 url: this._url
               }));
+              const count = (data?.payload?.profileBookings?.length || data?.profileBookings?.length || 0);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: '📦 [XHR] Captured Bookings API payload',
+                message: '📦 [XHR] Captured Upcoming Cruises API payload with ' + count + ' bookings',
                 logType: 'success'
               }));
             }
             
-            if (this._url.includes('/api/loyalty') || this._url.includes('/api/profile/loyalty')) {
+            if (this._url.includes('/api/account/courtesy-holds')) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'network_payload',
+                endpoint: 'courtesyHolds',
+                data: data,
+                url: this._url
+              }));
+              const count = (data?.payload?.profileBookings?.length || data?.profileBookings?.length || 0);
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '📦 [XHR] Captured Courtesy Holds API payload with ' + count + ' holds',
+                logType: 'success'
+              }));
+            }
+            
+            if (this._url.includes('/account/loyalty-programs') || this._url.includes('/api/loyalty') || this._url.includes('/api/profile/loyalty')) {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
                 endpoint: 'loyalty',

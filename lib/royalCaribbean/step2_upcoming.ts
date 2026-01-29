@@ -151,122 +151,8 @@ export const STEP2_UPCOMING_SCRIPT = `
     }
   }
 
-  async function fetchProfileBookings() {
-    log('🔄 Step 2: Fetching booking data via API...', 'info');
-
-    var headers = getAuthHeaders();
-
-    try {
-      var host = location && location.hostname ? location.hostname : '';
-      var brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
-      var baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
-      
-      log('🔍 Testing multiple booking endpoints...', 'info');
-      var endpoints = [
-        baseUrl + '/api/club-royale/offers',
-        baseUrl + '/api/profile/bookings',
-        baseUrl + '/api/account/bookings',
-        baseUrl + '/api/bookings'
-      ];
-      
-      var response = null;
-      var workingEndpoint = null;
-      
-      for (var ei = 0; ei < endpoints.length; ei++) {
-        var testEndpoint = endpoints[ei];
-        log('📡 Testing endpoint ' + (ei + 1) + '/' + endpoints.length + ': ' + testEndpoint, 'info');
-      
-        try {
-          // Try cookie-based auth first
-          var testResponse = await fetch(testEndpoint, {
-            method: 'GET',
-            credentials: 'include',
-            headers: {
-              'accept': 'application/json, text/plain, */*',
-              'accept-language': 'en-US,en;q=0.9',
-              'cache-control': 'no-cache',
-              'pragma': 'no-cache'
-            }
-          });
-          
-          log('   📡 Response status: ' + testResponse.status, 'info');
-          
-          if (testResponse.ok) {
-            response = testResponse;
-            workingEndpoint = testEndpoint;
-            log('   ✅ SUCCESS! Endpoint works: ' + testEndpoint, 'success');
-            break;
-          } else {
-            log('   ❌ Failed with status: ' + testResponse.status, 'warning');
-          }
-        } catch (fetchErr) {
-          log('   ❌ Error: ' + fetchErr.message, 'warning');
-        }
-        
-        await wait(500);
-      }
-      
-      if (!response || !response.ok) {
-        log('❌ All booking endpoints failed!', 'error');
-        log('📝 Tested endpoints:', 'info');
-        for (var li = 0; li < endpoints.length; li++) {
-          log('   ' + (li + 1) + '. ' + endpoints[li], 'info');
-        }
-        throw new Error('All API endpoints returned errors');
-      }
-      
-      log('✅ Using working endpoint: ' + workingEndpoint, 'success');
-
-      var text = await response.text();
-      log('📦 Response received, length: ' + text.length + ' chars', 'info');
-      
-      if (!text || text.length < 10) {
-        log('⚠️ Empty or very short response', 'warning');
-        throw new Error('Empty response');
-      }
-      
-      var data;
-      try {
-        data = JSON.parse(text);
-      } catch (parseError) {
-        log('❌ Failed to parse JSON: ' + parseError.message, 'error');
-        log('📝 Response preview: ' + text.substring(0, 300), 'info');
-        throw new Error('JSON parse error');
-      }
-      
-      log('📊 Parsed response - status: ' + data.status + ', has payload: ' + !!data.payload, 'info');
-      
-      if (data && data.payload && data.payload.profileBookings) {
-        var bookings = data.payload.profileBookings;
-        log('✅ API returned ' + bookings.length + ' bookings from profileBookings', 'success');
-        
-        var confirmedCount = 0;
-        var offerCount = 0;
-        var cancelledCount = 0;
-        for (var i = 0; i < bookings.length; i++) {
-          var status = bookings[i].bookingStatus;
-          if (status === 'BK') confirmedCount++;
-          else if (status === 'OF') offerCount++;
-          else if (status === 'CX' || status === 'CN') cancelledCount++;
-          log('   📋 Booking ' + (i+1) + ': ' + bookings[i].shipCode + ' - ' + bookings[i].sailDate + ' - Status: ' + status, 'info');
-        }
-        log('   Summary - Confirmed: ' + confirmedCount + ', Offers: ' + offerCount + ', Cancelled: ' + cancelledCount, 'info');
-        
-        return { bookings: bookings, vdsId: data.payload.vdsId };
-      }
-      
-      log('⚠️ No profileBookings in response payload', 'warning');
-      if (data.payload) {
-        log('📝 Payload keys: ' + Object.keys(data.payload).join(', '), 'info');
-      }
-      throw new Error('No profileBookings in response');
-      
-    } catch (error) {
-      log('❌ API fetch failed: ' + error.message, 'error');
-      log('📝 Will try DOM scraping as fallback...', 'info');
-      return null;
-    }
-  }
+  // Removed manual API calls - we now rely on network monitor to capture
+  // the page's natural API calls instead of making our own (which fail with 403)
 
   async function fetchEnrichmentData(bookings) {
     if (!bookings || bookings.length === 0) {
@@ -781,63 +667,58 @@ export const STEP2_UPCOMING_SCRIPT = `
       log('🔍 Starting upcoming cruises extraction...', 'info');
       log('📍 Current URL: ' + window.location.href, 'info');
 
-      await wait(5000);
+      // Wait for page to load and make API calls naturally
+      log('⏳ Waiting 8 seconds for page to load and make API calls...', 'info');
+      await wait(8000);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
-        current: 0,
+        current: 10,
         total: 100,
-        stepName: 'Extracting booking data from page...'
+        stepName: 'Page loaded, checking for data...'
       }));
 
-      // FIRST: Try to extract from embedded page data (most reliable)
-      log('📄 Step 1: Trying to extract from embedded page data...', 'info');
-      var pageStateResult = extractFromPageState();
+      // The page will make its own API calls which are captured by network monitor
+      // We don't need to make manual API calls here
+      log('📡 Network monitor should have captured API calls from page load', 'info');
+      log('📝 If no bookings were captured, falling back to DOM scraping...', 'info');
       
-      var apiResult = null;
-      if (pageStateResult && pageStateResult.bookings && pageStateResult.bookings.length > 0) {
-        log('✅ Successfully extracted ' + pageStateResult.bookings.length + ' bookings from page data', 'success');
-        apiResult = pageStateResult;
-      } else {
-        log('⚠️ Page data extraction failed or returned no bookings - trying API...', 'warning');
-        apiResult = await fetchProfileBookings();
-      }
+      // Try embedded page data first
+      log('📄 Trying to extract from embedded page data...', 'info');
+      var pageStateResult = extractFromPageState();
       
       var cruises = [];
       
-      if (apiResult && apiResult.bookings && apiResult.bookings.length > 0) {
-        log('📊 API method: Processing ' + apiResult.bookings.length + ' bookings...', 'info');
+      if (pageStateResult && pageStateResult.bookings && pageStateResult.bookings.length > 0) {
+        log('✅ Successfully extracted ' + pageStateResult.bookings.length + ' bookings from page data', 'success');
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'progress',
-          current: 25,
+          current: 30,
           total: 100,
           stepName: 'Fetching enrichment data...'
         }));
         
-        var enrichmentMap = await fetchEnrichmentData(apiResult.bookings);
-        
-        var enrichmentCount = Object.keys(enrichmentMap).length;
-        log('📊 Enrichment map has ' + enrichmentCount + ' entries', 'info');
+        var enrichmentMap = await fetchEnrichmentData(pageStateResult.bookings);
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'progress',
-          current: 50,
+          current: 60,
           total: 100,
-          stepName: 'Processing ' + apiResult.bookings.length + ' cruises...'
+          stepName: 'Processing ' + pageStateResult.bookings.length + ' cruises...'
         }));
         
-        cruises = parseBookingsWithEnrichment(apiResult.bookings, enrichmentMap);
+        cruises = parseBookingsWithEnrichment(pageStateResult.bookings, enrichmentMap);
         
-        log('✅ API method extracted ' + cruises.length + ' cruises with details', 'success');
+        log('✅ Extracted ' + cruises.length + ' cruises with details', 'success');
       } else {
-        log('⚠️ API method failed or returned no data - trying DOM scraping', 'warning');
+        log('⚠️ No embedded page data found - falling back to DOM scraping', 'warning');
         
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'progress',
-          current: 25,
+          current: 30,
           total: 100,
-          stepName: 'API failed, trying DOM scraping...'
+          stepName: 'Using DOM scraping method...'
         }));
         
         cruises = await extractViaDOM();

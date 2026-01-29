@@ -105,7 +105,53 @@ export const STEP4_LOYALTY_SCRIPT = `
     }
   }
 
-  async function fetchLoyaltyData() {
+  // Removed manual API calls - network monitor captures the page's natural API calls
+  // Wait for page to load naturally and capture loyalty data from network monitor
+  
+  async function extractLoyaltyData() {
+    try {
+      log('🚀 ====== STEP 4: LOYALTY PROGRAMS ======', 'info');
+      log('📍 Current URL: ' + window.location.href, 'info');
+      
+      // Wait for page to load and make API calls naturally
+      log('⏳ Waiting 8 seconds for page to load and make loyalty API calls...', 'info');
+      await wait(8000);
+      
+      // Try to extract from embedded page state
+      var pageState = extractFromPageState();
+      if (pageState && pageState.loyalty) {
+        log('✅ Found loyalty data in embedded page state', 'success');
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'extended_loyalty_data',
+          data: pageState.loyalty,
+          accountId: pageState.accountId || ''
+        }));
+      } else {
+        log('ℹ️ No embedded loyalty data found - relying on network capture', 'info');
+      }
+      
+      // Network monitor should have captured any loyalty API calls
+      log('📡 Network monitor should have captured loyalty API calls', 'info');
+      
+      // Complete step
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 4,
+        data: []
+      }));
+      
+      log('✅ Step 4 Complete', 'success');
+      
+    } catch (error) {
+      log('❌ Step 4 error: ' + error.message, 'error');
+      // Still send step_complete so sync continues
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete',
+        step: 4,
+        data: []
+      }));
+    }
+  }
     log('📡 Fetching loyalty data...', 'info');
     
     // First try to extract from embedded page state (Next.js SSR data)

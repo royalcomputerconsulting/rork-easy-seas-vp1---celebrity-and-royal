@@ -284,95 +284,45 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         console.log(`[RoyalCaribbeanSync] Network payload captured: ${endpoint}`, url);
         console.log(`[RoyalCaribbeanSync] Data structure:`, JSON.stringify(data).substring(0, 500));
         
-        if (endpoint === 'bookings' && data) {
-          addLog(`📦 Processing captured Bookings API payload...`, 'info');
+        if ((endpoint === 'bookings' || endpoint === 'upcomingCruises' || endpoint === 'courtesyHolds') && data) {
+          addLog(`📦 Processing captured ${endpoint} API payload...`, 'info');
           addLog(`📦 Data keys: ${Object.keys(data).join(', ')}`, 'info');
-          addLog(`📦 Is array: ${Array.isArray(data)}, Has .bookings: ${!!data.bookings}, Has .data: ${!!data.data}`, 'info');
           
-          if (Array.isArray(data)) {
-            const formattedCruises = data.map((booking: any) => ({
-              sourcePage: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
-              shipName: booking.shipName || booking.shipCode + ' of the Seas',
-              shipCode: booking.shipCode,
-              cruiseTitle: booking.cruiseTitle || booking.numberOfNights + ' Night Cruise',
-              sailingStartDate: booking.sailDate,
-              sailingEndDate: booking.sailingEndDate || '',
-              sailingDates: booking.sailingDates || '',
-              itinerary: booking.itinerary || '',
-              departurePort: booking.departurePort || '',
-              arrivalPort: booking.arrivalPort || '',
-              cabinType: booking.stateroomType || '',
-              cabinCategory: booking.stateroomCategoryCode || '',
-              cabinNumberOrGTY: booking.stateroomNumber === 'GTY' ? 'GTY' : booking.stateroomNumber,
-              deckNumber: booking.deckNumber || '',
-              bookingId: booking.bookingId,
-              numberOfGuests: booking.passengers?.length.toString() || '1',
-              numberOfNights: booking.numberOfNights,
-              daysToGo: '',
-              status: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
-              holdExpiration: booking.offerExpirationDate || '',
-              loyaltyLevel: '',
-              loyaltyPoints: '',
-              paidInFull: booking.paidInFull ? 'Yes' : 'No',
-              balanceDue: booking.balanceDueAmount?.toString() || '0',
-              musterStation: booking.musterStation || '',
-              bookingStatus: booking.bookingStatus,
-              packageCode: booking.packageCode || '',
-              passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
-              stateroomNumber: booking.stateroomNumber,
-              stateroomCategoryCode: booking.stateroomCategoryCode,
-              stateroomType: booking.stateroomType
-            }));
-            
-            setState(prev => ({
-              ...prev,
-              extractedBookedCruises: [...prev.extractedBookedCruises, ...formattedCruises]
-            }));
-            
-            addLog(`✅ Processed ${data.length} bookings from network capture`, 'success');
+          // Check for error responses first
+          if (data.message && !data.payload && !data.status) {
+            addLog(`⚠️ Captured error response: ${data.message}`, 'warning');
+            addLog(`📦 Captured ${endpoint} API payload (ERROR)`, 'warning');
+            break;
+          }
+          
+          // Royal Caribbean API structure: data.payload.profileBookings
+          let bookings = null;
+          if (data.payload && Array.isArray(data.payload.profileBookings)) {
+            bookings = data.payload.profileBookings;
+            addLog(`✅ Found ${bookings.length} bookings in payload.profileBookings`, 'success');
+          } else if (Array.isArray(data.profileBookings)) {
+            bookings = data.profileBookings;
+            addLog(`✅ Found ${bookings.length} bookings in profileBookings`, 'success');
+          } else if (Array.isArray(data)) {
+            bookings = data;
+            addLog(`✅ Found ${bookings.length} bookings in root array`, 'success');
           } else if (data.bookings && Array.isArray(data.bookings)) {
-            const formattedCruises = data.bookings.map((booking: any) => ({
-              sourcePage: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
-              shipName: booking.shipName || booking.shipCode + ' of the Seas',
-              shipCode: booking.shipCode,
-              cruiseTitle: booking.cruiseTitle || booking.numberOfNights + ' Night Cruise',
-              sailingStartDate: booking.sailDate,
-              sailingEndDate: booking.sailingEndDate || '',
-              sailingDates: booking.sailingDates || '',
-              itinerary: booking.itinerary || '',
-              departurePort: booking.departurePort || '',
-              arrivalPort: booking.arrivalPort || '',
-              cabinType: booking.stateroomType || '',
-              cabinCategory: booking.stateroomCategoryCode || '',
-              cabinNumberOrGTY: booking.stateroomNumber === 'GTY' ? 'GTY' : booking.stateroomNumber,
-              deckNumber: booking.deckNumber || '',
-              bookingId: booking.bookingId,
-              numberOfGuests: booking.passengers?.length.toString() || '1',
-              numberOfNights: booking.numberOfNights,
-              daysToGo: '',
-              status: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
-              holdExpiration: booking.offerExpirationDate || '',
-              loyaltyLevel: '',
-              loyaltyPoints: '',
-              paidInFull: booking.paidInFull ? 'Yes' : 'No',
-              balanceDue: booking.balanceDueAmount?.toString() || '0',
-              musterStation: booking.musterStation || '',
-              bookingStatus: booking.bookingStatus,
-              packageCode: booking.packageCode || '',
-              passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
-              stateroomNumber: booking.stateroomNumber,
-              stateroomCategoryCode: booking.stateroomCategoryCode,
-              stateroomType: booking.stateroomType
-            }));
-            
-            setState(prev => ({
-              ...prev,
-              extractedBookedCruises: [...prev.extractedBookedCruises, ...formattedCruises]
-            }));
-            
-            addLog(`✅ Processed ${data.bookings.length} bookings from network capture`, 'success');
+            bookings = data.bookings;
+            addLog(`✅ Found ${bookings.length} bookings in bookings array`, 'success');
           } else if (data.data && Array.isArray(data.data.bookings)) {
-            const formattedCruises = data.data.bookings.map((booking: any) => ({
+            bookings = data.data.bookings;
+            addLog(`✅ Found ${bookings.length} bookings in data.bookings`, 'success');
+          } else {
+            addLog(`⚠️ Bookings data structure not recognized. Type: ${typeof data}, Keys: ${Object.keys(data).join(', ')}`, 'warning');
+            if (data.payload) {
+              addLog(`📦 Payload keys: ${Object.keys(data.payload).join(', ')}`, 'info');
+            }
+            addLog(`📦 Captured ${endpoint} API payload (UNKNOWN STRUCTURE)`, 'warning');
+            break;
+          }
+          
+          if (bookings && bookings.length > 0) {
+            const formattedCruises = bookings.map((booking: any) => ({
               sourcePage: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
               shipName: booking.shipName || booking.shipCode + ' of the Seas',
               shipCode: booking.shipCode,
@@ -411,9 +361,22 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               extractedBookedCruises: [...prev.extractedBookedCruises, ...formattedCruises]
             }));
             
-            addLog(`✅ Processed ${data.data.bookings.length} bookings from network capture (data.data.bookings)`, 'success');
+            // Determine status based on endpoint
+            const isCourtesyHold = endpoint === 'courtesyHolds';
+            const formattedCruisesWithStatus = formattedCruises.map((c: BookedCruiseRow) => ({
+              ...c,
+              status: isCourtesyHold ? 'Courtesy Hold' : c.status,
+              sourcePage: isCourtesyHold ? 'Courtesy' : c.sourcePage
+            }));
+            
+            setState(prev => ({
+              ...prev,
+              extractedBookedCruises: [...prev.extractedBookedCruises, ...formattedCruisesWithStatus]
+            }));
+            
+            addLog(`✅ Processed ${bookings.length} ${endpoint === 'courtesyHolds' ? 'courtesy holds' : 'bookings'} from network capture`, 'success');
           } else {
-            addLog(`⚠️ Bookings data structure not recognized. Type: ${typeof data}, Keys: ${Object.keys(data || {}).join(', ')}`, 'warning');
+            addLog(`⚠️ No bookings found after structure detection`, 'warning');
           }
         }
         
