@@ -2,12 +2,16 @@ export const AUTH_DETECTION_SCRIPT = `
 (function() {
   let lastAuthState = null;
   let checkCount = 0;
-  const capturedPayloads = {
-    offers: null,
-    upcomingCruises: null,
-    courtesyHolds: null,
-    loyalty: null
-  };
+  
+  // Store captured payloads in window object so step scripts can access them
+  if (!window.capturedPayloads) {
+    window.capturedPayloads = {
+      offers: null,
+      upcomingCruises: null,
+      courtesyHolds: null,
+      loyalty: null
+    };
+  }
 
   function interceptNetworkCalls() {
     const originalFetch = window.fetch;
@@ -19,6 +23,7 @@ export const AUTH_DETECTION_SCRIPT = `
         if (typeof url === 'string' && response.ok && response.status === 200) {
           if (url.includes('/api/casino/casino-offers')) {
             clonedResponse.json().then(data => {
+              window.capturedPayloads.offers = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
                 endpoint: 'offers',
@@ -35,6 +40,7 @@ export const AUTH_DETECTION_SCRIPT = `
           
           if (url.includes('/api/account/upcoming-cruises') || url.includes('/api/profile/bookings/enrichment') || url.includes('/api/profile/bookings')) {
             clonedResponse.json().then(data => {
+              window.capturedPayloads.upcomingCruises = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
                 endpoint: 'upcomingCruises',
@@ -52,6 +58,7 @@ export const AUTH_DETECTION_SCRIPT = `
           
           if (url.includes('/api/account/courtesy-holds')) {
             clonedResponse.json().then(data => {
+              window.capturedPayloads.courtesyHolds = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
                 endpoint: 'courtesyHolds',
@@ -69,6 +76,7 @@ export const AUTH_DETECTION_SCRIPT = `
           
           if (url.includes('/account/loyalty-programs') || url.includes('/api/loyalty') || url.includes('/api/profile/loyalty') || url.includes('/api/account/info')) {
             clonedResponse.json().then(data => {
+              window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
                 endpoint: 'loyalty',
@@ -103,6 +111,7 @@ export const AUTH_DETECTION_SCRIPT = `
             const data = JSON.parse(this.responseText);
             
             if (this._url.includes('/api/casino/casino-offers')) {
+              window.capturedPayloads.offers = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
                 endpoint: 'offers',
@@ -117,6 +126,7 @@ export const AUTH_DETECTION_SCRIPT = `
             }
             
             if (this._url.includes('/api/account/upcoming-cruises') || this._url.includes('/api/profile/bookings/enrichment') || this._url.includes('/api/profile/bookings')) {
+              window.capturedPayloads.upcomingCruises = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
                 endpoint: 'upcomingCruises',
@@ -132,6 +142,7 @@ export const AUTH_DETECTION_SCRIPT = `
             }
             
             if (this._url.includes('/api/account/courtesy-holds')) {
+              window.capturedPayloads.courtesyHolds = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
                 endpoint: 'courtesyHolds',
@@ -147,6 +158,7 @@ export const AUTH_DETECTION_SCRIPT = `
             }
             
             if (this._url.includes('/account/loyalty-programs') || this._url.includes('/api/loyalty') || this._url.includes('/api/profile/loyalty') || this._url.includes('/api/account/info')) {
+              window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
                 endpoint: 'loyalty',

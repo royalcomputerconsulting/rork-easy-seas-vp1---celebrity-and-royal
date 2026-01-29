@@ -498,8 +498,51 @@ export const STEP3_HOLDS_SCRIPT = `
 
       await wait(2000);
 
+      // FIRST: Check if we have captured payloads from network monitor
+      if (window.capturedPayloads && window.capturedPayloads.courtesyHolds) {
+        log('✅ Found captured courtesy holds payload from network monitor!', 'success');
+        var capturedData = window.capturedPayloads.courtesyHolds;
+        log('📦 Captured data keys: ' + Object.keys(capturedData).join(', '), 'info');
+        
+        // Extract courtesy holds from captured payload
+        var holdsFromCapture = null;
+        if (capturedData.payload && capturedData.payload.sailingInfo) {
+          holdsFromCapture = capturedData.payload.sailingInfo;
+          log('✅ Found ' + holdsFromCapture.length + ' holds in payload.sailingInfo', 'success');
+        } else if (capturedData.sailingInfo) {
+          holdsFromCapture = capturedData.sailingInfo;
+          log('✅ Found ' + holdsFromCapture.length + ' holds in sailingInfo', 'success');
+        }
+        
+        if (holdsFromCapture && holdsFromCapture.length > 0) {
+          log('✅ Using ' + holdsFromCapture.length + ' holds from captured payload', 'success');
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'step_complete',
+            step: 3,
+            totalCount: holdsFromCapture.length
+          }));
+          
+          log('✅ Step 3 Complete: Extracted ' + holdsFromCapture.length + ' courtesy holds', 'success');
+          return;
+        } else {
+          log('ℹ️ Captured payload shows 0 courtesy holds', 'info');
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'step_complete',
+            step: 3,
+            totalCount: 0
+          }));
+          
+          log('✅ Step 3 Complete: No courtesy holds found', 'info');
+          return;
+        }
+      } else {
+        log('📝 No captured courtesy holds payload, trying fallback methods...', 'info');
+      }
+
       // Try API extraction first (more reliable, gets enrichment data)
-      var apiHolds = await fetchCourtesyHoldsViaAPI();
+      var apiHolds = null;
       
       var holds = [];
       

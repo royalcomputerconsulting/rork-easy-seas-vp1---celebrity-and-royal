@@ -476,6 +476,40 @@ export const STEP4_LOYALTY_SCRIPT = `
       log('🔄 Waiting for page to fully load...', 'info');
       await wait(5000);
 
+      // FIRST: Check if we have captured payloads from network monitor
+      if (window.capturedPayloads && window.capturedPayloads.loyalty) {
+        log('✅ Found captured loyalty payload from network monitor!', 'success');
+        var capturedData = window.capturedPayloads.loyalty;
+        log('📦 Captured data keys: ' + Object.keys(capturedData).join(', '), 'info');
+        
+        // Extract loyalty info from captured payload
+        var loyaltyPayload = capturedData.payload || capturedData;
+        var loyaltyInfo = loyaltyPayload.loyaltyInformation || loyaltyPayload;
+        var accountId = loyaltyPayload.accountId || '';
+        
+        if (loyaltyInfo) {
+          log('✅ Using loyalty data from captured payload', 'success');
+          
+          // Send the loyalty data
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'extended_loyalty_data',
+            data: loyaltyInfo,
+            accountId: accountId
+          }));
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'step_complete',
+            step: 4,
+            totalCount: 1
+          }));
+          
+          log('✅ Step 4 Complete: Loyalty data extracted from captured payload', 'success');
+          return;
+        }
+      } else {
+        log('📝 No captured loyalty payload, trying other methods...', 'info');
+      }
+
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
         current: 20,
@@ -483,7 +517,7 @@ export const STEP4_LOYALTY_SCRIPT = `
         stepName: 'Checking embedded page data...'
       }));
 
-      // FIRST: Try to extract from embedded page data (most reliable)
+      // SECOND: Try to extract from embedded page data (most reliable)
       log('📄 Step 1: Trying to extract from embedded page data (__NEXT_DATA__)...', 'info');
       var pageState = extractFromPageState();
       

@@ -693,9 +693,61 @@ export const STEP2_UPCOMING_SCRIPT = `
       // The page will make its own API calls which are captured by network monitor
       // We don't need to make manual API calls here
       log('📡 Network monitor should have captured API calls from page load', 'info');
-      log('📝 If no bookings were captured, falling back to DOM scraping...', 'info');
       
-      // Try embedded page data first
+      // FIRST: Check if we have captured payloads from network monitor
+      if (window.capturedPayloads && window.capturedPayloads.upcomingCruises) {
+        log('✅ Found captured payload from network monitor!', 'success');
+        var capturedData = window.capturedPayloads.upcomingCruises;
+        log('📦 Captured data structure: ' + JSON.stringify(Object.keys(capturedData)).substring(0, 200), 'info');
+        
+        // Extract bookings from captured payload
+        var bookingsFromCapture = null;
+        if (capturedData.payload && capturedData.payload.sailingInfo) {
+          bookingsFromCapture = capturedData.payload.sailingInfo;
+          log('✅ Found ' + bookingsFromCapture.length + ' bookings in payload.sailingInfo', 'success');
+        } else if (capturedData.sailingInfo) {
+          bookingsFromCapture = capturedData.sailingInfo;
+          log('✅ Found ' + bookingsFromCapture.length + ' bookings in sailingInfo', 'success');
+        } else {
+          log('⚠️ Captured payload does not contain sailingInfo', 'warning');
+          log('📦 Payload keys: ' + Object.keys(capturedData).join(', '), 'info');
+        }
+        
+        if (bookingsFromCapture && bookingsFromCapture.length > 0) {
+          log('✅ Using ' + bookingsFromCapture.length + ' bookings from captured payload', 'success');
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'progress',
+            current: 40,
+            total: 100,
+            stepName: 'Processing ' + bookingsFromCapture.length + ' cruises from API...'
+          }));
+          
+          // These are already enriched bookings from the API, so we can parse them directly
+          var cruises = parseBookingsWithEnrichment(bookingsFromCapture, {});
+          
+          log('📤 Sending ' + cruises.length + ' cruises to app...', 'info');
+          for (var i = 0; i < cruises.length; i++) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'cruise_batch',
+              data: [cruises[i]]
+            }));
+          }
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'step_complete',
+            step: 2,
+            totalCount: cruises.length
+          }));
+          
+          log('✅ Step 2 Complete: Extracted ' + cruises.length + ' upcoming cruises', 'success');
+          return;
+        }
+      } else {
+        log('📝 No captured payload available, trying other methods...', 'info');
+      }
+      
+      // Try embedded page data
       log('📄 Trying to extract from embedded page data...', 'info');
       var pageStateResult = extractFromPageState();
       
