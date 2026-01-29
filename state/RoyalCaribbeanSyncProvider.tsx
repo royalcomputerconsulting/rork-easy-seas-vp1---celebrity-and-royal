@@ -358,17 +358,30 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }
       
-      // Step 4: Fetch loyalty data using Bearer token auth (no navigation needed)
+      // Step 4: Navigate to Crown & Anchor page and fetch loyalty data
       setState(prev => ({ ...prev, status: 'running_step_4' }));
-      addLog('Step 4: Fetching loyalty data...', 'info');
+      addLog('Step 4: Navigating to Crown & Anchor page for loyalty data...', 'info');
+      addLog('Loading Crown & Anchor Page...', 'info');
       
       try {
         if (webViewRef.current) {
-          // No navigation needed - Bearer token auth works from any page
-          // Just inject the loyalty extraction script directly
+          // Navigate to Crown & Anchor page to establish proper session for loyalty API
+          const loyaltyPageUrl = cruiseLine === 'celebrity' 
+            ? 'https://www.celebritycruises.com/account/captains-club'
+            : 'https://www.royalcaribbean.com/account/crown-anchor-society';
+          
+          webViewRef.current.injectJavaScript(`
+            window.location.href = '${loyaltyPageUrl}';
+            true;
+          `);
+          
+          // Wait for page to load and session to establish
+          await new Promise(resolve => setTimeout(resolve, 6000));
+          
+          // Now inject the loyalty extraction script
           webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
           
-          await waitForStepComplete(4, 30000);
+          await waitForStepComplete(4, 45000);
         }
       } catch (step4Error) {
         addLog(`Step 4 error: ${step4Error} - continuing without loyalty data`, 'warning');
@@ -459,7 +472,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, state.scrapePricingAndItinerary, state.extractedBookedCruises, addLog, config]);
+  }, [state.status, state.scrapePricingAndItinerary, state.extractedBookedCruises, addLog, config, cruiseLine]);
 
   const exportOffersCSV = useCallback(async () => {
     try {

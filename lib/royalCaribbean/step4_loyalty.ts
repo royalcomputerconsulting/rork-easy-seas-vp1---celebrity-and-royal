@@ -72,7 +72,7 @@ export const STEP4_LOYALTY_SCRIPT = `
       
       var response = await fetch(endpoint, {
         method: 'GET',
-        credentials: 'omit',
+        credentials: 'include',
         headers: headers
       });
 
@@ -171,10 +171,52 @@ export const STEP4_LOYALTY_SCRIPT = `
     }
   }
 
+  // Valid Crown & Anchor tiers
+  var VALID_CA_TIERS = ['gold', 'platinum', 'emerald', 'diamond', 'diamond plus', 'pinnacle'];
+  // Valid Club Royale tiers  
+  var VALID_CR_TIERS = ['choice', 'classic', 'prime', 'premier', 'signature', 'masters'];
+
+  function isValidLoyaltyData(data) {
+    if (!data) return false;
+    
+    // Check if we have at least one valid tier
+    var caTier = (data.crownAndAnchorLevel || '').toLowerCase().trim();
+    var crTier = (data.clubRoyaleTier || '').toLowerCase().trim();
+    
+    var hasValidCATier = caTier && VALID_CA_TIERS.some(function(t) { 
+      return caTier.indexOf(t) !== -1; 
+    });
+    var hasValidCRTier = crTier && VALID_CR_TIERS.some(function(t) { 
+      return crTier.indexOf(t) !== -1; 
+    });
+    
+    // Check if we have reasonable points
+    var caPoints = parseInt(data.crownAndAnchorPoints || '0', 10);
+    var crPoints = parseInt(data.clubRoyalePoints || '0', 10);
+    var hasValidPoints = (caPoints > 0 && caPoints < 10000000) || (crPoints > 0 && crPoints < 10000000);
+    
+    // Must have at least one valid tier OR valid points to be considered valid
+    var isValid = hasValidCATier || hasValidCRTier || hasValidPoints;
+    
+    if (!isValid) {
+      log('⚠️ Extracted data failed validation - not sending garbage', 'warning');
+      log('   C&A Tier: "' + caTier + '" valid=' + hasValidCATier, 'info');
+      log('   CR Tier: "' + crTier + '" valid=' + hasValidCRTier, 'info');
+      log('   Points valid=' + hasValidPoints, 'info');
+    }
+    
+    return isValid;
+  }
+
   async function extractLoyaltyData() {
     try {
       log('🚀 ====== STEP 4: LOYALTY DATA ======', 'info');
       log('📍 Current URL: ' + window.location.href, 'info');
+
+      // Check if we're on an error page
+      if (window.location.href.includes('/error') || window.location.href.includes('/errors')) {
+        log('⚠️ Currently on an error page - API may fail', 'warning');
+      }
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
@@ -183,8 +225,8 @@ export const STEP4_LOYALTY_SCRIPT = `
         stepName: 'Fetching loyalty data...'
       }));
 
-      // Small wait to ensure any pending operations complete
-      await wait(1000);
+      // Wait for page to stabilize
+      await wait(2000);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
@@ -193,12 +235,12 @@ export const STEP4_LOYALTY_SCRIPT = `
         stepName: 'Calling loyalty API...'
       }));
 
-      // Fetch loyalty data using Bearer token auth (same as Step 1)
+      // Fetch loyalty data using Bearer token auth
       var loyaltyResult = await fetchLoyaltyData();
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
-        current: 80,
+        current: 60,
         total: 100,
         stepName: 'Processing loyalty data...'
       }));
@@ -208,17 +250,22 @@ export const STEP4_LOYALTY_SCRIPT = `
       } else {
         log('⚠️ API method failed - trying DOM fallback...', 'warning');
         
+        // Wait a moment then try DOM extraction
+        await wait(1000);
+        
         // Try to extract from DOM as fallback
         log('📄 Attempting DOM fallback for loyalty data...', 'info');
         var domLoyalty = extractLoyaltyFromDOM();
-        if (domLoyalty) {
-          log('✅ Extracted loyalty data from DOM', 'success');
+        
+        // Validate extracted data - don't send garbage
+        if (domLoyalty && isValidLoyaltyData(domLoyalty)) {
+          log('✅ Extracted valid loyalty data from DOM', 'success');
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'loyalty_data',
             data: domLoyalty
           }));
         } else {
-          log('⚠️ Step 4 Complete: Could not extract loyalty data from API or DOM', 'warning');
+          log('⚠️ Step 4 Complete: Could not extract valid loyalty data from API or DOM', 'warning');
         }
       }
 
@@ -262,25 +309,41 @@ export const STEP4_LOYALTY_SCRIPT = `
         clubRoyalePoints: ''
       };
       
-      // Crown & Anchor tier patterns - look for specific tier names
-      var caTierPatterns = [
-        /Crown\\s*(?:&|and)?\\s*Anchor[^\\w]*(Gold|Platinum|Emerald|Diamond|Diamond\\s*Plus|Pinnacle)/i,
-        /(Gold|Platinum|Emerald|Diamond|Diamond\\s*Plus|Pinnacle)\\s*(?:Member|Status|Tier)/i,
-        /Your\\s+(?:current\\s+)?tier[:\\s]*(Gold|Platinum|Emerald|Diamond|Diamond\\s*Plus|Pinnacle)/i
-      ];
+      log('📄 Scanning page for loyalty data...', 'info');
+      log('📄 Page text length: ' + pageText.length + ' chars', 'info');
       
-      for (var i = 0; i < caTierPatterns.length; i++) {
-        var match = pageText.match(caTierPatterns[i]);
-        if (match && match[1]) {
-          result.crownAndAnchorLevel = match[1].trim();
-          break;
+      // First check for "Diamond Plus" explicitly (multi-word tier)
+      var diamondPlusMatch = pageText.match(/Diamond\\s+Plus/i);
+      if (diamondPlusMatch) {
+        result.crownAndAnchorLevel = 'Diamond Plus';
+        log('📄 Found Crown & Anchor tier: Diamond Plus', 'success');
+      } else {
+        // Crown & Anchor tier patterns - more specific patterns
+        var caTierPatterns = [
+          /Crown\\s*(?:&|and)?\\s*Anchor[^a-zA-Z]{0,30}(Pinnacle|Emerald|Diamond|Platinum|Gold)/i,
+          /(?:Your|My)?\\s*(?:current\\s*)?(?:status|tier|level|membership)[:\\s\\-]{0,10}(Pinnacle|Emerald|Diamond|Platinum|Gold)/i,
+          /(Pinnacle|Emerald|Diamond|Platinum|Gold)\\s*(?:Member|Status|Tier|Level)/i,
+          /\\b(Pinnacle|Emerald|Diamond|Platinum|Gold)\\s+member\\b/i
+        ];
+        
+        for (var i = 0; i < caTierPatterns.length; i++) {
+          var match = pageText.match(caTierPatterns[i]);
+          if (match && match[1]) {
+            var tier = match[1].trim();
+            // Verify it's a valid tier name
+            if (VALID_CA_TIERS.indexOf(tier.toLowerCase()) !== -1) {
+              result.crownAndAnchorLevel = tier;
+              log('📄 Found Crown & Anchor tier: ' + tier, 'success');
+              break;
+            }
+          }
         }
       }
       
-      // Crown & Anchor points patterns
+      // Crown & Anchor points patterns - look for cruise credits/points
       var caPointsPatterns = [
-        /([\\d,]+)\\s*(?:cruise\\s*)?points/i,
-        /(?:total|earned|current)\\s*(?:cruise\\s*)?points[:\\s]*([\\d,]+)/i
+        /([\\d,]+)\\s*(?:cruise\\s*)?(?:credits|points)(?:\\s*earned)?/i,
+        /(?:total|earned|current|lifetime)\\s*(?:cruise\\s*)?(?:credits|points)[:\\s]*([\\d,]+)/i
       ];
       
       for (var j = 0; j < caPointsPatterns.length; j++) {
@@ -289,42 +352,49 @@ export const STEP4_LOYALTY_SCRIPT = `
           var pointVal = pMatch[1] || pMatch[2];
           if (pointVal) {
             var numPoints = parseInt(pointVal.replace(/,/g, ''), 10);
+            // Crown & Anchor points are typically in the range of 1-100000+
             if (numPoints >= 1 && numPoints <= 10000000) {
-              result.crownAndAnchorPoints = pointVal.replace(/,/g, '');
+              result.crownAndAnchorPoints = numPoints.toString();
+              log('📄 Found Crown & Anchor points: ' + numPoints, 'success');
               break;
             }
           }
         }
       }
       
-      // Club Royale tier patterns - look for specific tier names
+      // Club Royale tier patterns
       var crTierPatterns = [
-        /Club\\s*Royale[^\\w]*(Signature|Premier|Classic|Prime|Choice|Masters)/i,
-        /(Signature|Premier|Classic|Prime|Choice|Masters)\\s*(?:Member|Status|Tier)/i,
-        /Casino\\s*(?:Status|Tier)[:\\s]*(Signature|Premier|Classic|Prime|Choice|Masters)/i
+        /Club\\s*Royale[^a-zA-Z]{0,30}(Masters|Signature|Premier|Prime|Classic|Choice)/i,
+        /(?:Casino|CR)\\s*(?:Status|Tier|Level)[:\\s\\-]{0,10}(Masters|Signature|Premier|Prime|Classic|Choice)/i,
+        /(Masters|Signature|Premier|Prime|Classic|Choice)\\s*(?:Member|Status|Tier)/i
       ];
       
       for (var k = 0; k < crTierPatterns.length; k++) {
         var crMatch = pageText.match(crTierPatterns[k]);
         if (crMatch && crMatch[1]) {
-          result.clubRoyaleTier = crMatch[1].trim();
-          break;
+          var crTier = crMatch[1].trim();
+          if (VALID_CR_TIERS.indexOf(crTier.toLowerCase()) !== -1) {
+            result.clubRoyaleTier = crTier;
+            log('📄 Found Club Royale tier: ' + crTier, 'success');
+            break;
+          }
         }
       }
       
-      // Club Royale points patterns
+      // Club Royale points/credits patterns
       var crPointsPatterns = [
-        /(?:tier\\s*)?credits[:\\s]*([\\d,]+)/i,
-        /([\\d,]+)\\s*(?:tier\\s*)?credits/i,
-        /casino\\s*points[:\\s]*([\\d,]+)/i
+        /tier\\s*credits[:\\s]*([\\d,]+)/i,
+        /([\\d,]+)\\s*tier\\s*credits/i
       ];
       
       for (var l = 0; l < crPointsPatterns.length; l++) {
         var crpMatch = pageText.match(crPointsPatterns[l]);
         if (crpMatch && crpMatch[1]) {
           var crPoints = parseInt(crpMatch[1].replace(/,/g, ''), 10);
+          // Club Royale tier credits are typically 0-100000+
           if (crPoints >= 0 && crPoints <= 10000000) {
-            result.clubRoyalePoints = crpMatch[1].replace(/,/g, '');
+            result.clubRoyalePoints = crPoints.toString();
+            log('📄 Found Club Royale points: ' + crPoints, 'success');
             break;
           }
         }
@@ -334,17 +404,16 @@ export const STEP4_LOYALTY_SCRIPT = `
                     result.clubRoyaleTier || result.clubRoyalePoints;
       
       if (hasData) {
-        log('📄 DOM extraction found:', 'info');
-        if (result.crownAndAnchorLevel || result.crownAndAnchorPoints) {
-          log('   C&A: ' + (result.crownAndAnchorLevel || 'N/A') + ' / ' + (result.crownAndAnchorPoints || '0') + ' pts', 'info');
-        }
-        if (result.clubRoyaleTier || result.clubRoyalePoints) {
-          log('   CR: ' + (result.clubRoyaleTier || 'N/A') + ' / ' + (result.clubRoyalePoints || '0') + ' pts', 'info');
-        }
+        log('📄 DOM extraction summary:', 'info');
+        log('   C&A Tier: ' + (result.crownAndAnchorLevel || '[not found]'), 'info');
+        log('   C&A Points: ' + (result.crownAndAnchorPoints || '[not found]'), 'info');
+        log('   CR Tier: ' + (result.clubRoyaleTier || '[not found]'), 'info');
+        log('   CR Points: ' + (result.clubRoyalePoints || '[not found]'), 'info');
         return result;
       }
       
-      log('📄 DOM extraction: No loyalty data found on page', 'info');
+      log('📄 DOM extraction: No loyalty data found on page', 'warning');
+      log('📄 Page might be an error page or not a loyalty page', 'warning');
       return null;
     } catch (e) {
       log('⚠️ DOM extraction failed: ' + e.message, 'warning');
