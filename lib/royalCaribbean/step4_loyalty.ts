@@ -215,6 +215,86 @@ export const STEP4_LOYALTY_SCRIPT = `
       log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
       log('📊 LOYALTY DATA EXTRACTION RESULTS', 'success');
       log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+      log('', 'info');
+      
+      if (loyalty.crownAndAnchorSocietyLoyaltyTier) {
+        var caPoints = loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints || 0;
+        var caNextTier = loyalty.crownAndAnchorSocietyNextTier || '';
+        var caRemaining = loyalty.crownAndAnchorSocietyRemainingPoints || 0;
+        var caPercentage = loyalty.crownAndAnchorTrackerPercentage || 0;
+        log('   👑 Crown & Anchor Society (Loyalty):', 'info');
+        log('      Tier: ' + loyalty.crownAndAnchorSocietyLoyaltyTier, 'success');
+        log('      Points: ' + caPoints.toLocaleString() + ' cruise credits', 'success');
+        log('      ID: ' + (loyalty.crownAndAnchorId || 'N/A'), 'info');
+        if (caNextTier) {
+          log('      Next Tier: ' + caNextTier + ' (' + caRemaining.toLocaleString() + ' pts away, ' + caPercentage + '% complete)', 'info');
+        }
+      } else {
+        log('   👑 Crown & Anchor Society: Not found in API response', 'warning');
+      }
+      log('', 'info');
+      
+      if (loyalty.clubRoyaleLoyaltyTier) {
+        var crPoints = loyalty.clubRoyaleLoyaltyIndividualPoints || 0;
+        log('   🎰 Club Royale (Casino Loyalty):', 'info');
+        log('      Tier: ' + loyalty.clubRoyaleLoyaltyTier, 'success');
+        log('      Points: ' + crPoints.toLocaleString() + ' tier credits', 'success');
+      } else {
+        log('   🎰 Club Royale (Casino): Not found in API response', 'warning');
+      }
+      log('', 'info');
+      
+      if (loyalty.captainsClubLoyaltyTier) {
+        var ccPoints = loyalty.captainsClubLoyaltyIndividualPoints || 0;
+        var ccNextTier = loyalty.captainsClubNextTier || '';
+        var ccRemaining = loyalty.captainsClubRemainingPoints || 0;
+        var ccPercentage = loyalty.captainsClubTrackerPercentage || 0;
+        log('   ⚓ Captain\'s Club (Celebrity Loyalty):', 'info');
+        log('      Tier: ' + loyalty.captainsClubLoyaltyTier, 'success');
+        log('      Points: ' + ccPoints.toLocaleString(), 'success');
+        log('      ID: ' + (loyalty.captainsClubId || 'N/A'), 'info');
+        if (ccNextTier) {
+          log('      Next Tier: ' + ccNextTier + ' (' + ccRemaining.toLocaleString() + ' pts away, ' + ccPercentage + '% complete)', 'info');
+        }
+      }
+      log('', 'info');
+      
+      if (loyalty.celebrityBlueChipLoyaltyTier) {
+        var bcPoints = loyalty.celebrityBlueChipLoyaltyIndividualPoints || 0;
+        log('   💎 Blue Chip Club (Celebrity Casino):', 'info');
+        log('      Tier: ' + loyalty.celebrityBlueChipLoyaltyTier, 'success');
+        log('      Points: ' + bcPoints.toLocaleString(), 'success');
+      }
+      log('', 'info');
+      
+      if (loyalty.venetianSocietyLoyaltyTier) {
+        log('   🚢 Venetian Society (Silversea):', 'info');
+        log('      Tier: ' + loyalty.venetianSocietyLoyaltyTier, 'success');
+        if (loyalty.venetianSocietyNextTier) {
+          log('      Next Tier: ' + loyalty.venetianSocietyNextTier, 'info');
+        }
+        if (loyalty.vsMemberNumber) {
+          log('      Member #: ' + loyalty.vsMemberNumber, 'info');
+        }
+      }
+      
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+      log('📋 COMPLETE API PAYLOAD:', 'info');
+      log('   Account ID: ' + (loyaltyResult.accountId || 'N/A'), 'info');
+      log('   Crown & Anchor ID: ' + (loyalty.crownAndAnchorId || 'N/A'), 'info');
+      log('   C&A Tier: ' + (loyalty.crownAndAnchorSocietyLoyaltyTier || 'N/A'), 'info');
+      log('   C&A Points: ' + (loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints || 0), 'info');
+      log('   Club Royale Tier: ' + (loyalty.clubRoyaleLoyaltyTier || 'N/A'), 'info');
+      log('   Club Royale Points: ' + (loyalty.clubRoyaleLoyaltyIndividualPoints || 0), 'info');
+      if (loyalty.captainsClubLoyaltyTier) {
+        log('   Captain\'s Club Tier: ' + loyalty.captainsClubLoyaltyTier, 'info');
+        log('   Captain\'s Club Points: ' + (loyalty.captainsClubLoyaltyIndividualPoints || 0), 'info');
+      }
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+      
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+      log('📊 LOYALTY DATA EXTRACTION RESULTS', 'success');
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
       
       if (loyalty.crownAndAnchorSocietyLoyaltyTier) {
         var caPoints = loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints || 0;

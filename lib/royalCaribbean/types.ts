@@ -146,14 +146,65 @@ export interface BookedCruiseRow {
   loyaltyPoints: string;
   paidInFull?: string;
   balanceDue?: string;
+  balanceDueAmount?: number;
+  depositAmountDue?: number;
   musterStation?: string;
   holdExpiration?: string;
+  offerExpirationDate?: string;
   bookingStatus?: string;
   packageCode?: string;
   passengerStatus?: string;
   stateroomNumber?: string;
   stateroomCategoryCode?: string;
   stateroomType?: string;
+  stateroomSubtype?: string;
+  stateroomDescription?: string;
+  bookingChannel?: string;
+  bookingCurrency?: string;
+  bookingOfficeCountryCode?: string;
+  officeCode?: string;
+  bookingType?: string;
+  brand?: string;
+  consumerId?: string;
+  grantorPassengerId?: string;
+  linkFlow?: string;
+  linkType?: string;
+  masterBookingId?: string;
+  masterPassengerId?: string;
+  passengerId?: string;
+  preferred?: boolean;
+  isDirect?: boolean;
+  isBoardingExpressEnabled?: boolean;
+  isInternationalBooking?: boolean;
+  amendToken?: string;
+  passengers?: Array<{
+    birthdate?: string;
+    consumerId?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    hasFlight?: boolean;
+    passengerId?: string;
+    passengerStatus?: string;
+    stateroomNumber?: string;
+    stateroomCategoryCode?: string;
+    stateroomType?: string;
+    title?: string;
+  }>;
+  passengersInStateroom?: Array<{
+    birthdate?: string;
+    consumerId?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    hasFlight?: boolean;
+    passengerId?: string;
+    passengerStatus?: string;
+    stateroomNumber?: string;
+    stateroomCategoryCode?: string;
+    stateroomType?: string;
+    title?: string;
+  }>;
 }
 
 export interface ProgressInfo {

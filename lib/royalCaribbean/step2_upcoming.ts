@@ -517,7 +517,8 @@ export const STEP2_UPCOMING_SCRIPT = `
       var portSummary = departurePort ? (isOneWay ? departurePort + ' → ' + arrivalPort : departurePort) : 'No port data';
       var cabinDisplay = cabinNumber ? cabinNumber : 'GTY';
       var cabinTypeDisplay = cabinType || 'Unknown';
-      log('  ✓ ' + shipName + ' - ' + sailingStartDate + ' - ' + cabinTypeDisplay + ' #' + cabinDisplay + ' - Deck ' + (deckNumber || 'N/A') + ' - Booking: ' + booking.bookingId + ' - ' + status, 'success');
+      var cabinCategoryDisplay = stateroomCategoryCode ? ' (Cat: ' + stateroomCategoryCode + ')' : '';
+      log('  ✓ ' + shipName + ' - ' + sailingStartDate + ' - ' + cabinTypeDisplay + cabinCategoryDisplay + ' #' + cabinDisplay + ' - Deck ' + (deckNumber || 'N/A') + ' - Booking: ' + booking.bookingId + ' - ' + status, 'success');
     }
     
     log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
@@ -526,6 +527,13 @@ export const STEP2_UPCOMING_SCRIPT = `
     log('  📥 Total bookings from API: ' + bookings.length, 'info');
     log('  ✓ Successfully processed: ' + processedBookings.length, 'success');
     log('  ⏭️ Skipped (cancelled): ' + skippedBookings.length, 'info');
+    log('', 'info');
+    log('📋 DETAILED CRUISE INFORMATION:', 'info');
+    for (var detailIdx = 0; detailIdx < cruises.length && detailIdx < 15; detailIdx++) {
+      var detailCruise = cruises[detailIdx];
+      var roomInfo = detailCruise.cabinType + ' ' + (detailCruise.stateroomCategoryCode || '') + ' #' + detailCruise.cabinNumberOrGTY;
+      log('  ' + (detailIdx + 1) + '. ' + detailCruise.shipName + ' - ' + detailCruise.sailingStartDate + ' | ' + roomInfo + ' | Booking: ' + detailCruise.bookingId, 'info');
+    }
     
     if (skippedBookings.length > 0) {
       log('  📋 Skipped details: ' + skippedBookings.join(', '), 'info');

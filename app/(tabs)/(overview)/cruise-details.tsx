@@ -670,6 +670,96 @@ export default function CruiseDetailsScreen() {
             <CompactFact icon={Dice5} value={casinoAvailability ? `${casinoAvailability.casinoOpenDays}/${casinoAvailability.totalDays} casino` : '—'} />
           </View>
 
+          {isBooked && (cruise as BookedCruise).bookingId && (
+            <View style={styles.cruiseDetailsSection}>
+              <View style={styles.sectionHeader}>
+                <Ship size={20} color={COLORS.beigeWarm} />
+                <Text style={styles.sectionTitle}>Cruise Details</Text>
+              </View>
+              
+              <View style={styles.detailsGrid}>
+                {(cruise as BookedCruise).bookingId && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailRowLabel}>Booking ID</Text>
+                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).bookingId}</Text>
+                  </View>
+                )}
+                
+                {(cruise as BookedCruise).stateroomNumber && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailRowLabel}>Stateroom</Text>
+                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomNumber}</Text>
+                  </View>
+                )}
+                
+                {(cruise as BookedCruise).stateroomCategoryCode && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailRowLabel}>Category Code</Text>
+                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomCategoryCode}</Text>
+                  </View>
+                )}
+                
+                {(cruise as BookedCruise).deckNumber && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailRowLabel}>Deck</Text>
+                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).deckNumber}</Text>
+                  </View>
+                )}
+                
+                {(cruise as BookedCruise).musterStation && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailRowLabel}>Muster Station</Text>
+                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).musterStation}</Text>
+                  </View>
+                )}
+                
+                {(cruise as BookedCruise).packageCode && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailRowLabel}>Package Code</Text>
+                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).packageCode}</Text>
+                  </View>
+                )}
+                
+                {(cruise as BookedCruise).bookingStatus && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailRowLabel}>Booking Status</Text>
+                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).bookingStatus}</Text>
+                  </View>
+                )}
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailRowLabel}>Paid in Full</Text>
+                  <Text style={styles.detailRowValue}>
+                    {(cruise as any).paidInFull === 'Yes' || (cruise as any).paidInFull === true ? 'Yes' : 'No'}
+                  </Text>
+                </View>
+                
+                {((cruise as any).balanceDue && parseFloat((cruise as any).balanceDue) > 0) && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailRowLabel}>Balance Due</Text>
+                    <Text style={[styles.detailRowValue, { color: COLORS.error }]}>
+                      {formatCurrency(parseFloat((cruise as any).balanceDue))}
+                    </Text>
+                  </View>
+                )}
+                
+                {cruise.guests && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailRowLabel}>Number of Guests</Text>
+                    <Text style={styles.detailRowValue}>{cruise.guests}</Text>
+                  </View>
+                )}
+                
+                {(cruise as BookedCruise).guestNames && (cruise as BookedCruise).guestNames!.length > 0 && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailRowLabel}>Guests</Text>
+                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).guestNames!.join(', ')}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
           {((cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 || (cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0) && (
             <View style={styles.fpObcQuickView}>
               {(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 && (
@@ -3226,5 +3316,36 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: 'rgba(30, 64, 175, 0.4)',
+  },
+  cruiseDetailsSection: {
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: '#E0F2FE',
+    ...SHADOW.sm,
+  },
+  detailsGrid: {
+    gap: SPACING.sm,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: '#DBEAFE',
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  detailRowLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textDarkGrey,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  detailRowValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
 });
