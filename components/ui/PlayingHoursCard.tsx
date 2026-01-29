@@ -145,7 +145,7 @@ export function PlayingHoursCard({
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#059669', '#047857']}
+        colors={['#3B82F6', '#2563EB']}
         style={styles.header}
       >
         <View style={styles.headerContent}>
@@ -163,15 +163,12 @@ export function PlayingHoursCard({
           value={formData.enabled}
           onValueChange={handleToggleEnabled}
           trackColor={{ false: 'rgba(255,255,255,0.3)', true: 'rgba(255,255,255,0.5)' }}
-          thumbColor={formData.enabled ? '#10B981' : '#9CA3AF'}
+          thumbColor={formData.enabled ? '#3B82F6' : '#9CA3AF'}
         />
       </LinearGradient>
 
       <View style={styles.content}>
-        <Text style={styles.sectionLabel}>PREFERRED PLAYING SESSIONS</Text>
-        <Text style={styles.sectionHint}>
-          Select when you typically play. These times will be highlighted in GREEN on your daily agenda when the casino is open.
-        </Text>
+        <Text style={styles.sectionLabel}>PLAYING SESSIONS</Text>
 
         <View style={styles.sessionsContainer}>
           {formData.sessions.map((session) => (
@@ -223,7 +220,7 @@ export function PlayingHoursCard({
                   onPress={() => handleEditSession(session)}
                   activeOpacity={0.7}
                 >
-                  <Edit2 size={16} color="#047857" />
+                  <Edit2 size={16} color="#3B82F6" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.sessionActionButton}
@@ -240,19 +237,9 @@ export function PlayingHoursCard({
             onPress={handleAddSession}
             activeOpacity={0.7}
           >
-            <Plus size={18} color="#059669" />
+            <Plus size={16} color="#3B82F6" />
             <Text style={styles.addSessionText}>Add Playing Session</Text>
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.legendContainer}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-            <Text style={styles.legendText}>Opportune Playing Time</Text>
-          </View>
-          <Text style={styles.legendHint}>
-            When your preferred sessions overlap with casino open hours, they will appear highlighted in green on your daily agenda.
-          </Text>
         </View>
 
         <TouchableOpacity 
@@ -261,7 +248,7 @@ export function PlayingHoursCard({
           disabled={isSaving}
         >
           <LinearGradient
-            colors={['#10B981', '#059669']}
+            colors={['#3B82F6', '#2563EB']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.saveButtonGradient}
@@ -289,7 +276,7 @@ export function PlayingHoursCard({
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <View style={styles.modalHeaderLeft}>
-                  <Clock size={20} color="#059669" />
+                  <Clock size={20} color="#3B82F6" />
                   <Text style={styles.modalTitle}>
                     {editingSession ? 'Edit' : 'Add'} Playing Session
                   </Text>
@@ -357,7 +344,7 @@ export function PlayingHoursCard({
                   activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={['#10B981', '#059669']}
+                    colors={['#3B82F6', '#2563EB']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.modalSaveButtonGradient}
@@ -377,16 +364,16 @@ export function PlayingHoursCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: '#EFF6FF',
+    borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
-    ...SHADOW.md,
-    marginTop: SPACING.lg,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+    ...SHADOW.sm,
+    marginTop: SPACING.md,
   },
   header: {
-    padding: SPACING.md,
+    padding: SPACING.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -397,10 +384,10 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   headerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -408,93 +395,86 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   headerTitle: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.white,
   },
   headerSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   content: {
-    padding: SPACING.md,
+    padding: SPACING.sm,
   },
   sectionLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#047857',
-    letterSpacing: 1.5,
+    color: '#1E40AF',
+    letterSpacing: 1,
     marginBottom: SPACING.xs,
   },
-  sectionHint: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#065F46',
-    marginBottom: SPACING.md,
-    lineHeight: 18,
-  },
   sessionsContainer: {
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: 'rgba(59, 130, 246, 0.15)',
     overflow: 'hidden',
   },
   sessionRowEnabled: {
-    backgroundColor: '#D1FAE5',
-    borderColor: '#10B981',
+    backgroundColor: '#DBEAFE',
+    borderColor: '#3B82F6',
   },
   sessionMainContent: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: SPACING.sm,
-    paddingLeft: SPACING.md,
-    paddingRight: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    paddingLeft: SPACING.sm,
+    paddingRight: SPACING.xs,
   },
   sessionInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.xs,
   },
   sessionDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   sessionDotEnabled: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#3B82F6',
   },
   sessionDotDisabled: {
     backgroundColor: '#D1D5DB',
   },
   sessionName: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#065F46',
+    color: '#1E40AF',
   },
   sessionNameDisabled: {
     color: '#9CA3AF',
   },
   sessionTime: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontSize: TYPOGRAPHY.fontSizeXS,
     color: '#6B7280',
-    marginTop: 2,
   },
   sessionToggle: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
     backgroundColor: '#E5E7EB',
   },
   sessionToggleEnabled: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#3B82F6',
   },
   sessionToggleText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -504,47 +484,19 @@ const styles = StyleSheet.create({
   sessionToggleTextEnabled: {
     color: COLORS.white,
   },
-  legendContainer: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    marginBottom: SPACING.md,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.xs,
-  },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  legendText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#065F46',
-  },
-  legendHint: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#047857',
-    marginTop: SPACING.xs,
-    lineHeight: 16,
-  },
   saveButton: {
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: BORDER_RADIUS.sm,
     overflow: 'hidden',
   },
   saveButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: SPACING.md,
-    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    gap: SPACING.xs,
   },
   saveButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.white,
   },
@@ -552,11 +504,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderLeftWidth: 1,
-    borderLeftColor: 'rgba(16, 185, 129, 0.15)',
-    paddingLeft: SPACING.xs,
+    borderLeftColor: 'rgba(59, 130, 246, 0.15)',
   },
   sessionActionButton: {
-    padding: SPACING.sm,
+    padding: SPACING.xs,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -564,19 +515,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: '#3B82F6',
     borderStyle: 'dashed',
-    gap: SPACING.sm,
+    gap: SPACING.xs,
   },
   addSessionText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#059669',
+    color: '#2563EB',
   },
   modalOverlay: {
     flex: 1,
@@ -608,7 +559,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#065F46',
+    color: '#1E40AF',
   },
   modalCloseButton: {
     padding: SPACING.xs,
@@ -623,7 +574,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#065F46',
+    color: '#1E40AF',
   },
   textInput: {
     backgroundColor: '#F9FAFB',
