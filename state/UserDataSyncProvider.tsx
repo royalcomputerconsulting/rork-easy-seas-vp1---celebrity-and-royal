@@ -1,22 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
-import { trpc } from "@/lib/trpc";
+import { trpc, isBackendAvailable } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
 import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
 
 const LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 2;
-const MIN_SYNC_INTERVAL_MS = 60000; // Minimum 1 minute between syncs
-
-const isBackendAvailable = (): boolean => {
-  const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-  const available = !!(url && url !== "https://fallback.local" && !url.includes("fallback"));
-  if (!available) {
-    console.log("[UserDataSync] Backend URL not configured or is fallback:", url);
-  }
-  return available;
-};
+const MIN_SYNC_INTERVAL_MS = 60000;
 
 interface SyncState {
   isSyncing: boolean;
@@ -41,8 +32,6 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSyncedEmailRef = useRef<string | null>(null);
   const retryCountRef = useRef(0);
-  const backendAvailableRef = useRef(isBackendAvailable());
-  const lastFailedAttemptRef = useRef<number>(0);
   const lastSyncAttemptRef = useRef<number>(0);
   const isMountedRef = useRef(true);
   const hasInitializedRef = useRef(false);
@@ -256,26 +245,21 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
   const checkCloudDataExists = useCallback(async (email: string): Promise<boolean> => {
     if (!email) return false;
-    if (!backendAvailableRef.current) {
+    if (!isBackendAvailable()) {
       console.log("[UserDataSync] Backend not available, skipping cloud check");
       return false;
     }
     
     try {
       console.log("[UserDataSync] Checking if cloud data exists for:", email);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
       const result = await fetchAllUserData();
-      clearTimeout(timeoutId);
       
       const exists = !!(result.data?.found && result.data.data);
       console.log("[UserDataSync] Cloud data exists:", exists);
       retryCountRef.current = 0;
       return exists;
     } catch (error) {
-      console.error("[UserDataSync] Error checking cloud data:", error);
-      backendAvailableRef.current = false;
+      console.log("[UserDataSync] Error checking cloud data (backend may be unavailable):", error);
       return false;
     }
   }, [fetchAllUserData]);
@@ -287,7 +271,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return false;
     }
 
-    if (!backendAvailableRef.current) {
+    if (!isBackendAvailable()) {
       console.log("[UserDataSync] Backend not available, skipping cloud load");
       setInitialCheckComplete(true);
       return false;
@@ -295,8 +279,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
     const now = Date.now();
     if (retryCountRef.current >= MAX_RETRY_ATTEMPTS) {
-      console.log("[UserDataSync] Max retry attempts reached, disabling sync");
-      backendAvailableRef.current = false;
+      console.log("[UserDataSync] Max retry attempts reached, skipping sync");
       setInitialCheckComplete(true);
       return false;
     }
@@ -350,16 +333,15 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       setInitialCheckComplete(true);
       return false;
     } catch (error) {
-      console.error("[UserDataSync] Error loading from cloud:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      console.log("[UserDataSync] Cloud load error (backend may be unavailable):", errorMessage);
       retryCountRef.current += 1;
-      lastFailedAttemptRef.current = Date.now();
-      const errorMessage = error instanceof Error ? error.message : "Failed to load data";
       
-      // Disable backend on any connection error
-      console.log("[UserDataSync] Backend connection failed, disabling further sync attempts");
-      backendAvailableRef.current = false;
+      // Don't set user-facing error for known backend issues
+      if (!['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage)) {
+        setSyncError(errorMessage);
+      }
       
-      setSyncError(errorMessage);
       setInitialCheckComplete(true);
       return false;
     } finally {
@@ -375,14 +357,13 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return;
     }
 
-    if (!backendAvailableRef.current) {
+    if (!isBackendAvailable()) {
       console.log("[UserDataSync] Backend not available, skipping cloud sync");
       return;
     }
 
     if (retryCountRef.current >= MAX_RETRY_ATTEMPTS) {
-      console.log("[UserDataSync] Max retry attempts reached, disabling sync");
-      backendAvailableRef.current = false;
+      console.log("[UserDataSync] Max retry attempts reached, skipping sync");
       return;
     }
 
@@ -433,17 +414,15 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       
       console.log("[UserDataSync] Successfully synced to cloud");
     } catch (error) {
-      console.error("[UserDataSync] Error syncing to cloud:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      console.log("[UserDataSync] Cloud sync error (backend may be unavailable):", errorMessage);
       retryCountRef.current += 1;
-      lastFailedAttemptRef.current = Date.now();
-      const errorMessage = error instanceof Error ? error.message : "Failed to sync data";
       
-      // Disable backend on any connection error
-      console.log("[UserDataSync] Backend connection failed, disabling further sync attempts");
-      backendAvailableRef.current = false;
-      
-      if (isMountedRef.current) {
-        setSyncError(errorMessage);
+      // Don't set user-facing error for known backend issues
+      if (!['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage)) {
+        if (isMountedRef.current) {
+          setSyncError(errorMessage);
+        }
       }
     } finally {
       if (isMountedRef.current) {
@@ -484,7 +463,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return;
     }
 
-    if (!backendAvailableRef.current) {
+    if (!isBackendAvailable()) {
       console.log("[UserDataSync] Backend not available, skipping initial sync");
       setInitialCheckComplete(true);
       hasInitializedRef.current = true;
@@ -498,10 +477,10 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       const cloudLoaded = await loadFromCloud();
       
       // Only try to sync local data once if no cloud data and backend is still available
-      if (!cloudLoaded && backendAvailableRef.current && isMountedRef.current) {
+      if (!cloudLoaded && isBackendAvailable() && isMountedRef.current) {
         console.log("[UserDataSync] No cloud data, will sync local data after delay");
         const timeoutId = setTimeout(() => {
-          if (backendAvailableRef.current && isMountedRef.current) {
+          if (isBackendAvailable() && isMountedRef.current) {
             syncToCloud();
           }
         }, 5000);
