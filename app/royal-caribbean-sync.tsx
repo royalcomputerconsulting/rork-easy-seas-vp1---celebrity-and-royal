@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#334155'
   },
   logsScrollTop: {
-    maxHeight: 70,
+    maxHeight: 50,
     padding: 12
   },
   progressText: {
@@ -778,7 +778,7 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const
   },
   webViewContainer: {
-    height: 450,
+    height: 550,
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b'
   },
