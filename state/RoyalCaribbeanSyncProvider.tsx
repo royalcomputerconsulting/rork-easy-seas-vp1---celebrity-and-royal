@@ -163,10 +163,82 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
         break;
 
+      case 'all_bookings_data':
+        // New: All bookings received from Step 1 consolidated API call
+        if (message.bookings && Array.isArray(message.bookings)) {
+          const formattedCruises = message.bookings.map((booking: any) => ({
+            sourcePage: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
+            shipName: booking.shipName || booking.shipCode + ' of the Seas',
+            shipCode: booking.shipCode,
+            cruiseTitle: booking.cruiseTitle || booking.numberOfNights + ' Night Cruise',
+            sailingStartDate: booking.sailDate,
+            sailingEndDate: booking.sailingEndDate || '',
+            sailingDates: booking.sailingDates || '',
+            itinerary: booking.itinerary || '',
+            departurePort: booking.departurePort || '',
+            arrivalPort: booking.arrivalPort || '',
+            cabinType: booking.stateroomType || '',
+            cabinCategory: booking.stateroomCategoryCode || '',
+            cabinNumberOrGTY: booking.stateroomNumber === 'GTY' ? 'GTY' : booking.stateroomNumber,
+            deckNumber: booking.deckNumber || '',
+            bookingId: booking.bookingId,
+            numberOfGuests: booking.passengers?.length.toString() || '1',
+            numberOfNights: booking.numberOfNights,
+            daysToGo: '',
+            status: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
+            holdExpiration: booking.offerExpirationDate || '',
+            loyaltyLevel: '',
+            loyaltyPoints: '',
+            paidInFull: booking.paidInFull ? 'Yes' : 'No',
+            balanceDue: booking.balanceDueAmount?.toString() || '0',
+            musterStation: booking.musterStation || '',
+            bookingStatus: booking.bookingStatus,
+            packageCode: booking.packageCode || '',
+            passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
+            stateroomNumber: booking.stateroomNumber,
+            stateroomCategoryCode: booking.stateroomCategoryCode,
+            stateroomType: booking.stateroomType
+          }));
+          
+          setState(prev => ({
+            ...prev,
+            extractedBookedCruises: [...prev.extractedBookedCruises, ...formattedCruises]
+          }));
+          
+          addLog(`✅ Received ${message.bookings.length} bookings from consolidated API call`, 'success');
+        }
+        break;
+
       case 'loyalty_data':
-        // Only use DOM-scraped loyalty data if we haven't received API data
-        if (!hasReceivedApiLoyaltyData) {
-          setState(prev => ({ ...prev, loyaltyData: message.data }));
+        // Check if this is API data (from Step 1 consolidated call) or DOM fallback
+        if (message.loyalty && typeof message.loyalty === 'object') {
+          // This is API data from Step 1 consolidated call
+          const loyaltyInfo = message.loyalty as LoyaltyApiInformation;
+          const converted = convertLoyaltyInfoToExtended(loyaltyInfo, '');
+          setExtendedLoyaltyData(converted);
+          hasReceivedApiLoyaltyData = true;
+          
+          setState(prev => ({
+            ...prev,
+            loyaltyData: {
+              ...prev.loyaltyData,
+              clubRoyaleTier: converted.clubRoyaleTierFromApi,
+              clubRoyalePoints: converted.clubRoyalePointsFromApi?.toString(),
+              crownAndAnchorLevel: converted.crownAndAnchorTier,
+              crownAndAnchorPoints: converted.crownAndAnchorPointsFromApi?.toString(),
+            }
+          }));
+          
+          addLog('✅ Loyalty data from consolidated API call (authoritative)', 'success');
+          if (converted.clubRoyalePointsFromApi !== undefined) {
+            addLog(`   → Club Royale: ${converted.clubRoyaleTierFromApi || 'N/A'} - ${converted.clubRoyalePointsFromApi.toLocaleString()} points`, 'info');
+          }
+          if (converted.crownAndAnchorPointsFromApi !== undefined) {
+            addLog(`   → Crown & Anchor: ${converted.crownAndAnchorTier || 'N/A'} - ${converted.crownAndAnchorPointsFromApi.toLocaleString()} points`, 'info');
+          }
+        } else if (!hasReceivedApiLoyaltyData) {
+          // This is DOM fallback data
+          setState(prev => ({ ...prev, loyaltyData: message.data || null }));
           addLog('Loyalty data extracted (DOM fallback)', 'info');
         } else {
           addLog('Ignoring DOM loyalty data - API data already received', 'info');
@@ -300,27 +372,36 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await waitForStepComplete(1, 900000);
       
-      addLog(`✅ Offers step complete - continuing to upcoming cruises...`, 'success');
+      addLog(`✅ Step 1 complete with consolidated API calls!`, 'success');
       
-      setState(prev => ({ ...prev, status: 'running_step_2' }));
-      addLog('Step 2: Navigating to upcoming cruises page...', 'info');
-      addLog('Loading Upcoming Cruises Page...', 'info');
+      // Check if we got bookings from the consolidated API call in Step 1
+      const hasBookingsFromApi = state.extractedBookedCruises.length > 0;
+      const hasLoyaltyFromApi = hasReceivedApiLoyaltyData;
       
-      try {
-        if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`
-            window.location.href = '${config.upcomingUrl}';
-            true;
-          `);
-          
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          
-          webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
-          
-          await waitForStepComplete(2, 120000);
+      if (hasBookingsFromApi) {
+        addLog(`✅ Skipping Steps 2-3: ${state.extractedBookedCruises.length} bookings already retrieved from API`, 'success');
+      } else {
+        // Fallback: Only navigate if API call failed
+        setState(prev => ({ ...prev, status: 'running_step_2' }));
+        addLog('Step 2: Bookings API failed, falling back to DOM scraping...', 'warning');
+        addLog('Loading Upcoming Cruises Page...', 'info');
+        
+        try {
+          if (webViewRef.current) {
+            webViewRef.current.injectJavaScript(`
+              window.location.href = '${config.upcomingUrl}';
+              true;
+            `);
+            
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            
+            webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
+            
+            await waitForStepComplete(2, 120000);
+          }
+        } catch (step2Error) {
+          addLog(`Step 2 error: ${step2Error} - continuing with collected data`, 'warning');
         }
-      } catch (step2Error) {
-        addLog(`Step 2 error: ${step2Error} - continuing with collected data`, 'warning');
       }
       
       // Check if Step 2 already extracted courtesy holds from the API
@@ -358,33 +439,40 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }
       
-      // Step 4: Navigate to Crown & Anchor page and fetch loyalty data
-      setState(prev => ({ ...prev, status: 'running_step_4' }));
-      addLog('Step 4: Navigating to Loyalty Programs page for loyalty data...', 'info');
-      addLog('Loading Loyalty Programs Page...', 'info');
-      
-      try {
-        if (webViewRef.current) {
-          // Navigate to loyalty programs page to establish proper session for loyalty API
-          const loyaltyPageUrl = cruiseLine === 'celebrity' 
-            ? 'https://www.celebritycruises.com/account/loyalty-programs'
-            : 'https://www.royalcaribbean.com/account/loyalty-programs';
-          
-          webViewRef.current.injectJavaScript(`
-            window.location.href = '${loyaltyPageUrl}';
-            true;
-          `);
-          
-          // Wait for page to load and session to establish
-          await new Promise(resolve => setTimeout(resolve, 6000));
-          
-          // Now inject the loyalty extraction script
-          webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
-          
-          await waitForStepComplete(4, 45000);
+      // Step 4: Check if we already have loyalty data from Step 1 consolidated API call
+      if (hasLoyaltyFromApi) {
+        addLog(`✅ Skipping Step 4: Loyalty data already retrieved from API`, 'success');
+        setState(prev => ({ ...prev, status: 'running_step_4' }));
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } else {
+        // Fallback: Only navigate if API call failed
+        setState(prev => ({ ...prev, status: 'running_step_4' }));
+        addLog('Step 4: Loyalty API failed, falling back to DOM scraping...', 'warning');
+        addLog('Loading Loyalty Programs Page...', 'info');
+        
+        try {
+          if (webViewRef.current) {
+            // Navigate to loyalty programs page for DOM fallback
+            const loyaltyPageUrl = cruiseLine === 'celebrity' 
+              ? 'https://www.celebritycruises.com/account/loyalty-programs'
+              : 'https://www.royalcaribbean.com/account/loyalty-programs';
+            
+            webViewRef.current.injectJavaScript(`
+              window.location.href = '${loyaltyPageUrl}';
+              true;
+            `);
+            
+            // Wait for page to load
+            await new Promise(resolve => setTimeout(resolve, 6000));
+            
+            // Inject loyalty extraction script
+            webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
+            
+            await waitForStepComplete(4, 45000);
+          }
+        } catch (step4Error) {
+          addLog(`Step 4 error: ${step4Error} - continuing without loyalty data`, 'warning');
         }
-      } catch (step4Error) {
-        addLog(`Step 4 error: ${step4Error} - continuing without loyalty data`, 'warning');
       }
       
       addLog('All steps completed successfully! Ready to sync.', 'success');

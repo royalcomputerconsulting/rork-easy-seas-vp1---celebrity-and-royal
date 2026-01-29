@@ -221,7 +221,8 @@ export type WebViewMessage =
   | { type: 'cruise_batch'; data: any[] }
   | { type: 'step_complete'; step: number; data: any[]; totalCount?: number; offerCount?: number }
   | { type: 'offer_progress'; offerIndex: number; totalOffers: number; offerName: string; sailingsCount: number; status: string }
-  | { type: 'loyalty_data'; data: LoyaltyData }
+  | { type: 'all_bookings_data'; bookings: any[]; vdsId?: string }
+  | { type: 'loyalty_data'; data?: LoyaltyData; loyalty?: LoyaltyApiInformation }
   | { type: 'extended_loyalty_data'; data: LoyaltyApiInformation; accountId?: string }
   | { type: 'error'; message: string }
   | { type: 'complete' };

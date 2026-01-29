@@ -78,41 +78,32 @@ export const STEP1_OFFERS_SCRIPT = `
     }
   }
 
-  async function fetchOffersFromAPI() {
+  async function getAuthContext() {
     try {
-      log('🔌 Using API-based offer extraction (more reliable)...');
+      log('Parsing session data from localStorage...');
+      const sessionData = localStorage.getItem('persist:session');
       
-      let authToken, accountId, loyaltyId, user;
-      
-      try {
-        log('Parsing session data from localStorage...');
-        const sessionData = localStorage.getItem('persist:session');
-        
-        if (!sessionData) {
-          throw new Error('No session data found. Please log in again.');
-        }
-        
-        const parsedData = JSON.parse(sessionData);
-        authToken = parsedData.token ? JSON.parse(parsedData.token) : null;
-        const tokenExpiration = parsedData.tokenExpiration ? parseInt(parsedData.tokenExpiration) * 1000 : null;
-        user = parsedData.user ? JSON.parse(parsedData.user) : null;
-        accountId = user && user.accountId ? user.accountId : null;
-        loyaltyId = user && user.cruiseLoyaltyId ? user.cruiseLoyaltyId : null;
-        
-        if (!authToken || !accountId) {
-          throw new Error('Invalid session data. Please log in again.');
-        }
-        
-        const currentTime = Date.now();
-        if (tokenExpiration && tokenExpiration < currentTime) {
-          throw new Error('Session expired. Please log in again.');
-        }
-        
-        log('Session data parsed successfully', 'success');
-      } catch (error) {
-        log('Failed to parse session: ' + error.message, 'error');
-        throw error;
+      if (!sessionData) {
+        throw new Error('No session data found. Please log in again.');
       }
+      
+      const parsedData = JSON.parse(sessionData);
+      const authToken = parsedData.token ? JSON.parse(parsedData.token) : null;
+      const tokenExpiration = parsedData.tokenExpiration ? parseInt(parsedData.tokenExpiration) * 1000 : null;
+      const user = parsedData.user ? JSON.parse(parsedData.user) : null;
+      const accountId = user && user.accountId ? user.accountId : null;
+      const loyaltyId = user && user.cruiseLoyaltyId ? user.cruiseLoyaltyId : null;
+      
+      if (!authToken || !accountId) {
+        throw new Error('Invalid session data. Please log in again.');
+      }
+      
+      const currentTime = Date.now();
+      if (tokenExpiration && tokenExpiration < currentTime) {
+        throw new Error('Session expired. Please log in again.');
+      }
+      
+      log('Session data parsed successfully', 'success');
       
       const rawAuth = authToken && authToken.toString ? authToken.toString() : '';
       const networkAuth = rawAuth ? (rawAuth.startsWith('Bearer ') ? rawAuth : 'Bearer ' + rawAuth) : '';
@@ -127,10 +118,22 @@ export const STEP1_OFFERS_SCRIPT = `
       
       const host = location && location.hostname ? location.hostname : '';
       const brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
-      const relativePath = '/api/casino/casino-offers/v1';
-      const onSupportedDomain = host.includes('royalcaribbean.com') || host.includes('celebritycruises.com');
-      const defaultDomain = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
-      const endpoint = onSupportedDomain ? relativePath : defaultDomain + relativePath;
+      const baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
+      
+      return { headers, accountId, loyaltyId, brandCode, baseUrl, user };
+    } catch (error) {
+      log('Failed to get auth context: ' + error.message, 'error');
+      throw error;
+    }
+  }
+
+  async function fetchOffersFromAPI(authContext) {
+    try {
+      log('🔌 Using API-based offer extraction (more reliable)...');
+      
+      const { headers, loyaltyId, brandCode, baseUrl } = authContext;
+      
+      const endpoint = baseUrl + '/api/casino/casino-offers/v1';
       
       log('📡 Calling Royal Caribbean Casino Offers API...');
       log('Endpoint: ' + endpoint);
@@ -231,9 +234,96 @@ export const STEP1_OFFERS_SCRIPT = `
       
       return data;
     } catch (error) {
-      log('API fetch failed: ' + error.message, 'error');
+      log('Casino Offers API fetch failed: ' + error.message, 'error');
       throw error;
     }
+  }
+
+  async function fetchAllAPIsInStep1(authContext) {
+    log('🚀 Making all API calls with authenticated session...', 'info');
+    const results = { offers: null, bookings: null, loyalty: null };
+    
+    try {
+      // 1. Fetch Casino Offers (Step 1)
+      log('📡 Calling Casino Offers API...', 'info');
+      results.offers = await fetchOffersFromAPI(authContext);
+      log('✅ Casino Offers API successful', 'success');
+    } catch (error) {
+      log('❌ Casino Offers API failed: ' + error.message, 'error');
+    }
+    
+    try {
+      // 2. Fetch Bookings (Step 2 + 3) - using same auth immediately
+      log('📡 Calling Bookings API (Steps 2+3)...', 'info');
+      const endpoint = authContext.baseUrl + '/api/profile/bookings';
+      
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        credentials: 'omit',
+        headers: authContext.headers
+      });
+      
+      log('📡 Bookings API response status: ' + response.status, 'info');
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.payload && data.payload.profileBookings) {
+          results.bookings = data.payload.profileBookings;
+          log('✅ Bookings API returned ' + results.bookings.length + ' bookings', 'success');
+          
+          // Send bookings immediately
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'all_bookings_data',
+            bookings: results.bookings,
+            vdsId: data.payload.vdsId
+          }));
+        } else {
+          log('⚠️ Bookings API: No profileBookings in response', 'warning');
+        }
+      } else {
+        log('⚠️ Bookings API returned: ' + response.status, 'warning');
+      }
+    } catch (error) {
+      log('⚠️ Bookings API failed: ' + error.message + ' - will use DOM fallback', 'warning');
+    }
+    
+    try {
+      // 3. Fetch Loyalty (Step 4) - using same auth immediately
+      log('📡 Calling Loyalty API (Step 4)...', 'info');
+      const endpoint = authContext.baseUrl + '/api/account/loyalty-programs';
+      
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        credentials: 'omit',
+        headers: authContext.headers
+      });
+      
+      log('📡 Loyalty API response status: ' + response.status, 'info');
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.payload && data.payload.loyaltyInformation) {
+          results.loyalty = data.payload.loyaltyInformation;
+          log('✅ Loyalty API successful', 'success');
+          log('   Crown & Anchor: ' + results.loyalty.crownAndAnchorSocietyLoyaltyTier + ' - ' + results.loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints + ' pts', 'info');
+          log('   Club Royale: ' + results.loyalty.clubRoyaleLoyaltyTier + ' - ' + results.loyalty.clubRoyaleLoyaltyIndividualPoints + ' pts', 'info');
+          
+          // Send loyalty data immediately
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'loyalty_data',
+            loyalty: results.loyalty
+          }));
+        } else {
+          log('⚠️ Loyalty API: No loyaltyInformation in response', 'warning');
+        }
+      } else {
+        log('⚠️ Loyalty API returned: ' + response.status, 'warning');
+      }
+    } catch (error) {
+      log('⚠️ Loyalty API failed: ' + error.message + ' - will use DOM fallback', 'warning');
+    }
+    
+    return results;
   }
 
   function processAPIResponse(data) {
@@ -377,16 +467,37 @@ export const STEP1_OFFERS_SCRIPT = `
         type: 'progress',
         current: 0,
         total: 100,
-        stepName: 'Connecting to Royal Caribbean API...'
+        stepName: 'Authenticating and fetching all data...'
       }));
       
-      const apiData = await fetchOffersFromAPI();
+      // Get auth context once
+      const authContext = await getAuthContext();
       
-      const { offerRows, offerCount, totalSailings } = processAPIResponse(apiData);
+      // Make ALL API calls immediately with the same authenticated session
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+      log('🔐 CONSOLIDATED API CALLS (Steps 1-4)', 'success');
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+      log('✓ Using single authenticated session for all APIs', 'info');
+      log('✓ No page navigation needed!', 'info');
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+      
+      const allResults = await fetchAllAPIsInStep1(authContext);
+      
+      // Process offers
+      const { offerRows, offerCount, totalSailings } = processAPIResponse(allResults.offers);
       
       sendOfferBatch([], true, totalSailings, offerCount);
       
       log('✓ Extracted ' + totalSailings + ' offer rows from ' + offerCount + ' offer(s)', 'success');
+      
+      // Log summary
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'success');
+      log('📊 ALL APIS COMPLETED', 'success');
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'success');
+      log('  ✅ Offers: ' + offerCount + ' offers with ' + totalSailings + ' sailings', 'success');
+      log('  ' + (allResults.bookings ? '✅' : '⚠️') + ' Bookings: ' + (allResults.bookings ? allResults.bookings.length : 'Failed (will use DOM)'), allResults.bookings ? 'success' : 'warning');
+      log('  ' + (allResults.loyalty ? '✅' : '⚠️') + ' Loyalty: ' + (allResults.loyalty ? 'Success' : 'Failed (will use DOM)'), allResults.loyalty ? 'success' : 'warning');
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'success');
       
     } catch (error) {
       log('❌ API extraction failed: ' + error.message, 'error');
