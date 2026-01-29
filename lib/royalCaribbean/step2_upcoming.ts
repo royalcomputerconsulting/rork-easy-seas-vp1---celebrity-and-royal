@@ -117,19 +117,60 @@ export const STEP2_UPCOMING_SCRIPT = `
     return stateroomType ? (STATEROOM_TYPE_MAP[stateroomType] || stateroomType) : '';
   }
 
+  function getAuthHeaders() {
+    try {
+      var sessionData = localStorage.getItem('persist:session');
+      if (!sessionData) {
+        log('⚠️ No session data found in localStorage', 'warning');
+        return null;
+      }
+      
+      var parsedData = JSON.parse(sessionData);
+      var authToken = parsedData.token ? JSON.parse(parsedData.token) : null;
+      var user = parsedData.user ? JSON.parse(parsedData.user) : null;
+      var accountId = user && user.accountId ? user.accountId : null;
+      
+      if (!authToken || !accountId) {
+        log('⚠️ Missing auth token or account ID', 'warning');
+        return null;
+      }
+      
+      var rawAuth = authToken && authToken.toString ? authToken.toString() : '';
+      var networkAuth = rawAuth ? (rawAuth.startsWith('Bearer ') ? rawAuth : 'Bearer ' + rawAuth) : '';
+      
+      return {
+        'accept': 'application/json',
+        'accept-language': 'en-US,en;q=0.9',
+        'account-id': accountId,
+        'authorization': networkAuth,
+        'content-type': 'application/json'
+      };
+    } catch (e) {
+      log('⚠️ Failed to get auth headers: ' + e.message, 'warning');
+      return null;
+    }
+  }
+
   async function fetchProfileBookings() {
     log('🔄 Step 2: Fetching booking data via API...', 'info');
 
+    var headers = getAuthHeaders();
+    if (!headers) {
+      log('⚠️ Could not obtain auth headers - will try DOM fallback', 'warning');
+      return null;
+    }
+
     try {
-      log('📡 Calling /api/profile/bookings...', 'info');
-      var response = await fetch('https://www.royalcaribbean.com/api/profile/bookings', {
+      var host = location && location.hostname ? location.hostname : '';
+      var brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
+      var baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
+      var endpoint = baseUrl + '/api/profile/bookings';
+      
+      log('📡 Calling ' + endpoint + '...', 'info');
+      var response = await fetch(endpoint, {
         method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        }
+        credentials: 'omit',
+        headers: headers
       });
 
       log('📡 API Response status: ' + response.status, 'info');
@@ -198,6 +239,12 @@ export const STEP2_UPCOMING_SCRIPT = `
 
     log('🔄 Fetching enrichment data for ' + bookings.length + ' bookings...', 'info');
 
+    var headers = getAuthHeaders();
+    if (!headers) {
+      log('⚠️ Could not obtain auth headers for enrichment', 'warning');
+      return {};
+    }
+
     try {
       var sailingKeys = [];
       for (var i = 0; i < bookings.length; i++) {
@@ -213,16 +260,17 @@ export const STEP2_UPCOMING_SCRIPT = `
         return {};
       }
 
+      var host = location && location.hostname ? location.hostname : '';
+      var brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
+      var baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
+      var endpoint = baseUrl + '/api/profile/bookings/enrichment';
+
       log('📡 Calling enrichment API with ' + sailingKeys.length + ' sailings...', 'info');
       
-      var response = await fetch('https://www.royalcaribbean.com/api/profile/bookings/enrichment', {
+      var response = await fetch(endpoint, {
         method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
+        credentials: 'omit',
+        headers: headers,
         body: JSON.stringify({ sailings: sailingKeys })
       });
 
@@ -283,38 +331,38 @@ export const STEP2_UPCOMING_SCRIPT = `
   function parseBookingsWithEnrichment(bookings, enrichmentMap) {
     var cruises = [];
     
-    log('🔄 Processing ' + bookings.length + ' bookings...', 'info');
+    log('🔄 Processing ' + bookings.length + ' bookings from API...', 'info');
     
     // Log all booking statuses for debugging
     var statusCounts = {};
+    var skippedBookings = [];
+    var processedBookings = [];
+    
     for (var j = 0; j < bookings.length; j++) {
       var status = bookings[j].bookingStatus || 'UNKNOWN';
       statusCounts[status] = (statusCounts[status] || 0) + 1;
     }
-    log('📊 Booking statuses: ' + JSON.stringify(statusCounts), 'info');
+    log('📊 Booking statuses breakdown: ' + JSON.stringify(statusCounts), 'info');
+    log('📊 Total bookings to process: ' + bookings.length, 'info');
     
     for (var i = 0; i < bookings.length; i++) {
       var booking = bookings[i];
+      var bookingInfo = booking.shipCode + ' ' + booking.sailDate + ' (ID: ' + booking.bookingId + ', Status: ' + booking.bookingStatus + ')';
       
       // Include all valid booking statuses:
-      // BK = Booked/Confirmed, OF = Offer, PD = Pending, HD/HO = Hold
-      // Only exclude cancelled (CX, CN) and explicitly rejected statuses
-      var validStatuses = ['BK', 'OF', 'PD', 'HD', 'HO', 'CF', 'DP', 'WL'];
-      var isValid = validStatuses.indexOf(booking.bookingStatus) >= 0;
+      // BK = Booked/Confirmed, OF = Offer/Courtesy Hold, PD = Pending, HD/HO = Hold
+      // Only exclude cancelled (CX, CN, XX) statuses
+      var cancelledStatuses = ['CX', 'CN', 'XX'];
+      var isCancelled = cancelledStatuses.indexOf(booking.bookingStatus) >= 0;
       
-      // If status is unknown but booking has valid data, include it
-      if (!isValid && booking.bookingStatus) {
-        var isCancelled = booking.bookingStatus === 'CX' || booking.bookingStatus === 'CN' || booking.bookingStatus === 'XX';
-        if (!isCancelled) {
-          log('⚠️ Including booking with unknown status: ' + booking.bookingStatus + ' (Ship: ' + booking.shipCode + ', Date: ' + booking.sailDate + ')', 'warning');
-          isValid = true;
-        }
-      }
-      
-      if (!isValid) {
-        log('⏭️ Skipping booking with status: ' + booking.bookingStatus + ' (Ship: ' + booking.shipCode + ', Date: ' + booking.sailDate + ')', 'info');
+      if (isCancelled) {
+        log('⏭️ Skipping CANCELLED booking: ' + bookingInfo, 'info');
+        skippedBookings.push(bookingInfo);
         continue;
       }
+      
+      // All non-cancelled bookings should be included
+      log('✓ Processing booking ' + (i + 1) + '/' + bookings.length + ': ' + bookingInfo, 'info');
       
       var shipCode = booking.shipCode || '';
       var shipName = SHIP_CODE_MAP[shipCode] || (shipCode ? shipCode + ' of the Seas' : '');
@@ -451,9 +499,37 @@ export const STEP2_UPCOMING_SCRIPT = `
       };
       
       cruises.push(cruise);
+      processedBookings.push(bookingInfo);
 
       var portSummary = departurePort ? (isOneWay ? departurePort + ' → ' + arrivalPort : departurePort) : 'No port data';
-      log('  ✓ ' + shipName + ' - ' + sailingStartDate + ' - ' + portSummary + ' - Cabin: ' + (cabinNumber || 'GTY') + ' (' + cabinType + ')', 'success');
+      log('  ✓ ' + shipName + ' - ' + sailingStartDate + ' - ' + portSummary + ' - Cabin: ' + (cabinNumber || 'GTY') + ' (' + cabinType + ') - Status: ' + status, 'success');
+    }
+    
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+    log('📊 STEP 2 EXTRACTION SUMMARY', 'success');
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+    log('  📥 Total bookings from API: ' + bookings.length, 'info');
+    log('  ✓ Successfully processed: ' + processedBookings.length, 'success');
+    log('  ⏭️ Skipped (cancelled): ' + skippedBookings.length, 'info');
+    
+    if (skippedBookings.length > 0) {
+      log('  📋 Skipped details: ' + skippedBookings.join(', '), 'info');
+    }
+    
+    // Count by status for verification
+    var upcomingCount = 0;
+    var holdCount = 0;
+    var otherCount = 0;
+    for (var k = 0; k < cruises.length; k++) {
+      if (cruises[k].status === 'Upcoming') upcomingCount++;
+      else if (cruises[k].status === 'Courtesy Hold') holdCount++;
+      else otherCount++;
+    }
+    log('  📊 By Status - Upcoming: ' + upcomingCount + ', Courtesy Holds: ' + holdCount + ', Other: ' + otherCount, 'success');
+    
+    // Verification check
+    if (processedBookings.length !== cruises.length) {
+      log('  ⚠️ MISMATCH: Processed ' + processedBookings.length + ' but created ' + cruises.length + ' cruises!', 'error');
     }
     
     return cruises;
@@ -509,7 +585,8 @@ export const STEP2_UPCOMING_SCRIPT = `
     var cruiseCards = allElements.filter(function(el) {
       var text = el.textContent || '';
       var hasShip = text.indexOf('of the Seas') >= 0;
-      var hasNight = text.match(/\\d+\\s+Night/i);
+      // Match both "7 Night" and "7 nt" abbreviation formats
+      var hasNight = text.match(/\\d+\\s+(Night|nt)\\b/i);
       var hasReservation = text.match(/Reservation[:\\s]*\\d+/i);
       var textLength = text.length;
       
@@ -542,7 +619,8 @@ export const STEP2_UPCOMING_SCRIPT = `
       var shipMatch = fullText.match(/([\\w\\s]+of the Seas)/);
       var shipName = shipMatch ? shipMatch[1].trim() : '';
 
-      var cruiseTitleMatch = fullText.match(/(\\d+)\\s+Night\\s+([^\\n]+?)(?=VANCOUVER|LOS ANGELES|MIAMI|SEATTLE|TAMPA|ORLANDO|FORT LAUDERDALE|GALVESTON|NEW YORK|BOSTON|BALTIMORE|SEWARD|HONOLULU|SAN JUAN|NASSAU|COZUMEL|BAYONNE|CAPE LIBERTY|PORT CANAVERAL|SINGAPORE|SYDNEY|SOUTHAMPTON|BARCELONA|ROME|CIVITAVECCHIA|CHECK-IN|\\d+ Days|$)/i);
+      // Match both "7 Night" and "7 nt" cruise title formats
+      var cruiseTitleMatch = fullText.match(/(\\d+)\\s+(?:Night|nt)\\s+([^\\n]+?)(?=VANCOUVER|LOS ANGELES|MIAMI|SEATTLE|TAMPA|ORLANDO|FORT LAUDERDALE|GALVESTON|NEW YORK|BOSTON|BALTIMORE|SEWARD|HONOLULU|SAN JUAN|NASSAU|COZUMEL|BAYONNE|CAPE LIBERTY|PORT CANAVERAL|SINGAPORE|SYDNEY|SOUTHAMPTON|BARCELONA|ROME|CIVITAVECCHIA|CHECK-IN|\\d+ Days|$)/i);
       var cruiseTitle = cruiseTitleMatch ? cruiseTitleMatch[0].trim() : '';
 
       var dateMatch = fullText.match(/(\\w{3})\\s+(\\d+)\\s*—\\s*(\\w{3})\\s+(\\d+),?\\s*(\\d{4})/);
@@ -606,71 +684,7 @@ export const STEP2_UPCOMING_SCRIPT = `
     return cruises;
   }
 
-  async function fetchLoyaltyData() {
-    log('🔄 Fetching loyalty data via API...', 'info');
 
-    try {
-      var response = await fetch('https://www.royalcaribbean.com/api/profile/loyalty', {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        }
-      });
-
-      log('📡 Loyalty API Response status: ' + response.status, 'info');
-
-      if (!response.ok) {
-        log('⚠️ Loyalty API returned non-OK status: ' + response.status, 'warning');
-        return null;
-      }
-
-      var text = await response.text();
-      log('📦 Loyalty response length: ' + text.length + ' chars', 'info');
-      
-      var data;
-      try {
-        data = JSON.parse(text);
-      } catch (parseError) {
-        log('⚠️ Failed to parse loyalty JSON: ' + parseError.message, 'warning');
-        return null;
-      }
-      
-      if (data && data.payload && data.payload.loyaltyInformation) {
-        var loyalty = data.payload.loyaltyInformation;
-        log('✅ Loyalty API returned data', 'success');
-        
-        // Log the key loyalty info
-        if (loyalty.crownAndAnchorSocietyLoyaltyTier) {
-          log('   → Crown & Anchor: ' + loyalty.crownAndAnchorSocietyLoyaltyTier + ' - ' + (loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints || 0) + ' pts', 'info');
-        }
-        if (loyalty.clubRoyaleLoyaltyTier) {
-          log('   → Club Royale: ' + loyalty.clubRoyaleLoyaltyTier + ' - ' + (loyalty.clubRoyaleLoyaltyIndividualPoints || 0) + ' pts', 'info');
-        }
-        if (loyalty.captainsClubLoyaltyTier) {
-          log('   → Captains Club: ' + loyalty.captainsClubLoyaltyTier + ' - ' + (loyalty.captainsClubLoyaltyIndividualPoints || 0) + ' pts', 'info');
-        }
-        
-        // Send extended loyalty data to app
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'extended_loyalty_data',
-          data: loyalty,
-          accountId: data.payload.accountId
-        }));
-        
-        return loyalty;
-      }
-      
-      log('⚠️ No loyaltyInformation in response', 'warning');
-      return null;
-      
-    } catch (error) {
-      log('⚠️ Loyalty fetch failed: ' + error.message, 'warning');
-      return null;
-    }
-  }
 
   async function extractUpcomingCruises() {
     try {
@@ -687,8 +701,8 @@ export const STEP2_UPCOMING_SCRIPT = `
         stepName: 'Fetching booking data...'
       }));
 
-      // Also fetch loyalty data in parallel
-      var loyaltyPromise = fetchLoyaltyData();
+      // NOTE: Loyalty data is now fetched in Step 4 after navigating to the Crown & Anchor page
+      // This is because the loyalty API requires a session that's only established on that page
       
       var apiResult = await fetchProfileBookings();
       
@@ -734,17 +748,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         log('📄 DOM method extracted ' + cruises.length + ' cruises', 'info');
       }
 
-      // Wait for loyalty data to complete
-      try {
-        var loyaltyResult = await loyaltyPromise;
-        if (loyaltyResult) {
-          log('✅ Loyalty data fetched successfully', 'success');
-        } else {
-          log('⚠️ No loyalty data from API - will try DOM extraction in step 4', 'warning');
-        }
-      } catch (loyaltyError) {
-        log('⚠️ Loyalty fetch error: ' + loyaltyError.message, 'warning');
-      }
+      // Loyalty data will be fetched in Step 4 after navigating to Crown & Anchor page
 
       log('📤 Sending ' + cruises.length + ' cruises to app...', 'info');
 

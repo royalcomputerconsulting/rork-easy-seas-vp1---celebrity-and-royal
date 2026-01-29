@@ -50,6 +50,7 @@ interface FilterState {
   noConflicts: boolean;
   searchQuery: string;
   sortBy: SortOption;
+  selectedShips: string[];
 }
 
 const TABS: { key: ViewTab; label: string; icon?: any }[] = [
@@ -80,7 +81,9 @@ export default function SchedulingScreen() {
     noConflicts: false,
     searchQuery: '',
     sortBy: 'date-asc',
+    selectedShips: [],
   });
+  const [showShipFilter, setShowShipFilter] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
@@ -174,6 +177,22 @@ export default function SchedulingScreen() {
     return sets;
   }, [bookedDates]);
 
+  const availableShips = useMemo(() => {
+    const ships = new Set<string>();
+    const offers = localData.offers || [];
+    offers.forEach((offer: any) => {
+      if (offer.shipName) {
+        ships.add(offer.shipName);
+      }
+    });
+    allCruises.forEach(cruise => {
+      if (cruise.shipName) {
+        ships.add(cruise.shipName);
+      }
+    });
+    return Array.from(ships).sort();
+  }, [localData.offers, allCruises]);
+
   const enrichedCruises = useMemo(() => {
     const offers = localData.offers || [];
     
@@ -240,6 +259,10 @@ export default function SchedulingScreen() {
 
     if (filters.noConflicts && activeTab === 'all') {
       result = result.filter(c => !hasConflict(c));
+    }
+
+    if (filters.selectedShips.length > 0) {
+      result = result.filter(c => c.shipName && filters.selectedShips.includes(c.shipName));
     }
 
     if (filters.searchQuery.trim()) {
@@ -309,6 +332,19 @@ export default function SchedulingScreen() {
       noConflicts: false,
       searchQuery: '',
       sortBy: 'date-asc',
+      selectedShips: [],
+    });
+    setShowShipFilter(false);
+  }, []);
+
+  const toggleShipFilter = useCallback((shipName: string) => {
+    setFilters(prev => {
+      const isSelected = prev.selectedShips.includes(shipName);
+      if (isSelected) {
+        return { ...prev, selectedShips: prev.selectedShips.filter(s => s !== shipName) };
+      } else {
+        return { ...prev, selectedShips: [...prev.selectedShips, shipName] };
+      }
     });
   }, []);
 
@@ -533,7 +569,7 @@ export default function SchedulingScreen() {
           activeOpacity={0.7}
         >
           <SlidersHorizontal size={14} color={showAdvancedFilters ? COLORS.navyDeep : CLEAN_THEME.text.secondary} />
-          {(filters.cabinType !== 'all' || filters.noConflicts) && (
+          {(filters.cabinType !== 'all' || filters.noConflicts || filters.selectedShips.length > 0) && (
             <View style={styles.filterDot} />
           )}
         </TouchableOpacity>
@@ -542,6 +578,71 @@ export default function SchedulingScreen() {
       {/* Collapsible Filters */}
       {showAdvancedFilters && (
         <View style={styles.filtersPanel}>
+          {/* Ship Filter */}
+          <TouchableOpacity
+            style={styles.shipFilterHeader}
+            onPress={() => setShowShipFilter(!showShipFilter)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.shipFilterHeaderLeft}>
+              <Ship size={14} color={COLORS.navyDeep} />
+              <Text style={styles.shipFilterLabel}>Ships</Text>
+              {filters.selectedShips.length > 0 && (
+                <View style={styles.shipCountBadge}>
+                  <Text style={styles.shipCountText}>{filters.selectedShips.length}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.shipFilterToggleText}>
+              {filters.selectedShips.length === 0 ? 'All Ships' : filters.selectedShips.length === 1 ? filters.selectedShips[0] : `${filters.selectedShips.length} selected`}
+            </Text>
+          </TouchableOpacity>
+          
+          {showShipFilter && (
+            <View style={styles.shipFilterList}>
+              {availableShips.length === 0 ? (
+                <Text style={styles.noShipsText}>No ships available</Text>
+              ) : (
+                availableShips.map(ship => (
+                  <TouchableOpacity
+                    key={ship}
+                    style={[
+                      styles.shipChip,
+                      filters.selectedShips.includes(ship) && styles.shipChipActive
+                    ]}
+                    onPress={() => toggleShipFilter(ship)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[
+                      styles.shipCheckbox,
+                      filters.selectedShips.includes(ship) && styles.shipCheckboxActive
+                    ]}>
+                      {filters.selectedShips.includes(ship) && <Check size={10} color={COLORS.white} />}
+                    </View>
+                    <Text style={[
+                      styles.shipChipText,
+                      filters.selectedShips.includes(ship) && styles.shipChipTextActive
+                    ]}>
+                      {ship}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
+              {filters.selectedShips.length > 0 && (
+                <TouchableOpacity
+                  style={styles.clearShipsButton}
+                  onPress={() => setFilters(prev => ({ ...prev, selectedShips: [] }))}
+                  activeOpacity={0.7}
+                >
+                  <X size={12} color={COLORS.error} />
+                  <Text style={styles.clearShipsText}>Clear ship filter</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* Cabin Type Filter */}
+          <Text style={styles.filterSectionTitle}>Cabin Type</Text>
           <View style={styles.cabinRow}>
             {CABIN_FILTERS.map(cabin => (
               <TouchableOpacity
@@ -1238,13 +1339,123 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.goldAccent,
   },
   filtersPanel: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.sm,
     marginHorizontal: SPACING.md,
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.15)',
+  },
+  shipFilterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+    marginBottom: SPACING.sm,
+    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  shipFilterHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  shipFilterLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  shipCountBadge: {
+    backgroundColor: COLORS.goldAccent,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  shipCountText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  shipFilterToggleText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+  },
+  shipFilterList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+    paddingBottom: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  shipChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  shipChipActive: {
+    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: COLORS.navyDeep,
+  },
+  shipCheckbox: {
+    width: 16,
+    height: 16,
+    borderRadius: 3,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 31, 63, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shipCheckboxActive: {
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
+  },
+  shipChipText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+  },
+  shipChipTextActive: {
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  noShipsText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.5,
+    fontStyle: 'italic' as const,
+    padding: SPACING.sm,
+  },
+  clearShipsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+  },
+  clearShipsText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.error,
+  },
+  filterSectionTitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+    opacity: 0.6,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: SPACING.xs,
   },
   cabinRow: {
     flexDirection: 'row',

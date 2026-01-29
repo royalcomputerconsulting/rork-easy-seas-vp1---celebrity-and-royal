@@ -433,10 +433,21 @@ export function createSyncPreview(
 }
 
 export function calculateSyncCounts(preview: SyncPreview): SyncPreviewCounts {
-  const upcomingCruises = preview.bookedCruises.new.filter(c => c.status === 'booked' && !c.isCourtesyHold).length + 
-                          preview.bookedCruises.updates.filter(u => u.updated.status === 'booked' && !u.updated.isCourtesyHold).length;
+  // Count upcoming cruises - all booked cruises that are NOT courtesy holds
+  const upcomingCruises = preview.bookedCruises.new.filter(c => !c.isCourtesyHold).length + 
+                          preview.bookedCruises.updates.filter(u => !u.updated.isCourtesyHold).length;
+  
+  // Count courtesy holds
   const courtesyHolds = preview.bookedCruises.new.filter(c => c.isCourtesyHold === true).length + 
                         preview.bookedCruises.updates.filter(u => u.updated.isCourtesyHold === true).length;
+  
+  console.log('[SyncLogic] calculateSyncCounts:', {
+    newCruises: preview.bookedCruises.new.length,
+    updatedCruises: preview.bookedCruises.updates.length,
+    upcomingCruises,
+    courtesyHolds,
+    newCruisesDetails: preview.bookedCruises.new.map(c => ({ ship: c.shipName, date: c.sailDate, isHold: c.isCourtesyHold })),
+  });
 
   return {
     offersNew: preview.offers.new.length,

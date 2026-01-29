@@ -18,6 +18,7 @@ import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbea
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectUpcomingCruisesExtraction } from '@/lib/royalCaribbean/step2_upcoming';
 import { injectCourtesyHoldsExtraction } from '@/lib/royalCaribbean/step3_holds';
+import { injectLoyaltyExtraction } from '@/lib/royalCaribbean/step4_loyalty';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 
 export type CruiseLine = 'royal_caribbean' | 'celebrity';
@@ -322,33 +323,81 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Step 2 error: ${step2Error} - continuing with collected data`, 'warning');
       }
       
-      setState(prev => ({ ...prev, status: 'running_step_3' }));
-      addLog('Step 3: Navigating to courtesy holds page...', 'info');
-      addLog('Loading Courtesy Holds Page...', 'info');
+      // Check if Step 2 already extracted courtesy holds from the API
+      // If so, skip Step 3 DOM scraping to avoid duplicates
+      const step2CourtesyHolds = state.extractedBookedCruises.filter(c => {
+        const status = (c.status || '').toLowerCase();
+        return status === 'courtesy hold' || status === 'hold' || status === 'offer';
+      });
+      
+      if (step2CourtesyHolds.length > 0) {
+        addLog(`Step 3: Skipping DOM scraping - ${step2CourtesyHolds.length} courtesy hold(s) already extracted via API`, 'info');
+        setState(prev => ({ ...prev, status: 'running_step_3' }));
+        // Send step_complete immediately since we're skipping
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } else {
+        setState(prev => ({ ...prev, status: 'running_step_3' }));
+        addLog('Step 3: Navigating to courtesy holds page...', 'info');
+        addLog('Loading Courtesy Holds Page...', 'info');
+        
+        try {
+          if (webViewRef.current) {
+            webViewRef.current.injectJavaScript(`
+              window.location.href = '${config.holdsUrl}';
+              true;
+            `);
+            
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            
+            webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
+            
+            await waitForStepComplete(3, 90000);
+          }
+        } catch (step3Error) {
+          addLog(`Step 3 error: ${step3Error} - continuing with collected data`, 'warning');
+        }
+      }
+      
+      // Step 4: Fetch loyalty data using Bearer token auth (no navigation needed)
+      setState(prev => ({ ...prev, status: 'running_step_4' }));
+      addLog('Step 4: Fetching loyalty data...', 'info');
       
       try {
         if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`
-            window.location.href = '${config.holdsUrl}';
-            true;
-          `);
+          // No navigation needed - Bearer token auth works from any page
+          // Just inject the loyalty extraction script directly
+          webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
           
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          
-          webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
-          
-          await waitForStepComplete(3, 90000);
+          await waitForStepComplete(4, 30000);
         }
-      } catch (step3Error) {
-        addLog(`Step 3 error: ${step3Error} - continuing with collected data`, 'warning');
+      } catch (step4Error) {
+        addLog(`Step 4 error: ${step4Error} - continuing without loyalty data`, 'warning');
       }
       
-      // Step 4 (Loyalty) has been removed per user request
       addLog('All steps completed successfully! Ready to sync.', 'success');
       
       setState(prev => {
-        const upcomingCruises = prev.extractedBookedCruises.filter(c => c.status === 'Upcoming').length;
-        const courtesyHolds = prev.extractedBookedCruises.filter(c => c.status === 'Courtesy Hold').length;
+        // Log all extracted cruises for debugging
+        console.log('[RoyalCaribbeanSync] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('[RoyalCaribbeanSync] FINAL EXTRACTION VERIFICATION');
+        console.log('[RoyalCaribbeanSync] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('[RoyalCaribbeanSync] Total extracted cruises:', prev.extractedBookedCruises.length);
+        prev.extractedBookedCruises.forEach((c, idx) => {
+          console.log(`[RoyalCaribbeanSync]   ${idx + 1}. ${c.shipName} - ${c.sailingStartDate} - Status: ${c.status} - Booking: ${c.bookingId} - Nights: ${c.numberOfNights}`);
+        });
+        
+        // Count cruises by status - be more flexible with status matching
+        const upcomingCruises = prev.extractedBookedCruises.filter(c => {
+          const status = (c.status || '').toLowerCase();
+          return status === 'upcoming' || status === 'booked' || status === 'confirmed' || status === 'pending' || status === 'waitlist';
+        }).length;
+        
+        const courtesyHolds = prev.extractedBookedCruises.filter(c => {
+          const status = (c.status || '').toLowerCase();
+          return status === 'courtesy hold' || status === 'hold' || status === 'offer';
+        }).length;
+        
+        console.log('[RoyalCaribbeanSync] Status counts - Upcoming:', upcomingCruises, ', Courtesy Holds:', courtesyHolds);
         
         // Group by offer name to get unique offer count
         const offersByName = new Map<string, number>();
@@ -357,6 +406,20 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           offersByName.set(key, (offersByName.get(key) || 0) + 1);
         });
         const uniqueOffers = offersByName.size;
+        
+        // Log detailed breakdown of all extracted cruises
+        console.log('[RoyalCaribbeanSync] Extracted cruises breakdown:', {
+          total: prev.extractedBookedCruises.length,
+          upcomingCruises,
+          courtesyHolds,
+          cruiseDetails: prev.extractedBookedCruises.map(c => ({
+            ship: c.shipName,
+            date: c.sailingStartDate,
+            status: c.status,
+            bookingId: c.bookingId,
+            nights: c.numberOfNights
+          }))
+        });
         
         console.log('[RoyalCaribbeanSync] Offer grouping:', {
           totalRows: prev.extractedOffers.length,
@@ -381,10 +444,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           offerRows: prev.extractedOffers.length,
           upcomingCruises,
           courtesyHolds,
+          totalCruises: prev.extractedBookedCruises.length,
           status: 'awaiting_confirmation'
         });
         
-        addLog(`📊 Extracted: ${prev.extractedOffers.length} offer rows from ${uniqueOffers} unique offer(s), ${prev.extractedBookedCruises.length} cruises`, 'info');
+        addLog(`📊 Extracted: ${prev.extractedOffers.length} offer rows from ${uniqueOffers} unique offer(s)`, 'info');
+        addLog(`📊 Extracted: ${prev.extractedBookedCruises.length} total cruises (${upcomingCruises} upcoming, ${courtesyHolds} courtesy holds)`, 'info');
         addLog('⏳ Awaiting user confirmation to sync data...', 'info');
         
         return newState;
@@ -394,7 +459,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, state.scrapePricingAndItinerary, addLog, config]);
+  }, [state.status, state.scrapePricingAndItinerary, state.extractedBookedCruises, addLog, config]);
 
   const exportOffersCSV = useCallback(async () => {
     try {

@@ -285,6 +285,67 @@ export function CruiseCard({
               <Text style={styles.miniTaxesValue}>${Math.round(bookedCruise.taxes ?? cruise.taxes ?? 0).toLocaleString()}</Text>
             </View>
           )}
+          {/* Booking Enrichment Data from Sync */}
+          {isBooked && (bookedCruise.musterStation || bookedCruise.bookingStatus || bookedCruise.packageCode || bookedCruise.stateroomNumber || bookedCruise.stateroomCategoryCode) && (
+            <View style={styles.miniEnrichmentSection}>
+              {bookedCruise.bookingStatus && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Status:</Text>
+                  <View style={[
+                    styles.miniEnrichmentBadge,
+                    { backgroundColor: bookedCruise.bookingStatus === 'BK' ? '#DCFCE7' : bookedCruise.bookingStatus === 'OF' ? '#FEF3C7' : '#E0E7FF' }
+                  ]}>
+                    <Text style={[
+                      styles.miniEnrichmentBadgeText,
+                      { color: bookedCruise.bookingStatus === 'BK' ? '#15803D' : bookedCruise.bookingStatus === 'OF' ? '#92400E' : '#4338CA' }
+                    ]}>
+                      {bookedCruise.bookingStatus === 'BK' ? 'Confirmed' : bookedCruise.bookingStatus === 'OF' ? 'Offer/Hold' : bookedCruise.bookingStatus}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {bookedCruise.stateroomNumber && bookedCruise.stateroomNumber !== 'GTY' && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Cabin #:</Text>
+                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.stateroomNumber}</Text>
+                </View>
+              )}
+              {bookedCruise.stateroomCategoryCode && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Category:</Text>
+                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.stateroomCategoryCode}</Text>
+                </View>
+              )}
+              {bookedCruise.stateroomType && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Type:</Text>
+                  <Text style={styles.miniEnrichmentValue}>
+                    {bookedCruise.stateroomType === 'B' ? 'Balcony' : bookedCruise.stateroomType === 'O' ? 'Ocean View' : bookedCruise.stateroomType === 'I' ? 'Interior' : bookedCruise.stateroomType === 'S' ? 'Suite' : bookedCruise.stateroomType}
+                  </Text>
+                </View>
+              )}
+              {bookedCruise.musterStation && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Muster:</Text>
+                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.musterStation}</Text>
+                </View>
+              )}
+              {bookedCruise.packageCode && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Offer Code:</Text>
+                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.packageCode}</Text>
+                </View>
+              )}
+              {bookedCruise.passengerStatus && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Pax Status:</Text>
+                  <Text style={styles.miniEnrichmentValue}>
+                    {bookedCruise.passengerStatus === 'AC' ? 'Active' : bookedCruise.passengerStatus}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
         <ChevronRight size={20} color={COLORS.navyDeep} style={styles.miniChevron} />
       </TouchableOpacity>
@@ -732,6 +793,39 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#7C3AED',
+  },
+  miniEnrichmentSection: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  miniEnrichmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  miniEnrichmentLabel: {
+    fontSize: 9,
+    color: '#6B7280',
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  miniEnrichmentValue: {
+    fontSize: 9,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  miniEnrichmentBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  miniEnrichmentBadgeText: {
+    fontSize: 9,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   compactContainer: {
     backgroundColor: COLORS.white,
