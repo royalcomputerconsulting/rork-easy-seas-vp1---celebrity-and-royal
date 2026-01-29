@@ -502,7 +502,9 @@ export const STEP2_UPCOMING_SCRIPT = `
       processedBookings.push(bookingInfo);
 
       var portSummary = departurePort ? (isOneWay ? departurePort + ' → ' + arrivalPort : departurePort) : 'No port data';
-      log('  ✓ ' + shipName + ' - ' + sailingStartDate + ' - ' + portSummary + ' - Cabin: ' + (cabinNumber || 'GTY') + ' (' + cabinType + ') - Status: ' + status, 'success');
+      var cabinDisplay = cabinNumber ? cabinNumber : 'GTY';
+      var cabinTypeDisplay = cabinType || 'Unknown';
+      log('  ✓ ' + shipName + ' - ' + sailingStartDate + ' - Room: ' + cabinTypeDisplay + ' #' + cabinDisplay + ' - Booking: ' + booking.bookingId + ' - Status: ' + status, 'success');
     }
     
     log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
@@ -677,7 +679,8 @@ export const STEP2_UPCOMING_SCRIPT = `
         };
         
         cruises.push(cruise);
-        log('  ✓ DOM: ' + shipName + ' - ' + sailingStartDate + ' - Booking: ' + bookingId, 'success');
+        var domCabinDisplay = cabinNumber ? cabinNumber : (cabinType && cabinType.match(/GTY/i) ? 'GTY' : 'Unknown');
+        log('  ✓ DOM: ' + shipName + ' - ' + sailingStartDate + ' - Room: ' + (cabinType || 'Unknown') + ' #' + domCabinDisplay + ' - Booking: ' + bookingId, 'success');
       }
     }
 

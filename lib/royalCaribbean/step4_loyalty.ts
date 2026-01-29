@@ -41,11 +41,14 @@ export const STEP4_LOYALTY_SCRIPT = `
       log('✓ Auth headers obtained - account: ' + accountId.substring(0, 8) + '...', 'info');
       
       return {
-        'accept': 'application/json',
-        'accept-language': 'en-US,en;q=0.9',
-        'account-id': accountId,
-        'authorization': networkAuth,
-        'content-type': 'application/json'
+        headers: {
+          'accept': 'application/json',
+          'accept-language': 'en-US,en;q=0.9',
+          'account-id': accountId,
+          'authorization': networkAuth,
+          'content-type': 'application/json'
+        },
+        accountId: accountId
       };
     } catch (e) {
       log('⚠️ Failed to get auth headers: ' + e.message, 'warning');
@@ -56,114 +59,142 @@ export const STEP4_LOYALTY_SCRIPT = `
   async function fetchLoyaltyData() {
     log('📡 Fetching loyalty data via authenticated API...', 'info');
 
-    var headers = getAuthHeaders();
-    if (!headers) {
+    var authInfo = getAuthHeaders();
+    if (!authInfo) {
       log('⚠️ Could not obtain auth headers - will try DOM fallback', 'warning');
       return null;
     }
+
+    var headers = authInfo.headers;
 
     try {
       var host = location && location.hostname ? location.hostname : '';
       var brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
       var baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
-      var endpoint = baseUrl + '/api/profile/loyalty';
       
-      log('📡 Calling ' + endpoint + '...', 'info');
+      // Try multiple endpoints - the loyalty API should work with Bearer token
+      var endpoints = [
+        baseUrl + '/api/profile/loyalty',
+        baseUrl + '/api/profile/loyalty-status',
+        baseUrl + '/api/account/loyalty'
+      ];
       
-      var response = await fetch(endpoint, {
-        method: 'GET',
-        credentials: 'include',
-        headers: headers
-      });
+      var loyaltyResult = null;
+      
+      for (var i = 0; i < endpoints.length; i++) {
+        var endpoint = endpoints[i];
+        log('📡 Trying endpoint ' + (i + 1) + '/' + endpoints.length + ': ' + endpoint, 'info');
+        
+        try {
+          var response = await fetch(endpoint, {
+            method: 'GET',
+            credentials: 'omit',
+            headers: headers
+          });
 
-      log('📡 Loyalty API Response status: ' + response.status, 'info');
+          log('📡 Response status: ' + response.status, 'info');
 
-      if (!response.ok) {
-        log('⚠️ Loyalty API returned non-OK status: ' + response.status, 'warning');
+          if (response.ok) {
+            var text = await response.text();
+            log('📦 Response length: ' + text.length + ' chars', 'info');
+            
+            if (text && text.length > 10) {
+              var data = JSON.parse(text);
+              
+              if (data && data.payload && data.payload.loyaltyInformation) {
+                loyaltyResult = { data: data, accountId: data.payload.accountId || authInfo.accountId };
+                log('✅ Found loyalty data at ' + endpoint, 'success');
+                break;
+              } else {
+                log('⚠️ No loyaltyInformation in response from ' + endpoint, 'warning');
+                if (data && data.payload) {
+                  log('   Payload keys: ' + Object.keys(data.payload).join(', '), 'info');
+                }
+              }
+            }
+          } else if (response.status === 403) {
+            log('⚠️ 403 Forbidden at ' + endpoint + ' - trying next...', 'warning');
+          } else {
+            log('⚠️ Status ' + response.status + ' at ' + endpoint + ' - trying next...', 'warning');
+          }
+        } catch (endpointError) {
+          log('⚠️ Error at ' + endpoint + ': ' + endpointError.message, 'warning');
+        }
+        
+        await wait(500);
+      }
+      
+      if (!loyaltyResult) {
+        log('⚠️ All API endpoints failed', 'warning');
         return null;
       }
-
-      var text = await response.text();
-      log('📦 Loyalty response length: ' + text.length + ' chars', 'info');
       
-      var data;
-      try {
-        data = JSON.parse(text);
-      } catch (parseError) {
-        log('⚠️ Failed to parse loyalty JSON: ' + parseError.message, 'warning');
-        return null;
+      var loyalty = loyaltyResult.data.payload.loyaltyInformation;
+      log('✅ Loyalty API returned data successfully!', 'success');
+      
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+      log('📊 LOYALTY DATA EXTRACTION RESULTS', 'success');
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+      
+      if (loyalty.crownAndAnchorSocietyLoyaltyTier) {
+        var caPoints = loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints || 0;
+        var caNextTier = loyalty.crownAndAnchorSocietyNextTierLevel || '';
+        var caRemaining = loyalty.crownAndAnchorSocietyRemainingPoints || 0;
+        log('   👑 Crown & Anchor Society:', 'info');
+        log('      Tier: ' + loyalty.crownAndAnchorSocietyLoyaltyTier, 'success');
+        log('      Points: ' + caPoints.toLocaleString(), 'success');
+        if (caNextTier) {
+          log('      Next Tier: ' + caNextTier + ' (' + caRemaining.toLocaleString() + ' pts away)', 'info');
+        }
+      } else {
+        log('   👑 Crown & Anchor Society: Not found in API response', 'warning');
       }
       
-      if (data && data.payload && data.payload.loyaltyInformation) {
-        var loyalty = data.payload.loyaltyInformation;
-        log('✅ Loyalty API returned data successfully!', 'success');
-        
-        log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-        log('📊 LOYALTY DATA EXTRACTION', 'success');
-        log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-        
-        if (loyalty.crownAndAnchorSocietyLoyaltyTier) {
-          var caPoints = loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints || 0;
-          var caNextTier = loyalty.crownAndAnchorSocietyNextTierLevel || '';
-          var caRemaining = loyalty.crownAndAnchorSocietyRemainingPoints || 0;
-          log('   👑 Crown & Anchor Society:', 'info');
-          log('      Tier: ' + loyalty.crownAndAnchorSocietyLoyaltyTier, 'success');
-          log('      Points: ' + caPoints.toLocaleString(), 'info');
-          if (caNextTier) {
-            log('      Next Tier: ' + caNextTier + ' (' + caRemaining.toLocaleString() + ' pts away)', 'info');
-          }
-        }
-        
-        if (loyalty.clubRoyaleLoyaltyTier) {
-          var crPoints = loyalty.clubRoyaleLoyaltyIndividualPoints || 0;
-          log('   🎰 Club Royale (Casino):', 'info');
-          log('      Tier: ' + loyalty.clubRoyaleLoyaltyTier, 'success');
-          log('      Points: ' + crPoints.toLocaleString(), 'info');
-        }
-        
-        if (loyalty.captainsClubLoyaltyTier) {
-          var ccPoints = loyalty.captainsClubLoyaltyIndividualPoints || 0;
-          var ccNextTier = loyalty.captainsClubNextTierLevel || '';
-          var ccRemaining = loyalty.captainsClubRemainingPoints || 0;
-          log('   ⚓ Captain\\'s Club (Celebrity):', 'info');
-          log('      Tier: ' + loyalty.captainsClubLoyaltyTier, 'success');
-          log('      Points: ' + ccPoints.toLocaleString(), 'info');
-          if (ccNextTier) {
-            log('      Next Tier: ' + ccNextTier + ' (' + ccRemaining.toLocaleString() + ' pts away)', 'info');
-          }
-        }
-        
-        if (loyalty.blueChipClubLoyaltyTier) {
-          var bcPoints = loyalty.blueChipClubLoyaltyIndividualPoints || 0;
-          log('   💎 Blue Chip Club (Celebrity Casino):', 'info');
-          log('      Tier: ' + loyalty.blueChipClubLoyaltyTier, 'success');
-          log('      Points: ' + bcPoints.toLocaleString(), 'info');
-        }
-        
-        if (loyalty.venetianSocietyLoyaltyTier) {
-          log('   🚢 Venetian Society:', 'info');
-          log('      Tier: ' + loyalty.venetianSocietyLoyaltyTier, 'success');
-          if (loyalty.venetianSocietyMemberNumber) {
-            log('      Member #: ' + loyalty.venetianSocietyMemberNumber, 'info');
-          }
-        }
-        
-        log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-        
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'extended_loyalty_data',
-          data: loyalty,
-          accountId: data.payload.accountId
-        }));
-        
-        return loyalty;
+      if (loyalty.clubRoyaleLoyaltyTier) {
+        var crPoints = loyalty.clubRoyaleLoyaltyIndividualPoints || 0;
+        log('   🎰 Club Royale (Casino):', 'info');
+        log('      Tier: ' + loyalty.clubRoyaleLoyaltyTier, 'success');
+        log('      Points: ' + crPoints.toLocaleString(), 'success');
+      } else {
+        log('   🎰 Club Royale (Casino): Not found in API response', 'warning');
       }
       
-      log('⚠️ No loyaltyInformation in response', 'warning');
-      if (data && data.payload) {
-        log('📝 Payload keys: ' + Object.keys(data.payload).join(', '), 'info');
+      if (loyalty.captainsClubLoyaltyTier) {
+        var ccPoints = loyalty.captainsClubLoyaltyIndividualPoints || 0;
+        var ccNextTier = loyalty.captainsClubNextTierLevel || '';
+        var ccRemaining = loyalty.captainsClubRemainingPoints || 0;
+        log('   ⚓ Captain\\'s Club (Celebrity):', 'info');
+        log('      Tier: ' + loyalty.captainsClubLoyaltyTier, 'success');
+        log('      Points: ' + ccPoints.toLocaleString(), 'success');
+        if (ccNextTier) {
+          log('      Next Tier: ' + ccNextTier + ' (' + ccRemaining.toLocaleString() + ' pts away)', 'info');
+        }
       }
-      return null;
+      
+      if (loyalty.blueChipClubLoyaltyTier) {
+        var bcPoints = loyalty.blueChipClubLoyaltyIndividualPoints || 0;
+        log('   💎 Blue Chip Club (Celebrity Casino):', 'info');
+        log('      Tier: ' + loyalty.blueChipClubLoyaltyTier, 'success');
+        log('      Points: ' + bcPoints.toLocaleString(), 'success');
+      }
+      
+      if (loyalty.venetianSocietyLoyaltyTier) {
+        log('   🚢 Venetian Society:', 'info');
+        log('      Tier: ' + loyalty.venetianSocietyLoyaltyTier, 'success');
+        if (loyalty.venetianSocietyMemberNumber) {
+          log('      Member #: ' + loyalty.venetianSocietyMemberNumber, 'info');
+        }
+      }
+      
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+      
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'extended_loyalty_data',
+        data: loyalty,
+        accountId: loyaltyResult.accountId
+      }));
+      
+      return loyalty;
       
     } catch (error) {
       log('⚠️ Loyalty fetch failed: ' + error.message, 'warning');
@@ -213,9 +244,9 @@ export const STEP4_LOYALTY_SCRIPT = `
       log('🚀 ====== STEP 4: LOYALTY DATA ======', 'info');
       log('📍 Current URL: ' + window.location.href, 'info');
 
-      // Check if we're on an error page
+      // Check if we're on an error page - this is OK, we fetch via API with Bearer token
       if (window.location.href.includes('/error') || window.location.href.includes('/errors')) {
-        log('⚠️ Currently on an error page - API may fail', 'warning');
+        log('📍 On error page - will fetch loyalty data directly via API', 'info');
       }
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -225,28 +256,28 @@ export const STEP4_LOYALTY_SCRIPT = `
         stepName: 'Fetching loyalty data...'
       }));
 
-      // Wait for page to stabilize
-      await wait(2000);
+      // No need to wait for page - we're fetching directly via API with Bearer token
+      await wait(500);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
-        current: 30,
+        current: 20,
         total: 100,
         stepName: 'Calling loyalty API...'
       }));
 
-      // Fetch loyalty data using Bearer token auth
+      // Fetch loyalty data using Bearer token auth - works regardless of current page
       var loyaltyResult = await fetchLoyaltyData();
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
-        current: 60,
+        current: 70,
         total: 100,
         stepName: 'Processing loyalty data...'
       }));
 
       if (loyaltyResult) {
-        log('✅ Step 4 Complete: Loyalty data extracted successfully', 'success');
+        log('✅ Step 4 Complete: Loyalty data extracted successfully via API', 'success');
       } else {
         log('⚠️ API method failed - trying DOM fallback...', 'warning');
         
@@ -260,12 +291,26 @@ export const STEP4_LOYALTY_SCRIPT = `
         // Validate extracted data - don't send garbage
         if (domLoyalty && isValidLoyaltyData(domLoyalty)) {
           log('✅ Extracted valid loyalty data from DOM', 'success');
+          
+          // Log DOM extraction results
+          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+          log('📊 LOYALTY DATA (DOM FALLBACK)', 'success');
+          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+          if (domLoyalty.crownAndAnchorLevel) {
+            log('   👑 Crown & Anchor: ' + domLoyalty.crownAndAnchorLevel + ' - ' + (domLoyalty.crownAndAnchorPoints || '0') + ' pts', 'success');
+          }
+          if (domLoyalty.clubRoyaleTier) {
+            log('   🎰 Club Royale: ' + domLoyalty.clubRoyaleTier + ' - ' + (domLoyalty.clubRoyalePoints || '0') + ' pts', 'success');
+          }
+          log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+          
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'loyalty_data',
             data: domLoyalty
           }));
         } else {
           log('⚠️ Step 4 Complete: Could not extract valid loyalty data from API or DOM', 'warning');
+          log('💡 Tip: Try logging out and back in, then run sync again', 'info');
         }
       }
 

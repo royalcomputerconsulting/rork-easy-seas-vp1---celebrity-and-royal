@@ -65,59 +65,13 @@ export const STEP1_OFFERS_SCRIPT = `
   async function extractClubRoyaleStatus() {
     try {
       log('Extracting Club Royale status...');
+      log('⚠️ Note: Loyalty data will be fetched via API in Step 4 for accuracy', 'info');
 
-      const loyaltyData = {
-        clubRoyaleTier: '',
-        clubRoyalePoints: '',
-        crownAndAnchorLevel: '',
-        crownAndAnchorPoints: ''
-      };
-
-      const pageText = document.body.textContent || '';
+      // Don't extract loyalty data from DOM in Step 1 - it's unreliable
+      // The API-based extraction in Step 4 is the authoritative source
+      // This prevents incorrect data (like CHOICE/200) from being sent
       
-      const tierPatterns = [
-        /Club Royale\\s*(?:Status|Tier)?[:\\s]*(Signature|Premier|Classic|Prime|Choice|Masters)/i,
-        /(Signature|Premier|Classic|Prime|Choice|Masters)\\s*(?:Member|Status|Tier)?/i
-      ];
-      
-      for (const pattern of tierPatterns) {
-        const match = pageText.match(pattern);
-        if (match && match[1]) {
-          loyaltyData.clubRoyaleTier = match[1];
-          log('Found Club Royale tier: ' + match[1], 'success');
-          break;
-        }
-      }
-      
-      const tierCreditsPatterns = [
-        /YOUR\\s+CURRENT\\s+TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
-        /TIER\\s+CREDITS[^\\d]{0,50}?([\\d,]+)/gi,
-        /([\\d,]+)\\s*TIER\\s+CREDITS/gi
-      ];
-      
-      for (const pattern of tierCreditsPatterns) {
-        let match = pattern.exec(pageText);
-        if (match && match[1]) {
-          const pointStr = match[1].replace(/,/g, '');
-          const numPoints = parseInt(pointStr, 10);
-          if (numPoints >= 100 && numPoints <= 10000000) {
-            loyaltyData.clubRoyalePoints = match[1];
-            log('Found Club Royale points: ' + match[1], 'success');
-            break;
-          }
-        }
-      }
-
-      if (loyaltyData.clubRoyaleTier || loyaltyData.clubRoyalePoints) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'loyalty_data',
-          data: loyaltyData
-        }));
-        
-        log('Club Royale status: ' + (loyaltyData.clubRoyaleTier || 'Unknown') + ', ' + (loyaltyData.clubRoyalePoints || '0') + ' points', 'success');
-      }
-      
-      return loyaltyData;
+      return null;
     } catch (error) {
       log('Error extracting Club Royale status: ' + error.message, 'warning');
       return null;
