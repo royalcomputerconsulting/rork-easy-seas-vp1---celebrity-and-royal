@@ -160,38 +160,62 @@ export const STEP2_UPCOMING_SCRIPT = `
       var host = location && location.hostname ? location.hostname : '';
       var brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
       var baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
-      var endpoint = baseUrl + '/api/profile/bookings';
       
-      // Try cookie-based auth first (most reliable when on the page)
-      log('📡 Trying cookie-based auth for ' + endpoint + '...', 'info');
-      var response = await fetch(endpoint, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'accept': 'application/json, text/plain, */*',
-          'accept-language': 'en-US,en;q=0.9',
-          'cache-control': 'no-cache',
-          'pragma': 'no-cache'
+      log('🔍 Testing multiple booking endpoints...', 'info');
+      var endpoints = [
+        baseUrl + '/api/club-royale/offers',
+        baseUrl + '/api/profile/bookings',
+        baseUrl + '/api/account/bookings',
+        baseUrl + '/api/bookings'
+      ];
+      
+      var response = null;
+      var workingEndpoint = null;
+      
+      for (var ei = 0; ei < endpoints.length; ei++) {
+        var testEndpoint = endpoints[ei];
+        log('📡 Testing endpoint ' + (ei + 1) + '/' + endpoints.length + ': ' + testEndpoint, 'info');
+      
+        try {
+          // Try cookie-based auth first
+          var testResponse = await fetch(testEndpoint, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'accept': 'application/json, text/plain, */*',
+              'accept-language': 'en-US,en;q=0.9',
+              'cache-control': 'no-cache',
+              'pragma': 'no-cache'
+            }
+          });
+          
+          log('   📡 Response status: ' + testResponse.status, 'info');
+          
+          if (testResponse.ok) {
+            response = testResponse;
+            workingEndpoint = testEndpoint;
+            log('   ✅ SUCCESS! Endpoint works: ' + testEndpoint, 'success');
+            break;
+          } else {
+            log('   ❌ Failed with status: ' + testResponse.status, 'warning');
+          }
+        } catch (fetchErr) {
+          log('   ❌ Error: ' + fetchErr.message, 'warning');
         }
-      });
-
-      log('📡 Cookie auth response status: ' + response.status, 'info');
-
-      // If cookie auth fails, try bearer token auth
-      if (!response.ok && headers) {
-        log('📡 Cookie auth failed, trying bearer token auth...', 'info');
-        response = await fetch(endpoint, {
-          method: 'GET',
-          credentials: 'omit',
-          headers: headers
-        });
-        log('📡 Bearer auth response status: ' + response.status, 'info');
+        
+        await wait(500);
       }
-
-      if (!response.ok) {
-        log('⚠️ API returned non-OK status: ' + response.status, 'warning');
-        throw new Error('API response not OK: ' + response.status);
+      
+      if (!response || !response.ok) {
+        log('❌ All booking endpoints failed!', 'error');
+        log('📝 Tested endpoints:', 'info');
+        for (var li = 0; li < endpoints.length; li++) {
+          log('   ' + (li + 1) + '. ' + endpoints[li], 'info');
+        }
+        throw new Error('All API endpoints returned errors');
       }
+      
+      log('✅ Using working endpoint: ' + workingEndpoint, 'success');
 
       var text = await response.text();
       log('📦 Response received, length: ' + text.length + ' chars', 'info');

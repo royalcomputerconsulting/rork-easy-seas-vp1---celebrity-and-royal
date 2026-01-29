@@ -122,9 +122,11 @@ export const STEP4_LOYALTY_SCRIPT = `
       var brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
       var baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
       
-      // Try multiple API endpoints - the loyalty-programs page uses these
-      // IMPORTANT: Use credentials: 'include' AND same-origin headers for cookie auth
+      log('🔍 Testing multiple loyalty endpoints...', 'info');
+      // Try multiple API endpoints - test all possible variations
       var endpoints = [
+        { url: baseUrl + '/api/loyalty', method: 'cookie' },
+        { url: baseUrl + '/api/account/loyalty', method: 'cookie' },
         { url: baseUrl + '/api/account/loyalty-programs', method: 'cookie' },
         { url: baseUrl + '/api/profile/loyalty-programs', method: 'cookie' },
         { url: baseUrl + '/api/profile/loyalty', method: 'cookie' },
@@ -135,7 +137,7 @@ export const STEP4_LOYALTY_SCRIPT = `
       
       for (var i = 0; i < endpoints.length; i++) {
         var ep = endpoints[i];
-        log('📡 Trying endpoint ' + (i + 1) + '/' + endpoints.length + ': ' + ep.url + ' (' + ep.method + ' auth)', 'info');
+        log('📡 Testing endpoint ' + (i + 1) + '/' + endpoints.length + ': ' + ep.url + ' (' + ep.method + ' auth)', 'info');
         
         try {
           var fetchOpts;
@@ -165,7 +167,7 @@ export const STEP4_LOYALTY_SCRIPT = `
           
           var response = await fetch(ep.url, fetchOpts);
 
-          log('📡 Response status: ' + response.status, 'info');
+          log('   📡 Response status: ' + response.status, 'info');
 
           if (response.ok) {
             var text = await response.text();
@@ -181,33 +183,39 @@ export const STEP4_LOYALTY_SCRIPT = `
               
               if (data && data.payload && data.payload.loyaltyInformation) {
                 loyaltyResult = { data: data, accountId: data.payload.accountId || accountId };
-                log('✅ Found loyalty data at ' + ep.url, 'success');
+                log('   ✅ SUCCESS! Endpoint works: ' + ep.url, 'success');
                 break;
               } else if (data && data.loyaltyInformation) {
                 // Handle direct response without payload wrapper
                 loyaltyResult = { data: { payload: data }, accountId: data.accountId || accountId };
-                log('✅ Found loyalty data at ' + ep.url + ' (unwrapped)', 'success');
+                log('   ✅ SUCCESS! Endpoint works (unwrapped): ' + ep.url, 'success');
                 break;
               } else {
-                log('⚠️ No loyaltyInformation in response from ' + ep.url, 'warning');
+                log('   ❌ No loyaltyInformation in response', 'warning');
               }
             }
           } else if (response.status === 403) {
-            log('⚠️ 403 Forbidden at ' + ep.url + ' - trying next...', 'warning');
+            log('   ❌ Failed: 403 Forbidden', 'warning');
           } else {
-            log('⚠️ Status ' + response.status + ' at ' + ep.url + ' - trying next...', 'warning');
+            log('   ❌ Failed with status: ' + response.status, 'warning');
           }
         } catch (endpointError) {
-          log('⚠️ Error at ' + ep.url + ': ' + endpointError.message, 'warning');
+          log('   ❌ Error: ' + endpointError.message, 'warning');
         }
         
         await wait(500);
       }
       
       if (!loyaltyResult) {
-        log('⚠️ All API endpoints failed', 'warning');
+        log('❌ All loyalty endpoints failed!', 'error');
+        log('📝 Tested endpoints:', 'info');
+        for (var li = 0; li < endpoints.length; li++) {
+          log('   ' + (li + 1) + '. ' + endpoints[li].url + ' (' + endpoints[li].method + ')', 'info');
+        }
         return null;
       }
+      
+      log('✅ Using working endpoint for loyalty data', 'success');
       
       var loyalty = loyaltyResult.data.payload.loyaltyInformation;
       log('✅ Loyalty API returned data successfully!', 'success');
