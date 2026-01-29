@@ -372,36 +372,40 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       await waitForStepComplete(1, 900000);
       
-      addLog(`✅ Step 1 complete with consolidated API calls!`, 'success');
+      addLog(`✅ Step 1 complete!`, 'success');
       
-      // Check if we got bookings from the consolidated API call in Step 1
-      const hasBookingsFromApi = state.extractedBookedCruises.length > 0;
-      const hasLoyaltyFromApi = hasReceivedApiLoyaltyData;
+      // Step 2: Navigate to account page first, then upcoming cruises to establish session
+      setState(prev => ({ ...prev, status: 'running_step_2' }));
+      addLog('Step 2: Navigating to account page to establish session...', 'info');
       
-      if (hasBookingsFromApi) {
-        addLog(`✅ Skipping Steps 2-3: ${state.extractedBookedCruises.length} bookings already retrieved from API`, 'success');
-      } else {
-        // Fallback: Only navigate if API call failed
-        setState(prev => ({ ...prev, status: 'running_step_2' }));
-        addLog('Step 2: Bookings API failed, falling back to DOM scraping...', 'warning');
-        addLog('Loading Upcoming Cruises Page...', 'info');
-        
-        try {
-          if (webViewRef.current) {
-            webViewRef.current.injectJavaScript(`
-              window.location.href = '${config.upcomingUrl}';
-              true;
-            `);
-            
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            
-            webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
-            
-            await waitForStepComplete(2, 120000);
-          }
-        } catch (step2Error) {
-          addLog(`Step 2 error: ${step2Error} - continuing with collected data`, 'warning');
+      try {
+        if (webViewRef.current) {
+          // First go to account page
+          webViewRef.current.injectJavaScript(`
+            window.location.href = 'https://www.royalcaribbean.com/account';
+            true;
+          `);
+          
+          addLog('⏳ Waiting 10 seconds for account page to load and establish session...', 'info');
+          await new Promise(resolve => setTimeout(resolve, 10000));
+          
+          // Now navigate to upcoming cruises page
+          addLog('Loading Upcoming Cruises Page...', 'info');
+          webViewRef.current.injectJavaScript(`
+            window.location.href = '${config.upcomingUrl}';
+            true;
+          `);
+          
+          addLog('⏳ Waiting 5 seconds for upcoming cruises page to load...', 'info');
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          // Now call the API with proper session established
+          webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
+          
+          await waitForStepComplete(2, 120000);
         }
+      } catch (step2Error) {
+        addLog(`Step 2 error: ${step2Error} - continuing with collected data`, 'warning');
       }
       
       // Check if Step 2 already extracted courtesy holds from the API
@@ -439,40 +443,31 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }
       
-      // Step 4: Check if we already have loyalty data from Step 1 consolidated API call
-      if (hasLoyaltyFromApi) {
-        addLog(`✅ Skipping Step 4: Loyalty data already retrieved from API`, 'success');
-        setState(prev => ({ ...prev, status: 'running_step_4' }));
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } else {
-        // Fallback: Only navigate if API call failed
-        setState(prev => ({ ...prev, status: 'running_step_4' }));
-        addLog('Step 4: Loyalty API failed, falling back to DOM scraping...', 'warning');
-        addLog('Loading Loyalty Programs Page...', 'info');
-        
-        try {
-          if (webViewRef.current) {
-            // Navigate to loyalty programs page for DOM fallback
-            const loyaltyPageUrl = cruiseLine === 'celebrity' 
-              ? 'https://www.celebritycruises.com/account/loyalty-programs'
-              : 'https://www.royalcaribbean.com/account/loyalty-programs';
-            
-            webViewRef.current.injectJavaScript(`
-              window.location.href = '${loyaltyPageUrl}';
-              true;
-            `);
-            
-            // Wait for page to load
-            await new Promise(resolve => setTimeout(resolve, 6000));
-            
-            // Inject loyalty extraction script
-            webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
-            
-            await waitForStepComplete(4, 45000);
-          }
-        } catch (step4Error) {
-          addLog(`Step 4 error: ${step4Error} - continuing without loyalty data`, 'warning');
+      // Step 4: Navigate to loyalty programs page to establish session
+      setState(prev => ({ ...prev, status: 'running_step_4' }));
+      addLog('Step 4: Navigating to loyalty programs page...', 'info');
+      
+      try {
+        if (webViewRef.current) {
+          const loyaltyPageUrl = cruiseLine === 'celebrity' 
+            ? 'https://www.celebritycruises.com/account/loyalty-programs'
+            : 'https://www.royalcaribbean.com/account/loyalty-programs';
+          
+          webViewRef.current.injectJavaScript(`
+            window.location.href = '${loyaltyPageUrl}';
+            true;
+          `);
+          
+          addLog('⏳ Waiting 5 seconds for loyalty programs page to load...', 'info');
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          // Now call the API with proper session established
+          webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
+          
+          await waitForStepComplete(4, 45000);
         }
+      } catch (step4Error) {
+        addLog(`Step 4 error: ${step4Error} - continuing without loyalty data`, 'warning');
       }
       
       addLog('All steps completed successfully! Ready to sync.', 'success');
