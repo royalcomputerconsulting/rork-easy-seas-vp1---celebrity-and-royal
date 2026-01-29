@@ -360,15 +360,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       // Step 4: Navigate to Crown & Anchor page and fetch loyalty data
       setState(prev => ({ ...prev, status: 'running_step_4' }));
-      addLog('Step 4: Navigating to Crown & Anchor page for loyalty data...', 'info');
-      addLog('Loading Crown & Anchor Page...', 'info');
+      addLog('Step 4: Navigating to Loyalty Programs page for loyalty data...', 'info');
+      addLog('Loading Loyalty Programs Page...', 'info');
       
       try {
         if (webViewRef.current) {
-          // Navigate to Crown & Anchor page to establish proper session for loyalty API
+          // Navigate to loyalty programs page to establish proper session for loyalty API
           const loyaltyPageUrl = cruiseLine === 'celebrity' 
-            ? 'https://www.celebritycruises.com/account/captains-club'
-            : 'https://www.royalcaribbean.com/account/crown-anchor-society';
+            ? 'https://www.celebritycruises.com/account/loyalty-programs'
+            : 'https://www.royalcaribbean.com/account/loyalty-programs';
           
           webViewRef.current.injectJavaScript(`
             window.location.href = '${loyaltyPageUrl}';

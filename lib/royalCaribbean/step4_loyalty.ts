@@ -56,8 +56,63 @@ export const STEP4_LOYALTY_SCRIPT = `
     }
   }
 
+  // Extract loyalty data from page's embedded JSON (Next.js __NEXT_DATA__ or similar)
+  function extractFromPageState() {
+    try {
+      // Try __NEXT_DATA__ first
+      var nextDataEl = document.getElementById('__NEXT_DATA__');
+      if (nextDataEl) {
+        var nextData = JSON.parse(nextDataEl.textContent || '');
+        if (nextData && nextData.props && nextData.props.pageProps) {
+          var pageProps = nextData.props.pageProps;
+          // Look for loyalty data in various locations
+          if (pageProps.loyaltyInformation) {
+            log('✅ Found loyalty data in __NEXT_DATA__.props.pageProps.loyaltyInformation', 'success');
+            return { loyalty: pageProps.loyaltyInformation, accountId: pageProps.accountId };
+          }
+          if (pageProps.payload && pageProps.payload.loyaltyInformation) {
+            log('✅ Found loyalty data in __NEXT_DATA__.props.pageProps.payload.loyaltyInformation', 'success');
+            return { loyalty: pageProps.payload.loyaltyInformation, accountId: pageProps.payload.accountId };
+          }
+          if (pageProps.initialData && pageProps.initialData.loyaltyInformation) {
+            log('✅ Found loyalty data in __NEXT_DATA__.props.pageProps.initialData', 'success');
+            return { loyalty: pageProps.initialData.loyaltyInformation, accountId: pageProps.initialData.accountId };
+          }
+        }
+      }
+      
+      // Try looking for Apollo/GraphQL state
+      if (window.__APOLLO_STATE__) {
+        log('📄 Found Apollo state, searching for loyalty...', 'info');
+        var apolloStr = JSON.stringify(window.__APOLLO_STATE__);
+        if (apolloStr.includes('loyaltyInformation') || apolloStr.includes('crownAndAnchor')) {
+          log('📄 Apollo state contains loyalty keywords', 'info');
+        }
+      }
+      
+      // Try Redux/store state
+      if (window.__PRELOADED_STATE__) {
+        var preloaded = window.__PRELOADED_STATE__;
+        if (preloaded.loyalty || preloaded.profile) {
+          log('📄 Found preloaded state with loyalty/profile', 'info');
+        }
+      }
+      
+      return null;
+    } catch (e) {
+      log('📄 Page state extraction failed: ' + e.message, 'warning');
+      return null;
+    }
+  }
+
   async function fetchLoyaltyData() {
-    log('📡 Fetching loyalty data via authenticated API...', 'info');
+    log('📡 Fetching loyalty data...', 'info');
+    
+    // First try to extract from embedded page state
+    var pageState = extractFromPageState();
+    if (pageState && pageState.loyalty) {
+      return { data: { payload: { loyaltyInformation: pageState.loyalty, accountId: pageState.accountId } }, accountId: pageState.accountId };
+    }
 
     var authInfo = getAuthHeaders();
     if (!authInfo) {
@@ -72,25 +127,28 @@ export const STEP4_LOYALTY_SCRIPT = `
       var brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
       var baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
       
-      // Try multiple endpoints - the loyalty API should work with Bearer token
+      // The loyalty-programs page fetches from this API - use credentials: include to send cookies
       var endpoints = [
-        baseUrl + '/api/profile/loyalty',
-        baseUrl + '/api/profile/loyalty-status',
-        baseUrl + '/api/account/loyalty'
+        { url: baseUrl + '/api/account/loyalty-programs', useCookies: true },
+        { url: baseUrl + '/api/profile/loyalty-programs', useCookies: true },
+        { url: baseUrl + '/api/profile/loyalty', useCookies: true },
+        { url: baseUrl + '/api/profile/loyalty', useCookies: false }
       ];
       
       var loyaltyResult = null;
       
       for (var i = 0; i < endpoints.length; i++) {
-        var endpoint = endpoints[i];
-        log('📡 Trying endpoint ' + (i + 1) + '/' + endpoints.length + ': ' + endpoint, 'info');
+        var ep = endpoints[i];
+        log('📡 Trying endpoint ' + (i + 1) + '/' + endpoints.length + ': ' + ep.url + (ep.useCookies ? ' (with cookies)' : ''), 'info');
         
         try {
-          var response = await fetch(endpoint, {
+          var fetchOpts = {
             method: 'GET',
-            credentials: 'omit',
-            headers: headers
-          });
+            credentials: ep.useCookies ? 'include' : 'omit',
+            headers: ep.useCookies ? { 'accept': 'application/json' } : headers
+          };
+          
+          var response = await fetch(ep.url, fetchOpts);
 
           log('📡 Response status: ' + response.status, 'info');
 
@@ -103,22 +161,29 @@ export const STEP4_LOYALTY_SCRIPT = `
               
               if (data && data.payload && data.payload.loyaltyInformation) {
                 loyaltyResult = { data: data, accountId: data.payload.accountId || authInfo.accountId };
-                log('✅ Found loyalty data at ' + endpoint, 'success');
+                log('✅ Found loyalty data at ' + ep.url, 'success');
+                break;
+              } else if (data && data.loyaltyInformation) {
+                // Handle direct response without payload wrapper
+                loyaltyResult = { data: { payload: data }, accountId: data.accountId || authInfo.accountId };
+                log('✅ Found loyalty data at ' + ep.url + ' (unwrapped)', 'success');
                 break;
               } else {
-                log('⚠️ No loyaltyInformation in response from ' + endpoint, 'warning');
+                log('⚠️ No loyaltyInformation in response from ' + ep.url, 'warning');
                 if (data && data.payload) {
                   log('   Payload keys: ' + Object.keys(data.payload).join(', '), 'info');
+                } else if (data) {
+                  log('   Response keys: ' + Object.keys(data).slice(0, 5).join(', '), 'info');
                 }
               }
             }
           } else if (response.status === 403) {
-            log('⚠️ 403 Forbidden at ' + endpoint + ' - trying next...', 'warning');
+            log('⚠️ 403 Forbidden at ' + ep.url + ' - trying next...', 'warning');
           } else {
-            log('⚠️ Status ' + response.status + ' at ' + endpoint + ' - trying next...', 'warning');
+            log('⚠️ Status ' + response.status + ' at ' + ep.url + ' - trying next...', 'warning');
           }
         } catch (endpointError) {
-          log('⚠️ Error at ' + endpoint + ': ' + endpointError.message, 'warning');
+          log('⚠️ Error at ' + ep.url + ': ' + endpointError.message, 'warning');
         }
         
         await wait(500);
@@ -244,9 +309,11 @@ export const STEP4_LOYALTY_SCRIPT = `
       log('🚀 ====== STEP 4: LOYALTY DATA ======', 'info');
       log('📍 Current URL: ' + window.location.href, 'info');
 
-      // Check if we're on an error page - this is OK, we fetch via API with Bearer token
+      // Check if we're on the correct page
       if (window.location.href.includes('/error') || window.location.href.includes('/errors')) {
-        log('📍 On error page - will fetch loyalty data directly via API', 'info');
+        log('⚠️ On error page - page redirect may have failed', 'warning');
+      } else if (window.location.href.includes('/loyalty-programs')) {
+        log('✅ On loyalty-programs page - good!', 'success');
       }
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -256,8 +323,9 @@ export const STEP4_LOYALTY_SCRIPT = `
         stepName: 'Fetching loyalty data...'
       }));
 
-      // No need to wait for page - we're fetching directly via API with Bearer token
-      await wait(500);
+      // Wait for page to fully load and render
+      log('🔄 Waiting for page to fully load...', 'info');
+      await wait(2000);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
