@@ -41,7 +41,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 data: data,
                 url: url
               }));
-              const count = (data?.payload?.profileBookings?.length || data?.profileBookings?.length || 0);
+              const count = (data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '📦 Captured Upcoming Cruises API payload with ' + count + ' bookings',
@@ -58,7 +58,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 data: data,
                 url: url
               }));
-              const count = (data?.payload?.profileBookings?.length || data?.profileBookings?.length || 0);
+              const count = (data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '📦 Captured Courtesy Holds API payload with ' + count + ' holds',
@@ -123,7 +123,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 data: data,
                 url: this._url
               }));
-              const count = (data?.payload?.profileBookings?.length || data?.profileBookings?.length || 0);
+              const count = (data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '📦 [XHR] Captured Upcoming Cruises API payload with ' + count + ' bookings',
@@ -138,7 +138,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 data: data,
                 url: this._url
               }));
-              const count = (data?.payload?.profileBookings?.length || data?.profileBookings?.length || 0);
+              const count = (data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '📦 [XHR] Captured Courtesy Holds API payload with ' + count + ' holds',

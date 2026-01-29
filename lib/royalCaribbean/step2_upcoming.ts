@@ -639,9 +639,17 @@ export const STEP2_UPCOMING_SCRIPT = `
       var pageProps = nextData.props.pageProps;
       
       // Look for bookings in various locations
+      if (pageProps.payload && pageProps.payload.sailingInfo) {
+        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.payload.sailingInfo', 'success');
+        return { bookings: pageProps.payload.sailingInfo, vdsId: pageProps.payload.vdsId };
+      }
       if (pageProps.payload && pageProps.payload.profileBookings) {
         log('✅ Found bookings in __NEXT_DATA__.props.pageProps.payload.profileBookings', 'success');
         return { bookings: pageProps.payload.profileBookings, vdsId: pageProps.payload.vdsId };
+      }
+      if (pageProps.sailingInfo) {
+        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.sailingInfo', 'success');
+        return { bookings: pageProps.sailingInfo, vdsId: pageProps.vdsId };
       }
       if (pageProps.profileBookings) {
         log('✅ Found bookings in __NEXT_DATA__.props.pageProps.profileBookings', 'success');
@@ -651,8 +659,12 @@ export const STEP2_UPCOMING_SCRIPT = `
         log('✅ Found bookings in __NEXT_DATA__.props.pageProps.initialData', 'success');
         return { bookings: pageProps.initialData.profileBookings, vdsId: pageProps.initialData.vdsId };
       }
+      if (pageProps.initialData && pageProps.initialData.sailingInfo) {
+        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.initialData.sailingInfo', 'success');
+        return { bookings: pageProps.initialData.sailingInfo, vdsId: pageProps.initialData.vdsId };
+      }
       
-      log('⚠️ No profileBookings found in __NEXT_DATA__', 'warning');
+      log('⚠️ No sailingInfo or profileBookings found in __NEXT_DATA__', 'warning');
       log('📝 Available keys in pageProps: ' + Object.keys(pageProps).slice(0, 10).join(', '), 'info');
       return null;
     } catch (e) {

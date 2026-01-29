@@ -295,11 +295,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             break;
           }
           
-          // Royal Caribbean API structure: data.payload.profileBookings
+          // Royal Caribbean API structure: data.payload.sailingInfo (new) or data.payload.profileBookings (old)
           let bookings = null;
-          if (data.payload && Array.isArray(data.payload.profileBookings)) {
+          if (data.payload && Array.isArray(data.payload.sailingInfo)) {
+            bookings = data.payload.sailingInfo;
+            addLog(`✅ Found ${bookings.length} bookings in payload.sailingInfo`, 'success');
+          } else if (data.payload && Array.isArray(data.payload.profileBookings)) {
             bookings = data.payload.profileBookings;
             addLog(`✅ Found ${bookings.length} bookings in payload.profileBookings`, 'success');
+          } else if (Array.isArray(data.sailingInfo)) {
+            bookings = data.sailingInfo;
+            addLog(`✅ Found ${bookings.length} bookings in sailingInfo`, 'success');
           } else if (Array.isArray(data.profileBookings)) {
             bookings = data.profileBookings;
             addLog(`✅ Found ${bookings.length} bookings in profileBookings`, 'success');
@@ -322,39 +328,46 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
           
           if (bookings && bookings.length > 0) {
-            const formattedCruises = bookings.map((booking: any) => ({
-              sourcePage: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
-              shipName: booking.shipName || booking.shipCode + ' of the Seas',
-              shipCode: booking.shipCode,
-              cruiseTitle: booking.cruiseTitle || booking.numberOfNights + ' Night Cruise',
-              sailingStartDate: booking.sailDate,
-              sailingEndDate: booking.sailingEndDate || '',
-              sailingDates: booking.sailingDates || '',
-              itinerary: booking.itinerary || '',
-              departurePort: booking.departurePort || '',
-              arrivalPort: booking.arrivalPort || '',
-              cabinType: booking.stateroomType || '',
-              cabinCategory: booking.stateroomCategoryCode || '',
-              cabinNumberOrGTY: booking.stateroomNumber === 'GTY' ? 'GTY' : booking.stateroomNumber,
-              deckNumber: booking.deckNumber || '',
-              bookingId: booking.bookingId,
-              numberOfGuests: booking.passengers?.length.toString() || '1',
-              numberOfNights: booking.numberOfNights,
-              daysToGo: '',
-              status: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
-              holdExpiration: booking.offerExpirationDate || '',
-              loyaltyLevel: '',
-              loyaltyPoints: '',
-              paidInFull: booking.paidInFull ? 'Yes' : 'No',
-              balanceDue: booking.balanceDueAmount?.toString() || '0',
-              musterStation: booking.musterStation || '',
-              bookingStatus: booking.bookingStatus,
-              packageCode: booking.packageCode || '',
-              passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
-              stateroomNumber: booking.stateroomNumber,
-              stateroomCategoryCode: booking.stateroomCategoryCode,
-              stateroomType: booking.stateroomType
-            }));
+            const formattedCruises = bookings.map((booking: any) => {
+              // Handle both sailingInfo and profileBookings structures
+              const isCourtesyHold = booking.bookingStatus === 'OF' || endpoint === 'courtesyHolds';
+              const nights = booking.numberOfNights || booking.duration || 0;
+              const itineraryDesc = booking.itinerary?.description || booking.cruiseTitle || (nights ? `${nights} Night Cruise` : 'Cruise');
+              
+              return {
+                sourcePage: isCourtesyHold ? 'Courtesy Hold' : 'Upcoming',
+                shipName: booking.shipName || (booking.shipCode ? booking.shipCode + ' of the Seas' : 'Unknown Ship'),
+                shipCode: booking.shipCode || '',
+                cruiseTitle: itineraryDesc,
+                sailingStartDate: booking.sailDate || '',
+                sailingEndDate: booking.sailingEndDate || '',
+                sailingDates: booking.sailingDates || '',
+                itinerary: itineraryDesc,
+                departurePort: booking.departurePort || booking.departurePortName || '',
+                arrivalPort: booking.arrivalPort || booking.arrivalPortName || '',
+                cabinType: booking.stateroomType || '',
+                cabinCategory: booking.stateroomCategoryCode || '',
+                cabinNumberOrGTY: booking.stateroomNumber === 'GTY' ? 'GTY' : (booking.stateroomNumber || ''),
+                deckNumber: booking.deckNumber || '',
+                bookingId: booking.bookingId || booking.voyageId?.toString() || '',
+                numberOfGuests: booking.passengers?.length.toString() || '1',
+                numberOfNights: nights.toString(),
+                daysToGo: '',
+                status: isCourtesyHold ? 'Courtesy Hold' : 'Upcoming',
+                holdExpiration: booking.offerExpirationDate || '',
+                loyaltyLevel: '',
+                loyaltyPoints: '',
+                paidInFull: booking.paidInFull ? 'Yes' : 'No',
+                balanceDue: booking.balanceDueAmount?.toString() || '0',
+                musterStation: booking.musterStation || '',
+                bookingStatus: booking.bookingStatus || (isCourtesyHold ? 'OF' : 'BK'),
+                packageCode: booking.packageCode || '',
+                passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
+                stateroomNumber: booking.stateroomNumber || '',
+                stateroomCategoryCode: booking.stateroomCategoryCode || '',
+                stateroomType: booking.stateroomType || ''
+              };
+            });
             
             setState(prev => ({
               ...prev,
