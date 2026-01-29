@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 
 interface LandingPageProps {
@@ -9,29 +10,32 @@ interface LandingPageProps {
 export function LandingPage({ onContinue }: LandingPageProps) {
   return (
     <View style={styles.container}>
+      <LinearGradient
+        colors={['#001F3F', '#003D7A', '#00508C']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
       >
         <View style={styles.content}>
           <Image 
-            source={require('@/assets/images/splash-icon.png')}
+            source={require('@/assets/images/icon.png')}
             style={styles.logo}
             resizeMode="contain"
           />
           <Text style={styles.title}>EASY SEAS™</Text>
+          <Text style={styles.subtitle}>Manage your Nautical Lifestyle</Text>
           
           <View style={styles.disclaimerCard}>
+            <Text style={styles.disclaimerTitle}>DISCLAIMER</Text>
             <Text style={styles.disclaimer}>
-              EasySeas™ is an all-in-one casino cruise management system designed for frequent cruisers and casino loyalty members. The platform automatically imports casino offers, eligible sailings, cruise itineraries, cabin pricing, and expiration dates, then synchronizes this data with personal calendars such as TripIt, Google Calendar, Apple Calendar, and Outlook.
+              This app is for informational purposes only. Not a gambling manual. Royal Computer Consulting, Scott Merlis, and all associated parties take no responsibility for decisions made. You gamble at your own risk. If you have a gambling problem, call 1-800-522-4700 or visit www.gamblersanonymous.org
             </Text>
-
             <Text style={styles.disclaimer}>
-              Using artificial intelligence, EasySeas analyzes schedule availability, offer timing, itinerary value, and pricing trends to generate personalized cruise recommendations. Unlike traditional trackers, EasySeas functions as a decision-support platform, helping users identify which cruises best align with their lifestyle, timing, and value objectives.
-            </Text>
-
-            <Text style={styles.disclaimer}>
-              EasySeas is developed and operated by Royal Computer Consulting and is provided for informational and organizational purposes only. The platform is not affiliated with Royal Caribbean, Celebrity Cruises, or any casino loyalty program.
+              TRADEMARK NOTICE: All trademarks, service marks, trade names, ship names, and logos, including but not limited to &quot;Club Royale,&quot; &quot;Blue Chip Club,&quot; &quot;Royal Caribbean,&quot; &quot;Celebrity Cruises,&quot; and all associated cruise ship names, are the property of their respective owners. Royal Computer Consulting and Scott Merlis have no affiliation, association, authorization, endorsement, or sponsorship with or by Royal Caribbean International, Celebrity Cruises, or any of their parent companies, subsidiaries, or affiliates.
             </Text>
           </View>
 
@@ -50,7 +54,6 @@ export function LandingPage({ onContinue }: LandingPageProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A1628',
   },
   scrollContent: {
     flexGrow: 1,
@@ -65,18 +68,26 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   logo: {
-    width: 140,
-    height: 140,
+    width: 200,
+    height: 200,
     alignSelf: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   title: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: '#FFD700',
+    textAlign: 'center',
+    marginBottom: SPACING.xs,
+    letterSpacing: 3,
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: TYPOGRAPHY.fontWeightMedium as any,
     color: COLORS.white,
     textAlign: 'center',
-    marginBottom: SPACING.lg,
-    letterSpacing: 2,
+    marginBottom: SPACING.xl,
+    opacity: 0.9,
   },
   heroCard: {
     backgroundColor: 'rgba(0, 168, 232, 0.1)',
@@ -354,20 +365,27 @@ const styles = StyleSheet.create({
     fontStyle: 'italic' as const,
   },
   disclaimerCard: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(0, 31, 63, 0.5)',
     borderRadius: 12,
     padding: SPACING.lg,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.xl,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  disclaimerTitle: {
+    fontSize: 14,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: COLORS.white,
+    textAlign: 'center',
+    marginBottom: SPACING.md,
+    letterSpacing: 1,
   },
   disclaimer: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.white,
     marginBottom: SPACING.md,
-    lineHeight: 18,
-    opacity: 0.6,
-    textAlign: 'center',
+    lineHeight: 16,
+    textAlign: 'left',
   },
   continueButton: {
     backgroundColor: '#00D4FF',
