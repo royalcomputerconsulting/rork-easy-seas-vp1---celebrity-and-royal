@@ -415,22 +415,48 @@ export const STEP4_LOYALTY_SCRIPT = `
         type: 'progress',
         current: 0,
         total: 100,
-        stepName: 'Fetching loyalty data...'
+        stepName: 'Extracting loyalty data from page...'
       }));
 
-      // Wait for page to fully load and render
+      // Wait for page to fully load and render (5 seconds as recommended)
       log('🔄 Waiting for page to fully load...', 'info');
-      await wait(2000);
+      await wait(5000);
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
         current: 20,
         total: 100,
-        stepName: 'Calling loyalty API...'
+        stepName: 'Checking embedded page data...'
       }));
 
-      // Fetch loyalty data using Bearer token auth - works regardless of current page
-      var loyaltyResult = await fetchLoyaltyData();
+      // FIRST: Try to extract from embedded page data (most reliable)
+      log('📄 Step 1: Trying to extract from embedded page data (__NEXT_DATA__)...', 'info');
+      var pageState = extractFromPageState();
+      
+      var loyaltyResult = null;
+      if (pageState && pageState.loyalty) {
+        log('✅ Successfully extracted loyalty from page data!', 'success');
+        loyaltyResult = pageState.loyalty;
+        
+        // Send the loyalty data
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'extended_loyalty_data',
+          data: pageState.loyalty,
+          accountId: pageState.accountId
+        }));
+      } else {
+        log('⚠️ Page data extraction failed or returned no loyalty data - trying API...', 'warning');
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'progress',
+          current: 40,
+          total: 100,
+          stepName: 'Trying API fallback...'
+        }));
+        
+        // Fallback to API
+        loyaltyResult = await fetchLoyaltyData();
+      }
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',

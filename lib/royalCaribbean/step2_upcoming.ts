@@ -710,25 +710,74 @@ export const STEP2_UPCOMING_SCRIPT = `
 
 
 
+  // Extract bookings from page's embedded JSON (Next.js __NEXT_DATA__)
+  function extractFromPageState() {
+    try {
+      log('📄 Checking for embedded page data (__NEXT_DATA__)...', 'info');
+      var nextDataEl = document.getElementById('__NEXT_DATA__');
+      if (!nextDataEl) {
+        log('⚠️ No __NEXT_DATA__ element found on page', 'warning');
+        return null;
+      }
+      
+      var nextData = JSON.parse(nextDataEl.textContent || '');
+      if (!nextData || !nextData.props || !nextData.props.pageProps) {
+        log('⚠️ __NEXT_DATA__ has unexpected structure', 'warning');
+        return null;
+      }
+      
+      var pageProps = nextData.props.pageProps;
+      
+      // Look for bookings in various locations
+      if (pageProps.payload && pageProps.payload.profileBookings) {
+        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.payload.profileBookings', 'success');
+        return { bookings: pageProps.payload.profileBookings, vdsId: pageProps.payload.vdsId };
+      }
+      if (pageProps.profileBookings) {
+        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.profileBookings', 'success');
+        return { bookings: pageProps.profileBookings, vdsId: pageProps.vdsId };
+      }
+      if (pageProps.initialData && pageProps.initialData.profileBookings) {
+        log('✅ Found bookings in __NEXT_DATA__.props.pageProps.initialData', 'success');
+        return { bookings: pageProps.initialData.profileBookings, vdsId: pageProps.initialData.vdsId };
+      }
+      
+      log('⚠️ No profileBookings found in __NEXT_DATA__', 'warning');
+      log('📝 Available keys in pageProps: ' + Object.keys(pageProps).slice(0, 10).join(', '), 'info');
+      return null;
+    } catch (e) {
+      log('⚠️ Page state extraction failed: ' + e.message, 'warning');
+      return null;
+    }
+  }
+
   async function extractUpcomingCruises() {
     try {
       log('🚀 ====== STEP 2: UPCOMING CRUISES ======', 'info');
       log('🔍 Starting upcoming cruises extraction...', 'info');
       log('📍 Current URL: ' + window.location.href, 'info');
 
-      await wait(2000);
+      await wait(5000);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'progress',
         current: 0,
         total: 100,
-        stepName: 'Fetching booking data...'
+        stepName: 'Extracting booking data from page...'
       }));
 
-      // NOTE: Loyalty data is now fetched in Step 4 after navigating to the Crown & Anchor page
-      // This is because the loyalty API requires a session that's only established on that page
+      // FIRST: Try to extract from embedded page data (most reliable)
+      log('📄 Step 1: Trying to extract from embedded page data...', 'info');
+      var pageStateResult = extractFromPageState();
       
-      var apiResult = await fetchProfileBookings();
+      var apiResult = null;
+      if (pageStateResult && pageStateResult.bookings && pageStateResult.bookings.length > 0) {
+        log('✅ Successfully extracted ' + pageStateResult.bookings.length + ' bookings from page data', 'success');
+        apiResult = pageStateResult;
+      } else {
+        log('⚠️ Page data extraction failed or returned no bookings - trying API...', 'warning');
+        apiResult = await fetchProfileBookings();
+      }
       
       var cruises = [];
       
