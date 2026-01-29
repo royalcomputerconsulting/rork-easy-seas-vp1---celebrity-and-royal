@@ -1,10 +1,10 @@
-import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download, Anchor, LogIn, Lock, Eye, EyeOff, Crown, Star, Award } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download, Anchor, Crown, Star, Award } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -38,10 +38,6 @@ function RoyalCaribbeanSyncScreen() {
   
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
-  
-  const [webUsername, setWebUsername] = useState('');
-  const [webPassword, setWebPassword] = useState('');
-  const [showWebPassword, setShowWebPassword] = useState(false);
   
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
   
@@ -239,6 +235,7 @@ function RoyalCaribbeanSyncScreen() {
       />
       
       <View style={styles.container}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.cruiseLineToggleContainer}>
           <View style={styles.cruiseLineOption}>
             <Anchor size={18} color={!isCelebrity ? '#60a5fa' : '#64748b'} />
@@ -715,6 +712,7 @@ function RoyalCaribbeanSyncScreen() {
           isLoading={webLoginMutation.isPending}
           error={webSyncError}
         />
+        </ScrollView>
       </View>
     </>
   );
@@ -724,6 +722,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0f172a'
+  },
+  scrollView: {
+    flex: 1
+  },
+  scrollContent: {
+    paddingBottom: 20
   },
   statusBadge: {
     flexDirection: 'row' as const,
@@ -778,7 +782,7 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const
   },
   webViewContainer: {
-    height: 550,
+    height: 400,
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b'
   },
