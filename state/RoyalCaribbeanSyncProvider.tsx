@@ -238,7 +238,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
         } else if (!hasReceivedApiLoyaltyData) {
           // This is DOM fallback data
-          setState(prev => ({ ...prev, loyaltyData: message.data || null }));
+          setState(prev => ({ ...prev, loyaltyData: message.data ?? null }));
           addLog('Loyalty data extracted (DOM fallback)', 'info');
         } else {
           addLog('Ignoring DOM loyalty data - API data already received', 'info');
