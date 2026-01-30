@@ -444,7 +444,22 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       if (bookedData && parsedBookedData.length > 0) {
         console.log('[CoreData] Found existing booked data, processing...');
-        const withTransition = transitionCruisesToCompleted(parsedBookedData);
+        
+        // Filter out any mock/demo cruises if real data exists
+        const nonMockCruises = parsedBookedData.filter(cruise => 
+          !cruise.id?.includes('demo-') && 
+          !cruise.id?.includes('booked-virtual') &&
+          cruise.reservationNumber !== 'DEMO123' &&
+          cruise.reservationNumber !== 'DEMO456' &&
+          cruise.shipName !== 'Virtually a Ship of the Seas'
+        );
+        
+        console.log('[CoreData] Filtered cruises:', { 
+          original: parsedBookedData.length, 
+          afterFilter: nonMockCruises.length 
+        });
+        
+        const withTransition = transitionCruisesToCompleted(nonMockCruises);
         const withItineraries = enrichCruisesWithMockItineraries(withTransition);
         const withKnownRetail = applyKnownRetailValues(withItineraries);
         const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
@@ -670,7 +685,22 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const setBookedCruises = useCallback((newCruises: BookedCruise[]) => {
     const booked = newCruises.filter(c => c.status !== 'available');
-    const withItineraries = enrichCruisesWithMockItineraries(booked);
+    
+    // Filter out mock/demo cruises when setting real data
+    const nonMockCruises = booked.filter(cruise => 
+      !cruise.id?.includes('demo-') && 
+      !cruise.id?.includes('booked-virtual') &&
+      cruise.reservationNumber !== 'DEMO123' &&
+      cruise.reservationNumber !== 'DEMO456' &&
+      cruise.shipName !== 'Virtually a Ship of the Seas'
+    );
+    
+    console.log('[CoreData] Setting booked cruises:', { 
+      total: booked.length, 
+      nonMock: nonMockCruises.length 
+    });
+    
+    const withItineraries = enrichCruisesWithMockItineraries(nonMockCruises);
     const withKnownRetail = applyKnownRetailValues(withItineraries);
     const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
     const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
@@ -733,8 +763,19 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, [persistData]);
 
   const setCasinoOffers = useCallback((newOffers: CasinoOffer[]) => {
-    setCasinoOffersState(newOffers);
-    persistData(STORAGE_KEYS.CASINO_OFFERS, newOffers);
+    // Filter out demo offers when setting real offers
+    const nonMockOffers = newOffers.filter(offer => 
+      !offer.id?.includes('demo-') &&
+      offer.offerCode !== 'NOWHERE2025'
+    );
+    
+    console.log('[CoreData] Setting casino offers:', { 
+      total: newOffers.length, 
+      nonMock: nonMockOffers.length 
+    });
+    
+    setCasinoOffersState(nonMockOffers);
+    persistData(STORAGE_KEYS.CASINO_OFFERS, nonMockOffers);
     AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
     syncToBackend().catch(console.error);
   }, [persistData, syncToBackend]);
