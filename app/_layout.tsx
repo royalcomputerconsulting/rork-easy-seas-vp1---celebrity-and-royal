@@ -5,7 +5,7 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StyleSheet, View, Text, ActivityIndicator } from "react-native";
-import { CoreDataProvider } from "@/state/CoreDataProvider";
+import { CoreDataProvider, useCoreData } from "@/state/CoreDataProvider";
 import { clearAllAppData } from "@/lib/dataManager";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
@@ -39,7 +39,7 @@ import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 
 try {
   SplashScreen.preventAutoHideAsync();
-} catch (error) {
+} catch {
   // Safe to ignore - splash screen may not be available in all contexts
 }
 
@@ -253,7 +253,7 @@ function AppContent() {
       try {
         await SplashScreen.hideAsync();
         console.log('[AppContent] Native splash hidden');
-      } catch (error) {
+      } catch {
         // Safe to ignore - splash screen may not be registered
       }
     };
@@ -284,9 +284,10 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   setIsClearing: (clearing: boolean) => void;
 }) {
   const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail, isWhitelisted } = useAuth();
-  const { initialCheckComplete, isSyncing, syncError, hasCloudData } = useUserDataSync();
+  const { initialCheckComplete, isSyncing, syncError, hasCloudData, lastRestoreTime } = useUserDataSync();
   const { setIsUserWhitelisted } = useSlotMachineLibrary();
-  const { updateUser, ensureOwner } = useUser();
+  const coreData = useCoreData();
+  const { updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
   const [showLandingPage, setShowLandingPage] = useState(true);
 
   useEffect(() => {
@@ -305,6 +306,20 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
     };
     syncEmailToProfile();
   }, [isAuthenticated, authenticatedEmail, ensureOwner, updateUser]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!lastRestoreTime) return;
+
+    console.log('[AppContent] Cloud restore completed - refreshing providers:', { lastRestoreTime, authenticatedEmail });
+
+    Promise.all([
+      coreData.refreshData(),
+      syncUserFromStorage(),
+    ]).catch((error) => {
+      console.error('[AppContent] Error refreshing providers after cloud restore:', error);
+    });
+  }, [isAuthenticated, lastRestoreTime, authenticatedEmail, coreData, syncUserFromStorage]);
 
   useEffect(() => {
     console.log('[AppContent] Syncing whitelist status to machine library:', isWhitelisted);

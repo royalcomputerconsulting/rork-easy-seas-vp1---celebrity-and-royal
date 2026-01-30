@@ -4,11 +4,11 @@ import createContextHook from "@nkzw/create-context-hook";
 import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { Platform } from "react-native";
 
-const APP_PASSWORD = "CR101@2";
 const ADMIN_PASSWORD = "a1";
 const AUTH_KEY = "easyseas_authenticated";
 const AUTH_EMAIL_KEY = "easyseas_auth_email";
 const FRESH_START_KEY = "easyseas_fresh_start";
+const PENDING_ACCOUNT_SWITCH_KEY = "easyseas_pending_account_switch";
 const ADMIN_EMAIL = "scott.merlis1@gmail.com";
 
 interface AuthState {
@@ -64,7 +64,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
         return defaultWhitelist;
       }
       return JSON.parse(stored);
-    } catch (error) {
+    } catch {
       return [ADMIN_EMAIL];
     }
   };
@@ -185,13 +185,30 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     }
     
     const hasLaunchedBefore = await AsyncStorage.getItem(STORAGE_KEYS.HAS_LAUNCHED_BEFORE);
-    const isReturningUser = await AsyncStorage.getItem(AUTH_EMAIL_KEY);
-    const shouldFreshStart = !hasLaunchedBefore && !isReturningUser;
-    
+    const previousEmail = await AsyncStorage.getItem(AUTH_EMAIL_KEY);
+    const isFirstEverLogin = !hasLaunchedBefore && !previousEmail;
+
+    const isAccountSwitch = !!previousEmail && previousEmail.toLowerCase().trim() !== normalizedEmail;
+
+    console.log('[AuthProvider] Login context:', {
+      normalizedEmail,
+      previousEmail,
+      hasLaunchedBefore: !!hasLaunchedBefore,
+      isFirstEverLogin,
+      isAccountSwitch,
+    });
+
     await AsyncStorage.setItem(AUTH_KEY, "true");
     await AsyncStorage.setItem(AUTH_EMAIL_KEY, normalizedEmail);
-    
-    if (shouldFreshStart) {
+
+    if (isAccountSwitch) {
+      await AsyncStorage.setItem(PENDING_ACCOUNT_SWITCH_KEY, "true");
+      console.log('[AuthProvider] Account switch detected - pending switch flag set');
+    } else {
+      await AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY);
+    }
+
+    if (isFirstEverLogin) {
       await AsyncStorage.setItem(FRESH_START_KEY, "true");
       setIsFreshStart(true);
       console.log('[AuthProvider] First-time user login - will trigger fresh start');

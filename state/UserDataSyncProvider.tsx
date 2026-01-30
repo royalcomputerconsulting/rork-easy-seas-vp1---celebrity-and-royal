@@ -1,17 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
-import { trpc, isBackendAvailable } from "@/lib/trpc";
+import { trpc, trpcClient, isBackendAvailable } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
 import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
+import { clearAllAppData } from "@/lib/dataManager";
 
 const LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 2;
 const MIN_SYNC_INTERVAL_MS = 60000;
+const PENDING_ACCOUNT_SWITCH_KEY = "easyseas_pending_account_switch";
 
 interface SyncState {
   isSyncing: boolean;
   lastSyncTime: string | null;
+  lastRestoreTime: string | null;
   syncError: string | null;
   hasCloudData: boolean;
   initialCheckComplete: boolean;
@@ -28,6 +31,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const [syncError, setSyncError] = useState<string | null>(null);
   const [hasCloudData, setHasCloudData] = useState(false);
   const [initialCheckComplete, setInitialCheckComplete] = useState(false);
+  const [lastRestoreTime, setLastRestoreTime] = useState<string | null>(null);
   
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSyncedEmailRef = useRef<string | null>(null);
@@ -37,15 +41,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const hasInitializedRef = useRef(false);
 
   const saveAllMutation = trpc.data.saveAllUserData.useMutation();
-  const { refetch: fetchAllUserData } = trpc.data.getAllUserData.useQuery(
-    { email: authenticatedEmail || "" },
-    { 
-      enabled: false, 
-      retry: false,
-      staleTime: Infinity,
-      gcTime: Infinity,
-    }
-  );
+
+  const fetchAllUserDataByEmail = useCallback(async (email: string) => {
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log("[UserDataSync] Fetching cloud data for:", normalizedEmail);
+    return trpcClient.data.getAllUserData.query({ email: normalizedEmail });
+  }, []);
 
   const gatherAllLocalData = useCallback(async () => {
     console.log("[UserDataSync] Gathering all local data for sync...");
@@ -131,28 +132,28 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
   const restoreDataToLocal = useCallback(async (cloudData: any) => {
     console.log("[UserDataSync] Restoring cloud data to local storage...");
-    
+
     try {
       const savePromises: Promise<void>[] = [];
 
-      if (cloudData.bookedCruises?.length > 0) {
+      if (cloudData.bookedCruises !== undefined) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.BOOKED_CRUISES, JSON.stringify(cloudData.bookedCruises))
+          AsyncStorage.setItem(STORAGE_KEYS.BOOKED_CRUISES, JSON.stringify(cloudData.bookedCruises ?? []))
         );
       }
-      if (cloudData.casinoOffers?.length > 0) {
+      if (cloudData.casinoOffers !== undefined) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.CASINO_OFFERS, JSON.stringify(cloudData.casinoOffers))
+          AsyncStorage.setItem(STORAGE_KEYS.CASINO_OFFERS, JSON.stringify(cloudData.casinoOffers ?? []))
         );
       }
-      if (cloudData.calendarEvents?.length > 0) {
+      if (cloudData.calendarEvents !== undefined) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.CALENDAR_EVENTS, JSON.stringify(cloudData.calendarEvents))
+          AsyncStorage.setItem(STORAGE_KEYS.CALENDAR_EVENTS, JSON.stringify(cloudData.calendarEvents ?? []))
         );
       }
-      if (cloudData.casinoSessions?.length > 0) {
+      if (cloudData.casinoSessions !== undefined) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.CASINO_SESSIONS, JSON.stringify(cloudData.casinoSessions))
+          AsyncStorage.setItem(STORAGE_KEYS.CASINO_SESSIONS, JSON.stringify(cloudData.casinoSessions ?? []))
         );
       }
       if (cloudData.clubRoyaleProfile) {
@@ -249,12 +250,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       console.log("[UserDataSync] Backend not available, skipping cloud check");
       return false;
     }
-    
+
     try {
       console.log("[UserDataSync] Checking if cloud data exists for:", email);
-      const result = await fetchAllUserData();
-      
-      const exists = !!(result.data?.found && result.data.data);
+      const result = await fetchAllUserDataByEmail(email);
+
+      const exists = !!(result?.found && result.data);
       console.log("[UserDataSync] Cloud data exists:", exists);
       retryCountRef.current = 0;
       return exists;
@@ -262,7 +263,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       console.log("[UserDataSync] Error checking cloud data (backend may be unavailable):", error);
       return false;
     }
-  }, [fetchAllUserData]);
+  }, [fetchAllUserDataByEmail]);
 
   const loadFromCloud = useCallback(async (): Promise<boolean> => {
     if (!authenticatedEmail) {
@@ -296,19 +297,27 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     setSyncError(null);
 
     try {
-      const result = await fetchAllUserData();
+      const pendingSwitch = await AsyncStorage.getItem(PENDING_ACCOUNT_SWITCH_KEY);
+      if (pendingSwitch === "true") {
+        console.log("[UserDataSync] Pending account switch detected - clearing local app data before restore");
+        await clearAllAppData();
+        await AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY);
+      }
+
+      const result = await fetchAllUserDataByEmail(authenticatedEmail);
       
       if (!isMountedRef.current) return false;
       
-      if (result.data?.found && result.data.data) {
+      if (result?.found && result.data) {
         console.log("[UserDataSync] Cloud data found, restoring...");
         setHasCloudData(true);
-        
-        const restored = await restoreDataToLocal(result.data.data);
+
+        const restored = await restoreDataToLocal(result.data);
         
         if (restored) {
           const syncTime = new Date().toISOString();
           setLastSyncTime(syncTime);
+          setLastRestoreTime(syncTime);
           await AsyncStorage.setItem(LAST_SYNC_KEY, syncTime);
           lastSyncedEmailRef.current = authenticatedEmail;
           retryCountRef.current = 0;
@@ -349,7 +358,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         setIsSyncing(false);
       }
     }
-  }, [authenticatedEmail, fetchAllUserData, restoreDataToLocal]);
+  }, [authenticatedEmail, fetchAllUserDataByEmail, restoreDataToLocal]);
 
   const syncToCloud = useCallback(async () => {
     if (!authenticatedEmail) {
@@ -512,6 +521,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   return {
     isSyncing,
     lastSyncTime,
+    lastRestoreTime,
     syncError,
     hasCloudData,
     initialCheckComplete,
