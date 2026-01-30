@@ -3,7 +3,7 @@ import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpa
 import { LinearGradient } from 'expo-linear-gradient';
 import { Crown, ExternalLink, RefreshCcw, Shield, Sparkles } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
-import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
+import { COLORS, BORDER_RADIUS, SHADOW } from '@/constants/theme';
 import { useEntitlement, PRO_PRODUCT_ID } from '@/state/EntitlementProvider';
 
 export default function PaywallScreen() {

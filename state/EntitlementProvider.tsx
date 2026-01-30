@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
@@ -112,7 +112,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     if (Purchases) return Purchases;
 
     try {
-      const mod = require('react-native-purchases') as { default: PurchasesModule };
+      const mod = (await import('react-native-purchases')) as unknown as { default: PurchasesModule };
       Purchases = mod.default;
 
       const apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ?? '').trim();
