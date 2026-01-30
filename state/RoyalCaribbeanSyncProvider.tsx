@@ -682,30 +682,47 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       try {
         if (webViewRef.current) {
-          addLog('📡 Fetching loyalty via https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info', 'info');
-          
+          const loyaltyUrl = 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info';
+          addLog(`📡 Fetching loyalty via ${loyaltyUrl}`, 'info');
+          addLog('ℹ️ Using in-page request capture (avoids Invalid ApiKey from manual fetch)', 'info');
+
           webViewRef.current.injectJavaScript(`
-            (async function() {
-              const LOYALTY_URL = 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info';
+            (function() {
+              const LOYALTY_URL = '${loyaltyUrl}';
+              const TRIGGER_URL = 'https://www.royalcaribbean.com/account';
 
               function post(type, payload) {
                 try {
                   window.ReactNativeWebView.postMessage(JSON.stringify({ type, ...payload }));
-                } catch (e) {
-                  // ignore
-                }
+                } catch (e) {}
               }
 
               function log(message, logType) {
                 post('log', { message, logType: logType || 'info' });
               }
 
-              function safeJsonParse(str) {
+              function tryFindApiKey() {
+                const candidates = [];
                 try {
-                  return JSON.parse(str);
-                } catch (e) {
-                  return null;
-                }
+                  const keys = Object.keys(localStorage || {});
+                  for (const k of keys) {
+                    if (/api[-_]?key/i.test(k)) {
+                      const v = localStorage.getItem(k);
+                      if (v && v.length > 10) candidates.push(v);
+                    }
+                  }
+                } catch (e) {}
+                const winAny = window;
+                try {
+                  const env = winAny?.__ENV__ || winAny?.__env__ || winAny?.env || null;
+                  const v = env?.API_KEY || env?.apiKey || env?.apigeeApiKey || null;
+                  if (typeof v === 'string' && v.length > 10) candidates.push(v);
+                } catch (e) {}
+                return candidates[0] || '';
+              }
+
+              function safeJsonParse(str) {
+                try { return JSON.parse(str); } catch (e) { return null; }
               }
 
               function getAuthHeadersFromSession() {
@@ -722,87 +739,101 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
                 if (!accountId || !authorization) return null;
 
-                return {
+                const apiKey = tryFindApiKey();
+
+                const headers = {
                   'accept': 'application/json',
                   'accept-language': 'en-US,en;q=0.9',
                   'content-type': 'application/json',
                   'account-id': accountId,
                   'authorization': authorization,
                 };
-              }
 
-              async function fetchWithRetries() {
-                const headers = getAuthHeadersFromSession();
-                if (!headers) {
-                  log('⚠️ Loyalty fetch: missing auth headers (session not found) - please log in again', 'error');
-                  return { ok: false, error: 'missing_auth' };
+                if (apiKey) {
+                  headers['x-api-key'] = apiKey;
                 }
 
-                const attempts = 4;
-                for (let i = 1; i <= attempts; i++) {
-                  try {
-                    log('⏳ Loyalty fetch attempt ' + i + '/' + attempts + '...', 'info');
+                return headers;
+              }
 
-                    const res = await fetch(LOYALTY_URL, {
-                      method: 'GET',
-                      headers,
-                      credentials: 'omit',
-                      cache: 'no-store',
-                    });
+              function emitCapturedIfPresent() {
+                const existing = window.capturedPayloads && window.capturedPayloads.loyalty ? window.capturedPayloads.loyalty : null;
+                if (existing) {
+                  log('✅ Loyalty data already captured by network monitor', 'success');
+                  post('network_payload', { endpoint: 'loyalty', data: existing, url: LOYALTY_URL });
+                  post('step_complete', { step: 3 });
+                  return true;
+                }
+                return false;
+              }
 
-                    if (!res.ok) {
-                      const text = await res.text().catch(() => '');
-                      log('❌ Loyalty fetch HTTP ' + res.status + ' ' + res.statusText + (text ? (': ' + text.slice(0, 200)) : ''), 'error');
-                      if (i < attempts) {
-                        await new Promise(r => setTimeout(r, 700 * i));
-                        continue;
+              if (emitCapturedIfPresent()) return true;
+
+              log('🧭 Triggering Royal Caribbean account page to let the site call loyalty/info with the correct ApiKey...', 'info');
+              try {
+                window.location.href = TRIGGER_URL;
+              } catch (e) {}
+
+              let tries = 0;
+              const maxTries = 40; // ~20s
+              const timer = setInterval(async function() {
+                tries++;
+
+                if (emitCapturedIfPresent()) {
+                  clearInterval(timer);
+                  return;
+                }
+
+                if (tries === 10) {
+                  log('⏳ Still waiting for the site to request loyalty/info...', 'info');
+                }
+
+                if (tries === 18) {
+                  const headers = getAuthHeadersFromSession();
+                  const hasApiKey = !!(headers && headers['x-api-key']);
+                  log('🔁 Fallback: attempting manual loyalty/info fetch' + (hasApiKey ? ' (with x-api-key)' : ' (NO x-api-key found)'), hasApiKey ? 'info' : 'warning');
+                  if (headers) {
+                    try {
+                      const res = await fetch(LOYALTY_URL, {
+                        method: 'GET',
+                        headers,
+                        credentials: 'omit',
+                        cache: 'no-store',
+                      });
+
+                      if (res.ok) {
+                        const data = await res.json();
+                        window.capturedPayloads = window.capturedPayloads || {};
+                        window.capturedPayloads.loyalty = data;
+                        log('✅ Loyalty fetched successfully from loyalty/info (fallback)', 'success');
+                        post('network_payload', { endpoint: 'loyalty', data, url: LOYALTY_URL });
+                        post('step_complete', { step: 3 });
+                        clearInterval(timer);
+                        return;
                       }
-                      return { ok: false, error: 'http_' + res.status };
+
+                      const text = await res.text().catch(() => '');
+                      log('❌ Loyalty fetch HTTP ' + res.status + ': ' + (text ? text.slice(0, 200) : ''), 'error');
+                    } catch (e) {
+                      const msg = (e && e.message) ? e.message : String(e);
+                      log('❌ Loyalty fallback fetch failed: ' + msg, 'error');
                     }
-
-                    const data = await res.json();
-
-                    window.capturedPayloads = window.capturedPayloads || {};
-                    window.capturedPayloads.loyalty = data;
-
-                    post('network_payload', {
-                      endpoint: 'loyalty',
-                      data,
-                      url: LOYALTY_URL,
-                    });
-
-                    log('✅ Loyalty fetched successfully from loyalty/info', 'success');
-                    post('step_complete', { step: 3 });
-                    return { ok: true };
-                  } catch (e) {
-                    const msg = (e && e.message) ? e.message : String(e);
-                    log('❌ Loyalty fetch attempt ' + i + ' failed: ' + msg, 'error');
-                    if (i < attempts) {
-                      await new Promise(r => setTimeout(r, 700 * i));
-                      continue;
-                    }
-                    return { ok: false, error: msg };
                   }
                 }
-                return { ok: false, error: 'unknown' };
-              }
 
-              try {
-                const result = await fetchWithRetries();
-                if (!result.ok) {
+                if (tries >= maxTries) {
+                  clearInterval(timer);
+                  log('⚠️ Loyalty capture timed out - continuing without loyalty data', 'warning');
                   post('step_complete', { step: 3 });
                 }
-              } catch (e) {
-                const msg = (e && e.message) ? e.message : String(e);
-                log('❌ Loyalty step fatal error: ' + msg, 'error');
-                post('step_complete', { step: 3 });
-              }
+              }, 500);
+
+              return true;
             })();
-            true;
           `);
-          
-          addLog('⏳ Waiting for loyalty API response...', 'info');
-          await waitForStepComplete(3, 20000);
+
+          addLog('⏳ Waiting for loyalty data capture...', 'info');
+          await waitForStepComplete(3, 22000);
         }
       } catch (step3Error) {
         addLog(`Step 3 error: ${step3Error} - continuing without loyalty data`, 'warning');
