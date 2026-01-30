@@ -134,15 +134,33 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     if (Platform.OS === 'web') return null;
 
     const apiKey = (
-      process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ??
-      process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ??
       process.env.EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY ??
+      process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY ??
+      process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ??
+      process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ??
+      process.env.EXPO_PUBLIC_REVENUECAT_KEY ??
       ''
     ).trim();
 
     if (!apiKey) {
-      purchasesInitError = 'Missing RevenueCat API key (EXPO_PUBLIC_REVENUECAT_API_KEY).';
-      console.warn('[Entitlement] Missing RevenueCat API key. Expected env var EXPO_PUBLIC_REVENUECAT_API_KEY.');
+      purchasesInitError =
+        'Missing RevenueCat Public SDK Key. Set EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY (recommended) or EXPO_PUBLIC_REVENUECAT_API_KEY.';
+      console.warn('[Entitlement] Missing RevenueCat Public SDK Key.', {
+        tried: [
+          'EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY',
+          'EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY',
+          'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY',
+          'EXPO_PUBLIC_REVENUECAT_API_KEY',
+          'EXPO_PUBLIC_REVENUECAT_KEY',
+        ],
+      });
+      return null;
+    }
+
+    if (apiKey.startsWith('sk_')) {
+      purchasesInitError =
+        'Invalid RevenueCat key provided. This looks like a secret key (sk_...). Please use the Public SDK Key from RevenueCat (typically starts with appl_...).';
+      console.warn('[Entitlement] Refusing to initialize Purchases with a secret key (sk_...)');
       return null;
     }
 
