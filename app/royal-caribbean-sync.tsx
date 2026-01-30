@@ -28,7 +28,9 @@ function RoyalCaribbeanSyncScreen() {
     cancelSync,
     handleWebViewMessage,
     addLog,
-    extendedLoyaltyData
+    extendedLoyaltyData,
+    staySignedIn,
+    toggleStaySignedIn
   } = useRoyalCaribbeanSync();
   
   const isCelebrity = cruiseLine === 'celebrity';
@@ -261,6 +263,21 @@ function RoyalCaribbeanSyncScreen() {
             </Text>
           </View>
         </View>
+
+        {Platform.OS !== 'web' && (
+          <View style={styles.staySignedInContainer}>
+            <View style={styles.staySignedInInfo}>
+              <Text style={styles.staySignedInLabel}>Stay Signed In</Text>
+              <Text style={styles.staySignedInDesc}>Keep your session active across app restarts</Text>
+            </View>
+            <Switch
+              value={staySignedIn}
+              onValueChange={toggleStaySignedIn}
+              trackColor={{ false: '#334155', true: '#059669' }}
+              thumbColor={staySignedIn ? '#10b981' : '#94a3b8'}
+            />
+          </View>
+        )}
 
         <View style={styles.logsContainerTop}>
           <View style={styles.logsHeaderRow}>
@@ -1264,6 +1281,31 @@ const styles = StyleSheet.create({
   cruiseLineLabelCelebrity: {
     color: '#10b981',
     fontWeight: '600' as const
+  },
+  staySignedInContainer: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: '#1e293b',
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155'
+  },
+  staySignedInInfo: {
+    flex: 1,
+    marginRight: 12
+  },
+  staySignedInLabel: {
+    color: '#e2e8f0',
+    fontSize: 15,
+    fontWeight: '600' as const,
+    marginBottom: 2
+  },
+  staySignedInDesc: {
+    color: '#94a3b8',
+    fontSize: 12,
+    lineHeight: 16
   },
   webBackButton: {
     marginTop: 20,

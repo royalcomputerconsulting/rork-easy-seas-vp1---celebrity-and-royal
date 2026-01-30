@@ -1,8 +1,10 @@
 import createContextHook from '@nkzw/create-context-hook';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { WebView } from 'react-native-webview';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { 
   RoyalCaribbeanSyncState, 
   SyncStatus,
@@ -69,11 +71,27 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const [state, setState] = useState<RoyalCaribbeanSyncState>(INITIAL_STATE);
   const [cruiseLine, setCruiseLine] = useState<CruiseLine>(DEFAULT_CRUISE_LINE);
   const [extendedLoyaltyData, setExtendedLoyaltyData] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
+  const [staySignedIn, setStaySignedIn] = useState(false);
   const webViewRef = useRef<WebView | null>(null);
   const stepCompleteResolvers = useRef<{ [key: number]: () => void }>({});
   const progressCallbacks = useRef<{ onProgress?: () => void }>({});
   
   const config = CRUISE_LINE_CONFIG[cruiseLine];
+
+  useEffect(() => {
+    const loadStaySignedInPreference = async () => {
+      try {
+        const preference = await AsyncStorage.getItem('stay_signed_in');
+        if (preference === 'true') {
+          setStaySignedIn(true);
+          console.log('[RoyalCaribbeanSync] Stay signed in preference loaded: enabled');
+        }
+      } catch (error) {
+        console.error('[RoyalCaribbeanSync] Failed to load stay signed in preference:', error);
+      }
+    };
+    loadStaySignedInPreference();
+  }, []);
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     rcLogger.log(message, type);
@@ -82,6 +100,36 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       logs: rcLogger.getLogs()
     }));
   }, []);
+
+  const toggleStaySignedIn = useCallback(async (enabled: boolean) => {
+    try {
+      await AsyncStorage.setItem('stay_signed_in', enabled ? 'true' : 'false');
+      setStaySignedIn(enabled);
+      if (!enabled) {
+        if (Platform.OS !== 'web' && webViewRef.current) {
+          webViewRef.current.injectJavaScript(`
+            (function() {
+              try {
+                document.cookie.split(";").forEach(function(c) { 
+                  document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+                });
+                window.postMessage(JSON.stringify({ type: 'log', message: 'Cookies cleared - signed out', logType: 'info' }), '*');
+              } catch (e) {
+                console.error('Cookie clear error:', e);
+              }
+            })();
+            true;
+          `);
+        }
+        setState(prev => ({ ...prev, status: 'not_logged_in' }));
+        addLog('Signed out - cookies cleared', 'info');
+      } else {
+        addLog('Stay signed in enabled - your session will persist', 'success');
+      }
+    } catch (error) {
+      console.error('[RoyalCaribbeanSync] Failed to save stay signed in preference:', error);
+    }
+  }, [addLog]);
 
   const setProgress = useCallback((current: number, total: number, stepName?: string) => {
     setState(prev => ({
@@ -937,6 +985,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     handleWebViewMessage,
     addLog,
     extendedLoyaltyData,
-    setExtendedLoyalty
+    setExtendedLoyalty,
+    staySignedIn,
+    toggleStaySignedIn
   };
 });
