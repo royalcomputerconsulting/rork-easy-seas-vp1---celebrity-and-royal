@@ -15,12 +15,13 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download, Crown, RefreshCcw, ExternalLink } from 'lucide-react-native';
+import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions, type CasinoSession } from '@/state/CasinoSessionProvider';
 import { AtlasCard } from '@/components/AtlasCard';
+import { useEntitlement } from '@/state/EntitlementProvider';
 import { exportFavoriteMachinesToDocx, exportAllMachinesIncrementallyToDocx } from '@/lib/exportMachinesToDocx';
 import { MachineSessionStats } from '@/components/MachineSessionStats';
 import { MachineSessionsList } from '@/components/MachineSessionsList';
@@ -32,6 +33,9 @@ type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 
 export default function AtlasScreen() {
   const router = useRouter();
+  const entitlement = useEntitlement();
+
+  const FREE_MACHINE_PREVIEW_LIMIT = 8;
 
   const listRef = useRef<FlatList<MachineEncyclopediaEntry> | null>(null);
   const scrollOffsetRef = useRef<number>(0);
@@ -159,17 +163,6 @@ export default function AtlasScreen() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
 
-  const manufacturers = useMemo(() => {
-    const uniqueManufacturers = new Set(myAtlasMachines.map(m => m.manufacturer));
-    return Array.from(uniqueManufacturers).sort();
-  }, [myAtlasMachines]);
-
-  const ships = useMemo(() => {
-    const uniqueShips = new Set(
-      myAtlasMachines.flatMap(m => m.shipAssignments?.map(s => s.shipName) || [])
-    );
-    return Array.from(uniqueShips).sort();
-  }, [myAtlasMachines]);
 
   const filteredMachines = useMemo(() => {
     let filtered = [...myAtlasMachines];
@@ -288,7 +281,12 @@ export default function AtlasScreen() {
     setSelectedShip('');
   }, []);
 
-  const handleMachinePress = useCallback((id: string) => {
+  const handleMachinePress = useCallback((id: string, locked: boolean) => {
+    if (locked) {
+      console.log('[Atlas] Locked machine tapped - opening paywall', { id });
+      router.push('/paywall' as any);
+      return;
+    }
     router.push(`/machine-detail/${id}` as any);
   }, [router]);
 
@@ -352,18 +350,23 @@ export default function AtlasScreen() {
   );
 
   const renderMachineItem = useCallback(
-    ({ item, index }: { item: (typeof filteredMachines)[number]; index: number }) => (
-      <View style={[styles.gridItem, index % 2 === 1 && styles.gridItemRight]}>
-        <AtlasCard
-          machine={item}
-          onPress={() => handleMachinePress(item.id)}
-          isFavorite={item.isFavorite}
-          onToggleFavorite={() => handleToggleFavorite(item.id)}
-          compact={true}
-        />
-      </View>
-    ),
-    [handleMachinePress, handleToggleFavorite]
+    ({ item, index }: { item: (typeof filteredMachines)[number]; index: number }) => {
+      const locked = !entitlement.isPro && index >= FREE_MACHINE_PREVIEW_LIMIT;
+
+      return (
+        <View style={[styles.gridItem, index % 2 === 1 && styles.gridItemRight]}>
+          <AtlasCard
+            machine={item}
+            onPress={() => handleMachinePress(item.id, locked)}
+            isFavorite={item.isFavorite}
+            onToggleFavorite={() => handleToggleFavorite(item.id)}
+            compact={true}
+            locked={locked}
+          />
+        </View>
+      );
+    },
+    [FREE_MACHINE_PREVIEW_LIMIT, entitlement.isPro, handleMachinePress, handleToggleFavorite]
   );
 
   const listHeader = useMemo(() => {
@@ -387,6 +390,54 @@ export default function AtlasScreen() {
             {filteredMachines.length} machine{filteredMachines.length !== 1 ? 's' : ''}
           </Text>
         </View>
+
+        {!entitlement.isPro ? (
+          <View style={styles.proBanner} testID="machines.proBanner">
+            <View style={styles.proBannerLeft}>
+              <View style={styles.proBadge}>
+                <Crown size={14} color={COLORS.white} />
+                <Text style={styles.proBadgeText}>PRO</Text>
+              </View>
+              <Text style={styles.proBannerText}>
+                Preview: {FREE_MACHINE_PREVIEW_LIMIT} machines. Locked items show a lock.
+              </Text>
+            </View>
+
+            <View style={styles.proBannerActions}>
+              <TouchableOpacity
+                style={styles.proActionPrimary}
+                onPress={() => router.push('/paywall' as any)}
+                activeOpacity={0.85}
+                testID="machines.paywall.open"
+              >
+                <Text style={styles.proActionPrimaryText}>Unlock</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.proActionIcon}
+                onPress={() => entitlement.restore()}
+                activeOpacity={0.85}
+                testID="machines.paywall.restore"
+              >
+                <RefreshCcw size={16} color={COLORS.navyDeep} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.proActionIcon}
+                onPress={() => entitlement.openManageSubscription()}
+                activeOpacity={0.85}
+                testID="machines.paywall.manage"
+              >
+                <ExternalLink size={16} color={COLORS.navyDeep} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.proUnlockedBanner} testID="machines.proUnlocked">
+            <Crown size={16} color={COLORS.money} />
+            <Text style={styles.proUnlockedText}>Pro unlocked</Text>
+          </View>
+        )}
 
         {uiError ? (
           <View style={styles.errorBanner} testID="machines.errorBanner">
@@ -579,7 +630,9 @@ export default function AtlasScreen() {
       </>
     );
   }, [
+    FREE_MACHINE_PREVIEW_LIMIT,
     activeFilter,
+    entitlement,
     favoriteMachines.length,
     filteredMachines.length,
     handleClearFilters,
@@ -590,14 +643,11 @@ export default function AtlasScreen() {
     exportProgress,
     isLoading,
     isLoadingIndex,
-    manufacturers,
     myAtlasMachines.length,
     reload,
+    router,
     searchQuery,
-    selectedManufacturer,
-    selectedShip,
     sessions,
-    ships,
     showSessionsSection,
     uiError,
   ]);
@@ -1165,5 +1215,86 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '700' as const,
     color: COLORS.white,
+  },
+
+  proBanner: {
+    marginHorizontal: 20,
+    marginBottom: 14,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  proBannerLeft: {
+    flex: 1,
+    gap: 8,
+  },
+  proBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  proBadgeText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '900' as const,
+    letterSpacing: 0.6,
+  },
+  proBannerText: {
+    color: COLORS.textDarkGrey,
+    fontSize: 12,
+    fontWeight: '700' as const,
+    lineHeight: 16,
+  },
+  proBannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  proActionPrimary: {
+    backgroundColor: COLORS.money,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  proActionPrimaryText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '900' as const,
+    letterSpacing: 0.2,
+  },
+  proActionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    backgroundColor: 'rgba(10, 31, 68, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(10, 31, 68, 0.10)',
+  },
+
+  proUnlockedBanner: {
+    marginHorizontal: 20,
+    marginBottom: 14,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  proUnlockedText: {
+    color: COLORS.navyDeep,
+    fontSize: 13,
+    fontWeight: '800' as const,
   },
 });
