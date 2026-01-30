@@ -257,7 +257,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const hasLocalData = cruises.length > 0 || bookedCruises.length > 0 || casinoOffers.length > 0 || calendarEvents.length > 0;
 
-  const saveAllUserDataMutation = trpc.data.saveAllUserData.useMutation();
+  const { mutateAsync: saveAllUserDataMutateAsync } = trpc.data.saveAllUserData.useMutation();
   const { refetch: refetchBackendData } = trpc.data.getAllUserData.useQuery(
     { email: authenticatedEmail || '' },
     { enabled: false, retry: false, staleTime: 0 }
@@ -322,7 +322,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         events: parsedEvents.length,
       });
       
-      await saveAllUserDataMutation.mutateAsync({
+      await saveAllUserDataMutateAsync({
         email: authenticatedEmail,
         bookedCruises: parsedBooked,
         casinoOffers: parsedOffers,
@@ -336,7 +336,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     } catch (error) {
       console.error('[CoreData] Backend sync failed:', error);
     }
-  }, [saveAllUserDataMutation, authenticatedEmail]);
+  }, [saveAllUserDataMutateAsync, authenticatedEmail]);
 
   const loadFromBackend = useCallback(async () => {
     if (!isBackendAvailable() || !authenticatedEmail) {
