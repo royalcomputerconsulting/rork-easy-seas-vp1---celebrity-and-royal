@@ -108,6 +108,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
   const mountedRef = useRef<boolean>(true);
   const actionInFlightRef = useRef<boolean>(false);
+  const lastIsProRef = useRef<boolean>(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -124,10 +125,25 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       entitlementsActiveKeys: Object.keys(info?.entitlements?.active ?? {}),
     });
 
+    const wasPro = lastIsProRef.current;
+
     setCustomerInfo(info);
     setIsPro(computedIsPro);
     setSource(computedIsPro ? 'iap' : 'unknown');
     setLastCheckedAt(new Date().toISOString());
+
+    lastIsProRef.current = computedIsPro;
+
+    if (!wasPro && computedIsPro) {
+      try {
+        if (typeof window !== 'undefined') {
+          console.log('[Entitlement] Dispatching entitlementProUnlocked event');
+          window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
+        }
+      } catch (e) {
+        console.error('[Entitlement] Failed to dispatch entitlementProUnlocked event', e);
+      }
+    }
   }, []);
 
   const ensurePurchasesLoaded = useCallback(async (): Promise<PurchasesModule | null> => {
@@ -255,6 +271,10 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     console.log('[Entitlement] Provider mounted - refreshing entitlements');
     refresh().catch((e) => console.error('[Entitlement] initial refresh failed', e));
   }, [refresh]);
+
+  useEffect(() => {
+    lastIsProRef.current = isPro;
+  }, [isPro]);
 
   const findMonthlyPackage = useCallback((): PurchasesPackage | null => {
     try {

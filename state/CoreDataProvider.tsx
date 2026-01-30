@@ -722,11 +722,19 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
     try {
       if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
+        const handleEntitlementProUnlocked = () => {
+          console.log('[CoreDataProvider] entitlementProUnlocked event received, reloading data...');
+          loadAttemptedRef.current = false;
+          loadFromStorage(true);
+        };
+
         window.addEventListener('casinoSessionPointsUpdated', handleSessionPointsUpdate as EventListener);
         window.addEventListener('cloudDataRestored', handleCloudDataRestored as EventListener);
+        window.addEventListener('entitlementProUnlocked', handleEntitlementProUnlocked as EventListener);
         return () => {
           window.removeEventListener('casinoSessionPointsUpdated', handleSessionPointsUpdate as EventListener);
           window.removeEventListener('cloudDataRestored', handleCloudDataRestored as EventListener);
+          window.removeEventListener('entitlementProUnlocked', handleEntitlementProUnlocked as EventListener);
         };
       }
     } catch (error) {

@@ -85,19 +85,19 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   ): Promise<{ success: boolean; count: number; encyclopedia: MachineEncyclopediaEntry[]; atlasIds: string[]; error?: string }> => {
     try {
       console.log('[SlotMachineLibrary] Loading machines from index (lightweight mode)...');
-      
+
       const machineIndex = await machineIndexHelper.getOrCreateIndex();
       console.log(`[SlotMachineLibrary] Loaded ${machineIndex.length} machines from index`);
-      
+
       const newEntries: MachineEncyclopediaEntry[] = [];
-      
+
       for (const indexEntry of machineIndex) {
         const existingEntry = currentEncyclopedia.find(
-          e => e.globalMachineId === indexEntry.id || 
+          e => e.globalMachineId === indexEntry.id ||
                (e.machineName.toLowerCase() === indexEntry.name.toLowerCase() &&
                 e.manufacturer === indexEntry.manufacturer)
         );
-        
+
         if (!existingEntry) {
           const newEntry: MachineEncyclopediaEntry = {
             id: `m262-${indexEntry.id}`,
@@ -114,8 +114,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
               hasMustHitBy: indexEntry.hasMHB || false,
             },
             source: 'global',
-            isInMyAtlas: true,
-            addedToAtlasAt: new Date().toISOString(),
+            isInMyAtlas: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
@@ -125,29 +124,90 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       }
 
       console.log('[SlotMachineLibrary] Created', newEntries.length, 'new entries from index');
-      
+
       const updatedEncyclopedia = [...currentEncyclopedia, ...newEntries];
       await AsyncStorage.setItem(STORAGE_KEY_ENCYCLOPEDIA, JSON.stringify(updatedEncyclopedia));
 
-      const newAtlasIds = newEntries.map(e => e.id);
-      const updatedAtlasIds = [...currentAtlasIds, ...newAtlasIds];
-      await AsyncStorage.setItem(STORAGE_KEY_MY_ATLAS, JSON.stringify(updatedAtlasIds));
-
-      return { 
-        success: true, 
-        count: newEntries.length, 
-        encyclopedia: updatedEncyclopedia, 
-        atlasIds: updatedAtlasIds 
+      return {
+        success: true,
+        count: newEntries.length,
+        encyclopedia: updatedEncyclopedia,
+        atlasIds: currentAtlasIds,
       };
     } catch (error) {
       console.error('[SlotMachineLibrary] Load from index error:', error);
-      return { 
-        success: false, 
-        count: 0, 
-        encyclopedia: currentEncyclopedia, 
+      return {
+        success: false,
+        count: 0,
+        encyclopedia: currentEncyclopedia,
         atlasIds: currentAtlasIds,
-        error: error instanceof Error ? error.message : 'Unknown error' 
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
+    }
+  }, []);
+
+  const ensureEncyclopediaFullyLoadedForPro = useCallback(async (
+    currentEncyclopedia: MachineEncyclopediaEntry[],
+    currentAtlasIds: string[]
+  ): Promise<{ didChange: boolean; encyclopedia: MachineEncyclopediaEntry[] }> => {
+    try {
+      console.log('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro called', {
+        currentCount: currentEncyclopedia.length,
+        currentAtlasIds: currentAtlasIds.length,
+      });
+
+      const machineIndex = await machineIndexHelper.getOrCreateIndex();
+      const indexCount = machineIndex.length;
+
+      const existingGlobalIds = new Set<string>(currentEncyclopedia.map(e => e.globalMachineId ?? e.id));
+      const newEntries: MachineEncyclopediaEntry[] = [];
+
+      for (const indexEntry of machineIndex) {
+        if (existingGlobalIds.has(indexEntry.id)) continue;
+
+        newEntries.push({
+          id: `m262-${indexEntry.id}`,
+          globalMachineId: indexEntry.id,
+          machineName: indexEntry.name,
+          manufacturer: indexEntry.manufacturer,
+          volatility: indexEntry.volatility,
+          cabinetType: indexEntry.cabinetType,
+          releaseYear: indexEntry.releaseYear,
+          gameSeries: indexEntry.gameSeries,
+          theme: indexEntry.theme,
+          apMetadata: {
+            persistenceType: indexEntry.persistenceType || 'True',
+            hasMustHitBy: indexEntry.hasMHB || false,
+          },
+          source: 'global',
+          isInMyAtlas: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      if (newEntries.length === 0) {
+        console.log('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro: nothing to add', {
+          currentCount: currentEncyclopedia.length,
+          indexCount,
+        });
+        return { didChange: false, encyclopedia: currentEncyclopedia };
+      }
+
+      const updated = [...currentEncyclopedia, ...newEntries];
+      await AsyncStorage.setItem(STORAGE_KEY_ENCYCLOPEDIA, JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEY_INDEX_LOADED, 'true');
+
+      console.log('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro: added entries', {
+        added: newEntries.length,
+        after: updated.length,
+        indexCount,
+      });
+
+      return { didChange: true, encyclopedia: updated };
+    } catch (e) {
+      console.error('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro failed', e);
+      return { didChange: false, encyclopedia: currentEncyclopedia };
     }
   }, []);
 
@@ -205,6 +265,24 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   useEffect(() => {
     initializeAndLoadData();
   }, [initializeAndLoadData]);
+
+  useEffect(() => {
+    if (!hasFullAccess) return;
+    if (isLoading) return;
+
+    console.log('[SlotMachineLibrary] Pro access detected - ensuring full encyclopedia is loaded', {
+      encyclopediaCount: encyclopedia.length,
+      myAtlasIds: myAtlasIds.length,
+      indexLoadComplete,
+    });
+
+    ensureEncyclopediaFullyLoadedForPro(encyclopedia, myAtlasIds)
+      .then((result) => {
+        if (!result.didChange) return;
+        setEncyclopedia(result.encyclopedia);
+      })
+      .catch((e) => console.error('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro unhandled error', e));
+  }, [ensureEncyclopediaFullyLoadedForPro, encyclopedia, hasFullAccess, indexLoadComplete, isLoading, myAtlasIds]);
 
   const saveEncyclopedia = async (data: MachineEncyclopediaEntry[]) => {
     try {
