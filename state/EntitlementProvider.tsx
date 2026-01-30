@@ -13,6 +13,7 @@ type PurchasesModule = {
 };
 
 let Purchases: PurchasesModule | null = null;
+let purchasesInitError: string | null = null;
 
 export type EntitlementSource = 'iap' | 'dev' | 'unknown';
 
@@ -132,9 +133,16 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   const ensurePurchasesLoaded = useCallback(async (): Promise<PurchasesModule | null> => {
     if (Platform.OS === 'web') return null;
 
-    const apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ?? '').trim();
+    const apiKey = (
+      process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ??
+      process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ??
+      process.env.EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY ??
+      ''
+    ).trim();
+
     if (!apiKey) {
-      console.warn('[Entitlement] Missing EXPO_PUBLIC_REVENUECAT_API_KEY - purchases will be unavailable');
+      purchasesInitError = 'Missing RevenueCat API key (EXPO_PUBLIC_REVENUECAT_API_KEY).';
+      console.warn('[Entitlement] Missing RevenueCat API key. Expected env var EXPO_PUBLIC_REVENUECAT_API_KEY.');
       return null;
     }
 
@@ -144,12 +152,21 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       const mod = (await import('react-native-purchases')) as unknown as { default: PurchasesModule };
       Purchases = mod.default;
 
-      console.log('[Entitlement] Configuring Purchases');
+      console.log('[Entitlement] Configuring Purchases', {
+        hasApiKey: !!apiKey,
+        platform: Platform.OS,
+      });
+
       Purchases.configure({ apiKey });
+      purchasesInitError = null;
 
       return Purchases;
     } catch (e) {
-      console.error('[Entitlement] Failed to load react-native-purchases', e);
+      purchasesInitError =
+        e instanceof Error
+          ? `Failed to initialize purchases: ${e.message}`
+          : 'Failed to initialize purchases.';
+      console.error('[Entitlement] Failed to load/initialize react-native-purchases', e);
       return null;
     }
   }, []);
@@ -186,7 +203,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     try {
       const purchases = await ensurePurchasesLoaded();
       if (!purchases) {
-        setError('In-app purchases are not configured.');
+        const message = purchasesInitError ?? 'In-app purchases are not configured.';
+        console.warn('[Entitlement] refresh: Purchases unavailable', { message });
+        setError(message);
         return;
       }
 
@@ -262,7 +281,10 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       setIsLoading(true);
       const purchases = await ensurePurchasesLoaded();
       if (!purchases) {
-        Alert.alert('Not Available', 'In-app purchases are not configured.');
+        const message = purchasesInitError ?? 'In-app purchases are not configured.';
+        console.warn('[Entitlement] subscribeMonthly: Purchases unavailable', { message });
+        Alert.alert('Not Available', message);
+        setError(message);
         return;
       }
 
@@ -315,7 +337,10 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       setIsLoading(true);
       const purchases = await ensurePurchasesLoaded();
       if (!purchases) {
-        Alert.alert('Not Available', 'In-app purchases are not configured.');
+        const message = purchasesInitError ?? 'In-app purchases are not configured.';
+        console.warn('[Entitlement] restore: Purchases unavailable', { message });
+        Alert.alert('Not Available', message);
+        setError(message);
         return;
       }
 
