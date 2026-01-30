@@ -5,7 +5,7 @@ import { Bot, TrendingUp, Award, DollarSign, RefreshCw, MessageSquare } from 'lu
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
 import { useCruiseStore } from '@/state/CruiseStore';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
+
 import type { BookedCruise } from '@/types/models';
 
 interface AgentXAnalysisCardProps {
@@ -19,35 +19,7 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const bookedCruises = useMemo(() => {
-    const getCruiseKey = (c: BookedCruise) => `${c.shipName}-${c.sailDate}`;
-    
-    const mergedMap = new Map<string, BookedCruise>();
-    
-    BOOKED_CRUISES_DATA.forEach((c: BookedCruise) => {
-      mergedMap.set(getCruiseKey(c), c);
-    });
-    
-    if (storedCruises && storedCruises.length > 0) {
-      storedCruises.forEach((c: BookedCruise) => {
-        const key = getCruiseKey(c);
-        const existing = mergedMap.get(key);
-        
-        if (existing) {
-          const storedHasData = (c.earnedPoints || 0) > 0 || (c.casinoPoints || 0) > 0 || c.winnings !== undefined;
-          const existingHasData = (existing.earnedPoints || 0) > 0 || (existing.casinoPoints || 0) > 0 || existing.winnings !== undefined;
-          
-          if (storedHasData) {
-            mergedMap.set(key, c);
-          } else if (!existingHasData) {
-            mergedMap.set(key, c);
-          }
-        } else {
-          mergedMap.set(key, c);
-        }
-      });
-    }
-    
-    return Array.from(mergedMap.values());
+    return storedCruises || [];
   }, [storedCruises]);
 
   const handleRefresh = useCallback(async () => {

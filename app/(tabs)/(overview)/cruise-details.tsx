@@ -11,7 +11,7 @@ import { useAppState } from '@/state/AppStateProvider';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useCruiseStore } from '@/state/CruiseStore';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
-import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
+
 import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PLAYER_SCHEDULE, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 
@@ -122,7 +122,7 @@ export default function CruiseDetailsScreen() {
   };
 
   const cruise = useMemo(() => {
-    // Priority: CruiseStore data > localData > BOOKED_CRUISES_DATA mock
+    // Priority: CruiseStore data > localData
     // CruiseStore has enriched itinerary data from enrichCruisesWithMockItineraries
     const allCruises = [
       ...(storeCruises || []),
@@ -132,32 +132,6 @@ export default function CruiseDetailsScreen() {
     ];
     
     let found = allCruises.find(c => c.id === id);
-    
-    // If cruise found but missing itinerary, try to enrich from mock data
-    if (found && (!found.itinerary || found.itinerary.length === 0)) {
-      const mockMatch = BOOKED_CRUISES_DATA.find(mc => 
-        mc.id === found!.id || 
-        mc.reservationNumber === (found as any).reservationNumber ||
-        (mc.shipName === found!.shipName && mc.sailDate === found!.sailDate)
-      );
-      
-      if (mockMatch?.itinerary && mockMatch.itinerary.length > 0) {
-        console.log('[CruiseDetails] Enriching cruise with mock itinerary:', mockMatch.id);
-        found = {
-          ...found,
-          itinerary: mockMatch.itinerary,
-          seaDays: mockMatch.seaDays,
-          portDays: mockMatch.portDays,
-          casinoOpenDays: mockMatch.casinoOpenDays,
-          ports: mockMatch.ports,
-        };
-      }
-    }
-    
-    // If still not found, check mock data directly
-    if (!found) {
-      found = BOOKED_CRUISES_DATA.find(c => c.id === id);
-    }
     
     // Enrich pricing from linked offer if cruise has missing prices
     if (found && found.offerCode) {

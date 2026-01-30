@@ -393,14 +393,29 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const hasImported = hasImportedData === 'true';
       const hasAnyExistingData = !!(bookedData || offersData || profileData || pointsData || cruisesData);
       
-      // Don't treat as first time user if cloud sync hasn't completed yet or if cloud has data
-      // This prevents showing sample data to returning users on new devices
+      // Parse existing data to check if there's any real (non-mock) data
+      const parsedBookedData = bookedData ? JSON.parse(bookedData) : [];
+      const parsedOffersData = offersData ? JSON.parse(offersData) : [];
+      const hasRealData = parsedBookedData.length > 0 || parsedOffersData.length > 0;
+      
+      // Don't treat as first time user if:
+      // 1. Cloud sync hasn't completed yet or cloud has data
+      // 2. There's ANY existing data (prevents showing sample data to returning users)
       const isFirstTimeUser = hasImportedData === null && !hasAnyExistingData && initialCheckComplete && !hasCloudData;
-      console.log('[CoreData] Has imported data flag:', hasImported, 'isFirstTimeUser:', isFirstTimeUser, 'hasAnyExistingData:', hasAnyExistingData, 'initialCheckComplete:', initialCheckComplete, 'hasCloudData:', hasCloudData);
+      console.log('[CoreData] Data status:', { 
+        hasImported, 
+        isFirstTimeUser, 
+        hasAnyExistingData, 
+        hasRealData,
+        bookedCount: parsedBookedData.length,
+        offersCount: parsedOffersData.length,
+        initialCheckComplete, 
+        hasCloudData 
+      });
 
-      const parsedOffers: CasinoOffer[] = offersData ? JSON.parse(offersData) : [];
-      console.log('[CoreData] Parsed offers:', parsedOffers.length);
-      setCasinoOffersState(parsedOffers);
+      // Only show offers if they exist (no mock offers)
+      console.log('[CoreData] Parsed offers:', parsedOffersData.length);
+      setCasinoOffersState(parsedOffersData);
 
       if (cruisesData) {
         const parsedCruises = JSON.parse(cruisesData) as Cruise[];
@@ -427,18 +442,17 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
       let finalBookedCount = 0;
       
-      if (bookedData) {
-        const parsedBooked = JSON.parse(bookedData) as BookedCruise[];
+      if (bookedData && parsedBookedData.length > 0) {
         console.log('[CoreData] Found existing booked data, processing...');
-        const withTransition = transitionCruisesToCompleted(parsedBooked);
+        const withTransition = transitionCruisesToCompleted(parsedBookedData);
         const withItineraries = enrichCruisesWithMockItineraries(withTransition);
         const withKnownRetail = applyKnownRetailValues(withItineraries);
         const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
         const enrichedBooked = enrichCruisesWithReceiptData(withFreeplayOBC);
         finalBookedCount = enrichedBooked.length;
         setBookedCruisesState(enrichedBooked);
-      } else if (isFirstTimeUser) {
-        console.log('[CoreData] First time user detected - loading sample demo data');
+      } else if (isFirstTimeUser && !hasRealData) {
+        console.log('[CoreData] First time user with no real data - loading sample demo data');
         const { sampleCruises, sampleOffers } = getFirstTimeUserSampleData();
         const withItineraries = enrichCruisesWithMockItineraries(sampleCruises);
         const withKnownRetail = applyKnownRetailValues(withItineraries);
@@ -452,7 +466,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true');
         console.log('[CoreData] Sample demo data loaded:', enrichedSample.length, 'cruises,', sampleOffers.length, 'offers');
       } else {
-        console.log('[CoreData] No booked cruises, keeping empty state');
+        console.log('[CoreData] No booked cruises or real data exists - keeping empty state');
         finalBookedCount = 0;
         setBookedCruisesState([]);
       }
