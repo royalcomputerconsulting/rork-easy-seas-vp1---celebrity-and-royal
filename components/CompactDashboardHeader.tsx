@@ -72,9 +72,22 @@ export function CompactDashboardHeader({
 
   const formatCruiseDate = (dateStr: string | null | undefined): string => {
     if (!dateStr) return 'TBD';
-    const d = new Date(dateStr);
-    if (Number.isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    // Prefer MM-DD-YYYY for these labels (avoids showing ISO YYYY-M-D)
+    const isoMatch = String(dateStr).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (isoMatch) {
+      const [, y, m, d] = isoMatch;
+      const mm = String(m).padStart(2, '0');
+      const dd = String(d).padStart(2, '0');
+      return `${mm}-${dd}-${y}`;
+    }
+
+    const dt = new Date(dateStr);
+    if (Number.isNaN(dt.getTime())) return String(dateStr);
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    const yy = String(dt.getFullYear());
+    return `${mm}-${dd}-${yy}`;
   };
 
   const getTierColor = (tier: string): string => {

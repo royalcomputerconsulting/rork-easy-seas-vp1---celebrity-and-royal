@@ -235,6 +235,7 @@ export type WebViewMessage =
   | { type: 'loyalty_data'; data?: LoyaltyData; loyalty?: LoyaltyApiInformation }
   | { type: 'extended_loyalty_data'; data: LoyaltyApiInformation; accountId?: string }
   | { type: 'network_payload'; endpoint: string; data: any; url: string }
+  | { type: 'network_capture_headers'; url: string; hasApiKey?: boolean; hasAuthorization?: boolean; hasAccountId?: boolean }
   | { type: 'error'; message: string }
   | { type: 'complete' };
 

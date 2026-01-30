@@ -31,7 +31,10 @@ export function ClubRoyalePoints({
 
   const formatDate = (date: Date | null): string => {
     if (!date) return 'Not scheduled';
-    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const yy = String(date.getFullYear());
+    return `${mm}-${dd}-${yy}`;
   };
 
   const pinnacleETA = pinnacleProgress.nightsToNext === 0 
@@ -112,7 +115,12 @@ export function ClubRoyalePoints({
               {pinnacleProgress.pinnacleShip && pinnacleProgress.pinnacleSailDate && pinnacleProgress.nightsToNext > 0 && (
                 <View style={styles.pinnacleAchievementBadge}>
                   <Text style={styles.pinnacleAchievementText}>
-                    ⭐ {pinnacleProgress.pinnacleShip} - {pinnacleProgress.pinnacleSailDate}
+                    ⭐ {pinnacleProgress.pinnacleShip} - {String(pinnacleProgress.pinnacleSailDate || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/) ? (() => {
+                      const m = String(pinnacleProgress.pinnacleSailDate).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                      if (!m) return pinnacleProgress.pinnacleSailDate;
+                      const [, y, mo, da] = m;
+                      return `${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}-${y}`;
+                    })() : pinnacleProgress.pinnacleSailDate}
                   </Text>
                 </View>
               )}

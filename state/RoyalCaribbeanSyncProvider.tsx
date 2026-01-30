@@ -334,6 +334,18 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
         break;
 
+      case 'network_capture_headers': {
+        const headerMsg = message as any;
+        console.log('[RoyalCaribbeanSync] Captured request headers', {
+          url: headerMsg.url,
+          hasApiKey: headerMsg.hasApiKey,
+          hasAuthorization: headerMsg.hasAuthorization,
+          hasAccountId: headerMsg.hasAccountId,
+        });
+        addLog(`🔑 Captured request headers for ${String(headerMsg.url || '').split('?')[0]}`, 'info');
+        break;
+      }
+
       case 'network_payload':
         const { endpoint, data, url } = message as any;
         
@@ -504,6 +516,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           const loyaltyPayload = data.payload || data;
           const loyaltyInfo = loyaltyPayload.loyaltyInformation || loyaltyPayload;
           const accountId = loyaltyPayload.accountId || '';
+
+          // Helpful signal: confirm the endpoint we captured from
+          if (typeof url === 'string' && url.includes('/guestAccounts/loyalty/info')) {
+            addLog('✅ Captured loyalty from /guestAccounts/loyalty/info (correct endpoint)', 'success');
+          } else if (typeof url === 'string' && url.length > 0) {
+            addLog(`ℹ️ Loyalty captured from: ${url}`, 'info');
+          }
           
           addLog(`📦 Loyalty payload keys: ${Object.keys(loyaltyPayload).join(', ')}`, 'info');
           

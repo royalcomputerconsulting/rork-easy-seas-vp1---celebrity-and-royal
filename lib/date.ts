@@ -36,6 +36,14 @@ export function createDateFromString(dateString: string): Date {
   return date;
 }
 
+export function formatDateMDY(date: Date | string, separator: '-' | '/' = '-'): string {
+  const d = typeof date === 'string' ? createDateFromString(date) : date;
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const year = String(d.getFullYear());
+  return `${month}${separator}${day}${separator}${year}`;
+}
+
 export function formatDate(date: Date | string, format: 'short' | 'medium' | 'long' = 'medium'): string {
   const d = typeof date === 'string' ? createDateFromString(date) : date;
   

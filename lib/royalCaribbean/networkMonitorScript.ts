@@ -9,6 +9,7 @@ export const NETWORK_MONITOR_SCRIPT = `
   console.log('[NetworkMonitor] Installing comprehensive network monitor');
   
   window.capturedPayloads = window.capturedPayloads || {};
+  window.capturedRequestHeaders = window.capturedRequestHeaders || {};
   
   function log(message, type = 'info') {
     try {
@@ -24,10 +25,66 @@ export const NETWORK_MONITOR_SCRIPT = `
   
   log('🌐 Network monitoring active - will capture all API payloads', 'info');
   
+  function extractHeaderValue(headers, name) {
+    try {
+      if (!headers) return undefined;
+      const lower = name.toLowerCase();
+      if (typeof headers.get === 'function') {
+        return headers.get(name) || headers.get(lower) || undefined;
+      }
+      if (Array.isArray(headers)) {
+        for (const pair of headers) {
+          if (!pair || pair.length < 2) continue;
+          const k = String(pair[0] || '').toLowerCase();
+          if (k === lower) return String(pair[1] ?? '');
+        }
+      }
+      if (typeof headers === 'object') {
+        for (const k of Object.keys(headers)) {
+          if (k.toLowerCase() === lower) return String(headers[k] ?? '');
+        }
+      }
+      return undefined;
+    } catch (e) {
+      return undefined;
+    }
+  }
+
+  function captureRequestHeaders(url, options) {
+    try {
+      if (!url || typeof url !== 'string') return;
+      if (!url.includes('aws-prd.api.rccl.com')) return;
+
+      const headers = options?.headers;
+      const apiKey = extractHeaderValue(headers, 'x-api-key') || extractHeaderValue(headers, 'X-Api-Key');
+      const authorization = extractHeaderValue(headers, 'authorization');
+      const accountId = extractHeaderValue(headers, 'account-id');
+
+      if (apiKey) window.capturedRequestHeaders.apiKey = apiKey;
+      if (authorization) window.capturedRequestHeaders.authorization = authorization;
+      if (accountId) window.capturedRequestHeaders.accountId = accountId;
+
+      if (apiKey || authorization || accountId) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'network_capture_headers',
+          url,
+          hasApiKey: !!apiKey,
+          hasAuthorization: !!authorization,
+          hasAccountId: !!accountId,
+        }));
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
   const originalFetch = window.fetch;
   window.fetch = function(...args) {
     const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-    
+    const options = args[1] || {};
+
+    captureRequestHeaders(url, options);
+
     return originalFetch.apply(this, args).then(async (response) => {
       const clonedResponse = response.clone();
       
@@ -105,10 +162,43 @@ export const NETWORK_MONITOR_SCRIPT = `
   const OriginalXHR = XMLHttpRequest;
   XMLHttpRequest = function() {
     const xhr = new OriginalXHR();
-    
+
+    let _url = '';
+    let _headers = {};
+
+    const originalOpen = xhr.open;
+    xhr.open = function(method, url) {
+      try {
+        _url = String(url || '');
+      } catch (e) {
+        _url = '';
+      }
+      return originalOpen.apply(this, arguments);
+    };
+
+    const originalSetRequestHeader = xhr.setRequestHeader;
+    xhr.setRequestHeader = function(name, value) {
+      try {
+        _headers[String(name || '').toLowerCase()] = String(value ?? '');
+
+        if (_url.includes('aws-prd.api.rccl.com')) {
+          const apiKey = _headers['x-api-key'];
+          const authorization = _headers['authorization'];
+          const accountId = _headers['account-id'];
+
+          if (apiKey) window.capturedRequestHeaders.apiKey = apiKey;
+          if (authorization) window.capturedRequestHeaders.authorization = authorization;
+          if (accountId) window.capturedRequestHeaders.accountId = accountId;
+        }
+      } catch (e) {
+        // ignore
+      }
+      return originalSetRequestHeader.apply(this, arguments);
+    };
+
     xhr.addEventListener('load', function() {
       if (this.readyState === 4 && this.status === 200) {
-        const url = this.responseURL || '';
+        const url = this.responseURL || _url || '';
         
         try {
           if (url.includes('/profileBookings/enriched')) {
