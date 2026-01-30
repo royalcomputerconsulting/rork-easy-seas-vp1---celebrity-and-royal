@@ -69,6 +69,26 @@ export function OfferCard({
     }
   }, [offer, showValueBreakdown]);
 
+  const inferredOfferName = useMemo(() => {
+    const direct = (offer.offerName || '').trim();
+    if (direct.length > 0) return direct;
+
+    if (offer.offerCode && allCruises.length > 0) {
+      const match = allCruises.find(c => c.offerCode === offer.offerCode && (c.offerName || '').trim().length > 0);
+      const inferred = (match?.offerName || '').trim();
+      if (inferred.length > 0) {
+        console.log('[OfferCard] Inferred offer name from other cruises with same offerCode:', {
+          offerId: offer.id,
+          offerCode: offer.offerCode,
+          inferred,
+        });
+        return inferred;
+      }
+    }
+
+    return '';
+  }, [offer.id, offer.offerCode, offer.offerName, allCruises]);
+
   const aggregateValue = useMemo((): OfferAggregateValue | null => {
     try {
       if (allCruises.length > 0 && offer.offerCode) {
@@ -228,7 +248,7 @@ export function OfferCard({
       {(offer.offerName || offer.offerCode) && (
         <View style={styles.offerHeaderSection}>
           <Text style={styles.offerNameHeader}>
-            {offer.offerName || offer.destination || 'Casino Offer'}
+            {offer.offerName || inferredOfferName || 'Casino Offer'}
           </Text>
           <View style={styles.offerCodeRow}>
             {offer.offerCode && (
