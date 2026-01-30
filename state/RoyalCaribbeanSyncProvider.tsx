@@ -714,7 +714,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           webViewRef.current.injectJavaScript(`
             (function() {
               const LOYALTY_URL = '${loyaltyUrl}';
-              const TRIGGER_URL = 'https://www.royalcaribbean.com/account';
+              const TRIGGER_URLS = [
+                'https://www.royalcaribbean.com/account',
+                'https://www.royalcaribbean.com/account/loyalty',
+                'https://www.royalcaribbean.com/account/loyalty-programs',
+                'https://www.royalcaribbean.com/account/loyalty-program',
+              ];
 
               function post(type, payload) {
                 try {
@@ -726,23 +731,30 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 post('log', { message, logType: logType || 'info' });
               }
 
-              function tryFindApiKey() {
+              function tryFindAppKey() {
                 const candidates = [];
                 try {
                   const keys = Object.keys(localStorage || {});
                   for (const k of keys) {
-                    if (/api[-_]?key/i.test(k)) {
+                    if (/appkey/i.test(k) || /api[-_]?key/i.test(k)) {
                       const v = localStorage.getItem(k);
                       if (v && v.length > 10) candidates.push(v);
                     }
                   }
                 } catch (e) {}
+
                 const winAny = window;
                 try {
                   const env = winAny?.__ENV__ || winAny?.__env__ || winAny?.env || null;
-                  const v = env?.API_KEY || env?.apiKey || env?.apigeeApiKey || null;
+                  const v = env?.APPKEY || env?.appKey || env?.appkey || env?.API_KEY || env?.apiKey || env?.apigeeApiKey || null;
                   if (typeof v === 'string' && v.length > 10) candidates.push(v);
                 } catch (e) {}
+
+                try {
+                  const maybe = winAny?.RCLL_APPKEY || winAny?.RCCL_APPKEY || winAny?.APPKEY || null;
+                  if (typeof maybe === 'string' && maybe.length > 10) candidates.push(maybe);
+                } catch (e) {}
+
                 return candidates[0] || '';
               }
 
@@ -764,7 +776,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
                 if (!accountId || !authorization) return null;
 
-                const apiKey = tryFindApiKey();
+                const appKey = tryFindAppKey();
 
                 const headers = {
                   'accept': 'application/json',
@@ -774,8 +786,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                   'authorization': authorization,
                 };
 
-                if (apiKey) {
-                  headers['x-api-key'] = apiKey;
+                if (appKey) {
+                  headers['appkey'] = appKey;
+                  headers['x-api-key'] = appKey;
                 }
 
                 return headers;
@@ -794,10 +807,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
               if (emitCapturedIfPresent()) return true;
 
-              log('🧭 Triggering Royal Caribbean account page to let the site call loyalty/info with the correct ApiKey...', 'info');
-              try {
-                window.location.href = TRIGGER_URL;
-              } catch (e) {}
+              log('🧭 Triggering Royal Caribbean loyalty area to let the site call loyalty/info with the correct appkey...', 'info');
+              let triggerIndex = 0;
+              function navigateTrigger() {
+                const next = TRIGGER_URLS[triggerIndex % TRIGGER_URLS.length];
+                triggerIndex++;
+                try {
+                  window.location.href = next;
+                  log('📍 Navigating to: ' + next, 'info');
+                } catch (e) {}
+              }
+              navigateTrigger();
 
               let tries = 0;
               const maxTries = 40; // ~20s
@@ -809,14 +829,24 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                   return;
                 }
 
-                if (tries === 10) {
+                if (tries === 8) {
                   log('⏳ Still waiting for the site to request loyalty/info...', 'info');
+                }
+
+                if (tries === 14) {
+                  log('🧭 Still no loyalty call — trying a different loyalty page...', 'info');
+                  navigateTrigger();
+                }
+
+                if (tries === 22) {
+                  log('🧭 Still no loyalty call — trying one more loyalty page...', 'info');
+                  navigateTrigger();
                 }
 
                 if (tries === 18) {
                   const headers = getAuthHeadersFromSession();
-                  const hasApiKey = !!(headers && headers['x-api-key']);
-                  log('🔁 Fallback: attempting manual loyalty/info fetch' + (hasApiKey ? ' (with x-api-key)' : ' (NO x-api-key found)'), hasApiKey ? 'info' : 'warning');
+                  const hasAppKey = !!(headers && (headers['appkey'] || headers['x-api-key']));
+                  log('🔁 Fallback: attempting manual loyalty/info fetch' + (hasAppKey ? ' (with appkey)' : ' (NO appkey found)'), hasAppKey ? 'info' : 'warning');
                   if (headers) {
                     try {
                       const res = await fetch(LOYALTY_URL, {

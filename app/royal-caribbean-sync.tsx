@@ -548,7 +548,7 @@ function RoyalCaribbeanSyncScreen() {
                         <Text style={styles.loyaltySectionTitle}>Not captured</Text>
                       </View>
                       <Text style={styles.loyaltyValueMuted}>
-                        We couldn&apos;t capture /guestAccounts/loyalty/info in time. Keep the in-app browser open for ~10 seconds on your account page and run Sync again.
+                        We couldn&apos;t capture /guestAccounts/loyalty/info in time. Keep the in-app browser open for ~10 seconds, then try Sync again.
                       </Text>
                     </View>
                   ) : (
