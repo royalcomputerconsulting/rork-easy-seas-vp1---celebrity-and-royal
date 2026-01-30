@@ -660,16 +660,30 @@ export default function CruiseDetailsScreen() {
                 )}
                 
                 {(cruise as BookedCruise).stateroomNumber && (
-                  <View style={styles.detailRow}>
+                  <View style={styles.detailRow} testID="cruise-detail-stateroom-number">
                     <Text style={styles.detailRowLabel}>Stateroom</Text>
                     <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomNumber}</Text>
                   </View>
                 )}
                 
                 {(cruise as BookedCruise).stateroomCategoryCode && (
-                  <View style={styles.detailRow}>
+                  <View style={styles.detailRow} testID="cruise-detail-stateroom-category-code">
                     <Text style={styles.detailRowLabel}>Category Code</Text>
                     <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomCategoryCode}</Text>
+                  </View>
+                )}
+
+                {(cruise as BookedCruise).stateroomType && (
+                  <View style={styles.detailRow} testID="cruise-detail-stateroom-type">
+                    <Text style={styles.detailRowLabel}>Stateroom Type</Text>
+                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomType}</Text>
+                  </View>
+                )}
+
+                {(cruise as BookedCruise).passengerStatus && (
+                  <View style={styles.detailRow} testID="cruise-detail-passenger-status">
+                    <Text style={styles.detailRowLabel}>Passenger Status</Text>
+                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).passengerStatus}</Text>
                   </View>
                 )}
                 
@@ -688,7 +702,7 @@ export default function CruiseDetailsScreen() {
                 )}
                 
                 {(cruise as BookedCruise).packageCode && (
-                  <View style={styles.detailRow}>
+                  <View style={styles.detailRow} testID="cruise-detail-package-code">
                     <Text style={styles.detailRowLabel}>Package Code</Text>
                     <Text style={styles.detailRowValue}>{(cruise as BookedCruise).packageCode}</Text>
                   </View>
