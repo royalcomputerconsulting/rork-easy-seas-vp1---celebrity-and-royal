@@ -530,13 +530,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`   → Crown & Anchor: ${convertedLoyalty.crownAndAnchorTier || 'N/A'} - ${convertedLoyalty.crownAndAnchorPointsFromApi.toLocaleString()} points`, 'info');
           }
           
-          // Auto-complete Step 4 if we're in that step
+          // Auto-complete Step 3 if we're in that step (loyalty step)
           setState(prev => {
-            if (prev.status === 'running_step_4') {
-              addLog(`✅ Step 4 auto-completing with loyalty data from network monitor`, 'success');
-              if (stepCompleteResolvers.current[4]) {
-                stepCompleteResolvers.current[4]();
-                delete stepCompleteResolvers.current[4];
+            if (prev.status === 'running_step_3') {
+              addLog(`✅ Step 3 auto-completing with loyalty data from network monitor`, 'success');
+              if (stepCompleteResolvers.current[3]) {
+                stepCompleteResolvers.current[3]();
+                delete stepCompleteResolvers.current[3];
               }
             }
             return prev;
@@ -671,89 +671,144 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       // Step 3: Removed - courtesy holds are in Step 2's API (bookingStatus='OF')
       // No need to navigate to a separate page
       
-      // Step 3: Fetch loyalty data directly from the correct API endpoint
-      setState(prev => ({ ...prev, status: 'running_step_4' }));
+      // Step 3: Fetch loyalty data from the ONLY correct API endpoint.
+      // IMPORTANT: This call must succeed even when direct fetch is blocked ("Load failed").
+      // Strategy:
+      // 1) Try to fetch with the same auth headers the site uses (token from localStorage), credentials: 'omit'
+      // 2) Retry a few times with backoff
+      setState(prev => ({ ...prev, status: 'running_step_3' }));
       addLog('🚀 ====== STEP 3: LOYALTY DATA ======', 'info');
       addLog('Step 3: Fetching loyalty data from API...', 'info');
       
       try {
         if (webViewRef.current) {
-          addLog('📡 Making direct API call to loyalty/info endpoint...', 'info');
+          addLog('📡 Fetching loyalty via https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info', 'info');
           
-          // Make a direct API call to the ONLY correct loyalty endpoint
           webViewRef.current.injectJavaScript(`
             (async function() {
-              try {
-                const response = await fetch('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info', {
-                  method: 'GET',
-                  credentials: 'include',
-                  headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                  }
-                });
-                
-                if (response.ok) {
-                  const data = await response.json();
-                  
-                  // Store in captured payloads
-                  window.capturedPayloads = window.capturedPayloads || {};
-                  window.capturedPayloads.loyalty = data;
-                  
-                  // Send to React Native
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'network_payload',
-                    endpoint: 'loyalty',
-                    data: data,
-                    url: 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info'
-                  }));
-                  
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log',
-                    message: '✅ Successfully fetched loyalty data from correct API endpoint',
-                    logType: 'success'
-                  }));
-                  
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'step_complete',
-                    step: 4
-                  }));
-                } else {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log',
-                    message: 'Failed to fetch loyalty data: ' + response.status + ' ' + response.statusText,
-                    logType: 'error'
-                  }));
-                  
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'step_complete',
-                    step: 4
-                  }));
+              const LOYALTY_URL = 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info';
+
+              function post(type, payload) {
+                try {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type, ...payload }));
+                } catch (e) {
+                  // ignore
                 }
-              } catch (error) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: 'Error fetching loyalty data: ' + error.message,
-                  logType: 'error'
-                }));
-                
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'step_complete',
-                  step: 4
-                }));
+              }
+
+              function log(message, logType) {
+                post('log', { message, logType: logType || 'info' });
+              }
+
+              function safeJsonParse(str) {
+                try {
+                  return JSON.parse(str);
+                } catch (e) {
+                  return null;
+                }
+              }
+
+              function getAuthHeadersFromSession() {
+                const sessionRaw = localStorage.getItem('persist:session');
+                const session = sessionRaw ? safeJsonParse(sessionRaw) : null;
+                if (!session) return null;
+
+                const token = session.token ? safeJsonParse(session.token) : null;
+                const user = session.user ? safeJsonParse(session.user) : null;
+
+                const accountId = user && user.accountId ? String(user.accountId) : '';
+                const rawAuth = token && token.toString ? token.toString() : '';
+                const authorization = rawAuth ? (rawAuth.startsWith('Bearer ') ? rawAuth : ('Bearer ' + rawAuth)) : '';
+
+                if (!accountId || !authorization) return null;
+
+                return {
+                  'accept': 'application/json',
+                  'accept-language': 'en-US,en;q=0.9',
+                  'content-type': 'application/json',
+                  'account-id': accountId,
+                  'authorization': authorization,
+                };
+              }
+
+              async function fetchWithRetries() {
+                const headers = getAuthHeadersFromSession();
+                if (!headers) {
+                  log('⚠️ Loyalty fetch: missing auth headers (session not found) - please log in again', 'error');
+                  return { ok: false, error: 'missing_auth' };
+                }
+
+                const attempts = 4;
+                for (let i = 1; i <= attempts; i++) {
+                  try {
+                    log('⏳ Loyalty fetch attempt ' + i + '/' + attempts + '...', 'info');
+
+                    const res = await fetch(LOYALTY_URL, {
+                      method: 'GET',
+                      headers,
+                      credentials: 'omit',
+                      cache: 'no-store',
+                    });
+
+                    if (!res.ok) {
+                      const text = await res.text().catch(() => '');
+                      log('❌ Loyalty fetch HTTP ' + res.status + ' ' + res.statusText + (text ? (': ' + text.slice(0, 200)) : ''), 'error');
+                      if (i < attempts) {
+                        await new Promise(r => setTimeout(r, 700 * i));
+                        continue;
+                      }
+                      return { ok: false, error: 'http_' + res.status };
+                    }
+
+                    const data = await res.json();
+
+                    window.capturedPayloads = window.capturedPayloads || {};
+                    window.capturedPayloads.loyalty = data;
+
+                    post('network_payload', {
+                      endpoint: 'loyalty',
+                      data,
+                      url: LOYALTY_URL,
+                    });
+
+                    log('✅ Loyalty fetched successfully from loyalty/info', 'success');
+                    post('step_complete', { step: 3 });
+                    return { ok: true };
+                  } catch (e) {
+                    const msg = (e && e.message) ? e.message : String(e);
+                    log('❌ Loyalty fetch attempt ' + i + ' failed: ' + msg, 'error');
+                    if (i < attempts) {
+                      await new Promise(r => setTimeout(r, 700 * i));
+                      continue;
+                    }
+                    return { ok: false, error: msg };
+                  }
+                }
+                return { ok: false, error: 'unknown' };
+              }
+
+              try {
+                const result = await fetchWithRetries();
+                if (!result.ok) {
+                  post('step_complete', { step: 3 });
+                }
+              } catch (e) {
+                const msg = (e && e.message) ? e.message : String(e);
+                log('❌ Loyalty step fatal error: ' + msg, 'error');
+                post('step_complete', { step: 3 });
               }
             })();
             true;
           `);
           
           addLog('⏳ Waiting for loyalty API response...', 'info');
-          await waitForStepComplete(4, 10000);
+          await waitForStepComplete(3, 20000);
         }
-      } catch (step4Error) {
-        addLog(`Step 3 error: ${step4Error} - continuing without loyalty data`, 'warning');
+      } catch (step3Error) {
+        addLog(`Step 3 error: ${step3Error} - continuing without loyalty data`, 'warning');
       }
       
-      addLog('✅ Step 3 Complete: Loyalty data fetched', 'success');
+      addLog('✅ Step 3 Complete: Loyalty step finished', 'success');
       
       addLog('All steps completed successfully! Ready to sync.', 'success');
       
