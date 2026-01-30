@@ -472,6 +472,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           console.log(`[RoyalCaribbeanSync] Voyage enrichment data received`);
           console.log(`[RoyalCaribbeanSync] Voyage enrichment keys:`, Object.keys(data));
           addLog(`✅ Voyage enrichment data stored for merging with bookings`, 'success');
+          
+          // Auto-complete Step 2 if we're in that step and have bookings
+          if (state.status === 'running_step_2' && state.extractedBookedCruises.length > 0) {
+            addLog(`✅ Step 2 auto-completing with ${state.extractedBookedCruises.length} cruises from network monitor`, 'success');
+            if (stepCompleteResolvers.current[2]) {
+              stepCompleteResolvers.current[2]();
+              delete stepCompleteResolvers.current[2];
+            }
+          }
         }
         
         if (endpoint === 'loyalty' && data) {
@@ -506,6 +515,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
           if (convertedLoyalty.crownAndAnchorPointsFromApi !== undefined) {
             addLog(`   → Crown & Anchor: ${convertedLoyalty.crownAndAnchorTier || 'N/A'} - ${convertedLoyalty.crownAndAnchorPointsFromApi.toLocaleString()} points`, 'info');
+          }
+          
+          // Auto-complete Step 4 if we're in that step
+          if (state.status === 'running_step_4') {
+            addLog(`✅ Step 4 auto-completing with loyalty data from network monitor`, 'success');
+            if (stepCompleteResolvers.current[4]) {
+              stepCompleteResolvers.current[4]();
+              delete stepCompleteResolvers.current[4];
+            }
           }
         }
         break;
@@ -618,52 +636,25 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             true;
           `);
           
-          addLog('⏳ Waiting 8 seconds for upcoming cruises page to load and make API calls...', 'info');
-          await new Promise(resolve => setTimeout(resolve, 8000));
+          addLog('⏳ Waiting for upcoming cruises API to load (max 20 seconds)...', 'info');
           
-          addLog('📡 Injecting extraction script (will use captured API payload)...', 'info');
-          webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
-          
-          await waitForStepComplete(2, 120000);
+          // Wait for network monitor to capture and process the payload
+          // The network monitor will auto-complete the step when it processes the payload
+          await waitForStepComplete(2, 20000);
         }
       } catch (step2Error) {
         addLog(`Step 2 error: ${step2Error} - continuing with collected data`, 'warning');
       }
       
-      // Check if Step 2 already extracted courtesy holds from the API
-      // If so, skip Step 3 DOM scraping to avoid duplicates
+      // Step 3: Skip courtesy holds page - they're already in the bookings API
       const step2CourtesyHolds = state.extractedBookedCruises.filter(c => {
         const status = (c.status || '').toLowerCase();
         return status === 'courtesy hold' || status === 'hold' || status === 'offer';
       });
       
-      if (step2CourtesyHolds.length > 0) {
-        addLog(`Step 3: Skipping DOM scraping - ${step2CourtesyHolds.length} courtesy hold(s) already extracted via API`, 'info');
-        setState(prev => ({ ...prev, status: 'running_step_3' }));
-        // Send step_complete immediately since we're skipping
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } else {
-        setState(prev => ({ ...prev, status: 'running_step_3' }));
-        addLog('Step 3: Navigating to courtesy holds page...', 'info');
-        addLog('Loading Courtesy Holds Page...', 'info');
-        
-        try {
-          if (webViewRef.current) {
-            webViewRef.current.injectJavaScript(`
-              window.location.href = '${config.holdsUrl}';
-              true;
-            `);
-            
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            
-            webViewRef.current.injectJavaScript(injectCourtesyHoldsExtraction() + '; true;');
-            
-            await waitForStepComplete(3, 90000);
-          }
-        } catch (step3Error) {
-          addLog(`Step 3 error: ${step3Error} - continuing with collected data`, 'warning');
-        }
-      }
+      setState(prev => ({ ...prev, status: 'running_step_3' }));
+      addLog(`✅ Step 3: Skipping - ${step2CourtesyHolds.length > 0 ? step2CourtesyHolds.length + ' courtesy hold(s) already in bookings API' : 'no courtesy holds'} (integrated with Step 2)`, 'success');
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // Step 4: Navigate to loyalty programs page
       setState(prev => ({ ...prev, status: 'running_step_4' }));
@@ -682,13 +673,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             true;
           `);
           
-          addLog('⏳ Waiting 8 seconds for loyalty page to load and make API calls...', 'info');
-          await new Promise(resolve => setTimeout(resolve, 8000));
+          addLog('⏳ Waiting for loyalty API to load (max 15 seconds)...', 'info');
           
-          addLog('📡 Injecting loyalty extraction script (will use captured API payload)...', 'info');
-          webViewRef.current.injectJavaScript(injectLoyaltyExtraction() + '; true;');
-          
-          await waitForStepComplete(4, 60000);
+          // Wait for network monitor to capture and process the loyalty payload
+          // The network monitor will auto-complete the step when it processes the payload
+          await waitForStepComplete(4, 15000);
         }
       } catch (step4Error) {
         addLog(`Step 4 error: ${step4Error} - continuing without loyalty data`, 'warning');
