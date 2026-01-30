@@ -71,19 +71,15 @@ export const NETWORK_MONITOR_SCRIPT = `
           log(\`📦 [Fetch] Captured Voyage Enrichment data from \${url}\`, 'info');
         }
         
-        else if (url.includes('/loyalty') || 
-                 url.includes('/guestAccounts/loyalty') ||
-                 url.includes('/loyaltyInformation') ||
-                 url.includes('/loyalty-programs') ||
-                 url.includes('/profile/loyalty') ||
-                 url.includes('/account/loyalty')) {
+        else if (url.includes('/guestAccounts/loyalty/info')) {
           const data = await clonedResponse.json();
           window.capturedPayloads.loyalty = data;
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'network_capture',
             endpoint: 'loyalty',
-            data: data
+            data: data,
+            url: url
           }));
           
           log(\`📦 [Fetch] Captured Loyalty API payload from \${url}\`, 'success');
@@ -142,19 +138,15 @@ export const NETWORK_MONITOR_SCRIPT = `
             log(\`📦 [XHR] Captured Voyage Enrichment data from \${url}\`, 'info');
           }
           
-          else if (url.includes('/loyalty') || 
-                   url.includes('/guestAccounts/loyalty') ||
-                   url.includes('/loyaltyInformation') ||
-                   url.includes('/loyalty-programs') ||
-                   url.includes('/profile/loyalty') ||
-                   url.includes('/account/loyalty')) {
+          else if (url.includes('/guestAccounts/loyalty/info')) {
             const data = JSON.parse(this.responseText);
             window.capturedPayloads.loyalty = data;
             
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'network_capture',
               endpoint: 'loyalty',
-              data: data
+              data: data,
+              url: url
             }));
             
             log(\`📦 [XHR] Captured Loyalty API from \${url}\`, 'success');

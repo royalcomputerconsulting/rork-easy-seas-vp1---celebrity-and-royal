@@ -671,34 +671,89 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       // Step 3: Removed - courtesy holds are in Step 2's API (bookingStatus='OF')
       // No need to navigate to a separate page
       
-      // Step 4: Navigate to loyalty programs page
+      // Step 3: Fetch loyalty data directly from the correct API endpoint
       setState(prev => ({ ...prev, status: 'running_step_4' }));
-      addLog('🚀 ====== STEP 3: LOYALTY PROGRAMS ======', 'info');
-      addLog('Step 3: Navigating to loyalty programs page...', 'info');
+      addLog('🚀 ====== STEP 3: LOYALTY DATA ======', 'info');
+      addLog('Step 3: Fetching loyalty data from API...', 'info');
       
       try {
         if (webViewRef.current) {
-          const loyaltyPageUrl = cruiseLine === 'celebrity' 
-            ? 'https://www.celebritycruises.com/account/loyalty-programs'
-            : 'https://www.royalcaribbean.com/account/loyalty-programs';
+          addLog('📡 Making direct API call to loyalty/info endpoint...', 'info');
           
-          addLog('📍 Loading Loyalty Programs Page...', 'info');
+          // Make a direct API call to the ONLY correct loyalty endpoint
           webViewRef.current.injectJavaScript(`
-            window.location.href = '${loyaltyPageUrl}';
+            (async function() {
+              try {
+                const response = await fetch('https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info', {
+                  method: 'GET',
+                  credentials: 'include',
+                  headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                  }
+                });
+                
+                if (response.ok) {
+                  const data = await response.json();
+                  
+                  // Store in captured payloads
+                  window.capturedPayloads = window.capturedPayloads || {};
+                  window.capturedPayloads.loyalty = data;
+                  
+                  // Send to React Native
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'network_payload',
+                    endpoint: 'loyalty',
+                    data: data,
+                    url: 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info'
+                  }));
+                  
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log',
+                    message: '✅ Successfully fetched loyalty data from correct API endpoint',
+                    logType: 'success'
+                  }));
+                  
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'step_complete',
+                    step: 4
+                  }));
+                } else {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log',
+                    message: 'Failed to fetch loyalty data: ' + response.status + ' ' + response.statusText,
+                    logType: 'error'
+                  }));
+                  
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'step_complete',
+                    step: 4
+                  }));
+                }
+              } catch (error) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: 'Error fetching loyalty data: ' + error.message,
+                  logType: 'error'
+                }));
+                
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'step_complete',
+                  step: 4
+                }));
+              }
+            })();
             true;
           `);
           
-          addLog('⏳ Waiting 4 seconds for loyalty API to load...', 'info');
-          
-          // Wait 4 seconds for the page to load and network monitor to capture the API call
-          // Network monitor will automatically process and send the payload
-          await waitForStepComplete(4, 4000);
+          addLog('⏳ Waiting for loyalty API response...', 'info');
+          await waitForStepComplete(4, 10000);
         }
       } catch (step4Error) {
-        addLog(`Step 4 error: ${step4Error} - continuing without loyalty data`, 'warning');
+        addLog(`Step 3 error: ${step4Error} - continuing without loyalty data`, 'warning');
       }
       
-      addLog('✅ Step 3 Complete: Loyalty data captured from API', 'success');
+      addLog('✅ Step 3 Complete: Loyalty data fetched', 'success');
       
       addLog('All steps completed successfully! Ready to sync.', 'success');
       
@@ -785,7 +840,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, state.scrapePricingAndItinerary, addLog, config, cruiseLine]);
+  }, [state.status, state.scrapePricingAndItinerary, addLog, config]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
