@@ -955,6 +955,199 @@ export default function CruiseDetailsScreen() {
             </View>
           )}
 
+          {isBooked && (cruise as BookedCruise).bookingId && (
+            <View style={styles.payloadDetailsSection}>
+              <View style={styles.sectionHeader}>
+                <Ship size={20} color={COLORS.beigeWarm} />
+                <Text style={styles.sectionTitle}>Booking Payload Details</Text>
+              </View>
+              
+              <View style={styles.payloadGrid}>
+                {(cruise as any).bookingChannel && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Booking Channel</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).bookingChannel}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).bookingCurrency && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Currency</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).bookingCurrency}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).bookingOfficeCountryCode && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Office Country</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).bookingOfficeCountryCode}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).bookingType && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Booking Type</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).bookingType}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).brand && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Brand</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).brand}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).consumerId && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Consumer ID</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).consumerId}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).grantorPassengerId && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Grantor Passenger</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).grantorPassengerId}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).lastName && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Last Name</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).lastName}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).linkFlow && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Link Flow</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).linkFlow}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).linkType && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Link Type</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).linkType}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).masterBookingId && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Master Booking ID</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).masterBookingId}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).masterPassengerId && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Master Passenger ID</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).masterPassengerId}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).numberOfNights !== undefined && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Number of Nights</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).numberOfNights}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).officeCode && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Office Code</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).officeCode}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).passengerId && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Passenger ID</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).passengerId}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).passengersInStateroom !== undefined && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Passengers in Stateroom</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).passengersInStateroom}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).preferred !== undefined && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Preferred</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).preferred ? 'Yes' : 'No'}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).shipCode && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Ship Code</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).shipCode}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).stateroomDescription && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Stateroom Description</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).stateroomDescription}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).stateroomSubtype && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Stateroom Subtype</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).stateroomSubtype}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).stateroomType && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Stateroom Type</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).stateroomType}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).isDirect !== undefined && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Is Direct</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).isDirect ? 'Yes' : 'No'}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).isBoardingExpressEnabled !== undefined && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Boarding Express</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).isBoardingExpressEnabled ? 'Enabled' : 'Disabled'}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).isInternationalBooking !== undefined && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>International Booking</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).isInternationalBooking ? 'Yes' : 'No'}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).amendToken && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Amend Token</Text>
+                    <Text style={styles.payloadValue} numberOfLines={1}>{(cruise as any).amendToken}</Text>
+                  </View>
+                )}
+                
+                {(cruise as any).passengers && Array.isArray((cruise as any).passengers) && (
+                  <View style={styles.payloadRow}>
+                    <Text style={styles.payloadLabel}>Passengers</Text>
+                    <Text style={styles.payloadValue}>{(cruise as any).passengers.length} guest(s)</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
           {casinoAvailability && (
             <View style={styles.casinoSection}>
               <View style={styles.sectionHeader}>
@@ -3325,6 +3518,40 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 31, 63, 0.1)',
     backgroundColor: '#E0F2FE',
     ...SHADOW.sm,
+  },
+  payloadDetailsSection: {
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: '#FEF3C7',
+    ...SHADOW.sm,
+  },
+  payloadGrid: {
+    gap: SPACING.xs,
+  },
+  payloadRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 31, 63, 0.05)',
+  },
+  payloadLabel: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+    flex: 1,
+  },
+  payloadValue: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
+    flex: 1,
+    textAlign: 'right' as const,
   },
   detailsGrid: {
     gap: SPACING.sm,
