@@ -103,7 +103,7 @@ export const AUTH_DETECTION_SCRIPT = `
             }
           }
           
-          if (url.includes('/guestAccounts/loyalty/info')) {
+          if (url.includes('/guestAccounts/loyalty/info') || url.includes('/en/celebrity/web/v3/guestAccounts/')) {
             clonedResponse.text().then(text => {
               let data = null;
               try { data = JSON.parse(text); } catch (e) { data = { raw: text }; }
@@ -221,7 +221,7 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
             }
             
-            if (this._url.includes('/guestAccounts/loyalty/info')) {
+            if (this._url.includes('/guestAccounts/loyalty/info') || this._url.includes('/en/celebrity/web/v3/guestAccounts/')) {
               window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',

@@ -129,7 +129,7 @@ export const STEP1_OFFERS_SCRIPT = `
       
       const { headers, loyaltyId, brandCode, baseUrl } = authContext;
       
-      const endpoint = baseUrl + '/api/casino/casino-offers/v1';
+      const endpoint = baseUrl + (brandCode === 'C' ? '/api/casino/casino-offers/v2' : '/api/casino/casino-offers/v1');
       
       log('📡 Calling Royal Caribbean Casino Offers API...');
       log('Endpoint: ' + endpoint);

@@ -709,22 +709,39 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       try {
         if (webViewRef.current) {
-          const loyaltyUrl = 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info';
+          const loyaltyUrl = cruiseLine === 'celebrity'
+            ? 'https://aws-prd.api.rccl.com/en/celebrity/web/v3/guestAccounts/{ACCOUNT_ID}'
+            : 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info';
           addLog(`📡 Fetching loyalty via ${loyaltyUrl}`, 'info');
           addLog('ℹ️ Using in-page request capture (avoids Invalid ApiKey from manual fetch)', 'info');
 
           webViewRef.current.injectJavaScript(`
             (function() {
-              const LOYALTY_URL = '${loyaltyUrl}';
+              const LOYALTY_URL_TEMPLATE = '${loyaltyUrl}';
+              function buildLoyaltyUrl(accountId) {
+                try {
+                  if (!accountId) return LOYALTY_URL_TEMPLATE;
+                  if (LOYALTY_URL_TEMPLATE.includes('{ACCOUNT_ID}')) {
+                    return LOYALTY_URL_TEMPLATE.replace('{ACCOUNT_ID}', encodeURIComponent(String(accountId)));
+                  }
+                  return LOYALTY_URL_TEMPLATE;
+                } catch (e) {
+                  return LOYALTY_URL_TEMPLATE;
+                }
+              }
               const TRIGGER_URLS = [
-                // Put the most likely "loyalty hub" page FIRST so the site fires the loyalty/info call immediately
-                'https://www.royalcaribbean.com/account/loyalty-programs',
-                'https://www.royalcaribbean.com/account/loyalty-programs/club-royale',
-                'https://www.royalcaribbean.com/account/loyalty-programs/crown-anchor-society',
-                'https://www.royalcaribbean.com/account/loyalty-programs/loyalty-match',
-                'https://www.royalcaribbean.com/account/loyalty',
-                'https://www.royalcaribbean.com/account',
-                'https://www.royalcaribbean.com/account/loyalty-program',
+                ...(window.location && String(window.location.hostname || '').includes('celebritycruises.com') ? [
+                  'https://www.celebritycruises.com/account',
+                  'https://www.celebritycruises.com/blue-chip-club/offers',
+                ] : [
+                  'https://www.royalcaribbean.com/account/loyalty-programs',
+                  'https://www.royalcaribbean.com/account/loyalty-programs/club-royale',
+                  'https://www.royalcaribbean.com/account/loyalty-programs/crown-anchor-society',
+                  'https://www.royalcaribbean.com/account/loyalty-programs/loyalty-match',
+                  'https://www.royalcaribbean.com/account/loyalty',
+                  'https://www.royalcaribbean.com/account',
+                  'https://www.royalcaribbean.com/account/loyalty-program',
+                ])
               ];
 
               function post(type, payload) {
@@ -800,20 +817,24 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 return headers;
               }
 
-              function emitCapturedIfPresent() {
+              function emitCapturedIfPresent(loyaltyUrl) {
                 const existing = window.capturedPayloads && window.capturedPayloads.loyalty ? window.capturedPayloads.loyalty : null;
                 if (existing) {
                   log('✅ Loyalty data already captured by network monitor', 'success');
-                  post('network_payload', { endpoint: 'loyalty', data: existing, url: LOYALTY_URL });
+                  post('network_payload', { endpoint: 'loyalty', data: existing, url: loyaltyUrl });
                   post('step_complete', { step: 3 });
                   return true;
                 }
                 return false;
               }
 
-              if (emitCapturedIfPresent()) return true;
+              const headersForUrlBuild = getAuthHeadersFromSession();
+              const accountIdForUrlBuild = headersForUrlBuild && headersForUrlBuild['account-id'] ? headersForUrlBuild['account-id'] : '';
+              const LOYALTY_URL = buildLoyaltyUrl(accountIdForUrlBuild);
 
-              log('🧭 Triggering Royal Caribbean loyalty area to let the site call loyalty/info with the correct appkey...', 'info');
+              if (emitCapturedIfPresent(LOYALTY_URL)) return true;
+
+              log('🧭 Triggering loyalty area to let the site call the loyalty endpoint with the correct appkey...', 'info');
               let triggerIndex = 0;
               function navigateTrigger() {
                 const next = TRIGGER_URLS[triggerIndex % TRIGGER_URLS.length];
@@ -830,7 +851,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               const timer = setInterval(async function() {
                 tries++;
 
-                if (emitCapturedIfPresent()) {
+                if (emitCapturedIfPresent(LOYALTY_URL)) {
                   clearInterval(timer);
                   return;
                 }
@@ -982,7 +1003,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, state.scrapePricingAndItinerary, addLog, config]);
+  }, [state.status, state.scrapePricingAndItinerary, addLog, config, cruiseLine]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
