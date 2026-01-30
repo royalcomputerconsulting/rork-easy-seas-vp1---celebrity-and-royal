@@ -72,6 +72,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const webViewRef = useRef<WebView | null>(null);
   const stepCompleteResolvers = useRef<{ [key: number]: () => void }>({});
   const progressCallbacks = useRef<{ onProgress?: () => void }>({});
+  const processedPayloads = useRef<Set<string>>(new Set());
   
   const config = CRUISE_LINE_CONFIG[cruiseLine];
 
@@ -92,10 +93,18 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     rcLogger.log(message, type);
-    setState(prev => ({
-      ...prev,
-      logs: rcLogger.getLogs()
-    }));
+    // Batch log updates to prevent excessive state updates
+    setState(prev => {
+      const newLogs = rcLogger.getLogs();
+      // Only update if logs actually changed
+      if (prev.logs.length === newLogs.length) {
+        return prev;
+      }
+      return {
+        ...prev,
+        logs: newLogs
+      };
+    });
   }, []);
 
   const toggleStaySignedIn = useCallback(async (enabled: boolean) => {
@@ -327,6 +336,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       case 'network_payload':
         const { endpoint, data, url } = message as any;
+        
+        // Create unique key for this payload to prevent duplicate processing
+        const payloadKey = `${endpoint}-${url}-${JSON.stringify(data).substring(0, 100)}`;
+        if (processedPayloads.current.has(payloadKey)) {
+          console.log(`[RoyalCaribbeanSync] Skipping duplicate payload: ${endpoint}`);
+          return;
+        }
+        processedPayloads.current.add(payloadKey);
+        
         console.log(`[RoyalCaribbeanSync] Network payload captured: ${endpoint}`, url);
         console.log(`[RoyalCaribbeanSync] Data structure:`, JSON.stringify(data).substring(0, 500));
         console.log(`[RoyalCaribbeanSync] Full data keys:`, Object.keys(data));
@@ -561,6 +579,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog('WebView not available', 'error');
       return;
     }
+
+    // Clear processed payloads on new ingestion
+    processedPayloads.current.clear();
+    hasReceivedApiLoyaltyData = false;
 
     setState(prev => ({
       ...prev,
