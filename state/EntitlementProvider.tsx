@@ -36,6 +36,27 @@ const KEYS = {
   WEB_IS_PRO: 'easyseas_entitlements_web_is_pro',
 } as const;
 
+const DEFAULT_TIMEOUT_MS = 20000 as const;
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<T>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out. Please try again.`));
+    }, ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export const PRO_PRODUCT_ID = 'com.easyseas.pro.monthly' as const;
 
 const PRIVACY_URL = 'https://example.com/privacy' as const;
@@ -85,6 +106,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
 
   const mountedRef = useRef<boolean>(true);
+  const actionInFlightRef = useRef<boolean>(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -109,19 +131,21 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
   const ensurePurchasesLoaded = useCallback(async (): Promise<PurchasesModule | null> => {
     if (Platform.OS === 'web') return null;
+
+    const apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ?? '').trim();
+    if (!apiKey) {
+      console.warn('[Entitlement] Missing EXPO_PUBLIC_REVENUECAT_API_KEY - purchases will be unavailable');
+      return null;
+    }
+
     if (Purchases) return Purchases;
 
     try {
       const mod = (await import('react-native-purchases')) as unknown as { default: PurchasesModule };
       Purchases = mod.default;
 
-      const apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ?? '').trim();
-      if (apiKey) {
-        console.log('[Entitlement] Configuring Purchases');
-        Purchases.configure({ apiKey });
-      } else {
-        console.warn('[Entitlement] Missing EXPO_PUBLIC_REVENUECAT_API_KEY - purchases will be unavailable');
-      }
+      console.log('[Entitlement] Configuring Purchases');
+      Purchases.configure({ apiKey });
 
       return Purchases;
     } catch (e) {
@@ -134,6 +158,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     console.log('[Entitlement] refresh called');
     setError(null);
 
+    if (!mountedRef.current) return;
+    setIsLoading(true);
+
     if (Platform.OS === 'web') {
       try {
         const stored = await AsyncStorage.getItem(KEYS.WEB_IS_PRO);
@@ -145,18 +172,18 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setLastCheckedAt(new Date().toISOString());
         setCustomerInfo(null);
         setOfferings([]);
-        return;
       } catch (e) {
         console.error('[Entitlement] web refresh failed', e);
         if (!mountedRef.current) return;
         setError(e instanceof Error ? e.message : 'Failed to refresh entitlements.');
-        return;
+      } finally {
+        if (!mountedRef.current) return;
+        setIsLoading(false);
       }
+      return;
     }
 
     try {
-      setIsLoading(true);
-
       const purchases = await ensurePurchasesLoaded();
       if (!purchases) {
         setError('In-app purchases are not configured.');
@@ -164,14 +191,14 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       }
 
       console.log('[Entitlement] Fetching offerings');
-      const offers = await purchases.getOfferings();
+      const offers = await withTimeout(purchases.getOfferings(), DEFAULT_TIMEOUT_MS, 'Loading subscription options');
       const allOfferings = Object.values(offers.all ?? {});
       console.log('[Entitlement] Offerings fetched:', allOfferings.map(o => ({ identifier: o.identifier, packages: o.availablePackages?.length ?? 0 })));
       if (!mountedRef.current) return;
       setOfferings(allOfferings);
 
       console.log('[Entitlement] Fetching customer info');
-      const info = await purchases.getCustomerInfo();
+      const info = await withTimeout(purchases.getCustomerInfo(), DEFAULT_TIMEOUT_MS, 'Checking subscription status');
       if (!mountedRef.current) return;
       setStateFromCustomerInfo(info);
     } catch (e) {
@@ -206,6 +233,11 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
   const subscribeMonthly = useCallback(async () => {
     console.log('[Entitlement] subscribeMonthly called');
+    if (actionInFlightRef.current) {
+      console.log('[Entitlement] subscribeMonthly ignored: action already in flight');
+      return;
+    }
+    actionInFlightRef.current = true;
     setError(null);
 
     if (Platform.OS === 'web') {
@@ -221,6 +253,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         console.error('[Entitlement] web subscribeMonthly failed', e);
         Alert.alert('Error', 'Unable to start subscription on web preview.');
         return;
+      } finally {
+        actionInFlightRef.current = false;
       }
     }
 
@@ -240,7 +274,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       }
 
       console.log('[Entitlement] Purchasing package', { productId: pkg.product.identifier, offeringId: pkg.offeringIdentifier });
-      const result = await purchases.purchasePackage(pkg);
+      const result = await withTimeout(purchases.purchasePackage(pkg), DEFAULT_TIMEOUT_MS, 'Purchasing subscription');
       console.log('[Entitlement] purchasePackage result', {
         purchasedProductId: result.productIdentifier,
         activeSubscriptions: result.customerInfo?.activeSubscriptions ?? [],
@@ -256,6 +290,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       setError(message);
       Alert.alert('Subscription Failed', message);
     } finally {
+      actionInFlightRef.current = false;
       if (!mountedRef.current) return;
       setIsLoading(false);
     }
@@ -263,9 +298,15 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
   const restore = useCallback(async () => {
     console.log('[Entitlement] restore called');
+    if (actionInFlightRef.current) {
+      console.log('[Entitlement] restore ignored: action already in flight');
+      return;
+    }
+    actionInFlightRef.current = true;
     setError(null);
 
     if (Platform.OS === 'web') {
+      actionInFlightRef.current = false;
       Alert.alert('Not Supported', 'Restore purchases is not supported in web preview.');
       return;
     }
@@ -278,7 +319,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         return;
       }
 
-      const info = await purchases.restorePurchases();
+      const info = await withTimeout(purchases.restorePurchases(), DEFAULT_TIMEOUT_MS, 'Restoring purchases');
       console.log('[Entitlement] restorePurchases customerInfo', {
         activeSubscriptions: info?.activeSubscriptions ?? [],
       });
@@ -292,6 +333,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       setError(message);
       Alert.alert('Restore Failed', message);
     } finally {
+      actionInFlightRef.current = false;
       if (!mountedRef.current) return;
       setIsLoading(false);
     }
