@@ -34,7 +34,7 @@ import { MachineStrategyProvider } from "@/state/MachineStrategyProvider";
 import { SlotMachineProvider } from "@/state/SlotMachineProvider";
 import { SlotMachineLibraryProvider, useSlotMachineLibrary } from "@/state/SlotMachineLibraryProvider";
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
-import { UserDataSyncProvider } from "@/state/UserDataSyncProvider";
+import { UserDataSyncProvider, useUserDataSync } from "@/state/UserDataSyncProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 
 try {
@@ -55,6 +55,42 @@ const queryClient = new QueryClient({
 const rootStyles = StyleSheet.create({
   gestureHandler: {
     flex: 1,
+  },
+  cloudRestoreContainer: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: SPACING.xl,
+  },
+  cloudRestoreCard: {
+    width: "100%",
+    maxWidth: 520,
+    borderRadius: 20,
+    backgroundColor: "#F7FAFF",
+    borderWidth: 1,
+    borderColor: "#E6EEF9",
+    padding: SPACING.xl,
+  },
+  cloudRestoreTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: COLORS.navy,
+    marginBottom: 6,
+  },
+  cloudRestoreSubtitle: {
+    fontSize: 14,
+    color: "#2A3B55",
+    marginBottom: 14,
+  },
+  cloudRestoreHint: {
+    fontSize: 13,
+    color: "#4C6588",
+  },
+  cloudRestoreError: {
+    marginTop: 10,
+    fontSize: 12,
+    color: "#B00020",
   },
 });
 
@@ -248,6 +284,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   setIsClearing: (clearing: boolean) => void;
 }) {
   const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail, isWhitelisted } = useAuth();
+  const { initialCheckComplete, isSyncing, syncError, hasCloudData } = useUserDataSync();
   const { setIsUserWhitelisted } = useSlotMachineLibrary();
   const { updateUser, ensureOwner } = useUser();
   const [showLandingPage, setShowLandingPage] = useState(true);
@@ -279,7 +316,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
     setShowSplash(false);
   };
 
-  console.log('[AppContent] Render - showSplash:', showSplash, 'isAuthenticated:', isAuthenticated, 'authLoading:', authLoading, 'isFreshStart:', isFreshStart, 'isClearing:', isClearing);
+  console.log('[AppContent] Render - showSplash:', showSplash, 'isAuthenticated:', isAuthenticated, 'authLoading:', authLoading, 'isFreshStart:', isFreshStart, 'isClearing:', isClearing, 'initialCheckComplete:', initialCheckComplete, 'isSyncing:', isSyncing, 'hasCloudData:', hasCloudData, 'syncError:', syncError);
 
   if (authLoading) {
     return (
@@ -303,6 +340,27 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
         onAnimationComplete={handleSplashComplete}
         duration={1500}
       />
+    );
+  }
+
+  if (isAuthenticated && !initialCheckComplete) {
+    return (
+      <View style={rootStyles.cloudRestoreContainer} testID="cloudRestoreScreen">
+        <View style={rootStyles.cloudRestoreCard}>
+          <Text style={rootStyles.cloudRestoreTitle} testID="cloudRestoreTitle">Restoring your data</Text>
+          <Text style={rootStyles.cloudRestoreSubtitle} testID="cloudRestoreSubtitle">
+            Signing in as {authenticatedEmail ?? 'your account'}
+          </Text>
+          <Text style={rootStyles.cloudRestoreHint} testID="cloudRestoreHint">
+            {isSyncing ? 'Checking cloud backup…' : 'Preparing your workspace…'}
+          </Text>
+          {!!syncError && (
+            <Text style={rootStyles.cloudRestoreError} testID="cloudRestoreError">
+              {syncError}
+            </Text>
+          )}
+        </View>
+      </View>
     );
   }
 
