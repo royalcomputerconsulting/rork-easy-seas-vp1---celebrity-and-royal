@@ -493,7 +493,12 @@ function RoyalCaribbeanSyncScreen() {
                 <Text style={styles.confirmationSubtitle}>Ready to sync to your app</Text>
               </View>
 
-              <View style={styles.confirmationContent}>
+              <ScrollView
+                style={styles.confirmationScroll}
+                contentContainerStyle={styles.confirmationContent}
+                showsVerticalScrollIndicator={false}
+                testID="sync-confirmation-scroll"
+              >
                 <View style={styles.countCard}>
                   <View style={styles.countIconContainer}>
                     <Ship size={24} color="#3b82f6" />
@@ -533,11 +538,11 @@ function RoyalCaribbeanSyncScreen() {
                   </View>
                 </View>
 
-                <View style={styles.loyaltyCard}>
+                <View style={styles.loyaltyCard} testID="loyalty-preview-card">
                   <Text style={styles.loyaltyTitle}>Loyalty Status Updates</Text>
 
                   {!(state.loyaltyData || extendedLoyaltyData) ? (
-                    <View style={styles.loyaltySection}>
+                    <View style={styles.loyaltySection} testID="loyalty-preview-missing">
                       <View style={styles.loyaltySectionHeader}>
                         <AlertCircle size={16} color="#f59e0b" />
                         <Text style={styles.loyaltySectionTitle}>Not captured</Text>
@@ -550,7 +555,7 @@ function RoyalCaribbeanSyncScreen() {
                     <>
                       {/* Crown & Anchor Society */}
                       {(extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel) && (
-                        <View style={styles.loyaltySection}>
+                        <View style={styles.loyaltySection} testID="loyalty-crown-anchor">
                           <View style={styles.loyaltySectionHeader}>
                             <Anchor size={16} color="#3b82f6" />
                             <Text style={styles.loyaltySectionTitle}>Crown & Anchor Society</Text>
@@ -582,7 +587,7 @@ function RoyalCaribbeanSyncScreen() {
 
                       {/* Club Royale (Casino) */}
                       {(extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier) && (
-                        <View style={styles.loyaltySection}>
+                        <View style={styles.loyaltySection} testID="loyalty-club-royale">
                           <View style={styles.loyaltySectionHeader}>
                             <Crown size={16} color="#f59e0b" />
                             <Text style={styles.loyaltySectionTitle}>Club Royale (Casino)</Text>
@@ -606,7 +611,7 @@ function RoyalCaribbeanSyncScreen() {
 
                       {/* Captain's Club (Celebrity Cruises) */}
                       {extendedLoyaltyData?.captainsClubTier && extendedLoyaltyData.captainsClubPoints !== undefined && extendedLoyaltyData.captainsClubPoints > 0 && (
-                        <View style={styles.loyaltySection}>
+                        <View style={styles.loyaltySection} testID="loyalty-captains-club">
                           <View style={styles.loyaltySectionHeader}>
                             <Star size={16} color="#10b981" />
                             <Text style={styles.loyaltySectionTitle}>Captain&apos;s Club (Celebrity)</Text>
@@ -632,7 +637,7 @@ function RoyalCaribbeanSyncScreen() {
 
                       {/* Celebrity Blue Chip */}
                       {extendedLoyaltyData?.celebrityBlueChipTier && extendedLoyaltyData.celebrityBlueChipPoints !== undefined && extendedLoyaltyData.celebrityBlueChipPoints > 0 && (
-                        <View style={styles.loyaltySection}>
+                        <View style={styles.loyaltySection} testID="loyalty-blue-chip">
                           <View style={styles.loyaltySectionHeader}>
                             <Award size={16} color="#8b5cf6" />
                             <Text style={styles.loyaltySectionTitle}>Blue Chip Club (Celebrity Casino)</Text>
@@ -650,7 +655,7 @@ function RoyalCaribbeanSyncScreen() {
 
                       {/* Venetian Society */}
                       {extendedLoyaltyData?.venetianSocietyTier && (
-                        <View style={styles.loyaltySection}>
+                        <View style={styles.loyaltySection} testID="loyalty-venetian">
                           <View style={styles.loyaltySectionHeader}>
                             <Ship size={16} color="#ec4899" />
                             <Text style={styles.loyaltySectionTitle}>Venetian Society</Text>
@@ -683,9 +688,9 @@ function RoyalCaribbeanSyncScreen() {
                     Sync will update existing data. If conflicts exist, synced data wins.
                   </Text>
                 </View>
-              </View>
+              </ScrollView>
 
-              <Text style={styles.confirmationQuestion}>Sync this data to the app?</Text>
+              <Text style={styles.confirmationQuestion} testID="sync-confirmation-question">Sync this data to the app?</Text>
 
               <View style={styles.confirmationButtons}>
                 <Pressable 
@@ -1061,9 +1066,12 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 14
   },
+  confirmationScroll: {
+    maxHeight: 520
+  },
   confirmationContent: {
     gap: 12,
-    marginBottom: 24
+    paddingBottom: 8
   },
   countCard: {
     backgroundColor: '#0f172a',

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Linking, Image, Dimensions, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Dimensions, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 
@@ -14,7 +14,7 @@ export function LoginScreen() {
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
-  const [logoError, setLogoError] = useState<boolean>(false);
+  const [logoError] = useState<boolean>(false);
   const { login } = useAuth();
 
   
@@ -49,9 +49,7 @@ export function LoginScreen() {
     }
   };
 
-  const handlePurchasePress = () => {
-    Linking.openURL('https://buy.stripe.com/3cIeVc4RtcXT3QH54Y0VO00');
-  };
+
 
   return (
     <LinearGradient
@@ -85,12 +83,8 @@ export function LoginScreen() {
           <Text style={styles.brandTagline}>Manage your Nautical Lifestyle</Text>
 
           <View style={styles.disclaimerSection}>
-            <Text style={styles.disclaimerText}>
-              DISCLAIMER: This app is for informational purposes only. Not a gambling manual. Royal Computer Consulting, Scott Merlis, and all associated parties take no responsibility. Use at your own risk. If you have a gambling problem, call 1-800-522-4700 or visit www.gamblersanonymous.org
-            </Text>
-            
             <Text style={styles.trademarkText}>
-              TRADEMARK NOTICE: All trademarks, service marks, trade names, ship names, and logos, including but not limited to "Club Royale," "Blue Chip Club," "Royal Caribbean," "Celebrity Cruises," and all associated cruise ship names, are the property of their respective owners. Royal Computer Consulting and Scott Merlis have no affiliation, association, authorization, endorsement, or sponsorship with or by Royal Caribbean International, Celebrity Cruises, or any of their parent companies, subsidiaries, or affiliates.
+              TRADEMARK NOTICE: All trademarks, service marks, trade names, ship names, and logos, including but not limited to “Club Royale,” “Blue Chip Club,” “Royal Caribbean,” “Celebrity Cruises,” and all associated cruise ship names, are the property of their respective owners. Royal Computer Consulting and Scott Merlis have no affiliation, association, authorization, endorsement, or sponsorship with or by Royal Caribbean International, Celebrity Cruises, or any of their parent companies, subsidiaries, or affiliates.
             </Text>
           </View>
 
@@ -151,11 +145,17 @@ export function LoginScreen() {
           <TouchableOpacity 
             style={styles.aboutButton}
             onPress={() => setShowAboutModal(true)}
+            testID="what-is-easy-seas-button"
           >
             <Text style={styles.aboutButtonText}>What is Easy Seas?</Text>
           </TouchableOpacity>
 
-          
+          <View style={styles.bottomDisclaimerSection}>
+            <Text style={styles.disclaimerText}>
+              DISCLAIMER: This app is for informational purposes only. Not a gambling manual. Royal Computer Consulting, Scott Merlis, and all associated parties take no responsibility. Use at your own risk. If you have a gambling problem, call 1-800-522-4700 or visit www.gamblersanonymous.org
+            </Text>
+          </View>
+
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -677,7 +677,11 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     textAlign: 'center',
     lineHeight: 14,
-    opacity: 0.75,
+    opacity: 0.8,
+  },
+  bottomDisclaimerSection: {
+    paddingHorizontal: SPACING.lg,
+    marginTop: SPACING.md,
   },
   modalContainer: {
     flex: 1,

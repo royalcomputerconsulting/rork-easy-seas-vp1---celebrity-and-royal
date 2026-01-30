@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Ship,
   Clock,
-  Tag,
   ChevronRight,
   CheckCircle,
   X,

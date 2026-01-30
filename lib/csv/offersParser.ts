@@ -97,7 +97,7 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     sailingDate: getColumnIndex(headerMap, ['sailing date', 'sailingdate', 'sail date', 'saildate', 'date']),
     itinerary: getColumnIndex(headerMap, ['itinerary', 'route', 'destination']),
     offerCode: getColumnIndex(headerMap, ['offer code', 'offercode', 'code']),
-    offerName: getColumnIndex(headerMap, ['real offer name', 'offer name', 'offername', 'offer', 'realoffername']),
+    offerName: getColumnIndex(headerMap, ['name', 'real offer name', 'offer name', 'offername', 'offer', 'realoffername']),
     roomType: getColumnIndex(headerMap, ['room type', 'roomtype', 'cabin type', 'cabintype']),
     guestsInfo: getColumnIndex(headerMap, ['guests info', 'guestsinfo', 'guests']),
     perks: getColumnIndex(headerMap, ['perks', 'benefits']),
