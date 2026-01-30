@@ -139,9 +139,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     switch (message.type) {
       case 'auth_status':
         setState(prev => {
-          const isActiveSync = prev.status.startsWith('running_') || prev.status === 'syncing' || prev.status === 'awaiting_confirmation';
+          const status = prev.status;
+          const isActiveSync = status.startsWith('running_') || status === 'syncing' || status === 'awaiting_confirmation';
           if (isActiveSync) {
-            console.log('[RoyalCaribbeanSync] Ignoring auth_status during active sync:', prev.status);
+            console.log('[RoyalCaribbeanSync] Ignoring auth_status during active sync:', status);
             return prev;
           }
           addLog(message.loggedIn ? 'User logged in successfully' : 'User not logged in', 'info');
@@ -455,13 +456,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             });
             
             // Auto-complete Step 2 immediately since we have the bookings data
-            if (state.status === 'running_step_2') {
-              addLog(`✅ Step 2 auto-completing with ${bookings.length} bookings from network monitor`, 'success');
-              if (stepCompleteResolvers.current[2]) {
-                stepCompleteResolvers.current[2]();
-                delete stepCompleteResolvers.current[2];
+            setState(prev => {
+              if (prev.status === 'running_step_2') {
+                addLog(`✅ Step 2 auto-completing with ${bookings.length} bookings from network monitor`, 'success');
+                if (stepCompleteResolvers.current[2]) {
+                  stepCompleteResolvers.current[2]();
+                  delete stepCompleteResolvers.current[2];
+                }
               }
-            }
+              return prev;
+            });
           } else {
             addLog(`⚠️ No bookings found after structure detection`, 'warning');
           }
@@ -509,13 +513,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
           
           // Auto-complete Step 4 if we're in that step
-          if (state.status === 'running_step_4') {
-            addLog(`✅ Step 4 auto-completing with loyalty data from network monitor`, 'success');
-            if (stepCompleteResolvers.current[4]) {
-              stepCompleteResolvers.current[4]();
-              delete stepCompleteResolvers.current[4];
+          setState(prev => {
+            if (prev.status === 'running_step_4') {
+              addLog(`✅ Step 4 auto-completing with loyalty data from network monitor`, 'success');
+              if (stepCompleteResolvers.current[4]) {
+                stepCompleteResolvers.current[4]();
+                delete stepCompleteResolvers.current[4];
+              }
             }
-          }
+            return prev;
+          });
         }
         break;
 
@@ -533,7 +540,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Ingestion completed successfully', 'success');
         break;
     }
-  }, [addLog, setProgress, state.status, state.extractedBookedCruises]);
+  }, [addLog, setProgress]);
 
   const openLogin = useCallback(() => {
     if (webViewRef.current) {

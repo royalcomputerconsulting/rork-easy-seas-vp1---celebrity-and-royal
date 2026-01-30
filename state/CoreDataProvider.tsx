@@ -252,6 +252,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [userPoints, setUserPointsState] = useState(0);
   const [clubRoyaleProfile, setClubRoyaleProfileState] = useState<ClubRoyaleProfile>(SAMPLE_CLUB_ROYALE_PROFILE);
+  const isSyncingRef = useRef(false);
+  const isInitialLoadRef = useRef(true);
 
   const hasLocalData = cruises.length > 0 || bookedCruises.length > 0 || casinoOffers.length > 0 || calendarEvents.length > 0;
 
@@ -562,9 +564,15 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       });
       
       // Auto-sync to backend after load if authenticated
-      if (authenticatedEmail) {
-        syncToBackend().catch(console.error);
+      if (authenticatedEmail && !isSyncingRef.current) {
+        isSyncingRef.current = true;
+        syncToBackend().finally(() => {
+          isSyncingRef.current = false;
+        });
       }
+      
+      // Mark initial load as complete
+      isInitialLoadRef.current = false;
     } catch (error) {
       console.error('[CoreData] === LOAD FAILED ===');
       console.error('[CoreData] Error details:', error);
@@ -599,6 +607,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.log('[CoreData] User changed from', lastAuthEmailRef.current, 'to', authenticatedEmail, '- reloading data');
       lastAuthEmailRef.current = authenticatedEmail;
       loadAttemptedRef.current = false;
+      isInitialLoadRef.current = true;
+      isSyncingRef.current = false;
       setCruisesState([]);
       setBookedCruisesState([]);
       setCasinoOffersState([]);
@@ -653,11 +663,17 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   // Auto-sync to backend when data changes (debounced)
   useEffect(() => {
-    if (!isAuthenticated || !authenticatedEmail) return;
+    // Skip auto-sync during initial load or if already syncing
+    if (!isAuthenticated || !authenticatedEmail || isInitialLoadRef.current || isSyncingRef.current) return;
     
     const syncTimeout = setTimeout(() => {
-      console.log('[CoreData] Auto-syncing to backend...');
-      syncToBackend();
+      if (!isSyncingRef.current) {
+        console.log('[CoreData] Auto-syncing to backend...');
+        isSyncingRef.current = true;
+        syncToBackend().finally(() => {
+          isSyncingRef.current = false;
+        });
+      }
     }, 2000); // Debounce 2 seconds
     
     return () => clearTimeout(syncTimeout);
@@ -766,7 +782,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     setBookedCruisesState(enrichedCruises);
     persistData(STORAGE_KEYS.BOOKED_CRUISES, enrichedCruises);
     AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
-    syncToBackend().catch(console.error);
+    
+    if (!isSyncingRef.current) {
+      isSyncingRef.current = true;
+      syncToBackend().finally(() => {
+        isSyncingRef.current = false;
+      });
+    }
   }, [persistData, syncToBackend]);
 
   const addBookedCruise = useCallback((cruise: BookedCruise) => {
@@ -836,7 +858,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     setCasinoOffersState(nonMockOffers);
     persistData(STORAGE_KEYS.CASINO_OFFERS, nonMockOffers);
     AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
-    syncToBackend().catch(console.error);
+    
+    if (!isSyncingRef.current) {
+      isSyncingRef.current = true;
+      syncToBackend().finally(() => {
+        isSyncingRef.current = false;
+      });
+    }
   }, [persistData, syncToBackend]);
 
   const addCasinoOffer = useCallback((offer: CasinoOffer) => {
