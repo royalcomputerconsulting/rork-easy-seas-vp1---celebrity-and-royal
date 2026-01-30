@@ -715,9 +715,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             (function() {
               const LOYALTY_URL = '${loyaltyUrl}';
               const TRIGGER_URLS = [
-                'https://www.royalcaribbean.com/account',
-                'https://www.royalcaribbean.com/account/loyalty',
+                // Put the most likely "loyalty hub" page FIRST so the site fires the loyalty/info call immediately
                 'https://www.royalcaribbean.com/account/loyalty-programs',
+                'https://www.royalcaribbean.com/account/loyalty-programs/club-royale',
+                'https://www.royalcaribbean.com/account/loyalty-programs/crown-anchor-society',
+                'https://www.royalcaribbean.com/account/loyalty-programs/loyalty-match',
+                'https://www.royalcaribbean.com/account/loyalty',
+                'https://www.royalcaribbean.com/account',
                 'https://www.royalcaribbean.com/account/loyalty-program',
               ];
 
@@ -820,7 +824,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               navigateTrigger();
 
               let tries = 0;
-              const maxTries = 40; // ~20s
+              const maxTries = 120; // ~60s
               const timer = setInterval(async function() {
                 tries++;
 
@@ -833,17 +837,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                   log('⏳ Still waiting for the site to request loyalty/info...', 'info');
                 }
 
-                if (tries === 14) {
-                  log('🧭 Still no loyalty call — trying a different loyalty page...', 'info');
+                if (tries === 16 || tries === 28 || tries === 40 || tries === 52) {
+                  log('🧭 Still no loyalty call — trying another loyalty page...', 'info');
                   navigateTrigger();
                 }
 
-                if (tries === 22) {
-                  log('🧭 Still no loyalty call — trying one more loyalty page...', 'info');
-                  navigateTrigger();
-                }
-
-                if (tries === 18) {
+                if (tries === 24 || tries === 44) {
                   const headers = getAuthHeadersFromSession();
                   const hasAppKey = !!(headers && (headers['appkey'] || headers['x-api-key']));
                   log('🔁 Fallback: attempting manual loyalty/info fetch' + (hasAppKey ? ' (with appkey)' : ' (NO appkey found)'), hasAppKey ? 'info' : 'warning');
@@ -888,7 +887,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           `);
 
           addLog('⏳ Waiting for loyalty data capture...', 'info');
-          await waitForStepComplete(3, 22000);
+          await waitForStepComplete(3, 65000);
         }
       } catch (step3Error) {
         addLog(`Step 3 error: ${step3Error} - continuing without loyalty data`, 'warning');

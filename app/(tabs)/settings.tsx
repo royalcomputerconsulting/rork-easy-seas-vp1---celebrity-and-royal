@@ -43,7 +43,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
-import { useCruiseStore } from '@/state/CruiseStore';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import type { PlayingHours } from '@/state/UserProvider';
 import { 
@@ -81,7 +80,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { settings, updateSettings, clearLocalData, setLocalData, localData } = useAppState();
   const coreData = useCoreData();
-  const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, restoreMockData, setCasinoOffers } = coreData;
+  const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers } = coreData;
   const cruises = coreData.cruises;
   const { currentUser, updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
   const { 
@@ -108,7 +107,6 @@ export default function SettingsScreen() {
   const [isSavingPlayingHours, setIsSavingPlayingHours] = useState(false);
   const [isImportingMachines, setIsImportingMachines] = useState(false);
   const [isExportingMachines, setIsExportingMachines] = useState(false);
-  const [isRestoringMockData, setIsRestoringMockData] = useState(false);
   const [isSavingMockData, setIsSavingMockData] = useState(false);
   const [whitelist, setWhitelist] = useState<string[]>([]);
   const [isLoadingWhitelist, setIsLoadingWhitelist] = useState(false);
@@ -204,29 +202,44 @@ export default function SettingsScreen() {
 
   const enrichmentData = useMemo(() => {
     if (!extendedLoyalty) return null;
-    
+
     return {
       accountId: extendedLoyalty.accountId,
-      captainsClubId: extendedLoyalty.captainsClubId,
+
       crownAndAnchorId: extendedLoyalty.crownAndAnchorId,
       crownAndAnchorTier: extendedLoyalty.crownAndAnchorTier,
       crownAndAnchorNextTier: extendedLoyalty.crownAndAnchorNextTier,
       crownAndAnchorRemainingPoints: extendedLoyalty.crownAndAnchorRemainingPoints,
       crownAndAnchorTrackerPercentage: extendedLoyalty.crownAndAnchorTrackerPercentage,
+      crownAndAnchorRelationshipPointsFromApi: extendedLoyalty.crownAndAnchorRelationshipPointsFromApi,
+      crownAndAnchorLoyaltyMatchTier: extendedLoyalty.crownAndAnchorLoyaltyMatchTier,
+
       clubRoyaleTierFromApi: extendedLoyalty.clubRoyaleTierFromApi,
       clubRoyalePointsFromApi: extendedLoyalty.clubRoyalePointsFromApi,
+      clubRoyaleRelationshipPointsFromApi: extendedLoyalty.clubRoyaleRelationshipPointsFromApi,
+
+      captainsClubId: extendedLoyalty.captainsClubId,
       captainsClubTier: captainsClub?.tier || extendedLoyalty.captainsClubTier,
       captainsClubPoints: captainsClub?.points || extendedLoyalty.captainsClubPoints,
+      captainsClubRelationshipPoints: extendedLoyalty.captainsClubRelationshipPoints,
       captainsClubNextTier: captainsClub?.nextTier || extendedLoyalty.captainsClubNextTier,
       captainsClubRemainingPoints: captainsClub?.remainingPoints || extendedLoyalty.captainsClubRemainingPoints,
       captainsClubTrackerPercentage: captainsClub?.trackerPercentage || extendedLoyalty.captainsClubTrackerPercentage,
+      captainsClubLoyaltyMatchTier: extendedLoyalty.captainsClubLoyaltyMatchTier,
+
       celebrityBlueChipTier: extendedLoyalty.celebrityBlueChipTier,
       celebrityBlueChipPoints: extendedLoyalty.celebrityBlueChipPoints,
+      celebrityBlueChipRelationshipPoints: extendedLoyalty.celebrityBlueChipRelationshipPoints,
+
       venetianSocietyTier: venetianSociety?.tier || extendedLoyalty.venetianSocietyTier,
       venetianSocietyNextTier: venetianSociety?.nextTier || extendedLoyalty.venetianSocietyNextTier,
       venetianSocietyMemberNumber: venetianSociety?.memberNumber || extendedLoyalty.venetianSocietyMemberNumber,
       venetianSocietyEnrolled: venetianSociety?.enrolled || extendedLoyalty.venetianSocietyEnrolled,
+      venetianSocietyLoyaltyMatchTier: extendedLoyalty.venetianSocietyLoyaltyMatchTier,
+
       hasCoBrandCard: extendedLoyalty.hasCoBrandCard,
+      coBrandCardStatus: extendedLoyalty.coBrandCardStatus,
+      coBrandCardErrorMessage: extendedLoyalty.coBrandCardErrorMessage,
     };
   }, [extendedLoyalty, venetianSociety, captainsClub]);
 
@@ -889,34 +902,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
     }
   }, [currentUser, updateUser, ensureOwner, setManualClubRoyalePoints, setManualCrownAnchorPoints]);
 
-  const handleRestoreMockData = useCallback(async () => {
-    Alert.alert(
-      'Restore Mock Data',
-      'This will restore all completed cruises from the mock data to AsyncStorage. This is useful if the data was cleared or if you want to reset to the default state.\n\nContinue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restore',
-          onPress: async () => {
-            try {
-              setIsRestoringMockData(true);
-              console.log('[Settings] Restoring mock data...');
-              await restoreMockData();
-              Alert.alert(
-                'Mock Data Restored',
-                'All completed cruises have been restored to AsyncStorage successfully.'
-              );
-            } catch (error) {
-              console.error('[Settings] Restore mock data error:', error);
-              Alert.alert('Restore Error', 'Failed to restore mock data. Please try again.');
-            } finally {
-              setIsRestoringMockData(false);
-            }
-          }
-        }
-      ]
-    );
-  }, [restoreMockData]);
+
 
   const handleOpenLink = useCallback((url: string) => {
     Linking.openURL(url).catch(() => {

@@ -15,36 +15,45 @@ export function convertApiLoyaltyToExtended(
     crownAndAnchorTier: formatTierName(loyalty.crownAndAnchorSocietyLoyaltyTier),
     crownAndAnchorPoints: loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints?.toString(),
     crownAndAnchorPointsFromApi: loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints,
+    crownAndAnchorRelationshipPointsFromApi: loyalty.crownAndAnchorSocietyLoyaltyRelationshipPoints,
     crownAndAnchorNextTier: formatTierName(loyalty.crownAndAnchorSocietyNextTier),
     crownAndAnchorRemainingPoints: loyalty.crownAndAnchorSocietyRemainingPoints,
     crownAndAnchorTrackerPercentage: loyalty.crownAndAnchorTrackerPercentage,
+    crownAndAnchorLoyaltyMatchTier: loyalty.crownAndAnchorLoyaltyMatchTier,
 
     // Club Royale (Casino loyalty)
     clubRoyaleTier: formatTierName(loyalty.clubRoyaleLoyaltyTier),
     clubRoyaleTierFromApi: formatTierName(loyalty.clubRoyaleLoyaltyTier),
     clubRoyalePoints: loyalty.clubRoyaleLoyaltyIndividualPoints?.toString(),
     clubRoyalePointsFromApi: loyalty.clubRoyaleLoyaltyIndividualPoints,
+    clubRoyaleRelationshipPointsFromApi: loyalty.clubRoyaleLoyaltyRelationshipPoints,
 
     // Captain's Club (Celebrity cruise loyalty)
     captainsClubId: loyalty.captainsClubId,
     captainsClubTier: formatTierName(loyalty.captainsClubLoyaltyTier),
     captainsClubPoints: loyalty.captainsClubLoyaltyIndividualPoints,
+    captainsClubRelationshipPoints: loyalty.captainsClubLoyaltyRelationshipPoints,
     captainsClubNextTier: formatTierName(loyalty.captainsClubNextTier),
     captainsClubRemainingPoints: loyalty.captainsClubRemainingPoints,
     captainsClubTrackerPercentage: loyalty.captainsClubTrackerPercentage,
+    captainsClubLoyaltyMatchTier: loyalty.captainsClubLoyaltyMatchTier,
 
     // Celebrity Blue Chip (Celebrity casino loyalty)
     celebrityBlueChipTier: formatTierName(loyalty.celebrityBlueChipLoyaltyTier),
     celebrityBlueChipPoints: loyalty.celebrityBlueChipLoyaltyIndividualPoints,
+    celebrityBlueChipRelationshipPoints: loyalty.celebrityBlueChipLoyaltyRelationshipPoints,
 
     // Venetian Society
     venetianSocietyTier: loyalty.venetianSocietyLoyaltyTier,
     venetianSocietyNextTier: loyalty.venetianSocietyNextTier,
     venetianSocietyMemberNumber: loyalty.vsMemberNumber,
     venetianSocietyEnrolled: loyalty.venetianSocietyEnrollmentSubmitted,
+    venetianSocietyLoyaltyMatchTier: loyalty.venetianSocietyLoyaltyMatchTier,
 
     // Co-brand card
     hasCoBrandCard: payload.coBrandCardInfo?.activeCardHolder,
+    coBrandCardStatus: payload.coBrandCardInfo?.status,
+    coBrandCardErrorMessage: payload.coBrandCardInfo?.errorMessage,
   };
 
   return extendedData;
@@ -63,33 +72,40 @@ export function convertLoyaltyInfoToExtended(
     crownAndAnchorTier: formatTierName(loyalty.crownAndAnchorSocietyLoyaltyTier),
     crownAndAnchorPoints: loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints?.toString(),
     crownAndAnchorPointsFromApi: loyalty.crownAndAnchorSocietyLoyaltyIndividualPoints,
+    crownAndAnchorRelationshipPointsFromApi: loyalty.crownAndAnchorSocietyLoyaltyRelationshipPoints,
     crownAndAnchorNextTier: formatTierName(loyalty.crownAndAnchorSocietyNextTier),
     crownAndAnchorRemainingPoints: loyalty.crownAndAnchorSocietyRemainingPoints,
     crownAndAnchorTrackerPercentage: loyalty.crownAndAnchorTrackerPercentage,
+    crownAndAnchorLoyaltyMatchTier: loyalty.crownAndAnchorLoyaltyMatchTier,
 
     // Club Royale (Casino loyalty)
     clubRoyaleTier: formatTierName(loyalty.clubRoyaleLoyaltyTier),
     clubRoyaleTierFromApi: formatTierName(loyalty.clubRoyaleLoyaltyTier),
     clubRoyalePoints: loyalty.clubRoyaleLoyaltyIndividualPoints?.toString(),
     clubRoyalePointsFromApi: loyalty.clubRoyaleLoyaltyIndividualPoints,
+    clubRoyaleRelationshipPointsFromApi: loyalty.clubRoyaleLoyaltyRelationshipPoints,
 
     // Captain's Club (Celebrity cruise loyalty)
     captainsClubId: loyalty.captainsClubId,
     captainsClubTier: formatTierName(loyalty.captainsClubLoyaltyTier),
     captainsClubPoints: loyalty.captainsClubLoyaltyIndividualPoints,
+    captainsClubRelationshipPoints: loyalty.captainsClubLoyaltyRelationshipPoints,
     captainsClubNextTier: formatTierName(loyalty.captainsClubNextTier),
     captainsClubRemainingPoints: loyalty.captainsClubRemainingPoints,
     captainsClubTrackerPercentage: loyalty.captainsClubTrackerPercentage,
+    captainsClubLoyaltyMatchTier: loyalty.captainsClubLoyaltyMatchTier,
 
     // Celebrity Blue Chip (Celebrity casino loyalty)
     celebrityBlueChipTier: formatTierName(loyalty.celebrityBlueChipLoyaltyTier),
     celebrityBlueChipPoints: loyalty.celebrityBlueChipLoyaltyIndividualPoints,
+    celebrityBlueChipRelationshipPoints: loyalty.celebrityBlueChipLoyaltyRelationshipPoints,
 
     // Venetian Society
     venetianSocietyTier: loyalty.venetianSocietyLoyaltyTier,
     venetianSocietyNextTier: loyalty.venetianSocietyNextTier,
     venetianSocietyMemberNumber: loyalty.vsMemberNumber,
     venetianSocietyEnrolled: loyalty.venetianSocietyEnrollmentSubmitted,
+    venetianSocietyLoyaltyMatchTier: loyalty.venetianSocietyLoyaltyMatchTier,
   };
 
   return extendedData;

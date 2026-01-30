@@ -299,16 +299,19 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     try {
       const pendingSwitch = await AsyncStorage.getItem(PENDING_ACCOUNT_SWITCH_KEY);
       if (pendingSwitch === "true") {
-        console.log("[UserDataSync] Pending account switch detected - clearing local app data before restore");
-        await clearAllAppData();
-        await AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY);
+        console.log("[UserDataSync] Pending account switch detected - will only clear local data AFTER confirming cloud data exists");
       }
 
       const result = await fetchAllUserDataByEmail(authenticatedEmail);
-      
+
       if (!isMountedRef.current) return false;
-      
+
       if (result?.found && result.data) {
+        if (pendingSwitch === "true") {
+          console.log("[UserDataSync] Cloud data found for new account - clearing local app data now (safe) before restore");
+          await clearAllAppData();
+          await AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY);
+        }
         console.log("[UserDataSync] Cloud data found, restoring...");
         setHasCloudData(true);
 

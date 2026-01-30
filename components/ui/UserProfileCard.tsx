@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Save, CheckCircle, AlertCircle, Crown, Award, Star, Anchor, Ship } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, GRADIENTS } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,7 +8,6 @@ import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers'
 import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS } from '@/constants/celebrityCaptainsClub';
 import { getCelebrityBlueChipTierByLevel, CELEBRITY_BLUE_CHIP_TIERS } from '@/constants/celebrityBlueChipClub';
 import { BrandToggle, BrandType } from './BrandToggle';
-import type { ExtendedLoyaltyData } from '@/lib/royalCaribbean/types';
 
 interface UserProfileData {
   name: string;
@@ -33,26 +32,42 @@ interface UserProfileData {
 
 interface EnrichmentData {
   accountId?: string;
-  captainsClubId?: string;
+
   crownAndAnchorId?: string;
   crownAndAnchorTier?: string;
   crownAndAnchorNextTier?: string;
   crownAndAnchorRemainingPoints?: number;
   crownAndAnchorTrackerPercentage?: number;
+  crownAndAnchorRelationshipPointsFromApi?: number;
+  crownAndAnchorLoyaltyMatchTier?: string;
+
   clubRoyaleTierFromApi?: string;
   clubRoyalePointsFromApi?: number;
+  clubRoyaleRelationshipPointsFromApi?: number;
+
+  captainsClubId?: string;
   captainsClubTier?: string;
   captainsClubPoints?: number;
+  captainsClubRelationshipPoints?: number;
   captainsClubNextTier?: string;
   captainsClubRemainingPoints?: number;
   captainsClubTrackerPercentage?: number;
+  captainsClubLoyaltyMatchTier?: string;
+
   celebrityBlueChipTier?: string;
   celebrityBlueChipPoints?: number;
+  celebrityBlueChipRelationshipPoints?: number;
+
   venetianSocietyTier?: string;
   venetianSocietyNextTier?: string;
   venetianSocietyMemberNumber?: string;
   venetianSocietyEnrolled?: boolean;
+  venetianSocietyLoyaltyMatchTier?: string;
+
   hasCoBrandCard?: boolean;
+  coBrandCardStatus?: number;
+  coBrandCardErrorMessage?: string;
+
   lastSyncTimestamp?: string;
 }
 

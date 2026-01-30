@@ -41,7 +41,7 @@ export interface RoyalCaribbeanLoyaltyApiResponse {
 export interface LoyaltyApiInformation {
   captainsClubId?: string;
   crownAndAnchorId?: string;
-  
+
   captainsClubLoyaltyTier?: string;
   captainsClubLoyaltyIndividualPoints?: number;
   captainsClubLoyaltyRelationshipPoints?: number;
@@ -49,15 +49,15 @@ export interface LoyaltyApiInformation {
   captainsClubRemainingPoints?: number;
   captainsClubTrackerPercentage?: number;
   captainsClubLoyaltyMatchTier?: string;
-  
+
   celebrityBlueChipLoyaltyTier?: string;
   celebrityBlueChipLoyaltyIndividualPoints?: number;
   celebrityBlueChipLoyaltyRelationshipPoints?: number;
-  
+
   clubRoyaleLoyaltyTier?: string;
   clubRoyaleLoyaltyIndividualPoints?: number;
   clubRoyaleLoyaltyRelationshipPoints?: number;
-  
+
   crownAndAnchorSocietyLoyaltyTier?: string;
   crownAndAnchorSocietyLoyaltyIndividualPoints?: number;
   crownAndAnchorSocietyLoyaltyRelationshipPoints?: number;
@@ -65,7 +65,7 @@ export interface LoyaltyApiInformation {
   crownAndAnchorSocietyRemainingPoints?: number;
   crownAndAnchorTrackerPercentage?: number;
   crownAndAnchorLoyaltyMatchTier?: string;
-  
+
   venetianSocietyLoyaltyTier?: string;
   venetianSocietyNextTier?: string;
   venetianSocietyLoyaltyMatchTier?: string;
@@ -75,33 +75,42 @@ export interface LoyaltyApiInformation {
 
 export interface ExtendedLoyaltyData extends LoyaltyData {
   accountId?: string;
-  
+
   captainsClubId?: string;
   captainsClubTier?: string;
   captainsClubPoints?: number;
+  captainsClubRelationshipPoints?: number;
   captainsClubNextTier?: string;
   captainsClubRemainingPoints?: number;
   captainsClubTrackerPercentage?: number;
-  
+  captainsClubLoyaltyMatchTier?: string;
+
   celebrityBlueChipTier?: string;
   celebrityBlueChipPoints?: number;
-  
+  celebrityBlueChipRelationshipPoints?: number;
+
   clubRoyaleTierFromApi?: string;
   clubRoyalePointsFromApi?: number;
-  
+  clubRoyaleRelationshipPointsFromApi?: number;
+
   crownAndAnchorId?: string;
   crownAndAnchorTier?: string;
   crownAndAnchorPointsFromApi?: number;
+  crownAndAnchorRelationshipPointsFromApi?: number;
   crownAndAnchorNextTier?: string;
   crownAndAnchorRemainingPoints?: number;
   crownAndAnchorTrackerPercentage?: number;
-  
+  crownAndAnchorLoyaltyMatchTier?: string;
+
   venetianSocietyTier?: string;
   venetianSocietyNextTier?: string;
   venetianSocietyMemberNumber?: string;
   venetianSocietyEnrolled?: boolean;
-  
+  venetianSocietyLoyaltyMatchTier?: string;
+
   hasCoBrandCard?: boolean;
+  coBrandCardStatus?: number;
+  coBrandCardErrorMessage?: string;
 }
 
 export interface OfferRow {
