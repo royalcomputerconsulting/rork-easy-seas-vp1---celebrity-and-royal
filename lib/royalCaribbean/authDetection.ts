@@ -18,84 +18,109 @@ export const AUTH_DETECTION_SCRIPT = `
     window.fetch = function(...args) {
       return originalFetch.apply(this, args).then(response => {
         const clonedResponse = response.clone();
-        const url = args[0];
+        const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
         
-        if (typeof url === 'string' && response.ok && response.status === 200) {
+        if (typeof url === 'string' && url) {
           if (url.includes('/api/casino/casino-offers')) {
-            clonedResponse.json().then(data => {
-              window.capturedPayloads.offers = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'offers',
-                data: data,
-                url: url
-              }));
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '📦 Captured Casino Offers API payload with ' + (data?.offers?.length || 0) + ' offers',
-                logType: 'success'
-              }));
-            }).catch(() => {});
+            if (response.ok && response.status === 200) {
+              clonedResponse.json().then(data => {
+                window.capturedPayloads.offers = data;
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'network_payload',
+                  endpoint: 'offers',
+                  data: data,
+                  url: url
+                }));
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: '📦 Captured Casino Offers API payload with ' + (data?.offers?.length || 0) + ' offers',
+                  logType: 'success'
+                }));
+              }).catch(() => {});
+            }
           }
           
           if (url.includes('/profileBookings/enriched') || url.includes('/api/account/upcoming-cruises') || url.includes('/api/profile/bookings')) {
-            clonedResponse.json().then(data => {
-              window.capturedPayloads.upcomingCruises = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'upcomingCruises',
-                data: data,
-                url: url
-              }));
-              const count = (data?.profileBookings?.length || data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '📦 Captured Bookings API payload with ' + count + ' bookings from ' + url,
-                logType: 'success'
-              }));
-            }).catch(() => {});
+            if (response.ok && response.status === 200) {
+              clonedResponse.json().then(data => {
+                window.capturedPayloads.upcomingCruises = data;
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'network_payload',
+                  endpoint: 'upcomingCruises',
+                  data: data,
+                  url: url
+                }));
+                const count = (data?.profileBookings?.length || data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: '📦 Captured Bookings API payload with ' + count + ' bookings from ' + url,
+                  logType: 'success'
+                }));
+              }).catch(() => {});
+            }
           }
           
           if (url.includes('/api/account/courtesy-holds')) {
-            clonedResponse.json().then(data => {
-              window.capturedPayloads.courtesyHolds = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'courtesyHolds',
-                data: data,
-                url: url
-              }));
-              const count = (data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '📦 Captured Courtesy Holds API payload with ' + count + ' holds',
-                logType: 'success'
-              }));
-            }).catch(() => {});
+            if (response.ok && response.status === 200) {
+              clonedResponse.json().then(data => {
+                window.capturedPayloads.courtesyHolds = data;
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'network_payload',
+                  endpoint: 'courtesyHolds',
+                  data: data,
+                  url: url
+                }));
+                const count = (data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: '📦 Captured Courtesy Holds API payload with ' + count + ' holds',
+                  logType: 'success'
+                }));
+              }).catch(() => {});
+            }
           }
           
           if (url.includes('/ships/voyages') && url.includes('/enriched')) {
-            clonedResponse.json().then(data => {
-              if (!window.capturedPayloads.voyageEnrichment) {
-                window.capturedPayloads.voyageEnrichment = {};
-              }
-              window.capturedPayloads.voyageEnrichment = data;
+            if (response.ok && response.status === 200) {
+              clonedResponse.json().then(data => {
+                if (!window.capturedPayloads.voyageEnrichment) {
+                  window.capturedPayloads.voyageEnrichment = {};
+                }
+                window.capturedPayloads.voyageEnrichment = data;
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'network_payload',
+                  endpoint: 'voyageEnrichment',
+                  data: data,
+                  url: url
+                }));
+                const count = Object.keys(data || {}).length;
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: '📦 Captured Voyage Enrichment data with ' + count + ' voyages from ' + url,
+                  logType: 'success'
+                }));
+              }).catch(() => {});
+            }
+          }
+          
+          if (url.includes('/guestAccounts/loyalty/info')) {
+            clonedResponse.text().then(text => {
+              let data = null;
+              try { data = JSON.parse(text); } catch (e) { data = { raw: text }; }
+              window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
-                endpoint: 'voyageEnrichment',
+                endpoint: 'loyalty',
                 data: data,
                 url: url
               }));
-              const count = Object.keys(data || {}).length;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: '📦 Captured Voyage Enrichment data with ' + count + ' voyages from ' + url,
-                logType: 'success'
+                message: '📦 Captured Loyalty API payload (' + response.status + ') from ' + url,
+                logType: response.ok ? 'success' : 'warning'
               }));
             }).catch(() => {});
-          }
-          
-          if (url.includes('/loyalty') || url.includes('/guestAccounts/loyalty') || url.includes('/loyaltyInformation') || url.includes('/loyalty-programs') || url.includes('/profile/loyalty') || url.includes('/account/info')) {
+          } else if (response.ok && response.status === 200 && (url.includes('/loyalty') || url.includes('/guestAccounts/loyalty') || url.includes('/loyaltyInformation') || url.includes('/loyalty-programs') || url.includes('/profile/loyalty') || url.includes('/account/info'))) {
             clonedResponse.json().then(data => {
               window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -127,7 +152,7 @@ export const AUTH_DETECTION_SCRIPT = `
     
     XMLHttpRequest.prototype.send = function(...args) {
       this.addEventListener('load', function() {
-        if (this.status === 200 && this._url) {
+        if (this._url) {
           try {
             const data = JSON.parse(this.responseText);
             
@@ -196,7 +221,20 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
             }
             
-            if (this._url.includes('/loyalty') || this._url.includes('/guestAccounts/loyalty') || this._url.includes('/loyaltyInformation') || this._url.includes('/loyalty-programs') || this._url.includes('/profile/loyalty') || this._url.includes('/account/info')) {
+            if (this._url.includes('/guestAccounts/loyalty/info')) {
+              window.capturedPayloads.loyalty = data;
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'network_payload',
+                endpoint: 'loyalty',
+                data: data,
+                url: this._url
+              }));
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'log',
+                message: '📦 [XHR] Captured Loyalty API payload (' + this.status + ') from ' + this._url,
+                logType: this.status === 200 ? 'success' : 'warning'
+              }));
+            } else if (this.status === 200 && (this._url.includes('/loyalty') || this._url.includes('/guestAccounts/loyalty') || this._url.includes('/loyaltyInformation') || this._url.includes('/loyalty-programs') || this._url.includes('/profile/loyalty') || this._url.includes('/account/info'))) {
               window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
