@@ -18,6 +18,7 @@ import { calculateCruiseValue, calculateOfferAggregateValue, getCabinPriceFromEn
 interface OfferCardProps {
   offer: Cruise;
   allCruises?: Cruise[];
+  offerNameOverride?: string;
   onPress?: () => void;
   isBooked?: boolean;
   recommended?: boolean;
@@ -41,6 +42,7 @@ function getOfferImage(offer: Cruise): string {
 export function OfferCard({
   offer,
   allCruises = [],
+  offerNameOverride,
   onPress,
   isBooked = false,
   recommended = false,
@@ -70,8 +72,25 @@ export function OfferCard({
   }, [offer, showValueBreakdown]);
 
   const inferredOfferName = useMemo(() => {
+    const override = (offerNameOverride || '').trim();
+    if (override.length > 0) {
+      console.log('[OfferCard] Using offerNameOverride for code:', {
+        offerId: offer.id,
+        offerCode: offer.offerCode,
+        offerNameOverride: override,
+      });
+      return override;
+    }
+
     const direct = (offer.offerName || '').trim();
-    if (direct.length > 0) return direct;
+    if (direct.length > 0) {
+      console.log('[OfferCard] Using offer.offerName (no override available):', {
+        offerId: offer.id,
+        offerCode: offer.offerCode,
+        offerName: direct,
+      });
+      return direct;
+    }
 
     if (offer.offerCode && allCruises.length > 0) {
       const match = allCruises.find(c => c.offerCode === offer.offerCode && (c.offerName || '').trim().length > 0);
@@ -87,7 +106,7 @@ export function OfferCard({
     }
 
     return '';
-  }, [offer.id, offer.offerCode, offer.offerName, allCruises]);
+  }, [offer.id, offer.offerCode, offer.offerName, offerNameOverride, allCruises]);
 
   const aggregateValue = useMemo((): OfferAggregateValue | null => {
     try {
@@ -177,7 +196,9 @@ export function OfferCard({
     if (recommended) {
       return { text: 'RECOMMENDED', bg: COLORS.gold };
     }
-    return { text: offer.offerName || 'CASINO OFFER', bg: COLORS.loyalty };
+
+    const badgeName = (offerNameOverride || offer.offerName || inferredOfferName || 'CASINO OFFER').trim();
+    return { text: badgeName.length > 0 ? badgeName : 'CASINO OFFER', bg: COLORS.loyalty };
   };
 
   const statusBadge = getStatusBadge();
@@ -248,7 +269,9 @@ export function OfferCard({
       {(offer.offerName || offer.offerCode) && (
         <View style={styles.offerHeaderSection}>
           <Text style={styles.offerNameHeader}>
-            {offer.offerName || inferredOfferName || 'Casino Offer'}
+            {(offerNameOverride || inferredOfferName || 'Casino Offer').trim().length > 0
+              ? (offerNameOverride || inferredOfferName || 'Casino Offer')
+              : 'Casino Offer'}
           </Text>
           <View style={styles.offerCodeRow}>
             {offer.offerCode && (

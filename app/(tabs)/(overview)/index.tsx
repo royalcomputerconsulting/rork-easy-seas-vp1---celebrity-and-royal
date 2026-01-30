@@ -159,6 +159,33 @@ function OverviewScreenContent() {
 
   const offersData = useMemo(() => casinoOffers, [casinoOffers]);
 
+  const offerNameByCode = useMemo(() => {
+    const map = new Map<string, string>();
+    offersData.forEach((o: CasinoOffer) => {
+      const code = (o.offerCode || '').trim();
+      if (code.length === 0) return;
+      const name = (o.offerName || o.title || '').trim();
+      if (name.length === 0) return;
+      if (!map.has(code)) {
+        map.set(code, name);
+        return;
+      }
+
+      const existing = (map.get(code) || '').trim();
+      if (existing.length === 0) {
+        map.set(code, name);
+        return;
+      }
+
+      if (existing === 'Casino Offer' && name !== 'Casino Offer') {
+        map.set(code, name);
+      }
+    });
+
+    console.log('[Overview] offerNameByCode map size:', map.size);
+    return map;
+  }, [offersData]);
+
   const bookedCruises = useMemo(() => allBookedCruises, [allBookedCruises]);
 
   const bookedCruiseIds = useMemo(() => {
@@ -625,16 +652,27 @@ function OverviewScreenContent() {
       );
     }
 
+    const offerNameOverride = item.offerCode ? offerNameByCode.get(item.offerCode) : undefined;
+    if (item.offerCode) {
+      console.log('[Overview] OfferCard name resolution:', {
+        cruiseId: item.id,
+        offerCode: item.offerCode,
+        cruiseOfferName: item.offerName,
+        offerNameOverride,
+      });
+    }
+
     return (
       <OfferCard 
         offer={item as Cruise} 
         allCruises={cruisesData}
+        offerNameOverride={offerNameOverride}
         onPress={() => handleOfferPress(item)} 
         isBooked={bookedCruiseIds.has(item.id)}
         recommended={index === 0}
       />
     );
-  }, [handleOfferPress, handleCruiseItemPress, bookedCruiseIds, cruisesData]);
+  }, [handleOfferPress, handleCruiseItemPress, bookedCruiseIds, cruisesData, offerNameByCode]);
 
   const keyExtractor = useCallback((item: CasinoOfferCardData | Cruise) => item.id, []);
 
