@@ -136,13 +136,18 @@ export const STEP4_LOYALTY_SCRIPT = `
           loyaltyInfo = capturedData.loyaltyInformation;
           accountId = capturedData.accountId || '';
           log('✅ Found loyalty data in loyaltyInformation', 'success');
-        } else if (capturedData.accountId) {
-          // Direct structure from /guestAccounts/loyalty/info endpoint
+        } else if (capturedData.crownAndAnchorId || capturedData.clubRoyaleLoyaltyTier || capturedData.crownAndAnchorSocietyLoyaltyTier) {
+          // Direct structure from /guestAccounts/loyalty/info endpoint - fields at root level
           loyaltyInfo = capturedData;
           accountId = capturedData.accountId || '';
-          log('✅ Found loyalty data in root (direct structure)', 'success');
+          log('✅ Found loyalty data at root level (direct API response)', 'success');
+        } else if (capturedData.accountId) {
+          // Has accountId but no loyalty fields yet - might be partial data
+          loyaltyInfo = capturedData;
+          accountId = capturedData.accountId || '';
+          log('✅ Found loyalty data with accountId (checking for loyalty fields...)', 'success');
         } else {
-          log('⚠️ Captured payload does not contain loyaltyInformation', 'warning');
+          log('⚠️ Captured payload does not contain recognizable loyalty data', 'warning');
           log('📦 Payload keys: ' + Object.keys(capturedData).join(', '), 'info');
         }
         

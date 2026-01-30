@@ -606,7 +606,10 @@ export const STEP2_UPCOMING_SCRIPT = `
         log('📦 Captured data structure: ' + JSON.stringify(Object.keys(capturedData)).substring(0, 200), 'info');
         
         var bookingsFromCapture = null;
-        if (capturedData.profileBookings && Array.isArray(capturedData.profileBookings)) {
+        if (capturedData.payload && capturedData.payload.profileBookings && Array.isArray(capturedData.payload.profileBookings)) {
+          bookingsFromCapture = capturedData.payload.profileBookings;
+          log('✅ Found ' + bookingsFromCapture.length + ' bookings in payload.profileBookings', 'success');
+        } else if (capturedData.profileBookings && Array.isArray(capturedData.profileBookings)) {
           bookingsFromCapture = capturedData.profileBookings;
           log('✅ Found ' + bookingsFromCapture.length + ' bookings in profileBookings', 'success');
         } else if (capturedData.payload && capturedData.payload.sailingInfo && Array.isArray(capturedData.payload.sailingInfo)) {
