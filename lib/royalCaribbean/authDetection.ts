@@ -3,7 +3,6 @@ export const AUTH_DETECTION_SCRIPT = `
   let lastAuthState = null;
   let checkCount = 0;
   
-  // Store captured payloads in window object so step scripts can access them
   if (!window.capturedPayloads) {
     window.capturedPayloads = {
       offers: null,
@@ -96,7 +95,7 @@ export const AUTH_DETECTION_SCRIPT = `
             }).catch(() => {});
           }
           
-          if (url.includes('/guestAccounts/loyalty/info') || url.includes('/loyalty/history/summary') || url.includes('/api/account/loyalty-programs') || url.includes('/api/loyalty-programs') || url.includes('/api/account/info')) {
+          if (url.includes('/loyalty') || url.includes('/guestAccounts/loyalty') || url.includes('/loyaltyInformation') || url.includes('/loyalty-programs') || url.includes('/profile/loyalty') || url.includes('/account/info')) {
             clonedResponse.json().then(data => {
               window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -197,7 +196,7 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
             }
             
-            if (this._url.includes('/guestAccounts/loyalty/info') || this._url.includes('/loyalty/history/summary') || this._url.includes('/api/account/loyalty-programs') || this._url.includes('/api/loyalty-programs') || this._url.includes('/api/account/info')) {
+            if (this._url.includes('/loyalty') || this._url.includes('/guestAccounts/loyalty') || this._url.includes('/loyaltyInformation') || this._url.includes('/loyalty-programs') || this._url.includes('/profile/loyalty') || this._url.includes('/account/info')) {
               window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',

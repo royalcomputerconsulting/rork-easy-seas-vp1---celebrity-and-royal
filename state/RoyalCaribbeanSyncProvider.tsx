@@ -533,7 +533,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Ingestion completed successfully', 'success');
         break;
     }
-  }, [addLog, setProgress, state.status]);
+  }, [addLog, setProgress, state.status, state.extractedBookedCruises]);
 
   const openLogin = useCallback(() => {
     if (webViewRef.current) {

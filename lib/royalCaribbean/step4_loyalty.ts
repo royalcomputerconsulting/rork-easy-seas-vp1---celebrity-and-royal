@@ -114,8 +114,11 @@ export const STEP4_LOYALTY_SCRIPT = `
       log('📍 Current URL: ' + window.location.href, 'info');
       
       // Wait for page to load and make API calls naturally
-      log('⏳ Waiting 10 seconds for page to load and make loyalty API calls...', 'info');
-      await wait(10000);
+      log('⏳ Waiting 8 seconds for page to load and make loyalty API calls...', 'info');
+      await wait(8000);
+      
+      // Log current URL to verify we're on the right page
+      log('📍 Current page URL: ' + window.location.href, 'info');
       
       // FIRST: Check if we have captured loyalty payload from network monitor
       if (window.capturedPayloads && window.capturedPayloads.loyalty) {
