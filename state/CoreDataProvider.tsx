@@ -255,11 +255,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const hasLocalData = cruises.length > 0 || bookedCruises.length > 0 || casinoOffers.length > 0 || calendarEvents.length > 0;
 
-  const userId = authenticatedEmail || 'anonymous';
-  const saveToBackendMutation = trpc.data.saveUserData.useMutation();
-  const { refetch: refetchBackendData } = trpc.data.getUserData.useQuery(
-    { userId },
-    { enabled: false, retry: false }
+  const saveAllUserDataMutation = trpc.data.saveAllUserData.useMutation();
+  const { refetch: refetchBackendData } = trpc.data.getAllUserData.useQuery(
+    { email: authenticatedEmail || '' },
+    { enabled: false, retry: false, staleTime: 0 }
   );
 
   const activeFilterCount = useMemo(() => {
@@ -292,68 +291,106 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, []);
 
   const syncToBackend = useCallback(async () => {
-    if (!isBackendAvailable()) {
+    if (!isBackendAvailable() || !authenticatedEmail) {
+      console.log('[CoreData] Backend sync skipped - not authenticated or backend unavailable');
       return;
     }
     
     try {
-      const bookedData = await AsyncStorage.getItem(STORAGE_KEYS.BOOKED_CRUISES);
-      const offersData = await AsyncStorage.getItem(STORAGE_KEYS.CASINO_OFFERS);
+      const [bookedData, offersData, eventsData, settingsData, pointsData, profileData] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEYS.BOOKED_CRUISES),
+        AsyncStorage.getItem(STORAGE_KEYS.CASINO_OFFERS),
+        AsyncStorage.getItem(STORAGE_KEYS.CALENDAR_EVENTS),
+        AsyncStorage.getItem(STORAGE_KEYS.SETTINGS),
+        AsyncStorage.getItem(STORAGE_KEYS.USER_POINTS),
+        AsyncStorage.getItem(STORAGE_KEYS.CLUB_PROFILE),
+      ]);
       
       const parsedBooked = bookedData ? JSON.parse(bookedData) : [];
       const parsedOffers = offersData ? JSON.parse(offersData) : [];
+      const parsedEvents = eventsData ? JSON.parse(eventsData) : [];
+      const parsedSettings = settingsData ? JSON.parse(settingsData) : undefined;
+      const parsedPoints = pointsData ? parseInt(pointsData, 10) : undefined;
+      const parsedProfile = profileData ? JSON.parse(profileData) : undefined;
       
-      if (parsedBooked.length === 0 && parsedOffers.length === 0) {
-        return;
-      }
-      
-      console.log('[CoreData] Attempting backend sync:', {
+      console.log('[CoreData] Syncing to backend:', {
+        email: authenticatedEmail,
         cruises: parsedBooked.length,
         offers: parsedOffers.length,
+        events: parsedEvents.length,
       });
       
-      await saveToBackendMutation.mutateAsync({
-        userId,
+      await saveAllUserDataMutation.mutateAsync({
+        email: authenticatedEmail,
         bookedCruises: parsedBooked,
         casinoOffers: parsedOffers,
+        calendarEvents: parsedEvents,
+        settings: parsedSettings,
+        userPoints: parsedPoints,
+        clubRoyaleProfile: parsedProfile,
       });
       
-      console.log('[CoreData] Backend sync successful');
-    } catch {
-      console.log('[CoreData] Backend sync skipped (unavailable)');
+      console.log('[CoreData] ✅ Backend sync successful');
+    } catch (error) {
+      console.error('[CoreData] Backend sync failed:', error);
     }
-  }, [saveToBackendMutation, userId]);
+  }, [saveAllUserDataMutation, authenticatedEmail]);
 
   const loadFromBackend = useCallback(async () => {
-    if (!isBackendAvailable()) {
+    if (!isBackendAvailable() || !authenticatedEmail) {
+      console.log('[CoreData] Backend load skipped - not authenticated or backend unavailable');
       return false;
     }
     
     try {
-      console.log('[CoreData] Attempting to load from backend...');
+      console.log('[CoreData] 🔄 Loading data from backend for:', authenticatedEmail);
       const result = await refetchBackendData();
       
-      if (result.data && result.data.bookedCruises && result.data.bookedCruises.length > 0) {
-        console.log('[CoreData] Backend data found:', {
-          cruises: result.data.bookedCruises.length,
-          offers: result.data.casinoOffers?.length || 0,
+      if (result.data && result.data.found && result.data.data) {
+        const userData = result.data.data;
+        console.log('[CoreData] ✅ Backend data found:', {
+          email: authenticatedEmail,
+          cruises: userData.bookedCruises?.length || 0,
+          offers: userData.casinoOffers?.length || 0,
+          events: userData.calendarEvents?.length || 0,
+          updatedAt: userData.updatedAt,
         });
         
-        await AsyncStorage.setItem(STORAGE_KEYS.BOOKED_CRUISES, JSON.stringify(result.data.bookedCruises));
-        if (result.data.casinoOffers) {
-          await AsyncStorage.setItem(STORAGE_KEYS.CASINO_OFFERS, JSON.stringify(result.data.casinoOffers));
+        // Save all data to AsyncStorage
+        const savePromises = [];
+        if (userData.bookedCruises) {
+          savePromises.push(AsyncStorage.setItem(STORAGE_KEYS.BOOKED_CRUISES, JSON.stringify(userData.bookedCruises)));
+        }
+        if (userData.casinoOffers) {
+          savePromises.push(AsyncStorage.setItem(STORAGE_KEYS.CASINO_OFFERS, JSON.stringify(userData.casinoOffers)));
+        }
+        if (userData.calendarEvents) {
+          savePromises.push(AsyncStorage.setItem(STORAGE_KEYS.CALENDAR_EVENTS, JSON.stringify(userData.calendarEvents)));
+        }
+        if (userData.settings) {
+          savePromises.push(AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(userData.settings)));
+        }
+        if (userData.userPoints !== undefined) {
+          savePromises.push(AsyncStorage.setItem(STORAGE_KEYS.USER_POINTS, userData.userPoints.toString()));
+        }
+        if (userData.clubRoyaleProfile) {
+          savePromises.push(AsyncStorage.setItem(STORAGE_KEYS.CLUB_PROFILE, JSON.stringify(userData.clubRoyaleProfile)));
         }
         
+        await Promise.all(savePromises);
+        await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true');
+        
+        console.log('[CoreData] ✅ Backend data loaded and cached locally');
         return true;
       }
       
-      console.log('[CoreData] No backend data found');
+      console.log('[CoreData] No backend data found for:', authenticatedEmail);
       return false;
-    } catch {
-      console.log('[CoreData] Backend load skipped (unavailable)');
+    } catch (error) {
+      console.error('[CoreData] Backend load failed:', error);
       return false;
     }
-  }, [refetchBackendData]);
+  }, [refetchBackendData, authenticatedEmail]);
 
   const loadFromStorage = useCallback(async (force = false) => {
     console.log('[CoreData] === START LOADING FROM STORAGE ===', { force, alreadyAttempted: loadAttemptedRef.current });
@@ -370,8 +407,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
     
     try {
-      // Try backend load but don't block on it
-      loadFromBackend().catch(() => {});
+      // Try to load from backend first if authenticated
+      if (authenticatedEmail) {
+        const hasBackendData = await loadFromBackend();
+        if (hasBackendData) {
+          console.log('[CoreData] Loaded user data from backend, will refresh from storage');
+        }
+      }
       
       console.log('[CoreData] Loading from storage...');
 
@@ -424,7 +466,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       const today = new Date();
       const transitionCruisesToCompleted = (cruises: BookedCruise[]): BookedCruise[] => {
-        return cruises.map(cruise => {
+        return cruises.map((cruise: BookedCruise) => {
           if (cruise.returnDate) {
             const returnDate = new Date(cruise.returnDate);
             if (returnDate < today && cruise.completionState !== 'completed') {
@@ -446,7 +488,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         console.log('[CoreData] Found existing booked data, processing...');
         
         // Filter out any mock/demo cruises if real data exists
-        const nonMockCruises = parsedBookedData.filter((cruise: BookedCruise) => 
+        const nonMockCruises = parsedBookedData.filter((cruise: any) => 
           !cruise.id?.includes('demo-') && 
           !cruise.id?.includes('booked-virtual') &&
           cruise.reservationNumber !== 'DEMO123' &&
@@ -518,6 +560,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         events: parsedEvents.length,
         hasImportedData: hasImported,
       });
+      
+      // Auto-sync to backend after load if authenticated
+      if (authenticatedEmail) {
+        syncToBackend().catch(console.error);
+      }
     } catch (error) {
       console.error('[CoreData] === LOAD FAILED ===');
       console.error('[CoreData] Error details:', error);
@@ -534,7 +581,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setIsLoading(false);
       console.log('[CoreData] === isLoading set to FALSE ===');
     }, 0);
-  }, [loadFromBackend, initialCheckComplete, hasCloudData]);
+  }, [loadFromBackend, initialCheckComplete, hasCloudData, authenticatedEmail, syncToBackend]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -603,6 +650,18 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       clearTimeout(loadTimeout);
     };
   }, [loadFromStorage, isAuthenticated, authenticatedEmail, initialCheckComplete]);
+
+  // Auto-sync to backend when data changes (debounced)
+  useEffect(() => {
+    if (!isAuthenticated || !authenticatedEmail) return;
+    
+    const syncTimeout = setTimeout(() => {
+      console.log('[CoreData] Auto-syncing to backend...');
+      syncToBackend();
+    }, 2000); // Debounce 2 seconds
+    
+    return () => clearTimeout(syncTimeout);
+  }, [bookedCruises, casinoOffers, calendarEvents, settings, userPoints, clubRoyaleProfile, isAuthenticated, authenticatedEmail, syncToBackend]);
 
   useEffect(() => {
     const handleSessionPointsUpdate = (event: any) => {
