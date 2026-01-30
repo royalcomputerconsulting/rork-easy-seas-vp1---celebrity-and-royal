@@ -1,14 +1,17 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  Dimensions, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Dimensions,
   TouchableOpacity,
   RefreshControl,
-  Image 
+  Image,
+  Platform,
 } from 'react-native';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,10 +30,10 @@ import {
   Brain,
   LineChart,
   Receipt,
-  Anchor,
   Calendar,
   Dices,
   Calculator,
+  Download,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -475,33 +478,182 @@ export default function AnalyticsScreen() {
     { label: 'Points', value: formatNumber(currentPoints), icon: Award },
   ], [realAnalytics, currentPoints]);
 
+  const buildCasinoCruisesCsv = useCallback((cruises: BookedCruise[]): string => {
+    console.log('[CasinoCruiseExport] Building CSV...', { cruiseCount: cruises.length });
+
+    const escapeCsv = (value: unknown): string => {
+      const str = String(value ?? '');
+      const needsQuotes = /[\n\r\t",]/.test(str);
+      const escaped = str.replace(/"/g, '""');
+      return needsQuotes ? `"${escaped}"` : escaped;
+    };
+
+    const header = [
+      'shipName',
+      'sailDate',
+      'returnDate',
+      'nights',
+      'departurePort',
+      'destination',
+      'itineraryName',
+      'offerCode',
+      'cabinType',
+      'stateroomNumber',
+      'stateroomCategoryCode',
+      'stateroomType',
+      'cabinNumber',
+      'deckNumber',
+      'packageCode',
+      'passengerStatus',
+      'pointsEarned',
+      'winLoss',
+      'actualSpend',
+      'totalRetailCost',
+    ];
+
+    const rows = cruises.map((cruise) => {
+      const pointsEarned = cruise.earnedPoints ?? cruise.casinoPoints ?? 0;
+      const winLoss = cruise.winnings ?? cruise.netResult ?? cruise.totalWinnings ?? 0;
+
+      return [
+        cruise.shipName,
+        cruise.sailDate,
+        cruise.returnDate,
+        cruise.nights,
+        cruise.departurePort,
+        cruise.destination,
+        cruise.itineraryName,
+        cruise.offerCode,
+        cruise.cabinType,
+        cruise.stateroomNumber,
+        cruise.stateroomCategoryCode,
+        cruise.stateroomType,
+        cruise.cabinNumber,
+        cruise.deckNumber,
+        cruise.packageCode,
+        cruise.passengerStatus,
+        pointsEarned,
+        winLoss,
+        cruise.actualSpend,
+        cruise.totalRetailCost,
+      ].map(escapeCsv).join(',');
+    });
+
+    return [header.join(','), ...rows].join('\n');
+  }, []);
+
+  const handleExportCruisePortfolio = useCallback(async () => {
+    try {
+      console.log('[CasinoCruiseExport] Export requested');
+
+      const today = new Date();
+      const completedCruises = bookedCruises.filter((c) => {
+        if (c.completionState === 'completed' || c.status === 'completed') return true;
+        if (c.returnDate) {
+          const returnDate = createDateFromString(c.returnDate);
+          return returnDate < today;
+        }
+        return false;
+      });
+
+      const cruisesToExport = completedCruises.filter((c) => {
+        const points = c.earnedPoints ?? c.casinoPoints ?? 0;
+        const winLoss = c.winnings ?? c.netResult ?? c.totalWinnings ?? 0;
+        return points > 0 || winLoss !== 0;
+      });
+
+      console.log('[CasinoCruiseExport] Filtered cruises to export', {
+        completed: completedCruises.length,
+        exportable: cruisesToExport.length,
+      });
+
+      if (cruisesToExport.length === 0) {
+        console.log('[CasinoCruiseExport] No cruises with points or win/loss found - skipping export');
+        return;
+      }
+
+      const filename = 'CasinoCruises.csv';
+      const csv = buildCasinoCruisesCsv(cruisesToExport);
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        console.log('[CasinoCruiseExport] Web download started');
+        return;
+      }
+
+      const directory = Paths.cache ?? Paths.document;
+      const file = new File(directory, filename);
+      file.write(csv, { encoding: 'utf8' });
+
+      const fileUri = file.uri;
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        console.log('[CasinoCruiseExport] Sharing not available on this device');
+        return;
+      }
+
+      await Sharing.shareAsync(fileUri, {
+        mimeType: 'text/csv',
+        UTI: 'public.comma-separated-values-text',
+        dialogTitle: 'Export CasinoCruises.csv',
+      });
+
+      console.log('[CasinoCruiseExport] Share sheet opened', { fileUri });
+    } catch (e) {
+      console.log('[CasinoCruiseExport] Export failed', e);
+    }
+  }, [bookedCruises, buildCasinoCruisesCsv]);
+
   const ROIFilterTabs = () => (
-    <View style={styles.filterTabs}>
-      {(['all', 'high', 'medium', 'low'] as ROIFilter[]).map((filter) => {
-        const isActive = roiFilter === filter;
-        const count = filter === 'all' 
-          ? portfolioMetrics.totalCruises 
-          : portfolioMetrics[`${filter}ROI` as keyof typeof portfolioMetrics];
-        const label = filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1);
-        
-        return (
-          <TouchableOpacity
-            key={filter}
-            style={[styles.filterTab, isActive && styles.filterTabActive]}
-            onPress={() => setRoiFilter(filter)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
-              {label}
-            </Text>
-            <View style={[styles.filterBadge, isActive && styles.filterBadgeActive]}>
-              <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>
-                {count}
+    <View style={styles.filterTabsRow}>
+      <View style={styles.filterTabs}>
+        {(['all', 'high', 'medium', 'low'] as ROIFilter[]).map((filter) => {
+          const isActive = roiFilter === filter;
+          const count = filter === 'all'
+            ? portfolioMetrics.totalCruises
+            : portfolioMetrics[`${filter}ROI` as keyof typeof portfolioMetrics];
+          const label = filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1);
+
+          return (
+            <TouchableOpacity
+              key={filter}
+              style={[styles.filterTab, isActive && styles.filterTabActive]}
+              onPress={() => setRoiFilter(filter)}
+              activeOpacity={0.7}
+              testID={`casino-portfolio-filter-${filter}`}
+            >
+              <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
+                {label}
               </Text>
-            </View>
-          </TouchableOpacity>
-        );
-      })}
+              <View style={[styles.filterBadge, isActive && styles.filterBadgeActive]}>
+                <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>
+                  {count}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <TouchableOpacity
+        style={styles.exportButton}
+        activeOpacity={0.8}
+        onPress={handleExportCruisePortfolio}
+        testID="casino-portfolio-export"
+      >
+        <Download size={16} color={COLORS.navyDeep} />
+        <Text style={styles.exportButtonText}>Export</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -1979,11 +2131,35 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: SPACING.sm,
   },
+  filterTabsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
   filterTabs: {
     flexDirection: 'row',
     justifyContent: 'center',
+    flexWrap: 'wrap',
     gap: 6,
-    marginBottom: SPACING.md,
+    flex: 1,
+  },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(0, 31, 63, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.15)',
+  },
+  exportButtonText: {
+    fontSize: 12,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   filterTab: {
     flexDirection: 'row',

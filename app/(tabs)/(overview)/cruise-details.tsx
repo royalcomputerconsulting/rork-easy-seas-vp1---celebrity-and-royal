@@ -644,7 +644,7 @@ export default function CruiseDetailsScreen() {
             <CompactFact icon={Dice5} value={casinoAvailability ? `${casinoAvailability.casinoOpenDays}/${casinoAvailability.totalDays} casino` : '—'} />
           </View>
 
-          {isBooked && (cruise as BookedCruise).bookingId && (
+          {isBooked && (
             <View style={styles.cruiseDetailsSection}>
               <View style={styles.sectionHeader}>
                 <Ship size={20} color={COLORS.beigeWarm} />
@@ -652,61 +652,50 @@ export default function CruiseDetailsScreen() {
               </View>
               
               <View style={styles.detailsGrid}>
-                {(cruise as BookedCruise).bookingId && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailRowLabel}>Booking ID</Text>
-                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).bookingId}</Text>
-                  </View>
-                )}
-                
-                {(cruise as BookedCruise).stateroomNumber && (
-                  <View style={styles.detailRow} testID="cruise-detail-stateroom-number">
-                    <Text style={styles.detailRowLabel}>Stateroom</Text>
-                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomNumber}</Text>
-                  </View>
-                )}
-                
-                {(cruise as BookedCruise).stateroomCategoryCode && (
-                  <View style={styles.detailRow} testID="cruise-detail-stateroom-category-code">
-                    <Text style={styles.detailRowLabel}>Category Code</Text>
-                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomCategoryCode}</Text>
-                  </View>
-                )}
+                <View style={styles.detailRow} testID="cruise-detail-booking-id">
+                  <Text style={styles.detailRowLabel}>Booking ID</Text>
+                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).bookingId ?? '—'}</Text>
+                </View>
 
-                {(cruise as BookedCruise).stateroomType && (
-                  <View style={styles.detailRow} testID="cruise-detail-stateroom-type">
-                    <Text style={styles.detailRowLabel}>Stateroom Type</Text>
-                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomType}</Text>
-                  </View>
-                )}
+                <View style={styles.detailRow} testID="cruise-detail-reservation-number">
+                  <Text style={styles.detailRowLabel}>Reservation #</Text>
+                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).reservationNumber ?? '—'}</Text>
+                </View>
 
-                {(cruise as BookedCruise).passengerStatus && (
-                  <View style={styles.detailRow} testID="cruise-detail-passenger-status">
-                    <Text style={styles.detailRowLabel}>Passenger Status</Text>
-                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).passengerStatus}</Text>
-                  </View>
-                )}
-                
-                {(cruise as BookedCruise).deckNumber && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailRowLabel}>Deck</Text>
-                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).deckNumber}</Text>
-                  </View>
-                )}
-                
-                {(cruise as BookedCruise).musterStation && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailRowLabel}>Muster Station</Text>
-                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).musterStation}</Text>
-                  </View>
-                )}
-                
-                {(cruise as BookedCruise).packageCode && (
-                  <View style={styles.detailRow} testID="cruise-detail-package-code">
-                    <Text style={styles.detailRowLabel}>Package Code</Text>
-                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).packageCode}</Text>
-                  </View>
-                )}
+                <View style={styles.detailRow} testID="cruise-detail-package-code">
+                  <Text style={styles.detailRowLabel}>Package Code</Text>
+                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).packageCode ?? '—'}</Text>
+                </View>
+
+                <View style={styles.detailRow} testID="cruise-detail-passenger-status">
+                  <Text style={styles.detailRowLabel}>Passenger Status</Text>
+                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).passengerStatus ?? '—'}</Text>
+                </View>
+
+                <View style={styles.detailRow} testID="cruise-detail-stateroom-number">
+                  <Text style={styles.detailRowLabel}>Stateroom #</Text>
+                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomNumber ?? '—'}</Text>
+                </View>
+
+                <View style={styles.detailRow} testID="cruise-detail-stateroom-category-code">
+                  <Text style={styles.detailRowLabel}>Stateroom Category</Text>
+                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomCategoryCode ?? '—'}</Text>
+                </View>
+
+                <View style={styles.detailRow} testID="cruise-detail-stateroom-type">
+                  <Text style={styles.detailRowLabel}>Stateroom Type</Text>
+                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomType ?? '—'}</Text>
+                </View>
+
+                <View style={styles.detailRow} testID="cruise-detail-deck-number">
+                  <Text style={styles.detailRowLabel}>Deck</Text>
+                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).deckNumber ?? '—'}</Text>
+                </View>
+
+                <View style={styles.detailRow} testID="cruise-detail-muster-station">
+                  <Text style={styles.detailRowLabel}>Muster Station</Text>
+                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).musterStation ?? '—'}</Text>
+                </View>
                 
                 {(cruise as BookedCruise).bookingStatus && (
                   <View style={styles.detailRow}>
