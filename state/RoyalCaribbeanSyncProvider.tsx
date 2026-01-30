@@ -18,9 +18,6 @@ import { convertLoyaltyInfoToExtended } from '@/lib/royalCaribbean/loyaltyConver
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
-import { injectUpcomingCruisesExtraction } from '@/lib/royalCaribbean/step2_upcoming';
-import { injectCourtesyHoldsExtraction } from '@/lib/royalCaribbean/step3_holds';
-import { injectLoyaltyExtraction } from '@/lib/royalCaribbean/step4_loyalty';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 
 export type CruiseLine = 'royal_caribbean' | 'celebrity';
@@ -383,12 +380,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             console.log(`[RoyalCaribbeanSync] First booking sample:`, JSON.stringify(bookings[0]).substring(0, 300));
             console.log(`[RoyalCaribbeanSync] First booking FULL:`, JSON.stringify(bookings[0]));
             console.log(`[RoyalCaribbeanSync] First booking keys:`, Object.keys(bookings[0]));
-            addLog(`🔍 DIAGNOSTIC - First booking fields: ${Object.keys(bookings[0]).join(', ')}`, 'info');
-            addLog(`🔍 DIAGNOSTIC - First booking sample: ${JSON.stringify(bookings[0]).substring(0, 200)}`, 'info');
-            console.log(`[RoyalCaribbeanSync] First booking FULL:`, JSON.stringify(bookings[0]));
-            console.log(`[RoyalCaribbeanSync] First booking keys:`, Object.keys(bookings[0]));
-            addLog(`🔍 DIAGNOSTIC - First booking fields: ${Object.keys(bookings[0]).join(', ')}`, 'info');
-            addLog(`🔍 Sample booking data: ${JSON.stringify(bookings[0]).substring(0, 200)}`, 'info');
             
             const SHIP_CODE_MAP: Record<string, string> = {
               'AL': 'Allure of the Seas', 'AN': 'Anthem of the Seas', 'AD': 'Adventure of the Seas',
@@ -462,6 +453,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             formattedCruises.slice(0, 3).forEach((c: any, i: number) => {
               addLog(`   ${i + 1}. ${c.shipName} - ${c.sailingStartDate} - ${c.cabinType} #${c.cabinNumberOrGTY} - Booking: ${c.bookingId}`, 'info');
             });
+            
+            // Auto-complete Step 2 immediately since we have the bookings data
+            if (state.status === 'running_step_2') {
+              addLog(`✅ Step 2 auto-completing with ${bookings.length} bookings from network monitor`, 'success');
+              if (stepCompleteResolvers.current[2]) {
+                stepCompleteResolvers.current[2]();
+                delete stepCompleteResolvers.current[2];
+              }
+            }
           } else {
             addLog(`⚠️ No bookings found after structure detection`, 'warning');
           }
@@ -472,15 +472,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           console.log(`[RoyalCaribbeanSync] Voyage enrichment data received`);
           console.log(`[RoyalCaribbeanSync] Voyage enrichment keys:`, Object.keys(data));
           addLog(`✅ Voyage enrichment data stored for merging with bookings`, 'success');
-          
-          // Auto-complete Step 2 if we're in that step and have bookings
-          if (state.status === 'running_step_2' && state.extractedBookedCruises.length > 0) {
-            addLog(`✅ Step 2 auto-completing with ${state.extractedBookedCruises.length} cruises from network monitor`, 'success');
-            if (stepCompleteResolvers.current[2]) {
-              stepCompleteResolvers.current[2]();
-              delete stepCompleteResolvers.current[2];
-            }
-          }
         }
         
         if (endpoint === 'loyalty' && data) {
@@ -636,11 +627,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             true;
           `);
           
-          addLog('⏳ Waiting for upcoming cruises API to load (max 20 seconds)...', 'info');
+          addLog('⏳ Waiting for upcoming cruises API to load (max 8 seconds)...', 'info');
           
           // Wait for network monitor to capture and process the payload
           // The network monitor will auto-complete the step when it processes the payload
-          await waitForStepComplete(2, 20000);
+          await waitForStepComplete(2, 8000);
         }
       } catch (step2Error) {
         addLog(`Step 2 error: ${step2Error} - continuing with collected data`, 'warning');
@@ -673,11 +664,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             true;
           `);
           
-          addLog('⏳ Waiting for loyalty API to load (max 15 seconds)...', 'info');
+          addLog('⏳ Waiting for loyalty API to load (max 8 seconds)...', 'info');
           
           // Wait for network monitor to capture and process the loyalty payload
           // The network monitor will auto-complete the step when it processes the payload
-          await waitForStepComplete(4, 15000);
+          await waitForStepComplete(4, 8000);
         }
       } catch (step4Error) {
         addLog(`Step 4 error: ${step4Error} - continuing without loyalty data`, 'warning');
