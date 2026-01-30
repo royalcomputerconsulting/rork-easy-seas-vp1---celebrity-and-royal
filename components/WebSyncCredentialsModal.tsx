@@ -55,9 +55,9 @@ export function WebSyncCredentialsModal({
             <View style={[styles.iconContainer, isCelebrity && styles.iconContainerCelebrity]}>
               <Ship size={32} color={isCelebrity ? '#10b981' : '#3b82f6'} />
             </View>
-            <Text style={styles.title}>Web Sync Login</Text>
+            <Text style={styles.title}>Easy Seas™</Text>
             <Text style={styles.subtitle}>
-              Enter your {brandName} credentials to sync your {clubName} data
+              Sign in to sync your {brandName} {clubName} data
             </Text>
           </View>
 
