@@ -610,7 +610,7 @@ function RoyalCaribbeanSyncScreen() {
                       )}
 
                       {/* Captain's Club (Celebrity Cruises) */}
-                      {extendedLoyaltyData?.captainsClubTier && extendedLoyaltyData.captainsClubPoints !== undefined && extendedLoyaltyData.captainsClubPoints > 0 && (
+                      {(extendedLoyaltyData?.captainsClubTier || extendedLoyaltyData?.captainsClubPoints !== undefined) && (
                         <View style={styles.loyaltySection} testID="loyalty-captains-club">
                           <View style={styles.loyaltySectionHeader}>
                             <Star size={16} color="#10b981" />
@@ -618,11 +618,11 @@ function RoyalCaribbeanSyncScreen() {
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
-                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.captainsClubTier}</Text>
+                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.captainsClubTier ?? 'N/A'}</Text>
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Points:</Text>
-                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.captainsClubPoints.toLocaleString()}</Text>
+                            <Text style={styles.loyaltyValue}>{(extendedLoyaltyData.captainsClubPoints ?? 0).toLocaleString()}</Text>
                           </View>
                           {extendedLoyaltyData.captainsClubNextTier && (
                             <View style={styles.loyaltyRow}>
@@ -636,7 +636,7 @@ function RoyalCaribbeanSyncScreen() {
                       )}
 
                       {/* Celebrity Blue Chip */}
-                      {extendedLoyaltyData?.celebrityBlueChipTier && extendedLoyaltyData.celebrityBlueChipPoints !== undefined && extendedLoyaltyData.celebrityBlueChipPoints > 0 && (
+                      {(extendedLoyaltyData?.celebrityBlueChipTier || extendedLoyaltyData?.celebrityBlueChipPoints !== undefined) && (
                         <View style={styles.loyaltySection} testID="loyalty-blue-chip">
                           <View style={styles.loyaltySectionHeader}>
                             <Award size={16} color="#8b5cf6" />
@@ -644,11 +644,11 @@ function RoyalCaribbeanSyncScreen() {
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
-                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.celebrityBlueChipTier}</Text>
+                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.celebrityBlueChipTier ?? 'N/A'}</Text>
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Points:</Text>
-                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.celebrityBlueChipPoints.toLocaleString()}</Text>
+                            <Text style={styles.loyaltyValue}>{(extendedLoyaltyData.celebrityBlueChipPoints ?? 0).toLocaleString()}</Text>
                           </View>
                         </View>
                       )}

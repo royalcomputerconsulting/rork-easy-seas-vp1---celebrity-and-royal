@@ -136,6 +136,7 @@ export interface OfferRow {
 }
 
 export interface BookedCruiseRow {
+  rawBooking?: unknown;
   sourcePage: string;
   shipName: string;
   shipCode?: string;

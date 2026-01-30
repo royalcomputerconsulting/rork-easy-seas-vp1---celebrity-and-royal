@@ -1,9 +1,11 @@
 import { LogEntry } from './types';
 
+type LogType = 'info' | 'success' | 'warning' | 'error';
+
 class RoyalCaribbeanLogger {
   private logs: LogEntry[] = [];
 
-  log(message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') {
+  log(message: string, type: LogType = 'info') {
     const timestamp = new Date().toISOString();
     const formattedTimestamp = new Date(timestamp).toLocaleString('en-US', {
       year: 'numeric',
@@ -29,10 +31,32 @@ class RoyalCaribbeanLogger {
     return [...this.logs];
   }
 
-  getLogsAsText(): string {
-    return this.logs
-      .map(entry => `[${entry.timestamp}] ${entry.message}`)
-      .join('\n');
+  getDisplayLogs(): LogEntry[] {
+    return this.logs.filter((l) => (l.type ?? 'info') === 'success');
+  }
+
+  getNotes(): LogEntry[] {
+    return this.logs.filter((l) => (l.type ?? 'info') !== 'success');
+  }
+
+  getLogsAsText(options?: { includeNotes?: boolean }): string {
+    const includeNotes = options?.includeNotes ?? true;
+
+    const successLines = this.getDisplayLogs().map(
+      (entry) => `[${entry.timestamp}] ${entry.message}`
+    );
+
+    if (!includeNotes) {
+      return successLines.join('\n');
+    }
+
+    const notes = this.getNotes();
+    const noteLines = notes.map((entry) => {
+      const type = (entry.type ?? 'info').toUpperCase();
+      return `[${entry.timestamp}] (${type}) ${entry.message}`;
+    });
+
+    return [...successLines, '', '--- NOTES ---', ...noteLines].join('\n');
   }
 
   clear() {

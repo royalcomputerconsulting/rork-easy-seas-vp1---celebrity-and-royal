@@ -101,7 +101,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     rcLogger.log(message, type);
     // Batch log updates to prevent excessive state updates
     setState(prev => {
-      const newLogs = rcLogger.getLogs();
+      const newLogs = rcLogger.getDisplayLogs();
       // Only update if logs actually changed
       if (prev.logs.length === newLogs.length) {
         return prev;
@@ -228,6 +228,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         // New: All bookings received from Step 1 consolidated API call
         if (message.bookings && Array.isArray(message.bookings)) {
           const formattedCruises = message.bookings.map((booking: any) => ({
+            rawBooking: booking,
             sourcePage: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
             shipName: booking.shipName || booking.shipCode + ' of the Seas',
             shipCode: booking.shipCode,
@@ -447,6 +448,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               const isGTY = stateroomNumber === 'GTY' || !stateroomNumber;
               
               return {
+                rawBooking: booking,
                 sourcePage: 'Upcoming',
                 shipName,
                 shipCode,
@@ -1022,7 +1024,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
   const exportLog = useCallback(async () => {
     try {
-      const logText = rcLogger.getLogsAsText();
+      const logText = rcLogger.getLogsAsText({ includeNotes: true });
       const file = new File(Paths.cache, 'last.log');
       file.write(logText);
 

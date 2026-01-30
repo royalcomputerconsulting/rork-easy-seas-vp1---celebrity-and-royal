@@ -299,13 +299,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
     
     try {
-      const [bookedData, offersData, eventsData, settingsData, pointsData, profileData] = await Promise.all([
+      const [bookedData, offersData, eventsData, settingsData, pointsData, profileData, extendedLoyaltyData] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.BOOKED_CRUISES),
         AsyncStorage.getItem(STORAGE_KEYS.CASINO_OFFERS),
         AsyncStorage.getItem(STORAGE_KEYS.CALENDAR_EVENTS),
         AsyncStorage.getItem(STORAGE_KEYS.SETTINGS),
         AsyncStorage.getItem(STORAGE_KEYS.USER_POINTS),
         AsyncStorage.getItem(STORAGE_KEYS.CLUB_PROFILE),
+        AsyncStorage.getItem('easyseas_extended_loyalty_data'),
       ]);
       
       const parsedBooked = bookedData ? JSON.parse(bookedData) : [];
@@ -314,6 +315,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const parsedSettings = settingsData ? JSON.parse(settingsData) : undefined;
       const parsedPoints = pointsData ? parseInt(pointsData, 10) : undefined;
       const parsedProfile = profileData ? JSON.parse(profileData) : undefined;
+      const parsedExtendedLoyalty = extendedLoyaltyData ? JSON.parse(extendedLoyaltyData) : undefined;
       
       console.log('[CoreData] Syncing to backend:', {
         email: authenticatedEmail,
@@ -330,6 +332,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         settings: parsedSettings,
         userPoints: parsedPoints,
         clubRoyaleProfile: parsedProfile,
+        loyaltyData: parsedExtendedLoyalty,
       });
       
       console.log('[CoreData] ✅ Backend sync successful');
@@ -377,6 +380,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         }
         if (userData.clubRoyaleProfile) {
           savePromises.push(AsyncStorage.setItem(STORAGE_KEYS.CLUB_PROFILE, JSON.stringify(userData.clubRoyaleProfile)));
+        }
+        if (userData.loyaltyData) {
+          savePromises.push(AsyncStorage.setItem('easyseas_extended_loyalty_data', JSON.stringify(userData.loyaltyData)));
         }
         
         await Promise.all(savePromises);

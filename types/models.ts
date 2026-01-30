@@ -105,6 +105,7 @@ export interface ItineraryDay {
 }
 
 export interface BookedCruise extends Cruise {
+  sourcePayload?: unknown;
   reservationNumber?: string;
   bookingId?: string;
   bwoNumber?: string;

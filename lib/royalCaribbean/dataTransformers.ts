@@ -222,6 +222,7 @@ export function transformBookedCruisesToAppFormat(
     const finalEndDate = endDate || calculateReturnDate(startDate, nights);
     
     const bookedCruise: BookedCruise = {
+      sourcePayload: (cruise as any).rawBooking,
       id: generateId(),
       shipName: cruise.shipName,
       sailDate: startDate,
