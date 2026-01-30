@@ -12,6 +12,7 @@ import {
 import { GlobalSlotMachine } from '@/constants/globalSlotMachinesDatabase';
 import { permanentDB } from '@/lib/permanentMachineDatabase';
 import { machineIndexHelper, type MachineFullDetails } from '@/lib/machineIndexHelper';
+import { useEntitlement } from '@/state/EntitlementProvider';
 
 const STORAGE_KEY_ENCYCLOPEDIA = 'easyseas_machine_encyclopedia_v2_262_only';
 const STORAGE_KEY_MY_ATLAS = 'easyseas_my_slot_atlas_v2_262_only';
@@ -56,6 +57,7 @@ function parseRTPRange(rtpRange: string): { min: number; max: number } | undefin
 }
 
 export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContextHook(() => {
+  const { isPro } = useEntitlement();
   const [encyclopedia, setEncyclopedia] = useState<MachineEncyclopediaEntry[]>([]);
   const [myAtlasIds, setMyAtlasIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -633,12 +635,16 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     }
   }, []);
 
+  const hasFullAccess = useMemo(() => {
+    return isUserWhitelisted || isPro;
+  }, [isPro, isUserWhitelisted]);
+
   const globalLibrary = useMemo(() => {
-    if (isUserWhitelisted) {
+    if (hasFullAccess) {
       return encyclopedia;
     }
     return encyclopedia.slice(0, FREE_USER_MACHINE_LIMIT);
-  }, [encyclopedia, isUserWhitelisted]);
+  }, [encyclopedia, hasFullAccess]);
 
   const filteredGlobalLibrary = useMemo(() => {
     let filtered = [...globalLibrary];
@@ -735,11 +741,11 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
   const myAtlasMachines = useMemo(() => {
     const atlasMachines = encyclopedia.filter(entry => entry.isInMyAtlas);
-    if (isUserWhitelisted) {
+    if (hasFullAccess) {
       return atlasMachines;
     }
     return atlasMachines.slice(0, FREE_USER_MACHINE_LIMIT);
-  }, [encyclopedia, isUserWhitelisted]);
+  }, [encyclopedia, hasFullAccess]);
 
   const totalMachineCount = useMemo(() => {
     return encyclopedia.length;
