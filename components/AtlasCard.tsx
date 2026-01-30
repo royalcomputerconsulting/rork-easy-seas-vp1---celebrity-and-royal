@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronRight, Star, Zap, Ship } from 'lucide-react-native';
+import { ChevronRight, Star, Zap, Ship, Lock } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import type { MachineEncyclopediaEntry } from '@/types/models';
@@ -12,6 +12,7 @@ interface AtlasCardProps {
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   compact?: boolean;
+  locked?: boolean;
 }
 
 export function AtlasCard({
@@ -20,6 +21,7 @@ export function AtlasCard({
   isFavorite = false,
   onToggleFavorite,
   compact = false,
+  locked = false,
 }: AtlasCardProps) {
   const hasAPPotential = machine.apMetadata && machine.apMetadata.persistenceType !== 'None';
   const shipCount = machine.shipAssignments?.length || 0;
@@ -43,6 +45,11 @@ export function AtlasCard({
           </View>
 
           <View style={styles.compactRight}>
+            {locked ? (
+              <View style={styles.compactLockBadge} testID="atlas-card.lock">
+                <Lock size={16} color={COLORS.navyDeep} />
+              </View>
+            ) : null}
             {onToggleFavorite && (
               <TouchableOpacity
                 onPress={(e: any) => {
@@ -442,6 +449,17 @@ const styles = StyleSheet.create({
   compactRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  compactLockBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: 'rgba(18, 58, 99, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(18, 58, 99, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   compactStarButton: {
     padding: 4,

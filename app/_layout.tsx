@@ -35,6 +35,7 @@ import { SlotMachineProvider } from "@/state/SlotMachineProvider";
 import { SlotMachineLibraryProvider, useSlotMachineLibrary } from "@/state/SlotMachineLibraryProvider";
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
 import { UserDataSyncProvider, useUserDataSync } from "@/state/UserDataSyncProvider";
+import { EntitlementProvider } from "@/state/EntitlementProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 
 try {
@@ -173,6 +174,13 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="paywall"
+        options={{
+          presentation: "modal",
+          headerShown: false,
+        }}
+      />
       <Stack.Screen 
         name="modal" 
         options={{ 
@@ -395,7 +403,8 @@ export default function RootLayout() {
           <AuthProvider>
             <UserDataSyncProvider>
               <UserProvider>
-                <CoreDataProvider>
+                <EntitlementProvider>
+                  <CoreDataProvider>
                 <HistoricalPerformanceProvider>
                   <PriceHistoryProvider>
                     <FinancialsProvider>
@@ -435,7 +444,8 @@ export default function RootLayout() {
                     </FinancialsProvider>
                   </PriceHistoryProvider>
                 </HistoricalPerformanceProvider>
-              </CoreDataProvider>
+                  </CoreDataProvider>
+                </EntitlementProvider>
               </UserProvider>
             </UserDataSyncProvider>
           </AuthProvider>
