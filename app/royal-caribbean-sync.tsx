@@ -126,7 +126,6 @@ function RoyalCaribbeanSyncScreen() {
       case 'running_step_1':
       case 'running_step_2':
       case 'running_step_3':
-      case 'running_step_4':
         return '#3b82f6';
       case 'awaiting_confirmation':
         return '#f59e0b';
@@ -169,14 +168,6 @@ function RoyalCaribbeanSyncScreen() {
         if (state.progress && state.progress.stepName) {
           return state.progress.stepName;
         }
-        if (state.progress && state.progress.current > 0) {
-          return `Scraping Holds - ${state.progress.current} scraped`;
-        }
-        return 'Loading Courtesy Holds Page...';
-      case 'running_step_4':
-        if (state.progress && state.progress.stepName) {
-          return state.progress.stepName;
-        }
         return 'Loading Loyalty Programs Page...';
       case 'awaiting_confirmation':
         return 'Ready to Sync';
@@ -201,7 +192,6 @@ function RoyalCaribbeanSyncScreen() {
       case 'running_step_1':
       case 'running_step_2':
       case 'running_step_3':
-      case 'running_step_4':
       case 'syncing':
         return <Loader2 size={size} color={color} />;
       case 'complete':

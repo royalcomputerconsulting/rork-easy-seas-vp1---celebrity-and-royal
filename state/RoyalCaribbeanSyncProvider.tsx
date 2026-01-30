@@ -533,7 +533,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Ingestion completed successfully', 'success');
         break;
     }
-  }, [addLog, setProgress]);
+  }, [addLog, setProgress, state.status]);
 
   const openLogin = useCallback(() => {
     if (webViewRef.current) {
@@ -627,30 +627,25 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             true;
           `);
           
-          addLog('⏳ Waiting for upcoming cruises API to load (max 8 seconds)...', 'info');
+          addLog('⏳ Waiting 4 seconds for bookings API to load...', 'info');
           
-          // Wait for network monitor to capture and process the payload
-          // The network monitor will auto-complete the step when it processes the payload
-          await waitForStepComplete(2, 8000);
+          // Wait 4 seconds for the page to load and network monitor to capture the API call
+          // Network monitor will automatically process and send the payload
+          await waitForStepComplete(2, 4000);
         }
       } catch (step2Error) {
         addLog(`Step 2 error: ${step2Error} - continuing with collected data`, 'warning');
       }
       
-      // Step 3: Skip courtesy holds page - they're already in the bookings API
-      const step2CourtesyHolds = state.extractedBookedCruises.filter(c => {
-        const status = (c.status || '').toLowerCase();
-        return status === 'courtesy hold' || status === 'hold' || status === 'offer';
-      });
+      addLog('✅ Step 2 Complete: Bookings data captured from API', 'success');
       
-      setState(prev => ({ ...prev, status: 'running_step_3' }));
-      addLog(`✅ Step 3: Skipping - ${step2CourtesyHolds.length > 0 ? step2CourtesyHolds.length + ' courtesy hold(s) already in bookings API' : 'no courtesy holds'} (integrated with Step 2)`, 'success');
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Step 3: Removed - courtesy holds are in Step 2's API (bookingStatus='OF')
+      // No need to navigate to a separate page
       
       // Step 4: Navigate to loyalty programs page
       setState(prev => ({ ...prev, status: 'running_step_4' }));
-      addLog('🚀 ====== STEP 4: LOYALTY PROGRAMS ======', 'info');
-      addLog('Step 4: Navigating to loyalty programs page...', 'info');
+      addLog('🚀 ====== STEP 3: LOYALTY PROGRAMS ======', 'info');
+      addLog('Step 3: Navigating to loyalty programs page...', 'info');
       
       try {
         if (webViewRef.current) {
@@ -664,15 +659,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             true;
           `);
           
-          addLog('⏳ Waiting for loyalty API to load (max 8 seconds)...', 'info');
+          addLog('⏳ Waiting 4 seconds for loyalty API to load...', 'info');
           
-          // Wait for network monitor to capture and process the loyalty payload
-          // The network monitor will auto-complete the step when it processes the payload
-          await waitForStepComplete(4, 8000);
+          // Wait 4 seconds for the page to load and network monitor to capture the API call
+          // Network monitor will automatically process and send the payload
+          await waitForStepComplete(4, 4000);
         }
       } catch (step4Error) {
         addLog(`Step 4 error: ${step4Error} - continuing without loyalty data`, 'warning');
       }
+      
+      addLog('✅ Step 3 Complete: Loyalty data captured from API', 'success');
       
       addLog('All steps completed successfully! Ready to sync.', 'success');
       
@@ -759,7 +756,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Ingestion failed: ${error}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
-  }, [state.status, state.scrapePricingAndItinerary, state.extractedBookedCruises, addLog, config, cruiseLine]);
+  }, [state.status, state.scrapePricingAndItinerary, addLog, config, cruiseLine]);
 
   const exportOffersCSV = useCallback(async () => {
     try {

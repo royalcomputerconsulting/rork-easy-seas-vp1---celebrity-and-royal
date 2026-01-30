@@ -446,7 +446,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         console.log('[CoreData] Found existing booked data, processing...');
         
         // Filter out any mock/demo cruises if real data exists
-        const nonMockCruises = parsedBookedData.filter(cruise => 
+        const nonMockCruises = parsedBookedData.filter((cruise: BookedCruise) => 
           !cruise.id?.includes('demo-') && 
           !cruise.id?.includes('booked-virtual') &&
           cruise.reservationNumber !== 'DEMO123' &&
@@ -514,7 +514,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.log('[CoreData] Loaded data summary:', {
         cruises: cruisesData ? JSON.parse(cruisesData).length : 0,
         booked: finalBookedCount,
-        offers: parsedOffers.length,
+        offers: parsedOffersData.length,
         events: parsedEvents.length,
         hasImportedData: hasImported,
       });
