@@ -68,7 +68,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const [state, setState] = useState<RoyalCaribbeanSyncState>(INITIAL_STATE);
   const [cruiseLine, setCruiseLine] = useState<CruiseLine>(DEFAULT_CRUISE_LINE);
   const [extendedLoyaltyData, setExtendedLoyaltyData] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
-  const [staySignedIn, setStaySignedIn] = useState(false);
+  const [staySignedIn, setStaySignedIn] = useState(true);
   const webViewRef = useRef<WebView | null>(null);
   const stepCompleteResolvers = useRef<{ [key: number]: () => void }>({});
   const progressCallbacks = useRef<{ onProgress?: () => void }>({});
@@ -77,18 +77,24 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const config = CRUISE_LINE_CONFIG[cruiseLine];
 
   useEffect(() => {
-    const loadStaySignedInPreference = async () => {
+    const ensureStaySignedInDefault = async () => {
       try {
         const preference = await AsyncStorage.getItem('stay_signed_in');
-        if (preference === 'true') {
+        if (preference == null) {
+          await AsyncStorage.setItem('stay_signed_in', 'true');
           setStaySignedIn(true);
-          console.log('[RoyalCaribbeanSync] Stay signed in preference loaded: enabled');
+          console.log('[RoyalCaribbeanSync] Stay signed in default applied (first run)');
+          return;
         }
+
+        const enabled = preference === 'true';
+        setStaySignedIn(enabled);
+        console.log('[RoyalCaribbeanSync] Stay signed in preference loaded:', enabled ? 'enabled' : 'disabled');
       } catch (error) {
         console.error('[RoyalCaribbeanSync] Failed to load stay signed in preference:', error);
       }
     };
-    loadStaySignedInPreference();
+    ensureStaySignedInDefault();
   }, []);
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
@@ -276,7 +282,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           setState(prev => ({
             ...prev,
             loyaltyData: {
-              ...prev.loyaltyData,
+              ...(prev.loyaltyData ?? {}),
               clubRoyaleTier: converted.clubRoyaleTierFromApi,
               clubRoyalePoints: converted.clubRoyalePointsFromApi?.toString(),
               crownAndAnchorLevel: converted.crownAndAnchorTier,
@@ -311,7 +317,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         setState(prev => ({
           ...prev,
           loyaltyData: {
-            ...prev.loyaltyData,
+            ...(prev.loyaltyData ?? {}),
             clubRoyaleTier: converted.clubRoyaleTierFromApi,
             clubRoyalePoints: converted.clubRoyalePointsFromApi?.toString(),
             crownAndAnchorLevel: converted.crownAndAnchorTier,
@@ -533,7 +539,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           setState(prev => ({
             ...prev,
             loyaltyData: {
-              ...prev.loyaltyData,
+              ...(prev.loyaltyData ?? {}),
               clubRoyaleTier: convertedLoyalty.clubRoyaleTierFromApi,
               clubRoyalePoints: convertedLoyalty.clubRoyalePointsFromApi?.toString(),
               crownAndAnchorLevel: convertedLoyalty.crownAndAnchorTier,
@@ -1018,7 +1024,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState(prev => ({
         ...prev,
         loyaltyData: {
-          ...prev.loyaltyData,
+          ...(prev.loyaltyData ?? {}),
           clubRoyaleTier: data.clubRoyaleTierFromApi,
           clubRoyalePoints: data.clubRoyalePointsFromApi?.toString(),
           crownAndAnchorLevel: data.crownAndAnchorTier,

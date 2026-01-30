@@ -172,19 +172,57 @@ function OverviewScreenContent() {
       if (offer.expiryDate && getDaysUntil(offer.expiryDate) < 0) {
         return;
       }
-      
+
       const key = offer.offerCode || offer.id;
-      if (!offersMap.has(key)) {
+      const existing = offersMap.get(key);
+
+      const rawName = (offer.offerName || offer.title || '').trim();
+      const offerName = rawName.length > 0 ? rawName : 'Casino Offer';
+
+      const tradeInValue =
+        offer.tradeInValue ?? offer.value ?? offer.offerValue ?? offer.totalValue ?? undefined;
+
+      const obc = offer.obcAmount ?? offer.OBC ?? undefined;
+      const expiryDate = offer.expiryDate || offer.expires || offer.offerExpiryDate || undefined;
+
+      if (!existing) {
         offersMap.set(key, {
           id: offer.id,
           offerCode: offer.offerCode || offer.id,
-          offerName: offer.offerName || offer.title || 'Casino Offer',
-          expiryDate: offer.expiryDate,
-          tradeInValue: offer.value,
-          freePlay: 0,
-          obc: offer.obcAmount,
-          perks: [],
+          offerName,
+          expiryDate,
+          tradeInValue,
+          freePlay: offer.freePlay ?? offer.freeplayAmount ?? 0,
+          obc,
+          perks: offer.perks ?? [],
           cruises: [],
+        });
+        return;
+      }
+
+      const shouldUpgradeName = existing.offerName === 'Casino Offer' && offerName !== 'Casino Offer';
+      const shouldUpgradeExpiry = !existing.expiryDate && !!expiryDate;
+      const shouldUpgradeValue = existing.tradeInValue == null && tradeInValue != null;
+      const shouldUpgradeOBC = existing.obc == null && obc != null;
+      const shouldUpgradeFreePlay = (existing.freePlay ?? 0) === 0 && (offer.freePlay ?? offer.freeplayAmount ?? 0) > 0;
+      const shouldUpgradePerks = (existing.perks?.length ?? 0) === 0 && (offer.perks?.length ?? 0) > 0;
+
+      if (
+        shouldUpgradeName ||
+        shouldUpgradeExpiry ||
+        shouldUpgradeValue ||
+        shouldUpgradeOBC ||
+        shouldUpgradeFreePlay ||
+        shouldUpgradePerks
+      ) {
+        offersMap.set(key, {
+          ...existing,
+          offerName: shouldUpgradeName ? offerName : existing.offerName,
+          expiryDate: shouldUpgradeExpiry ? expiryDate : existing.expiryDate,
+          tradeInValue: shouldUpgradeValue ? tradeInValue : existing.tradeInValue,
+          obc: shouldUpgradeOBC ? obc : existing.obc,
+          freePlay: shouldUpgradeFreePlay ? (offer.freePlay ?? offer.freeplayAmount ?? 0) : existing.freePlay,
+          perks: shouldUpgradePerks ? (offer.perks ?? []) : existing.perks,
         });
       }
     });

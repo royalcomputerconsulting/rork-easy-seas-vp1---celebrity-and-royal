@@ -254,7 +254,7 @@ function RoyalCaribbeanSyncScreen() {
           </View>
         </View>
 
-        {Platform.OS !== 'web' && (
+        {false && Platform.OS !== 'web' && (
           <View style={styles.staySignedInContainer}>
             <View style={styles.staySignedInInfo}>
               <Text style={styles.staySignedInLabel}>Stay Signed In</Text>
