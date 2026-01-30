@@ -135,11 +135,12 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
     const apiKey = (
       process.env.EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY ??
-      process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY ??
+      process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ??
       process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ??
+      process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ??
       process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ??
       process.env.EXPO_PUBLIC_REVENUECAT_KEY ??
-      ''
+      'appl_ByMylGXTSwaAUxxRUwhteOFaJjL'
     ).trim();
 
     if (!apiKey) {
@@ -148,10 +149,12 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       console.warn('[Entitlement] Missing RevenueCat Public SDK Key.', {
         tried: [
           'EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY',
-          'EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY',
+          'EXPO_PUBLIC_REVENUECAT_TEST_API_KEY',
           'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY',
+          'EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY',
           'EXPO_PUBLIC_REVENUECAT_API_KEY',
           'EXPO_PUBLIC_REVENUECAT_KEY',
+          '(hardcoded fallback key)',
         ],
       });
       return null;
