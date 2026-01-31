@@ -166,7 +166,7 @@ export default function SchedulingScreen() {
     
     const sets = findBackToBackSets(cruises, bookedDates, {
       maxGapDays: 2,
-      requireDifferentOffers: false,
+      requireDifferentOffers: true,
       excludeConflicts: bookedDates.size > 0,
       minChainLength: 2,
     });

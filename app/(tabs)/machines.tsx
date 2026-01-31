@@ -167,7 +167,7 @@ export default function AtlasScreen() {
 
 
   const filteredMachines = useMemo(() => {
-    let filtered = [...myAtlasMachines];
+    let filtered = [...encyclopedia];
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -198,7 +198,7 @@ export default function AtlasScreen() {
       if (!a.isFavorite && b.isFavorite) return 1;
       return a.machineName.localeCompare(b.machineName);
     });
-  }, [myAtlasMachines, searchQuery, activeFilter, selectedManufacturer, selectedShip]);
+  }, [encyclopedia, searchQuery, activeFilter, selectedManufacturer, selectedShip]);
 
   const letterToIndex = useMemo(() => {
     const map: Record<string, number> = {};
