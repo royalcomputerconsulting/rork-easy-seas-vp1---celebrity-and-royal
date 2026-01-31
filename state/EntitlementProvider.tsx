@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import Constants from 'expo-constants';
 import type { CustomerInfo, PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
+import { useAuth } from './AuthProvider';
 
 type PurchasesModule = {
   getOfferings: () => Promise<{ all?: Record<string, PurchasesOffering> }>;
@@ -99,6 +100,7 @@ async function safeOpenURL(url: string): Promise<void> {
 }
 
 export const [EntitlementProvider, useEntitlement] = createContextHook((): EntitlementState => {
+  const auth = useAuth();
   const [isPro, setIsPro] = useState<boolean>(false);
   const [source, setSource] = useState<EntitlementSource>('unknown');
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
@@ -383,12 +385,42 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
     try {
       setIsLoading(true);
+      
+      let hasWhitelistAccess = false;
+      if (auth.isWhitelisted && auth.authenticatedEmail) {
+        console.log('[Entitlement] Whitelisted email detected during restore:', auth.authenticatedEmail);
+        hasWhitelistAccess = true;
+        
+        setIsPro(true);
+        setSource('dev');
+        setLastCheckedAt(new Date().toISOString());
+        
+        const wasPro = lastIsProRef.current;
+        lastIsProRef.current = true;
+        
+        if (!wasPro) {
+          try {
+            if (typeof window !== 'undefined') {
+              console.log('[Entitlement] Dispatching entitlementProUnlocked event for whitelisted user');
+              window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
+            }
+          } catch (e) {
+            console.error('[Entitlement] Failed to dispatch entitlementProUnlocked event', e);
+          }
+        }
+      }
+      
       const purchases = await ensurePurchasesLoaded();
       if (!purchases) {
         const message = purchasesInitError ?? 'In-app purchases are not configured.';
         console.warn('[Entitlement] restore: Purchases unavailable', { message });
-        Alert.alert('Not Available', message);
-        setError(message);
+        
+        if (hasWhitelistAccess) {
+          Alert.alert('Success', 'Full access unlocked via whitelisted email.');
+        } else {
+          Alert.alert('Not Available', message);
+          setError(message);
+        }
         return;
       }
 
@@ -397,8 +429,24 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         activeSubscriptions: info?.activeSubscriptions ?? [],
       });
       if (!mountedRef.current) return;
-      setStateFromCustomerInfo(info);
-      Alert.alert('Restored', computeIsProFromCustomerInfo(info) ? 'Pro restored successfully.' : 'No active subscription found.');
+      
+      const hasActivePurchase = computeIsProFromCustomerInfo(info);
+      
+      if (hasActivePurchase) {
+        setStateFromCustomerInfo(info);
+      }
+      
+      if (!mountedRef.current) return;
+      
+      if (hasWhitelistAccess && hasActivePurchase) {
+        Alert.alert('Success', 'Full access unlocked via whitelisted email and active subscription restored.');
+      } else if (hasWhitelistAccess) {
+        Alert.alert('Success', 'Full access unlocked via whitelisted email.');
+      } else if (hasActivePurchase) {
+        Alert.alert('Restored', 'Pro restored successfully.');
+      } else {
+        Alert.alert('Restored', 'No active subscription found.');
+      }
     } catch (e) {
       console.error('[Entitlement] restore failed', e);
       const message = e instanceof Error ? e.message : 'Restore failed.';
@@ -410,7 +458,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       if (!mountedRef.current) return;
       setIsLoading(false);
     }
-  }, [ensurePurchasesLoaded, setStateFromCustomerInfo]);
+  }, [auth.isWhitelisted, auth.authenticatedEmail, ensurePurchasesLoaded, setStateFromCustomerInfo]);
 
   const openManageSubscription = useCallback(async () => {
     await safeOpenURL(MANAGE_SUBS_URL);
