@@ -37,7 +37,7 @@ export default function AtlasScreen() {
   const entitlement = useEntitlement();
   const auth = useAuth();
 
-  const FREE_MACHINE_PREVIEW_LIMIT = 8;
+
 
   const listRef = useRef<FlatList<MachineEncyclopediaEntry> | null>(null);
   const scrollOffsetRef = useRef<number>(0);
@@ -283,12 +283,7 @@ export default function AtlasScreen() {
     setSelectedShip('');
   }, []);
 
-  const handleMachinePress = useCallback((id: string, locked: boolean) => {
-    if (locked) {
-      console.log('[Atlas] Locked machine tapped - opening paywall', { id });
-      router.push('/paywall' as any);
-      return;
-    }
+  const handleMachinePress = useCallback((id: string) => {
     router.push(`/machine-detail/${id}` as any);
   }, [router]);
 
@@ -353,22 +348,20 @@ export default function AtlasScreen() {
 
   const renderMachineItem = useCallback(
     ({ item, index }: { item: (typeof filteredMachines)[number]; index: number }) => {
-      const locked = !(entitlement.isPro || auth.isWhitelisted) && index >= FREE_MACHINE_PREVIEW_LIMIT;
-
       return (
         <View style={[styles.gridItem, index % 2 === 1 && styles.gridItemRight]}>
           <AtlasCard
             machine={item}
-            onPress={() => handleMachinePress(item.id, locked)}
+            onPress={() => handleMachinePress(item.id)}
             isFavorite={item.isFavorite}
             onToggleFavorite={() => handleToggleFavorite(item.id)}
             compact={true}
-            locked={locked}
+            locked={false}
           />
         </View>
       );
     },
-    [FREE_MACHINE_PREVIEW_LIMIT, entitlement.isPro, auth.isWhitelisted, handleMachinePress, handleToggleFavorite]
+    [handleMachinePress, handleToggleFavorite]
   );
 
   const listHeader = useMemo(() => {
@@ -401,7 +394,7 @@ export default function AtlasScreen() {
                 <Text style={styles.proBadgeText}>PRO</Text>
               </View>
               <Text style={styles.proBannerText}>
-                Preview: {FREE_MACHINE_PREVIEW_LIMIT} machines. Locked items show a lock.
+                All machines unlocked. Subscribe to sync your data.
               </Text>
             </View>
 
@@ -632,7 +625,6 @@ export default function AtlasScreen() {
       </>
     );
   }, [
-    FREE_MACHINE_PREVIEW_LIMIT,
     activeFilter,
     entitlement,
     favoriteMachines.length,
