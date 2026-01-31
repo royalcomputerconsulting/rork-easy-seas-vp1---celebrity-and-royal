@@ -579,11 +579,21 @@ export function findBackToBackSets(
     };
   });
 
-  console.log('[B2B Finder] Final result:', b2bSets.length, 'back-to-back sets');
+  const filteredSets = b2bSets.filter(set => set.totalNights <= 14);
 
-  return b2bSets.sort((a, b) => 
-    createDateFromString(a.startDate).getTime() - createDateFromString(b.startDate).getTime()
-  );
+  console.log('[B2B Finder] Final result before 14-night filter:', b2bSets.length, 'back-to-back sets');
+  console.log('[B2B Finder] Filtered sets (≤14 nights):', filteredSets.length, 'back-to-back sets');
+  
+  if (b2bSets.length > filteredSets.length) {
+    console.log('[B2B Finder] Excluded', b2bSets.length - filteredSets.length, 'sets exceeding 14 nights');
+  }
+
+  return filteredSets.sort((a, b) => {
+    if (a.totalNights !== b.totalNights) {
+      return a.totalNights - b.totalNights;
+    }
+    return createDateFromString(a.startDate).getTime() - createDateFromString(b.startDate).getTime();
+  });
 }
 
 export function convertSetsToDisplayCruises(sets: BackToBackSet[]): BackToBackCruiseDisplay[] {
