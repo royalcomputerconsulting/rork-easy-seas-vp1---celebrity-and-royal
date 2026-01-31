@@ -1,10 +1,10 @@
-import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useMemo, useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download, Anchor, Crown, Star, Award } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download, Anchor, Crown, Star, Award, ArrowLeft } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -243,6 +243,15 @@ function RoyalCaribbeanSyncScreen() {
       
       <View style={styles.container}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <TouchableOpacity 
+          style={styles.backButtonTop}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <ArrowLeft size={20} color="#fff" strokeWidth={2.5} />
+          <Text style={styles.backButtonTopText}>Back</Text>
+        </TouchableOpacity>
+
         <View style={styles.cruiseLineToggleContainer}>
           <View style={styles.cruiseLineOption}>
             <Anchor size={18} color={!isCelebrity ? '#60a5fa' : '#64748b'} />
@@ -781,6 +790,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0f172a'
+  },
+  backButtonTop: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    margin: 12,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+  },
+  backButtonTopText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700' as const,
   },
   scrollView: {
     flex: 1
