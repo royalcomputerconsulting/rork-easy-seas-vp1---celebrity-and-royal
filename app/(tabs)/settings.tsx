@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useMemo, useEffect } from 'react';
+import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -115,6 +115,8 @@ export default function SettingsScreen() {
   const [isLoadingWhitelist, setIsLoadingWhitelist] = useState(false);
   const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   const [isUserManualVisible, setIsUserManualVisible] = useState(false);
+  const [secretTapCount, setSecretTapCount] = useState(0);
+  const secretTapTimer = useRef<NodeJS.Timeout | null>(null);
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
@@ -913,6 +915,96 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
     });
   }, []);
 
+  const handleSecretUnlock = useCallback(() => {
+    setSecretTapCount(prev => {
+      const newCount = prev + 1;
+      
+      if (secretTapTimer.current) {
+        clearTimeout(secretTapTimer.current);
+      }
+      
+      secretTapTimer.current = setTimeout(() => {
+        setSecretTapCount(0);
+      }, 2000);
+      
+      if (newCount >= 3) {
+        setSecretTapCount(0);
+        if (secretTapTimer.current) {
+          clearTimeout(secretTapTimer.current);
+        }
+        
+        Alert.prompt(
+          'Developer Access',
+          'Enter password:',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+            {
+              text: 'Unlock',
+              onPress: async (password?: string) => {
+                if (password === 'a1') {
+                  try {
+                    console.log('[Settings] Secret unlock activated - granting full access');
+                    
+                    await AsyncStorage.setItem(KEYS.WEB_IS_PRO, 'true');
+                    
+                    if (!mountedRef.current) return;
+                    
+                    entitlement.refresh();
+                    
+                    Alert.alert(
+                      '🔓 Full Access Unlocked',
+                      'Developer mode activated. All pro features are now available.',
+                      [
+                        {
+                          text: 'OK',
+                          onPress: () => {
+                            try {
+                              if (typeof window !== 'undefined') {
+                                console.log('[Settings] Dispatching entitlementProUnlocked event');
+                                window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
+                              }
+                            } catch (e) {
+                              console.error('[Settings] Failed to dispatch event', e);
+                            }
+                          }
+                        }
+                      ]
+                    );
+                  } catch (error) {
+                    console.error('[Settings] Secret unlock error:', error);
+                    Alert.alert('Error', 'Failed to unlock. Please try again.');
+                  }
+                } else {
+                  Alert.alert('Incorrect Password', 'Access denied.');
+                }
+              },
+            },
+          ],
+          'secure-text'
+        );
+      }
+      
+      return newCount;
+    });
+  }, [entitlement]);
+
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (secretTapTimer.current) {
+        clearTimeout(secretTapTimer.current);
+      }
+    };
+  }, []);
+
+  const KEYS = {
+    WEB_IS_PRO: 'easyseas_entitlements_web_is_pro',
+  } as const;
+
   const handleSavePlayingHours = useCallback(async (playingHours: PlayingHours) => {
     try {
       setIsSavingPlayingHours(true);
@@ -1435,12 +1527,33 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                 undefined,
                 () => entitlement.openPrivacyPolicy()
               )}
-              {renderSettingRow(
-                <Shield size={18} color={COLORS.navyDeep} />,
-                'Terms of Use (EULA)',
-                undefined,
-                () => entitlement.openTerms()
-              )}
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    {renderSettingRow(
+                      <Shield size={18} color={COLORS.navyDeep} />,
+                      'Terms of Use (EULA)',
+                      undefined,
+                      () => entitlement.openTerms()
+                    )}
+                  </View>
+                  <TouchableOpacity 
+                    onPress={handleSecretUnlock}
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      width: 60,
+                      height: '100%',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      opacity: 0.01,
+                    }}
+                    activeOpacity={0.01}
+                  >
+                    <Text style={{ color: '#E0F7FA', fontSize: 1 }}>🔓</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           </View>
 

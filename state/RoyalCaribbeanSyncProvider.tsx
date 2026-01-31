@@ -182,11 +182,25 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             const newOffers = [...prev.extractedOffers, ...(message.data as OfferRow[])];
             const batch = message.data as OfferRow[];
             const offerName = batch[0]?.offerName || 'Unknown Offer';
+            const offerCode = batch[0]?.offerCode || 'N/A';
             console.log(`[RoyalCaribbeanSync] Batch received: ${message.data.length} items, total now: ${newOffers.length}`);
             
-            // Show offer name for the first item in the batch
+            // Show detailed offer information
             if (batch[0]?.offerName) {
-              addLog(`✅ Captured casino offer "${offerName}" with ${message.data.length} sailing(s)`, 'success');
+              addLog(`✅ Captured casino offer "${offerName}" (Code: ${offerCode})`, 'success');
+              addLog(`   📊 Captured ${message.data.length} sailing(s) for this offer`, 'success');
+              
+              // Show first few sailings as examples
+              const sampleSailings = batch.slice(0, Math.min(3, batch.length));
+              sampleSailings.forEach((sailing, idx) => {
+                if (sailing.shipName && sailing.sailingStartDate) {
+                  addLog(`   🚢 Sailing ${idx + 1}: ${sailing.shipName} - ${sailing.sailingStartDate}`, 'success');
+                }
+              });
+              
+              if (batch.length > 3) {
+                addLog(`   ➕ ...and ${batch.length - 3} more sailing(s)`, 'success');
+              }
             }
             
             return {
@@ -206,10 +220,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             const newCruises = [...prev.extractedBookedCruises, ...(message.data as BookedCruiseRow[])];
             console.log(`[RoyalCaribbeanSync] Cruise batch received: ${message.data.length} items, total now: ${newCruises.length}`);
             
-            // Show detailed cruise capture info
+            // Show detailed cruise capture info with more context
             const batch = message.data as BookedCruiseRow[];
-            batch.forEach(cruise => {
-              addLog(`✅ Captured cruise: ${cruise.shipName} - ${cruise.sailingStartDate} (${cruise.numberOfNights} nights)`, 'success');
+            addLog(`✅ Captured ${batch.length} cruise booking(s)`, 'success');
+            batch.forEach((cruise, idx) => {
+              const cabinInfo = cruise.cabinNumberOrGTY ? ` - Cabin ${cruise.cabinNumberOrGTY}` : '';
+              const statusInfo = cruise.status ? ` [${cruise.status}]` : '';
+              addLog(`   🚢 Cruise ${idx + 1}: ${cruise.shipName} - ${cruise.sailingStartDate} (${cruise.numberOfNights} nights)${cabinInfo}${statusInfo}`, 'success');
             });
             
             return {
@@ -311,10 +328,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           
           addLog('✅ Captured loyalty data from Royal Caribbean API', 'success');
           if (converted.clubRoyalePointsFromApi !== undefined) {
-            addLog(`✅ Captured Club Royale tier: "${converted.clubRoyaleTierFromApi || 'N/A'}" with ${converted.clubRoyalePointsFromApi.toLocaleString()} points`, 'success');
+            addLog(`   🎰 Club Royale Status`, 'success');
+            addLog(`   📊 Tier: "${converted.clubRoyaleTierFromApi || 'N/A'}"`, 'success');
+            addLog(`   💎 Points: ${converted.clubRoyalePointsFromApi.toLocaleString()}`, 'success');
           }
           if (converted.crownAndAnchorPointsFromApi !== undefined) {
-            addLog(`✅ Captured Crown & Anchor tier: "${converted.crownAndAnchorTier || 'N/A'}" with ${converted.crownAndAnchorPointsFromApi.toLocaleString()} points`, 'success');
+            addLog(`   ⚓ Crown & Anchor Society`, 'success');
+            addLog(`   📊 Level: "${converted.crownAndAnchorTier || 'N/A'}"`, 'success');
+            addLog(`   💎 Points: ${converted.crownAndAnchorPointsFromApi.toLocaleString()}`, 'success');
           }
         } else if (!hasReceivedApiLoyaltyData) {
           // This is DOM fallback data
@@ -346,16 +367,24 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         
         addLog('✅ Captured loyalty data from API (authoritative source)', 'success');
         if (converted.clubRoyalePointsFromApi !== undefined) {
-          addLog(`✅ Captured Club Royale tier: "${converted.clubRoyaleTierFromApi || 'N/A'}" with ${converted.clubRoyalePointsFromApi.toLocaleString()} points`, 'success');
+          addLog(`   🎰 Club Royale Status`, 'success');
+          addLog(`   📊 Tier: "${converted.clubRoyaleTierFromApi || 'N/A'}"`, 'success');
+          addLog(`   💎 Points: ${converted.clubRoyalePointsFromApi.toLocaleString()}`, 'success');
         }
         if (converted.crownAndAnchorPointsFromApi !== undefined) {
-          addLog(`✅ Captured Crown & Anchor tier: "${converted.crownAndAnchorTier || 'N/A'}" with ${converted.crownAndAnchorPointsFromApi.toLocaleString()} points`, 'success');
+          addLog(`   ⚓ Crown & Anchor Society`, 'success');
+          addLog(`   📊 Level: "${converted.crownAndAnchorTier || 'N/A'}"`, 'success');
+          addLog(`   💎 Points: ${converted.crownAndAnchorPointsFromApi.toLocaleString()}`, 'success');
         }
         if (converted.captainsClubPoints !== undefined && converted.captainsClubPoints > 0) {
-          addLog(`✅ Captured Captain's Club tier: "${converted.captainsClubTier || 'N/A'}" with ${converted.captainsClubPoints.toLocaleString()} points`, 'success');
+          addLog(`   🌟 Captain's Club Status`, 'success');
+          addLog(`   📊 Tier: "${converted.captainsClubTier || 'N/A'}"`, 'success');
+          addLog(`   💎 Points: ${converted.captainsClubPoints.toLocaleString()}`, 'success');
         }
         if (converted.celebrityBlueChipPoints !== undefined && converted.celebrityBlueChipPoints > 0) {
-          addLog(`✅ Captured Blue Chip Club tier: "${converted.celebrityBlueChipTier || 'N/A'}" with ${converted.celebrityBlueChipPoints.toLocaleString()} points`, 'success');
+          addLog(`   🎲 Blue Chip Club Status`, 'success');
+          addLog(`   📊 Tier: "${converted.celebrityBlueChipTier || 'N/A'}"`, 'success');
+          addLog(`   💎 Points: ${converted.celebrityBlueChipPoints.toLocaleString()}`, 'success');
         }
         break;
 
@@ -569,10 +598,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           
           addLog('✅ Captured loyalty data from network capture', 'success');
           if (convertedLoyalty.clubRoyalePointsFromApi !== undefined) {
-            addLog(`✅ Captured Club Royale tier: "${convertedLoyalty.clubRoyaleTierFromApi || 'N/A'}" with ${convertedLoyalty.clubRoyalePointsFromApi.toLocaleString()} points`, 'success');
+            addLog(`   🎰 Club Royale Status`, 'success');
+            addLog(`   📊 Tier: "${convertedLoyalty.clubRoyaleTierFromApi || 'N/A'}"`, 'success');
+            addLog(`   💎 Points: ${convertedLoyalty.clubRoyalePointsFromApi.toLocaleString()}`, 'success');
           }
           if (convertedLoyalty.crownAndAnchorPointsFromApi !== undefined) {
-            addLog(`✅ Captured Crown & Anchor tier: "${convertedLoyalty.crownAndAnchorTier || 'N/A'}" with ${convertedLoyalty.crownAndAnchorPointsFromApi.toLocaleString()} points`, 'success');
+            addLog(`   ⚓ Crown & Anchor Society`, 'success');
+            addLog(`   📊 Level: "${convertedLoyalty.crownAndAnchorTier || 'N/A'}"`, 'success');
+            addLog(`   💎 Points: ${convertedLoyalty.crownAndAnchorPointsFromApi.toLocaleString()}`, 'success');
           }
           
           // Auto-complete Step 3 if we're in that step (loyalty step)
