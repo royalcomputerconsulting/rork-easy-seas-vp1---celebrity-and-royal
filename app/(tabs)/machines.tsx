@@ -394,7 +394,7 @@ export default function AtlasScreen() {
                 <Text style={styles.proBadgeText}>PRO</Text>
               </View>
               <Text style={styles.proBannerText}>
-                All machines unlocked. Subscribe to sync your data.
+                GET EASY SEAS PRO
               </Text>
             </View>
 
