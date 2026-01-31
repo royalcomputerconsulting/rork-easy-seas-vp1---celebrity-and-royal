@@ -198,7 +198,7 @@ export function W2GTracker({ records, onAddRecord, onRemoveRecord }: W2GTrackerP
                 style={styles.input}
                 value={newDate}
                 onChangeText={setNewDate}
-                placeholder="YYYY-MM-DD"
+                placeholder="MM-DD-YYYY"
                 placeholderTextColor={COLORS.textSecondary}
               />
 

@@ -56,7 +56,10 @@ export function transformApiBookingToBookedCruiseRow(
   } else {
     const startDate = new Date(sailDate);
     startDate.setDate(startDate.getDate() + booking.numberOfNights);
-    sailingEndDate = startDate.toISOString().split('T')[0];
+    const month = String(startDate.getMonth() + 1).padStart(2, '0');
+    const day = String(startDate.getDate()).padStart(2, '0');
+    const year = String(startDate.getFullYear());
+    sailingEndDate = `${month}-${day}-${year}`;
   }
   
   const status = isCourtesyHold(booking) ? 'Courtesy Hold' : 'Upcoming';
@@ -161,7 +164,10 @@ export function transformApiBookingToBookedCruise(
   } else {
     const startDate = new Date(sailDate);
     startDate.setDate(startDate.getDate() + booking.numberOfNights);
-    sailingEndDate = startDate.toISOString().split('T')[0];
+    const month = String(startDate.getMonth() + 1).padStart(2, '0');
+    const day = String(startDate.getDate()).padStart(2, '0');
+    const year = String(startDate.getFullYear());
+    sailingEndDate = `${month}-${day}-${year}`;
   }
   
   const status = isCourtesyHold(booking) ? 'available' : 'booked';

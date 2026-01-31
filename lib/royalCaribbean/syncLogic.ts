@@ -122,11 +122,14 @@ function normalizeShipName(shipName: string | undefined): string {
 
 function normalizeSailDate(sailDate: string | undefined): string {
   if (!sailDate) return '';
-  // Try to normalize to YYYY-MM-DD format
+  // Normalize to MM-DD-YYYY format
   try {
     const date = new Date(sailDate);
     if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0];
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const year = String(date.getFullYear());
+      return `${month}-${day}-${year}`;
     }
   } catch {
     // Fall through

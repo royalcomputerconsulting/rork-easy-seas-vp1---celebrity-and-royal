@@ -310,17 +310,22 @@ export function parseRCDate(dateStr: string): string {
     const year = dateStr.substring(0, 4);
     const month = dateStr.substring(4, 6);
     const day = dateStr.substring(6, 8);
-    return `${year}-${month}-${day}`;
+    return `${month}-${day}-${year}`;
   }
   
   if (dateStr.includes('T')) {
-    return dateStr.split('T')[0];
+    const isoDate = dateStr.split('T')[0];
+    const [year, month, day] = isoDate.split('-');
+    return `${month}-${day}-${year}`;
   }
   
   try {
     const date = new Date(dateStr);
     if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0];
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const year = String(date.getFullYear());
+      return `${month}-${day}-${year}`;
     }
   } catch {
     console.warn('[parseRCDate] Failed to parse date:', dateStr);

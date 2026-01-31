@@ -31,27 +31,31 @@ export function normalizeDateString(dateStr: string): string {
 
   const cleaned = dateStr.trim();
 
+  // M/D/YYYY or MM/DD/YYYY format - convert to MM-DD-YYYY
   if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(cleaned)) {
     const [month, day, year] = cleaned.split('/');
     const fullYear = year.length === 2 ? `20${year}` : year;
-    return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    return `${month.padStart(2, '0')}-${day.padStart(2, '0')}-${fullYear}`;
   }
 
+  // MM-DD-YYYY format - already correct, just ensure padding
   if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(cleaned)) {
     const [month, day, year] = cleaned.split('-');
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    return `${month.padStart(2, '0')}-${day.padStart(2, '0')}-${year}`;
   }
 
+  // YYYY-MM-DD format (ISO) - convert to MM-DD-YYYY
   if (/^\d{4}-\d{2}-\d{2}/.test(cleaned)) {
     const [year, month, day] = cleaned.split('T')[0].split('-');
-    return `${year}-${month}-${day}`;
+    return `${month}-${day}-${year}`;
   }
 
+  // YYYYMMDD format - convert to MM-DD-YYYY
   if (/^\d{8}$/.test(cleaned)) {
     const year = cleaned.slice(0, 4);
     const month = cleaned.slice(4, 6);
     const day = cleaned.slice(6, 8);
-    return `${year}-${month}-${day}`;
+    return `${month}-${day}-${year}`;
   }
 
   return cleaned;
@@ -62,17 +66,24 @@ export function calculateReturnDate(sailDate: string, nights: number): string {
     const parts = sailDate.split('-');
     let date: Date;
     
-    if (parts[0].length === 4) {
-      date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-    } else {
+    // MM-DD-YYYY format
+    if (parts[0].length === 2 && parts[2].length === 4) {
       date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+    }
+    // YYYY-MM-DD format (ISO)
+    else if (parts[0].length === 4) {
+      date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    // Fallback
+    else {
+      date = new Date(sailDate);
     }
     
     date.setDate(date.getDate() + nights);
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const year = date.getFullYear();
-    return `${year}-${month}-${day}`;
+    return `${month}-${day}-${year}`;
   } catch {
     return sailDate;
   }

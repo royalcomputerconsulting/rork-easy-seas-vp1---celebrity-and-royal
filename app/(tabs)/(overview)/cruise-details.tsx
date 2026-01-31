@@ -1470,7 +1470,7 @@ export default function CruiseDetailsScreen() {
 
               <View style={styles.inputRow}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>Sail Date (YYYY-MM-DD)</Text>
+                  <Text style={styles.inputLabel}>Sail Date (MM-DD-YYYY)</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.sailDate}

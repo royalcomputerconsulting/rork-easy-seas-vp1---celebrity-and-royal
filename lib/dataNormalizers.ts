@@ -164,7 +164,10 @@ export function normalizeDate(value: unknown): NormalizationResult<string> {
   try {
     const parsedDate = createDateFromString(strValue);
     if (!isNaN(parsedDate.getTime())) {
-      const normalizedValue = parsedDate.toISOString().split('T')[0];
+      const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(parsedDate.getDate()).padStart(2, '0');
+      const year = String(parsedDate.getFullYear());
+      const normalizedValue = `${month}-${day}-${year}`;
       wasNormalized = normalizedValue !== strValue;
       return {
         value: normalizedValue,

@@ -17,15 +17,19 @@ function parseDate(dateStr: string): string {
       const day = parseInt(monthNameMatch[2], 10);
       const year = parseInt(monthNameMatch[3], 10);
       if (month !== undefined && !isNaN(day) && !isNaN(year)) {
-        const date = new Date(year, month, day);
-        return date.toISOString().split('T')[0];
+        const monthStr = String(month + 1).padStart(2, '0');
+        const dayStr = String(day).padStart(2, '0');
+        return `${monthStr}-${dayStr}-${year}`;
       }
     }
     
     // Try standard Date parsing
     const date = new Date(dateStr);
     if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0];
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const year = String(date.getFullYear());
+      return `${month}-${day}-${year}`;
     }
   } catch {
     console.warn('Failed to parse date:', dateStr);
@@ -79,7 +83,10 @@ function calculateReturnDate(startDate: string, nights: number): string {
   try {
     const date = new Date(startDate);
     date.setDate(date.getDate() + nights);
-    return date.toISOString().split('T')[0];
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const year = String(date.getFullYear());
+    return `${month}-${day}-${year}`;
   } catch {
     return '';
   }

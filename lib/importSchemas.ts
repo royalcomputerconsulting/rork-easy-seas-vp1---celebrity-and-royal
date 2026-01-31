@@ -5,13 +5,13 @@ export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 export const MAX_ROWS = 50000;
 
 const dateStringSchema = z.string().regex(
-  /^\d{4}-\d{2}-\d{2}$/,
-  'Date must be in YYYY-MM-DD format'
+  /^\d{2}-\d{2}-\d{4}$/,
+  'Date must be in MM-DD-YYYY format'
 );
 
 const optionalDateStringSchema = z.string().regex(
-  /^\d{4}-\d{2}-\d{2}$/,
-  'Date must be in YYYY-MM-DD format'
+  /^\d{2}-\d{2}-\d{4}$/,
+  'Date must be in MM-DD-YYYY format'
 ).optional().or(z.literal(''));
 
 const positiveNumberSchema = z.number().nonnegative('Must be a positive number');
@@ -213,7 +213,7 @@ function generateSuggestions(error: z.ZodIssue): string[] {
       return false;
     });
     if (hasDateInPath) {
-      suggestions.push('Dates should be in YYYY-MM-DD format (e.g., 2025-12-31)');
+      suggestions.push('Dates should be in MM-DD-YYYY format (e.g., 12-31-2025)');
     }
   }
   

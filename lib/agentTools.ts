@@ -669,7 +669,10 @@ export function executeRecommendations(input: RecommendationInput, context: Agen
     const returnDate = createDateFromString(cruise.returnDate);
     let currentDate = new Date(sailDate);
     while (currentDate <= returnDate) {
-      bookedDates.add(currentDate.toISOString().split('T')[0]);
+      const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+      const day = String(currentDate.getDate()).padStart(2, '0');
+      const year = String(currentDate.getFullYear());
+      bookedDates.add(`${month}-${day}-${year}`);
       currentDate.setDate(currentDate.getDate() + 1);
     }
   });
