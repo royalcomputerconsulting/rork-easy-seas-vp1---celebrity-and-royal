@@ -60,7 +60,7 @@ async function withTimeout<T>(
   }
 }
 
-export const PRO_PRODUCT_ID = 'com.easyseas.pro.monthly' as const;
+export const PRO_PRODUCT_ID = 'prod276e8b42c3' as const;
 
 const PRIVACY_URL = 'https://example.com/privacy' as const;
 const TERMS_URL = 'https://example.com/terms' as const;
@@ -287,12 +287,29 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
   const findMonthlyPackage = useCallback((): PurchasesPackage | null => {
     try {
+      const paywallOffering = offerings.find(o => o.identifier === 'PAYWALL');
+      if (paywallOffering) {
+        for (const p of paywallOffering.availablePackages ?? []) {
+          const id = p.product.identifier;
+          console.log('[Entitlement] Checking package in PAYWALL offering:', { id, priceString: p.product.priceString });
+          if (id === PRO_PRODUCT_ID) {
+            console.log('[Entitlement] Found matching package in PAYWALL offering');
+            return p;
+          }
+        }
+      }
+      
+      console.log('[Entitlement] PAYWALL offering not found, searching all offerings');
       for (const offering of offerings) {
         for (const p of offering.availablePackages ?? []) {
           const id = p.product.identifier;
-          if (id === PRO_PRODUCT_ID) return p;
+          if (id === PRO_PRODUCT_ID) {
+            console.log('[Entitlement] Found matching package in offering:', offering.identifier);
+            return p;
+          }
         }
       }
+      console.warn('[Entitlement] No package found with product ID:', PRO_PRODUCT_ID);
       return null;
     } catch (e) {
       console.error('[Entitlement] findMonthlyPackage failed', e);
