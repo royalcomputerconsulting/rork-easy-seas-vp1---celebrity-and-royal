@@ -167,7 +167,7 @@ export default function AtlasScreen() {
 
 
   const filteredMachines = useMemo(() => {
-    let filtered = [...encyclopedia];
+    let filtered = [...myAtlasMachines];
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -189,7 +189,7 @@ export default function AtlasScreen() {
 
     if (selectedShip) {
       filtered = filtered.filter(m => 
-        m.shipAssignments?.some(s => s.shipName === selectedShip)
+        m.shipAssignments?.some((s: any) => s.shipName === selectedShip)
       );
     }
 
@@ -198,7 +198,7 @@ export default function AtlasScreen() {
       if (!a.isFavorite && b.isFavorite) return 1;
       return a.machineName.localeCompare(b.machineName);
     });
-  }, [encyclopedia, searchQuery, activeFilter, selectedManufacturer, selectedShip]);
+  }, [myAtlasMachines, searchQuery, activeFilter, selectedManufacturer, selectedShip]);
 
   const letterToIndex = useMemo(() => {
     const map: Record<string, number> = {};
