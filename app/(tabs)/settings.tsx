@@ -634,17 +634,28 @@ export default function SettingsScreen() {
                 clearLocalData();
                 setLastImportResult(null);
                 
-                console.log('[Settings] Resetting user profile to blank...');
+                console.log('[Settings] Resetting user profile to blank for all cruise lines...');
                 await syncUserFromStorage();
                 const owner = await ensureOwner();
                 await updateUser(owner.id, { 
                   name: '',
                   crownAnchorNumber: '',
+                  celebrityEmail: '',
+                  celebrityCaptainsClubNumber: '',
+                  celebrityCaptainsClubPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
+                  celebrityBlueChipPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
+                  silverseaEmail: '',
+                  silverseaVenetianNumber: '',
+                  silverseaVenetianTier: '',
+                  silverseaVenetianPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
                 });
                 
-                console.log('[Settings] Setting loyalty points to 1 (sample data)...');
+                console.log('[Settings] Setting loyalty points to 1 for all three cruise lines (sample data)...');
                 await setManualClubRoyalePoints(SAMPLE_LOYALTY_POINTS.clubRoyale);
                 await setManualCrownAnchorPoints(SAMPLE_LOYALTY_POINTS.crownAnchor);
+                console.log('[Settings] ✓ Royal Caribbean: Club Royale & Crown & Anchor reset to 1');
+                console.log('[Settings] ✓ Celebrity: Captain\'s Club & Blue Chip reset to 1');
+                console.log('[Settings] ✓ Silversea: Venetian Society reset to 1');
                 
                 console.log('[Settings] Generating sample demo data...');
                 const sampleData = generateSampleData();
@@ -901,8 +912,25 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
         });
       }
       
+      // Update Royal Caribbean loyalty data
       await setManualClubRoyalePoints(profileData.clubRoyalePoints);
       await setManualCrownAnchorPoints(profileData.loyaltyPoints);
+      console.log('[Settings] ✓ Updated Royal Caribbean loyalty:', {
+        clubRoyale: profileData.clubRoyalePoints,
+        crownAnchor: profileData.loyaltyPoints
+      });
+      
+      // Ensure Celebrity loyalty data is persisted
+      console.log('[Settings] ✓ Updated Celebrity loyalty:', {
+        captainsClub: profileData.celebrityCaptainsClubPoints,
+        blueChip: profileData.celebrityBlueChipPoints
+      });
+      
+      // Ensure Silversea loyalty data is persisted
+      console.log('[Settings] ✓ Updated Silversea loyalty:', {
+        venetianTier: profileData.silverseaVenetianTier,
+        venetianPoints: profileData.silverseaVenetianPoints
+      });
       
       if (emailChanged) {
         console.log('[Settings] Email changed - updating auth state and triggering re-login');

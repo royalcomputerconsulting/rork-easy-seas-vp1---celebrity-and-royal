@@ -271,12 +271,55 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       await AsyncStorage.setItem(STORAGE_KEYS.EXTENDED_LOYALTY_DATA, jsonValue);
       console.log('[LoyaltyProvider] ✓ Extended loyalty data saved to storage');
       
+      // Update Royal Caribbean loyalty data
       if (data.clubRoyalePointsFromApi !== undefined) {
         await setManualClubRoyalePoints(data.clubRoyalePointsFromApi);
+        console.log('[LoyaltyProvider] ✓ Updated Club Royale points:', data.clubRoyalePointsFromApi);
       }
       
       if (data.crownAndAnchorPointsFromApi !== undefined) {
         await setManualCrownAnchorPoints(data.crownAndAnchorPointsFromApi);
+        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor points:', data.crownAndAnchorPointsFromApi);
+      }
+      
+      // Update Celebrity loyalty data
+      const celebrityUpdates: any = {};
+      if (data.celebrityBlueChipPoints !== undefined) {
+        celebrityUpdates.celebrityBlueChipPoints = data.celebrityBlueChipPoints;
+        console.log('[LoyaltyProvider] ✓ Updated Celebrity Blue Chip points:', data.celebrityBlueChipPoints);
+      }
+      if (data.captainsClubPoints !== undefined) {
+        celebrityUpdates.celebrityCaptainsClubPoints = data.captainsClubPoints;
+        console.log('[LoyaltyProvider] ✓ Updated Celebrity Captains Club points:', data.captainsClubPoints);
+      }
+      
+      // Update Silversea loyalty data
+      const silverseaUpdates: any = {};
+      if (data.venetianSocietyTier !== undefined && data.venetianSocietyTier !== null) {
+        silverseaUpdates.silverseaVenetianTier = data.venetianSocietyTier;
+        console.log('[LoyaltyProvider] ✓ Updated Silversea Venetian tier:', data.venetianSocietyTier);
+      }
+      
+      // Apply all updates to user profile if any exist
+      if (Object.keys(celebrityUpdates).length > 0 || Object.keys(silverseaUpdates).length > 0) {
+        const allUpdates = { ...celebrityUpdates, ...silverseaUpdates };
+        console.log('[LoyaltyProvider] ✓ Updating user profile with all cruise line data:', allUpdates);
+        
+        // Store to AsyncStorage to persist across all three cruise lines
+        const usersData = await AsyncStorage.getItem('easyseas_users');
+        if (usersData) {
+          const users = JSON.parse(usersData);
+          const currentUserId = await AsyncStorage.getItem('easyseas_current_user');
+          if (currentUserId) {
+            const updatedUsers = users.map((u: any) => 
+              u.id === currentUserId 
+                ? { ...u, ...allUpdates, updatedAt: new Date().toISOString() }
+                : u
+            );
+            await AsyncStorage.setItem('easyseas_users', JSON.stringify(updatedUsers));
+            console.log('[LoyaltyProvider] ✓ User profile updated in storage with all cruise line loyalty data');
+          }
+        }
       }
       
       console.log('[LoyaltyProvider] ==================== SAVE COMPLETE ====================');
