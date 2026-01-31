@@ -115,7 +115,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
                 When you first open EasySeas, you will see a welcome splash screen. The app requires authentication to ensure your data is secure.
               </Paragraph>
               <BulletList title="Initial Setup Steps:" items={[
-                'Sign in with your authorized email (must be whitelisted by admin)',
+                'Sign in with your email (sync requires an active subscription or a whitelisted email)',
                 'Complete your user profile in Settings with your name and loyalty points',
                 'Import your cruise data using Chrome extensions or CSV files (see Chrome Extensions Setup)',
               ]} />
@@ -795,7 +795,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
               <Text style={styles.subHeader}>Profile Card</Text>
               <FieldList items={[
                 { field: 'Name Input', description: 'Enter your full name. Used for display throughout the app.' },
-                { field: 'Email Input', description: 'Your email address. Must match the whitelisted email to stay logged in.' },
+                { field: 'Email Input', description: 'Your email address. Sync features may require an active subscription or a whitelisted email.' },
                 { field: 'Crown & Anchor Number', description: 'Your Royal Caribbean loyalty number (found on your SeaPass card or account)' },
               ]} />
               <ButtonList items={[
@@ -1024,11 +1024,11 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
 
             <Subsection title="Cannot Log In">
               <NumberedList items={[
-                'Verify your email is on the whitelist (contact admin)',
+                'Verify your email is on the whitelist (or activate a subscription)',
                 'Check your internet connection',
                 'Try a different browser if using web version',
                 'Clear browser cookies and cache',
-                'Request whitelist verification from admin',
+                'Request whitelist verification from admin (or activate a subscription)',
               ]} />
             </Subsection>
           </SectionWithRef>
