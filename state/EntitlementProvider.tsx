@@ -60,7 +60,7 @@ async function withTimeout<T>(
   }
 }
 
-export const PRO_PRODUCT_ID = 'com.easyseas.pro.monthly' as const;
+export const PRO_PRODUCT_ID = 'easyseas.pro.monthly' as const;
 
 const PRIVACY_URL = 'https://example.com/privacy' as const;
 const TERMS_URL = 'https://example.com/terms' as const;
