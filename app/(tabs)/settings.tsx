@@ -1197,42 +1197,6 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
             </View>
           </View>
 
-          <View style={styles.section} testID="settings.pro.section">
-            <Text style={styles.sectionLabel}>PRO</Text>
-            <View style={styles.sectionCard}>
-              {renderSettingRow(
-                <Crown size={18} color={COLORS.navyDeep} />,
-                entitlement.isPro ? 'Full Access Unlocked' : 'Unlock Full Access',
-                entitlement.isPro ? 'Active' : undefined,
-                () => router.push('/paywall' as any)
-              )}
-              {renderSettingRow(
-                <RefreshCcw size={18} color={COLORS.navyDeep} />,
-                'Restore Purchases',
-                entitlement.isLoading ? <ActivityIndicator size="small" color={COLORS.navyDeep} /> : undefined,
-                () => entitlement.restore()
-              )}
-              {renderSettingRow(
-                <ExternalLink size={18} color={COLORS.navyDeep} />,
-                'Manage Subscription',
-                undefined,
-                () => entitlement.openManageSubscription()
-              )}
-              {renderSettingRow(
-                <Shield size={18} color={COLORS.navyDeep} />,
-                'Privacy Policy',
-                undefined,
-                () => entitlement.openPrivacyPolicy()
-              )}
-              {renderSettingRow(
-                <Shield size={18} color={COLORS.navyDeep} />,
-                'Terms of Use (EULA)',
-                undefined,
-                () => entitlement.openTerms()
-              )}
-            </View>
-          </View>
-
           <UserProfileCard
             currentValues={currentProfileValues}
             enrichmentData={enrichmentData}
@@ -1442,6 +1406,42 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
             <Text style={styles.extensionHint}>
               The Chrome extension scrapes offers from Royal Caribbean and Celebrity cruise websites.
             </Text>
+          </View>
+
+          <View style={styles.section} testID="settings.pro.section">
+            <Text style={styles.sectionLabel}>PRO</Text>
+            <View style={styles.sectionCard}>
+              {renderSettingRow(
+                <Crown size={18} color={COLORS.navyDeep} />,
+                entitlement.isPro ? 'Full Access Unlocked' : 'Unlock Full Access',
+                entitlement.isPro ? 'Active' : undefined,
+                () => router.push('/paywall' as any)
+              )}
+              {renderSettingRow(
+                <RefreshCcw size={18} color={COLORS.navyDeep} />,
+                'Restore Purchases',
+                entitlement.isLoading ? <ActivityIndicator size="small" color={COLORS.navyDeep} /> : undefined,
+                () => entitlement.restore()
+              )}
+              {renderSettingRow(
+                <ExternalLink size={18} color={COLORS.navyDeep} />,
+                'Manage Subscription',
+                undefined,
+                () => entitlement.openManageSubscription()
+              )}
+              {renderSettingRow(
+                <Shield size={18} color={COLORS.navyDeep} />,
+                'Privacy Policy',
+                undefined,
+                () => entitlement.openPrivacyPolicy()
+              )}
+              {renderSettingRow(
+                <Shield size={18} color={COLORS.navyDeep} />,
+                'Terms of Use (EULA)',
+                undefined,
+                () => entitlement.openTerms()
+              )}
+            </View>
           </View>
 
           <View style={styles.section}>
