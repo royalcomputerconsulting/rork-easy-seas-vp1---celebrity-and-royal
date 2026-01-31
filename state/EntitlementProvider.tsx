@@ -34,6 +34,7 @@ export interface EntitlementState {
   openManageSubscription: () => Promise<void>;
   openPrivacyPolicy: () => Promise<void>;
   openTerms: () => Promise<void>;
+  manualUnlock: () => Promise<void>;
 }
 
 const KEYS = {
@@ -499,6 +500,38 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     await safeOpenURL(TERMS_URL);
   }, []);
 
+  const manualUnlock = useCallback(async () => {
+    console.log('[Entitlement] manualUnlock called');
+    try {
+      await AsyncStorage.setItem(KEYS.WEB_IS_PRO, 'true');
+      if (!mountedRef.current) return;
+      
+      const wasPro = lastIsProRef.current;
+      
+      setIsPro(true);
+      setSource('dev');
+      setLastCheckedAt(new Date().toISOString());
+      
+      lastIsProRef.current = true;
+      
+      if (!wasPro) {
+        try {
+          if (typeof window !== 'undefined') {
+            console.log('[Entitlement] Dispatching entitlementProUnlocked event for manual unlock');
+            window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
+          }
+        } catch (e) {
+          console.error('[Entitlement] Failed to dispatch entitlementProUnlocked event', e);
+        }
+      }
+      
+      console.log('[Entitlement] Manual unlock successful');
+    } catch (e) {
+      console.error('[Entitlement] manualUnlock failed', e);
+      throw e;
+    }
+  }, []);
+
   return useMemo(
     () => ({
       isPro,
@@ -515,6 +548,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       openManageSubscription,
       openPrivacyPolicy,
       openTerms,
+      manualUnlock,
     }),
     [
       isPro,
@@ -531,6 +565,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       openManageSubscription,
       openPrivacyPolicy,
       openTerms,
+      manualUnlock,
     ]
   );
 });

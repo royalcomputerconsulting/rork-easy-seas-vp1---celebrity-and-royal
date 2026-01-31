@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ExternalLink, RefreshCcw, Shield, Sparkles } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
@@ -9,6 +9,40 @@ import { useEntitlement, PRO_PRODUCT_ID_MONTHLY, PRO_PRODUCT_ID_3MONTH } from '@
 export default function PaywallScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
+  const [overrideLoading, setOverrideLoading] = useState(false);
+
+  const handleManualOverride = () => {
+    Alert.prompt(
+      'Manual Override',
+      'Enter password:',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Unlock',
+          onPress: async (password) => {
+            if (password === 'a1') {
+              setOverrideLoading(true);
+              try {
+                await entitlement.manualUnlock();
+                Alert.alert('Success', 'Full access unlocked via manual override.');
+                router.back();
+              } catch (e) {
+                Alert.alert('Error', 'Failed to unlock. Please try again.');
+              } finally {
+                setOverrideLoading(false);
+              }
+            } else {
+              Alert.alert('Error', 'Incorrect password.');
+            }
+          },
+        },
+      ],
+      'secure-text'
+    );
+  };
 
   const find30DayPackage = useMemo(() => {
     for (const offering of entitlement.offerings) {
@@ -146,6 +180,20 @@ export default function PaywallScreen() {
                 <Text style={styles.legalLinkText}>Terms of Use (EULA)</Text>
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+              style={styles.manualOverrideButton}
+              onPress={handleManualOverride}
+              activeOpacity={0.8}
+              disabled={overrideLoading || entitlement.isPro}
+              testID="paywall.manual-override"
+            >
+              {overrideLoading ? (
+                <ActivityIndicator size="small" color={COLORS.navyDeep} />
+              ) : (
+                <Text style={styles.manualOverrideText}>Manual Override</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </LinearGradient>
@@ -352,5 +400,20 @@ const styles = StyleSheet.create({
     color: '#8A0020',
     fontSize: 13,
     lineHeight: 18,
+  },
+  manualOverrideButton: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: 'rgba(18, 58, 99, 0.04)',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(18, 58, 99, 0.08)',
+  },
+  manualOverrideText: {
+    color: COLORS.navyDeep,
+    fontWeight: '600' as const,
+    fontSize: 11,
   },
 });
