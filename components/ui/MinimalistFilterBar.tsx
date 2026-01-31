@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
-import { Search, X, Bell } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView } from 'react-native';
+import { X, Bell, Ship, ChevronDown, Check } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, COLORS, SHADOW } from '@/constants/theme';
 
@@ -30,6 +30,10 @@ interface MinimalistFilterBarProps {
   showingCount?: number;
   totalCount?: number;
   bookedCount?: number;
+  ships?: string[];
+  selectedShips?: string[];
+  onShipToggle?: (ship: string) => void;
+  onClearShips?: () => void;
 }
 
 export function MinimalistFilterBar({
@@ -44,59 +48,87 @@ export function MinimalistFilterBar({
   showingCount,
   totalCount,
   bookedCount,
+  ships = [],
+  selectedShips = [],
+  onShipToggle,
+  onClearShips,
 }: MinimalistFilterBarProps) {
-  const [inputValue, setInputValue] = useState(searchValue || '');
+  const [showShipFilter, setShowShipFilter] = useState(false);
   const alertAction = actions.find(a => a.key === 'alerts');
 
-  const handleTextChange = (text: string) => {
-    setInputValue(text);
-    if (onSearch) {
-      onSearch(text);
-    } else if (onSearchChange) {
-      onSearchChange(text);
+  const handleShipPress = (ship: string) => {
+    if (onShipToggle) {
+      onShipToggle(ship);
     }
-  };
-
-  const handleSearch = () => {
-    if (onSearch) {
-      onSearch(inputValue);
-    } else if (onSearchChange) {
-      onSearchChange(inputValue);
-    }
-  };
-
-  const handleClear = () => {
-    handleTextChange('');
   };
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchContainer} pointerEvents="auto">
-        <TextInput
-          style={styles.searchInput}
-          placeholder={searchPlaceholder}
-          placeholderTextColor={COLORS.textMuted}
-          value={inputValue}
-          onChangeText={handleTextChange}
-          returnKeyType="search"
-          onSubmitEditing={handleSearch}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={true}
-          selectTextOnFocus={true}
-          blurOnSubmit={false}
-          clearButtonMode="never"
-          underlineColorAndroid="transparent"
-        />
-        {inputValue.length > 0 && (
-          <TouchableOpacity onPress={handleClear} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={styles.clearButton}>
-            <X size={16} color={COLORS.textDarkGrey} />
-          </TouchableOpacity>
+      <TouchableOpacity 
+        style={styles.shipFilterButton} 
+        onPress={() => setShowShipFilter(!showShipFilter)}
+        activeOpacity={0.7}
+      >
+        <Ship size={16} color={COLORS.navyDeep} />
+        <Text style={styles.shipFilterLabel}>
+          {selectedShips.length === 0 
+            ? 'All Ships' 
+            : selectedShips.length === 1 
+            ? selectedShips[0] 
+            : `${selectedShips.length} Ships Selected`}
+        </Text>
+        {selectedShips.length > 0 && (
+          <View style={styles.shipCountBadge}>
+            <Text style={styles.shipCountText}>{selectedShips.length}</Text>
+          </View>
         )}
-        <TouchableOpacity onPress={handleSearch} style={styles.searchButton} activeOpacity={0.7}>
-          <Search size={16} color={COLORS.white} />
-        </TouchableOpacity>
-      </View>
+        <ChevronDown size={16} color={COLORS.textDarkGrey} style={showShipFilter ? styles.chevronUp : undefined} />
+      </TouchableOpacity>
+
+      {showShipFilter && (
+        <View style={styles.shipFilterPanel}>
+          <ScrollView 
+            style={styles.shipScrollView}
+            contentContainerStyle={styles.shipList}
+            showsVerticalScrollIndicator={false}
+          >
+            {ships.length === 0 ? (
+              <Text style={styles.noShipsText}>No ships available</Text>
+            ) : (
+              ships.map(ship => {
+                const isSelected = selectedShips.includes(ship);
+                return (
+                  <TouchableOpacity
+                    key={ship}
+                    style={[styles.shipOption, isSelected && styles.shipOptionActive]}
+                    onPress={() => handleShipPress(ship)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.shipCheckbox, isSelected && styles.shipCheckboxActive]}>
+                      {isSelected && <Check size={12} color={COLORS.white} />}
+                    </View>
+                    <Text style={[styles.shipOptionText, isSelected && styles.shipOptionTextActive]}>
+                      {ship}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </ScrollView>
+          {selectedShips.length > 0 && (
+            <TouchableOpacity 
+              style={styles.clearShipsButton} 
+              onPress={() => {
+                if (onClearShips) onClearShips();
+              }}
+              activeOpacity={0.7}
+            >
+              <X size={14} color={COLORS.error} />
+              <Text style={styles.clearShipsText}>Clear Selection</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       <View style={styles.mainRow}>
         <View style={styles.tabsContainer}>
@@ -159,45 +191,108 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     gap: SPACING.sm,
   },
-  searchContainer: {
+  shipFilterButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.bgSecondary,
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
-    paddingLeft: SPACING.md,
-    paddingRight: SPACING.xs,
-    paddingVertical: Platform.OS === 'ios' ? SPACING.xs : 0,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     gap: SPACING.xs,
     minHeight: 44,
   },
-  searchInput: {
+  shipFilterLabel: {
     flex: 1,
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.textNavy,
-    paddingVertical: SPACING.sm,
-    minHeight: 40,
-    backgroundColor: 'transparent',
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-        cursor: 'text',
-      } as any,
-      android: {
-        paddingVertical: 8,
-      },
-    }),
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
-  clearButton: {
-    padding: SPACING.xs,
-  },
-  searchButton: {
+  shipCountBadge: {
     backgroundColor: COLORS.navyDeep,
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.sm,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  shipCountText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: COLORS.white,
+  },
+  chevronUp: {
+    transform: [{ rotate: '180deg' }],
+  },
+  shipFilterPanel: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    overflow: 'hidden',
+  },
+  shipScrollView: {
+    maxHeight: 250,
+  },
+  shipList: {
+    padding: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  noShipsText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textMuted,
+    textAlign: 'center' as const,
+    paddingVertical: SPACING.lg,
+  },
+  shipOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: COLORS.bgSecondary,
+    gap: SPACING.sm,
+  },
+  shipOptionActive: {
+    backgroundColor: 'rgba(30, 58, 95, 0.1)',
+  },
+  shipCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: COLORS.borderLight,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shipCheckboxActive: {
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
+  },
+  shipOptionText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textNavy,
+  },
+  shipOptionTextActive: {
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  clearShipsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    gap: SPACING.xs,
+  },
+  clearShipsText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.error,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   mainRow: {
     flexDirection: 'row',

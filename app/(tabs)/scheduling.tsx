@@ -531,8 +531,10 @@ export default function SchedulingScreen() {
           { key: 'clear', label: 'Clear', icon: X, onPress: clearFilters },
           { key: 'alerts', label: 'Alerts', icon: Bell, badge: alertCount, onPress: handleAlertsPress },
         ]}
-        onSearch={handleSearch}
-        searchPlaceholder="Search cruises..."
+        ships={availableShips}
+        selectedShips={filters.selectedShips}
+        onShipToggle={toggleShipFilter}
+        onClearShips={() => setFilters(prev => ({ ...prev, selectedShips: [] }))}
         showingCount={stats.showing}
         totalCount={stats.total}
         bookedCount={stats.booked}
