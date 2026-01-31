@@ -22,6 +22,7 @@ import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions, type CasinoSession } from '@/state/CasinoSessionProvider';
 import { AtlasCard } from '@/components/AtlasCard';
 import { useEntitlement } from '@/state/EntitlementProvider';
+import { useAuth } from '@/state/AuthProvider';
 import { exportFavoriteMachinesToDocx, exportAllMachinesIncrementallyToDocx } from '@/lib/exportMachinesToDocx';
 import { MachineSessionStats } from '@/components/MachineSessionStats';
 import { MachineSessionsList } from '@/components/MachineSessionsList';
@@ -34,6 +35,7 @@ type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 export default function AtlasScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
+  const auth = useAuth();
 
   const FREE_MACHINE_PREVIEW_LIMIT = 8;
 
@@ -351,7 +353,7 @@ export default function AtlasScreen() {
 
   const renderMachineItem = useCallback(
     ({ item, index }: { item: (typeof filteredMachines)[number]; index: number }) => {
-      const locked = !entitlement.isPro && index >= FREE_MACHINE_PREVIEW_LIMIT;
+      const locked = !(entitlement.isPro || auth.isWhitelisted) && index >= FREE_MACHINE_PREVIEW_LIMIT;
 
       return (
         <View style={[styles.gridItem, index % 2 === 1 && styles.gridItemRight]}>
@@ -366,7 +368,7 @@ export default function AtlasScreen() {
         </View>
       );
     },
-    [FREE_MACHINE_PREVIEW_LIMIT, entitlement.isPro, handleMachinePress, handleToggleFavorite]
+    [FREE_MACHINE_PREVIEW_LIMIT, entitlement.isPro, auth.isWhitelisted, handleMachinePress, handleToggleFavorite]
   );
 
   const listHeader = useMemo(() => {
@@ -391,7 +393,7 @@ export default function AtlasScreen() {
           </Text>
         </View>
 
-        {!entitlement.isPro ? (
+        {!(entitlement.isPro || auth.isWhitelisted) ? (
           <View style={styles.proBanner} testID="machines.proBanner">
             <View style={styles.proBannerLeft}>
               <View style={styles.proBadge}>
