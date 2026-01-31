@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
+import Constants from 'expo-constants';
 import type { CustomerInfo, PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 
 type PurchasesModule = {
@@ -149,30 +150,34 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   const ensurePurchasesLoaded = useCallback(async (): Promise<PurchasesModule | null> => {
     if (Platform.OS === 'web') return null;
 
-    const apiKey = (
-      process.env.EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY ??
-      process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ??
-      process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ??
-      process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ??
-      process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ??
-      process.env.EXPO_PUBLIC_REVENUECAT_KEY ??
-      'appl_ByMylGXTSwaAUxxRUwhteOFaJjL'
-    ).trim();
+    const isExpoGo = Constants.appOwnership === 'expo';
+    
+    let apiKey: string;
+    if (isExpoGo) {
+      apiKey = (
+        process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ??
+        ''
+      ).trim();
+      
+      if (!apiKey) {
+        purchasesInitError = 'IAP not available in Expo Go. Use a development build or web preview for testing.';
+        console.warn('[Entitlement] RevenueCat IAP requires a development build or Test Store API Key for Expo Go. See https://rev.cat/sdk-test-store');
+        return null;
+      }
+    } else {
+      apiKey = (
+        process.env.EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY ??
+        process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ??
+        process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ??
+        process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ??
+        process.env.EXPO_PUBLIC_REVENUECAT_KEY ??
+        'appl_ByMylGXTSwaAUxxRUwhteOFaJjL'
+      ).trim();
+    }
 
     if (!apiKey) {
-      purchasesInitError =
-        'Missing RevenueCat Public SDK Key. Set EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY (recommended) or EXPO_PUBLIC_REVENUECAT_API_KEY.';
-      console.warn('[Entitlement] Missing RevenueCat Public SDK Key.', {
-        tried: [
-          'EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY',
-          'EXPO_PUBLIC_REVENUECAT_TEST_API_KEY',
-          'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY',
-          'EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY',
-          'EXPO_PUBLIC_REVENUECAT_API_KEY',
-          'EXPO_PUBLIC_REVENUECAT_KEY',
-          '(hardcoded fallback key)',
-        ],
-      });
+      purchasesInitError = 'Missing RevenueCat API Key. Set EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY or EXPO_PUBLIC_REVENUECAT_API_KEY.';
+      console.warn('[Entitlement] Missing RevenueCat API Key.');
       return null;
     }
 
@@ -192,6 +197,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       console.log('[Entitlement] Configuring Purchases', {
         hasApiKey: !!apiKey,
         platform: Platform.OS,
+        isExpoGo,
+        keyType: isExpoGo ? 'test' : 'production',
       });
 
       Purchases.configure({ apiKey });
