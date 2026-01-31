@@ -116,7 +116,7 @@ export default function SettingsScreen() {
   const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   const [isUserManualVisible, setIsUserManualVisible] = useState(false);
   const [secretTapCount, setSecretTapCount] = useState(0);
-  const secretTapTimer = useRef<NodeJS.Timeout | null>(null);
+  const secretTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();

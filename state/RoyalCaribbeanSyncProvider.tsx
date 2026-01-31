@@ -193,8 +193,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               // Show first few sailings as examples
               const sampleSailings = batch.slice(0, Math.min(3, batch.length));
               sampleSailings.forEach((sailing, idx) => {
-                if (sailing.shipName && sailing.sailingStartDate) {
-                  addLog(`   🚢 Sailing ${idx + 1}: ${sailing.shipName} - ${sailing.sailingStartDate}`, 'success');
+                if (sailing.shipName && sailing.sailingDate) {
+                  addLog(`   🚢 Sailing ${idx + 1}: ${sailing.shipName} - ${sailing.sailingDate}`, 'success');
                 }
               });
               
