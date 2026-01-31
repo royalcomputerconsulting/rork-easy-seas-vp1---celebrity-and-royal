@@ -71,7 +71,11 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
           <Text style={styles.version}>Version 1.0.0 | Build 2025.11</Text>
           
           <Text style={styles.intro}>
-            Welcome to EasySeas, your comprehensive cruise points tracker and casino analytics platform for Royal Caribbean and Celebrity Cruises.
+            Easy Seas is the premier comprehensive cruise analytics and casino loyalty management platform designed exclusively for Royal Caribbean and Celebrity Cruises enthusiasts. This revolutionary mobile application transforms how cruise passengers track, analyze, and maximize their casino loyalty benefits, onboard credits, and cruise investments.
+          </Text>
+
+          <Text style={styles.intro}>
+            Built on cutting-edge React Native technology with enterprise-grade analytics, Easy Seas delivers unprecedented insights into your cruise portfolio, enabling data-driven decisions that can save thousands of dollars per year while maximizing loyalty tier advancement and return on investment.
           </Text>
 
           <View style={styles.tocContainer}>
