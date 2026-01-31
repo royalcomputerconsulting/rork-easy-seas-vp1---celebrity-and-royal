@@ -862,6 +862,12 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
       setIsSaving(true);
       console.log('[Settings] Saving profile:', profileData);
       
+      const oldEmail = currentUser?.email?.toLowerCase().trim();
+      const newEmail = profileData.email.toLowerCase().trim();
+      const emailChanged = oldEmail && oldEmail !== newEmail;
+      
+      console.log('[Settings] Email change check:', { oldEmail, newEmail, emailChanged });
+      
       if (currentUser) {
         await updateUser(currentUser.id, { 
           name: profileData.name,
@@ -898,14 +904,33 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
       await setManualClubRoyalePoints(profileData.clubRoyalePoints);
       await setManualCrownAnchorPoints(profileData.loyaltyPoints);
       
-      Alert.alert('Profile Saved', 'Your profile has been updated successfully.');
+      if (emailChanged) {
+        console.log('[Settings] Email changed - updating auth state and triggering re-login');
+        await AsyncStorage.setItem('easyseas_auth_email', newEmail);
+        await syncUserFromStorage();
+        
+        Alert.alert(
+          'Email Updated', 
+          'Your email address has been changed successfully. Your profile has been updated with the new email.',
+          [
+            {
+              text: 'OK',
+              onPress: async () => {
+                await syncUserFromStorage();
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Profile Saved', 'Your profile has been updated successfully.');
+      }
     } catch (error) {
       console.error('[Settings] Save error:', error);
       Alert.alert('Save Error', 'Failed to save profile. Please try again.');
     } finally {
       setIsSaving(false);
     }
-  }, [currentUser, updateUser, ensureOwner, setManualClubRoyalePoints, setManualCrownAnchorPoints]);
+  }, [currentUser, updateUser, ensureOwner, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncUserFromStorage]);
 
 
 
