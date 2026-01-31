@@ -1806,10 +1806,10 @@ const styles = StyleSheet.create({
     color: COLORS.error,
   },
   sectionCard: {
-    backgroundColor: CLEAN_THEME.background.secondary,
+    backgroundColor: '#E0F7FA',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: CLEAN_THEME.border.light,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
     overflow: 'hidden',
   },
   dangerCard: {
@@ -1998,12 +1998,12 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.xs,
   },
   dataOverviewCard: {
-    backgroundColor: CLEAN_THEME.background.secondary,
+    backgroundColor: '#DBEAFE',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: CLEAN_THEME.border.light,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
   },
   dataOverviewHeader: {
     flexDirection: 'row',
@@ -2050,6 +2050,11 @@ const styles = StyleSheet.create({
   },
   quickActionsSection: {
     marginBottom: SPACING.md,
+    backgroundColor: '#E0F2FE',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
   },
   quickActionFullWidth: {
     flexDirection: 'row',

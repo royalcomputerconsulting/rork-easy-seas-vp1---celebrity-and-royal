@@ -424,24 +424,26 @@ export default function SchedulingScreen() {
     return (
       <View key={set.id} style={styles.b2bSetCard}>
         <LinearGradient
-          colors={['#001F3F', '#0A2540']}
+          colors={['#E0F7FA', '#DBEAFE', '#E0F2FE']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={styles.b2bSetHeader}
         >
           <View style={styles.b2bSetBadge}>
-            <Link2 size={14} color={COLORS.goldAccent} />
+            <Link2 size={14} color={COLORS.navyDeep} />
             <Text style={styles.b2bSetBadgeText}>BACK-TO-BACK SET #{index + 1}</Text>
           </View>
           <View style={styles.b2bSetSummary}>
             <View style={styles.b2bSummaryItem}>
-              <Ship size={12} color={COLORS.beigeWarm} />
+              <Ship size={12} color={COLORS.navyDeep} />
               <Text style={styles.b2bSummaryText}>{slots[0]?.shipName || 'Unknown Ship'}</Text>
             </View>
             <View style={styles.b2bSummaryItem}>
-              <Calendar size={12} color={COLORS.beigeWarm} />
+              <Calendar size={12} color={COLORS.navyDeep} />
               <Text style={styles.b2bSummaryText}>{set.totalNights} nights total</Text>
             </View>
             <View style={styles.b2bSummaryItem}>
-              <Anchor size={12} color={COLORS.beigeWarm} />
+              <Anchor size={12} color={COLORS.navyDeep} />
               <Text style={styles.b2bSummaryText}>{set.departurePort}</Text>
             </View>
           </View>
@@ -1527,13 +1529,13 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.goldAccent,
+    borderColor: 'rgba(0, 31, 63, 0.15)',
     ...SHADOW.md,
   },
   b2bSetHeader: {
     padding: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(212, 165, 116, 0.3)',
+    borderBottomColor: 'rgba(0, 31, 63, 0.1)',
   },
   b2bSetBadge: {
     flexDirection: 'row',
@@ -1544,7 +1546,7 @@ const styles = StyleSheet.create({
   b2bSetBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.goldAccent,
+    color: COLORS.navyDeep,
     letterSpacing: 1,
   },
   b2bSetSummary: {
@@ -1558,7 +1560,7 @@ const styles = StyleSheet.create({
   },
   b2bSummaryText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.beigeWarm,
+    color: COLORS.navyDeep,
   },
   b2bCruiseItem: {
     flexDirection: 'row',
@@ -1717,9 +1719,10 @@ const styles = StyleSheet.create({
   },
   b2bDateRange: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.goldAccent,
+    color: COLORS.navyDeep,
     marginTop: SPACING.xs,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
+    opacity: 0.8,
   },
   nightsBadge: {
     backgroundColor: COLORS.navyDeep,
