@@ -2,7 +2,7 @@ import React, { memo, useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ItineraryDay, BookedCruise, CasinoOffer } from '@/types/models';
-import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, TrendingUp, Dice5, AlertCircle, CheckCircle, Award, Ticket, Target, CreditCard, Trash2, Sparkles } from 'lucide-react-native';
+import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, TrendingUp, Dice5, AlertCircle, Target, Trash2, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { formatCurrency, formatNights } from '@/lib/format';
@@ -12,7 +12,7 @@ import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useCruiseStore } from '@/state/CruiseStore';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 
-import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PLAYER_SCHEDULE, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
+import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 
 type CompactFactProps = {
@@ -587,14 +587,36 @@ export default function CruiseDetailsScreen() {
               <Text style={styles.bookedBadgeText}>BOOKED</Text>
             </View>
           )}
-          <TouchableOpacity 
-            style={styles.editAllButton} 
-            onPress={openFullEditModal}
-            activeOpacity={0.7}
-          >
-            <Edit3 size={18} color={COLORS.beigeWarm} />
-            <Text style={styles.editAllButtonText}>Edit</Text>
-          </TouchableOpacity>
+          <View style={styles.heroButtonsContainer}>
+            <TouchableOpacity 
+              style={styles.editAllButton} 
+              onPress={openFullEditModal}
+              activeOpacity={0.7}
+            >
+              <Edit3 size={18} color={COLORS.beigeWarm} />
+              <Text style={styles.editAllButtonText}>Edit</Text>
+            </TouchableOpacity>
+            
+            {!isBooked ? (
+              <TouchableOpacity 
+                style={styles.bookHeaderButton} 
+                activeOpacity={0.8}
+                onPress={handleBookCruise}
+                testID="book-cruise-button"
+              >
+                <Text style={styles.bookHeaderButtonText}>Book</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                style={styles.unbookHeaderButton} 
+                activeOpacity={0.8}
+                onPress={() => setUnbookModalVisible(true)}
+                testID="unbook-cruise-button"
+              >
+                <Trash2 size={16} color={COLORS.error} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
         
         <View style={styles.content}>
@@ -1128,8 +1150,8 @@ export default function CruiseDetailsScreen() {
           {casinoAvailability && (
             <View style={styles.casinoSection}>
               <View style={styles.sectionHeader}>
-                <Dice5 size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitle}>Casino Availability</Text>
+                <MapPin size={20} color={COLORS.beigeWarm} />
+                <Text style={styles.sectionTitle}>Itinerary & Casino</Text>
                 {casinoStatusBadge && (
                   <View style={[styles.casinoStatusBadge, { backgroundColor: casinoStatusBadge.color + '30' }]}>
                     <Text style={[styles.casinoStatusText, { color: casinoStatusBadge.color }]}>
@@ -1166,7 +1188,7 @@ export default function CruiseDetailsScreen() {
                 <View style={styles.expectedPointsSection}>
                   <View style={styles.expectedPointsHeader}>
                     <Target size={16} color={COLORS.beigeWarm} />
-                    <Text style={styles.expectedPointsTitle}>Your Play Schedule Estimate</Text>
+                    <Text style={styles.expectedPointsTitle}>Play Schedule Estimate</Text>
                   </View>
                   <View style={styles.combinedEstimateRow}>
                     <View style={styles.combinedEstimateItem}>
@@ -1196,36 +1218,6 @@ export default function CruiseDetailsScreen() {
                       </View>
                     </View>
                   </View>
-                  <Text style={styles.combinedEstimateSubtext}>
-                    {personalizedPlayEstimate.playDays} play days • {PLAYER_SCHEDULE.POINTS_PER_SESSION}/session • {playingHoursConfig.sessions.filter(s => s.enabled).length} enabled sessions
-                  </Text>
-                  <View style={styles.playScheduleBreakdown}>
-                    {personalizedPlayEstimate.sessionBreakdown
-                      .filter(d => d.casinoOpen && d.sessions > 0)
-                      .map((dayEstimate, idx) => (
-                        <View key={idx} style={styles.playDayRow}>
-                          <View style={styles.playDayInfo}>
-                            <Text style={styles.playDayLabel}>Day {dayEstimate.day}</Text>
-                            <Text style={styles.playDayPort} numberOfLines={1}>
-                              {dayEstimate.isSeaDay ? '🌊' : '📍'} {dayEstimate.port}
-                            </Text>
-                          </View>
-                          <View style={styles.playDayStats}>
-                            <Text style={styles.playDaySessions}>{dayEstimate.sessions}x</Text>
-                            <Text style={styles.playDayHours}>{dayEstimate.hoursPlayed}h</Text>
-                            <Text style={styles.playDayPoints}>{dayEstimate.pointsEarned.toLocaleString()}</Text>
-                          </View>
-                        </View>
-                      ))}
-                  </View>
-                  <View style={styles.playScheduleNote}>
-                    <Text style={styles.playScheduleNoteText}>
-                      {playingHoursConfig.enabled && personalizedPlayEstimate.goldenHoursTotal > 0
-                        ? `Based on your Golden Hours: ${playingHoursConfig.sessions.filter(s => s.enabled).map(s => s.name).join(', ')}`
-                        : `Based on default schedule: ${PLAYER_SCHEDULE.SEA_DAY_SESSIONS_COUNT} sessions on sea days, ${PLAYER_SCHEDULE.FIRST_DAY_HOURS}h first day, ${PLAYER_SCHEDULE.LAST_DAY_HOURS}h last day`
-                      }
-                    </Text>
-                  </View>
                 </View>
               )}
 
@@ -1233,49 +1225,42 @@ export default function CruiseDetailsScreen() {
                 <View style={styles.historicalComparisonSection}>
                   <View style={styles.expectedPointsHeader}>
                     <TrendingUp size={16} color={COLORS.textSecondary} />
-                    <Text style={styles.historicalComparisonTitle}>Historical Comparison</Text>
+                    <Text style={styles.historicalComparisonTitle}>Historical Avg</Text>
                   </View>
-                  <View style={styles.expectedPointsBreakdown}>
-                    <View style={styles.expectedPointsRow}>
-                      <Text style={styles.expectedPointsRowLabel}>Avg per night (past {expectedPointsCalculation.basedOnCruises} cruises):</Text>
-                      <Text style={styles.expectedPointsRowValue}>{expectedPointsCalculation.avgPointsPerNight.toLocaleString()} pts</Text>
+                  <View style={styles.historicalStatsRow}>
+                    <View style={styles.historicalStatItem}>
+                      <Text style={styles.historicalStatValue}>{expectedPointsCalculation.avgPointsPerNight.toLocaleString()}</Text>
+                      <Text style={styles.historicalStatLabel}>pts/night</Text>
                     </View>
-                    <View style={styles.expectedPointsRow}>
-                      <Text style={styles.expectedPointsRowLabel}>Avg per casino day:</Text>
-                      <Text style={styles.expectedPointsRowValue}>{expectedPointsCalculation.avgPointsPerCasinoDay.toLocaleString()} pts</Text>
+                    <View style={styles.historicalStatItem}>
+                      <Text style={styles.historicalStatValue}>{expectedPointsCalculation.avgPointsPerCasinoDay.toLocaleString()}</Text>
+                      <Text style={styles.historicalStatLabel}>pts/casino day</Text>
                     </View>
                   </View>
+                  <Text style={styles.historicalStatNote}>Based on {expectedPointsCalculation.basedOnCruises} past cruises</Text>
                 </View>
               )}
 
-              <Text style={styles.casinoDescription}>
-                {casinoAvailability.gamblingWindowsDescription}
-              </Text>
-
-              <View style={styles.casinoDayList}>
-                {casinoAvailability.dailyAvailability.slice(0, 8).map((day, index) => (
-                  <View key={index} style={styles.casinoDayItem}>
-                    <View style={[styles.casinoDayIndicator, { backgroundColor: day.casinoOpen ? COLORS.success : COLORS.error }]}>
-                      {day.casinoOpen ? (
-                        <CheckCircle size={12} color={COLORS.white} />
-                      ) : (
-                        <AlertCircle size={12} color={COLORS.white} />
-                      )}
-                    </View>
-                    <View style={styles.casinoDayContent}>
-                      <Text style={styles.casinoDayLabel}>Day {day.day}</Text>
-                      <Text style={styles.casinoDayPort} numberOfLines={1}>
+              <View style={styles.itineraryList}>
+                {casinoAvailability.dailyAvailability.map((day, index) => (
+                  <View key={index} style={styles.itineraryDayRow}>
+                    <View style={[styles.itineraryDayDot, day.isSeaDay && styles.seaDayDot]} />
+                    {index < casinoAvailability.dailyAvailability.length - 1 && <View style={styles.itineraryDayLine} />}
+                    <View style={styles.itineraryDayContent}>
+                      <View style={styles.itineraryDayHeader}>
+                        <Text style={styles.itineraryDayLabel}>Day {day.day}</Text>
+                        <View style={[styles.casinoDayStatusChip, { backgroundColor: day.casinoOpen ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)' }]}>
+                          <Text style={[styles.casinoDayStatusChipText, { color: day.casinoOpen ? COLORS.success : COLORS.error }]}>
+                            {day.casinoOpen ? 'Casino Open' : 'Casino Closed'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.itineraryDayPort}>
                         {day.isSeaDay ? '🌊 At Sea' : `📍 ${day.port}`}
                       </Text>
                     </View>
-                    <Text style={[styles.casinoDayStatus, { color: day.casinoOpen ? COLORS.success : COLORS.error }]}>
-                      {day.casinoOpen ? 'Open' : 'Closed'}
-                    </Text>
                   </View>
                 ))}
-                {casinoAvailability.dailyAvailability.length > 8 && (
-                  <Text style={styles.moreText}>+{casinoAvailability.dailyAvailability.length - 8} more days</Text>
-                )}
               </View>
             </View>
           )}
@@ -1284,7 +1269,7 @@ export default function CruiseDetailsScreen() {
             <View style={styles.valueSection}>
               <View style={styles.sectionHeader}>
                 <DollarSign size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitle}>Value Breakdown</Text>
+                <Text style={styles.sectionTitle}>Value Summary</Text>
                 <TouchableOpacity
                   style={styles.editValueButton}
                   onPress={openFullEditModal}
@@ -1293,92 +1278,27 @@ export default function CruiseDetailsScreen() {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.valueRow}>
-                <Text style={styles.valueLabel}>Cabin Value (×{cruise.guests || 2} guests)</Text>
-                <Text style={styles.valueAmount}>{formatCurrency(valueBreakdown.cabinValueForTwo)}</Text>
-              </View>
-              <View style={styles.valueRow}>
-                <Text style={styles.valueLabel}>Taxes & Fees</Text>
-                <Text style={styles.valueAmount}>{formatCurrency(valueBreakdown.taxesFees)}</Text>
-              </View>
-              
-              {(valueBreakdown.freePlayValue > 0 || cruise.freePlay || linkedOffer?.freePlay) && (
-                <View style={styles.valueRow}>
-                  <View style={styles.valueLabelWithIcon}>
-                    <Ticket size={12} color={COLORS.success} />
-                    <Text style={styles.valueLabel}>FreePlay (FPP)</Text>
-                  </View>
-                  <Text style={[styles.valueAmount, { color: COLORS.success }]}>
-                    +{formatCurrency(valueBreakdown.freePlayValue || cruise.freePlay || linkedOffer?.freePlay || linkedOffer?.freeplayAmount || 0)}
-                  </Text>
+              <View style={styles.valueCompactGrid}>
+                <View style={styles.valueCompactRow}>
+                  <Text style={styles.valueCompactLabel}>Retail</Text>
+                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown.totalRetailValue)}</Text>
                 </View>
-              )}
-              {(valueBreakdown.obcValue > 0 || cruise.freeOBC) && (
-                <View style={styles.valueRow}>
-                  <View style={styles.valueLabelWithIcon}>
-                    <CreditCard size={12} color={COLORS.success} />
-                    <Text style={styles.valueLabel}>Onboard Credit (OBC)</Text>
+                <TouchableOpacity
+                  style={styles.valueCompactRow}
+                  onPress={openFullEditModal}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.valueCompactLabelWithIcon}>
+                    <Text style={styles.valueCompactLabel}>Paid</Text>
+                    <Edit3 size={10} color={COLORS.textSecondary} />
                   </View>
-                  <Text style={[styles.valueAmount, { color: COLORS.success }]}>
-                    +{formatCurrency(valueBreakdown.obcValue || cruise.freeOBC || 0)}
-                  </Text>
-                </View>
-              )}
-              {(valueBreakdown.tradeInValue > 0 || cruise.tradeInValue || linkedOffer?.tradeInValue) && (
-                <View style={styles.valueRow}>
-                  <View style={styles.valueLabelWithIcon}>
-                    <Award size={12} color={COLORS.success} />
-                    <Text style={styles.valueLabel}>Trade-In Value</Text>
-                  </View>
-                  <Text style={[styles.valueAmount, { color: COLORS.success }]}>
-                    +{formatCurrency(valueBreakdown.tradeInValue || cruise.tradeInValue || linkedOffer?.tradeInValue || 0)}
-                  </Text>
-                </View>
-              )}
-              {(cruise.offerValue || linkedOffer?.offerValue) && cruise.offerValue! > 0 && (
-                <View style={styles.valueRow}>
-                  <View style={styles.valueLabelWithIcon}>
-                    <Tag size={12} color={COLORS.beigeWarm} />
-                    <Text style={styles.valueLabel}>Offer Value</Text>
-                  </View>
-                  <Text style={[styles.valueAmount, { color: COLORS.beigeWarm }]}>
-                    {formatCurrency(cruise.offerValue || linkedOffer?.offerValue || 0)}
-                  </Text>
-                </View>
-              )}
-              {((cruise as any).nextCruiseCertificate > 0) && (
-                <View style={styles.valueRow}>
-                  <View style={styles.valueLabelWithIcon}>
-                    <Star size={12} color={COLORS.success} />
-                    <Text style={styles.valueLabel}>Next Cruise Certificate</Text>
-                  </View>
-                  <Text style={[styles.valueAmount, { color: COLORS.success }]}>
-                    +{formatCurrency((cruise as any).nextCruiseCertificate || 0)}
-                  </Text>
-                </View>
-              )}
-              
-              <View style={styles.valueDivider} />
-              <View style={styles.valueRow}>
-                <Text style={styles.valueTotalLabel}>Total Retail Value</Text>
-                <Text style={styles.valueTotalAmount}>{formatCurrency(valueBreakdown.totalRetailValue)}</Text>
+                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown.amountPaid)}</Text>
+                </TouchableOpacity>
               </View>
               
-              <TouchableOpacity
-                style={styles.amountPaidRow}
-                onPress={openFullEditModal}
-                activeOpacity={0.7}
-              >
-                <View style={styles.amountPaidLabel}>
-                  <Text style={styles.valueLabel}>Amount Paid</Text>
-                  <Edit3 size={12} color={COLORS.textSecondary} style={{ marginLeft: 4 }} />
-                </View>
-                <Text style={styles.valueAmount}>{formatCurrency(valueBreakdown.amountPaid)}</Text>
-              </TouchableOpacity>
-              
-              <View style={[styles.valueRow, styles.netValueRow]}>
-                <Text style={styles.netValueLabel}>Net Value</Text>
-                <Text style={[styles.netValueAmount, { color: valueBreakdown.netValue >= 0 ? COLORS.success : COLORS.error }]}>
+              <View style={styles.valueNetRow}>
+                <Text style={styles.valueNetLabel}>Net Value</Text>
+                <Text style={[styles.valueNetAmount, { color: valueBreakdown.netValue >= 0 ? COLORS.success : COLORS.error }]}>
                   {valueBreakdown.netValue >= 0 ? '+' : ''}{formatCurrency(valueBreakdown.netValue)}
                 </Text>
               </View>
@@ -1395,66 +1315,10 @@ export default function CruiseDetailsScreen() {
                 {(valueBreakdown.coverageFraction * 100).toFixed(0)}% Coverage
                 {valueBreakdown.isFullyComped && ' • Fully Comped!'}
               </Text>
-              
-              {linkedOffer && (
-                <View style={styles.linkedOfferInfo}>
-                  <Text style={styles.linkedOfferLabel}>From Offer: {linkedOffer.offerCode || linkedOffer.title}</Text>
-                </View>
-              )}
             </View>
           )}
 
-          {casinoAvailability && casinoAvailability.dailyAvailability.length > 0 && (
-            <View style={styles.itinerarySection}>
-              <View style={styles.sectionHeader}>
-                <MapPin size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitle}>Itinerary</Text>
-              </View>
-              
-              <View style={styles.itineraryList}>
-                {casinoAvailability.dailyAvailability.map((day, index) => (
-                  <View key={index} style={styles.itineraryItem}>
-                    <View style={[styles.itineraryDot, day.isSeaDay && styles.seaDayDot]} />
-                    {index < casinoAvailability.dailyAvailability.length - 1 && <View style={styles.itineraryLine} />}
-                    <View style={styles.itineraryContent}>
-                      <Text style={styles.itineraryDay}>Day {day.day}</Text>
-                      <Text style={styles.itineraryPort}>
-                        {day.isSeaDay ? '\ud83c\udf0a ' : '\ud83d\udccd '}{day.port}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
 
-{!isBooked && (
-            <TouchableOpacity 
-              style={styles.bookButton} 
-              activeOpacity={0.8}
-              onPress={handleBookCruise}
-              testID="book-cruise-button"
-            >
-              <LinearGradient
-                colors={[COLORS.beigeWarm, COLORS.goldDark]}
-                style={styles.bookButtonGradient}
-              >
-                <Text style={styles.bookButtonText}>Book This Cruise</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
-
-          {isBooked && (
-            <TouchableOpacity 
-              style={styles.unbookButton} 
-              activeOpacity={0.8}
-              onPress={() => setUnbookModalVisible(true)}
-              testID="unbook-cruise-button"
-            >
-              <Trash2 size={20} color={COLORS.error} />
-              <Text style={styles.unbookButtonText}>Unbook This Cruise</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </ScrollView>
 
@@ -2006,10 +1870,14 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     letterSpacing: 1,
   },
-  editAllButton: {
+  heroButtonsContainer: {
     position: 'absolute',
     top: SPACING.lg,
     right: SPACING.lg,
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  editAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(212, 165, 116, 0.2)',
@@ -2019,6 +1887,31 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     borderWidth: 1,
     borderColor: 'rgba(212, 165, 116, 0.4)',
+  },
+  bookHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.beigeWarm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.goldDark,
+  },
+  bookHeaderButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  unbookHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.error,
   },
   editAllButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -2427,70 +2320,67 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: COLORS.navyDeep,
   },
-  itinerarySection: {
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    backgroundColor: '#E0F2FE',
-    ...SHADOW.sm,
-  },
   itineraryList: {
     gap: 0,
+    marginTop: SPACING.md,
   },
-  itineraryItem: {
+  itineraryDayRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    minHeight: 50,
+    minHeight: 60,
   },
-  itineraryDot: {
+  itineraryDayDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
     backgroundColor: COLORS.beigeWarm,
-    marginTop: 4,
+    marginTop: 6,
     zIndex: 1,
   },
   seaDayDot: {
     backgroundColor: '#3b82f6',
   },
-  itineraryLine: {
+  itineraryDayLine: {
     position: 'absolute',
     left: 5,
-    top: 16,
-    bottom: -16,
+    top: 18,
+    bottom: -18,
     width: 2,
     backgroundColor: COLORS.cardBorder,
   },
-  itineraryContent: {
+  itineraryDayContent: {
     marginLeft: SPACING.md,
     flex: 1,
+    backgroundColor: '#DBEAFE',
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
   },
-  itineraryDay: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
+  itineraryDayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  itineraryDayLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
     color: COLORS.points,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
-  itineraryPort: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
+  itineraryDayPort: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     color: COLORS.navyDeep,
   },
-  bookButton: {
-    borderRadius: BORDER_RADIUS.md,
-    overflow: 'hidden',
-    ...SHADOW.lg,
+  casinoDayStatusChip: {
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
   },
-  bookButtonGradient: {
-    paddingVertical: SPACING.lg,
-    alignItems: 'center',
-  },
-  bookButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeXL,
+  casinoDayStatusChipText: {
+    fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
   },
+
   editButton: {
     position: 'absolute',
     top: SPACING.sm,
@@ -2683,6 +2573,53 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 31, 63, 0.1)',
     backgroundColor: '#E0F2FE',
     ...SHADOW.sm,
+  },
+  valueCompactGrid: {
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  valueCompactRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: '#DBEAFE',
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  valueCompactLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textDarkGrey,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  valueCompactLabelWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  valueCompactValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  valueNetRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: BORDER_RADIUS.sm,
+    marginBottom: SPACING.sm,
+  },
+  valueNetLabel: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  valueNetAmount: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   valueRow: {
     flexDirection: 'row',
@@ -3090,6 +3027,35 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     color: COLORS.textDarkGrey,
   },
+  historicalStatsRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginTop: SPACING.xs,
+  },
+  historicalStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: '#DBEAFE',
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  historicalStatValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.points,
+  },
+  historicalStatLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  historicalStatNote: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+    textAlign: 'center' as const,
+    marginTop: SPACING.xs,
+    fontStyle: 'italic' as const,
+  },
   casinoStatsCard: {
     width: '100%',
   },
@@ -3115,24 +3081,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
-  unbookButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.xl,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 2,
-    borderColor: COLORS.error,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    marginTop: SPACING.lg,
-  },
-  unbookButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.error,
-  },
+
   unbookWarningContainer: {
     alignItems: 'center',
     padding: SPACING.lg,
