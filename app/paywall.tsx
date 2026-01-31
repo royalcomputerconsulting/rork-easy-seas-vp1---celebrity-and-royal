@@ -1,20 +1,34 @@
 import { useMemo } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Crown, ExternalLink, RefreshCcw, Shield, Sparkles } from 'lucide-react-native';
+import { ExternalLink, RefreshCcw, Shield, Sparkles } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
 import { COLORS, BORDER_RADIUS, SHADOW } from '@/constants/theme';
-import { useEntitlement, PRO_PRODUCT_ID } from '@/state/EntitlementProvider';
+import { useEntitlement, PRO_PRODUCT_ID_MONTHLY, PRO_PRODUCT_ID_3MONTH } from '@/state/EntitlementProvider';
 
 export default function PaywallScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
 
-  const primaryCtaLabel = useMemo(() => {
-    if (entitlement.isPro) return 'You’re Pro';
-    if (entitlement.isLoading) return 'Loading…';
-    return Platform.OS === 'web' ? 'Unlock Pro (Web Preview)' : 'Subscribe — $30/month';
-  }, [entitlement.isLoading, entitlement.isPro]);
+  const find30DayPackage = useMemo(() => {
+    for (const offering of entitlement.offerings) {
+      const pkg = (offering.availablePackages ?? []).find(
+        p => p.product.identifier === PRO_PRODUCT_ID_MONTHLY
+      );
+      if (pkg) return pkg;
+    }
+    return null;
+  }, [entitlement.offerings]);
+
+  const find90DayPackage = useMemo(() => {
+    for (const offering of entitlement.offerings) {
+      const pkg = (offering.availablePackages ?? []).find(
+        p => p.product.identifier === PRO_PRODUCT_ID_3MONTH
+      );
+      if (pkg) return pkg;
+    }
+    return null;
+  }, [entitlement.offerings]);
 
   return (
     <>
@@ -32,16 +46,59 @@ export default function PaywallScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.title}>Pro Tier</Text>
+            <Text style={styles.title}>Sync Your Data</Text>
             <Text style={styles.subtitle}>
-              Unlock the full Slot Machine Advantage Players Handbook (726 machines), unlimited detail views, and full exports.
+              Subscribe to sync your data across devices and keep your cruise information up to date.
             </Text>
 
-            <View style={styles.metaRow}>
-              <View style={styles.metaPill}>
-                <Crown size={16} color={COLORS.goldDark} />
-                <Text style={styles.metaPillText}>Product: {PRO_PRODUCT_ID}</Text>
-              </View>
+            <View style={styles.subscriptionOptions}>
+              <TouchableOpacity
+                style={[styles.subscriptionCard, (entitlement.isLoading || entitlement.isPro) && styles.subscriptionCardDisabled]}
+                onPress={() => entitlement.subscribeMonthly()}
+                activeOpacity={0.9}
+                disabled={entitlement.isLoading || entitlement.isPro}
+                testID="paywall.subscribe30"
+              >
+                <View style={styles.subscriptionHeader}>
+                  <Text style={styles.subscriptionTitle}>30 Days</Text>
+                  {entitlement.isPro && <Text style={styles.activeBadge}>Active</Text>}
+                </View>
+                <Text style={styles.subscriptionPrice}>
+                  {find30DayPackage ? find30DayPackage.product.priceString : '$29.99'}
+                </Text>
+                <Text style={styles.subscriptionId}>{PRO_PRODUCT_ID_MONTHLY}</Text>
+                {entitlement.isLoading ? (
+                  <ActivityIndicator color={COLORS.navyDeep} style={styles.loader} />
+                ) : (
+                  <View style={styles.subscriptionButtonContainer}>
+                    <Text style={styles.subscriptionButtonText}>Subscribe</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.subscriptionCard, (entitlement.isLoading || entitlement.isPro) && styles.subscriptionCardDisabled]}
+                onPress={() => entitlement.subscribe3Month()}
+                activeOpacity={0.9}
+                disabled={entitlement.isLoading || entitlement.isPro}
+                testID="paywall.subscribe90"
+              >
+                <View style={styles.subscriptionHeader}>
+                  <Text style={styles.subscriptionTitle}>90 Days</Text>
+                  {entitlement.isPro && <Text style={styles.activeBadge}>Active</Text>}
+                </View>
+                <Text style={styles.subscriptionPrice}>
+                  {find90DayPackage ? find90DayPackage.product.priceString : '$79.99'}
+                </Text>
+                <Text style={styles.subscriptionId}>{PRO_PRODUCT_ID_3MONTH}</Text>
+                {entitlement.isLoading ? (
+                  <ActivityIndicator color={COLORS.navyDeep} style={styles.loader} />
+                ) : (
+                  <View style={styles.subscriptionButtonContainer}>
+                    <Text style={styles.subscriptionButtonText}>Subscribe</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
 
             {!!entitlement.error && (
@@ -50,20 +107,6 @@ export default function PaywallScreen() {
                 <Text style={styles.errorBody}>{entitlement.error}</Text>
               </View>
             )}
-
-            <TouchableOpacity
-              style={[styles.primaryButton, (entitlement.isLoading || entitlement.isPro) && styles.primaryButtonDisabled]}
-              onPress={() => entitlement.subscribeMonthly()}
-              activeOpacity={0.9}
-              disabled={entitlement.isLoading || entitlement.isPro}
-              testID="paywall.subscribe"
-            >
-              {entitlement.isLoading ? (
-                <ActivityIndicator color={COLORS.white} />
-              ) : (
-                <Text style={styles.primaryButtonText}>{primaryCtaLabel}</Text>
-              )}
-            </TouchableOpacity>
 
             <View style={styles.rowButtons}>
               <TouchableOpacity
@@ -164,43 +207,69 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 14,
   },
-  metaRow: {
+  subscriptionOptions: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
+    gap: 12,
+    marginTop: 20,
+    marginBottom: 10,
   },
-  metaPill: {
+  subscriptionCard: {
+    flex: 1,
+    backgroundColor: COLORS.bgSecondary,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: COLORS.money,
+    alignItems: 'center',
+  },
+  subscriptionCardDisabled: {
+    opacity: 0.6,
+  },
+  subscriptionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(212, 160, 10, 0.12)',
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 160, 10, 0.22)',
+    marginBottom: 8,
   },
-  metaPillText: {
-    color: COLORS.navyDeep,
-    fontWeight: '700' as const,
-    fontSize: 12,
-  },
-  primaryButton: {
-    backgroundColor: COLORS.money,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.6,
-  },
-  primaryButtonText: {
-    color: COLORS.white,
+  subscriptionTitle: {
+    fontSize: 18,
     fontWeight: '900' as const,
-    fontSize: 15,
-    letterSpacing: 0.2,
+    color: COLORS.navyDeep,
+  },
+  activeBadge: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: COLORS.money,
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  subscriptionPrice: {
+    fontSize: 24,
+    fontWeight: '900' as const,
+    color: COLORS.money,
+    marginBottom: 6,
+  },
+  subscriptionId: {
+    fontSize: 10,
+    fontWeight: '600' as const,
+    color: COLORS.textDarkGrey,
+    marginBottom: 12,
+  },
+  subscriptionButtonContainer: {
+    backgroundColor: COLORS.money,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  subscriptionButtonText: {
+    color: COLORS.white,
+    fontWeight: '800' as const,
+    fontSize: 14,
+  },
+  loader: {
+    marginTop: 10,
   },
   rowButtons: {
     flexDirection: 'row',

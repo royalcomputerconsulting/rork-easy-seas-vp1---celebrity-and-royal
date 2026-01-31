@@ -29,6 +29,7 @@ export interface EntitlementState {
   error: string | null;
   refresh: () => Promise<void>;
   subscribeMonthly: () => Promise<void>;
+  subscribe3Month: () => Promise<void>;
   restore: () => Promise<void>;
   openManageSubscription: () => Promise<void>;
   openPrivacyPolicy: () => Promise<void>;
@@ -60,7 +61,8 @@ async function withTimeout<T>(
   }
 }
 
-export const PRO_PRODUCT_ID = 'easyseas.pro.monthly' as const;
+export const PRO_PRODUCT_ID_MONTHLY = 'easyseas.pro.monthly1' as const;
+export const PRO_PRODUCT_ID_3MONTH = 'easyseas.pro.3month2' as const;
 
 const PRIVACY_URL = 'https://example.com/privacy' as const;
 const TERMS_URL = 'https://example.com/terms' as const;
@@ -71,7 +73,7 @@ function computeIsProFromCustomerInfo(info: CustomerInfo | null): boolean {
 
   try {
     const active = (info.activeSubscriptions ?? []) as string[];
-    if (active.includes(PRO_PRODUCT_ID)) return true;
+    if (active.includes(PRO_PRODUCT_ID_MONTHLY) || active.includes(PRO_PRODUCT_ID_3MONTH)) return true;
 
     const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
     const entitlementIds = Object.keys(entitlements);
@@ -285,14 +287,14 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     lastIsProRef.current = isPro;
   }, [isPro]);
 
-  const findMonthlyPackage = useCallback((): PurchasesPackage | null => {
+  const findPackageByProductId = useCallback((productId: string): PurchasesPackage | null => {
     try {
       const paywallOffering = offerings.find(o => o.identifier === 'PAYWALL');
       if (paywallOffering) {
         for (const p of paywallOffering.availablePackages ?? []) {
           const id = p.product.identifier;
           console.log('[Entitlement] Checking package in PAYWALL offering:', { id, priceString: p.product.priceString });
-          if (id === PRO_PRODUCT_ID) {
+          if (id === productId) {
             console.log('[Entitlement] Found matching package in PAYWALL offering');
             return p;
           }
@@ -303,24 +305,24 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       for (const offering of offerings) {
         for (const p of offering.availablePackages ?? []) {
           const id = p.product.identifier;
-          if (id === PRO_PRODUCT_ID) {
+          if (id === productId) {
             console.log('[Entitlement] Found matching package in offering:', offering.identifier);
             return p;
           }
         }
       }
-      console.warn('[Entitlement] No package found with product ID:', PRO_PRODUCT_ID);
+      console.warn('[Entitlement] No package found with product ID:', productId);
       return null;
     } catch (e) {
-      console.error('[Entitlement] findMonthlyPackage failed', e);
+      console.error('[Entitlement] findPackageByProductId failed', e);
       return null;
     }
   }, [offerings]);
 
-  const subscribeMonthly = useCallback(async () => {
-    console.log('[Entitlement] subscribeMonthly called');
+  const subscribeToProduct = useCallback(async (productId: string, productName: string) => {
+    console.log(`[Entitlement] subscribeToProduct called for ${productName}`);
     if (actionInFlightRef.current) {
-      console.log('[Entitlement] subscribeMonthly ignored: action already in flight');
+      console.log(`[Entitlement] subscribeToProduct ignored: action already in flight`);
       return;
     }
     actionInFlightRef.current = true;
@@ -336,7 +338,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         Alert.alert('Unlocked (Web)', 'Pro has been enabled for web preview.');
         return;
       } catch (e) {
-        console.error('[Entitlement] web subscribeMonthly failed', e);
+        console.error(`[Entitlement] web subscribeToProduct failed`, e);
         Alert.alert('Error', 'Unable to start subscription on web preview.');
         return;
       } finally {
@@ -349,15 +351,15 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       const purchases = await ensurePurchasesLoaded();
       if (!purchases) {
         const message = purchasesInitError ?? 'In-app purchases are not configured.';
-        console.warn('[Entitlement] subscribeMonthly: Purchases unavailable', { message });
+        console.warn(`[Entitlement] subscribeToProduct: Purchases unavailable`, { message });
         Alert.alert('Not Available', message);
         setError(message);
         return;
       }
 
-      const pkg = findMonthlyPackage();
+      const pkg = findPackageByProductId(productId);
       if (!pkg) {
-        console.warn('[Entitlement] Monthly package not found in offerings');
+        console.warn(`[Entitlement] ${productName} package not found in offerings`);
         Alert.alert('Not Available', 'Subscription is not available right now. Please try again later.');
         return;
       }
@@ -373,7 +375,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       setStateFromCustomerInfo(result.customerInfo);
       Alert.alert('Success', 'Full access unlocked.');
     } catch (e) {
-      console.error('[Entitlement] subscribeMonthly failed', e);
+      console.error(`[Entitlement] subscribeToProduct failed`, e);
       const message = e instanceof Error ? e.message : 'Subscription failed.';
       if (!mountedRef.current) return;
       setError(message);
@@ -383,7 +385,15 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       if (!mountedRef.current) return;
       setIsLoading(false);
     }
-  }, [ensurePurchasesLoaded, findMonthlyPackage, setStateFromCustomerInfo]);
+  }, [ensurePurchasesLoaded, findPackageByProductId, setStateFromCustomerInfo]);
+
+  const subscribeMonthly = useCallback(async () => {
+    await subscribeToProduct(PRO_PRODUCT_ID_MONTHLY, '30-day subscription');
+  }, [subscribeToProduct]);
+
+  const subscribe3Month = useCallback(async () => {
+    await subscribeToProduct(PRO_PRODUCT_ID_3MONTH, '90-day subscription');
+  }, [subscribeToProduct]);
 
   const restore = useCallback(async () => {
     console.log('[Entitlement] restore called');
@@ -500,6 +510,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       error,
       refresh,
       subscribeMonthly,
+      subscribe3Month,
       restore,
       openManageSubscription,
       openPrivacyPolicy,
@@ -515,6 +526,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       error,
       refresh,
       subscribeMonthly,
+      subscribe3Month,
       restore,
       openManageSubscription,
       openPrivacyPolicy,
