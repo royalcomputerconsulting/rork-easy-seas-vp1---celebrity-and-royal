@@ -906,10 +906,18 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, [persistData]);
 
   const setCalendarEvents = useCallback((newEvents: CalendarEvent[]) => {
+    console.log('[CoreData] Setting calendar events:', newEvents.length);
     setCalendarEventsState(newEvents);
     persistData(STORAGE_KEYS.CALENDAR_EVENTS, newEvents);
     AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
-  }, [persistData]);
+    
+    if (!isSyncingRef.current) {
+      isSyncingRef.current = true;
+      syncToBackend().finally(() => {
+        isSyncingRef.current = false;
+      });
+    }
+  }, [persistData, syncToBackend]);
 
   const addCalendarEvent = useCallback((event: CalendarEvent) => {
     setCalendarEventsState(prev => {
@@ -917,7 +925,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       persistData(STORAGE_KEYS.CALENDAR_EVENTS, updated);
       return updated;
     });
-  }, [persistData]);
+    
+    if (!isSyncingRef.current) {
+      isSyncingRef.current = true;
+      syncToBackend().finally(() => {
+        isSyncingRef.current = false;
+      });
+    }
+  }, [persistData, syncToBackend]);
 
   const updateCalendarEvent = useCallback((id: string, updates: Partial<CalendarEvent>) => {
     setCalendarEventsState(prev => {

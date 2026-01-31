@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -49,10 +49,18 @@ export default function EventsScreen() {
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const calendarEvents = useMemo(() => {
-    return [...(localData.calendar || []), ...(localData.tripit || [])];
+    const events = [...(localData.calendar || []), ...(localData.tripit || [])];
+    console.log('[Events] Calendar events updated:', events.length);
+    return events;
   }, [localData.calendar, localData.tripit]);
+
+  useEffect(() => {
+    console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', bookedCruises.length);
+    setRefreshKey(prev => prev + 1);
+  }, [calendarEvents.length, bookedCruises.length]);
 
   const eventCounts = useMemo(() => {
     let cruise = 0;
@@ -140,6 +148,7 @@ export default function EventsScreen() {
   }, [calendarEvents, bookedCruises, isDateInRange]);
 
   const calendarDays = useMemo((): DayData[][] => {
+    console.log('[Events] Recalculating calendar days, refreshKey:', refreshKey);
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     
@@ -199,7 +208,7 @@ export default function EventsScreen() {
     }
     
     return weeks;
-  }, [currentDate, getEventsForDate]);
+  }, [currentDate, getEventsForDate, refreshKey]);
 
   const weekDays = useMemo(() => {
     const today = new Date();
@@ -220,7 +229,7 @@ export default function EventsScreen() {
       });
     }
     return days;
-  }, [getEventsForDate]);
+  }, [getEventsForDate, refreshKey]);
 
   const next90Days = useMemo(() => {
     const today = new Date();
@@ -239,7 +248,7 @@ export default function EventsScreen() {
       });
     }
     return days;
-  }, [getEventsForDate]);
+  }, [getEventsForDate, refreshKey]);
 
   const navigateMonth = useCallback((direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
