@@ -226,6 +226,7 @@ export function findBackToBackSets(
 ): BackToBackSet[] {
   const {
     maxGapDays = 2,
+    requireDifferentOffers = false,
     excludeConflicts = true,
     minChainLength = 2,
   } = options;
@@ -367,35 +368,50 @@ export function findBackToBackSets(
     currentGaps: number[],
     usedOfferCodes: Set<string>
   ) {
-    // Get available codes for this slot (codes not yet used in the chain)
-    const availableCodes = getAvailableOfferCodes(currentSlot, usedOfferCodes);
-    
-    // If no available codes for this slot, we can't continue
-    if (availableCodes.length === 0 && currentChain.length > 0) {
-      console.log('[B2B Finder] No unique offer codes left for slot', currentSlot.key);
+    // Check if slot has any offers
+    if (currentSlot.offers.length === 0 && currentChain.length > 0) {
+      console.log('[B2B Finder] No offers for slot', currentSlot.key);
       return;
+    }
+    
+    // If requiring different offers, get available codes for this slot
+    if (requireDifferentOffers) {
+      const availableCodes = getAvailableOfferCodes(currentSlot, usedOfferCodes);
+      if (availableCodes.length === 0 && currentChain.length > 0) {
+        console.log('[B2B Finder] No unique offer codes left for slot', currentSlot.key);
+        return;
+      }
     }
     
     currentChain.push(currentSlot);
     visitedInCurrentPath.add(currentSlot.key);
     
-    // Use one offer code from this slot (mark ALL available codes as used for this slot)
-    // Actually, we only need to mark ONE code as used - the slot "consumes" one code
-    // Pick the first available code to mark as used for this slot
-    const codeToUse = availableCodes[0] || 'NO_CODE';
-    const newUsedCodes = new Set(usedOfferCodes);
-    newUsedCodes.add(codeToUse);
+    // Update used codes only if we're requiring different offers
+    let newUsedCodes = usedOfferCodes;
+    if (requireDifferentOffers) {
+      const availableCodes = getAvailableOfferCodes(currentSlot, usedOfferCodes);
+      const codeToUse = availableCodes[0] || 'NO_CODE';
+      newUsedCodes = new Set(usedOfferCodes);
+      newUsedCodes.add(codeToUse);
+    }
     
     const followers = adjacencyMap.get(currentSlot.key) || [];
     
     for (const { slot: nextSlot, gapDays } of followers) {
       if (visitedInCurrentPath.has(nextSlot.key)) continue;
       
-      // Check if next slot has at least one offer code not yet used
-      const nextAvailableCodes = getAvailableOfferCodes(nextSlot, newUsedCodes);
-      if (nextAvailableCodes.length === 0) {
-        console.log('[B2B Finder] Next slot', nextSlot.key, 'has no unique codes, skipping chain extension');
+      // Check if next slot has offers and unique codes if required
+      if (nextSlot.offers.length === 0) {
+        console.log('[B2B Finder] Next slot', nextSlot.key, 'has no offers, skipping');
         continue;
+      }
+      
+      if (requireDifferentOffers) {
+        const nextAvailableCodes = getAvailableOfferCodes(nextSlot, newUsedCodes);
+        if (nextAvailableCodes.length === 0) {
+          console.log('[B2B Finder] Next slot', nextSlot.key, 'has no unique codes, skipping chain extension');
+          continue;
+        }
       }
       
       findChains(nextSlot, [...currentChain], [...currentGaps, gapDays], newUsedCodes);
@@ -447,22 +463,30 @@ export function findBackToBackSets(
     return true;
   });
 
-  // Filter slots' offers to only include non-MGM Gold offers and track unique codes per chain
+  // Filter slots' offers to only include non-MGM Gold offers and track unique codes per chain if required
   const chainsWithFilteredOffers = longestChains.map(chain => {
     const usedCodesInChain = new Set<string>();
     const filteredSlots = chain.slots.map(slot => {
-      // Filter out MGM Gold offers and already-used offer codes
+      // Filter out MGM Gold offers and optionally filter already-used offer codes
       const availableOffers = slot.offers.filter(o => {
         if (isMGMGoldOffer(o.offerName, o.offerCode)) return false;
-        const code = o.offerCode || 'NO_CODE';
-        return !usedCodesInChain.has(code);
+        
+        // Only enforce unique codes if requireDifferentOffers is true
+        if (requireDifferentOffers) {
+          const code = o.offerCode || 'NO_CODE';
+          return !usedCodesInChain.has(code);
+        }
+        
+        return true;
       });
       
-      // Mark codes from this slot as used (only the ones we're keeping)
-      availableOffers.forEach(o => {
-        const code = o.offerCode || 'NO_CODE';
-        usedCodesInChain.add(code);
-      });
+      // Mark codes from this slot as used only if we're requiring different offers
+      if (requireDifferentOffers) {
+        availableOffers.forEach(o => {
+          const code = o.offerCode || 'NO_CODE';
+          usedCodesInChain.add(code);
+        });
+      }
       
       return {
         ...slot,

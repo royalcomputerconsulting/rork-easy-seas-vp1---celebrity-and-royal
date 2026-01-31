@@ -797,6 +797,31 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     persistData(STORAGE_KEYS.BOOKED_CRUISES, enrichedCruises);
     AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
     
+    // Auto-generate calendar events from booked cruises
+    console.log('[CoreData] Auto-generating calendar events from', enrichedCruises.length, 'booked cruises');
+    const newCalendarEvents: CalendarEvent[] = enrichedCruises.map(cruise => ({
+      id: `cruise-${cruise.id}`,
+      title: `${cruise.shipName}`,
+      description: cruise.itineraryName || `${cruise.nights} Night Cruise`,
+      startDate: cruise.sailDate,
+      endDate: cruise.returnDate,
+      type: 'cruise',
+      isAllDay: true,
+      location: cruise.departurePort,
+      metadata: {
+        cruiseId: cruise.id,
+        shipName: cruise.shipName,
+        cabinNumber: cruise.cabinNumber,
+        reservationNumber: cruise.reservationNumber
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }));
+    
+    console.log('[CoreData] Generated', newCalendarEvents.length, 'calendar events from cruises');
+    setCalendarEventsState(newCalendarEvents);
+    persistData(STORAGE_KEYS.CALENDAR_EVENTS, newCalendarEvents);
+    
     if (!isSyncingRef.current) {
       isSyncingRef.current = true;
       syncToBackend().finally(() => {

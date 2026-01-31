@@ -1178,6 +1178,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }));
       addLog('Data synced successfully to app!', 'success');
+      
+      // Force refresh CoreData to ensure all computed data (calendar, B2B sets) updates
+      console.log('[RoyalCaribbeanSync] Triggering data refresh after sync...');
+      if (coreDataContext.refreshData) {
+        await coreDataContext.refreshData();
+        addLog('✅ Data refresh completed', 'success');
+      }
     } catch (error) {
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
       addLog(`Failed to sync data: ${error}`, 'error');
