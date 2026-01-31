@@ -223,6 +223,7 @@ export function findBackToBackSets(
     excludeConflicts?: boolean;
     minChainLength?: number;
     bookedCruises?: Cruise[];
+    minDaysBetweenBatches?: number;
   } = {}
 ): BackToBackSet[] {
   const {
@@ -231,6 +232,7 @@ export function findBackToBackSets(
     excludeConflicts = true,
     minChainLength = 2,
     bookedCruises = [],
+    minDaysBetweenBatches = 3,
   } = options;
 
   console.log('[B2B Finder] Starting search with', cruises.length, 'cruise records');
@@ -588,12 +590,58 @@ export function findBackToBackSets(
     console.log('[B2B Finder] Excluded', b2bSets.length - filteredSets.length, 'sets exceeding 14 nights');
   }
 
-  return filteredSets.sort((a, b) => {
+  const sortedSets = filteredSets.sort((a, b) => {
     if (a.totalNights !== b.totalNights) {
       return a.totalNights - b.totalNights;
     }
     return createDateFromString(a.startDate).getTime() - createDateFromString(b.startDate).getTime();
   });
+
+  const spacedSets: BackToBackSet[] = [];
+  
+  for (const set of sortedSets) {
+    const setStartDate = createDateFromString(set.startDate);
+    const setEndDate = createDateFromString(set.endDate);
+    
+    let hasConflict = false;
+    for (const existingSet of spacedSets) {
+      const existingEndDate = createDateFromString(existingSet.endDate);
+      const existingStartDate = createDateFromString(existingSet.startDate);
+      
+      const daysBetweenEnd = getDaysDifference(existingSet.endDate, set.startDate);
+      const daysBetweenStart = getDaysDifference(set.endDate, existingSet.startDate);
+      
+      if (daysBetweenEnd >= 0 && daysBetweenEnd < minDaysBetweenBatches) {
+        console.log(`[B2B Finder] Excluding set ${set.id}: only ${daysBetweenEnd} days after ${existingSet.id} (need ${minDaysBetweenBatches})`);
+        hasConflict = true;
+        break;
+      }
+      
+      if (daysBetweenStart >= 0 && daysBetweenStart < minDaysBetweenBatches) {
+        console.log(`[B2B Finder] Excluding set ${set.id}: only ${daysBetweenStart} days before ${existingSet.id} (need ${minDaysBetweenBatches})`);
+        hasConflict = true;
+        break;
+      }
+      
+      const datesOverlap = setStartDate <= existingEndDate && setEndDate >= existingStartDate;
+      if (datesOverlap) {
+        console.log(`[B2B Finder] Excluding set ${set.id}: overlaps with ${existingSet.id}`);
+        hasConflict = true;
+        break;
+      }
+    }
+    
+    if (!hasConflict) {
+      spacedSets.push(set);
+    }
+  }
+
+  console.log('[B2B Finder] Final sets with adequate spacing:', spacedSets.length);
+  if (sortedSets.length > spacedSets.length) {
+    console.log('[B2B Finder] Excluded', sortedSets.length - spacedSets.length, 'sets for insufficient spacing');
+  }
+
+  return spacedSets;
 }
 
 export function convertSetsToDisplayCruises(sets: BackToBackSet[]): BackToBackCruiseDisplay[] {
