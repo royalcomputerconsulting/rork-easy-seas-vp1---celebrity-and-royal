@@ -266,23 +266,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     initializeAndLoadData();
   }, [initializeAndLoadData]);
 
-  useEffect(() => {
-    if (!hasFullAccess) return;
-    if (isLoading) return;
-
-    console.log('[SlotMachineLibrary] Pro access detected - ensuring full encyclopedia is loaded', {
-      encyclopediaCount: encyclopedia.length,
-      myAtlasIds: myAtlasIds.length,
-      indexLoadComplete,
-    });
-
-    ensureEncyclopediaFullyLoadedForPro(encyclopedia, myAtlasIds)
-      .then((result) => {
-        if (!result.didChange) return;
-        setEncyclopedia(result.encyclopedia);
-      })
-      .catch((e) => console.error('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro unhandled error', e));
-  }, [ensureEncyclopediaFullyLoadedForPro, encyclopedia, hasFullAccess, indexLoadComplete, isLoading, myAtlasIds]);
 
   const saveEncyclopedia = async (data: MachineEncyclopediaEntry[]) => {
     try {
@@ -716,6 +699,24 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   const hasFullAccess = useMemo(() => {
     return isUserWhitelisted || isPro;
   }, [isPro, isUserWhitelisted]);
+
+  useEffect(() => {
+    if (!hasFullAccess) return;
+    if (isLoading) return;
+
+    console.log('[SlotMachineLibrary] Pro access detected - ensuring full encyclopedia is loaded', {
+      encyclopediaCount: encyclopedia.length,
+      myAtlasIds: myAtlasIds.length,
+      indexLoadComplete,
+    });
+
+    ensureEncyclopediaFullyLoadedForPro(encyclopedia, myAtlasIds)
+      .then((result) => {
+        if (!result.didChange) return;
+        setEncyclopedia(result.encyclopedia);
+      })
+      .catch((e) => console.error('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro unhandled error', e));
+  }, [ensureEncyclopediaFullyLoadedForPro, encyclopedia, hasFullAccess, indexLoadComplete, isLoading, myAtlasIds]);
 
   const globalLibrary = useMemo(() => {
     if (hasFullAccess) {

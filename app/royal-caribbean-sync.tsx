@@ -713,7 +713,7 @@ function RoyalCaribbeanSyncScreen() {
                   <View style={styles.syncLockedBannerTextWrap}>
                     <Text style={styles.syncLockedBannerTitle}>Subscriber-only</Text>
                     <Text style={styles.syncLockedBannerBody}>
-                      To sync your extracted data into the app, you need an active App Store subscription. Whitelisted emails can sync without a subscription.
+                      To sync your extracted data into the app, you need an active App Store subscription or a whitelisted email.
                     </Text>
                   </View>
                 </View>
@@ -732,7 +732,7 @@ function RoyalCaribbeanSyncScreen() {
                   onPress={() => {
                     if (!canSyncToApp) {
                       console.log('[RoyalCaribbeanSync] Sync blocked - user not entitled');
-                      addLog('Sync to app requires an active subscription. Open paywall to unlock.', 'warning');
+                      addLog('Sync to app requires an active subscription or a whitelisted email. Open paywall to unlock.', 'warning');
                       router.push('/paywall');
                       return;
                     }

@@ -1561,7 +1561,7 @@ STEP 4: Optional Calendar Import
                 <View style={styles.adminHeader}>
                   <Text style={styles.adminHeaderText}>Manage user access</Text>
                   <Text style={styles.adminHeaderSubtext}>
-                    Only whitelisted emails can log in. Admin email cannot be removed.
+                    Whitelisted emails can access restricted features without a subscription. Admin email cannot be removed.
                   </Text>
                 </View>
                 
