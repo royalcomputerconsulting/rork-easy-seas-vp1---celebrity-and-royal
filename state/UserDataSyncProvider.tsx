@@ -453,9 +453,11 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
   useEffect(() => {
     isMountedRef.current = true;
+    console.log('[UserDataSync] Provider mounted/remounted, resetting initialization');
     
     return () => {
       isMountedRef.current = false;
+      console.log('[UserDataSync] Provider unmounting');
     };
   }, []);
 
@@ -468,6 +470,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       lastSyncedEmailRef.current = null;
       hasInitializedRef.current = false;
       return;
+    }
+
+    // On hot reload, if initialCheckComplete is false but hasInitialized is true, reset
+    if (hasInitializedRef.current && !initialCheckComplete) {
+      console.log("[UserDataSync] Detected incomplete initialization (hot reload?), resetting");
+      hasInitializedRef.current = false;
     }
 
     if (hasInitializedRef.current && lastSyncedEmailRef.current === authenticatedEmail) {
