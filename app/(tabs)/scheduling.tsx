@@ -164,18 +164,22 @@ export default function SchedulingScreen() {
     console.log('[Scheduling] Finding back-to-back cruise sets...');
     console.log('[Scheduling] Total cruises to search:', cruises.length);
     
+    const allBooked = [...(localData.booked || []), ...(bookedCruises || [])];
+    console.log('[Scheduling] Including booked cruises for B2B matching:', allBooked.length);
+    
     const sets = findBackToBackSets(cruises, bookedDates, {
       maxGapDays: 2,
       requireDifferentOffers: true,
-      excludeConflicts: bookedDates.size > 0,
+      excludeConflicts: false,
       minChainLength: 2,
+      bookedCruises: allBooked,
     });
     
     console.log('[Scheduling] Found', sets.length, 'back-to-back sets');
     setB2bSets(sets);
     
     return sets;
-  }, [bookedDates]);
+  }, [bookedDates, localData.booked, bookedCruises]);
 
   const availableShips = useMemo(() => {
     const ships = new Set<string>();

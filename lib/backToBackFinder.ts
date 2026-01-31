@@ -222,6 +222,7 @@ export function findBackToBackSets(
     requireDifferentOffers?: boolean;
     excludeConflicts?: boolean;
     minChainLength?: number;
+    bookedCruises?: Cruise[];
   } = {}
 ): BackToBackSet[] {
   const {
@@ -229,11 +230,13 @@ export function findBackToBackSets(
     requireDifferentOffers = false,
     excludeConflicts = true,
     minChainLength = 2,
+    bookedCruises = [],
   } = options;
 
   console.log('[B2B Finder] Starting search with', cruises.length, 'cruise records');
   console.log('[B2B Finder] Options:', { maxGapDays, excludeConflicts, minChainLength });
   console.log('[B2B Finder] Booked dates count:', bookedDates.size);
+  console.log('[B2B Finder] Booked cruises count:', bookedCruises.length);
 
   const validCruises = cruises.filter(cruise => {
     if (!cruise.sailDate) return false;
@@ -243,14 +246,30 @@ export function findBackToBackSets(
 
   console.log('[B2B Finder] Valid future cruises:', validCruises.length);
 
-  const allSlots = groupCruisesIntoSlots(validCruises);
+  const validBookedCruises = bookedCruises.filter(cruise => {
+    if (!cruise.sailDate) return false;
+    if (isDateInPast(cruise.returnDate || cruise.sailDate)) return false;
+    return true;
+  });
+
+  console.log('[B2B Finder] Valid future booked cruises:', validBookedCruises.length);
+
+  const combinedCruises = [...validCruises, ...validBookedCruises];
+  console.log('[B2B Finder] Combined total (available + booked):', combinedCruises.length);
+
+  const allSlots = groupCruisesIntoSlots(combinedCruises);
   console.log('[B2B Finder] Unique sailing slots (ship+date combinations):', allSlots.length);
 
-  const availableSlots = excludeConflicts 
-    ? allSlots.filter(slot => !slotConflictsWithBookedDates(slot, bookedDates))
-    : allSlots;
+  const bookedSlotKeys = new Set(
+    validBookedCruises
+      .filter(c => c.shipName && c.sailDate)
+      .map(c => `${normalizeShipName(c.shipName)}_${c.sailDate}`)
+  );
+  console.log('[B2B Finder] Booked slot keys:', Array.from(bookedSlotKeys));
 
-  console.log('[B2B Finder] Available slots after conflict check:', availableSlots.length);
+  const availableSlots = allSlots;
+
+  console.log('[B2B Finder] Total slots for matching:', availableSlots.length);
 
   if (availableSlots.length < 2) {
     console.log('[B2B Finder] Not enough slots to form back-to-back sets');
@@ -516,7 +535,12 @@ export function findBackToBackSets(
     
     const allOfferCodes: string[] = [];
     const allOfferNames: string[] = [];
+    let hasBookedCruise = false;
+    
     setSlots.forEach(slot => {
+      if (bookedSlotKeys.has(slot.key)) {
+        hasBookedCruise = true;
+      }
       slot.offers.forEach(offer => {
         if (offer.offerCode && !allOfferCodes.includes(offer.offerCode)) {
           allOfferCodes.push(offer.offerCode);
@@ -532,9 +556,10 @@ export function findBackToBackSets(
     const firstSlot = setSlots[0];
     const lastSlot = setSlots[setSlots.length - 1];
 
-    console.log(`[B2B Finder] Set ${index + 1}: ${setSlots.length} sailings, ${totalNights} nights, ${firstSlot.sailDate} to ${lastSlot.returnDate}`);
+    console.log(`[B2B Finder] Set ${index + 1}: ${setSlots.length} sailings, ${totalNights} nights, ${firstSlot.sailDate} to ${lastSlot.returnDate}${hasBookedCruise ? ' (includes booked cruise)' : ''}`);
     setSlots.forEach((slot, i) => {
-      console.log(`  ${i + 1}. ${slot.shipName} ${slot.sailDate}-${slot.returnDate} (${slot.nights}N) - ${slot.offers.length} offer options`);
+      const isBooked = bookedSlotKeys.has(slot.key);
+      console.log(`  ${i + 1}. ${slot.shipName} ${slot.sailDate}-${slot.returnDate} (${slot.nights}N)${isBooked ? ' [BOOKED]' : ''} - ${slot.offers.length} offer options`);
       slot.offers.forEach(o => {
         console.log(`     - ${o.offerCode || 'No code'} | ${o.cabinType} | ${o.guestsInfo}`);
       });
