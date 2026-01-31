@@ -22,7 +22,7 @@ export default function PaywallScreen() {
         },
         {
           text: 'Unlock',
-          onPress: async (password) => {
+          onPress: async (password: string | undefined) => {
             if (password === 'a1') {
               setOverrideLoading(true);
               try {
