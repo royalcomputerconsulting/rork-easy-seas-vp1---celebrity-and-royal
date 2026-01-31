@@ -34,24 +34,24 @@ export function normalizeDateString(dateStr: string): string {
   if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(cleaned)) {
     const [month, day, year] = cleaned.split('/');
     const fullYear = year.length === 2 ? `20${year}` : year;
-    return `${month.padStart(2, '0')}-${day.padStart(2, '0')}-${fullYear}`;
+    return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
 
   if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(cleaned)) {
     const [month, day, year] = cleaned.split('-');
-    return `${month.padStart(2, '0')}-${day.padStart(2, '0')}-${year}`;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
 
   if (/^\d{4}-\d{2}-\d{2}/.test(cleaned)) {
     const [year, month, day] = cleaned.split('T')[0].split('-');
-    return `${month}-${day}-${year}`;
+    return `${year}-${month}-${day}`;
   }
 
   if (/^\d{8}$/.test(cleaned)) {
     const year = cleaned.slice(0, 4);
     const month = cleaned.slice(4, 6);
     const day = cleaned.slice(6, 8);
-    return `${month}-${day}-${year}`;
+    return `${year}-${month}-${day}`;
   }
 
   return cleaned;
@@ -72,7 +72,7 @@ export function calculateReturnDate(sailDate: string, nights: number): string {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const year = date.getFullYear();
-    return `${month}-${day}-${year}`;
+    return `${year}-${month}-${day}`;
   } catch {
     return sailDate;
   }
