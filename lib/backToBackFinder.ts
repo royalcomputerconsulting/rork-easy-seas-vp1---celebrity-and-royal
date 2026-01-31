@@ -253,8 +253,13 @@ export function findBackToBackSets(
 
   if (availableSlots.length < 2) {
     console.log('[B2B Finder] Not enough slots to form back-to-back sets');
+    console.log('[B2B Finder] Need at least 2 slots but only have', availableSlots.length);
     return [];
   }
+  
+  // Log sample of filtered cruises to understand what's being excluded
+  const mgmGoldCount = validCruises.filter(c => isMGMGoldOffer(c.offerName, c.offerCode)).length;
+  console.log('[B2B Finder] MGM Gold offers filtered out:', mgmGoldCount, 'out of', validCruises.length, 'valid cruises');
 
   const sortedSlots = [...availableSlots].sort((a, b) => 
     createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime()
@@ -326,6 +331,21 @@ export function findBackToBackSets(
   }
 
   console.log('[B2B Finder] Slots with potential followers:', adjacencyMap.size);
+  
+  if (adjacencyMap.size === 0) {
+    console.log('[B2B Finder] No adjacent slot pairs found. Possible reasons:');
+    console.log('  - Sailings have overlapping dates');
+    console.log('  - Gap between sailings exceeds', maxGapDays, 'days');
+    console.log('  - Departure ports don\'t match');
+    console.log('  - Not enough sailings on the same ship');
+    
+    // Sample diagnostics
+    const shipCounts = Array.from(shipGroups.entries())
+      .map(([ship, slots]) => ({ ship, count: slots.length }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+    console.log('[B2B Finder] Top ships by sailing count:', shipCounts);
+  }
 
   const allChains: { slots: SailingSlot[]; gapDays: number[]; usedOfferCodes: Set<string> }[] = [];
   const visitedInCurrentPath = new Set<string>();
