@@ -819,12 +819,8 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   ]);
 
   const myAtlasMachines = useMemo(() => {
-    const atlasMachines = encyclopedia.filter(entry => entry.isInMyAtlas);
-    if (hasFullAccess) {
-      return atlasMachines;
-    }
-    return atlasMachines.slice(0, FREE_USER_MACHINE_LIMIT);
-  }, [encyclopedia, hasFullAccess]);
+    return encyclopedia;
+  }, [encyclopedia]);
 
   const totalMachineCount = useMemo(() => {
     return encyclopedia.length;
