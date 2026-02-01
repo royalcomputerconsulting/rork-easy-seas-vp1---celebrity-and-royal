@@ -11,11 +11,13 @@ import {
   User,
   Plus,
   AlertTriangle,
+  RefreshCcw,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCruiseStore } from '@/state/CruiseStore';
 import { useLoyalty } from '@/state/LoyaltyProvider';
+import { useCoreData } from '@/state/CoreDataProvider';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import type { CalendarEvent, BookedCruise } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
@@ -47,9 +49,11 @@ export default function EventsScreen() {
   const { localData } = useAppState();
   const { bookedCruises } = useCruiseStore();
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
+  const coreData = useCoreData();
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const calendarEvents = useMemo(() => {
     const events = [...(localData.calendar || []), ...(localData.tripit || [])];
@@ -265,6 +269,41 @@ export default function EventsScreen() {
   const goToToday = useCallback(() => {
     setCurrentDate(new Date());
   }, []);
+
+  const handleSyncEvents = useCallback(async () => {
+    console.log('[Events] Syncing calendar events from booked cruises...');
+    setIsSyncing(true);
+    
+    try {
+      const existingEvents = coreData.calendarEvents.filter(e => e.sourceType !== 'cruise');
+      
+      const cruiseEvents: CalendarEvent[] = bookedCruises.map(cruise => ({
+        id: `cruise-event-${cruise.id}`,
+        title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
+        startDate: cruise.sailDate,
+        endDate: cruise.returnDate,
+        start: cruise.sailDate,
+        end: cruise.returnDate,
+        type: 'cruise' as const,
+        sourceType: 'cruise' as const,
+        location: cruise.departurePort,
+        description: `${cruise.nights} night cruise${cruise.reservationNumber ? ` - Res# ${cruise.reservationNumber}` : ''}${cruise.cabinNumber ? ` - Cabin ${cruise.cabinNumber}` : ''}`,
+        cruiseId: cruise.id,
+        allDay: true,
+        source: 'import' as const,
+      }));
+      
+      const allEvents = [...existingEvents, ...cruiseEvents];
+      coreData.setCalendarEvents(allEvents);
+      
+      console.log(`[Events] Synced ${cruiseEvents.length} cruise events`);
+      setRefreshKey(prev => prev + 1);
+    } catch (error) {
+      console.error('[Events] Error syncing events:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [bookedCruises, coreData]);
 
   const formatMonthYear = useCallback((date: Date): string => {
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -500,6 +539,15 @@ export default function EventsScreen() {
               >
                 <Text style={styles.monthYearText}>{formatMonthYear(currentDate)}</Text>
                 <Text style={styles.eventCountText}>{totalEventsThisMonth} events • Tap to go to today</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.navButton}
+                onPress={handleSyncEvents}
+                activeOpacity={0.7}
+                disabled={isSyncing}
+              >
+                <RefreshCcw size={20} color={isSyncing ? COLORS.navyDeep : COLORS.navyDeep} style={isSyncing ? { opacity: 0.5 } : undefined} />
               </TouchableOpacity>
               
               <TouchableOpacity
