@@ -105,6 +105,9 @@ export async function getAllStoredData(): Promise<FullAppDataBundle> {
     let users: UserProfile[] = [];
     let machineEncyclopedia: MachineEncyclopediaEntry[] = [];
     let myAtlasIds: string[] = [];
+    
+    const usedOfferCodes = new Set<string>();
+    const usedCruiseIds = new Set<string>();
 
     try {
       cruises = cruisesData ? JSON.parse(cruisesData) : [];
@@ -125,9 +128,48 @@ export async function getAllStoredData(): Promise<FullAppDataBundle> {
     try {
       casinoOffers = offersData ? JSON.parse(offersData) : [];
       if (!Array.isArray(casinoOffers)) casinoOffers = [];
+      
+      console.log('[DataBundle] Filtering out USED offers from export...');
+      const originalOfferCount = casinoOffers.length;
+      
+      casinoOffers.forEach(offer => {
+        if (offer.status === 'used') {
+          if (offer.offerCode) {
+            usedOfferCodes.add(offer.offerCode);
+          }
+          if (offer.cruiseId) {
+            usedCruiseIds.add(offer.cruiseId);
+          }
+          if (offer.cruiseIds && Array.isArray(offer.cruiseIds)) {
+            offer.cruiseIds.forEach(id => usedCruiseIds.add(id));
+          }
+        }
+      });
+      
+      casinoOffers = casinoOffers.filter(offer => offer.status !== 'used');
+      console.log('[DataBundle] Filtered offers:', originalOfferCount, '->', casinoOffers.length);
+      console.log('[DataBundle] Used offer codes:', Array.from(usedOfferCodes));
+      console.log('[DataBundle] Used cruise IDs:', Array.from(usedCruiseIds));
     } catch (e) {
       console.error('[DataBundle] Error parsing casino offers:', e);
       casinoOffers = [];
+    }
+    
+    if (usedOfferCodes.size > 0 || usedCruiseIds.size > 0) {
+      console.log('[DataBundle] Filtering cruises linked to used offers...');
+      const originalCruiseCount = cruises.length;
+      cruises = cruises.filter(cruise => {
+        if (usedCruiseIds.has(cruise.id)) {
+          console.log('[DataBundle] Excluding cruise by ID:', cruise.id, cruise.shipName, cruise.sailDate);
+          return false;
+        }
+        if (cruise.offerCode && usedOfferCodes.has(cruise.offerCode)) {
+          console.log('[DataBundle] Excluding cruise by offerCode:', cruise.offerCode, cruise.shipName, cruise.sailDate);
+          return false;
+        }
+        return true;
+      });
+      console.log('[DataBundle] Filtered cruises:', originalCruiseCount, '->', cruises.length);
     }
 
     try {
