@@ -19,7 +19,7 @@ export default function PaywallScreen() {
         await entitlement.manualUnlock();
         Alert.alert('Success', 'Full access unlocked via manual override.');
         router.back();
-      } catch (e) {
+      } catch {
         Alert.alert('Error', 'Failed to unlock. Please try again.');
       } finally {
         setOverrideLoading(false);
