@@ -242,7 +242,12 @@ function RoyalCaribbeanSyncScreen() {
       />
       
       <View style={styles.container}>
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={true}
+          persistentScrollbar={true}
+        >
         <TouchableOpacity 
           style={styles.backButtonTop}
           onPress={() => router.back()}

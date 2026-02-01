@@ -785,7 +785,8 @@ export default function SchedulingScreen() {
                 colors={[COLORS.navyDeep]}
               />
             }
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
+            persistentScrollbar={true}
           />
         ) : (
           <FlatList
@@ -803,11 +804,18 @@ export default function SchedulingScreen() {
                 colors={[COLORS.navyDeep]}
               />
             }
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
+            persistentScrollbar={true}
             removeClippedSubviews={Platform.OS === 'android'}
-            initialNumToRender={8}
-            maxToRenderPerBatch={8}
-            windowSize={10}
+            initialNumToRender={10}
+            maxToRenderPerBatch={20}
+            windowSize={21}
+            updateCellsBatchingPeriod={50}
+            getItemLayout={(data, index) => ({
+              length: 140,
+              offset: 140 * index,
+              index,
+            })}
           />
         )}
       </SafeAreaView>

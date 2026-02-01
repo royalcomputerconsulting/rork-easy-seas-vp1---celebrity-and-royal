@@ -1240,7 +1240,8 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
       
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView 
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
+          persistentScrollbar={true}
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.header}>
