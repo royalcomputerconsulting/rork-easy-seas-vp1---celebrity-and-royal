@@ -199,6 +199,10 @@ function OverviewScreenContent() {
       if (offer.expiryDate && getDaysUntil(offer.expiryDate) < 0) {
         return;
       }
+      
+      if (offer.status === 'used' || offer.status === 'booked') {
+        return;
+      }
 
       const key = offer.offerCode || offer.id;
       const existing = offersMap.get(key);

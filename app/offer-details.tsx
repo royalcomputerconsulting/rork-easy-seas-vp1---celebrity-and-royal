@@ -18,6 +18,8 @@ import {
   Dice5,
   Star,
   DollarSign,
+  Ban,
+  Archive,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -293,6 +295,32 @@ export default function OfferDetailsScreen() {
     router.back();
   }, [router]);
 
+  const handleMarkAsUsed = useCallback(() => {
+    const { offer } = offerData;
+    if (!offer) return;
+    
+    const { updateCasinoOffer } = useCruiseStore();
+    updateCasinoOffer({
+      ...offer,
+      status: 'used',
+    });
+    console.log('[OfferDetails] Marked offer as used:', offer.offerCode);
+    router.back();
+  }, [offerData, router]);
+
+  const handleMarkAsInProgress = useCallback(() => {
+    const { offer } = offerData;
+    if (!offer) return;
+    
+    const { updateCasinoOffer } = useCruiseStore();
+    updateCasinoOffer({
+      ...offer,
+      status: 'booked',
+    });
+    console.log('[OfferDetails] Marked offer as booked/in-progress:', offer.offerCode);
+    router.back();
+  }, [offerData, router]);
+
   const getCruiseSummary = useCallback((cruise: Cruise) => {
     const casinoAvail = calculateCasinoAvailabilityForCruise(cruise, storeOffers);
     const playEstimate = calculatePersonalizedPlayEstimate(casinoAvail, playingHoursConfig);
@@ -541,6 +569,44 @@ export default function OfferDetailsScreen() {
               </View>
             </View>
           </View>
+
+          {/* Status Actions */}
+          {offerInfo.offerCode && offerData.offer && offerData.offer.status !== 'used' && offerData.offer.status !== 'booked' && (
+            <View style={styles.statusActionsRow}>
+              <TouchableOpacity
+                style={styles.statusActionButton}
+                onPress={handleMarkAsInProgress}
+                activeOpacity={0.7}
+              >
+                <Archive size={16} color={COLORS.white} />
+                <Text style={styles.statusActionText}>Mark In Progress</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.statusActionButton, styles.statusActionButtonUsed]}
+                onPress={handleMarkAsUsed}
+                activeOpacity={0.7}
+              >
+                <Ban size={16} color={COLORS.white} />
+                <Text style={styles.statusActionText}>Mark as Used</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Status Badge if already marked */}
+          {offerData.offer && (offerData.offer.status === 'used' || offerData.offer.status === 'booked') && (
+            <View style={styles.statusBadgeContainer}>
+              <View style={[styles.statusBadge, offerData.offer.status === 'used' && styles.statusBadgeUsed]}>
+                {offerData.offer.status === 'used' ? (
+                  <Ban size={16} color={COLORS.white} />
+                ) : (
+                  <Archive size={16} color={COLORS.white} />
+                )}
+                <Text style={styles.statusBadgeText}>
+                  {offerData.offer.status === 'used' ? 'Used' : 'In Progress'}
+                </Text>
+              </View>
+            </View>
+          )}
         </LinearGradient>
 
         {/* Centered Sort Controls */}
@@ -1047,5 +1113,53 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700' as const,
     color: '#1E40AF',
+  },
+  statusActionsRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginTop: SPACING.md,
+  },
+  statusActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    backgroundColor: '#0EA5E9',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    ...SHADOW.sm,
+  },
+  statusActionButtonUsed: {
+    backgroundColor: '#DC2626',
+  },
+  statusActionText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: COLORS.white,
+  },
+  statusBadgeContainer: {
+    marginTop: SPACING.md,
+    alignItems: 'center',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    backgroundColor: '#0EA5E9',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.round,
+    ...SHADOW.sm,
+  },
+  statusBadgeUsed: {
+    backgroundColor: '#DC2626',
+  },
+  statusBadgeText: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: COLORS.white,
+    letterSpacing: 0.5,
   },
 });
