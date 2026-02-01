@@ -868,7 +868,7 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const
   },
   webViewContainer: {
-    height: 500,
+    height: 300,
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b'
   },
