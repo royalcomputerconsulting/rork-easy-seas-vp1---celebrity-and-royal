@@ -38,7 +38,7 @@ export default function OfferDetailsScreen() {
   const router = useRouter();
   const { offerCode } = useLocalSearchParams<{ offerCode: string }>();
   const { localData } = useAppState();
-  const { cruises: storeCruises, bookedCruises: storeBookedCruises, casinoOffers: storeOffers } = useCruiseStore();
+  const { cruises: storeCruises, bookedCruises: storeBookedCruises, casinoOffers: storeOffers, updateCasinoOffer } = useCruiseStore();
   const { currentUser } = useUser();
   const [sortBy, setSortBy] = useState<SortOption>('soonest');
 
@@ -299,27 +299,25 @@ export default function OfferDetailsScreen() {
     const { offer } = offerData;
     if (!offer) return;
     
-    const { updateCasinoOffer } = useCruiseStore();
     updateCasinoOffer({
       ...offer,
       status: 'used',
     });
     console.log('[OfferDetails] Marked offer as used:', offer.offerCode);
     router.back();
-  }, [offerData, router]);
+  }, [offerData, router, updateCasinoOffer]);
 
   const handleMarkAsInProgress = useCallback(() => {
     const { offer } = offerData;
     if (!offer) return;
     
-    const { updateCasinoOffer } = useCruiseStore();
     updateCasinoOffer({
       ...offer,
       status: 'booked',
     });
     console.log('[OfferDetails] Marked offer as booked/in-progress:', offer.offerCode);
     router.back();
-  }, [offerData, router]);
+  }, [offerData, router, updateCasinoOffer]);
 
   const getCruiseSummary = useCallback((cruise: Cruise) => {
     const casinoAvail = calculateCasinoAvailabilityForCruise(cruise, storeOffers);
