@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
-import { Platform } from "react-native";
 
 const ADMIN_PASSWORD = "a1";
 const AUTH_KEY = "easyseas_authenticated";
