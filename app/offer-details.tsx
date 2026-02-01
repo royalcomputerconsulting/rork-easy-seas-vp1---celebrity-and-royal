@@ -308,8 +308,7 @@ export default function OfferDetailsScreen() {
     const { offer } = offerData;
     if (!offer) return;
     
-    updateCasinoOffer({
-      ...offer,
+    updateCasinoOffer(offer.id, {
       status: 'booked',
     });
     console.log('[OfferDetails] Marked offer as booked/in-progress:', offer.offerCode);
