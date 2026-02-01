@@ -14,6 +14,7 @@ import {
   Waves,
   Users,
   Dices,
+  RefreshCcw,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -27,6 +28,7 @@ import type { PlayingHours } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
 import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
+import { useCoreData } from '@/state/CoreDataProvider';
 
 const EVENT_COLORS = {
   cruise: '#3B82F6',
@@ -91,10 +93,12 @@ export default function DayAgendaScreen() {
   const { localData } = useAppState();
   const { bookedCruises } = useCruiseStore();
   const { currentUser } = useUser();
+  const coreData = useCoreData();
 
   const playingHours: PlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
   const { getSessionsForDate, getDailySummary, addSession, removeSession } = useCasinoSessions();
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const selectedDate = useMemo(() => {
     if (!date) return new Date();
@@ -686,6 +690,40 @@ export default function DayAgendaScreen() {
     await removeSession(sessionId);
   }, [removeSession]);
 
+  const handleSyncEvents = useCallback(async () => {
+    console.log('[DayAgenda] Syncing calendar events from booked cruises...');
+    setIsSyncing(true);
+    
+    try {
+      const existingEvents = coreData.calendarEvents.filter(e => e.sourceType !== 'cruise');
+      
+      const cruiseEvents: CalendarEvent[] = bookedCruises.map(cruise => ({
+        id: `cruise-event-${cruise.id}`,
+        title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
+        startDate: cruise.sailDate,
+        endDate: cruise.returnDate,
+        start: cruise.sailDate,
+        end: cruise.returnDate,
+        type: 'cruise' as const,
+        sourceType: 'cruise' as const,
+        location: cruise.departurePort,
+        description: `${cruise.nights} night cruise${cruise.reservationNumber ? ` - Res# ${cruise.reservationNumber}` : ''}${cruise.cabinNumber ? ` - Cabin ${cruise.cabinNumber}` : ''}`,
+        cruiseId: cruise.id,
+        allDay: true,
+        source: 'import' as const,
+      }));
+      
+      const allEvents = [...existingEvents, ...cruiseEvents];
+      coreData.setCalendarEvents(allEvents);
+      
+      console.log(`[DayAgenda] Synced ${cruiseEvents.length} cruise events`);
+    } catch (error) {
+      console.error('[DayAgenda] Error syncing events:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [bookedCruises, coreData]);
+
   const renderTimelineEvent = useCallback((event: TimelineEvent) => {
     const IconComponent = getTimelineIcon(event.icon);
     const isOpportune = event.isOpportune || event.type === 'opportune';
@@ -899,7 +937,14 @@ export default function DayAgendaScreen() {
             <Calendar size={20} color={COLORS.beigeWarm} />
             <Text style={styles.headerTitle}>Day Agenda</Text>
           </View>
-          <View style={styles.headerSpacer} />
+          <TouchableOpacity
+            style={styles.syncButton}
+            onPress={handleSyncEvents}
+            activeOpacity={0.7}
+            disabled={isSyncing}
+          >
+            <RefreshCcw size={20} color={isSyncing ? COLORS.textSecondary : COLORS.beigeWarm} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.dateHeader}>
@@ -1014,8 +1059,13 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.textPrimary,
   },
-  headerSpacer: {
+  syncButton: {
     width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   dateHeader: {
     paddingHorizontal: SPACING.md,
