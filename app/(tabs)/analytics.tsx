@@ -1729,6 +1729,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SPACING.md,
+    paddingBottom: 120,
   },
   quickStatsRow: {
     flexDirection: 'row',
