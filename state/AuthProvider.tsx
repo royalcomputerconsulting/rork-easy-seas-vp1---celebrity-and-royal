@@ -95,21 +95,8 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
   }, [checkWhitelistStatus]);
 
   const initializeAuth = useCallback(async () => {
-    if (Platform.OS === 'web') {
-      console.log('[AuthProvider] Web platform detected - clearing auth on page load');
-      await AsyncStorage.removeItem(AUTH_KEY);
-      await AsyncStorage.removeItem(AUTH_EMAIL_KEY);
-      await AsyncStorage.removeItem(FRESH_START_KEY);
-      setIsAuthenticated(false);
-      setAuthenticatedEmail(null);
-      setIsFreshStart(false);
-      setIsAdmin(false);
-      setIsWhitelisted(false);
-      setIsLoading(false);
-      console.log('[AuthProvider] Auth cleared for web session');
-    } else {
-      await checkAuthentication();
-    }
+    console.log('[AuthProvider] Initializing auth - checking persisted state');
+    await checkAuthentication();
   }, [checkAuthentication]);
 
   useEffect(() => {
