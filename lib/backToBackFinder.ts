@@ -1,4 +1,4 @@
-import type { Cruise } from '@/types/models';
+import type { Cruise, CasinoOffer } from '@/types/models';
 import { createDateFromString, isDateInPast } from '@/lib/date';
 
 export interface SailingSlot {
@@ -224,6 +224,7 @@ export function findBackToBackSets(
     minChainLength?: number;
     bookedCruises?: Cruise[];
     minDaysBetweenBatches?: number;
+    casinoOffers?: CasinoOffer[];
   } = {}
 ): BackToBackSet[] {
   const {
@@ -233,16 +234,35 @@ export function findBackToBackSets(
     minChainLength = 2,
     bookedCruises = [],
     minDaysBetweenBatches = 3,
+    casinoOffers = [],
   } = options;
 
   console.log('[B2B Finder] Starting search with', cruises.length, 'cruise records');
   console.log('[B2B Finder] Options:', { maxGapDays, excludeConflicts, minChainLength });
   console.log('[B2B Finder] Booked dates count:', bookedDates.size);
   console.log('[B2B Finder] Booked cruises count:', bookedCruises.length);
+  console.log('[B2B Finder] Casino offers count:', casinoOffers.length);
+
+  const offerStatusMap = new Map<string, string>();
+  casinoOffers.forEach(offer => {
+    if (offer.offerCode && offer.status) {
+      offerStatusMap.set(offer.offerCode, offer.status);
+    }
+  });
+  console.log('[B2B Finder] Offer status map size:', offerStatusMap.size);
 
   const validCruises = cruises.filter(cruise => {
     if (!cruise.sailDate) return false;
     if (isDateInPast(cruise.sailDate)) return false;
+    
+    if (cruise.offerCode) {
+      const offerStatus = offerStatusMap.get(cruise.offerCode);
+      if (offerStatus === 'booked') {
+        console.log('[B2B Finder] Excluding cruise with in-progress offer:', cruise.offerCode, cruise.shipName, cruise.sailDate);
+        return false;
+      }
+    }
+    
     return true;
   });
 
