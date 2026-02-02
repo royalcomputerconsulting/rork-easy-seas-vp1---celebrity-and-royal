@@ -785,11 +785,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       try {
         if (webViewRef.current) {
-          const loyaltyUrl = cruiseLine === 'celebrity'
+          const isCelebrity = cruiseLine === 'celebrity';
+          const loyaltyUrl = isCelebrity
             ? 'https://aws-prd.api.rccl.com/en/celebrity/web/v3/guestAccounts/{ACCOUNT_ID}'
             : 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info';
-          addLog(`📡 Connecting to Royal Caribbean loyalty API...`, 'info');
-          addLog('⏳ Retrieving Crown & Anchor and Club Royale status...', 'info');
+          addLog(`📡 Connecting to ${isCelebrity ? 'Celebrity' : 'Royal Caribbean'} loyalty API...`, 'info');
+          addLog(`⏳ Retrieving ${isCelebrity ? 'Captain\'s Club and Blue Chip' : 'Crown & Anchor and Club Royale'} status...`, 'info');
 
           webViewRef.current.injectJavaScript(`
             (function() {
@@ -805,8 +806,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                   return LOYALTY_URL_TEMPLATE;
                 }
               }
+              const isCelebrityHost = window.location && String(window.location.hostname || '').includes('celebritycruises.com');
               const TRIGGER_URLS = [
-                ...(window.location && String(window.location.hostname || '').includes('celebritycruises.com') ? [
+                ...(isCelebrityHost ? [
+                  'https://www.celebritycruises.com/account/loyalty',
+                  'https://www.celebritycruises.com/account/loyalty-programs',
                   'https://www.celebritycruises.com/account',
                   'https://www.celebritycruises.com/blue-chip-club/offers',
                 ] : [
@@ -923,9 +927,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               navigateTrigger();
 
               let tries = 0;
-              const maxTries = 120; // ~60s
+              const maxTries = isCelebrityHost ? 80 : 120; // Celebrity: ~40s, Royal: ~60s
               const timer = setInterval(async function() {
-                tries++;
+                tries++;;
 
                 if (emitCapturedIfPresent(LOYALTY_URL)) {
                   clearInterval(timer);
@@ -986,13 +990,22 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           `);
 
           addLog('⏳ Waiting for loyalty data capture...', 'info');
-          await waitForStepComplete(3, 65000);
+          const loyaltyTimeout = isCelebrity ? 45000 : 65000; // Celebrity: 45s, Royal: 65s
+          await waitForStepComplete(3, loyaltyTimeout);
         }
       } catch (step3Error) {
         addLog(`Step 3 error: ${step3Error} - continuing without loyalty data`, 'warning');
       }
       
-      addLog('✅ STEP 3 COMPLETE: Loyalty data captured successfully', 'success');
+      setState(prev => {
+        const hasLoyalty = prev.loyaltyData || extendedLoyaltyData;
+        if (hasLoyalty) {
+          addLog('✅ STEP 3 COMPLETE: Loyalty data captured successfully', 'success');
+        } else {
+          addLog('⚠️ STEP 3 COMPLETE: No loyalty data captured (continuing without it)', 'warning');
+        }
+        return prev;
+      });
       
       addLog('🎉 ====== ALL STEPS COMPLETE ======', 'success');
       addLog('✅ All data extracted successfully - ready to sync to your app!', 'success');
