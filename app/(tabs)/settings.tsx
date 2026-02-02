@@ -293,9 +293,9 @@ export default function SettingsScreen() {
         return;
       }
 
-      setCruises(parsedCruises);
-      setCasinoOffers(parsedOffers);
-      setLocalData({
+      await setCruises(parsedCruises);
+      await setCasinoOffers(parsedOffers);
+      await setLocalData({
         cruises: parsedCruises,
         offers: parsedOffers,
       });
@@ -498,8 +498,8 @@ export default function SettingsScreen() {
       const mergedBooked = [...existingBooked, ...parsedBooked];
       console.log('[Settings] Merged booked cruises:', mergedBooked.length, '(added:', parsedBooked.length, ')');
 
-      setBookedCruises(mergedBooked);
-      setLocalData({
+      await setBookedCruises(mergedBooked);
+      await setLocalData({
         booked: mergedBooked,
       });
 
@@ -661,9 +661,9 @@ export default function SettingsScreen() {
                 const sampleData = generateSampleData();
                 
                 console.log('[Settings] Populating sample cruises, offers, and events...');
-                setBookedCruises(sampleData.bookedCruises);
-                setCasinoOffers(sampleData.casinoOffers);
-                setLocalData({
+                await setBookedCruises(sampleData.bookedCruises);
+                await setCasinoOffers(sampleData.casinoOffers);
+                await setLocalData({
                   booked: sampleData.bookedCruises,
                   offers: sampleData.casinoOffers,
                   calendar: sampleData.calendarEvents,

@@ -185,17 +185,17 @@ interface CoreDataState {
   clubRoyaleProfile: ClubRoyaleProfile;
   hasLocalData: boolean;
   
-  setCruises: (cruises: Cruise[]) => void;
+  setCruises: (cruises: Cruise[]) => Promise<void>;
   addCruise: (cruise: Cruise) => void;
   updateCruise: (id: string, updates: Partial<Cruise>) => void;
   removeCruise: (id: string) => void;
   
-  setBookedCruises: (cruises: BookedCruise[]) => void;
+  setBookedCruises: (cruises: BookedCruise[]) => Promise<void>;
   addBookedCruise: (cruise: BookedCruise) => void;
   updateBookedCruise: (id: string, updates: Partial<BookedCruise>) => void;
   removeBookedCruise: (id: string) => void;
   
-  setCasinoOffers: (offers: CasinoOffer[]) => void;
+  setCasinoOffers: (offers: CasinoOffer[]) => Promise<void>;
   addCasinoOffer: (offer: CasinoOffer) => void;
   updateCasinoOffer: (id: string, updates: Partial<CasinoOffer>) => void;
   removeCasinoOffer: (id: string) => void;
@@ -747,10 +747,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
   }, [persistData, loadFromStorage]);
 
-  const setCruises = useCallback((newCruises: Cruise[]) => {
+  const setCruises = useCallback(async (newCruises: Cruise[]) => {
     setCruisesState(newCruises);
-    persistData(STORAGE_KEYS.CRUISES, newCruises);
-    AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
+    await persistData(STORAGE_KEYS.CRUISES, newCruises);
+    await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
+    console.log('[CoreData] Cruises state updated and persisted:', newCruises.length);
   }, [persistData]);
 
   const addCruise = useCallback((cruise: Cruise) => {
@@ -777,7 +778,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     });
   }, [persistData]);
 
-  const setBookedCruises = useCallback((newCruises: BookedCruise[]) => {
+  const setBookedCruises = useCallback(async (newCruises: BookedCruise[]) => {
     const booked = newCruises.filter(c => c.status !== 'available');
     
     // Filter out mock/demo cruises when setting real data
@@ -799,8 +800,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
     const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
     setBookedCruisesState(enrichedCruises);
-    persistData(STORAGE_KEYS.BOOKED_CRUISES, enrichedCruises);
-    AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
+    await persistData(STORAGE_KEYS.BOOKED_CRUISES, enrichedCruises);
+    await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
     
     // Auto-generate calendar events from booked cruises
     console.log('[CoreData] Auto-generating calendar events from', enrichedCruises.length, 'booked cruises');
@@ -825,7 +826,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     
     console.log('[CoreData] Generated', newCalendarEvents.length, 'calendar events from cruises');
     setCalendarEventsState(newCalendarEvents);
-    persistData(STORAGE_KEYS.CALENDAR_EVENTS, newCalendarEvents);
+    await persistData(STORAGE_KEYS.CALENDAR_EVENTS, newCalendarEvents);
+    console.log('[CoreData] Booked cruises state updated and persisted:', enrichedCruises.length);
     
     if (!isSyncingRef.current) {
       isSyncingRef.current = true;
@@ -887,7 +889,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     });
   }, [persistData]);
 
-  const setCasinoOffers = useCallback((newOffers: CasinoOffer[]) => {
+  const setCasinoOffers = useCallback(async (newOffers: CasinoOffer[]) => {
     // Filter out demo offers when setting real offers
     const nonMockOffers = newOffers.filter(offer => 
       !offer.id?.includes('demo-') &&
@@ -900,8 +902,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     });
     
     setCasinoOffersState(nonMockOffers);
-    persistData(STORAGE_KEYS.CASINO_OFFERS, nonMockOffers);
-    AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
+    await persistData(STORAGE_KEYS.CASINO_OFFERS, nonMockOffers);
+    await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
+    console.log('[CoreData] Casino offers state updated and persisted:', nonMockOffers.length);
     
     if (!isSyncingRef.current) {
       isSyncingRef.current = true;

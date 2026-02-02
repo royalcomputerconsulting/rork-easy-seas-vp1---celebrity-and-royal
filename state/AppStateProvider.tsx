@@ -21,10 +21,10 @@ export const useAppState = () => {
     userPoints: coreData.userPoints,
     clubRoyaleProfile: coreData.clubRoyaleProfile,
     updateSettings: coreData.updateSettings,
-    setLocalData: (data: any) => {
-      if (data.booked) coreData.setBookedCruises(data.booked);
-      if (data.cruises) coreData.setCruises(data.cruises);
-      if (data.offers) coreData.setCasinoOffers(data.offers);
+    setLocalData: async (data: any) => {
+      if (data.booked) await coreData.setBookedCruises(data.booked);
+      if (data.cruises) await coreData.setCruises(data.cruises);
+      if (data.offers) await coreData.setCasinoOffers(data.offers);
       if (data.calendar) coreData.setCalendarEvents(data.calendar);
     },
     clearLocalData: coreData.clearAllData,

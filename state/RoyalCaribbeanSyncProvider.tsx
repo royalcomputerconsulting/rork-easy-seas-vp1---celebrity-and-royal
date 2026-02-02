@@ -1219,13 +1219,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       );
 
       addLog(`Setting ${finalOffers.length} total offers in app`, 'info');
-      coreDataContext.setCasinoOffers(finalOffers);
+      await coreDataContext.setCasinoOffers(finalOffers);
+      addLog('✅ Offers persisted to storage', 'success');
 
       addLog(`Setting ${finalCruises.length} total available cruises in app`, 'info');
-      coreDataContext.setCruises(finalCruises);
+      await coreDataContext.setCruises(finalCruises);
+      addLog('✅ Available cruises persisted to storage', 'success');
 
       addLog(`Setting ${finalBookedCruises.length} total booked cruises in app`, 'info');
-      coreDataContext.setBookedCruises(finalBookedCruises);
+      await coreDataContext.setBookedCruises(finalBookedCruises);
+      addLog('✅ Booked cruises persisted to storage', 'success');
 
       if (preview.loyalty) {
         if (preview.loyalty.clubRoyalePoints.changed) {
