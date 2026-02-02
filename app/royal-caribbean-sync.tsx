@@ -40,16 +40,7 @@ function RoyalCaribbeanSyncScreen() {
   const isCelebrity = cruiseLine === 'celebrity';
   const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
 
-  const canSyncToApp = useMemo(() => {
-    const allowed = entitlement.isPro || auth.isWhitelisted;
-    console.log('[RoyalCaribbeanSync] canSyncToApp computed:', {
-      isPro: entitlement.isPro,
-      isWhitelisted: auth.isWhitelisted,
-      allowed,
-      authenticatedEmail: auth.authenticatedEmail,
-    });
-    return allowed;
-  }, [auth.authenticatedEmail, auth.isWhitelisted, entitlement.isPro]);
+
 
   const [webViewVisible, setWebViewVisible] = useState(true);
   
@@ -721,18 +712,6 @@ function RoyalCaribbeanSyncScreen() {
 
               <Text style={styles.confirmationQuestion} testID="sync-confirmation-question">Sync this data to the app?</Text>
 
-              {!canSyncToApp && (
-                <View style={styles.syncLockedBanner} testID="sync.locked.banner">
-                  <Crown size={16} color="#fbbf24" />
-                  <View style={styles.syncLockedBannerTextWrap}>
-                    <Text style={styles.syncLockedBannerTitle}>Subscriber-only</Text>
-                    <Text style={styles.syncLockedBannerBody}>
-                      To sync your extracted data into the app, you need an active App Store subscription or a whitelisted email.
-                    </Text>
-                  </View>
-                </View>
-              )}
-
               <View style={styles.confirmationButtons}>
                 <Pressable 
                   style={[styles.button, styles.cancelButton]}
@@ -742,18 +721,12 @@ function RoyalCaribbeanSyncScreen() {
                 </Pressable>
 
                 <Pressable 
-                  style={[styles.button, styles.confirmButton, !canSyncToApp && styles.confirmButtonLocked]}
+                  style={[styles.button, styles.confirmButton]}
                   onPress={() => {
-                    if (!canSyncToApp) {
-                      console.log('[RoyalCaribbeanSync] Sync blocked - user not entitled');
-                      addLog('Sync to app requires an active subscription or a whitelisted email. Open paywall to unlock.', 'warning');
-                      router.push('/paywall');
-                      return;
-                    }
                     syncToApp(coreData, loyalty);
                   }}
                 >
-                  <Text style={styles.buttonText}>{canSyncToApp ? 'Yes, Sync Now' : 'Unlock Sync'}</Text>
+                  <Text style={styles.buttonText}>Yes, Sync Now</Text>
                 </Pressable>
               </View>
             </View>
