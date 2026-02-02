@@ -386,53 +386,7 @@ export default function AtlasScreen() {
           </Text>
         </View>
 
-        {!(entitlement.isPro || auth.isWhitelisted) ? (
-          <View style={styles.proBanner} testID="machines.proBanner">
-            <View style={styles.proBannerLeft}>
-              <View style={styles.proBadge}>
-                <Crown size={14} color={COLORS.white} />
-                <Text style={styles.proBadgeText}>PRO</Text>
-              </View>
-              <Text style={styles.proBannerText}>
-                GET EASY SEAS PRO
-              </Text>
-            </View>
 
-            <View style={styles.proBannerActions}>
-              <TouchableOpacity
-                style={styles.proActionPrimary}
-                onPress={() => router.push('/paywall' as any)}
-                activeOpacity={0.85}
-                testID="machines.paywall.open"
-              >
-                <Text style={styles.proActionPrimaryText}>Unlock</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.proActionIcon}
-                onPress={() => entitlement.restore()}
-                activeOpacity={0.85}
-                testID="machines.paywall.restore"
-              >
-                <RefreshCcw size={16} color={COLORS.navyDeep} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.proActionIcon}
-                onPress={() => entitlement.openManageSubscription()}
-                activeOpacity={0.85}
-                testID="machines.paywall.manage"
-              >
-                <ExternalLink size={16} color={COLORS.navyDeep} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.proUnlockedBanner} testID="machines.proUnlocked">
-            <Crown size={16} color={COLORS.money} />
-            <Text style={styles.proUnlockedText}>Pro unlocked</Text>
-          </View>
-        )}
 
         {uiError ? (
           <View style={styles.errorBanner} testID="machines.errorBanner">

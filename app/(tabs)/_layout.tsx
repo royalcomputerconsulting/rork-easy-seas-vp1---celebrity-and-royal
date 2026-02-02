@@ -68,7 +68,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
               <Tag color={color} size={22} strokeWidth={focused ? 2.5 : 2} />
-              {focused && <View style={styles.activeIndicator} />}
             </View>
           ),
         }}
@@ -80,7 +79,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
               <CalendarClock color={color} size={22} strokeWidth={focused ? 2.5 : 2} />
-              {focused && <View style={styles.activeIndicator} />}
             </View>
           ),
         }}
@@ -92,7 +90,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
               <Ship color={color} size={22} strokeWidth={focused ? 2.5 : 2} />
-              {focused && <View style={styles.activeIndicator} />}
             </View>
           ),
         }}
@@ -104,7 +101,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
               <PartyPopper color={color} size={22} strokeWidth={focused ? 2.5 : 2} />
-              {focused && <View style={styles.activeIndicator} />}
             </View>
           ),
         }}
@@ -116,7 +112,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
               <TrendingUp color={color} size={22} strokeWidth={focused ? 2.5 : 2} />
-              {focused && <View style={styles.activeIndicator} />}
             </View>
           ),
         }}
@@ -128,7 +123,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
               <Gamepad2 color={color} size={22} strokeWidth={focused ? 2.5 : 2} />
-              {focused && <View style={styles.activeIndicator} />}
             </View>
           ),
         }}
@@ -140,7 +134,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
               <Settings color={color} size={22} strokeWidth={focused ? 2.5 : 2} />
-              {focused && <View style={styles.activeIndicator} />}
             </View>
           ),
         }}
@@ -155,16 +148,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 44,
     height: 32,
+    borderRadius: 8,
+    backgroundColor: COLORS.white,
   },
   activeIconContainer: {
-    transform: [{ scale: 1.05 }],
-  },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: -4,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: COLORS.gold,
   },
 });
