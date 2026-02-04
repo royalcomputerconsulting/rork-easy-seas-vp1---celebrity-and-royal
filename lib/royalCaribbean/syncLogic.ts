@@ -283,65 +283,10 @@ export function createSyncPreview(
     console.log(`[SyncLogic] Filtered out ${inProgressCount} IN PROGRESS offer(s) from sync`);
   }
 
-  const { cruises: rawTransformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(filteredOffers, loyaltyData);
+  const { cruises: transformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(filteredOffers, loyaltyData);
   const transformedBookedCruises = transformBookedCruisesToAppFormat(extractedBookedCruises, loyaltyData);
 
-  // Deduplicate cruises within the transformed batch itself
-  // The same sailing can appear in multiple offers - merge them to keep all offer associations
-  const cruiseMap = new Map<string, Cruise>();
-  
-  for (const cruise of rawTransformedCruises) {
-    const key = `${normalizeShipName(cruise.shipName)}|${normalizeSailDate(cruise.sailDate)}|${normalizeCabinType(cruise.cabinType)}`;
-    
-    const existing = cruiseMap.get(key);
-    if (!existing) {
-      cruiseMap.set(key, cruise);
-    } else {
-      // Merge cruise data - keep existing but add new offer associations
-      const mergedOfferCodes = new Set<string>();
-      const mergedOfferNames = new Set<string>();
-      
-      // Add existing offer info
-      if (existing.offerCode) mergedOfferCodes.add(existing.offerCode);
-      if (existing.offerName) mergedOfferNames.add(existing.offerName);
-      
-      // Add new offer info
-      if (cruise.offerCode) mergedOfferCodes.add(cruise.offerCode);
-      if (cruise.offerName) mergedOfferNames.add(cruise.offerName);
-      
-      // Merge perks arrays
-      const mergedPerks = [...new Set([...(existing.perks || []), ...(cruise.perks || [])])];
-      
-      // Keep the most recent expiry date (furthest in the future)
-      let mergedExpiry = existing.offerExpiry;
-      if (cruise.offerExpiry && existing.offerExpiry) {
-        const cruiseDate = new Date(cruise.offerExpiry).getTime();
-        const existingDate = new Date(existing.offerExpiry).getTime();
-        if (cruiseDate > existingDate) {
-          mergedExpiry = cruise.offerExpiry;
-        }
-      } else if (cruise.offerExpiry) {
-        mergedExpiry = cruise.offerExpiry;
-      }
-      
-      // Take the maximum free play and OBC values
-      const mergedFreePlay = Math.max(existing.freePlay || 0, cruise.freePlay || 0) || undefined;
-      const mergedFreeOBC = Math.max(existing.freeOBC || 0, cruise.freeOBC || 0) || undefined;
-      
-      // Update the existing cruise with merged data
-      existing.offerCode = Array.from(mergedOfferCodes).join(', ');
-      existing.offerName = Array.from(mergedOfferNames).join(', ');
-      existing.offerExpiry = mergedExpiry;
-      existing.perks = mergedPerks;
-      existing.freePlay = mergedFreePlay;
-      existing.freeOBC = mergedFreeOBC;
-      
-      console.log(`[SyncLogic] Merged duplicate sailing: ${cruise.shipName} on ${cruise.sailDate} - now has ${mergedOfferCodes.size} offer(s): ${existing.offerCode}`);
-    }
-  }
-  
-  const transformedCruises = Array.from(cruiseMap.values());
-  console.log(`[SyncLogic] Deduplicated cruises: ${rawTransformedCruises.length} raw -> ${transformedCruises.length} unique (with merged offers)`);
+  console.log(`[SyncLogic] Transformed ${transformedCruises.length} cruise records from ${filteredOffers.length} offer rows`);
 
   const offersNew: CasinoOffer[] = [];
   const offersUpdates: { existing: CasinoOffer; updated: CasinoOffer }[] = [];
