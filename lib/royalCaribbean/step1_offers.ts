@@ -421,9 +421,9 @@ export const STEP1_OFFERS_SCRIPT = `
       
       const { offerRows, offerCount, totalSailings } = processAPIResponse(offersData);
       
-      sendOfferBatch([], true, totalSailings, offerCount);
+      sendOfferBatch([], true, offerRows.length, offerCount);
       
-      log('✓ Extracted ' + totalSailings + ' offer rows from ' + offerCount + ' offer(s)', 'success');
+      log('✓ Extracted ' + offerRows.length + ' offer rows from ' + offerCount + ' offer(s)', 'success');
       
     } catch (error) {
       log('❌ API extraction failed: ' + error.message, 'error');
