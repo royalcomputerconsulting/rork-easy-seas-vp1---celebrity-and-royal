@@ -6,7 +6,7 @@ import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, T
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { formatCurrency, formatNights } from '@/lib/format';
-import { formatDate, getDaysUntil } from '@/lib/date';
+import { formatDate, getDaysUntil, createDateFromString } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useCruiseStore } from '@/state/CruiseStore';
@@ -360,7 +360,7 @@ export default function CruiseDetailsScreen() {
 
   // Calculate accurate nights from sailDate and returnDate
   const accurateNights = useMemo(() => {
-    if (!cruise) return cruise?.nights || 0;
+    if (!cruise) return 0;
     
     if (cruise.sailDate && (cruise as BookedCruise).returnDate) {
       try {

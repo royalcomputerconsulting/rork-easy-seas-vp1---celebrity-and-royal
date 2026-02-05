@@ -266,7 +266,7 @@ export function transformBookedCruisesToAppFormat(
       returnDate: finalEndDate,
       departurePort: cruise.departurePort,
       destination: cruise.itinerary || cruise.cruiseTitle || 'Unknown',
-      nights: validatedNights,
+      nights: nights,
       
       cabinType: cruise.cabinType,
       cabinNumber: cruise.cabinNumberOrGTY && cruise.cabinNumberOrGTY !== 'GTY' ? cruise.cabinNumberOrGTY : undefined,
