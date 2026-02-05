@@ -199,17 +199,28 @@ export function transformBookedCruisesToAppFormat(
     const startDate = parseDate(cruise.sailingStartDate);
     const endDate = parseDate(cruise.sailingEndDate);
     
-    // Calculate nights with multiple fallbacks:
-    // 1. Use numberOfNights directly from API if available (most reliable)
-    // 2. Calculate from start and end dates
-    // 3. Extract from cruise title (e.g., "12 Night Hawaii Cruise")
-    // 4. Extract from itinerary
-    // 5. Default to 7 only as last resort
-    const apiNights = cruise.numberOfNights && cruise.numberOfNights > 0 ? cruise.numberOfNights : null;
-    const dateNights = calculateNightsFromDates(startDate, endDate);
-    const titleNights = extractNightsFromText(cruise.cruiseTitle || '');
-    const itineraryNights = extractNightsFromText(cruise.itinerary || '');
+    // CRITICAL: Ensure numberOfNights is always treated as a number, never a string
+    // This prevents string concatenation bugs (e.g., "7" + "1" = "71")
+    const rawNights = cruise.numberOfNights;
+    let apiNights: number | null = null;
     
+    if (rawNights !== undefined && rawNights !== null) {
+      // Explicitly convert to number and validate
+      const numValue = typeof rawNights === 'number' ? rawNights : parseInt(String(rawNights), 10);
+      if (!isNaN(numValue) && numValue > 0 && numValue <= 365) {
+        apiNights = numValue;
+        console.log(`[DataTransformer] ✓ Using API nights for ${cruise.shipName}: ${apiNights}`);
+      } else {
+        console.warn(`[DataTransformer] ⚠️ Invalid API nights value for ${cruise.shipName}: ${rawNights} (type: ${typeof rawNights})`);
+      }
+    }
+    
+    // Fallback calculations only if API nights is not available
+    const dateNights = apiNights === null ? calculateNightsFromDates(startDate, endDate) : null;
+    const titleNights = apiNights === null && dateNights === null ? extractNightsFromText(cruise.cruiseTitle || '') : null;
+    const itineraryNights = apiNights === null && dateNights === null && titleNights === null ? extractNightsFromText(cruise.itinerary || '') : null;
+    
+    // Priority: API > Date calculation > Title extraction > Itinerary extraction > Default 7
     const nights = apiNights !== null
       ? apiNights
       : (dateNights !== null 
@@ -220,13 +231,20 @@ export function transformBookedCruisesToAppFormat(
                   ? itineraryNights 
                   : 7)));
     
-    console.log(`[DataTransformer] Booked cruise nights: ship=${cruise.shipName}, dates=${startDate} to ${endDate}, apiNights=${apiNights}, dateCalc=${dateNights}, title=${titleNights}, itinerary=${itineraryNights}, final=${nights}`);
+    // Validate final nights value
+    const validatedNights = (typeof nights === 'number' && nights > 0 && nights <= 365) ? nights : 7;
+    
+    if (validatedNights !== nights) {
+      console.error(`[DataTransformer] ❌ INVALID nights value for ${cruise.shipName}: ${nights} (type: ${typeof nights}). Using default: 7`);
+    }
+    
+    console.log(`[DataTransformer] Final nights for ${cruise.shipName} (${startDate}): ${validatedNights} (API: ${apiNights}, Date: ${dateNights}, Title: ${titleNights}, Itinerary: ${itineraryNights})`);
     
     // Check for courtesy hold - both 'Courtesy Hold' and 'Offer' statuses are courtesy holds
     const isCourtesyHold = cruise.status === 'Courtesy Hold' || cruise.status === 'Offer';
     
     // If we don't have an end date, calculate it from the nights
-    const finalEndDate = endDate || calculateReturnDate(startDate, nights);
+    const finalEndDate = endDate || calculateReturnDate(startDate, validatedNights);
     
     const bookedCruise: BookedCruise = {
       sourcePayload: (cruise as any).rawBooking,
@@ -236,7 +254,7 @@ export function transformBookedCruisesToAppFormat(
       returnDate: finalEndDate,
       departurePort: cruise.departurePort,
       destination: cruise.itinerary || cruise.cruiseTitle || 'Unknown',
-      nights: nights,
+      nights: validatedNights,
       
       cabinType: cruise.cabinType,
       cabinNumber: cruise.cabinNumberOrGTY && cruise.cabinNumberOrGTY !== 'GTY' ? cruise.cabinNumberOrGTY : undefined,

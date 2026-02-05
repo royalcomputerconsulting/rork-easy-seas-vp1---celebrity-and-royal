@@ -144,31 +144,39 @@ function findMatchingCruise(
   const cruiseShip = normalizeShipName(cruise.shipName);
   const cruiseDate = normalizeSailDate(cruise.sailDate);
   const cruiseCabin = normalizeCabinType(cruise.cabinType);
+  const cruiseOfferCode = (cruise.offerCode || '').trim().toUpperCase();
   
   return existingCruises.find(existing => {
     const existingShip = normalizeShipName(existing.shipName);
     const existingDate = normalizeSailDate(existing.sailDate);
     const existingCabin = normalizeCabinType(existing.cabinType);
+    const existingOfferCode = (existing.offerCode || '').trim().toUpperCase();
     
-    // PRIORITY 1: Match by ship + sail date + cabin type (normalized)
+    // IMPORTANT: Two sailings on the same ship/date but with DIFFERENT offer codes are NOT duplicates
+    // Each offer should create its own cruise entry
+    
+    // PRIORITY 1: Match by ship + sail date + cabin type + offer code (most specific)
     if (
       cruiseShip && existingShip &&
       cruiseDate && existingDate &&
       cruiseShip === existingShip &&
       cruiseDate === existingDate &&
-      cruiseCabin === existingCabin
+      cruiseCabin === existingCabin &&
+      cruiseOfferCode && existingOfferCode &&
+      cruiseOfferCode === existingOfferCode
     ) {
-      console.log(`[Dedup Cruise] Matched by ship+date+cabin: ${cruise.shipName} on ${cruise.sailDate} (${cruise.cabinType})`);
+      console.log(`[Dedup Cruise] Matched by ship+date+cabin+offer: ${cruise.shipName} on ${cruise.sailDate} (${cruise.cabinType}) [${cruise.offerCode}]`);
       return true;
     }
     
-    // PRIORITY 2: Match by ship + sail date only (same sailing, different cabin type is still same cruise)
-    // This catches cases where cabin type formatting differs
+    // PRIORITY 2: Match by ship + sail date + offer code (when one has unknown cabin)
     if (
       cruiseShip && existingShip &&
       cruiseDate && existingDate &&
       cruiseShip === existingShip &&
-      cruiseDate === existingDate
+      cruiseDate === existingDate &&
+      cruiseOfferCode && existingOfferCode &&
+      cruiseOfferCode === existingOfferCode
     ) {
       // Only match if cabin types are similar or one is unknown
       const cabinsSimilar = cruiseCabin === existingCabin ||
@@ -176,7 +184,26 @@ function findMatchingCruise(
         cruiseCabin.includes(existingCabin) || existingCabin.includes(cruiseCabin);
       
       if (cabinsSimilar) {
-        console.log(`[Dedup Cruise] Matched by ship+date (similar cabin): ${cruise.shipName} on ${cruise.sailDate}`);
+        console.log(`[Dedup Cruise] Matched by ship+date+offer (similar cabin): ${cruise.shipName} on ${cruise.sailDate} [${cruise.offerCode}]`);
+        return true;
+      }
+    }
+    
+    // PRIORITY 3: Match by ship + sail date + cabin when NEITHER has an offer code
+    // This preserves the old behavior for cruises without offer codes (manually added, imported from CSV, etc.)
+    if (
+      cruiseShip && existingShip &&
+      cruiseDate && existingDate &&
+      cruiseShip === existingShip &&
+      cruiseDate === existingDate &&
+      !cruiseOfferCode && !existingOfferCode
+    ) {
+      const cabinsSimilar = cruiseCabin === existingCabin ||
+        cruiseCabin === 'unknown' || existingCabin === 'unknown' ||
+        cruiseCabin.includes(existingCabin) || existingCabin.includes(cruiseCabin);
+      
+      if (cabinsSimilar) {
+        console.log(`[Dedup Cruise] Matched by ship+date+cabin (no offer codes): ${cruise.shipName} on ${cruise.sailDate}`);
         return true;
       }
     }

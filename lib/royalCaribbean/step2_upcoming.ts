@@ -185,7 +185,11 @@ export const STEP2_UPCOMING_SCRIPT = `
       var shipCode = booking.shipCode || '';
       var shipName = SHIP_CODE_MAP[shipCode] || (shipCode ? shipCode + ' of the Seas' : '');
       
-      var nights = booking.numberOfNights || 0;
+      var nights = parseInt(booking.numberOfNights, 10) || 0;
+      if (isNaN(nights) || nights < 0 || nights > 365) {
+        log('   ⚠️ Invalid nights value detected: ' + booking.numberOfNights + ', defaulting to 7', 'warning');
+        nights = 7;
+      }
       var packageCode = booking.packageCode || '';
       
       var enrichmentKey = shipCode + '_' + booking.sailDate;
@@ -360,7 +364,7 @@ export const STEP2_UPCOMING_SCRIPT = `
         deckNumber: deckNumber,
         bookingId: booking.bookingId || '',
         numberOfGuests: numberOfGuests,
-        numberOfNights: nights,
+        numberOfNights: parseInt(nights, 10),
         daysToGo: daysToGo,
         status: status,
         holdExpiration: holdExpiration,

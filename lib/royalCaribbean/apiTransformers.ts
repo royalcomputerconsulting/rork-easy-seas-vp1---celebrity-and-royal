@@ -45,6 +45,11 @@ export function transformApiBookingToBookedCruiseRow(
   const shipName = sailingInfo?.shipName || getShipNameFromCode(booking.shipCode);
   const sailDate = parseRCDate(booking.sailDate);
   
+  // CRITICAL: Ensure numberOfNights is always a valid number
+  const nights = typeof booking.numberOfNights === 'number' && booking.numberOfNights > 0 && booking.numberOfNights <= 365
+    ? booking.numberOfNights
+    : 7;
+  
   let sailingEndDate = '';
   let itinerary = '';
   let departurePort = '';
@@ -55,7 +60,7 @@ export function transformApiBookingToBookedCruiseRow(
     departurePort = sailingInfo.departurePortName || '';
   } else {
     const startDate = new Date(sailDate);
-    startDate.setDate(startDate.getDate() + booking.numberOfNights);
+    startDate.setDate(startDate.getDate() + nights);
     const month = String(startDate.getMonth() + 1).padStart(2, '0');
     const day = String(startDate.getDate()).padStart(2, '0');
     const year = String(startDate.getFullYear());
@@ -81,6 +86,7 @@ export function transformApiBookingToBookedCruiseRow(
     deckNumber: booking.deckNumber,
     bookingId: booking.bookingId,
     numberOfGuests: String(booking.passengers?.length || 1),
+    numberOfNights: nights,
     status,
     loyaltyLevel: '',
     loyaltyPoints: '',
@@ -142,6 +148,11 @@ export function transformApiBookingToBookedCruise(
   const shipName = sailingInfo?.shipName || getShipNameFromCode(booking.shipCode);
   const sailDate = parseRCDate(booking.sailDate);
   
+  // CRITICAL: Ensure numberOfNights is always a valid number
+  const nights = typeof booking.numberOfNights === 'number' && booking.numberOfNights > 0 && booking.numberOfNights <= 365
+    ? booking.numberOfNights
+    : 7;
+  
   let sailingEndDate = '';
   let itinerary = '';
   let departurePort = '';
@@ -163,7 +174,7 @@ export function transformApiBookingToBookedCruise(
     }
   } else {
     const startDate = new Date(sailDate);
-    startDate.setDate(startDate.getDate() + booking.numberOfNights);
+    startDate.setDate(startDate.getDate() + nights);
     const month = String(startDate.getMonth() + 1).padStart(2, '0');
     const day = String(startDate.getDate()).padStart(2, '0');
     const year = String(startDate.getFullYear());
@@ -180,7 +191,7 @@ export function transformApiBookingToBookedCruise(
     returnDate: sailingEndDate,
     departurePort,
     destination: destination || itinerary,
-    nights: booking.numberOfNights,
+    nights,
     cabinType,
     cabinCategory: booking.stateroomCategoryCode,
     cabinNumber: booking.stateroomNumber !== 'GTY' ? booking.stateroomNumber : undefined,
