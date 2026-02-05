@@ -535,13 +535,67 @@ export function UserProfileCard({
     </>
   );
 
+  const getBrandIcon = () => {
+    switch (activeBrand) {
+      case 'royal':
+        return <Anchor size={20} color={COLORS.white} />;
+      case 'celebrity':
+        return <Star size={20} color={COLORS.white} />;
+      case 'silversea':
+        return <Ship size={20} color={COLORS.white} />;
+      default:
+        return <Anchor size={20} color={COLORS.white} />;
+    }
+  };
+
+  const getBrandTitle = () => {
+    switch (activeBrand) {
+      case 'royal':
+        return 'Royal Caribbean Profile';
+      case 'celebrity':
+        return 'Celebrity Cruises Profile';
+      case 'silversea':
+        return 'Silversea Profile';
+      default:
+        return 'User Profile';
+    }
+  };
+
+  const getBrandGradient = () => {
+    switch (activeBrand) {
+      case 'royal':
+        return ['#0369A1', '#0284C7'] as [string, string];
+      case 'celebrity':
+        return ['#1E40AF', '#2563EB'] as [string, string];
+      case 'silversea':
+        return ['#78350F', '#92400E'] as [string, string];
+      default:
+        return ['#0369A1', '#0284C7'] as [string, string];
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>User Profile</Text>
-      </View>
+      <LinearGradient
+        colors={getBrandGradient()}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <View style={styles.headerIcon}>
+            {getBrandIcon()}
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>{getBrandTitle()}</Text>
+            <Text style={styles.headerSubtitle}>
+              {enrichmentData && Object.keys(enrichmentData).length > 0 ? 'Synced with account' : 'Manual entry'}
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
 
-      <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} showSilversea={true} />
+      <View style={styles.brandToggleContainer}>
+        <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} showSilversea={true} />
+      </View>
 
       <View style={styles.currentValuesSection}>
         {activeBrand === 'royal' && renderRoyalCaribbeanCurrentValues()}
@@ -550,7 +604,7 @@ export function UserProfileCard({
       </View>
 
       <View style={styles.editSection}>
-        <Text style={styles.editSectionTitle}>Edit Profile</Text>
+        <Text style={styles.editSectionTitle}>EDIT PROFILE</Text>
         
         {activeBrand === 'royal' && renderRoyalCaribbeanEditForm()}
         {activeBrand === 'celebrity' && renderCelebrityEditForm()}
@@ -561,14 +615,21 @@ export function UserProfileCard({
           onPress={handleSave}
           disabled={isSaving}
         >
-          {isSaving ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
-          ) : (
-            <>
-              <Save size={18} color={COLORS.white} />
-              <Text style={styles.saveButtonText}>Save Profile</Text>
-            </>
-          )}
+          <LinearGradient
+            colors={getBrandGradient()}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.saveButtonGradient}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <>
+                <Save size={18} color={COLORS.white} />
+                <Text style={styles.saveButtonText}>Save Profile</Text>
+              </>
+            )}
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </View>
@@ -577,26 +638,51 @@ export function UserProfileCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: COLORS.white,
+    backgroundColor: '#F0F9FF',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(3, 105, 161, 0.2)',
     ...SHADOW.sm,
   },
   header: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 31, 63, 0.08)',
+    padding: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  headerIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerText: {
+    gap: 2,
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
+  },
+  headerSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  brandToggleContainer: {
+    padding: SPACING.sm,
+    paddingTop: SPACING.xs,
   },
   currentValuesSection: {
-    padding: SPACING.md,
+    padding: SPACING.sm,
+    paddingTop: 0,
   },
   currentValuesBg: {
     borderRadius: BORDER_RADIUS.md,
@@ -649,62 +735,57 @@ const styles = StyleSheet.create({
     color: COLORS.loyalty,
   },
   editSection: {
-    padding: SPACING.md,
-    backgroundColor: COLORS.bgSecondary,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 31, 63, 0.08)',
+    padding: SPACING.sm,
   },
   editSectionTitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: '#075985',
+    letterSpacing: 1,
     marginBottom: SPACING.sm,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
   },
   inputGroup: {
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
   },
   inputLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-    marginBottom: 4,
-    opacity: 0.8,
+    color: '#075985',
+    marginBottom: SPACING.xs,
   },
   input: {
     backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.sm,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.sm,
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.15)',
+    borderColor: '#BAE6FD',
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: '#0C4A6E',
   },
   saveButton: {
-    marginTop: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.sm,
+    overflow: 'hidden',
+  },
+  saveButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: SPACING.sm + 4,
+    paddingVertical: SPACING.sm,
     gap: SPACING.xs,
-    ...SHADOW.sm,
   },
   saveButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.white,
   },
   levelHint: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 4,
-    backgroundColor: 'rgba(0, 31, 63, 0.04)',
+    marginTop: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(3, 105, 161, 0.08)',
     borderRadius: BORDER_RADIUS.sm,
     gap: 6,
   },
