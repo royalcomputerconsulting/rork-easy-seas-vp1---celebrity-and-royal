@@ -199,52 +199,64 @@ export function transformBookedCruisesToAppFormat(
     const startDate = parseDate(cruise.sailingStartDate);
     const endDate = parseDate(cruise.sailingEndDate);
     
-    // CRITICAL: Ensure numberOfNights is always treated as a number, never a string
-    // This prevents string concatenation bugs (e.g., "7" + "1" = "71")
-    const rawNights = cruise.numberOfNights;
-    let apiNights: number | null = null;
+    // PRIORITY 1: If we have both sailDate and returnDate, ALWAYS calculate nights from dates
+    // This is the most reliable method and prevents string concatenation bugs
+    let nights: number = 7; // default fallback
+    let calculationMethod = 'default';
     
-    if (rawNights !== undefined && rawNights !== null) {
-      // Explicitly convert to number and validate
-      const numValue = typeof rawNights === 'number' ? rawNights : parseInt(String(rawNights), 10);
-      if (!isNaN(numValue) && numValue > 0 && numValue <= 365) {
-        apiNights = numValue;
-        console.log(`[DataTransformer] ✓ Using API nights for ${cruise.shipName}: ${apiNights}`);
-      } else {
-        console.warn(`[DataTransformer] ⚠️ Invalid API nights value for ${cruise.shipName}: ${rawNights} (type: ${typeof rawNights})`);
+    if (startDate && endDate) {
+      const dateNights = calculateNightsFromDates(startDate, endDate);
+      if (dateNights !== null && dateNights > 0 && dateNights <= 365) {
+        nights = dateNights;
+        calculationMethod = 'dates';
+        console.log(`[DataTransformer] ✓ Calculated nights from dates for ${cruise.shipName}: ${nights} nights (${startDate} to ${endDate})`);
       }
     }
     
-    // Fallback calculations only if API nights is not available
-    const dateNights = apiNights === null ? calculateNightsFromDates(startDate, endDate) : null;
-    const titleNights = apiNights === null && dateNights === null ? extractNightsFromText(cruise.cruiseTitle || '') : null;
-    const itineraryNights = apiNights === null && dateNights === null && titleNights === null ? extractNightsFromText(cruise.itinerary || '') : null;
-    
-    // Priority: API > Date calculation > Title extraction > Itinerary extraction > Default 7
-    const nights = apiNights !== null
-      ? apiNights
-      : (dateNights !== null 
-          ? dateNights 
-          : (titleNights !== null 
-              ? titleNights 
-              : (itineraryNights !== null 
-                  ? itineraryNights 
-                  : 7)));
-    
-    // Validate final nights value
-    const validatedNights = (typeof nights === 'number' && nights > 0 && nights <= 365) ? nights : 7;
-    
-    if (validatedNights !== nights) {
-      console.error(`[DataTransformer] ❌ INVALID nights value for ${cruise.shipName}: ${nights} (type: ${typeof nights}). Using default: 7`);
+    // PRIORITY 2: Use API numberOfNights only if date calculation failed
+    if (calculationMethod === 'default') {
+      const rawNights = cruise.numberOfNights;
+      if (rawNights !== undefined && rawNights !== null) {
+        const numValue = typeof rawNights === 'number' ? rawNights : parseInt(String(rawNights), 10);
+        if (!isNaN(numValue) && numValue > 0 && numValue <= 365) {
+          nights = numValue;
+          calculationMethod = 'api';
+          console.log(`[DataTransformer] ✓ Using API nights for ${cruise.shipName}: ${nights}`);
+        }
+      }
     }
     
-    console.log(`[DataTransformer] Final nights for ${cruise.shipName} (${startDate}): ${validatedNights} (API: ${apiNights}, Date: ${dateNights}, Title: ${titleNights}, Itinerary: ${itineraryNights})`);
+    // PRIORITY 3: Extract from cruise title/itinerary text
+    if (calculationMethod === 'default') {
+      const titleNights = extractNightsFromText(cruise.cruiseTitle || '');
+      if (titleNights !== null && titleNights > 0 && titleNights <= 365) {
+        nights = titleNights;
+        calculationMethod = 'title';
+        console.log(`[DataTransformer] ✓ Extracted nights from title for ${cruise.shipName}: ${nights}`);
+      } else {
+        const itineraryNights = extractNightsFromText(cruise.itinerary || '');
+        if (itineraryNights !== null && itineraryNights > 0 && itineraryNights <= 365) {
+          nights = itineraryNights;
+          calculationMethod = 'itinerary';
+          console.log(`[DataTransformer] ✓ Extracted nights from itinerary for ${cruise.shipName}: ${nights}`);
+        }
+      }
+    }
+    
+    // Final validation - ensure nights is a number
+    if (typeof nights !== 'number' || isNaN(nights) || nights <= 0 || nights > 365) {
+      console.error(`[DataTransformer] ❌ INVALID nights value for ${cruise.shipName}: ${nights} (type: ${typeof nights}). Using default: 7`);
+      nights = 7;
+      calculationMethod = 'default';
+    }
+    
+    console.log(`[DataTransformer] Final nights for ${cruise.shipName} (${startDate} to ${endDate}): ${nights} (method: ${calculationMethod})`);
     
     // Check for courtesy hold - both 'Courtesy Hold' and 'Offer' statuses are courtesy holds
     const isCourtesyHold = cruise.status === 'Courtesy Hold' || cruise.status === 'Offer';
     
     // If we don't have an end date, calculate it from the nights
-    const finalEndDate = endDate || calculateReturnDate(startDate, validatedNights);
+    const finalEndDate = endDate || calculateReturnDate(startDate, nights);
     
     const bookedCruise: BookedCruise = {
       sourcePayload: (cruise as any).rawBooking,
