@@ -195,6 +195,28 @@ export default function CruiseDetailsScreen() {
     );
   }, [cruise, storeOffers, localData.offers]);
 
+  // Calculate accurate nights from sailDate and returnDate
+  const accurateNights = useMemo(() => {
+    if (!cruise) return 0;
+    
+    if (cruise.sailDate && (cruise as BookedCruise).returnDate) {
+      try {
+        const sailDateObj = createDateFromString(cruise.sailDate);
+        const returnDateObj = createDateFromString((cruise as BookedCruise).returnDate);
+        const daysBetween = Math.round((returnDateObj.getTime() - sailDateObj.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysBetween > 0 && daysBetween < 365) {
+          console.log('[CruiseDetails] Calculated accurate nights from dates:', daysBetween, 'sailDate:', cruise.sailDate, 'returnDate:', (cruise as BookedCruise).returnDate);
+          return daysBetween;
+        }
+      } catch (e) {
+        console.warn('[CruiseDetails] Error calculating nights from dates:', e);
+      }
+    }
+    
+    return cruise.nights || 0;
+  }, [cruise]);
+
   const itineraryDisplay = useMemo((): { days: { day: number; port: string; isSeaDay: boolean }[]; needsManualEntry: boolean; source: string } => {
     if (!cruise) return { days: [], needsManualEntry: true, source: 'none' };
     
@@ -356,29 +378,7 @@ export default function CruiseDetailsScreen() {
     
     console.log('[CruiseDetails] Itinerary resolved:', { source, days: result.length, needsManualEntry });
     return { days: result, needsManualEntry, source };
-  }, [cruise, linkedOffer, storeOffers, localData.offers]);
-
-  // Calculate accurate nights from sailDate and returnDate
-  const accurateNights = useMemo(() => {
-    if (!cruise) return 0;
-    
-    if (cruise.sailDate && (cruise as BookedCruise).returnDate) {
-      try {
-        const sailDateObj = createDateFromString(cruise.sailDate);
-        const returnDateObj = createDateFromString((cruise as BookedCruise).returnDate);
-        const daysBetween = Math.round((returnDateObj.getTime() - sailDateObj.getTime()) / (1000 * 60 * 60 * 24));
-        
-        if (daysBetween > 0 && daysBetween < 365) {
-          console.log('[CruiseDetails] Calculated accurate nights from dates:', daysBetween, 'sailDate:', cruise.sailDate, 'returnDate:', (cruise as BookedCruise).returnDate);
-          return daysBetween;
-        }
-      } catch (e) {
-        console.warn('[CruiseDetails] Error calculating nights from dates:', e);
-      }
-    }
-    
-    return cruise.nights || 0;
-  }, [cruise]);
+  }, [cruise, linkedOffer, storeOffers, localData.offers, accurateNights]);
 
   const cruiseDetails = useMemo(() => {
     if (!cruise) return null;
