@@ -495,6 +495,18 @@ export function calculateCasinoAvailabilityForCruise(
 ): CruiseCasinoSummary {
   const dailyAvailability: CasinoAvailability[] = [];
   
+  // Calculate accurate nights from sailDate and returnDate if available
+  let accurateNights = cruise.nights || 7;
+  if (cruise.sailDate && (cruise as BookedCruise).returnDate) {
+    const sailDateObj = safeParseSailDate(cruise.sailDate);
+    const returnDateObj = safeParseSailDate((cruise as BookedCruise).returnDate);
+    const daysBetween = Math.round((returnDateObj.getTime() - sailDateObj.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysBetween > 0 && daysBetween < 365) {
+      accurateNights = daysBetween;
+      console.log('[CasinoAvailability] Calculated accurate nights from dates:', accurateNights, 'from sailDate:', cruise.sailDate, 'to returnDate:', (cruise as BookedCruise).returnDate);
+    }
+  }
+  
   let itineraryToUse: ItineraryDay[] = [];
   
   if (cruise.itinerary && cruise.itinerary.length > 0) {
@@ -556,7 +568,7 @@ export function calculateCasinoAvailabilityForCruise(
     }
   }
   
-  const expectedDays = (cruise.nights || 7) + 1;
+  const expectedDays = accurateNights + 1;
   
   if (itineraryToUse.length > 0) {
     itineraryToUse.forEach((day: ItineraryDay, index: number) => {
