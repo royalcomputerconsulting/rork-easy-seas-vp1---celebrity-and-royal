@@ -9,7 +9,7 @@ export default function OverviewLayout() {
         headerStyle: {
           backgroundColor: COLORS.navyDeep,
         },
-        headerTintColor: COLORS.textPrimary,
+        headerTintColor: COLORS.white,
         headerTitleStyle: {
           fontWeight: '600',
         },
