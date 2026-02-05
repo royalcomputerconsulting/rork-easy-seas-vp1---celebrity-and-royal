@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.textNavy,
   },
   toggleText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.textDarkGrey,
   },
