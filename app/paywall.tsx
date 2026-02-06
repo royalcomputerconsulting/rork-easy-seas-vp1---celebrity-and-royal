@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ExternalLink, RefreshCcw, Shield, Sparkles, Check } from 'lucide-react-native';
@@ -12,13 +12,22 @@ export default function PaywallScreen() {
   const [overrideLoading, setOverrideLoading] = useState(false);
   const [overridePassword, setOverridePassword] = useState('');
 
+  const handleClose = useCallback(() => {
+    console.log('[Paywall] Close requested. canGoBack:', router.canGoBack());
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/(tabs)/analytics');
+  }, [router]);
+
   const handleManualOverride = async () => {
     if (overridePassword === 'Wnzy5mti2!') {
       setOverrideLoading(true);
       try {
         await entitlement.manualUnlock();
         Alert.alert('Success', 'Full access unlocked via manual override.');
-        router.back();
+        handleClose();
       } catch {
         Alert.alert('Error', 'Failed to unlock. Please try again.');
       } finally {
@@ -67,7 +76,7 @@ export default function PaywallScreen() {
                 <Sparkles size={16} color={COLORS.white} />
                 <Text style={styles.badgeText}>Unlock Full Access</Text>
               </View>
-              <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8} testID="paywall.close">
+              <TouchableOpacity onPress={handleClose} activeOpacity={0.8} testID="paywall.close">
                 <Text style={styles.closeText}>Close</Text>
               </TouchableOpacity>
             </View>
