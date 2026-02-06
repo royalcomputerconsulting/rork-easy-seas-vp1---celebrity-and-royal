@@ -545,25 +545,29 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       const info = await withTimeout(purchases.restorePurchases(), DEFAULT_TIMEOUT_MS, 'Restoring purchases');
       console.log('[Entitlement] restorePurchases customerInfo', {
         activeSubscriptions: info?.activeSubscriptions ?? [],
+        entitlements: Object.keys(info?.entitlements?.active ?? {}),
       });
       if (!mountedRef.current) return;
       
-      const hasActivePurchase = computeIsProFromCustomerInfo(info);
+      const hasProPurchase = computeIsProFromCustomerInfo(info);
+      const hasBasicPurchase = computeIsBasicFromCustomerInfo(info);
+      const hasAnyActivePurchase = hasProPurchase || hasBasicPurchase;
       
-      if (hasActivePurchase) {
-        const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
-        const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
-        setStateFromCustomerInfo(info, currentTrialEnd);
-      }
+      const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
+      const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
+      setStateFromCustomerInfo(info, currentTrialEnd);
       
       if (!mountedRef.current) return;
       
-      if (hasWhitelistAccess && hasActivePurchase) {
-        Alert.alert('Success', 'Full access unlocked via whitelisted email and active subscription restored.');
+      if (hasWhitelistAccess && hasAnyActivePurchase) {
+        const tierName = hasProPurchase ? 'Pro' : 'Basic';
+        Alert.alert('Success', `Full access unlocked via whitelisted email and active ${tierName} subscription restored.`);
       } else if (hasWhitelistAccess) {
         Alert.alert('Success', 'Full access unlocked via whitelisted email.');
-      } else if (hasActivePurchase) {
-        Alert.alert('Restored', 'Pro restored successfully.');
+      } else if (hasProPurchase) {
+        Alert.alert('Restored', 'Pro subscription restored successfully.');
+      } else if (hasBasicPurchase) {
+        Alert.alert('Restored', 'Basic subscription restored successfully.');
       } else {
         Alert.alert('Restored', 'No active subscription found.');
       }
