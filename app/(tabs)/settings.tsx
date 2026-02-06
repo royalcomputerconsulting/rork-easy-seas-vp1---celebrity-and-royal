@@ -1702,6 +1702,58 @@ STEP 4: Optional Calendar Import
             </View>
           </View>
 
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>SUBSCRIPTIONS & PURCHASES</Text>
+            <View style={styles.sectionCard}>
+              <View style={styles.subscriptionStatusBanner}>
+                <Crown size={18} color={entitlement.isPro ? '#10B981' : entitlement.isBasic ? '#3B82F6' : '#F59E0B'} />
+                <View style={styles.subscriptionStatusText}>
+                  <Text style={styles.subscriptionStatusTitle}>
+                    {entitlement.isPro ? 'Pro Active' : entitlement.isBasic ? 'Basic Active' : entitlement.tier === 'trial' ? 'Trial Active' : 'View Only'}
+                  </Text>
+                  <Text style={styles.subscriptionStatusSubtitle}>
+                    {entitlement.isPro ? 'All features unlocked' : entitlement.isBasic ? 'Basic features active' : entitlement.tier === 'trial' ? `${entitlement.trialDaysRemaining} days remaining` : 'Upgrade to unlock features'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.dataDivider} />
+              {renderSettingRow(
+                <RefreshCcw size={18} color={COLORS.navyDeep} />,
+                'Restore Purchases',
+                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                () => entitlement.restore()
+              )}
+              {renderSettingRow(
+                <ExternalLink size={18} color={COLORS.navyDeep} />,
+                'Manage Subscriptions',
+                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                () => entitlement.openManageSubscription()
+              )}
+              {renderSettingRow(
+                <Crown size={18} color={COLORS.navyDeep} />,
+                'Upgrade to Pro',
+                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                () => router.push('/paywall')
+              )}
+              <View style={styles.dataDivider} />
+              {renderSettingRow(
+                <Shield size={18} color={COLORS.navyDeep} />,
+                'Privacy Policy',
+                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                () => entitlement.openPrivacyPolicy()
+              )}
+              {renderSettingRow(
+                <Shield size={18} color={COLORS.navyDeep} />,
+                'Terms of Use (EULA)',
+                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                () => entitlement.openTerms()
+              )}
+            </View>
+            <Text style={styles.subscriptionHint}>
+              Manage your subscription status, restore previous purchases, and review legal terms. Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
+            </Text>
+          </View>
+
           {isAdmin && (
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>ADMIN - EMAIL WHITELIST</Text>
@@ -2437,5 +2489,34 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: '#FFFFFF',
+  },
+  subscriptionStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    backgroundColor: 'rgba(76, 175, 80, 0.08)',
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.xs,
+  },
+  subscriptionStatusText: {
+    flex: 1,
+  },
+  subscriptionStatusTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    marginBottom: 2,
+  },
+  subscriptionStatusSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: CLEAN_THEME.text.secondary,
+  },
+  subscriptionHint: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: CLEAN_THEME.text.secondary,
+    marginTop: SPACING.xs,
+    marginHorizontal: SPACING.xs,
+    lineHeight: 16,
   },
 });

@@ -8,6 +8,7 @@ import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers'
 import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS } from '@/constants/celebrityCaptainsClub';
 import { getCelebrityBlueChipTierByLevel, CELEBRITY_BLUE_CHIP_TIERS } from '@/constants/celebrityBlueChipClub';
 import { BrandToggle, BrandType } from './BrandToggle';
+import { useEntitlement } from '@/state/EntitlementProvider';
 
 interface UserProfileData {
   name: string;
@@ -77,6 +78,7 @@ export function UserProfileCard({
   onSave,
   isSaving = false,
 }: UserProfileCardProps) {
+  const entitlement = useEntitlement();
   const [formData, setFormData] = useState<UserProfileData>(currentValues);
   const [activeBrand, setActiveBrand] = useState<BrandType>(
     (currentValues.preferredBrand as BrandType) || 'royal'
@@ -199,45 +201,64 @@ export function UserProfileCard({
     ? !!enrichmentData?.captainsClubId 
     : !!enrichmentData?.venetianSocietyMemberNumber;
 
-  const renderRoyalCaribbeanValues = () => (
-    <View style={styles.valuesGrid}>
-      {renderValueCard('Name', currentValues.name, undefined, true)}
-      {renderValueCard('Email', currentValues.email, undefined, true)}
-      {renderValueCard('Crown & Anchor #', enrichmentData?.crownAndAnchorId || currentValues.crownAnchorNumber, undefined, true)}
-      {renderValueCard('C&A Level', enrichmentData?.crownAndAnchorTier || calculatedLevel, calculatedLevelInfo?.color)}
-      {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
-      {renderValueCard('Club Royale Tier', enrichmentData?.clubRoyaleTierFromApi || calculatedTier, calculatedTierInfo?.color)}
-      {renderValueCard('Casino Points', enrichmentData?.clubRoyalePointsFromApi ?? currentValues.clubRoyalePoints, COLORS.points)}
-      {enrichmentData?.crownAndAnchorNextTier && renderValueCard('Next C&A Level', enrichmentData.crownAndAnchorNextTier)}
-      {enrichmentData?.crownAndAnchorRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.crownAndAnchorRemainingPoints)}
-    </View>
-  );
+  const getSubscriptionTierDisplay = () => {
+    if (entitlement.isPro) return { text: 'Pro Active', color: '#10B981' };
+    if (entitlement.isBasic) return { text: 'Basic Active', color: '#3B82F6' };
+    if (entitlement.tier === 'trial') return { text: `Trial (${entitlement.trialDaysRemaining}d left)`, color: '#F59E0B' };
+    return { text: 'View Only', color: '#6B7280' };
+  };
 
-  const renderCelebrityValues = () => (
-    <View style={styles.valuesGrid}>
-      {renderValueCard('Name', currentValues.name, undefined, true)}
-      {renderValueCard('Email', currentValues.celebrityEmail, undefined, true)}
-      {renderValueCard("Captain's Club #", enrichmentData?.captainsClubId || currentValues.celebrityCaptainsClubNumber, undefined, true)}
-      {renderValueCard("Captain's Level", enrichmentData?.captainsClubTier || calculatedCelebrityLevel, calculatedCelebrityLevelInfo?.color)}
-      {renderValueCard('Club Points', enrichmentData?.captainsClubPoints ?? currentValues.celebrityCaptainsClubPoints, COLORS.loyalty)}
-      {renderValueCard('Blue Chip Tier', enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier, calculatedCelebrityTierInfo?.color)}
-      {renderValueCard('Casino Points', enrichmentData?.celebrityBlueChipPoints ?? currentValues.celebrityBlueChipPoints, COLORS.points)}
-      {enrichmentData?.captainsClubNextTier && renderValueCard('Next Level', enrichmentData.captainsClubNextTier)}
-      {enrichmentData?.captainsClubRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.captainsClubRemainingPoints)}
-    </View>
-  );
+  const renderRoyalCaribbeanValues = () => {
+    const subTier = getSubscriptionTierDisplay();
+    return (
+      <View style={styles.valuesGrid}>
+        {renderValueCard('Subscription', subTier.text, subTier.color, true)}
+        {renderValueCard('Name', currentValues.name, undefined, true)}
+        {renderValueCard('Email', currentValues.email, undefined, true)}
+        {renderValueCard('Crown & Anchor #', enrichmentData?.crownAndAnchorId || currentValues.crownAnchorNumber, undefined, true)}
+        {renderValueCard('C&A Level', enrichmentData?.crownAndAnchorTier || calculatedLevel, calculatedLevelInfo?.color)}
+        {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
+        {renderValueCard('Club Royale Tier', enrichmentData?.clubRoyaleTierFromApi || calculatedTier, calculatedTierInfo?.color)}
+        {renderValueCard('Casino Points', enrichmentData?.clubRoyalePointsFromApi ?? currentValues.clubRoyalePoints, COLORS.points)}
+        {enrichmentData?.crownAndAnchorNextTier && renderValueCard('Next C&A Level', enrichmentData.crownAndAnchorNextTier)}
+        {enrichmentData?.crownAndAnchorRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.crownAndAnchorRemainingPoints)}
+      </View>
+    );
+  };
 
-  const renderSilverseaValues = () => (
-    <View style={styles.valuesGrid}>
-      {renderValueCard('Name', currentValues.name, undefined, true)}
-      {renderValueCard('Email', currentValues.silverseaEmail, undefined, true)}
-      {renderValueCard('Venetian Member #', enrichmentData?.venetianSocietyMemberNumber || currentValues.silverseaVenetianNumber, undefined, true)}
-      {renderValueCard('Enrolled', enrichmentData?.venetianSocietyEnrolled ? 'Yes' : 'No', enrichmentData?.venetianSocietyEnrolled ? COLORS.success : undefined)}
-      {renderValueCard('Tier', enrichmentData?.venetianSocietyTier || currentValues.silverseaVenetianTier)}
-      {renderValueCard('Points', currentValues.silverseaVenetianPoints, COLORS.loyalty)}
-      {enrichmentData?.venetianSocietyNextTier && renderValueCard('Next Tier', enrichmentData.venetianSocietyNextTier)}
-    </View>
-  );
+  const renderCelebrityValues = () => {
+    const subTier = getSubscriptionTierDisplay();
+    return (
+      <View style={styles.valuesGrid}>
+        {renderValueCard('Subscription', subTier.text, subTier.color, true)}
+        {renderValueCard('Name', currentValues.name, undefined, true)}
+        {renderValueCard('Email', currentValues.celebrityEmail, undefined, true)}
+        {renderValueCard("Captain's Club #", enrichmentData?.captainsClubId || currentValues.celebrityCaptainsClubNumber, undefined, true)}
+        {renderValueCard("Captain's Level", enrichmentData?.captainsClubTier || calculatedCelebrityLevel, calculatedCelebrityLevelInfo?.color)}
+        {renderValueCard('Club Points', enrichmentData?.captainsClubPoints ?? currentValues.celebrityCaptainsClubPoints, COLORS.loyalty)}
+        {renderValueCard('Blue Chip Tier', enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier, calculatedCelebrityTierInfo?.color)}
+        {renderValueCard('Casino Points', enrichmentData?.celebrityBlueChipPoints ?? currentValues.celebrityBlueChipPoints, COLORS.points)}
+        {enrichmentData?.captainsClubNextTier && renderValueCard('Next Level', enrichmentData.captainsClubNextTier)}
+        {enrichmentData?.captainsClubRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.captainsClubRemainingPoints)}
+      </View>
+    );
+  };
+
+  const renderSilverseaValues = () => {
+    const subTier = getSubscriptionTierDisplay();
+    return (
+      <View style={styles.valuesGrid}>
+        {renderValueCard('Subscription', subTier.text, subTier.color, true)}
+        {renderValueCard('Name', currentValues.name, undefined, true)}
+        {renderValueCard('Email', currentValues.silverseaEmail, undefined, true)}
+        {renderValueCard('Venetian Member #', enrichmentData?.venetianSocietyMemberNumber || currentValues.silverseaVenetianNumber, undefined, true)}
+        {renderValueCard('Enrolled', enrichmentData?.venetianSocietyEnrolled ? 'Yes' : 'No', enrichmentData?.venetianSocietyEnrolled ? COLORS.success : undefined)}
+        {renderValueCard('Tier', enrichmentData?.venetianSocietyTier || currentValues.silverseaVenetianTier)}
+        {renderValueCard('Points', currentValues.silverseaVenetianPoints, COLORS.loyalty)}
+        {enrichmentData?.venetianSocietyNextTier && renderValueCard('Next Tier', enrichmentData.venetianSocietyNextTier)}
+      </View>
+    );
+  };
 
   const renderEditForm = () => {
     if (activeBrand === 'royal') {
