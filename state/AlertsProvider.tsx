@@ -28,6 +28,7 @@ import {
   getAlertSummary,
   type AlertSummary,
 } from '@/lib/alertRules';
+import { useEntitlement } from './EntitlementProvider';
 
 const ALERTS_STORAGE_KEY = '@easy_seas_alerts';
 const RULES_STORAGE_KEY = '@easy_seas_alert_rules';
@@ -60,6 +61,7 @@ interface AlertsState {
 }
 
 export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => {
+  const { tier } = useEntitlement();
   const { bookedCruises, casinoOffers } = useCruiseStore();
   const { clubRoyaleProfile } = useAppState();
   const { priceDropAlerts } = usePriceHistory();
@@ -166,6 +168,11 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   }, [dismissedEntities]);
 
   const runDetection = useCallback(() => {
+    if (tier !== 'pro') {
+      console.log('[AlertsProvider] Alerts are Pro-only. Tier:', tier);
+      return;
+    }
+    
     setIsLoading(true);
     console.log('[AlertsProvider] Running anomaly detection...');
 
@@ -211,7 +218,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     } finally {
       setIsLoading(false);
     }
-  }, [bookedCruises, casinoOffers, clubRoyaleProfile, config, rules, alerts, dismissedIds, dismissedEntities, priceDropAlerts]);
+  }, [tier, bookedCruises, casinoOffers, clubRoyaleProfile, config, rules, alerts, dismissedIds, dismissedEntities, priceDropAlerts]);
 
   useEffect(() => {
     if (bookedCruises.length > 0 || casinoOffers.length > 0 || priceDropAlerts.length > 0) {

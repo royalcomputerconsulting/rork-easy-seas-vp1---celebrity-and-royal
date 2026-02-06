@@ -274,6 +274,18 @@ export default function SettingsScreen() {
   }, [cruises, bookedCruises, casinoOffers, localData, myAtlasMachines]);
 
   const handleImportOffersCSV = useCallback(async () => {
+    if (entitlement.tier === 'view') {
+      Alert.alert(
+        'View-Only Mode',
+        'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => router.push('/paywall') },
+        ]
+      );
+      return;
+    }
+    
     try {
       setIsImporting(true);
       setLastImportResult(null);
@@ -317,7 +329,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [setCruises, setCasinoOffers, setLocalData]);
+  }, [entitlement.tier, router, setCruises, setCasinoOffers, setLocalData]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
 
@@ -410,6 +422,18 @@ export default function SettingsScreen() {
   }, [setLocalData, localData.calendar, fetchICSMutation]);
 
   const handleImportCalendarFromFile = useCallback(async () => {
+    if (entitlement.tier === 'view') {
+      Alert.alert(
+        'View-Only Mode',
+        'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => router.push('/paywall') },
+        ]
+      );
+      return;
+    }
+    
     try {
       setIsImporting(true);
       setLastImportResult(null);
@@ -447,7 +471,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [setLocalData, localData.calendar]);
+  }, [entitlement.tier, router, setLocalData, localData.calendar]);
 
   const handleImportCalendarICS = useCallback(() => {
     Alert.alert(
@@ -472,6 +496,18 @@ export default function SettingsScreen() {
   }, [handleImportCalendarFromFile, handleImportCalendarFromURL]);
 
   const handleImportBookedCSV = useCallback(async () => {
+    if (entitlement.tier === 'view') {
+      Alert.alert(
+        'View-Only Mode',
+        'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => router.push('/paywall') },
+        ]
+      );
+      return;
+    }
+    
     try {
       setIsImporting(true);
       setLastImportResult(null);
@@ -720,6 +756,18 @@ export default function SettingsScreen() {
   }, []);
 
   const handleImportAllData = useCallback(async () => {
+    if (entitlement.tier === 'view') {
+      Alert.alert(
+        'View-Only Mode',
+        'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => router.push('/paywall') },
+        ]
+      );
+      return;
+    }
+    
     try {
       setIsImportingAll(true);
       console.log('[Settings] Starting full data import...');

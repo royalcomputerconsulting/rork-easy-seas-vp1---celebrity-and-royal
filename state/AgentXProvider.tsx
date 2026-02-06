@@ -25,6 +25,7 @@ import { useSlotMachines } from './SlotMachineProvider';
 import { useSlotMachineLibrary } from './SlotMachineLibraryProvider';
 import { useDeckPlan } from './DeckPlanProvider';
 import { useCasinoSessions } from './CasinoSessionProvider';
+import { useEntitlement } from './EntitlementProvider';
 
 interface AgentXState {
   messages: ChatMessage[];
@@ -230,6 +231,7 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
 }
 
 export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => {
+  const { tier } = useEntitlement();
   const { cruises, bookedCruises, casinoOffers } = useCruiseStore();
   const { clubRoyalePoints, clubRoyaleTier } = useLoyalty();
   const { allMachines } = useSlotMachines();
@@ -299,6 +301,19 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
 
   const sendMessage = useCallback(async (content: string) => {
     console.log('[AgentX] User message:', content);
+    
+    if (tier !== 'pro') {
+      console.log('[AgentX] Access denied. Tier:', tier);
+      const deniedMessage: ChatMessage = {
+        id: `denied-${Date.now()}`,
+        role: 'assistant',
+        content: 'Agent X is a Pro-only feature. Upgrade to Pro to access AI-powered cruise analysis and recommendations.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, deniedMessage]);
+      return;
+    }
+    
     setError(null);
     
     const userMessage: ChatMessage = {

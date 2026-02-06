@@ -86,6 +86,7 @@ import { useTax } from '@/state/TaxProvider';
 import type { MachineType, Denomination } from '@/state/CasinoSessionProvider';
 import { SessionsSummaryCard } from '@/components/SessionsSummaryCard';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
+import { useEntitlement } from '@/state/EntitlementProvider';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -111,6 +112,7 @@ function getCruiseROILevel(roi: number): 'high' | 'medium' | 'low' {
 
 export default function AnalyticsScreen() {
   const router = useRouter();
+  const { tier } = useEntitlement();
   const { analytics, casinoAnalytics } = useSimpleAnalytics();
   const { 
     activeAlerts, 
@@ -180,6 +182,17 @@ export default function AnalyticsScreen() {
     console.log('[Analytics] No booked cruises available, using empty array');
     return [];
   }, [localData.booked, storedBookedCruises]);
+
+  useEffect(() => {
+    if (tier !== 'pro') {
+      console.log('[Analytics] Access denied. Tier:', tier);
+      router.replace('/paywall');
+    }
+  }, [tier, router]);
+
+  if (tier !== 'pro') {
+    return null;
+  }
 
   const currentPoints = loyaltyClubRoyalePoints || clubRoyaleProfile?.tierPoints || analytics.totalPoints || 0;
   const totalNights = loyaltyCrownAnchorPoints || clubRoyaleProfile?.lifetimeNights || analytics.totalNights || 0;
