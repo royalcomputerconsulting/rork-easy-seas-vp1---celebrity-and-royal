@@ -588,7 +588,6 @@ export default function CruiseDetailsScreen() {
 
   return (
     <View style={styles.container}>
-      
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -640,7 +639,6 @@ export default function CruiseDetailsScreen() {
             )}
           </View>
         </View>
-        
         <View style={styles.content}>
           <View style={styles.headerSection}>
             <View style={styles.shipRow}>
