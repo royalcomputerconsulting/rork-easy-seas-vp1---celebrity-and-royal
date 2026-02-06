@@ -647,7 +647,7 @@ export default function CruiseDetailsScreen() {
             </View>
             <Text style={styles.destination}>{cruise.itineraryName || cruise.destination || 'Cruise'}</Text>
             
-            {(linkedOffer?.offerName || linkedOffer?.title || cruise.offerCode) && (
+            {!!(linkedOffer?.offerName || linkedOffer?.title || cruise.offerCode) && (
               <View style={styles.offerNameContainer}>
                 <Sparkles size={16} color={COLORS.goldDark} />
                 <Text style={styles.offerNameText}>
@@ -802,31 +802,31 @@ export default function CruiseDetailsScreen() {
                 {(cruise.interiorPrice ?? 0) > 0 && (
                   <View style={styles.pricingChip}>
                     <Text style={styles.pricingChipLabel}>INT</Text>
-                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.interiorPrice)}</Text>
+                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.interiorPrice ?? 0)}</Text>
                   </View>
                 )}
                 {(cruise.oceanviewPrice ?? 0) > 0 && (
                   <View style={styles.pricingChip}>
                     <Text style={styles.pricingChipLabel}>OV</Text>
-                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.oceanviewPrice)}</Text>
+                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.oceanviewPrice ?? 0)}</Text>
                   </View>
                 )}
                 {(cruise.balconyPrice ?? 0) > 0 && (
                   <View style={styles.pricingChip}>
                     <Text style={styles.pricingChipLabel}>BAL</Text>
-                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.balconyPrice)}</Text>
+                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.balconyPrice ?? 0)}</Text>
                   </View>
                 )}
                 {(cruise.suitePrice ?? 0) > 0 && (
                   <View style={styles.pricingChip}>
                     <Text style={styles.pricingChipLabel}>STE</Text>
-                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.suitePrice)}</Text>
+                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.suitePrice ?? 0)}</Text>
                   </View>
                 )}
                 {(cruise.taxes ?? 0) > 0 && (
                   <View style={[styles.pricingChip, styles.pricingChipMuted]}>
                     <Text style={styles.pricingChipLabel}>TAX</Text>
-                    <Text style={[styles.pricingChipValue, styles.pricingChipValueMuted]}>{formatCurrency(cruise.taxes)}</Text>
+                    <Text style={[styles.pricingChipValue, styles.pricingChipValueMuted]}>{formatCurrency(cruise.taxes ?? 0)}</Text>
                   </View>
                 )}
               </View>
