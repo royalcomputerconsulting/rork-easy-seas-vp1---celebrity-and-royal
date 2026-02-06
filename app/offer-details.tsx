@@ -604,24 +604,26 @@ export default function OfferDetailsScreen() {
         </LinearGradient>
 
         {/* Sort Controls */}
-        <View style={styles.sortRowCentered}>
+        <View style={styles.sortSection}>
           <Text style={styles.sortLabel} testID="offer-sort-label">Sort by:</Text>
-          <TouchableOpacity
-            style={[styles.sortPillMain, sortBy === 'soonest' && styles.sortPillMainActive]}
-            onPress={() => setSortBy('soonest')}
-            activeOpacity={0.7}
-            testID="sort-soonest"
-          >
-            <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Sailings Soonest Expiring Offer</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.sortPillMain, sortBy === 'highest-value' && styles.sortPillMainActive]}
-            onPress={() => setSortBy('highest-value')}
-            activeOpacity={0.7}
-            testID="sort-highest-value"
-          >
-            <Text style={[styles.sortPillMainText, sortBy === 'highest-value' && styles.sortPillMainTextActive]}>Highest Value</Text>
-          </TouchableOpacity>
+          <View style={styles.sortRowCentered}>
+            <TouchableOpacity
+              style={[styles.sortPillMain, sortBy === 'soonest' && styles.sortPillMainActive]}
+              onPress={() => setSortBy('soonest')}
+              activeOpacity={0.7}
+              testID="sort-soonest"
+            >
+              <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Sailings Soonest Expiring Offer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sortPillMain, sortBy === 'highest-value' && styles.sortPillMainActive]}
+              onPress={() => setSortBy('highest-value')}
+              activeOpacity={0.7}
+              testID="sort-highest-value"
+            >
+              <Text style={[styles.sortPillMainText, sortBy === 'highest-value' && styles.sortPillMainTextActive]}>Highest Value</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <FlatList
@@ -785,14 +787,17 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: '#166534',
   },
+  sortSection: {
+    marginHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    gap: SPACING.xs,
+  },
   sortRowCentered: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     gap: SPACING.md,
-    paddingVertical: SPACING.sm,
-    marginHorizontal: SPACING.md,
   },
   sortPillMain: {
     paddingHorizontal: SPACING.md,
@@ -819,6 +824,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.navyDeep,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    marginLeft: 2,
   },
   listContent: {
     padding: SPACING.md,
