@@ -9,7 +9,8 @@ import {
   Alert, 
   Linking, 
   ActivityIndicator,
-  TextInput
+  TextInput,
+  Image
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,6 +41,7 @@ import {
   RefreshCcw,
   BookOpen,
   Crown,
+  FileDown,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
@@ -1309,6 +1311,22 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
               <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.quickActionFullWidth} 
+              onPress={handleImportOffersCSV}
+              activeOpacity={0.7}
+              disabled={isImporting}
+            >
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
+                {isImporting ? (
+                  <ActivityIndicator size="small" color={COLORS.info} />
+                ) : (
+                  <FileDown size={16} color={COLORS.info} />
+                )}
+              </View>
+              <Text style={styles.quickActionLabelInline}>Load Import Offers.CSV</Text>
+              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
+            </TouchableOpacity>
             <View style={styles.quickActionsRow}>
               <TouchableOpacity 
                 style={styles.quickActionHalf} 
@@ -1630,8 +1648,8 @@ STEP 4: Optional Calendar Import
               {renderSettingRow(
                 <Star size={18} color={COLORS.navyDeep} />,
                 'Rate App',
-                undefined,
-                () => Alert.alert('Rate', 'Thank you for your support!')
+                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                () => handleOpenLink('https://apps.apple.com/us/app/easy-seas/id6758175890?ppid=9a051237-cab0-4164-9459-4c55a1976721')
               )}
             </View>
           </View>
@@ -1788,6 +1806,32 @@ STEP 4: Optional Calendar Import
                 'App Version',
                 '1.0.0'
               )}
+            </View>
+            <View style={styles.aboutPromoSection}>
+              <Image
+                source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/h9viq065jv5liw4sy78sl' }}
+                style={styles.aboutBanner}
+                resizeMode="cover"
+              />
+              <View style={styles.aboutQrRow}>
+                <Image
+                  source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/t70pmy9bqdf95tfyftktj' }}
+                  style={styles.aboutQrCode}
+                  resizeMode="contain"
+                />
+                <View style={styles.aboutQrText}>
+                  <Text style={styles.aboutQrTitle}>Download Easy Seas</Text>
+                  <Text style={styles.aboutQrSubtitle}>Scan the QR code to get the app on your device</Text>
+                  <TouchableOpacity
+                    onPress={() => handleOpenLink('https://apps.apple.com/us/app/easy-seas/id6758175890?ppid=9a051237-cab0-4164-9459-4c55a1976721')}
+                    style={styles.aboutAppStoreButton}
+                    activeOpacity={0.7}
+                  >
+                    <ExternalLink size={14} color="#FFFFFF" />
+                    <Text style={styles.aboutAppStoreText}>App Store</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -2289,5 +2333,61 @@ const styles = StyleSheet.create({
     padding: SPACING.sm,
     backgroundColor: 'rgba(244, 67, 54, 0.1)',
     borderRadius: BORDER_RADIUS.sm,
+  },
+  aboutPromoSection: {
+    marginTop: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+    backgroundColor: '#E0F7FA',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  aboutBanner: {
+    width: '100%',
+    height: 160,
+    borderTopLeftRadius: BORDER_RADIUS.lg,
+    borderTopRightRadius: BORDER_RADIUS.lg,
+  },
+  aboutQrRow: {
+    flexDirection: 'row',
+    padding: SPACING.md,
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  aboutQrCode: {
+    width: 90,
+    height: 90,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#FFFFFF',
+  },
+  aboutQrText: {
+    flex: 1,
+  },
+  aboutQrTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    marginBottom: 4,
+  },
+  aboutQrSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: CLEAN_THEME.text.secondary,
+    marginBottom: SPACING.sm,
+    lineHeight: 16,
+  },
+  aboutAppStoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.navyDeep,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.md,
+    alignSelf: 'flex-start',
+  },
+  aboutAppStoreText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#FFFFFF',
   },
 });
