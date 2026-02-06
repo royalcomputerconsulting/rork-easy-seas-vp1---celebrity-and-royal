@@ -796,40 +796,38 @@ export default function CruiseDetailsScreen() {
             </View>
           )}
 
-          {((cruise.interiorPrice ?? 0) > 0 || (cruise.oceanviewPrice ?? 0) > 0 || (cruise.balconyPrice ?? 0) > 0 || (cruise.suitePrice ?? 0) > 0 || (cruise.taxes ?? 0) > 0) && (
-            <View style={styles.pricingChipsCard} testID="cruise-pricing-chips">
-              <View style={styles.pricingChipsRow}>
-                {(cruise.interiorPrice ?? 0) > 0 && (
-                  <View style={styles.pricingChip}>
-                    <Text style={styles.pricingChipLabel}>INT</Text>
-                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.interiorPrice ?? 0)}</Text>
-                  </View>
-                )}
-                {(cruise.oceanviewPrice ?? 0) > 0 && (
-                  <View style={styles.pricingChip}>
-                    <Text style={styles.pricingChipLabel}>OV</Text>
-                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.oceanviewPrice ?? 0)}</Text>
-                  </View>
-                )}
-                {(cruise.balconyPrice ?? 0) > 0 && (
-                  <View style={styles.pricingChip}>
-                    <Text style={styles.pricingChipLabel}>BAL</Text>
-                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.balconyPrice ?? 0)}</Text>
-                  </View>
-                )}
-                {(cruise.suitePrice ?? 0) > 0 && (
-                  <View style={styles.pricingChip}>
-                    <Text style={styles.pricingChipLabel}>STE</Text>
-                    <Text style={styles.pricingChipValue}>{formatCurrency(cruise.suitePrice ?? 0)}</Text>
-                  </View>
-                )}
-                {(cruise.taxes ?? 0) > 0 && (
-                  <View style={[styles.pricingChip, styles.pricingChipMuted]}>
-                    <Text style={styles.pricingChipLabel}>TAX</Text>
-                    <Text style={[styles.pricingChipValue, styles.pricingChipValueMuted]}>{formatCurrency(cruise.taxes ?? 0)}</Text>
-                  </View>
-                )}
-              </View>
+          {(cruise.interiorPrice ?? 0) > 0 && (
+            <View style={styles.pricingCategoryCard}>
+              <Text style={styles.pricingCategoryLabel}>Interior</Text>
+              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.interiorPrice ?? 0)}</Text>
+            </View>
+          )}
+
+          {(cruise.oceanviewPrice ?? 0) > 0 && (
+            <View style={styles.pricingCategoryCard}>
+              <Text style={styles.pricingCategoryLabel}>Oceanview</Text>
+              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.oceanviewPrice ?? 0)}</Text>
+            </View>
+          )}
+
+          {(cruise.balconyPrice ?? 0) > 0 && (
+            <View style={styles.pricingCategoryCard}>
+              <Text style={styles.pricingCategoryLabel}>Balcony</Text>
+              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.balconyPrice ?? 0)}</Text>
+            </View>
+          )}
+
+          {(cruise.suitePrice ?? 0) > 0 && (
+            <View style={styles.pricingCategoryCard}>
+              <Text style={styles.pricingCategoryLabel}>Suite</Text>
+              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.suitePrice ?? 0)}</Text>
+            </View>
+          )}
+
+          {(cruise.taxes ?? 0) > 0 && (
+            <View style={styles.pricingCategoryCard}>
+              <Text style={styles.pricingCategoryLabel}>Port Taxes & Fees</Text>
+              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.taxes ?? 0)}</Text>
             </View>
           )}
 
@@ -912,62 +910,41 @@ export default function CruiseDetailsScreen() {
           )}
 
           {(hasPerks || cruise.offerCode || (cruise as any).offerCode) && (
-            <View style={styles.offersSection}>
-              <View style={styles.sectionHeader}>
-                <Gift size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitle}>Special Offers & Perks</Text>
+            <View style={styles.offersSectionCompact}>
+              <View style={styles.sectionHeaderCompact}>
+                <Gift size={16} color={COLORS.beigeWarm} />
+                <Text style={styles.sectionTitleCompact}>Special Offers & Perks</Text>
               </View>
               
-              {(cruise.offerCode || (cruise as any).offerCode) && (
-                <View style={styles.offerCodeCard}>
-                  <View style={styles.offerCodeHeader}>
-                    <Sparkles size={16} color={COLORS.goldDark} />
-                    <Text style={styles.offerCodeLabel}>Offer Code</Text>
+              <View style={styles.offersCompactContent}>
+                {(cruise.offerCode || (cruise as any).offerCode) && (
+                  <View style={styles.offerItemCompact}>
+                    <Sparkles size={12} color={COLORS.goldDark} />
+                    <Text style={styles.offerTextCompact}>{cruise.offerCode || (cruise as any).offerCode}</Text>
                   </View>
-                  <Text style={styles.offerCodeValue}>{cruise.offerCode || (cruise as any).offerCode}</Text>
-                </View>
-              )}
-
-              {((cruise.freePlay ?? 0) > 0 || ((cruise as any).freeOBC ?? cruise.freeOBC ?? 0) > 0) && (
-                <View style={styles.fpObcHighlight}>
-                  {(cruise.freePlay ?? 0) > 0 && (
-                    <View style={styles.fpHighlightCard}>
-                      <Text style={styles.fpHighlightLabel}>FreePlay</Text>
-                      <Text style={styles.fpHighlightValue}>${(cruise.freePlay ?? 0).toLocaleString()}</Text>
-                    </View>
-                  )}
-                  {((cruise as any).freeOBC ?? cruise.freeOBC ?? 0) > 0 && (
-                    <View style={styles.obcHighlightCard}>
-                      <Text style={styles.obcHighlightLabel}>Onboard Credit</Text>
-                      <Text style={styles.obcHighlightValue}>${((cruise as any).freeOBC ?? cruise.freeOBC ?? 0).toLocaleString()}</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-              
-              <View style={styles.offersList}>
+                )}
                 {cruise.freeGratuities && (
-                  <View style={styles.offerItem}>
-                    <Star size={16} color={COLORS.success} />
-                    <Text style={styles.offerText}>Free Gratuities Included</Text>
+                  <View style={styles.offerItemCompact}>
+                    <Star size={12} color={COLORS.success} />
+                    <Text style={styles.offerTextCompact}>Gratuities</Text>
                   </View>
                 )}
                 {cruise.freeDrinkPackage && (
-                  <View style={styles.offerItem}>
-                    <Star size={16} color={COLORS.success} />
-                    <Text style={styles.offerText}>Free Drink Package</Text>
+                  <View style={styles.offerItemCompact}>
+                    <Star size={12} color={COLORS.success} />
+                    <Text style={styles.offerTextCompact}>Drinks</Text>
                   </View>
                 )}
                 {cruise.freeWifi && (
-                  <View style={styles.offerItem}>
-                    <Star size={16} color={COLORS.success} />
-                    <Text style={styles.offerText}>Free WiFi</Text>
+                  <View style={styles.offerItemCompact}>
+                    <Star size={12} color={COLORS.success} />
+                    <Text style={styles.offerTextCompact}>WiFi</Text>
                   </View>
                 )}
                 {cruise.freeSpecialtyDining && (
-                  <View style={styles.offerItem}>
-                    <Star size={16} color={COLORS.success} />
-                    <Text style={styles.offerText}>Free Specialty Dining</Text>
+                  <View style={styles.offerItemCompact}>
+                    <Star size={12} color={COLORS.success} />
+                    <Text style={styles.offerTextCompact}>Specialty Dining</Text>
                   </View>
                 )}
               </View>
@@ -1168,119 +1145,40 @@ export default function CruiseDetailsScreen() {
           )}
 
           {casinoAvailability && (
-            <View style={styles.casinoSection}>
-              <View style={styles.sectionHeader}>
-                <MapPin size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitle}>Itinerary & Casino</Text>
-                {casinoStatusBadge && (
-                  <View style={[styles.casinoStatusBadge, { backgroundColor: casinoStatusBadge.color + '30' }]}>
-                    <Text style={[styles.casinoStatusText, { color: casinoStatusBadge.color }]}>
-                      {casinoStatusBadge.label}
-                    </Text>
-                  </View>
-                )}
+            <View style={styles.casinoSectionCompact}>
+              <View style={styles.sectionHeaderCompact}>
+                <MapPin size={16} color={COLORS.beigeWarm} />
+                <Text style={styles.sectionTitleCompact}>Itinerary & Casino</Text>
               </View>
               
-              <View style={styles.casinoStatsCompact}>
-                <View style={styles.casinoStatCompact}>
-                  <Text style={styles.casinoStatCompactLabel}>Casino</Text>
-                  <Text style={styles.casinoStatCompactValue}>{casinoAvailability.casinoOpenDays}d</Text>
+              <View style={styles.casinoStatsRow}>
+                <View style={styles.casinoStatBox}>
+                  <Text style={styles.casinoStatBoxLabel}>Casino</Text>
+                  <Text style={styles.casinoStatBoxValue}>{casinoAvailability.casinoOpenDays}d</Text>
                 </View>
-                <View style={styles.casinoStatCompact}>
-                  <Text style={styles.casinoStatCompactLabel}>Sea</Text>
-                  <Text style={styles.casinoStatCompactValue}>{casinoAvailability.seaDays}d</Text>
+                <View style={styles.casinoStatBox}>
+                  <Text style={styles.casinoStatBoxLabel}>Sea Days</Text>
+                  <Text style={styles.casinoStatBoxValue}>{casinoAvailability.seaDays}d</Text>
                 </View>
-                <View style={styles.casinoStatCompact}>
-                  <Text style={styles.casinoStatCompactLabel}>Play</Text>
-                  <Text style={styles.casinoStatCompactValue}>{personalizedPlayEstimate?.playDays || 0}d</Text>
-                </View>
-                <View style={styles.casinoStatCompact}>
-                  <Text style={styles.casinoStatCompactLabel}>Golden</Text>
-                  <Text style={styles.casinoStatCompactValue}>{personalizedPlayEstimate?.goldenHoursTotal || personalizedPlayEstimate?.estimatedPlayHours || 0}h</Text>
-                </View>
-                <View style={styles.casinoStatCompact}>
-                  <Text style={styles.casinoStatCompactLabel}>Est Pts</Text>
-                  <Text style={styles.casinoStatCompactValue}>~{((personalizedPlayEstimate?.estimatedPoints || 0) / 1000).toFixed(1)}k</Text>
+                <View style={styles.casinoStatBox}>
+                  <Text style={styles.casinoStatBoxLabel}>Est Pts</Text>
+                  <Text style={styles.casinoStatBoxValue}>~{((personalizedPlayEstimate?.estimatedPoints || 0) / 1000).toFixed(1)}k</Text>
                 </View>
               </View>
 
-              {personalizedPlayEstimate && (
-                <View style={styles.expectedPointsSection}>
-                  <View style={styles.expectedPointsHeader}>
-                    <Target size={16} color={COLORS.beigeWarm} />
-                    <Text style={styles.expectedPointsTitle}>Play Schedule Estimate</Text>
-                  </View>
-                  <View style={styles.combinedEstimateRow}>
-                    <View style={styles.combinedEstimateItem}>
-                      <View style={styles.combinedEstimateIconBadge}>
-                        <Star size={14} color={COLORS.navyDeep} />
-                      </View>
-                      <View>
-                        <Text style={styles.combinedEstimateValue}>
-                          ~{personalizedPlayEstimate.estimatedPoints.toLocaleString()} pts
-                        </Text>
-                        <Text style={styles.combinedEstimateLabel}>Est. Points</Text>
-                      </View>
-                    </View>
-                    <View style={styles.combinedEstimateDivider} />
-                    <View style={styles.combinedEstimateItem}>
-                      <View style={[styles.combinedEstimateIconBadge, styles.goldenIconBadge]}>
-                        <Clock size={14} color={COLORS.navyDeep} />
-                      </View>
-                      <View>
-                        <Text style={styles.combinedEstimateValue}>
-                          {personalizedPlayEstimate.goldenHoursTotal > 0 
-                            ? `${personalizedPlayEstimate.goldenHoursTotal}h`
-                            : `${personalizedPlayEstimate.estimatedPlayHours}h`
-                          }
-                        </Text>
-                        <Text style={styles.combinedEstimateLabel}>Golden Time</Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              {expectedPointsCalculation && (
-                <View style={styles.historicalComparisonSection}>
-                  <View style={styles.expectedPointsHeader}>
-                    <TrendingUp size={16} color={COLORS.textSecondary} />
-                    <Text style={styles.historicalComparisonTitle}>Historical Avg</Text>
-                  </View>
-                  <View style={styles.historicalStatsRow}>
-                    <View style={styles.historicalStatItem}>
-                      <Text style={styles.historicalStatValue}>{expectedPointsCalculation.avgPointsPerNight.toLocaleString()}</Text>
-                      <Text style={styles.historicalStatLabel}>pts/night</Text>
-                    </View>
-                    <View style={styles.historicalStatItem}>
-                      <Text style={styles.historicalStatValue}>{expectedPointsCalculation.avgPointsPerCasinoDay.toLocaleString()}</Text>
-                      <Text style={styles.historicalStatLabel}>pts/casino day</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.historicalStatNote}>Based on {expectedPointsCalculation.basedOnCruises} past cruises</Text>
-                </View>
-              )}
-
-              <View style={styles.itineraryList}>
-                {casinoAvailability.dailyAvailability.map((day, index) => (
-                  <View key={index} style={styles.itineraryDayRow}>
-                    <View style={[styles.itineraryDayDot, day.isSeaDay && styles.seaDayDot]} />
-                    {index < casinoAvailability.dailyAvailability.length - 1 && <View style={styles.itineraryDayLine} />}
-                    <View style={styles.itineraryDayContent}>
-                      <View style={styles.itineraryDayHeader}>
-                        <Text style={styles.itineraryDayLabel}>Day {day.day}</Text>
-                        <View style={[styles.casinoDayStatusChip, { backgroundColor: day.casinoOpen ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)' }]}>
-                          <Text style={[styles.casinoDayStatusChipText, { color: day.casinoOpen ? COLORS.success : COLORS.error }]}>
-                            {day.casinoOpen ? 'Casino Open' : 'Casino Closed'}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.itineraryDayPort}>
-                        {day.isSeaDay ? '🌊 At Sea' : `📍 ${day.port}`}
-                      </Text>
-                    </View>
+              <View style={styles.itineraryCompactList}>
+                {casinoAvailability.dailyAvailability.slice(0, 3).map((day, index) => (
+                  <View key={index} style={styles.itineraryDayCompact}>
+                    <Text style={styles.itineraryDayNumber}>D{day.day}</Text>
+                    <Text style={styles.itineraryDayPortCompact} numberOfLines={1}>
+                      {day.isSeaDay ? 'At Sea' : day.port}
+                    </Text>
+                    <View style={[styles.casinoDotIndicator, { backgroundColor: day.casinoOpen ? COLORS.success : COLORS.error }]} />
                   </View>
                 ))}
+                {casinoAvailability.dailyAvailability.length > 3 && (
+                  <Text style={styles.itineraryMoreText}>+{casinoAvailability.dailyAvailability.length - 3} more days</Text>
+                )}
               </View>
             </View>
           )}
@@ -3520,5 +3418,134 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.navyDeep,
     fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  pricingCategoryCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+    borderWidth: 2,
+    borderColor: '#0EA5E9',
+    ...SHADOW.md,
+  },
+  pricingCategoryLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xs,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 1,
+  },
+  pricingCategoryValue: {
+    fontSize: 28,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.money,
+  },
+  offersSectionCompact: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  sectionHeaderCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  sectionTitleCompact: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  offersCompactContent: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  offerItemCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  offerTextCompact: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: COLORS.success,
+  },
+  casinoSectionCompact: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  casinoStatsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  casinoStatBox: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 151, 167, 0.08)',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    alignItems: 'center',
+  },
+  casinoStatBoxLabel: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  casinoStatBoxValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  itineraryCompactList: {
+    gap: SPACING.xs,
+  },
+  itineraryDayCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: 'rgba(0, 31, 63, 0.02)',
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  itineraryDayNumber: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.textSecondary,
+    width: 24,
+  },
+  itineraryDayPortCompact: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: COLORS.navyDeep,
+    flex: 1,
+  },
+  casinoDotIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  itineraryMoreText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+    textAlign: 'center' as const,
+    marginTop: SPACING.xs,
+    fontStyle: 'italic' as const,
   },
 });
