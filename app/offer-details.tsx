@@ -613,7 +613,7 @@ export default function OfferDetailsScreen() {
               activeOpacity={0.7}
               testID="sort-soonest"
             >
-              <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Sailings Soonest Expiring Offer</Text>
+              <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Soonest Expiring</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.sortPillMain, sortBy === 'highest-value' && styles.sortPillMainActive]}
