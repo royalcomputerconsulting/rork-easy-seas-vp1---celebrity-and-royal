@@ -1,6 +1,7 @@
 export const STEP1_OFFERS_SCRIPT = `
 (function() {
   const BATCH_SIZE = 150;
+  const PRICING_BATCH_SIZE = 10;
   
   function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -62,11 +63,21 @@ export const STEP1_OFFERS_SCRIPT = `
     }
   }
 
+  function toISODate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toISOString().split('T')[0];
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
   async function extractClubRoyaleStatus() {
     try {
       log('Extracting Club Royale status...');
       log('⚠️ Note: Loyalty data will be fetched via API in Step 4 for accuracy', 'info');
-
       return null;
     } catch (error) {
       log('Error extracting Club Royale status: ' + error.message, 'warning');
@@ -123,6 +134,134 @@ export const STEP1_OFFERS_SCRIPT = `
     }
   }
 
+  async function fetchPricingAndItinerary(baseUrl, shipCode, minDate, maxDate, count) {
+    const endpoint = baseUrl + '/graph';
+    const query = 'query cruiseSearch_Cruises($filters:String,$qualifiers:String,$sort:CruiseSearchSort,$pagination:CruiseSearchPagination,$nlSearch:String){cruiseSearch(filters:$filters,qualifiers:$qualifiers,sort:$sort,pagination:$pagination,nlSearch:$nlSearch){results{cruises{id productViewLink masterSailing{itinerary{name code days{number type ports{activity arrivalTime departureTime port{code name region}}}departurePort{code name region}destination{code name}portSequence sailingNights ship{code name}totalNights type}}sailings{bookingLink id itinerary{code}sailDate startDate endDate taxesAndFees{value}taxesAndFeesIncluded stateroomClassPricing{price{value currency{code}}stateroomClass{id content{code}}}}}cruiseRecommendationId total}}}';
+    
+    const filtersValue = 'startDate:' + minDate + '~' + maxDate + '|ship:' + shipCode;
+    
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'accept': 'application/json',
+          'apollographql-client-name': 'rci-NextGen-Cruise-Search',
+          'apollographql-query-name': 'cruiseSearch_Cruises',
+          'skip_authentication': 'true'
+        },
+        body: JSON.stringify({
+          query: query,
+          variables: {
+            filters: filtersValue,
+            pagination: { count: count, skip: 0 }
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        return null;
+      }
+      
+      const data = await response.json();
+      return data?.data?.cruiseSearch?.results?.cruises || [];
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function extractPricingFromCruise(cruise, sailDate) {
+    const result = {
+      interiorPrice: '',
+      oceanviewPrice: '',
+      balconyPrice: '',
+      suitePrice: '',
+      taxesAndFees: '',
+      dayByDayItinerary: [],
+      destinationName: '',
+      totalNights: null,
+      bookingLink: '',
+      portList: ''
+    };
+    
+    try {
+      const itin = cruise?.masterSailing?.itinerary || {};
+      result.destinationName = itin?.destination?.name || '';
+      result.totalNights = itin?.totalNights || itin?.sailingNights || null;
+      
+      if (Array.isArray(itin?.days)) {
+        result.dayByDayItinerary = itin.days.map(day => ({
+          day: day.number || 0,
+          type: day.type || '',
+          portName: day.ports?.[0]?.port?.name || '',
+          portCode: day.ports?.[0]?.port?.code || '',
+          arrivalTime: day.ports?.[0]?.arrivalTime || '',
+          departureTime: day.ports?.[0]?.departureTime || ''
+        }));
+        
+        const portNames = itin.days
+          .filter(d => d.ports && d.ports.length > 0)
+          .map(d => d.ports[0]?.port?.name)
+          .filter(n => n);
+        result.portList = [...new Set(portNames)].join(', ');
+      }
+      
+      const sailings = cruise?.sailings || [];
+      const targetDate = toISODate(sailDate);
+      const matchingSailing = sailings.find(s => {
+        const sSailDate = (s.sailDate || '').toString().trim().slice(0, 10);
+        return sSailDate === targetDate;
+      }) || sailings[0];
+      
+      if (matchingSailing) {
+        result.bookingLink = matchingSailing.bookingLink || '';
+        
+        const taxVal = matchingSailing.taxesAndFees?.value;
+        if (taxVal !== undefined && taxVal !== null) {
+          const taxNum = Number(taxVal);
+          if (!isNaN(taxNum)) {
+            result.taxesAndFees = '$' + (taxNum * 2).toFixed(2);
+          }
+        }
+        
+        const categoryMap = {
+          'I': 'interior', 'IN': 'interior', 'INT': 'interior', 'INSIDE': 'interior', 'INTERIOR': 'interior',
+          'O': 'oceanview', 'OV': 'oceanview', 'OB': 'oceanview', 'E': 'oceanview', 'OCEAN': 'oceanview', 
+          'OCEANVIEW': 'oceanview', 'OUTSIDE': 'oceanview',
+          'B': 'balcony', 'BAL': 'balcony', 'BK': 'balcony', 'BALCONY': 'balcony',
+          'D': 'suite', 'DLX': 'suite', 'DELUXE': 'suite', 'JS': 'suite', 'SU': 'suite', 'SUITE': 'suite'
+        };
+        
+        const categoryPrices = { interior: null, oceanview: null, balcony: null, suite: null };
+        
+        if (Array.isArray(matchingSailing.stateroomClassPricing)) {
+          for (const pricing of matchingSailing.stateroomClassPricing) {
+            const code = (pricing?.stateroomClass?.content?.code || pricing?.stateroomClass?.id || '').toString().trim().toUpperCase();
+            const priceVal = pricing?.price?.value;
+            
+            if (code && priceVal !== undefined && priceVal !== null) {
+              const category = categoryMap[code];
+              if (category) {
+                const priceNum = Number(priceVal) * 2;
+                if (!isNaN(priceNum) && (categoryPrices[category] === null || priceNum < categoryPrices[category])) {
+                  categoryPrices[category] = priceNum;
+                }
+              }
+            }
+          }
+        }
+        
+        if (categoryPrices.interior !== null) result.interiorPrice = '$' + categoryPrices.interior.toFixed(2);
+        if (categoryPrices.oceanview !== null) result.oceanviewPrice = '$' + categoryPrices.oceanview.toFixed(2);
+        if (categoryPrices.balcony !== null) result.balconyPrice = '$' + categoryPrices.balcony.toFixed(2);
+        if (categoryPrices.suite !== null) result.suitePrice = '$' + categoryPrices.suite.toFixed(2);
+      }
+    } catch (e) {
+    }
+    
+    return result;
+  }
+
   async function fetchOffersFromAPI(authContext) {
     try {
       log('🔌 Using API-based offer extraction (more reliable)...');
@@ -131,7 +270,7 @@ export const STEP1_OFFERS_SCRIPT = `
       
       const endpoint = baseUrl + (brandCode === 'C' ? '/api/casino/casino-offers/v2' : '/api/casino/casino-offers/v1');
       
-      log('📡 Calling Royal Caribbean Casino Offers API...');
+      log('📡 Calling ' + (brandCode === 'C' ? 'Celebrity' : 'Royal Caribbean') + ' Casino Offers API...');
       log('Endpoint: ' + endpoint);
       
       const requestBody = {
@@ -235,7 +374,125 @@ export const STEP1_OFFERS_SCRIPT = `
     }
   }
 
-  function processAPIResponse(data) {
+  async function enrichWithPricingData(allOfferRows, baseUrl) {
+    if (!SCRAPE_PRICING_AND_ITINERARY || allOfferRows.length === 0) {
+      return allOfferRows;
+    }
+    
+    log('💰 Fetching stateroom pricing, taxes & day-by-day itinerary...', 'info');
+    
+    const shipDateMap = new Map();
+    allOfferRows.forEach((row, idx) => {
+      if (row.shipCode && row.sailingDate) {
+        const sailDateISO = toISODate(row.sailingDate);
+        if (sailDateISO) {
+          const key = row.shipCode + '|' + sailDateISO;
+          if (!shipDateMap.has(key)) {
+            shipDateMap.set(key, { shipCode: row.shipCode, sailDate: sailDateISO, indices: [] });
+          }
+          shipDateMap.get(key).indices.push(idx);
+        }
+      }
+    });
+    
+    const uniqueSailings = Array.from(shipDateMap.values());
+    log('📊 Found ' + uniqueSailings.length + ' unique ship/date combinations to enrich', 'info');
+    
+    if (uniqueSailings.length === 0) {
+      return allOfferRows;
+    }
+    
+    const shipGroups = {};
+    uniqueSailings.forEach(s => {
+      if (!shipGroups[s.shipCode]) {
+        shipGroups[s.shipCode] = { shipCode: s.shipCode, sailings: [], minDate: null, maxDate: null };
+      }
+      const group = shipGroups[s.shipCode];
+      group.sailings.push(s);
+      if (!group.minDate || s.sailDate < group.minDate) group.minDate = s.sailDate;
+      if (!group.maxDate || s.sailDate > group.maxDate) group.maxDate = s.sailDate;
+    });
+    
+    const groups = Object.values(shipGroups);
+    let processedCount = 0;
+    const totalCount = uniqueSailings.length;
+    
+    for (const group of groups) {
+      try {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'progress',
+          current: processedCount,
+          total: totalCount,
+          stepName: 'Fetching pricing for ' + group.shipCode + '...'
+        }));
+        
+        const cruises = await fetchPricingAndItinerary(
+          baseUrl, 
+          group.shipCode, 
+          group.minDate, 
+          group.maxDate, 
+          group.sailings.length * 3
+        );
+        
+        if (cruises && cruises.length > 0) {
+          const cruiseByDate = {};
+          cruises.forEach(cruise => {
+            const sailings = cruise?.sailings || [];
+            sailings.forEach(s => {
+              const sDate = (s.sailDate || '').toString().trim().slice(0, 10);
+              if (sDate) {
+                cruiseByDate[sDate] = cruise;
+              }
+            });
+          });
+          
+          for (const sailing of group.sailings) {
+            const cruise = cruiseByDate[sailing.sailDate];
+            if (cruise) {
+              const pricingData = extractPricingFromCruise(cruise, sailing.sailDate);
+              
+              for (const idx of sailing.indices) {
+                const row = allOfferRows[idx];
+                if (!row.interiorPrice && pricingData.interiorPrice) row.interiorPrice = pricingData.interiorPrice;
+                if (!row.oceanviewPrice && pricingData.oceanviewPrice) row.oceanviewPrice = pricingData.oceanviewPrice;
+                if (!row.balconyPrice && pricingData.balconyPrice) row.balconyPrice = pricingData.balconyPrice;
+                if (!row.suitePrice && pricingData.suitePrice) row.suitePrice = pricingData.suitePrice;
+                if (!row.taxesAndFees && pricingData.taxesAndFees) row.taxesAndFees = pricingData.taxesAndFees;
+                if (!row.portList && pricingData.portList) row.portList = pricingData.portList;
+                if (!row.destinationName && pricingData.destinationName) row.destinationName = pricingData.destinationName;
+                if (!row.totalNights && pricingData.totalNights) row.totalNights = pricingData.totalNights;
+                if (!row.bookingLink && pricingData.bookingLink) row.bookingLink = pricingData.bookingLink;
+                if (pricingData.dayByDayItinerary && pricingData.dayByDayItinerary.length > 0) {
+                  row.dayByDayItinerary = pricingData.dayByDayItinerary;
+                }
+              }
+              
+              processedCount += sailing.indices.length;
+            } else {
+              processedCount += sailing.indices.length;
+            }
+          }
+          
+          log('  ✓ Enriched ' + group.sailings.length + ' sailing(s) for ship ' + group.shipCode, 'success');
+        } else {
+          processedCount += group.sailings.reduce((sum, s) => sum + s.indices.length, 0);
+          log('  ⚠️ No pricing data found for ship ' + group.shipCode, 'warning');
+        }
+        
+        await wait(200);
+      } catch (err) {
+        processedCount += group.sailings.reduce((sum, s) => sum + s.indices.length, 0);
+        log('  ⚠️ Error fetching pricing for ' + group.shipCode + ': ' + err.message, 'warning');
+      }
+    }
+    
+    const enrichedCount = allOfferRows.filter(r => r.interiorPrice || r.oceanviewPrice || r.balconyPrice || r.suitePrice).length;
+    log('✅ Pricing enrichment complete: ' + enrichedCount + '/' + allOfferRows.length + ' sailings have pricing data', 'success');
+    
+    return allOfferRows;
+  }
+
+  function processAPIResponse(data, scrapePricing) {
     const allOfferRows = [];
     let totalSailings = 0;
     
@@ -277,6 +534,7 @@ export const STEP1_OFFERS_SCRIPT = `
           offerExpirationDate: offerExpiry,
           offerType: 'Club Royale',
           shipName: '',
+          shipCode: '',
           sailingDate: '',
           itinerary: '',
           departurePort: '',
@@ -289,7 +547,12 @@ export const STEP1_OFFERS_SCRIPT = `
           oceanviewPrice: '',
           balconyPrice: '',
           suitePrice: '',
-          portList: ''
+          taxesAndFees: '',
+          portList: '',
+          dayByDayItinerary: [],
+          destinationName: '',
+          totalNights: null,
+          bookingLink: ''
         });
         totalSailings++;
         
@@ -303,6 +566,7 @@ export const STEP1_OFFERS_SCRIPT = `
       
       for (const sailing of sailings) {
         const shipName = sailing.shipName || '';
+        const shipCode = sailing.shipCode || '';
         const sailDate = formatSailDate(sailing.sailDate);
         const departurePort = sailing.departurePort?.name || sailing.departurePortName || '';
         const itinerary = sailing.itineraryDescription || sailing.sailingType?.name || '';
@@ -344,6 +608,7 @@ export const STEP1_OFFERS_SCRIPT = `
           offerExpirationDate: offerExpiry,
           offerType: 'Club Royale',
           shipName: shipName,
+          shipCode: shipCode,
           sailingDate: sailDate,
           itinerary: itinerary,
           departurePort: departurePort,
@@ -356,38 +621,28 @@ export const STEP1_OFFERS_SCRIPT = `
           oceanviewPrice: oceanviewPrice,
           balconyPrice: balconyPrice,
           suitePrice: suitePrice,
-          portList: portList
+          taxesAndFees: '',
+          portList: portList,
+          dayByDayItinerary: [],
+          destinationName: '',
+          totalNights: null,
+          bookingLink: ''
         });
         
         totalSailings++;
         offerSailingCount++;
         
         if (totalSailings % BATCH_SIZE === 0) {
-          const batchStart = totalSailings - BATCH_SIZE;
-          const batch = allOfferRows.slice(batchStart, totalSailings);
-          sendOfferBatch(batch, false);
-          log('📤 Sent batch of ' + batch.length + ' sailings (total: ' + totalSailings + ')');
-        }
-        
-        if (offerSailingCount % 100 === 0) {
-          log('    ✓ Processed ' + offerSailingCount + '/' + sailings.length + ' sailings (' + totalSailings + ' total)');
-          
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'progress',
             current: totalSailings,
             total: validOffers.length,
-            stepName: 'Offer ' + (i + 1) + '/' + validOffers.length + ': ' + offerSailingCount + '/' + sailings.length + ' sailings'
+            stepName: 'Processing offers...'
           }));
         }
-      }
-      
-      const remainingInBatch = totalSailings % BATCH_SIZE;
-      if (remainingInBatch > 0 && offerSailingCount > 0) {
-        const batchStart = totalSailings - remainingInBatch;
-        const batch = allOfferRows.slice(batchStart, totalSailings);
-        if (batch.length > 0) {
-          sendOfferBatch(batch, false);
-          log('📤 Sent batch of ' + batch.length + ' sailings (total: ' + totalSailings + ')');
+        
+        if (offerSailingCount % 100 === 0) {
+          log('    ✓ Processed ' + offerSailingCount + '/' + sailings.length + ' sailings (' + totalSailings + ' total)');
         }
       }
       
@@ -419,11 +674,30 @@ export const STEP1_OFFERS_SCRIPT = `
       
       const offersData = await fetchOffersFromAPI(authContext);
       
-      const { offerRows, offerCount, totalSailings } = processAPIResponse(offersData);
+      let { offerRows, offerCount, totalSailings } = processAPIResponse(offersData, SCRAPE_PRICING_AND_ITINERARY);
+      
+      if (SCRAPE_PRICING_AND_ITINERARY && offerRows.length > 0) {
+        log('🔄 Starting pricing and itinerary enrichment...', 'info');
+        offerRows = await enrichWithPricingData(offerRows, authContext.baseUrl);
+      }
+      
+      const batchSize = BATCH_SIZE;
+      for (let i = 0; i < offerRows.length; i += batchSize) {
+        const batch = offerRows.slice(i, i + batchSize);
+        sendOfferBatch(batch, false);
+        log('📤 Sent batch of ' + batch.length + ' sailings (total: ' + Math.min(i + batchSize, offerRows.length) + '/' + offerRows.length + ')');
+      }
       
       sendOfferBatch([], true, offerRows.length, offerCount);
       
       log('✓ Extracted ' + offerRows.length + ' offer rows from ' + offerCount + ' offer(s)', 'success');
+      
+      if (SCRAPE_PRICING_AND_ITINERARY) {
+        const withPricing = offerRows.filter(r => r.interiorPrice || r.oceanviewPrice || r.balconyPrice || r.suitePrice).length;
+        const withItinerary = offerRows.filter(r => r.dayByDayItinerary && r.dayByDayItinerary.length > 0).length;
+        const withTaxes = offerRows.filter(r => r.taxesAndFees).length;
+        log('📊 Enrichment summary: ' + withPricing + ' with pricing, ' + withItinerary + ' with day-by-day itinerary, ' + withTaxes + ' with taxes/fees', 'success');
+      }
       
     } catch (error) {
       log('❌ API extraction failed: ' + error.message, 'error');
@@ -467,6 +741,7 @@ export const STEP1_OFFERS_SCRIPT = `
       offerExpirationDate: '',
       offerType: 'Club Royale',
       shipName: '',
+      shipCode: '',
       sailingDate: '',
       itinerary: '',
       departurePort: '',
@@ -479,7 +754,12 @@ export const STEP1_OFFERS_SCRIPT = `
       oceanviewPrice: '',
       balconyPrice: '',
       suitePrice: '',
-      portList: ''
+      taxesAndFees: '',
+      portList: '',
+      dayByDayItinerary: [],
+      destinationName: '',
+      totalNights: null,
+      bookingLink: ''
     };
     
     sendOfferBatch([basicOffer], false);

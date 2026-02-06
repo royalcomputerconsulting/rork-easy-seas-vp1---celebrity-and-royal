@@ -120,6 +120,7 @@ export interface OfferRow {
   offerExpirationDate: string;
   offerType: string;
   shipName: string;
+  shipCode?: string;
   sailingDate: string;
   itinerary: string;
   departurePort: string;
@@ -132,7 +133,21 @@ export interface OfferRow {
   oceanviewPrice?: string;
   balconyPrice?: string;
   suitePrice?: string;
+  taxesAndFees?: string;
   portList?: string;
+  dayByDayItinerary?: DayByDayPort[];
+  destinationName?: string;
+  totalNights?: number;
+  bookingLink?: string;
+}
+
+export interface DayByDayPort {
+  day: number;
+  type: string;
+  portName: string;
+  portCode?: string;
+  arrivalTime?: string;
+  departureTime?: string;
 }
 
 export interface BookedCruiseRow {
