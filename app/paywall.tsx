@@ -18,11 +18,7 @@ export default function PaywallScreen() {
       try {
         await entitlement.manualUnlock();
         Alert.alert('Success', 'Full access unlocked via manual override.');
-        if (router.canGoBack()) {
-          router.back();
-        } else {
-          router.replace('/');
-        }
+        router.back();
       } catch {
         Alert.alert('Error', 'Failed to unlock. Please try again.');
       } finally {
@@ -71,7 +67,7 @@ export default function PaywallScreen() {
                 <Sparkles size={16} color={COLORS.white} />
                 <Text style={styles.badgeText}>Unlock Full Access</Text>
               </View>
-              <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/')} activeOpacity={0.8} testID="paywall.close">
+              <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8} testID="paywall.close">
                 <Text style={styles.closeText}>Close</Text>
               </TouchableOpacity>
             </View>
