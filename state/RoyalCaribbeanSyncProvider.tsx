@@ -1101,30 +1101,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const exportOffersCSV = useCallback(async () => {
     try {
       const csv = generateOffersCSV(state.extractedOffers, state.loyaltyData);
-      
-      if (Platform.OS === 'web') {
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'offers.csv';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        addLog('Offers CSV downloaded successfully', 'success');
-      } else {
-        const file = new File(Paths.cache, 'offers.csv');
-        file.write(csv);
+      const file = new File(Paths.cache, 'offers.csv');
+      file.write(csv);
 
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(file.uri, {
-            mimeType: 'text/csv',
-            dialogTitle: 'Export Offers CSV'
-          });
-        }
-        addLog('Offers CSV exported successfully', 'success');
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export Offers CSV'
+        });
       }
+
+      addLog('Offers CSV exported successfully', 'success');
     } catch (error) {
       addLog(`Failed to export offers CSV: ${error}`, 'error');
     }
@@ -1133,30 +1120,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const exportBookedCruisesCSV = useCallback(async () => {
     try {
       const csv = generateBookedCruisesCSV(state.extractedBookedCruises, state.loyaltyData);
-      
-      if (Platform.OS === 'web') {
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'Booked_Cruises.csv';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        addLog('Booked Cruises CSV downloaded successfully', 'success');
-      } else {
-        const file = new File(Paths.cache, 'Booked_Cruises.csv');
-        file.write(csv);
+      const file = new File(Paths.cache, 'Booked_Cruises.csv');
+      file.write(csv);
 
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(file.uri, {
-            mimeType: 'text/csv',
-            dialogTitle: 'Export Booked Cruises CSV'
-          });
-        }
-        addLog('Booked Cruises CSV exported successfully', 'success');
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export Booked Cruises CSV'
+        });
       }
+
+      addLog('Booked Cruises CSV exported successfully', 'success');
     } catch (error) {
       addLog(`Failed to export booked cruises CSV: ${error}`, 'error');
     }
@@ -1165,30 +1139,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const exportLog = useCallback(async () => {
     try {
       const logText = rcLogger.getLogsAsText({ includeNotes: true });
-      
-      if (Platform.OS === 'web') {
-        const blob = new Blob([logText], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'last.log';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        addLog('Log downloaded successfully', 'success');
-      } else {
-        const file = new File(Paths.cache, 'last.log');
-        file.write(logText);
+      const file = new File(Paths.cache, 'last.log');
+      file.write(logText);
 
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(file.uri, {
-            mimeType: 'text/plain',
-            dialogTitle: 'Export Sync Log'
-          });
-        }
-        addLog('Log exported successfully', 'success');
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: 'text/plain',
+          dialogTitle: 'Export Sync Log'
+        });
       }
+
+      addLog('Log exported successfully', 'success');
     } catch (error) {
       addLog(`Failed to export log: ${error}`, 'error');
     }
