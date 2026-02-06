@@ -116,7 +116,7 @@ export function OfferSummaryCard({
               <Text style={[
                 summaryStyles.filterButtonText,
                 activeSortMode !== 'soonest' && summaryStyles.filterButtonTextInactive
-              ]}>Soonest</Text>
+              ]}>Sort by Soonest Expiring Offer</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[
@@ -129,7 +129,7 @@ export function OfferSummaryCard({
               <Text style={[
                 summaryStyles.filterButtonText,
                 activeSortMode !== 'highestValue' && summaryStyles.filterButtonTextInactive
-              ]}>Highest Value</Text>
+              ]}>Sort by Value</Text>
             </TouchableOpacity>
           </View>
         </LinearGradient>
