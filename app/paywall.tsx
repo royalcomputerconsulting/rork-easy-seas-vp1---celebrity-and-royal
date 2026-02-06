@@ -13,7 +13,7 @@ export default function PaywallScreen() {
   const [overridePassword, setOverridePassword] = useState('');
 
   const handleManualOverride = async () => {
-    if (overridePassword === 'a1') {
+    if (overridePassword === 'Wnzy5mti2!') {
       setOverrideLoading(true);
       try {
         await entitlement.manualUnlock();
