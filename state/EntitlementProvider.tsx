@@ -18,9 +18,14 @@ let Purchases: PurchasesModule | null = null;
 let purchasesInitError: string | null = null;
 
 export type EntitlementSource = 'iap' | 'dev' | 'unknown';
+export type SubscriptionTier = 'trial' | 'view' | 'basic' | 'pro';
 
 export interface EntitlementState {
   isPro: boolean;
+  isBasic: boolean;
+  tier: SubscriptionTier;
+  trialEnd: Date | null;
+  trialDaysRemaining: number;
   source: EntitlementSource;
   lastCheckedAt: string | null;
   customerInfo: CustomerInfo | null;
@@ -28,8 +33,9 @@ export interface EntitlementState {
   isLoading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  subscribeMonthly: () => Promise<void>;
-  subscribe3Month: () => Promise<void>;
+  subscribeBasicMonthly: () => Promise<void>;
+  subscribeProMonthly: () => Promise<void>;
+  subscribeProAnnual: () => Promise<void>;
   restore: () => Promise<void>;
   openManageSubscription: () => Promise<void>;
   openPrivacyPolicy: () => Promise<void>;
@@ -39,7 +45,11 @@ export interface EntitlementState {
 
 const KEYS = {
   WEB_IS_PRO: 'easyseas_entitlements_web_is_pro',
+  TRIAL_START: 'easyseas_trial_start',
+  TRIAL_END: 'easyseas_trial_end',
 } as const;
+
+const TRIAL_DURATION_DAYS = 30;
 
 const DEFAULT_TIMEOUT_MS = 20000 as const;
 
@@ -62,27 +72,47 @@ async function withTimeout<T>(
   }
 }
 
-export const PRO_PRODUCT_ID_MONTHLY = 'easyseas.pro.monthly1' as const;
-export const PRO_PRODUCT_ID_3MONTH = 'easyseas.pro.3month2' as const;
+export const BASIC_PRODUCT_ID_MONTHLY = 'easyseas_basic_monthly' as const;
+export const PRO_PRODUCT_ID_MONTHLY = 'easyseas_pro_monthly' as const;
+export const PRO_PRODUCT_ID_ANNUAL = 'easyseas_pro_annual' as const;
 
 const PRIVACY_URL = 'https://example.com/privacy' as const;
 const TERMS_URL = 'https://example.com/terms' as const;
-const MANAGE_SUBS_URL = 'https://apps.apple.com/account/subscriptions' as const;
+const MANAGE_SUBS_IOS_URL = 'https://apps.apple.com/account/subscriptions' as const;
+const MANAGE_SUBS_ANDROID_URL = 'https://play.google.com/store/account/subscriptions' as const;
 
 function computeIsProFromCustomerInfo(info: CustomerInfo | null): boolean {
   if (!info) return false;
 
   try {
-    const active = (info.activeSubscriptions ?? []) as string[];
-    if (active.includes(PRO_PRODUCT_ID_MONTHLY) || active.includes(PRO_PRODUCT_ID_3MONTH)) return true;
-
     const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
     const entitlementIds = Object.keys(entitlements);
     if (entitlementIds.includes('pro')) return true;
 
+    const active = (info.activeSubscriptions ?? []) as string[];
+    if (active.includes(PRO_PRODUCT_ID_MONTHLY) || active.includes(PRO_PRODUCT_ID_ANNUAL)) return true;
+
     return false;
   } catch (e) {
     console.error('[Entitlement] computeIsProFromCustomerInfo failed', e);
+    return false;
+  }
+}
+
+function computeIsBasicFromCustomerInfo(info: CustomerInfo | null): boolean {
+  if (!info) return false;
+
+  try {
+    const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
+    const entitlementIds = Object.keys(entitlements);
+    if (entitlementIds.includes('basic')) return true;
+
+    const active = (info.activeSubscriptions ?? []) as string[];
+    if (active.includes(BASIC_PRODUCT_ID_MONTHLY)) return true;
+
+    return false;
+  } catch (e) {
+    console.error('[Entitlement] computeIsBasicFromCustomerInfo failed', e);
     return false;
   }
 }
@@ -105,6 +135,10 @@ async function safeOpenURL(url: string): Promise<void> {
 export const [EntitlementProvider, useEntitlement] = createContextHook((): EntitlementState => {
   const auth = useAuth();
   const [isPro, setIsPro] = useState<boolean>(false);
+  const [isBasic, setIsBasic] = useState<boolean>(false);
+  const [tier, setTier] = useState<SubscriptionTier>('trial');
+  const [trialEnd, setTrialEnd] = useState<Date | null>(null);
+  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number>(TRIAL_DURATION_DAYS);
   const [source, setSource] = useState<EntitlementSource>('unknown');
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [offerings, setOfferings] = useState<PurchasesOffering[]>([]);
@@ -123,10 +157,51 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     };
   }, []);
 
-  const setStateFromCustomerInfo = useCallback((info: CustomerInfo | null) => {
+  const initializeTrial = useCallback(async () => {
+    try {
+      const storedTrialStart = await AsyncStorage.getItem(KEYS.TRIAL_START);
+      const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
+
+      if (storedTrialStart && storedTrialEnd) {
+        console.log('[Entitlement] Trial already initialized', { storedTrialStart, storedTrialEnd });
+        const trialEndDate = new Date(storedTrialEnd);
+        setTrialEnd(trialEndDate);
+        const now = new Date();
+        const daysRemaining = Math.max(0, Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+        setTrialDaysRemaining(daysRemaining);
+        return;
+      }
+
+      const now = new Date();
+      const end = new Date(now.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000);
+      
+      await AsyncStorage.setItem(KEYS.TRIAL_START, now.toISOString());
+      await AsyncStorage.setItem(KEYS.TRIAL_END, end.toISOString());
+      
+      console.log('[Entitlement] Trial initialized', { start: now.toISOString(), end: end.toISOString() });
+      setTrialEnd(end);
+      setTrialDaysRemaining(TRIAL_DURATION_DAYS);
+    } catch (e) {
+      console.error('[Entitlement] Failed to initialize trial', e);
+    }
+  }, []);
+
+  const computeTier = useCallback((isPro: boolean, isBasic: boolean, trialEnd: Date | null): SubscriptionTier => {
+    if (isPro) return 'pro';
+    if (isBasic) return 'basic';
+    if (trialEnd && new Date() < trialEnd) return 'trial';
+    return 'view';
+  }, []);
+
+  const setStateFromCustomerInfo = useCallback((info: CustomerInfo | null, currentTrialEnd: Date | null) => {
     const computedIsPro = computeIsProFromCustomerInfo(info);
+    const computedIsBasic = computeIsBasicFromCustomerInfo(info);
+    const computedTier = computeTier(computedIsPro, computedIsBasic, currentTrialEnd);
+    
     console.log('[Entitlement] setStateFromCustomerInfo', {
       computedIsPro,
+      computedIsBasic,
+      computedTier,
       activeSubscriptions: info?.activeSubscriptions ?? [],
       entitlementsActiveKeys: Object.keys(info?.entitlements?.active ?? {}),
     });
@@ -135,7 +210,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
     setCustomerInfo(info);
     setIsPro(computedIsPro);
-    setSource(computedIsPro ? 'iap' : 'unknown');
+    setIsBasic(computedIsBasic);
+    setTier(computedTier);
+    setSource(computedIsPro || computedIsBasic ? 'iap' : 'unknown');
     setLastCheckedAt(new Date().toISOString());
 
     lastIsProRef.current = computedIsPro;
@@ -150,7 +227,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         console.error('[Entitlement] Failed to dispatch entitlementProUnlocked event', e);
       }
     }
-  }, []);
+  }, [computeTier]);
 
   const ensurePurchasesLoaded = useCallback(async (): Promise<PurchasesModule | null> => {
     if (Platform.OS === 'web') return null;
@@ -227,6 +304,11 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     if (!mountedRef.current) return;
     setIsLoading(true);
 
+    await initializeTrial();
+
+    const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
+    const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
+
     if (Platform.OS === 'web') {
       try {
         const stored = await AsyncStorage.getItem(KEYS.WEB_IS_PRO);
@@ -234,6 +316,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         console.log('[Entitlement] web refresh: storedIsPro', storedIsPro);
         if (!mountedRef.current) return;
         setIsPro(storedIsPro);
+        setIsBasic(false);
+        setTier(computeTier(storedIsPro, false, currentTrialEnd));
         setSource(storedIsPro ? 'dev' : 'unknown');
         setLastCheckedAt(new Date().toISOString());
         setCustomerInfo(null);
@@ -268,7 +352,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       console.log('[Entitlement] Fetching customer info');
       const info = await withTimeout(purchases.getCustomerInfo(), DEFAULT_TIMEOUT_MS, 'Checking subscription status');
       if (!mountedRef.current) return;
-      setStateFromCustomerInfo(info);
+      setStateFromCustomerInfo(info, currentTrialEnd);
     } catch (e) {
       console.error('[Entitlement] refresh failed', e);
       if (!mountedRef.current) return;
@@ -277,7 +361,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       if (!mountedRef.current) return;
       setIsLoading(false);
     }
-  }, [ensurePurchasesLoaded, setStateFromCustomerInfo]);
+  }, [ensurePurchasesLoaded, setStateFromCustomerInfo, initializeTrial, computeTier]);
 
   useEffect(() => {
     console.log('[Entitlement] Provider mounted - refreshing entitlements');
@@ -373,7 +457,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       });
 
       if (!mountedRef.current) return;
-      setStateFromCustomerInfo(result.customerInfo);
+      const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
+      const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
+      setStateFromCustomerInfo(result.customerInfo, currentTrialEnd);
       Alert.alert('Success', 'Full access unlocked.');
     } catch (e) {
       console.error(`[Entitlement] subscribeToProduct failed`, e);
@@ -388,12 +474,16 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     }
   }, [ensurePurchasesLoaded, findPackageByProductId, setStateFromCustomerInfo]);
 
-  const subscribeMonthly = useCallback(async () => {
-    await subscribeToProduct(PRO_PRODUCT_ID_MONTHLY, '30-day subscription');
+  const subscribeBasicMonthly = useCallback(async () => {
+    await subscribeToProduct(BASIC_PRODUCT_ID_MONTHLY, 'Basic monthly subscription');
   }, [subscribeToProduct]);
 
-  const subscribe3Month = useCallback(async () => {
-    await subscribeToProduct(PRO_PRODUCT_ID_3MONTH, '90-day subscription');
+  const subscribeProMonthly = useCallback(async () => {
+    await subscribeToProduct(PRO_PRODUCT_ID_MONTHLY, 'Pro monthly subscription');
+  }, [subscribeToProduct]);
+
+  const subscribeProAnnual = useCallback(async () => {
+    await subscribeToProduct(PRO_PRODUCT_ID_ANNUAL, 'Pro annual subscription');
   }, [subscribeToProduct]);
 
   const restore = useCallback(async () => {
@@ -461,7 +551,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       const hasActivePurchase = computeIsProFromCustomerInfo(info);
       
       if (hasActivePurchase) {
-        setStateFromCustomerInfo(info);
+        const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
+        const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
+        setStateFromCustomerInfo(info, currentTrialEnd);
       }
       
       if (!mountedRef.current) return;
@@ -489,7 +581,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   }, [auth.isWhitelisted, auth.authenticatedEmail, ensurePurchasesLoaded, setStateFromCustomerInfo]);
 
   const openManageSubscription = useCallback(async () => {
-    await safeOpenURL(MANAGE_SUBS_URL);
+    const url = Platform.OS === 'android' ? MANAGE_SUBS_ANDROID_URL : MANAGE_SUBS_IOS_URL;
+    await safeOpenURL(url);
   }, []);
 
   const openPrivacyPolicy = useCallback(async () => {
@@ -535,6 +628,10 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   return useMemo(
     () => ({
       isPro,
+      isBasic,
+      tier,
+      trialEnd,
+      trialDaysRemaining,
       source,
       lastCheckedAt,
       customerInfo,
@@ -542,8 +639,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       isLoading,
       error,
       refresh,
-      subscribeMonthly,
-      subscribe3Month,
+      subscribeBasicMonthly,
+      subscribeProMonthly,
+      subscribeProAnnual,
       restore,
       openManageSubscription,
       openPrivacyPolicy,
@@ -552,6 +650,10 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     }),
     [
       isPro,
+      isBasic,
+      tier,
+      trialEnd,
+      trialDaysRemaining,
       source,
       lastCheckedAt,
       customerInfo,
@@ -559,8 +661,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       isLoading,
       error,
       refresh,
-      subscribeMonthly,
-      subscribe3Month,
+      subscribeBasicMonthly,
+      subscribeProMonthly,
+      subscribeProAnnual,
       restore,
       openManageSubscription,
       openPrivacyPolicy,
