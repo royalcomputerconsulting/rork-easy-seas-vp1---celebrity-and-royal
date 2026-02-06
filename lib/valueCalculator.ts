@@ -626,6 +626,7 @@ export interface OfferAggregateValue {
   tradeInValue: number;
   aggregateTotalValue: number;
   cruiseCount: number;
+  cruisesWithDetailedPricing: number;
   perks: string[];
   cruiseBreakdowns: {
     cruiseId: string;
@@ -657,6 +658,8 @@ export function calculateOfferAggregateValue(
     const obc = singleCruise.freeOBC || 0;
     const tradeIn = singleCruise.tradeInValue || 0;
     
+    const hasDetailedPricing = !!(singleCruise.interiorPrice || singleCruise.oceanviewPrice || singleCruise.balconyPrice || singleCruise.suitePrice || singleCruise.juniorSuitePrice || singleCruise.grandSuitePrice);
+    
     return {
       totalCabinValue: cabinValueForTwo,
       totalTaxesFees: taxesFees,
@@ -665,6 +668,7 @@ export function calculateOfferAggregateValue(
       tradeInValue: tradeIn,
       aggregateTotalValue: cabinValueForTwo + taxesFees + freePlay + obc,
       cruiseCount: 1,
+      cruisesWithDetailedPricing: hasDetailedPricing ? 1 : 0,
       perks: singleCruise.perks || [],
       cruiseBreakdowns: [{
         cruiseId: singleCruise.id,
@@ -680,6 +684,7 @@ export function calculateOfferAggregateValue(
   
   let totalCabinValue = 0;
   let totalTaxesFees = 0;
+  let cruisesWithDetailedPricing = 0;
   const cruiseBreakdowns: OfferAggregateValue['cruiseBreakdowns'] = [];
   const allPerks = new Set<string>();
   
@@ -687,6 +692,11 @@ export function calculateOfferAggregateValue(
     const cabinPrice = getCabinPriceFromEntity(cruise, roomType) || cruise.price || 0;
     const cabinValueForTwo = cabinPrice * GUEST_COUNT_DEFAULT;
     const taxesFees = cruise.taxes || 0;
+    
+    const hasDetailedPricing = !!(cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice || cruise.juniorSuitePrice || cruise.grandSuitePrice);
+    if (hasDetailedPricing) {
+      cruisesWithDetailedPricing++;
+    }
     
     totalCabinValue += cabinValueForTwo;
     totalTaxesFees += taxesFees;
@@ -736,6 +746,7 @@ export function calculateOfferAggregateValue(
     tradeInValue,
     aggregateTotalValue,
     cruiseCount: matchingCruises.length,
+    cruisesWithDetailedPricing,
     perks: Array.from(allPerks),
     cruiseBreakdowns,
   };

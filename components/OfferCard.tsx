@@ -321,7 +321,7 @@ export function OfferCard({
           <View style={styles.cruiseCountBadge}>
             <Text style={styles.cruiseCountText}>
               {aggregateValue && aggregateValue.cruiseCount > 0 
-                ? `${aggregateValue.cruiseCount} cruises available`
+                ? `${aggregateValue.cruiseCount} cruises available${aggregateValue.cruisesWithDetailedPricing > 0 ? ` ${aggregateValue.cruisesWithDetailedPricing} with detailed pricing` : ''}`
                 : `${offer.nights} cruises available`}
             </Text>
           </View>
