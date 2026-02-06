@@ -42,14 +42,29 @@ function generateId(): string {
   return `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
+function parseDateString(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  
+  // Parse MM-DD-YYYY format
+  const parts = dateStr.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
+  if (parts) {
+    const [, month, day, year] = parts;
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+  
+  // Fallback to standard parsing
+  const date = new Date(dateStr);
+  return isNaN(date.getTime()) ? null : date;
+}
+
 function calculateNightsFromDates(startDate: string, endDate: string): number | null {
   if (!startDate || !endDate) return null;
   
   try {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const start = parseDateString(startDate);
+    const end = parseDateString(endDate);
     
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+    if (!start || !end) return null;
     
     const diffTime = Math.abs(end.getTime() - start.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -81,13 +96,30 @@ function calculateReturnDate(startDate: string, nights: number): string {
   if (!startDate) return '';
   
   try {
-    const date = new Date(startDate);
+    // Parse MM-DD-YYYY format
+    const parts = startDate.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
+    let date: Date;
+    
+    if (parts) {
+      const [, month, day, year] = parts;
+      date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    } else {
+      // Fallback to standard parsing
+      date = new Date(startDate);
+    }
+    
+    if (isNaN(date.getTime())) {
+      console.warn('[calculateReturnDate] Invalid start date:', startDate);
+      return '';
+    }
+    
     date.setDate(date.getDate() + nights);
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const year = String(date.getFullYear());
     return `${month}-${day}-${year}`;
-  } catch {
+  } catch (e) {
+    console.warn('[calculateReturnDate] Error calculating return date:', e);
     return '';
   }
 }
