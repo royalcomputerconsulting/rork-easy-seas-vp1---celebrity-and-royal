@@ -603,19 +603,22 @@ export default function OfferDetailsScreen() {
           )}
         </LinearGradient>
 
-        {/* Centered Sort Controls */}
+        {/* Sort Controls */}
         <View style={styles.sortRowCentered}>
+          <Text style={styles.sortLabel} testID="offer-sort-label">Sort by:</Text>
           <TouchableOpacity
             style={[styles.sortPillMain, sortBy === 'soonest' && styles.sortPillMainActive]}
             onPress={() => setSortBy('soonest')}
             activeOpacity={0.7}
+            testID="sort-soonest"
           >
-            <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Soonest</Text>
+            <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Sailings Soonest Expiring Offer</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.sortPillMain, sortBy === 'highest-value' && styles.sortPillMainActive]}
             onPress={() => setSortBy('highest-value')}
             activeOpacity={0.7}
+            testID="sort-highest-value"
           >
             <Text style={[styles.sortPillMainText, sortBy === 'highest-value' && styles.sortPillMainTextActive]}>Highest Value</Text>
           </TouchableOpacity>
@@ -784,6 +787,7 @@ const styles = StyleSheet.create({
   },
   sortRowCentered: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
     gap: SPACING.md,
@@ -791,7 +795,7 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.md,
   },
   sortPillMain: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.md,
     paddingVertical: 10,
     borderRadius: BORDER_RADIUS.round,
     backgroundColor: 'rgba(0, 31, 63, 0.05)',
@@ -803,13 +807,18 @@ const styles = StyleSheet.create({
     borderColor: COLORS.navyDeep,
   },
   sortPillMainText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.navyDeep,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   sortPillMainTextActive: {
     color: COLORS.white,
     fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  sortLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   listContent: {
     padding: SPACING.md,
