@@ -33,16 +33,6 @@ export default function PaywallScreen() {
     }
   };
 
-  const findBasicMonthlyPackage = useMemo(() => {
-    for (const offering of entitlement.offerings) {
-      const pkg = (offering.availablePackages ?? []).find(
-        p => p.product.identifier === BASIC_PRODUCT_ID_MONTHLY
-      );
-      if (pkg) return pkg;
-    }
-    return null;
-  }, [entitlement.offerings]);
-
   const findProMonthlyPackage = useMemo(() => {
     for (const offering of entitlement.offerings) {
       const pkg = (offering.availablePackages ?? []).find(
@@ -88,98 +78,58 @@ export default function PaywallScreen() {
 
             <Text style={styles.title}>Choose Your Plan</Text>
             <Text style={styles.subtitle}>
-              Get full access to sync, import data, and unlock premium features.
+              Choose Pro monthly or annual to unlock Analytics, Agent X, Alerts, and SLOTS.
             </Text>
 
             <View style={styles.statusBadge}>
               <Text style={styles.statusText}>{tierStatusText}</Text>
             </View>
 
-            <View style={styles.subscriptionOptions}>
-              <TouchableOpacity
-                style={[styles.subscriptionCard, (entitlement.isLoading || entitlement.isBasic) && styles.subscriptionCardDisabled]}
-                onPress={() => entitlement.subscribeBasicMonthly()}
-                activeOpacity={0.9}
-                disabled={entitlement.isLoading || entitlement.isBasic || entitlement.isPro}
-                testID="paywall.subscribe-basic"
-              >
-                <View style={styles.subscriptionHeader}>
-                  <Text style={styles.subscriptionTitle}>Basic</Text>
-                  {entitlement.isBasic && <Text style={styles.activeBadge}>Active</Text>}
+            <TouchableOpacity
+              style={[styles.proMonthlyCard, (entitlement.isLoading || entitlement.isPro) && styles.subscriptionCardDisabled]}
+              onPress={() => entitlement.subscribeProMonthly()}
+              activeOpacity={0.9}
+              disabled={entitlement.isLoading || entitlement.isPro}
+              testID="paywall.subscribe-pro-monthly"
+            >
+              <View style={styles.subscriptionHeader}>
+                <Text style={styles.proMonthlyTitle}>Pro Monthly</Text>
+                {entitlement.isPro && <Text style={styles.activeBadge}>Active</Text>}
+              </View>
+              <Text style={styles.proMonthlyPrice}>
+                {findProMonthlyPackage ? findProMonthlyPackage.product.priceString : '$14.99'}
+              </Text>
+              <Text style={styles.subscriptionPeriod}>per month</Text>
+              <View style={styles.featureList}>
+                <View style={styles.featureItem}>
+                  <Check size={14} color={COLORS.money} />
+                  <Text style={styles.featureText}>Data Sync & Import</Text>
                 </View>
-                <Text style={styles.subscriptionPrice}>
-                  {findBasicMonthlyPackage ? findBasicMonthlyPackage.product.priceString : '$9.99'}
-                </Text>
-                <Text style={styles.subscriptionPeriod}>per month</Text>
-                <View style={styles.featureList}>
-                  <View style={styles.featureItem}>
-                    <Check size={14} color={COLORS.money} />
-                    <Text style={styles.featureText}>Data Sync</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Check size={14} color={COLORS.money} />
-                    <Text style={styles.featureText}>Import Data</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Check size={14} color={COLORS.money} />
-                    <Text style={styles.featureText}>Add/Edit Entries</Text>
-                  </View>
+                <View style={styles.featureItem}>
+                  <Check size={14} color={COLORS.money} />
+                  <Text style={styles.featureText}>Analytics</Text>
                 </View>
-                {entitlement.isLoading ? (
-                  <ActivityIndicator color={COLORS.navyDeep} style={styles.loader} />
-                ) : (
-                  <View style={styles.subscriptionButtonContainer}>
-                    <Text style={styles.subscriptionButtonText}>Subscribe</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.subscriptionCard, (entitlement.isLoading || entitlement.isPro) && styles.subscriptionCardDisabled]}
-                onPress={() => entitlement.subscribeProMonthly()}
-                activeOpacity={0.9}
-                disabled={entitlement.isLoading || entitlement.isPro}
-                testID="paywall.subscribe-pro-monthly"
-              >
-                <View style={styles.subscriptionHeader}>
-                  <Text style={styles.subscriptionTitle}>Pro</Text>
-                  {entitlement.isPro && <Text style={styles.activeBadge}>Active</Text>}
+                <View style={styles.featureItem}>
+                  <Check size={14} color={COLORS.money} />
+                  <Text style={styles.featureText}>Agent X</Text>
                 </View>
-                <Text style={styles.subscriptionPrice}>
-                  {findProMonthlyPackage ? findProMonthlyPackage.product.priceString : '$14.99'}
-                </Text>
-                <Text style={styles.subscriptionPeriod}>per month</Text>
-                <View style={styles.featureList}>
-                  <View style={styles.featureItem}>
-                    <Check size={14} color={COLORS.money} />
-                    <Text style={styles.featureText}>Everything in Basic</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Check size={14} color={COLORS.money} />
-                    <Text style={styles.featureText}>Analytics</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Check size={14} color={COLORS.money} />
-                    <Text style={styles.featureText}>Agent X</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Check size={14} color={COLORS.money} />
-                    <Text style={styles.featureText}>Alerts</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Check size={14} color={COLORS.money} />
-                    <Text style={styles.featureText}>SLOTS Access</Text>
-                  </View>
+                <View style={styles.featureItem}>
+                  <Check size={14} color={COLORS.money} />
+                  <Text style={styles.featureText}>Alerts</Text>
                 </View>
-                {entitlement.isLoading ? (
-                  <ActivityIndicator color={COLORS.navyDeep} style={styles.loader} />
-                ) : (
-                  <View style={styles.subscriptionButtonContainer}>
-                    <Text style={styles.subscriptionButtonText}>Subscribe</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
+                <View style={styles.featureItem}>
+                  <Check size={14} color={COLORS.money} />
+                  <Text style={styles.featureText}>SLOTS Access</Text>
+                </View>
+              </View>
+              {entitlement.isLoading ? (
+                <ActivityIndicator color={COLORS.navyDeep} style={styles.loader} />
+              ) : (
+                <View style={styles.subscriptionButtonContainer}>
+                  <Text style={styles.subscriptionButtonText}>Subscribe</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.annualCard, (entitlement.isLoading || entitlement.isPro) && styles.subscriptionCardDisabled]}
@@ -342,20 +292,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 14,
   },
-  subscriptionOptions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  subscriptionCard: {
-    flex: 1,
+  proMonthlyCard: {
     backgroundColor: COLORS.bgSecondary,
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
     borderWidth: 2,
     borderColor: COLORS.money,
     alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 10,
   },
   subscriptionCardDisabled: {
     opacity: 0.6,
@@ -370,6 +315,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900' as const,
     color: COLORS.navyDeep,
+  },
+  proMonthlyTitle: {
+    fontSize: 20,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  proMonthlyPrice: {
+    fontSize: 28,
+    fontWeight: '900' as const,
+    color: COLORS.money,
+    marginBottom: 6,
   },
   activeBadge: {
     fontSize: 10,
