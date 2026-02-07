@@ -20,13 +20,16 @@ export async function getDb() {
     db = new Surreal();
     
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Database connection timeout')), 10000)
+      setTimeout(() => reject(new Error('Database connection timeout')), 5000)
     );
     
     const connectPromise = db.connect(endpoint, {
       namespace,
       database: 'easyseas',
       auth: token,
+    }).catch((err) => {
+      console.log('[DB] Connection error caught:', err?.message || 'Unknown error');
+      throw err;
     });
     
     await Promise.race([connectPromise, timeoutPromise]);
@@ -34,7 +37,7 @@ export async function getDb() {
     console.log('[DB] Connected to SurrealDB');
     return db;
   } catch (error) {
-    console.log('[DB] Failed to connect to database:', error);
+    console.log('[DB] Failed to connect to database:', error instanceof Error ? error.message : 'Unknown error');
     db = null;
     throw error;
   }

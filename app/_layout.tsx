@@ -48,7 +48,13 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5,
-      retry: 2,
+      retry: 0,
+      retryOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    },
+    mutations: {
+      retry: 0,
     },
   },
 });
@@ -400,15 +406,40 @@ export default function RootLayout() {
   React.useEffect(() => {
     const handleError = (event: ErrorEvent) => {
       console.log('[RootLayout] Caught global error:', event.error);
-      if (event.error?.message?.includes('Network connection lost')) {
+      const errorMsg = event.error?.message || '';
+      if (errorMsg.includes('Network connection lost') || 
+          errorMsg.includes('Network request failed') ||
+          errorMsg.includes('Failed to fetch') ||
+          errorMsg.includes('NetworkError')) {
         console.log('[RootLayout] Network error detected - continuing in offline mode');
         event.preventDefault();
+        return;
+      }
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.log('[RootLayout] Caught unhandled rejection:', event.reason);
+      const reason = event.reason?.message || event.reason || '';
+      const reasonStr = typeof reason === 'string' ? reason : String(reason);
+      if (reasonStr.includes('Network connection lost') ||
+          reasonStr.includes('Network request failed') ||
+          reasonStr.includes('Failed to fetch') ||
+          reasonStr.includes('NetworkError') ||
+          reasonStr.includes('Database connection') ||
+          reasonStr.includes('BACKEND_')) {
+        console.log('[RootLayout] Network rejection detected - continuing in offline mode');
+        event.preventDefault();
+        return;
       }
     };
 
     if (typeof window !== 'undefined') {
       window.addEventListener('error', handleError);
-      return () => window.removeEventListener('error', handleError);
+      window.addEventListener('unhandledrejection', handleUnhandledRejection);
+      return () => {
+        window.removeEventListener('error', handleError);
+        window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      };
     }
   }, []);
 
