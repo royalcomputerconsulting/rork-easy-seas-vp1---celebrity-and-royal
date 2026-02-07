@@ -176,6 +176,20 @@ const freshStartStyles = StyleSheet.create({
 });
 
 function DeferredProviders({ children }: { children: React.ReactNode }) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log('[DeferredProviders] Mounting deferred providers');
+      setReady(true);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!ready) {
+    return <>{children}</>;
+  }
+
   return (
     <HistoricalPerformanceProvider>
       <PriceHistoryProvider>
