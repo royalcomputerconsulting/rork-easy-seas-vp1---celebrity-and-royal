@@ -19,17 +19,6 @@ function RoyalCaribbeanSyncScreen() {
   const loyalty = useLoyalty();
   const entitlement = useEntitlement();
   const auth = useAuth();
-  
-  useEffect(() => {
-    if (entitlement.tier === 'view') {
-      console.log('[RoyalCaribbeanSync] View-only mode detected. Redirecting to paywall.');
-      router.replace('/paywall');
-    }
-  }, [entitlement.tier, router]);
-  
-  if (entitlement.tier === 'view') {
-    return null;
-  }
   const {
     state,
     webViewRef,
@@ -48,17 +37,30 @@ function RoyalCaribbeanSyncScreen() {
     toggleStaySignedIn
   } = useRoyalCaribbeanSync();
   
-  const isCelebrity = cruiseLine === 'celebrity';
-  const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
-
-
-
   const [webViewVisible, setWebViewVisible] = useState(true);
-  
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
   
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
+  
+  const isCelebrity = cruiseLine === 'celebrity';
+  const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
+  
+  useEffect(() => {
+    if (entitlement.tier === 'view') {
+      console.log('[RoyalCaribbeanSync] View-only mode detected. Redirecting to paywall.');
+      router.replace('/paywall');
+    }
+  }, [entitlement.tier, router]);
+
+  useEffect(() => {
+    console.log('[RoyalCaribbeanSync Screen] Status changed:', state.status);
+    console.log('[RoyalCaribbeanSync Screen] syncCounts:', state.syncCounts);
+  }, [state.status, state.syncCounts]);
+  
+  if (entitlement.tier === 'view') {
+    return null;
+  }
   
   const isBackendAvailable = !!process.env.EXPO_PUBLIC_RORK_API_BASE_URL && 
     !process.env.EXPO_PUBLIC_RORK_API_BASE_URL.includes('fallback');
@@ -226,12 +228,6 @@ function RoyalCaribbeanSyncScreen() {
   const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
-
-  useEffect(() => {
-    console.log('[RoyalCaribbeanSync Screen] Status changed:', state.status);
-    console.log('[RoyalCaribbeanSync Screen] showConfirmation:', showConfirmation);
-    console.log('[RoyalCaribbeanSync Screen] syncCounts:', state.syncCounts);
-  }, [state.status, showConfirmation, state.syncCounts]);
 
   return (
     <>
