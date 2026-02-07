@@ -1269,6 +1269,18 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       await coreDataContext.setBookedCruises(finalBookedCruises);
       addLog('✅ Booked cruises persisted to storage', 'success');
 
+      try {
+        const { capturePriceSnapshotsOnSync } = require('@/lib/priceTrackingSync');
+        const authEmail = await AsyncStorage.getItem('easyseas_auth_email');
+        if (authEmail) {
+          addLog('Capturing price snapshots for tracking...', 'info');
+          const snapResult = await capturePriceSnapshotsOnSync(finalBookedCruises, finalOffers, authEmail);
+          addLog(`Price snapshots: ${snapResult.created} new, ${snapResult.updated} updated`, 'success');
+        }
+      } catch (priceError) {
+        console.log('[RoyalCaribbeanSync] Price snapshot capture skipped:', priceError);
+      }
+
       if (preview.loyalty) {
         if (preview.loyalty.clubRoyalePoints.changed) {
           addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');

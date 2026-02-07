@@ -176,6 +176,13 @@ export interface BookedCruise extends Cruise {
   usedNextCruiseCertificate?: boolean;
   nextCruiseCertificateValue?: number;
   nextCruiseCertificateId?: string;
+  priceTracking?: {
+    enabled: boolean;
+    trackCabinTypes: string[];
+    lastPriceCheck?: string;
+    priceAtBooking?: number;
+    cabinTypeAtBooking?: string;
+  };
 }
 
 export type OfferClassification = 

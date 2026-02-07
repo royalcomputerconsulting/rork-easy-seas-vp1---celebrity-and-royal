@@ -1,26 +1,74 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
+import { trpcClient, isBackendAvailable } from '@/lib/trpc';
 import type { 
   PriceHistoryRecord, 
   PriceDropAlert,
   CasinoOffer,
   Cruise,
+  BookedCruise,
 } from '@/types/models';
 import { generateCruiseKey } from '@/types/models';
 
 const PRICE_HISTORY_STORAGE_KEY = '@easy_seas_price_history';
 const PRICE_DROP_ALERTS_STORAGE_KEY = '@easy_seas_price_drop_alerts';
+const LAST_BACKEND_SYNC_KEY = '@easy_seas_price_last_backend_sync';
+
+export interface PriceSnapshot {
+  cruiseKey: string;
+  shipName: string;
+  sailDate: string;
+  nights: number;
+  destination: string;
+  cabinType: string;
+  prices: {
+    interior?: number;
+    oceanview?: number;
+    balcony?: number;
+    suite?: number;
+    juniorSuite?: number;
+    grandSuite?: number;
+  };
+  taxesFees?: number;
+  freePlay?: number;
+  obc?: number;
+  offerCode?: string;
+  offerName?: string;
+  offerId?: string;
+  source: 'offer' | 'cruise' | 'manual' | 'sync';
+}
+
+interface BackendPriceDrop {
+  cruiseKey: string;
+  shipName: string;
+  sailDate: string;
+  cabinType: string;
+  firstPrice: number;
+  latestPrice: number;
+  dropAmount: number;
+  dropPercent: number;
+  firstDate: string;
+  latestDate: string;
+  snapshotCount: number;
+}
 
 interface PriceHistoryState {
   priceHistory: PriceHistoryRecord[];
   priceDropAlerts: PriceDropAlert[];
   isLoading: boolean;
+  isSyncingToBackend: boolean;
   
   recordPrice: (record: Omit<PriceHistoryRecord, 'id' | 'recordedAt'>) => PriceDropAlert | null;
   recordPriceFromOffer: (offer: CasinoOffer, cabinType?: string) => PriceDropAlert | null;
   recordPriceFromCruise: (cruise: Cruise) => PriceDropAlert | null;
   bulkRecordFromOffers: (offers: CasinoOffer[]) => PriceDropAlert[];
+  
+  captureSnapshotForBookedCruise: (cruise: BookedCruise, userId: string) => Promise<void>;
+  bulkCaptureSnapshots: (cruises: BookedCruise[], offers: CasinoOffer[], userId: string) => Promise<{ created: number; updated: number; skipped: number }>;
+  fetchBackendHistory: (userId: string, cruiseKey?: string) => Promise<any[]>;
+  fetchBackendPriceDrops: (userId: string) => Promise<BackendPriceDrop[]>;
+  syncLocalToBackend: (userId: string) => Promise<void>;
   
   getPriceHistory: (cruiseKey: string) => PriceHistoryRecord[];
   getLowestPrice: (cruiseKey: string) => PriceHistoryRecord | null;
@@ -50,10 +98,88 @@ function extractCabinPrice(offer: CasinoOffer, cabinType?: string): number {
   return offer.balconyPrice || offer.oceanviewPrice || offer.interiorPrice || offer.value || 0;
 }
 
+function buildSnapshotFromCruise(cruise: BookedCruise): PriceSnapshot | null {
+  if (!cruise.shipName || !cruise.sailDate) return null;
+
+  const cabinType = cruise.cabinType || 'Balcony';
+  const cruiseKey = generateCruiseKey(cruise.shipName, cruise.sailDate, cabinType);
+
+  const prices: PriceSnapshot['prices'] = {};
+  if (cruise.interiorPrice) prices.interior = cruise.interiorPrice;
+  if (cruise.oceanviewPrice) prices.oceanview = cruise.oceanviewPrice;
+  if (cruise.balconyPrice) prices.balcony = cruise.balconyPrice;
+  if (cruise.suitePrice) prices.suite = cruise.suitePrice;
+  if (cruise.juniorSuitePrice) prices.juniorSuite = cruise.juniorSuitePrice;
+  if (cruise.grandSuitePrice) prices.grandSuite = cruise.grandSuitePrice;
+
+  const mainPrice = cruise.price || cruise.totalPrice || 0;
+  if (mainPrice > 0 && Object.keys(prices).length === 0) {
+    const key = cabinType.toLowerCase();
+    if (key.includes('interior')) prices.interior = mainPrice;
+    else if (key.includes('ocean')) prices.oceanview = mainPrice;
+    else if (key.includes('suite')) prices.suite = mainPrice;
+    else prices.balcony = mainPrice;
+  }
+
+  if (Object.values(prices).every(v => !v || v === 0)) return null;
+
+  return {
+    cruiseKey,
+    shipName: cruise.shipName,
+    sailDate: cruise.sailDate,
+    nights: cruise.nights || 0,
+    destination: cruise.destination || cruise.itineraryName || 'Unknown',
+    cabinType,
+    prices,
+    taxesFees: cruise.taxes || 0,
+    freePlay: cruise.freePlay,
+    obc: cruise.freeOBC,
+    offerCode: cruise.offerCode,
+    offerName: cruise.offerName,
+    source: 'cruise',
+  };
+}
+
+function buildSnapshotFromOffer(offer: CasinoOffer): PriceSnapshot | null {
+  if (!offer.shipName || !offer.sailingDate) return null;
+
+  const cabinType = offer.roomType || 'Balcony';
+  const cruiseKey = generateCruiseKey(offer.shipName, offer.sailingDate, cabinType);
+
+  const prices: PriceSnapshot['prices'] = {};
+  if (offer.interiorPrice) prices.interior = offer.interiorPrice;
+  if (offer.oceanviewPrice) prices.oceanview = offer.oceanviewPrice;
+  if (offer.balconyPrice) prices.balcony = offer.balconyPrice;
+  if (offer.suitePrice) prices.suite = offer.suitePrice;
+  if (offer.juniorSuitePrice) prices.juniorSuite = offer.juniorSuitePrice;
+  if (offer.grandSuitePrice) prices.grandSuite = offer.grandSuitePrice;
+
+  if (Object.values(prices).every(v => !v || v === 0)) return null;
+
+  return {
+    cruiseKey,
+    shipName: offer.shipName,
+    sailDate: offer.sailingDate,
+    nights: offer.nights || 0,
+    destination: offer.itineraryName || 'Unknown',
+    cabinType,
+    prices,
+    taxesFees: offer.taxesFees || offer.portCharges || 0,
+    freePlay: offer.freePlay || offer.freeplayAmount,
+    obc: offer.OBC || offer.obcAmount,
+    offerCode: offer.offerCode,
+    offerName: offer.offerName || offer.title,
+    offerId: offer.id,
+    source: 'offer',
+  };
+}
+
 export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): PriceHistoryState => {
   const [priceHistory, setPriceHistory] = useState<PriceHistoryRecord[]>([]);
   const [priceDropAlerts, setPriceDropAlerts] = useState<PriceDropAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncingToBackend, setIsSyncingToBackend] = useState(false);
+  const syncInProgressRef = useRef(false);
 
   useEffect(() => {
     const loadStoredData = async () => {
@@ -301,6 +427,168 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     return priceDrops;
   }, [recordPriceFromOffer]);
 
+  const captureSnapshotForBookedCruise = useCallback(async (cruise: BookedCruise, userId: string) => {
+    if (!isBackendAvailable()) {
+      console.log('[PriceHistoryProvider] Backend not available, skipping snapshot capture');
+      return;
+    }
+
+    const snapshot = buildSnapshotFromCruise(cruise);
+    if (!snapshot) {
+      console.log('[PriceHistoryProvider] No price data to snapshot for cruise:', cruise.id);
+      return;
+    }
+
+    try {
+      const result = await trpcClient.priceTracking.recordSnapshot.mutate({
+        userId,
+        snapshot,
+      });
+      console.log('[PriceHistoryProvider] Backend snapshot', result.action, 'for', snapshot.cruiseKey);
+    } catch (error) {
+      console.error('[PriceHistoryProvider] Failed to capture backend snapshot:', error);
+    }
+  }, []);
+
+  const bulkCaptureSnapshots = useCallback(async (
+    cruises: BookedCruise[],
+    offers: CasinoOffer[],
+    userId: string
+  ): Promise<{ created: number; updated: number; skipped: number }> => {
+    if (!isBackendAvailable()) {
+      console.log('[PriceHistoryProvider] Backend not available for bulk capture');
+      return { created: 0, updated: 0, skipped: 0 };
+    }
+
+    if (syncInProgressRef.current) {
+      console.log('[PriceHistoryProvider] Sync already in progress, skipping');
+      return { created: 0, updated: 0, skipped: 0 };
+    }
+
+    syncInProgressRef.current = true;
+    setIsSyncingToBackend(true);
+
+    try {
+      const snapshots: PriceSnapshot[] = [];
+
+      for (const cruise of cruises) {
+        const snapshot = buildSnapshotFromCruise(cruise);
+        if (snapshot) snapshots.push(snapshot);
+      }
+
+      for (const offer of offers) {
+        const snapshot = buildSnapshotFromOffer(offer);
+        if (snapshot) {
+          const exists = snapshots.find(s => s.cruiseKey === snapshot.cruiseKey);
+          if (!exists) {
+            snapshots.push(snapshot);
+          }
+        }
+      }
+
+      if (snapshots.length === 0) {
+        console.log('[PriceHistoryProvider] No snapshots to capture');
+        return { created: 0, updated: 0, skipped: 0 };
+      }
+
+      console.log('[PriceHistoryProvider] Sending', snapshots.length, 'snapshots to backend');
+
+      const result = await trpcClient.priceTracking.bulkRecordSnapshots.mutate({
+        userId,
+        snapshots,
+      });
+
+      console.log('[PriceHistoryProvider] Bulk capture result:', result);
+      await AsyncStorage.setItem(LAST_BACKEND_SYNC_KEY, new Date().toISOString());
+
+      return result;
+    } catch (error) {
+      console.error('[PriceHistoryProvider] Bulk capture failed:', error);
+      return { created: 0, updated: 0, skipped: 0 };
+    } finally {
+      syncInProgressRef.current = false;
+      setIsSyncingToBackend(false);
+    }
+  }, []);
+
+  const fetchBackendHistory = useCallback(async (userId: string, cruiseKey?: string): Promise<any[]> => {
+    if (!isBackendAvailable()) return [];
+
+    try {
+      if (cruiseKey) {
+        return await trpcClient.priceTracking.getHistory.query({ userId, cruiseKey });
+      } else {
+        return await trpcClient.priceTracking.getHistoryForAllCruises.query({ userId });
+      }
+    } catch (error) {
+      console.error('[PriceHistoryProvider] Failed to fetch backend history:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchBackendPriceDrops = useCallback(async (userId: string): Promise<BackendPriceDrop[]> => {
+    if (!isBackendAvailable()) return [];
+
+    try {
+      return await trpcClient.priceTracking.getPriceDrops.query({ userId, minDropPercent: 1 });
+    } catch (error) {
+      console.error('[PriceHistoryProvider] Failed to fetch backend price drops:', error);
+      return [];
+    }
+  }, []);
+
+  const syncLocalToBackend = useCallback(async (userId: string) => {
+    if (!isBackendAvailable() || priceHistory.length === 0) return;
+
+    const lastSync = await AsyncStorage.getItem(LAST_BACKEND_SYNC_KEY);
+    if (lastSync) {
+      const lastSyncDate = new Date(lastSync);
+      const hoursSinceSync = (Date.now() - lastSyncDate.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceSync < 1) {
+        console.log('[PriceHistoryProvider] Skipping sync, last synced', hoursSinceSync.toFixed(1), 'hours ago');
+        return;
+      }
+    }
+
+    console.log('[PriceHistoryProvider] Syncing', priceHistory.length, 'local records to backend');
+
+    const snapshotMap = new Map<string, PriceSnapshot>();
+    for (const record of priceHistory) {
+      const key = record.cruiseKey;
+      if (!snapshotMap.has(key) || new Date(record.recordedAt) > new Date(snapshotMap.get(key)!.sailDate)) {
+        snapshotMap.set(key, {
+          cruiseKey: record.cruiseKey,
+          shipName: record.shipName,
+          sailDate: record.sailDate,
+          nights: record.nights,
+          destination: record.destination,
+          cabinType: record.cabinType,
+          prices: {
+            [record.cabinType.toLowerCase().includes('interior') ? 'interior' :
+             record.cabinType.toLowerCase().includes('ocean') ? 'oceanview' :
+             record.cabinType.toLowerCase().includes('suite') ? 'suite' : 'balcony']: record.price,
+          },
+          taxesFees: record.taxesFees,
+          freePlay: record.freePlay,
+          obc: record.obc,
+          offerCode: record.offerCode,
+          offerName: record.offerName,
+          offerId: record.offerId,
+          source: record.source,
+        });
+      }
+    }
+
+    try {
+      const snapshots = Array.from(snapshotMap.values());
+      await trpcClient.priceTracking.bulkRecordSnapshots.mutate({ userId, snapshots });
+      await AsyncStorage.setItem(LAST_BACKEND_SYNC_KEY, new Date().toISOString());
+      console.log('[PriceHistoryProvider] Synced', snapshots.length, 'snapshots to backend');
+    } catch (error) {
+      console.error('[PriceHistoryProvider] Sync to backend failed:', error);
+    }
+  }, [priceHistory]);
+
   const getPriceDrops = useCallback((): PriceDropAlert[] => {
     return [...priceDropAlerts].sort((a, b) => b.priceDropPercent - a.priceDropPercent);
   }, [priceDropAlerts]);
@@ -323,6 +611,7 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
       await Promise.all([
         AsyncStorage.removeItem(PRICE_HISTORY_STORAGE_KEY),
         AsyncStorage.removeItem(PRICE_DROP_ALERTS_STORAGE_KEY),
+        AsyncStorage.removeItem(LAST_BACKEND_SYNC_KEY),
       ]);
       setPriceHistory([]);
       setPriceDropAlerts([]);
@@ -342,10 +631,16 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     priceHistory,
     priceDropAlerts,
     isLoading,
+    isSyncingToBackend,
     recordPrice,
     recordPriceFromOffer,
     recordPriceFromCruise,
     bulkRecordFromOffers,
+    captureSnapshotForBookedCruise,
+    bulkCaptureSnapshots,
+    fetchBackendHistory,
+    fetchBackendPriceDrops,
+    syncLocalToBackend,
     getPriceHistory,
     getLowestPrice,
     getHighestPrice,
