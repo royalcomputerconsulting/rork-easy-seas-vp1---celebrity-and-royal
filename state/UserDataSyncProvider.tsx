@@ -494,18 +494,25 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     hasInitializedRef.current = true;
     
     const initSync = async () => {
-      const cloudLoaded = await loadFromCloud();
-      
-      // Only try to sync local data once if no cloud data and backend is still available
-      if (!cloudLoaded && isBackendAvailable() && isMountedRef.current) {
-        console.log("[UserDataSync] No cloud data, will sync local data after delay");
-        const timeoutId = setTimeout(() => {
-          if (isBackendAvailable() && isMountedRef.current) {
-            syncToCloud();
-          }
-        }, 5000);
+      try {
+        const cloudLoaded = await loadFromCloud();
         
-        return () => clearTimeout(timeoutId);
+        // Only try to sync local data once if no cloud data and backend is still available
+        if (!cloudLoaded && isBackendAvailable() && isMountedRef.current) {
+          console.log("[UserDataSync] No cloud data, will sync local data after delay");
+          const timeoutId = setTimeout(() => {
+            if (isBackendAvailable() && isMountedRef.current) {
+              syncToCloud().catch(err => {
+                console.log('[UserDataSync] Background sync failed (non-critical):', err);
+              });
+            }
+          }, 5000);
+          
+          return () => clearTimeout(timeoutId);
+        }
+      } catch (error) {
+        console.log('[UserDataSync] Initial sync failed (non-critical):', error);
+        setInitialCheckComplete(true);
       }
     };
 

@@ -395,6 +395,34 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
 }
 
 export default function RootLayout() {
+  const [hasError, setHasError] = React.useState(false);
+
+  React.useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.log('[RootLayout] Caught global error:', event.error);
+      if (event.error?.message?.includes('Network connection lost')) {
+        console.log('[RootLayout] Network error detected - continuing in offline mode');
+        event.preventDefault();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('error', handleError);
+      return () => window.removeEventListener('error', handleError);
+    }
+  }, []);
+
+  if (hasError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ fontSize: 18, marginBottom: 10 }}>Something went wrong</Text>
+        <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
+          The app encountered an error during startup. Please restart the app.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>

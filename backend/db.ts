@@ -12,19 +12,32 @@ export async function getDb() {
   const token = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
 
   if (!endpoint || !namespace || !token) {
+    console.log('[DB] Database configuration missing - running in offline mode');
     throw new Error('Database configuration missing');
   }
 
-  db = new Surreal();
-  
-  await db.connect(endpoint, {
-    namespace,
-    database: 'easyseas',
-    auth: token,
-  });
-
-  console.log('[DB] Connected to SurrealDB');
-  return db;
+  try {
+    db = new Surreal();
+    
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database connection timeout')), 10000)
+    );
+    
+    const connectPromise = db.connect(endpoint, {
+      namespace,
+      database: 'easyseas',
+      auth: token,
+    });
+    
+    await Promise.race([connectPromise, timeoutPromise]);
+    
+    console.log('[DB] Connected to SurrealDB');
+    return db;
+  } catch (error) {
+    console.log('[DB] Failed to connect to database:', error);
+    db = null;
+    throw error;
+  }
 }
 
 export async function closeDb() {
