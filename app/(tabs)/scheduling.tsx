@@ -714,7 +714,7 @@ export default function SchedulingScreen() {
           </View>
           <Text style={styles.emptyTitle}>No Back-to-Back Sets Found</Text>
           <Text style={styles.emptyText}>
-            No consecutive cruise pairs with different offer codes were found that don't conflict with your booked cruises.
+            No consecutive cruise pairs with different offer codes were found that don{"'"}t conflict with your booked cruises.
           </Text>
         </View>
       );
