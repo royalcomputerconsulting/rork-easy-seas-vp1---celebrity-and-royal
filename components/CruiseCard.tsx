@@ -279,6 +279,34 @@ export function CruiseCard({
               </View>
             )
           )}
+          {(cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice) && (
+            <View style={styles.miniPricingRow}>
+              {cruise.interiorPrice && cruise.interiorPrice > 0 && (
+                <View style={styles.miniPricingItem}>
+                  <Text style={styles.miniPricingLabel}>Int:</Text>
+                  <Text style={styles.miniPricingValue}>${Math.round(cruise.interiorPrice).toLocaleString()}</Text>
+                </View>
+              )}
+              {cruise.oceanviewPrice && cruise.oceanviewPrice > 0 && (
+                <View style={styles.miniPricingItem}>
+                  <Text style={styles.miniPricingLabel}>OV:</Text>
+                  <Text style={styles.miniPricingValue}>${Math.round(cruise.oceanviewPrice).toLocaleString()}</Text>
+                </View>
+              )}
+              {cruise.balconyPrice && cruise.balconyPrice > 0 && (
+                <View style={styles.miniPricingItem}>
+                  <Text style={styles.miniPricingLabel}>Bal:</Text>
+                  <Text style={styles.miniPricingValue}>${Math.round(cruise.balconyPrice).toLocaleString()}</Text>
+                </View>
+              )}
+              {cruise.suitePrice && cruise.suitePrice > 0 && (
+                <View style={styles.miniPricingItem}>
+                  <Text style={styles.miniPricingLabel}>Suite:</Text>
+                  <Text style={styles.miniPricingValue}>${Math.round(cruise.suitePrice).toLocaleString()}</Text>
+                </View>
+              )}
+            </View>
+          )}
           {((bookedCruise.taxes ?? cruise.taxes ?? 0) > 0) && (
             <View style={styles.miniTaxesRow}>
               <Text style={styles.miniTaxesLabel}>Port Taxes & Fees:</Text>
@@ -713,6 +741,37 @@ const styles = StyleSheet.create({
   },
   miniChevron: {
     marginLeft: 2,
+  },
+  miniPricingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  miniPricingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  miniPricingLabel: {
+    fontSize: 10,
+    color: '#0369A1',
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  miniPricingValue: {
+    fontSize: 10,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniTaxesRow: {
     flexDirection: 'row',
