@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Royal Caribbean Sync & Export",
+  "version": "1.0.0",
+  "description": "Sync Royal Caribbean offers and export to CSV",
+  "permissions": [
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.royalcaribbean.com/*",
+    "https://www.celebritycruises.com/*",
+    "https://aws-prd.api.rccl.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.royalcaribbean.com/club-royale/*",
+        "https://www.celebritycruises.com/blue-chip-club/*"
+      ],
+      "js": [
+        "content-script.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
