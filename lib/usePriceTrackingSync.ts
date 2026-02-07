@@ -5,48 +5,49 @@ import type { CasinoOffer } from '@/types/models';
 
 export function usePriceTrackingSync() {
   const { casinoOffers } = useCruiseStore();
-  const { bulkRecordFromOffers, priceDropAlerts, isLoading } = usePriceHistory();
+  const { bulkRecordFromOffers, priceDropAlerts } = usePriceHistory();
   const lastProcessedRef = useRef<string>('');
-  const isProcessingRef = useRef(false);
+  const isInitialMount = useRef(true);
 
   const processOffers = useCallback((offers: CasinoOffer[]) => {
     if (offers.length === 0) return;
-    if (isProcessingRef.current) return;
 
-    const offersHash = offers.length + ':' + offers.slice(0, 5).map(o => o.id).join(',');
+    const offersHash = offers.map(o => `${o.id}:${o.balconyPrice || 0}`).join(',');
     
     if (offersHash === lastProcessedRef.current) {
+      console.log('[usePriceTrackingSync] Offers unchanged, skipping');
       return;
     }
 
-    isProcessingRef.current = true;
     console.log('[usePriceTrackingSync] Processing', offers.length, 'offers for price tracking');
+    const drops = bulkRecordFromOffers(offers);
     
-    try {
-      const drops = bulkRecordFromOffers(offers);
-      
-      if (drops.length > 0) {
-        console.log('[usePriceTrackingSync] Detected', drops.length, 'price drops');
-      }
-
-      lastProcessedRef.current = offersHash;
-    } catch (error) {
-      console.error('[usePriceTrackingSync] Error processing offers:', error);
-    } finally {
-      isProcessingRef.current = false;
+    if (drops.length > 0) {
+      console.log('[usePriceTrackingSync] Detected', drops.length, 'price drops!');
+      drops.forEach(drop => {
+        console.log(`[usePriceTrackingSync] Price drop: ${drop.shipName} ${drop.cabinType} - $${drop.previousPrice} → $${drop.currentPrice} (${drop.priceDropPercent.toFixed(1)}% off)`);
+      });
     }
+
+    lastProcessedRef.current = offersHash;
   }, [bulkRecordFromOffers]);
 
   useEffect(() => {
-    if (isLoading) return;
-    if (casinoOffers.length === 0) return;
-
-    const timer = setTimeout(() => {
-      processOffers(casinoOffers);
-    }, 5000);
-
-    return () => clearTimeout(timer);
-  }, [casinoOffers, processOffers, isLoading]);
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      
+      if (casinoOffers.length > 0) {
+        const timer = setTimeout(() => {
+          processOffers(casinoOffers);
+        }, 2000);
+        return () => clearTimeout(timer);
+      }
+    } else {
+      if (casinoOffers.length > 0) {
+        processOffers(casinoOffers);
+      }
+    }
+  }, [casinoOffers, processOffers]);
 
   return {
     priceDropCount: priceDropAlerts.length,

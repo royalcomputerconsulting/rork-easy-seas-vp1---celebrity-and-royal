@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { 
@@ -22,6 +22,7 @@ import {
   processAnomaliesWithRules,
   filterActiveAlerts,
   sortAlertsByPriority,
+  dismissAlert as dismissAlertFn,
   snoozeAlert as snoozeAlertFn,
   resolveAlert as resolveAlertFn,
   getAlertSummary,
@@ -74,8 +75,6 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   const [lastDetectionRun, setLastDetectionRun] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [dismissedEntities, setDismissedEntities] = useState<Set<string>>(new Set());
-  const alertsRef = useRef<Alert[]>(alerts);
-  alertsRef.current = alerts;
 
   useEffect(() => {
     const loadStoredData = async () => {
@@ -194,7 +193,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
       const newAlerts = processAnomaliesWithRules(
         result.anomalies,
         rules,
-        alertsRef.current
+        alerts
       );
 
       const filteredNewAlerts = newAlerts.filter(a => {
@@ -219,17 +218,17 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     } finally {
       setIsLoading(false);
     }
-  }, [tier, bookedCruises, casinoOffers, clubRoyaleProfile, config, rules, dismissedIds, dismissedEntities, priceDropAlerts]);
+  }, [tier, bookedCruises, casinoOffers, clubRoyaleProfile, config, rules, alerts, dismissedIds, dismissedEntities, priceDropAlerts]);
 
   useEffect(() => {
-    if (bookedCruises.length > 0 || casinoOffers.length > 0) {
+    if (bookedCruises.length > 0 || casinoOffers.length > 0 || priceDropAlerts.length > 0) {
       const timeout = setTimeout(() => {
         runDetection();
-      }, 2000);
+      }, 1000);
       return () => clearTimeout(timeout);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookedCruises.length, casinoOffers.length]);
+  }, [bookedCruises.length, casinoOffers.length, priceDropAlerts.length]);
 
   const dismissAlert = useCallback((alertId: string) => {
     const alertToRemove = alerts.find(a => a.id === alertId);

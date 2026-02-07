@@ -190,6 +190,10 @@ export default function AnalyticsScreen() {
     }
   }, [tier, router]);
 
+  if (tier !== 'pro') {
+    return null;
+  }
+
   const currentPoints = loyaltyClubRoyalePoints || clubRoyaleProfile?.tierPoints || analytics.totalPoints || 0;
   const totalNights = loyaltyCrownAnchorPoints || clubRoyaleProfile?.lifetimeNights || analytics.totalNights || 0;
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
@@ -1594,10 +1598,6 @@ export default function AnalyticsScreen() {
       </View>
     </View>
   );
-
-  if (tier !== 'pro') {
-    return null;
-  }
 
   return (
     <LinearGradient

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import MACHINES_262 from '@/assets/MACHINES_262.json';
 import type { SlotManufacturer, MachineVolatility, CabinetType, PersistenceType } from '@/types/models';
 
 const MACHINE_INDEX_KEY = '@easyseas/MACHINE_INDEX_V3_262_ONLY';
@@ -43,28 +44,14 @@ export interface MachineFullDetails extends MachineIndexEntry {
   [key: string]: any;
 }
 
-let _machines262Cache: any[] | null = null;
-
-function getMachines262(): any[] {
-  if (!_machines262Cache) {
-    console.log('[MachineIndex] Lazy-loading MACHINES_262.json...');
-    try {
-      _machines262Cache = require('@/assets/MACHINES_262.json') as any[];
-      console.log(`[MachineIndex] Loaded ${_machines262Cache.length} machines from JSON`);
-    } catch (error) {
-      console.error('[MachineIndex] Failed to load MACHINES_262.json:', error);
-      _machines262Cache = [];
-    }
-  }
-  return _machines262Cache;
-}
-
 class MachineIndexHelper {
   private static instance: MachineIndexHelper;
   private indexCache: MachineIndexEntry[] | null = null;
-  private fullMachineMap: Map<string, any> | null = null;
+  private fullMachineMap: Map<string, any> = new Map();
 
-  private constructor() {}
+  private constructor() {
+    this.initializeFullMachineMap();
+  }
 
   static getInstance(): MachineIndexHelper {
     if (!MachineIndexHelper.instance) {
@@ -73,12 +60,9 @@ class MachineIndexHelper {
     return MachineIndexHelper.instance;
   }
 
-  private ensureFullMachineMap(): Map<string, any> {
-    if (this.fullMachineMap) return this.fullMachineMap;
-    
+  private initializeFullMachineMap(): void {
     console.log('[MachineIndex] Building machine lookup map from MACHINES_262 only...');
-    this.fullMachineMap = new Map();
-    const allMachines = getMachines262();
+    const allMachines = [...(MACHINES_262 as any[])];
     
     for (const machine of allMachines) {
       const id = machine.id || `custom-${machine.name}-${machine.manufacturer}`;
@@ -86,7 +70,6 @@ class MachineIndexHelper {
     }
     
     console.log(`[MachineIndex] Lookup map built with ${this.fullMachineMap.size} machines`);
-    return this.fullMachineMap;
   }
 
   async getOrCreateIndex(): Promise<MachineIndexEntry[]> {
@@ -117,7 +100,7 @@ class MachineIndexHelper {
   }
 
   private async buildIndex(): Promise<MachineIndexEntry[]> {
-    const allMachines = getMachines262();
+    const allMachines = [...(MACHINES_262 as any[])];
     console.log(`[MachineIndex] Building index from ${allMachines.length} machines (MACHINES_262 only)...`);
 
     const index: MachineIndexEntry[] = [];
@@ -165,8 +148,7 @@ class MachineIndexHelper {
         return JSON.parse(cached);
       }
 
-      const machineMap = this.ensureFullMachineMap();
-      const fullMachine = machineMap.get(id);
+      const fullMachine = this.fullMachineMap.get(id);
       
       if (!fullMachine) {
         console.warn(`[MachineIndex] Machine not found: ${id}`);

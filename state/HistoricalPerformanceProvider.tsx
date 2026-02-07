@@ -47,6 +47,13 @@ export const [HistoricalPerformanceProvider, useHistoricalPerformance] = createC
 
     const hasHistoricalData = completedCruises.length > 0;
 
+    console.log('[HistoricalPerformanceProvider] State initialized:', {
+      completedCruisesCount: completedCruises.length,
+      hasHistoricalData,
+      avgPointsPerNight: metrics.averagePointsPerNight.toFixed(0),
+      avgROI: metrics.averageROI.toFixed(1),
+    });
+
     return {
       metrics,
       costPerPoint,

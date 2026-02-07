@@ -122,7 +122,7 @@ export default function SettingsScreen() {
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
-  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, refreshAuth, authenticatedEmail } = useAuth();
+  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist } = useAuth();
 
 
 
@@ -986,18 +986,15 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
         console.log('[Settings] Email changed - updating auth state and triggering re-login');
         await AsyncStorage.setItem('easyseas_auth_email', newEmail);
         await syncUserFromStorage();
-        await refreshAuth();
-        console.log('[Settings] Auth state refreshed with new email:', newEmail);
         
         Alert.alert(
           'Email Updated', 
-          `Your email address has been changed to ${newEmail}. Your profile has been updated throughout the app.`,
+          'Your email address has been changed successfully. Your profile has been updated with the new email.',
           [
             {
               text: 'OK',
               onPress: async () => {
                 await syncUserFromStorage();
-                await refreshAuth();
               }
             }
           ]
@@ -1011,7 +1008,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
     } finally {
       setIsSaving(false);
     }
-  }, [currentUser, updateUser, ensureOwner, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncUserFromStorage, refreshAuth]);
+  }, [currentUser, updateUser, ensureOwner, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncUserFromStorage]);
 
 
 
@@ -1417,7 +1414,6 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
             enrichmentData={enrichmentData}
             onSave={handleSaveProfile}
             isSaving={isSaving}
-            isAdminEmail={authenticatedEmail?.toLowerCase() === 'scott.merlis1@gmail.com'}
           />
 
           <PlayingHoursCard

@@ -41,29 +41,15 @@ import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 try {
   SplashScreen.preventAutoHideAsync();
 } catch {
+  // Safe to ignore - splash screen may not be available in all contexts
 }
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5,
-      retry: false,
-      retryOnMount: false,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
+      retry: 2,
     },
-    mutations: {
-      retry: false,
-    },
-  },
-});
-
-queryClient.setDefaultOptions({
-  queries: {
-    useErrorBoundary: false,
-  },
-  mutations: {
-    useErrorBoundary: false,
   },
 });
 
@@ -89,7 +75,7 @@ const rootStyles = StyleSheet.create({
   },
   cloudRestoreTitle: {
     fontSize: 22,
-    fontWeight: "800" as const,
+    fontWeight: "800",
     color: COLORS.navy,
     marginBottom: 6,
   },
@@ -184,147 +170,90 @@ const freshStartStyles = StyleSheet.create({
   },
 });
 
-function DeferredProviders({ children }: { children: React.ReactNode }) {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      console.log('[DeferredProviders] Mounting deferred providers');
-      setReady(true);
-    }, 50);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!ready) {
-    return <>{children}</>;
-  }
-
-  return (
-    <HistoricalPerformanceProvider>
-      <PriceHistoryProvider>
-        <FinancialsProvider>
-          <CasinoStrategyProvider>
-            <LoyaltyProvider>
-              <SimpleAnalyticsProvider>
-                <CasinoSessionProvider>
-                  <DeckPlanProvider>
-                    <MachineStrategyProvider>
-                      <BankrollProvider>
-                        <TaxProvider>
-                          <GamificationProvider>
-                            <PPHAlertsProvider>
-                              <AlertsProvider>
-                                <AgentXProvider>
-                                  <CertificatesProvider>
-                                    <CelebrityProvider>
-                                      {children}
-                                    </CelebrityProvider>
-                                  </CertificatesProvider>
-                                </AgentXProvider>
-                              </AlertsProvider>
-                            </PPHAlertsProvider>
-                          </GamificationProvider>
-                        </TaxProvider>
-                      </BankrollProvider>
-                    </MachineStrategyProvider>
-                  </DeckPlanProvider>
-                </CasinoSessionProvider>
-              </SimpleAnalyticsProvider>
-            </LoyaltyProvider>
-          </CasinoStrategyProvider>
-        </FinancialsProvider>
-      </PriceHistoryProvider>
-    </HistoricalPerformanceProvider>
-  );
-}
-
 function RootLayoutNav() {
   return (
-    <DeferredProviders>
-      <Stack screenOptions={{ headerBackTitle: "Back" }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="paywall"
-          options={{
-            presentation: "modal",
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen 
-          name="modal" 
-          options={{ 
-            presentation: "modal",
-            title: "Modal"
-          }} 
-        />
-        <Stack.Screen 
-          name="day-agenda" 
-          options={{ 
-            headerShown: false,
-          }} 
-        />
-        <Stack.Screen 
-          name="offer-details" 
-          options={{ 
-            presentation: "modal",
-            headerShown: false,
-          }} 
-        />
-        <Stack.Screen 
-          name="add-machine-wizard" 
-          options={{ 
-            presentation: "modal",
-            headerShown: false,
-          }} 
-        />
-        <Stack.Screen 
-          name="add-machines-to-ship" 
-          options={{ 
-            presentation: "modal",
-            headerShown: false,
-          }} 
-        />
-        <Stack.Screen 
-          name="deck-plan" 
-          options={{ 
-            headerShown: false,
-          }} 
-        />
-        <Stack.Screen 
-          name="global-library" 
-          options={{ 
-            presentation: "modal",
-            headerShown: false,
-          }} 
-        />
-        <Stack.Screen 
-          name="machine-detail/[id]" 
-          options={{ 
-            headerShown: false,
-          }} 
-        />
-        <Stack.Screen 
-          name="edit-machine/[id]" 
-          options={{ 
-            presentation: "modal",
-            headerShown: false,
-          }} 
-        />
-        <Stack.Screen 
-          name="royal-caribbean-sync" 
-          options={{ 
-            headerShown: true,
-          }} 
-        />
-      </Stack>
-    </DeferredProviders>
+    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="paywall"
+        options={{
+          presentation: "modal",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="modal" 
+        options={{ 
+          presentation: "modal",
+          title: "Modal"
+        }} 
+      />
+      <Stack.Screen 
+        name="day-agenda" 
+        options={{ 
+          headerShown: false,
+        }} 
+      />
+      <Stack.Screen 
+        name="offer-details" 
+        options={{ 
+          presentation: "modal",
+          headerShown: false,
+        }} 
+      />
+      <Stack.Screen 
+        name="add-machine-wizard" 
+        options={{ 
+          presentation: "modal",
+          headerShown: false,
+        }} 
+      />
+      <Stack.Screen 
+        name="add-machines-to-ship" 
+        options={{ 
+          presentation: "modal",
+          headerShown: false,
+        }} 
+      />
+      <Stack.Screen 
+        name="deck-plan" 
+        options={{ 
+          headerShown: false,
+        }} 
+      />
+      <Stack.Screen 
+        name="global-library" 
+        options={{ 
+          presentation: "modal",
+          headerShown: false,
+        }} 
+      />
+      <Stack.Screen 
+        name="machine-detail/[id]" 
+        options={{ 
+          headerShown: false,
+        }} 
+      />
+      <Stack.Screen 
+        name="edit-machine/[id]" 
+        options={{ 
+          presentation: "modal",
+          headerShown: false,
+        }} 
+      />
+      <Stack.Screen 
+        name="royal-caribbean-sync" 
+        options={{ 
+          headerShown: true,
+        }} 
+      />
+    </Stack>
   );
 }
 
 function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
-  const [forceReady, setForceReady] = useState(false);
 
   useEffect(() => {
     console.log('[AppContent] === MOUNT ===');
@@ -333,6 +262,7 @@ function AppContent() {
         await SplashScreen.hideAsync();
         console.log('[AppContent] Native splash hidden');
       } catch {
+        // Safe to ignore - splash screen may not be registered
       }
     };
     
@@ -344,29 +274,22 @@ function AppContent() {
       console.log('[AppContent] === TIMEOUT: Forcing splash to hide after 1.8s ===');
       setShowSplash(false);
     }, 1800);
-
-    const forceReadyTimeout = setTimeout(() => {
-      console.log('[AppContent] === SAFETY: Forcing app ready after 6s ===');
-      setForceReady(true);
-    }, 6000);
     
     return () => {
       console.log('[AppContent] === UNMOUNT ===');
       clearTimeout(timer);
       clearTimeout(timeout);
-      clearTimeout(forceReadyTimeout);
     };
   }, []);
 
-  return <AppContentInner showSplash={showSplash} setShowSplash={setShowSplash} isClearing={isClearing} setIsClearing={setIsClearing} forceReady={forceReady} />;
+  return <AppContentInner showSplash={showSplash} setShowSplash={setShowSplash} isClearing={isClearing} setIsClearing={setIsClearing} />;
 }
 
-function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing, forceReady }: { 
+function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing }: { 
   showSplash: boolean; 
   setShowSplash: (show: boolean) => void;
   isClearing: boolean;
   setIsClearing: (clearing: boolean) => void;
-  forceReady: boolean;
 }) {
   const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail, isWhitelisted } = useAuth();
   const { initialCheckComplete, isSyncing, syncError, hasCloudData, lastRestoreTime } = useUserDataSync();
@@ -416,11 +339,9 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing,
     setShowSplash(false);
   };
 
-  const effectiveInitialCheckComplete = initialCheckComplete || forceReady;
+  console.log('[AppContent] Render - showSplash:', showSplash, 'isAuthenticated:', isAuthenticated, 'authLoading:', authLoading, 'isFreshStart:', isFreshStart, 'isClearing:', isClearing, 'initialCheckComplete:', initialCheckComplete, 'isSyncing:', isSyncing, 'hasCloudData:', hasCloudData, 'syncError:', syncError);
 
-  console.log('[AppContent] Render - showSplash:', showSplash, 'isAuthenticated:', isAuthenticated, 'authLoading:', authLoading, 'isFreshStart:', isFreshStart, 'isClearing:', isClearing, 'initialCheckComplete:', initialCheckComplete, 'forceReady:', forceReady, 'isSyncing:', isSyncing, 'hasCloudData:', hasCloudData, 'syncError:', syncError);
-
-  if (authLoading && !forceReady) {
+  if (authLoading) {
     return (
       <WelcomeSplash 
         onAnimationComplete={() => {}}
@@ -445,7 +366,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing,
     );
   }
 
-  if (isAuthenticated && !effectiveInitialCheckComplete) {
+  if (isAuthenticated && !initialCheckComplete) {
     return (
       <View style={rootStyles.cloudRestoreContainer} testID="cloudRestoreScreen">
         <View style={rootStyles.cloudRestoreCard}>
@@ -474,62 +395,6 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing,
 }
 
 export default function RootLayout() {
-  const [hasError] = React.useState(false);
-
-  React.useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      console.log('[RootLayout] Caught global error:', event.error);
-      const errorMsg = event.error?.message || '';
-      if (errorMsg.includes('Network connection lost') || 
-          errorMsg.includes('Network request failed') ||
-          errorMsg.includes('Failed to fetch') ||
-          errorMsg.includes('NetworkError') ||
-          errorMsg.includes('SandboxError') ||
-          errorMsg.includes('BACKEND_')) {
-        console.log('[RootLayout] Network/Backend error detected - continuing in offline mode');
-        event.preventDefault();
-        return;
-      }
-    };
-
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      console.log('[RootLayout] Caught unhandled rejection:', event.reason);
-      const reason = event.reason?.message || event.reason || '';
-      const reasonStr = typeof reason === 'string' ? reason : String(reason);
-      if (reasonStr.includes('Network connection lost') ||
-          reasonStr.includes('Network request failed') ||
-          reasonStr.includes('Failed to fetch') ||
-          reasonStr.includes('NetworkError') ||
-          reasonStr.includes('Database connection') ||
-          reasonStr.includes('SandboxError') ||
-          reasonStr.includes('BACKEND_')) {
-        console.log('[RootLayout] Network rejection detected - continuing in offline mode');
-        event.preventDefault();
-        return;
-      }
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('error', handleError);
-      window.addEventListener('unhandledrejection', handleUnhandledRejection);
-      return () => {
-        window.removeEventListener('error', handleError);
-        window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-      };
-    }
-  }, []);
-
-  if (hasError) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Text style={{ fontSize: 18, marginBottom: 10 }}>Something went wrong</Text>
-        <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
-          The app encountered an error during startup. Please restart the app.
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
@@ -540,11 +405,45 @@ export default function RootLayout() {
               <UserProvider>
                 <EntitlementProvider>
                   <CoreDataProvider>
-                    <SlotMachineProvider>
-                      <SlotMachineLibraryProvider>
-                        <AppContent />
-                      </SlotMachineLibraryProvider>
-                    </SlotMachineProvider>
+                <HistoricalPerformanceProvider>
+                  <PriceHistoryProvider>
+                    <FinancialsProvider>
+                      <CasinoStrategyProvider>
+                        <LoyaltyProvider>
+                          <SimpleAnalyticsProvider>
+                            <CasinoSessionProvider>
+                              <SlotMachineProvider>
+                                <SlotMachineLibraryProvider>
+                                  <DeckPlanProvider>
+                                    <MachineStrategyProvider>
+                                      <BankrollProvider>
+                                        <TaxProvider>
+                                          <GamificationProvider>
+                                            <PPHAlertsProvider>
+                                              <AlertsProvider>
+                                                <AgentXProvider>
+                                                  <CertificatesProvider>
+                                                    <CelebrityProvider>
+                                                      <AppContent />
+                                                    </CelebrityProvider>
+                                                  </CertificatesProvider>
+                                                </AgentXProvider>
+                                              </AlertsProvider>
+                                            </PPHAlertsProvider>
+                                          </GamificationProvider>
+                                        </TaxProvider>
+                                      </BankrollProvider>
+                                    </MachineStrategyProvider>
+                                  </DeckPlanProvider>
+                                </SlotMachineLibraryProvider>
+                              </SlotMachineProvider>
+                            </CasinoSessionProvider>
+                          </SimpleAnalyticsProvider>
+                        </LoyaltyProvider>
+                      </CasinoStrategyProvider>
+                    </FinancialsProvider>
+                  </PriceHistoryProvider>
+                </HistoricalPerformanceProvider>
                   </CoreDataProvider>
                 </EntitlementProvider>
               </UserProvider>

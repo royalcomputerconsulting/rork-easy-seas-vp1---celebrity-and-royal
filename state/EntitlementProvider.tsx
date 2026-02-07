@@ -51,7 +51,7 @@ const KEYS = {
 
 const TRIAL_DURATION_DAYS = 30;
 
-const DEFAULT_TIMEOUT_MS = 8000 as const;
+const DEFAULT_TIMEOUT_MS = 20000 as const;
 
 async function withTimeout<T>(
   promise: Promise<T>,
@@ -365,10 +365,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
   useEffect(() => {
     console.log('[Entitlement] Provider mounted - refreshing entitlements');
-    const timer = setTimeout(() => {
-      refresh().catch((e) => console.error('[Entitlement] initial refresh failed', e));
-    }, 100);
-    return () => clearTimeout(timer);
+    refresh().catch((e) => console.error('[Entitlement] initial refresh failed', e));
   }, [refresh]);
 
   useEffect(() => {

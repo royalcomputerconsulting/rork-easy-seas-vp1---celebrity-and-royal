@@ -40,17 +40,9 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const isMountedRef = useRef(true);
   const hasInitializedRef = useRef(false);
 
-  const saveAllMutation = trpc.data.saveAllUserData.useMutation({
-    retry: false,
-    onError: (error) => {
-      console.log('[UserDataSync] Save mutation error:', error.message);
-    },
-  });
+  const saveAllMutation = trpc.data.saveAllUserData.useMutation();
 
   const fetchAllUserDataByEmail = useCallback(async (email: string) => {
-    if (!isBackendAvailable()) {
-      throw new Error('BACKEND_NOT_AVAILABLE');
-    }
     const normalizedEmail = email.toLowerCase().trim();
     console.log("[UserDataSync] Fetching cloud data for:", normalizedEmail);
     return trpcClient.data.getAllUserData.query({ email: normalizedEmail });
@@ -462,20 +454,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   useEffect(() => {
     isMountedRef.current = true;
     console.log('[UserDataSync] Provider mounted/remounted, resetting initialization');
-
-    const safetyTimeout = setTimeout(() => {
-      if (isMountedRef.current && !initialCheckComplete) {
-        console.log('[UserDataSync] SAFETY TIMEOUT: Forcing initialCheckComplete after 5s');
-        setInitialCheckComplete(true);
-      }
-    }, 5000);
     
     return () => {
       isMountedRef.current = false;
-      clearTimeout(safetyTimeout);
       console.log('[UserDataSync] Provider unmounting');
     };
-  }, [initialCheckComplete]);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated || !authenticatedEmail) {
@@ -509,42 +493,23 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     console.log("[UserDataSync] New user login detected, loading cloud data...");
     hasInitializedRef.current = true;
     
-    const syncTimeout = setTimeout(() => {
-      if (isMountedRef.current && !initialCheckComplete) {
-        console.log('[UserDataSync] Sync timeout reached - forcing initialCheckComplete');
-        setInitialCheckComplete(true);
-      }
-    }, 4000);
-
     const initSync = async () => {
-      try {
-        const cloudLoaded = await loadFromCloud();
+      const cloudLoaded = await loadFromCloud();
+      
+      // Only try to sync local data once if no cloud data and backend is still available
+      if (!cloudLoaded && isBackendAvailable() && isMountedRef.current) {
+        console.log("[UserDataSync] No cloud data, will sync local data after delay");
+        const timeoutId = setTimeout(() => {
+          if (isBackendAvailable() && isMountedRef.current) {
+            syncToCloud();
+          }
+        }, 5000);
         
-        if (!cloudLoaded && isBackendAvailable() && isMountedRef.current) {
-          console.log("[UserDataSync] No cloud data, will sync local data after delay");
-          const timeoutId = setTimeout(() => {
-            if (isBackendAvailable() && isMountedRef.current) {
-              syncToCloud().catch(err => {
-                console.log('[UserDataSync] Background sync failed (non-critical):', err);
-              });
-            }
-          }, 5000);
-          
-          return () => clearTimeout(timeoutId);
-        }
-      } catch (error) {
-        console.log('[UserDataSync] Initial sync failed (non-critical):', error);
-        if (isMountedRef.current) {
-          setInitialCheckComplete(true);
-        }
-      } finally {
-        clearTimeout(syncTimeout);
+        return () => clearTimeout(timeoutId);
       }
     };
 
     initSync();
-
-    return () => clearTimeout(syncTimeout);
   }, [isAuthenticated, authenticatedEmail, loadFromCloud, syncToCloud]);
 
   // Removed automatic storage change listener to prevent continuous sync loops

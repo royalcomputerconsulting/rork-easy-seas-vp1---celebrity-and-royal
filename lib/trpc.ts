@@ -7,21 +7,16 @@ import type { AppRouter } from "@/backend/trpc/app-router";
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  try {
-    const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
 
-    if (!url) {
-      console.log(
-        "[tRPC] EXPO_PUBLIC_RORK_API_BASE_URL not set - backend features disabled",
-      );
-      return "https://fallback.local";
-    }
-
-    return url;
-  } catch (e) {
-    console.log('[tRPC] Error getting base URL:', e);
+  if (!url) {
+    console.log(
+      "[tRPC] EXPO_PUBLIC_RORK_API_BASE_URL not set - backend features disabled",
+    );
     return "https://fallback.local";
   }
+
+  return url;
 };
 
 let _backendDisabled = false;
@@ -47,7 +42,6 @@ let _trpcClient: ReturnType<typeof trpc.createClient> | null = null;
 export const getTrpcClient = () => {
   if (!_trpcClient) {
     const baseUrl = getBaseUrl();
-    console.log('[tRPC] Creating client with baseUrl:', baseUrl);
     _trpcClient = trpc.createClient({
       links: [
         httpLink({
@@ -66,7 +60,7 @@ export const getTrpcClient = () => {
             
             try {
               const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 10000);
+              const timeoutId = setTimeout(() => controller.abort(), 30000);
               
               const existingSignal = options?.signal;
               if (existingSignal?.aborted) {
@@ -106,24 +100,20 @@ export const getTrpcClient = () => {
               if (error instanceof Error) {
                 if (error.name === 'AbortError') {
                   console.log('[tRPC] Request aborted/timeout');
-                  _backendDisabled = true;
-                  _lastErrorTime = Date.now();
-                  throw new Error('BACKEND_TIMEOUT');
+                  throw error;
                 }
                 if (['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR'].includes(error.message)) {
                   throw error;
                 }
-                if (error.message === 'Failed to fetch' || error.message.includes('NetworkError') || error.message.includes('Network connection lost')) {
+                if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
                   console.log('[tRPC] Network error, temporarily disabling backend');
                   _backendDisabled = true;
                   _lastErrorTime = Date.now();
                   throw new Error("NETWORK_ERROR");
                 }
               }
-              console.log('[tRPC] Fetch error, disabling backend:', error);
-              _backendDisabled = true;
-              _lastErrorTime = Date.now();
-              throw new Error('BACKEND_ERROR');
+              console.log('[tRPC] Fetch error:', error);
+              throw error;
             }
           },
         }),

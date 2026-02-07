@@ -257,14 +257,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const hasLocalData = cruises.length > 0 || bookedCruises.length > 0 || casinoOffers.length > 0 || calendarEvents.length > 0;
 
-  const { mutateAsync: saveAllUserDataMutateAsync } = trpc.data.saveAllUserData.useMutation({
-    onError: (error) => {
-      console.log('[CoreData] saveAllUserData mutation error (non-critical):', error?.message);
-    },
-  });
+  const { mutateAsync: saveAllUserDataMutateAsync } = trpc.data.saveAllUserData.useMutation();
   const { refetch: refetchBackendData } = trpc.data.getAllUserData.useQuery(
     { email: authenticatedEmail || '' },
-    { enabled: false, retry: false, staleTime: 0, gcTime: 0 }
+    { enabled: false, retry: false, staleTime: 0 }
   );
 
   const activeFilterCount = useMemo(() => {

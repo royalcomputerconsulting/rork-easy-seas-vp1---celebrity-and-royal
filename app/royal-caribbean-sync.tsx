@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download, Anchor, Crown, Star, Award, ArrowLeft } from 'lucide-react-native';
@@ -12,8 +12,6 @@ import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { trpc } from '@/lib/trpc';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useAuth } from '@/state/AuthProvider';
-import { usePriceHistory } from '@/state/PriceHistoryProvider';
-import { buildPriceRecordsFromOffers, syncPriceRecordsToBackend } from '@/lib/priceTrackingSync';
 
 function RoyalCaribbeanSyncScreen() {
   const router = useRouter();
@@ -21,7 +19,17 @@ function RoyalCaribbeanSyncScreen() {
   const loyalty = useLoyalty();
   const entitlement = useEntitlement();
   const auth = useAuth();
-  const { bulkRecordFromOffers } = usePriceHistory();
+  
+  useEffect(() => {
+    if (entitlement.tier === 'view') {
+      console.log('[RoyalCaribbeanSync] View-only mode detected. Redirecting to paywall.');
+      router.replace('/paywall');
+    }
+  }, [entitlement.tier, router]);
+  
+  if (entitlement.tier === 'view') {
+    return null;
+  }
   const {
     state,
     webViewRef,
@@ -40,30 +48,17 @@ function RoyalCaribbeanSyncScreen() {
     toggleStaySignedIn
   } = useRoyalCaribbeanSync();
   
+  const isCelebrity = cruiseLine === 'celebrity';
+  const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
+
+
+
   const [webViewVisible, setWebViewVisible] = useState(true);
+  
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
   
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
-  
-  const isCelebrity = cruiseLine === 'celebrity';
-  const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
-  
-  useEffect(() => {
-    if (entitlement.tier === 'view') {
-      console.log('[RoyalCaribbeanSync] View-only mode detected. Redirecting to paywall.');
-      router.replace('/paywall');
-    }
-  }, [entitlement.tier, router]);
-
-  useEffect(() => {
-    console.log('[RoyalCaribbeanSync Screen] Status changed:', state.status);
-    console.log('[RoyalCaribbeanSync Screen] syncCounts:', state.syncCounts);
-  }, [state.status, state.syncCounts]);
-  
-  if (entitlement.tier === 'view') {
-    return null;
-  }
   
   const isBackendAvailable = !!process.env.EXPO_PUBLIC_RORK_API_BASE_URL && 
     !process.env.EXPO_PUBLIC_RORK_API_BASE_URL.includes('fallback');
@@ -231,6 +226,12 @@ function RoyalCaribbeanSyncScreen() {
   const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
+
+  useEffect(() => {
+    console.log('[RoyalCaribbeanSync Screen] Status changed:', state.status);
+    console.log('[RoyalCaribbeanSync Screen] showConfirmation:', showConfirmation);
+    console.log('[RoyalCaribbeanSync Screen] syncCounts:', state.syncCounts);
+  }, [state.status, showConfirmation, state.syncCounts]);
 
   return (
     <>
@@ -732,26 +733,8 @@ function RoyalCaribbeanSyncScreen() {
 
                 <Pressable 
                   style={[styles.button, styles.confirmButton]}
-                  onPress={async () => {
-                    await syncToApp(coreData, loyalty);
-                    try {
-                      const offers = coreData.casinoOffers || [];
-                      if (offers.length > 0) {
-                        console.log('[RoyalCaribbeanSync] Recording price history for', offers.length, 'offers');
-                        const drops = bulkRecordFromOffers(offers);
-                        if (drops.length > 0) {
-                          addLog(`📉 Detected ${drops.length} price drop(s)!`, 'success');
-                        }
-                        if (auth.authenticatedEmail) {
-                          const records = buildPriceRecordsFromOffers(offers);
-                          syncPriceRecordsToBackend(auth.authenticatedEmail, records).catch(err => {
-                            console.log('[RoyalCaribbeanSync] Backend price sync error (non-critical):', err);
-                          });
-                        }
-                      }
-                    } catch (priceErr) {
-                      console.log('[RoyalCaribbeanSync] Price tracking error (non-critical):', priceErr);
-                    }
+                  onPress={() => {
+                    syncToApp(coreData, loyalty);
                   }}
                 >
                   <Text style={styles.buttonText}>Yes, Sync Now</Text>
