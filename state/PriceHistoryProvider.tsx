@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { 
@@ -55,6 +55,7 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
   const [priceDropAlerts, setPriceDropAlerts] = useState<PriceDropAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,15 +97,22 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     if (!hasLoadedFromStorage) return;
     if (priceHistory.length === 0) return;
 
-    const saveHistory = async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(async () => {
       try {
         await AsyncStorage.setItem(PRICE_HISTORY_STORAGE_KEY, JSON.stringify(priceHistory));
       } catch (error) {
         console.error('[PriceHistoryProvider] Error saving price history:', error);
       }
-    };
+    }, 1000);
 
-    saveHistory();
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
   }, [priceHistory, hasLoadedFromStorage]);
 
   useEffect(() => {
@@ -167,7 +175,6 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     });
 
     if (recentDuplicate) {
-      console.log('[PriceHistoryProvider] Skipping duplicate price record for', record.cruiseKey);
       return null;
     }
 
@@ -222,7 +229,6 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     cabinType?: string
   ): PriceDropAlert | null => {
     if (!offer.shipName || !offer.sailingDate) {
-      console.log('[PriceHistoryProvider] Missing ship name or sail date for offer:', offer.id);
       return null;
     }
 
@@ -231,7 +237,6 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     const taxes = offer.taxesFees || offer.portCharges || 0;
     
     if (price <= 0 && taxes <= 0) {
-      console.log('[PriceHistoryProvider] No price data for offer:', offer.id);
       return null;
     }
 
@@ -258,7 +263,6 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
 
   const recordPriceFromCruise = useCallback((cruise: Cruise): PriceDropAlert | null => {
     if (!cruise.shipName || !cruise.sailDate) {
-      console.log('[PriceHistoryProvider] Missing ship name or sail date for cruise:', cruise.id);
       return null;
     }
 
@@ -267,7 +271,6 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     const taxes = cruise.taxes || 0;
     
     if (price <= 0 && taxes <= 0) {
-      console.log('[PriceHistoryProvider] No price data for cruise:', cruise.id);
       return null;
     }
 
@@ -292,25 +295,109 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
   }, [recordPrice]);
 
   const bulkRecordFromOffers = useCallback((offers: CasinoOffer[]): PriceDropAlert[] => {
-    const priceDrops: PriceDropAlert[] = [];
-    
+    if (offers.length === 0) return [];
+
+    const now = new Date().toISOString();
     const cabinTypes = ['Interior', 'Oceanview', 'Balcony', 'Suite'];
-    
-    offers.forEach(offer => {
-      cabinTypes.forEach(cabinType => {
+    const newRecords: PriceHistoryRecord[] = [];
+    const newDropAlerts: PriceDropAlert[] = [];
+    const alertKeysToClear: string[] = [];
+
+    const currentHistorySnapshot = [...priceHistory];
+
+    for (const offer of offers) {
+      if (!offer.shipName || !offer.sailingDate) continue;
+
+      for (const cabinType of cabinTypes) {
         const price = extractCabinPrice(offer, cabinType);
-        if (price > 0) {
-          const drop = recordPriceFromOffer(offer, cabinType);
-          if (drop) {
-            priceDrops.push(drop);
+        if (price <= 0) continue;
+
+        const taxes = offer.taxesFees || offer.portCharges || 0;
+        const totalPrice = price + taxes;
+        const cruiseKey = generateCruiseKey(offer.shipName, offer.sailingDate, cabinType);
+
+        const allExisting = [
+          ...currentHistorySnapshot.filter(r => r.cruiseKey === cruiseKey),
+          ...newRecords.filter(r => r.cruiseKey === cruiseKey),
+        ];
+
+        const recentDuplicate = allExisting.find(existing => {
+          const timeDiff = new Date(now).getTime() - new Date(existing.recordedAt).getTime();
+          const hoursDiff = timeDiff / (1000 * 60 * 60);
+          return hoursDiff < 24 && Math.abs(existing.totalPrice - totalPrice) < 1;
+        });
+
+        if (recentDuplicate) continue;
+
+        const newRecord: PriceHistoryRecord = {
+          id: generateRecordId(),
+          cruiseKey,
+          shipName: offer.shipName,
+          sailDate: offer.sailingDate,
+          nights: offer.nights || 0,
+          destination: offer.itineraryName || 'Unknown',
+          cabinType,
+          price,
+          taxesFees: taxes,
+          totalPrice,
+          freePlay: offer.freePlay || offer.freeplayAmount,
+          obc: offer.OBC || offer.obcAmount,
+          offerCode: offer.offerCode,
+          offerName: offer.offerName || offer.title,
+          offerId: offer.id,
+          recordedAt: now,
+          source: 'offer',
+        };
+
+        newRecords.push(newRecord);
+
+        if (allExisting.length > 0) {
+          const previousRecord = allExisting.reduce((latest, current) =>
+            new Date(current.recordedAt) > new Date(latest.recordedAt) ? current : latest
+          );
+
+          if (totalPrice < previousRecord.totalPrice) {
+            const priceDrop = previousRecord.totalPrice - totalPrice;
+            const priceDropPercent = (priceDrop / previousRecord.totalPrice) * 100;
+
+            alertKeysToClear.push(cruiseKey);
+            newDropAlerts.push({
+              cruiseKey,
+              shipName: offer.shipName,
+              sailDate: offer.sailingDate,
+              destination: offer.itineraryName || 'Unknown',
+              cabinType,
+              previousPrice: previousRecord.totalPrice,
+              currentPrice: totalPrice,
+              priceDrop,
+              priceDropPercent,
+              previousRecordedAt: previousRecord.recordedAt,
+              currentRecordedAt: now,
+              offerId: offer.id,
+              offerName: offer.offerName || offer.title,
+            });
           }
         }
-      });
-    });
+      }
+    }
 
-    console.log('[PriceHistoryProvider] Bulk recorded prices from', offers.length, 'offers, found', priceDrops.length, 'price drops');
-    return priceDrops;
-  }, [recordPriceFromOffer]);
+    if (newRecords.length > 0) {
+      setPriceHistory(prev => [...prev, ...newRecords]);
+      console.log('[PriceHistoryProvider] Bulk added', newRecords.length, 'price records');
+    }
+
+    if (newDropAlerts.length > 0) {
+      const keysSet = new Set(alertKeysToClear);
+      setPriceDropAlerts(prev => {
+        const filtered = prev.filter(a => !keysSet.has(a.cruiseKey));
+        return [...filtered, ...newDropAlerts];
+      });
+      console.log('[PriceHistoryProvider] Bulk detected', newDropAlerts.length, 'price drops');
+    }
+
+    console.log('[PriceHistoryProvider] Bulk processed', offers.length, 'offers →', newRecords.length, 'new records,', newDropAlerts.length, 'drops');
+    return newDropAlerts;
+  }, [priceHistory]);
 
   const getPriceDrops = useCallback((): PriceDropAlert[] => {
     return [...priceDropAlerts].sort((a, b) => b.priceDropPercent - a.priceDropPercent);
