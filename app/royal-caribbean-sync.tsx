@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download, Anchor, Crown, Star, Award, ArrowLeft } from 'lucide-react-native';
@@ -12,6 +12,8 @@ import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { trpc } from '@/lib/trpc';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useAuth } from '@/state/AuthProvider';
+import { usePriceHistory } from '@/state/PriceHistoryProvider';
+import { buildPriceRecordsFromOffers, syncPriceRecordsToBackend } from '@/lib/priceTrackingSync';
 
 function RoyalCaribbeanSyncScreen() {
   const router = useRouter();
@@ -19,6 +21,7 @@ function RoyalCaribbeanSyncScreen() {
   const loyalty = useLoyalty();
   const entitlement = useEntitlement();
   const auth = useAuth();
+  const { bulkRecordFromOffers } = usePriceHistory();
   const {
     state,
     webViewRef,
@@ -729,8 +732,26 @@ function RoyalCaribbeanSyncScreen() {
 
                 <Pressable 
                   style={[styles.button, styles.confirmButton]}
-                  onPress={() => {
-                    syncToApp(coreData, loyalty);
+                  onPress={async () => {
+                    await syncToApp(coreData, loyalty);
+                    try {
+                      const offers = coreData.casinoOffers || [];
+                      if (offers.length > 0) {
+                        console.log('[RoyalCaribbeanSync] Recording price history for', offers.length, 'offers');
+                        const drops = bulkRecordFromOffers(offers);
+                        if (drops.length > 0) {
+                          addLog(`📉 Detected ${drops.length} price drop(s)!`, 'success');
+                        }
+                        if (auth.authenticatedEmail) {
+                          const records = buildPriceRecordsFromOffers(offers);
+                          syncPriceRecordsToBackend(auth.authenticatedEmail, records).catch(err => {
+                            console.log('[RoyalCaribbeanSync] Backend price sync error (non-critical):', err);
+                          });
+                        }
+                      }
+                    } catch (priceErr) {
+                      console.log('[RoyalCaribbeanSync] Price tracking error (non-critical):', priceErr);
+                    }
                   }}
                 >
                   <Text style={styles.buttonText}>Yes, Sync Now</Text>
