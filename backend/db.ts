@@ -20,7 +20,7 @@ export async function getDb() {
     db = new Surreal();
     
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Database connection timeout')), 5000)
+      setTimeout(() => reject(new Error('Database connection timeout')), 3000)
     );
     
     const connectPromise = db.connect(endpoint, {

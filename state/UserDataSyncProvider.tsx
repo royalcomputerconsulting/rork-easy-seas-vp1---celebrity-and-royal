@@ -40,9 +40,17 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const isMountedRef = useRef(true);
   const hasInitializedRef = useRef(false);
 
-  const saveAllMutation = trpc.data.saveAllUserData.useMutation();
+  const saveAllMutation = trpc.data.saveAllUserData.useMutation({
+    retry: false,
+    onError: (error) => {
+      console.log('[UserDataSync] Save mutation error:', error.message);
+    },
+  });
 
   const fetchAllUserDataByEmail = useCallback(async (email: string) => {
+    if (!isBackendAvailable()) {
+      throw new Error('BACKEND_NOT_AVAILABLE');
+    }
     const normalizedEmail = email.toLowerCase().trim();
     console.log("[UserDataSync] Fetching cloud data for:", normalizedEmail);
     return trpcClient.data.getAllUserData.query({ email: normalizedEmail });

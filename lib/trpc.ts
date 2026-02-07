@@ -47,6 +47,7 @@ let _trpcClient: ReturnType<typeof trpc.createClient> | null = null;
 export const getTrpcClient = () => {
   if (!_trpcClient) {
     const baseUrl = getBaseUrl();
+    console.log('[tRPC] Creating client with baseUrl:', baseUrl);
     _trpcClient = trpc.createClient({
       links: [
         httpLink({
@@ -65,7 +66,7 @@ export const getTrpcClient = () => {
             
             try {
               const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 30000);
+              const timeoutId = setTimeout(() => controller.abort(), 10000);
               
               const existingSignal = options?.signal;
               if (existingSignal?.aborted) {
@@ -105,20 +106,24 @@ export const getTrpcClient = () => {
               if (error instanceof Error) {
                 if (error.name === 'AbortError') {
                   console.log('[tRPC] Request aborted/timeout');
-                  throw error;
+                  _backendDisabled = true;
+                  _lastErrorTime = Date.now();
+                  throw new Error('BACKEND_TIMEOUT');
                 }
                 if (['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR'].includes(error.message)) {
                   throw error;
                 }
-                if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
+                if (error.message === 'Failed to fetch' || error.message.includes('NetworkError') || error.message.includes('Network connection lost')) {
                   console.log('[tRPC] Network error, temporarily disabling backend');
                   _backendDisabled = true;
                   _lastErrorTime = Date.now();
                   throw new Error("NETWORK_ERROR");
                 }
               }
-              console.log('[tRPC] Fetch error:', error);
-              throw error;
+              console.log('[tRPC] Fetch error, disabling backend:', error);
+              _backendDisabled = true;
+              _lastErrorTime = Date.now();
+              throw new Error('BACKEND_ERROR');
             }
           },
         }),

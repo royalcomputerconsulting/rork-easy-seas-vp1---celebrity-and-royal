@@ -47,14 +47,23 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5,
-      retry: 0,
+      retry: false,
       retryOnMount: false,
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
     },
     mutations: {
-      retry: 0,
+      retry: false,
     },
+  },
+});
+
+queryClient.setDefaultOptions({
+  queries: {
+    useErrorBoundary: false,
+  },
+  mutations: {
+    useErrorBoundary: false,
   },
 });
 
@@ -474,8 +483,10 @@ export default function RootLayout() {
       if (errorMsg.includes('Network connection lost') || 
           errorMsg.includes('Network request failed') ||
           errorMsg.includes('Failed to fetch') ||
-          errorMsg.includes('NetworkError')) {
-        console.log('[RootLayout] Network error detected - continuing in offline mode');
+          errorMsg.includes('NetworkError') ||
+          errorMsg.includes('SandboxError') ||
+          errorMsg.includes('BACKEND_')) {
+        console.log('[RootLayout] Network/Backend error detected - continuing in offline mode');
         event.preventDefault();
         return;
       }
@@ -490,6 +501,7 @@ export default function RootLayout() {
           reasonStr.includes('Failed to fetch') ||
           reasonStr.includes('NetworkError') ||
           reasonStr.includes('Database connection') ||
+          reasonStr.includes('SandboxError') ||
           reasonStr.includes('BACKEND_')) {
         console.log('[RootLayout] Network rejection detected - continuing in offline mode');
         event.preventDefault();
