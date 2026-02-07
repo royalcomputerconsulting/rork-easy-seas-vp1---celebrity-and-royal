@@ -41,7 +41,7 @@ import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 try {
   SplashScreen.preventAutoHideAsync();
 } catch {
-  // Safe to ignore - splash screen may not be available in all contexts
+  // Splash screen may not be available in all contexts
 }
 
 const queryClient = new QueryClient({
