@@ -80,8 +80,20 @@ export function CruiseCard({
 
   const retailValue = useMemo(() => {
     if (!showRetailValue) return null;
-    const valueBreakdown = calculateCruiseValue(cruise as Cruise | BookedCruise);
-    return valueBreakdown.totalRetailValue;
+    
+    const cabinType = cruise.cabinType || 'Balcony';
+    const guestCount = cruise.guests || 2;
+    let cabinValueForTwo = 0;
+    
+    const bookedCruise = cruise as BookedCruise;
+    if (bookedCruise.totalRetailCost && bookedCruise.pricePaid !== undefined) {
+      cabinValueForTwo = bookedCruise.totalRetailCost * 2;
+    } else {
+      const cabinPrice = cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice || cruise.price || 0;
+      cabinValueForTwo = cabinPrice * guestCount;
+    }
+    
+    return cabinValueForTwo;
   }, [cruise, showRetailValue]);
 
   const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {
