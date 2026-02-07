@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Modal, ScrollView, Alert, Platform } from 'react-native';
 import { Save, CheckCircle, AlertCircle, Crown, Award, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -70,13 +70,17 @@ interface UserProfileCardProps {
   enrichmentData?: EnrichmentData | null;
   onSave: (data: UserProfileData) => void;
   isSaving?: boolean;
+  isAdminEmail?: boolean;
 }
+
+const ADMIN_PASSWORD = 'a1';
 
 export function UserProfileCard({
   currentValues,
   enrichmentData,
   onSave,
   isSaving = false,
+  isAdminEmail = false,
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
   const [formData, setFormData] = useState<UserProfileData>(currentValues);
@@ -84,6 +88,8 @@ export function UserProfileCard({
     (currentValues.preferredBrand as BrandType) || 'royal'
   );
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [showAdminPrompt, setShowAdminPrompt] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
 
   useEffect(() => {
     setFormData(currentValues);
@@ -509,7 +515,35 @@ export function UserProfileCard({
       <View style={styles.editButtonContainer}>
         <TouchableOpacity 
           style={styles.editButton}
-          onPress={() => setIsModalVisible(true)}
+          onPress={() => {
+            if (isAdminEmail) {
+              if (Platform.OS === 'ios') {
+                Alert.prompt(
+                  'Admin Verification',
+                  'Enter admin password to edit profile:',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Unlock',
+                      onPress: (password?: string) => {
+                        if (password === ADMIN_PASSWORD) {
+                          setIsModalVisible(true);
+                        } else {
+                          Alert.alert('Access Denied', 'Incorrect admin password.');
+                        }
+                      },
+                    },
+                  ],
+                  'secure-text'
+                );
+              } else {
+                setAdminPasswordInput('');
+                setShowAdminPrompt(true);
+              }
+            } else {
+              setIsModalVisible(true);
+            }
+          }}
           activeOpacity={0.7}
         >
           <Edit2 size={16} color={getBrandGradient()[0]} />
@@ -578,6 +612,57 @@ export function UserProfileCard({
                 </TouchableOpacity>
               </View>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showAdminPrompt}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAdminPrompt(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.adminPromptContainer}>
+            <Text style={styles.adminPromptTitle}>Admin Verification</Text>
+            <Text style={styles.adminPromptSubtitle}>Enter admin password to edit profile:</Text>
+            <TextInput
+              style={styles.adminPromptInput}
+              value={adminPasswordInput}
+              onChangeText={setAdminPasswordInput}
+              placeholder="Password"
+              placeholderTextColor="#9CA3AF"
+              secureTextEntry
+              autoFocus
+            />
+            <View style={styles.adminPromptActions}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => {
+                  setShowAdminPrompt(false);
+                  setAdminPasswordInput('');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.adminUnlockButton}
+                onPress={() => {
+                  if (adminPasswordInput === ADMIN_PASSWORD) {
+                    setShowAdminPrompt(false);
+                    setAdminPasswordInput('');
+                    setIsModalVisible(true);
+                  } else {
+                    Alert.alert('Access Denied', 'Incorrect admin password.');
+                    setAdminPasswordInput('');
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.adminUnlockButtonText}>Unlock</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -823,6 +908,51 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   modalSaveText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.white,
+  },
+  adminPromptContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.xl,
+    width: '100%',
+    maxWidth: 360,
+    padding: SPACING.lg,
+  },
+  adminPromptTitle: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#111827',
+    marginBottom: SPACING.xs,
+  },
+  adminPromptSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#6B7280',
+    marginBottom: SPACING.md,
+  },
+  adminPromptInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: '#111827',
+    marginBottom: SPACING.md,
+  },
+  adminPromptActions: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  adminUnlockButton: {
+    flex: 1,
+    backgroundColor: '#0369A1',
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+  },
+  adminUnlockButtonText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.white,

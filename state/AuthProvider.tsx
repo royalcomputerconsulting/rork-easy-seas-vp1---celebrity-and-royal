@@ -19,6 +19,7 @@ interface AuthState {
   isWhitelisted: boolean;
   login: (email: string, password?: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  refreshAuth: () => Promise<void>;
   clearFreshStartFlag: () => Promise<void>;
   getWhitelist: () => Promise<string[]>;
   addToWhitelist: (email: string) => Promise<void>;
@@ -214,6 +215,11 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     return true;
   };
 
+  const refreshAuth = async () => {
+    console.log('[AuthProvider] Refreshing auth state from storage...');
+    await checkAuthentication();
+  };
+
   const logout = async () => {
     console.log('[AuthProvider] Logging out and clearing all user data...');
     await AsyncStorage.clear();
@@ -239,6 +245,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     isWhitelisted,
     login,
     logout,
+    refreshAuth,
     clearFreshStartFlag,
     getWhitelist,
     addToWhitelist,
