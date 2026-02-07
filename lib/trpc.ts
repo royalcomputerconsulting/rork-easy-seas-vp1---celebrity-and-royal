@@ -7,16 +7,21 @@ import type { AppRouter } from "@/backend/trpc/app-router";
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  try {
+    const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
 
-  if (!url) {
-    console.log(
-      "[tRPC] EXPO_PUBLIC_RORK_API_BASE_URL not set - backend features disabled",
-    );
+    if (!url) {
+      console.log(
+        "[tRPC] EXPO_PUBLIC_RORK_API_BASE_URL not set - backend features disabled",
+      );
+      return "https://fallback.local";
+    }
+
+    return url;
+  } catch (e) {
+    console.log('[tRPC] Error getting base URL:', e);
     return "https://fallback.local";
   }
-
-  return url;
 };
 
 let _backendDisabled = false;

@@ -260,6 +260,7 @@ function RootLayoutNav() {
 function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
+  const [forceReady, setForceReady] = useState(false);
 
   useEffect(() => {
     console.log('[AppContent] === MOUNT ===');
@@ -280,22 +281,29 @@ function AppContent() {
       console.log('[AppContent] === TIMEOUT: Forcing splash to hide after 1.8s ===');
       setShowSplash(false);
     }, 1800);
+
+    const forceReadyTimeout = setTimeout(() => {
+      console.log('[AppContent] === SAFETY: Forcing app ready after 6s ===');
+      setForceReady(true);
+    }, 6000);
     
     return () => {
       console.log('[AppContent] === UNMOUNT ===');
       clearTimeout(timer);
       clearTimeout(timeout);
+      clearTimeout(forceReadyTimeout);
     };
   }, []);
 
-  return <AppContentInner showSplash={showSplash} setShowSplash={setShowSplash} isClearing={isClearing} setIsClearing={setIsClearing} />;
+  return <AppContentInner showSplash={showSplash} setShowSplash={setShowSplash} isClearing={isClearing} setIsClearing={setIsClearing} forceReady={forceReady} />;
 }
 
-function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing }: { 
+function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing, forceReady }: { 
   showSplash: boolean; 
   setShowSplash: (show: boolean) => void;
   isClearing: boolean;
   setIsClearing: (clearing: boolean) => void;
+  forceReady: boolean;
 }) {
   const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail, isWhitelisted } = useAuth();
   const { initialCheckComplete, isSyncing, syncError, hasCloudData, lastRestoreTime } = useUserDataSync();
@@ -345,9 +353,11 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
     setShowSplash(false);
   };
 
-  console.log('[AppContent] Render - showSplash:', showSplash, 'isAuthenticated:', isAuthenticated, 'authLoading:', authLoading, 'isFreshStart:', isFreshStart, 'isClearing:', isClearing, 'initialCheckComplete:', initialCheckComplete, 'isSyncing:', isSyncing, 'hasCloudData:', hasCloudData, 'syncError:', syncError);
+  const effectiveInitialCheckComplete = initialCheckComplete || forceReady;
 
-  if (authLoading) {
+  console.log('[AppContent] Render - showSplash:', showSplash, 'isAuthenticated:', isAuthenticated, 'authLoading:', authLoading, 'isFreshStart:', isFreshStart, 'isClearing:', isClearing, 'initialCheckComplete:', initialCheckComplete, 'forceReady:', forceReady, 'isSyncing:', isSyncing, 'hasCloudData:', hasCloudData, 'syncError:', syncError);
+
+  if (authLoading && !forceReady) {
     return (
       <WelcomeSplash 
         onAnimationComplete={() => {}}
@@ -372,7 +382,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
     );
   }
 
-  if (isAuthenticated && !initialCheckComplete) {
+  if (isAuthenticated && !effectiveInitialCheckComplete) {
     return (
       <View style={rootStyles.cloudRestoreContainer} testID="cloudRestoreScreen">
         <View style={rootStyles.cloudRestoreCard}>
@@ -401,7 +411,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
 }
 
 export default function RootLayout() {
-  const [hasError, setHasError] = React.useState(false);
+  const [hasError] = React.useState(false);
 
   React.useEffect(() => {
     const handleError = (event: ErrorEvent) => {
