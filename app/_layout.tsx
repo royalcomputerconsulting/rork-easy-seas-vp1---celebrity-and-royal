@@ -41,7 +41,6 @@ import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 try {
   SplashScreen.preventAutoHideAsync();
 } catch {
-  // Splash screen may not be available in all contexts
 }
 
 const queryClient = new QueryClient({
@@ -81,7 +80,7 @@ const rootStyles = StyleSheet.create({
   },
   cloudRestoreTitle: {
     fontSize: 22,
-    fontWeight: "800",
+    fontWeight: "800" as const,
     color: COLORS.navy,
     marginBottom: 6,
   },
@@ -176,84 +175,126 @@ const freshStartStyles = StyleSheet.create({
   },
 });
 
+function DeferredProviders({ children }: { children: React.ReactNode }) {
+  return (
+    <HistoricalPerformanceProvider>
+      <PriceHistoryProvider>
+        <FinancialsProvider>
+          <CasinoStrategyProvider>
+            <LoyaltyProvider>
+              <SimpleAnalyticsProvider>
+                <CasinoSessionProvider>
+                  <DeckPlanProvider>
+                    <MachineStrategyProvider>
+                      <BankrollProvider>
+                        <TaxProvider>
+                          <GamificationProvider>
+                            <PPHAlertsProvider>
+                              <AlertsProvider>
+                                <AgentXProvider>
+                                  <CertificatesProvider>
+                                    <CelebrityProvider>
+                                      {children}
+                                    </CelebrityProvider>
+                                  </CertificatesProvider>
+                                </AgentXProvider>
+                              </AlertsProvider>
+                            </PPHAlertsProvider>
+                          </GamificationProvider>
+                        </TaxProvider>
+                      </BankrollProvider>
+                    </MachineStrategyProvider>
+                  </DeckPlanProvider>
+                </CasinoSessionProvider>
+              </SimpleAnalyticsProvider>
+            </LoyaltyProvider>
+          </CasinoStrategyProvider>
+        </FinancialsProvider>
+      </PriceHistoryProvider>
+    </HistoricalPerformanceProvider>
+  );
+}
+
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="paywall"
-        options={{
-          presentation: "modal",
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen 
-        name="modal" 
-        options={{ 
-          presentation: "modal",
-          title: "Modal"
-        }} 
-      />
-      <Stack.Screen 
-        name="day-agenda" 
-        options={{ 
-          headerShown: false,
-        }} 
-      />
-      <Stack.Screen 
-        name="offer-details" 
-        options={{ 
-          presentation: "modal",
-          headerShown: false,
-        }} 
-      />
-      <Stack.Screen 
-        name="add-machine-wizard" 
-        options={{ 
-          presentation: "modal",
-          headerShown: false,
-        }} 
-      />
-      <Stack.Screen 
-        name="add-machines-to-ship" 
-        options={{ 
-          presentation: "modal",
-          headerShown: false,
-        }} 
-      />
-      <Stack.Screen 
-        name="deck-plan" 
-        options={{ 
-          headerShown: false,
-        }} 
-      />
-      <Stack.Screen 
-        name="global-library" 
-        options={{ 
-          presentation: "modal",
-          headerShown: false,
-        }} 
-      />
-      <Stack.Screen 
-        name="machine-detail/[id]" 
-        options={{ 
-          headerShown: false,
-        }} 
-      />
-      <Stack.Screen 
-        name="edit-machine/[id]" 
-        options={{ 
-          presentation: "modal",
-          headerShown: false,
-        }} 
-      />
-      <Stack.Screen 
-        name="royal-caribbean-sync" 
-        options={{ 
-          headerShown: true,
-        }} 
-      />
-    </Stack>
+    <DeferredProviders>
+      <Stack screenOptions={{ headerBackTitle: "Back" }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="paywall"
+          options={{
+            presentation: "modal",
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen 
+          name="modal" 
+          options={{ 
+            presentation: "modal",
+            title: "Modal"
+          }} 
+        />
+        <Stack.Screen 
+          name="day-agenda" 
+          options={{ 
+            headerShown: false,
+          }} 
+        />
+        <Stack.Screen 
+          name="offer-details" 
+          options={{ 
+            presentation: "modal",
+            headerShown: false,
+          }} 
+        />
+        <Stack.Screen 
+          name="add-machine-wizard" 
+          options={{ 
+            presentation: "modal",
+            headerShown: false,
+          }} 
+        />
+        <Stack.Screen 
+          name="add-machines-to-ship" 
+          options={{ 
+            presentation: "modal",
+            headerShown: false,
+          }} 
+        />
+        <Stack.Screen 
+          name="deck-plan" 
+          options={{ 
+            headerShown: false,
+          }} 
+        />
+        <Stack.Screen 
+          name="global-library" 
+          options={{ 
+            presentation: "modal",
+            headerShown: false,
+          }} 
+        />
+        <Stack.Screen 
+          name="machine-detail/[id]" 
+          options={{ 
+            headerShown: false,
+          }} 
+        />
+        <Stack.Screen 
+          name="edit-machine/[id]" 
+          options={{ 
+            presentation: "modal",
+            headerShown: false,
+          }} 
+        />
+        <Stack.Screen 
+          name="royal-caribbean-sync" 
+          options={{ 
+            headerShown: true,
+          }} 
+        />
+      </Stack>
+    </DeferredProviders>
   );
 }
 
@@ -269,7 +310,6 @@ function AppContent() {
         await SplashScreen.hideAsync();
         console.log('[AppContent] Native splash hidden');
       } catch {
-        // Safe to ignore - splash screen may not be registered
       }
     };
     
@@ -474,45 +514,11 @@ export default function RootLayout() {
               <UserProvider>
                 <EntitlementProvider>
                   <CoreDataProvider>
-                <HistoricalPerformanceProvider>
-                  <PriceHistoryProvider>
-                    <FinancialsProvider>
-                      <CasinoStrategyProvider>
-                        <LoyaltyProvider>
-                          <SimpleAnalyticsProvider>
-                            <CasinoSessionProvider>
-                              <SlotMachineProvider>
-                                <SlotMachineLibraryProvider>
-                                  <DeckPlanProvider>
-                                    <MachineStrategyProvider>
-                                      <BankrollProvider>
-                                        <TaxProvider>
-                                          <GamificationProvider>
-                                            <PPHAlertsProvider>
-                                              <AlertsProvider>
-                                                <AgentXProvider>
-                                                  <CertificatesProvider>
-                                                    <CelebrityProvider>
-                                                      <AppContent />
-                                                    </CelebrityProvider>
-                                                  </CertificatesProvider>
-                                                </AgentXProvider>
-                                              </AlertsProvider>
-                                            </PPHAlertsProvider>
-                                          </GamificationProvider>
-                                        </TaxProvider>
-                                      </BankrollProvider>
-                                    </MachineStrategyProvider>
-                                  </DeckPlanProvider>
-                                </SlotMachineLibraryProvider>
-                              </SlotMachineProvider>
-                            </CasinoSessionProvider>
-                          </SimpleAnalyticsProvider>
-                        </LoyaltyProvider>
-                      </CasinoStrategyProvider>
-                    </FinancialsProvider>
-                  </PriceHistoryProvider>
-                </HistoricalPerformanceProvider>
+                    <SlotMachineProvider>
+                      <SlotMachineLibraryProvider>
+                        <AppContent />
+                      </SlotMachineLibraryProvider>
+                    </SlotMachineProvider>
                   </CoreDataProvider>
                 </EntitlementProvider>
               </UserProvider>
