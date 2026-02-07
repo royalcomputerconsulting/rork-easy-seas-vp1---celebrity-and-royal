@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { 
@@ -54,14 +54,18 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
   const [priceHistory, setPriceHistory] = useState<PriceHistoryRecord[]>([]);
   const [priceDropAlerts, setPriceDropAlerts] = useState<PriceDropAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     const loadStoredData = async () => {
       try {
         const [storedHistory, storedAlerts] = await Promise.all([
           AsyncStorage.getItem(PRICE_HISTORY_STORAGE_KEY),
           AsyncStorage.getItem(PRICE_DROP_ALERTS_STORAGE_KEY),
         ]);
+
+        if (cancelled) return;
 
         if (storedHistory) {
           const parsed = JSON.parse(storedHistory);
@@ -77,14 +81,21 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
       } catch (error) {
         console.error('[PriceHistoryProvider] Error loading stored data:', error);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setHasLoadedFromStorage(true);
+          setIsLoading(false);
+        }
       }
     };
 
     loadStoredData();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
+    if (!hasLoadedFromStorage) return;
+    if (priceHistory.length === 0) return;
+
     const saveHistory = async () => {
       try {
         await AsyncStorage.setItem(PRICE_HISTORY_STORAGE_KEY, JSON.stringify(priceHistory));
@@ -93,12 +104,12 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
       }
     };
 
-    if (priceHistory.length > 0) {
-      saveHistory();
-    }
-  }, [priceHistory]);
+    saveHistory();
+  }, [priceHistory, hasLoadedFromStorage]);
 
   useEffect(() => {
+    if (!hasLoadedFromStorage) return;
+
     const saveAlerts = async () => {
       try {
         await AsyncStorage.setItem(PRICE_DROP_ALERTS_STORAGE_KEY, JSON.stringify(priceDropAlerts));
@@ -108,7 +119,7 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     };
 
     saveAlerts();
-  }, [priceDropAlerts]);
+  }, [priceDropAlerts, hasLoadedFromStorage]);
 
   const getPriceHistory = useCallback((cruiseKey: string): PriceHistoryRecord[] => {
     return priceHistory
@@ -331,12 +342,6 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
       console.error('[PriceHistoryProvider] Error clearing price history:', error);
     }
   }, []);
-
-  const uniqueCruiseKeys = useMemo(() => {
-    return [...new Set(priceHistory.map(r => r.cruiseKey))];
-  }, [priceHistory]);
-
-  console.log('[PriceHistoryProvider] Tracking', uniqueCruiseKeys.length, 'unique cruises with', priceHistory.length, 'price records');
 
   return {
     priceHistory,
