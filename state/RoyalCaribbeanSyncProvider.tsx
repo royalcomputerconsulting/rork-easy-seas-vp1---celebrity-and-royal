@@ -1221,6 +1221,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any, providedExtendedLoyalty?: ExtendedLoyaltyData | null) => {
     const loyaltyToSync = providedExtendedLoyalty ?? extendedLoyaltyData;
     try {
+      console.log('[RoyalCaribbeanSync] Starting sync to app...');
       setState(prev => ({ ...prev, status: 'syncing' }));
       addLog('Creating sync preview...', 'info');
 
@@ -1231,6 +1232,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         crownAndAnchorLevel: loyaltyContext.crownAnchorLevel
       };
 
+      console.log('[RoyalCaribbeanSync] Creating sync preview with:', {
+        extractedOffers: state.extractedOffers.length,
+        extractedBookedCruises: state.extractedBookedCruises.length,
+        existingOffers: coreDataContext.casinoOffers.length,
+        existingCruises: coreDataContext.cruises.length,
+        existingBookedCruises: coreDataContext.bookedCruises.length
+      });
+
       const preview = createSyncPreview(
         state.extractedOffers,
         state.extractedBookedCruises,
@@ -1240,6 +1249,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         coreDataContext.bookedCruises,
         currentLoyalty
       );
+
+      console.log('[RoyalCaribbeanSync] Sync preview created successfully');
 
       const counts = calculateSyncCounts(preview);
       addLog(`Preview: ${counts.offersNew} new offers, ${counts.offersUpdated} updated offers`, 'info');
@@ -1257,50 +1268,82 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         coreDataContext.bookedCruises
       );
 
+      console.log('[RoyalCaribbeanSync] Sync applied. Final counts:', {
+        offers: finalOffers.length,
+        cruises: finalCruises.length,
+        bookedCruises: finalBookedCruises.length
+      });
+
       addLog(`Setting ${finalOffers.length} total offers in app`, 'info');
-      await coreDataContext.setCasinoOffers(finalOffers);
-      addLog('✅ Offers persisted to storage', 'success');
+      try {
+        await coreDataContext.setCasinoOffers(finalOffers);
+        addLog('✅ Offers persisted to storage', 'success');
+      } catch (offerError) {
+        console.error('[RoyalCaribbeanSync] Error persisting offers:', offerError);
+        addLog(`⚠️ Warning: Failed to persist offers: ${offerError}`, 'warning');
+      }
 
       addLog(`Setting ${finalCruises.length} total available cruises in app`, 'info');
-      await coreDataContext.setCruises(finalCruises);
-      addLog('✅ Available cruises persisted to storage', 'success');
+      try {
+        await coreDataContext.setCruises(finalCruises);
+        addLog('✅ Available cruises persisted to storage', 'success');
+      } catch (cruiseError) {
+        console.error('[RoyalCaribbeanSync] Error persisting cruises:', cruiseError);
+        addLog(`⚠️ Warning: Failed to persist cruises: ${cruiseError}`, 'warning');
+      }
 
       addLog(`Setting ${finalBookedCruises.length} total booked cruises in app`, 'info');
-      await coreDataContext.setBookedCruises(finalBookedCruises);
-      addLog('✅ Booked cruises persisted to storage', 'success');
+      try {
+        await coreDataContext.setBookedCruises(finalBookedCruises);
+        addLog('✅ Booked cruises persisted to storage', 'success');
+      } catch (bookedError) {
+        console.error('[RoyalCaribbeanSync] Error persisting booked cruises:', bookedError);
+        addLog(`⚠️ Warning: Failed to persist booked cruises: ${bookedError}`, 'warning');
+      }
 
       if (preview.loyalty) {
-        if (preview.loyalty.clubRoyalePoints.changed) {
-          addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
-          await loyaltyContext.setManualClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
-        }
-        
-        if (preview.loyalty.crownAndAnchorPoints.changed) {
-          addLog(`Updating Crown & Anchor points: ${preview.loyalty.crownAndAnchorPoints.current} → ${preview.loyalty.crownAndAnchorPoints.synced}`, 'info');
-          await loyaltyContext.setManualCrownAnchorPoints(preview.loyalty.crownAndAnchorPoints.synced);
+        try {
+          if (preview.loyalty.clubRoyalePoints.changed) {
+            addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
+            await loyaltyContext.setManualClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
+          }
+          
+          if (preview.loyalty.crownAndAnchorPoints.changed) {
+            addLog(`Updating Crown & Anchor points: ${preview.loyalty.crownAndAnchorPoints.current} → ${preview.loyalty.crownAndAnchorPoints.synced}`, 'info');
+            await loyaltyContext.setManualCrownAnchorPoints(preview.loyalty.crownAndAnchorPoints.synced);
+          }
+        } catch (loyaltyError) {
+          console.error('[RoyalCaribbeanSync] Error updating loyalty points:', loyaltyError);
+          addLog(`⚠️ Warning: Failed to update loyalty points: ${loyaltyError}`, 'warning');
         }
       }
       
       if (loyaltyToSync && loyaltyContext.setExtendedLoyaltyData) {
-        addLog('Syncing extended loyalty data...', 'info');
-        
-        if (loyaltyToSync.clubRoyalePointsFromApi !== undefined) {
-          addLog(`  → Club Royale: ${loyaltyToSync.clubRoyaleTierFromApi || 'N/A'} - ${loyaltyToSync.clubRoyalePointsFromApi.toLocaleString()} points`, 'info');
+        try {
+          addLog('Syncing extended loyalty data...', 'info');
+          
+          if (loyaltyToSync.clubRoyalePointsFromApi !== undefined) {
+            addLog(`  → Club Royale: ${loyaltyToSync.clubRoyaleTierFromApi || 'N/A'} - ${loyaltyToSync.clubRoyalePointsFromApi.toLocaleString()} points`, 'info');
+          }
+          if (loyaltyToSync.crownAndAnchorPointsFromApi !== undefined) {
+            addLog(`  → Crown & Anchor: ${loyaltyToSync.crownAndAnchorTier || 'N/A'} - ${loyaltyToSync.crownAndAnchorPointsFromApi} points`, 'info');
+          }
+          if (loyaltyToSync.captainsClubPoints !== undefined && loyaltyToSync.captainsClubPoints > 0) {
+            addLog(`  → Captain's Club: ${loyaltyToSync.captainsClubTier || 'N/A'} - ${loyaltyToSync.captainsClubPoints} points`, 'info');
+          }
+          if (loyaltyToSync.celebrityBlueChipPoints !== undefined && loyaltyToSync.celebrityBlueChipPoints > 0) {
+            addLog(`  → Blue Chip Club: ${loyaltyToSync.celebrityBlueChipTier || 'N/A'} - ${loyaltyToSync.celebrityBlueChipPoints} points`, 'info');
+          }
+          
+          await loyaltyContext.setExtendedLoyaltyData(loyaltyToSync);
+          addLog('Extended loyalty data synced successfully', 'success');
+        } catch (extLoyaltyError) {
+          console.error('[RoyalCaribbeanSync] Error syncing extended loyalty:', extLoyaltyError);
+          addLog(`⚠️ Warning: Failed to sync extended loyalty data: ${extLoyaltyError}`, 'warning');
         }
-        if (loyaltyToSync.crownAndAnchorPointsFromApi !== undefined) {
-          addLog(`  → Crown & Anchor: ${loyaltyToSync.crownAndAnchorTier || 'N/A'} - ${loyaltyToSync.crownAndAnchorPointsFromApi} points`, 'info');
-        }
-        if (loyaltyToSync.captainsClubPoints !== undefined && loyaltyToSync.captainsClubPoints > 0) {
-          addLog(`  → Captain's Club: ${loyaltyToSync.captainsClubTier || 'N/A'} - ${loyaltyToSync.captainsClubPoints} points`, 'info');
-        }
-        if (loyaltyToSync.celebrityBlueChipPoints !== undefined && loyaltyToSync.celebrityBlueChipPoints > 0) {
-          addLog(`  → Blue Chip Club: ${loyaltyToSync.celebrityBlueChipTier || 'N/A'} - ${loyaltyToSync.celebrityBlueChipPoints} points`, 'info');
-        }
-        
-        await loyaltyContext.setExtendedLoyaltyData(loyaltyToSync);
-        addLog('Extended loyalty data synced successfully', 'success');
       }
 
+      console.log('[RoyalCaribbeanSync] Setting status to complete...');
       setState(prev => ({ 
         ...prev, 
         status: 'complete',
@@ -1314,16 +1357,28 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }));
       addLog('Data synced successfully to app!', 'success');
       
-      // Force refresh CoreData to ensure all computed data (calendar, B2B sets) updates
       console.log('[RoyalCaribbeanSync] Triggering data refresh after sync...');
-      if (coreDataContext.refreshData) {
-        await coreDataContext.refreshData();
-        addLog('✅ Data refresh completed', 'success');
+      try {
+        if (coreDataContext.refreshData) {
+          await coreDataContext.refreshData();
+          addLog('✅ Data refresh completed', 'success');
+          console.log('[RoyalCaribbeanSync] Data refresh completed successfully');
+        } else {
+          console.log('[RoyalCaribbeanSync] No refreshData function available, skipping refresh');
+        }
+      } catch (refreshError) {
+        console.error('[RoyalCaribbeanSync] Error during data refresh (non-fatal):', refreshError);
+        addLog('⚠️ Data refresh had issues but sync completed', 'warning');
       }
+      
+      console.log('[RoyalCaribbeanSync] Sync to app completed successfully!');
     } catch (error) {
+      console.error('[RoyalCaribbeanSync] Sync error:', error);
+      if (error instanceof Error) {
+        console.error('[RoyalCaribbeanSync] Error stack:', error.stack);
+      }
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
       addLog(`Failed to sync data: ${error}`, 'error');
-      console.error('[RoyalCaribbeanSync] Sync error:', error);
     }
   }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog]);
 
