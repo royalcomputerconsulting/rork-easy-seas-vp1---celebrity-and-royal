@@ -246,4 +246,23 @@ export const dataRouter = createTRPCRouter({
       console.log('[API] Deleted user data for:', normalizedEmail);
       return { success: true };
     }),
+
+  checkEmailExists: publicProcedure
+    .input(z.object({ email: z.string().email() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const normalizedEmail = input.email.toLowerCase().trim();
+      
+      console.log('[API] Checking if email exists:', normalizedEmail);
+
+      const results = await db.query<[StoredUserData[]]>(
+        `SELECT email FROM user_profiles WHERE email = $email LIMIT 1`,
+        { email: normalizedEmail }
+      );
+
+      const exists = results && results[0] && results[0].length > 0;
+      console.log('[API] Email exists check:', { email: normalizedEmail, exists });
+      
+      return { exists };
+    }),
 });

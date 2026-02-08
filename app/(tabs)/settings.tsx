@@ -929,6 +929,94 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
       
       console.log('[Settings] Email change check:', { oldEmail, newEmail, emailChanged });
       
+      if (emailChanged) {
+        const isAdminEmail = newEmail === 'scott.merlis1@gmail.com';
+        
+        if (isAdminEmail) {
+          return new Promise<void>((resolve) => {
+            Alert.prompt(
+              'Admin Email Verification',
+              'This is an admin email. Please enter the password to update:',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                  onPress: () => {
+                    setIsSaving(false);
+                    resolve();
+                  },
+                },
+                {
+                  text: 'Verify',
+                  onPress: async (password?: string) => {
+                    if (password !== 'a1') {
+                      Alert.alert('Invalid Password', 'The password you entered is incorrect.');
+                      setIsSaving(false);
+                      resolve();
+                      return;
+                    }
+                    await continueProfileSave(profileData, oldEmail, newEmail, emailChanged);
+                    resolve();
+                  },
+                },
+              ],
+              'secure-text'
+            );
+          });
+        } else {
+          try {
+            const emailCheck = await trpc.data.checkEmailExists.query({ email: newEmail });
+            if (emailCheck.exists) {
+              Alert.alert(
+                'Email Already Exists',
+                'This email is already associated with another account. Please use a different email address.'
+              );
+              setIsSaving(false);
+              return;
+            }
+          } catch (error) {
+            console.error('[Settings] Error checking email uniqueness:', error);
+            Alert.alert('Error', 'Failed to verify email. Please try again.');
+            setIsSaving(false);
+            return;
+          }
+        }
+      }
+      
+      await continueProfileSave(profileData, oldEmail, newEmail, emailChanged);
+    } catch (error) {
+      console.error('[Settings] Save error:', error);
+      Alert.alert('Save Error', 'Failed to save profile. Please try again.');
+      setIsSaving(false);
+    }
+  }, [currentUser, updateUser, ensureOwner, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncUserFromStorage]);
+
+  const continueProfileSave = async (
+    profileData: {
+      name: string;
+      email: string;
+      crownAnchorNumber: string;
+      clubRoyalePoints: number;
+      clubRoyaleTier: string;
+      loyaltyPoints: number;
+      crownAnchorLevel: string;
+      celebrityEmail?: string;
+      celebrityCaptainsClubNumber?: string;
+      celebrityCaptainsClubPoints: number;
+      celebrityBlueChipPoints: number;
+      celebrityBlueChipTier: string;
+      celebrityCaptainsClubLevel: string;
+      preferredBrand?: 'royal' | 'celebrity' | 'silversea';
+      silverseaEmail?: string;
+      silverseaVenetianNumber?: string;
+      silverseaVenetianTier?: string;
+      silverseaVenetianPoints?: number;
+    },
+    oldEmail: string | undefined,
+    newEmail: string,
+    emailChanged: boolean
+  ) => {
+    try {
       if (currentUser) {
         await updateUser(currentUser.id, { 
           name: profileData.name,
@@ -1003,12 +1091,12 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
         Alert.alert('Profile Saved', 'Your profile has been updated successfully.');
       }
     } catch (error) {
-      console.error('[Settings] Save error:', error);
+      console.error('[Settings] continueProfileSave error:', error);
       Alert.alert('Save Error', 'Failed to save profile. Please try again.');
     } finally {
       setIsSaving(false);
     }
-  }, [currentUser, updateUser, ensureOwner, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncUserFromStorage]);
+  };
 
 
 
