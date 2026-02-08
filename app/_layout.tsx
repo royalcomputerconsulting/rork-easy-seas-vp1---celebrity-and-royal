@@ -311,6 +311,11 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   const { updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
   const [showLandingPage, setShowLandingPage] = useState(true);
 
+  const handleContinueToLogin = () => {
+    console.log('[AppContent] Continue button pressed - moving to login screen');
+    setShowLandingPage(false);
+  };
+
   useEffect(() => {
     const syncEmailToProfile = async () => {
       if (isAuthenticated && authenticatedEmail) {
@@ -365,8 +370,10 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
 
   if (!isAuthenticated) {
     if (showLandingPage) {
-      return <LandingPage onContinue={() => setShowLandingPage(false)} />;
+      console.log('[AppContent] Rendering LandingPage');
+      return <LandingPage onContinue={handleContinueToLogin} />;
     }
+    console.log('[AppContent] Rendering LoginScreen');
     return <LoginScreen />;
   }
 

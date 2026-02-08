@@ -8,6 +8,11 @@ interface LandingPageProps {
 }
 
 export function LandingPage({ onContinue }: LandingPageProps) {
+  const handleContinue = () => {
+    console.log('[LandingPage] Continue button pressed');
+    onContinue();
+  };
+
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -19,6 +24,8 @@ export function LandingPage({ onContinue }: LandingPageProps) {
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
+        scrollEnabled={true}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.content}>
           <Image 
@@ -41,7 +48,9 @@ export function LandingPage({ onContinue }: LandingPageProps) {
 
           <TouchableOpacity 
             style={styles.continueButton}
-            onPress={onContinue}
+            onPress={handleContinue}
+            activeOpacity={0.8}
+            testID="continueButton"
           >
             <Text style={styles.continueButtonText}>Continue to App</Text>
           </TouchableOpacity>
@@ -399,6 +408,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 10,
+    minHeight: 56,
+    justifyContent: 'center',
   },
   continueButtonText: {
     color: '#0A1628',
