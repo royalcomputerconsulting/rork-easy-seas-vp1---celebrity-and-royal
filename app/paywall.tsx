@@ -59,11 +59,12 @@ export default function PaywallScreen() {
   }, [entitlement.offerings]);
 
   const tierStatusText = useMemo(() => {
+    if (entitlement.isGrandfathered) return 'Pro Active - Grandfathered';
     if (entitlement.tier === 'pro') return 'Pro Active';
     if (entitlement.tier === 'basic') return 'Basic Active';
     if (entitlement.tier === 'trial') return `Trial: ${entitlement.trialDaysRemaining} days remaining`;
     return 'View-Only Mode';
-  }, [entitlement.tier, entitlement.trialDaysRemaining]);
+  }, [entitlement.tier, entitlement.trialDaysRemaining, entitlement.isGrandfathered]);
 
   return (
     <>
@@ -82,14 +83,21 @@ export default function PaywallScreen() {
             </View>
 
             <Text style={styles.title}>Choose Your Plan</Text>
-            <Text style={styles.subtitle}>
-              Choose Pro monthly or annual to unlock Analytics, Agent X, Alerts, and SLOTS.
-            </Text>
+            {entitlement.isGrandfathered ? (
+              <Text style={styles.subtitle}>
+                🎉 You're grandfathered into Pro! Your account was created before 2/8/2026, so you have lifetime Pro access at no charge. Thank you for being an early supporter!
+              </Text>
+            ) : (
+              <Text style={styles.subtitle}>
+                Choose Pro monthly or annual to unlock Analytics, Agent X, Alerts, and SLOTS.
+              </Text>
+            )}
 
             <View style={styles.statusBadge}>
               <Text style={styles.statusText}>{tierStatusText}</Text>
             </View>
 
+            {!entitlement.isGrandfathered && (
             <TouchableOpacity
               style={[styles.proMonthlyCard, (entitlement.isLoading || entitlement.isPro) && styles.subscriptionCardDisabled]}
               onPress={() => entitlement.subscribeProMonthly()}
@@ -135,7 +143,9 @@ export default function PaywallScreen() {
                 </View>
               )}
             </TouchableOpacity>
+            )}
 
+            {!entitlement.isGrandfathered && (
             <TouchableOpacity
               style={[styles.annualCard, (entitlement.isLoading || entitlement.isPro) && styles.subscriptionCardDisabled]}
               onPress={() => entitlement.subscribeProAnnual()}
@@ -163,6 +173,16 @@ export default function PaywallScreen() {
                 )}
               </View>
             </TouchableOpacity>
+            )}
+
+            {entitlement.isGrandfathered && (
+              <View style={styles.grandfatheredBox} testID="paywall.grandfathered">
+                <Text style={styles.grandfatheredTitle}>🎉 GRANDFATHERED USER</Text>
+                <Text style={styles.grandfatheredBody}>
+                  Your account was created on {entitlement.accountCreatedAt ? new Date(entitlement.accountCreatedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'before'} {entitlement.accountCreatedAt ? '- before the 2/8/2026 cutoff.' : '2/8/2026.'} You have lifetime Pro access at no charge. All Pro features are unlocked for you!
+                </Text>
+              </View>
+            )}
 
             {!!entitlement.error && (
               <View style={styles.errorBox} testID="paywall.error">
@@ -462,6 +482,28 @@ const styles = StyleSheet.create({
     color: '#8A0020',
     fontSize: 13,
     lineHeight: 18,
+  },
+  grandfatheredBox: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: COLORS.money,
+    backgroundColor: 'rgba(76, 175, 80, 0.08)',
+  },
+  grandfatheredTitle: {
+    color: COLORS.money,
+    fontWeight: '900' as const,
+    marginBottom: 8,
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  grandfatheredBody: {
+    color: COLORS.navyDeep,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600' as const,
   },
   manualOverrideContainer: {
     marginTop: 20,

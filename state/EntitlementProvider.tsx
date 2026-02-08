@@ -17,7 +17,7 @@ type PurchasesModule = {
 let Purchases: PurchasesModule | null = null;
 let purchasesInitError: string | null = null;
 
-export type EntitlementSource = 'iap' | 'dev' | 'unknown';
+export type EntitlementSource = 'iap' | 'dev' | 'grandfathered' | 'unknown';
 export type SubscriptionTier = 'trial' | 'view' | 'basic' | 'pro';
 
 export interface EntitlementState {
@@ -32,6 +32,8 @@ export interface EntitlementState {
   offerings: PurchasesOffering[];
   isLoading: boolean;
   error: string | null;
+  isGrandfathered: boolean;
+  accountCreatedAt: Date | null;
   refresh: () => Promise<void>;
   subscribeBasicMonthly: () => Promise<void>;
   subscribeProMonthly: () => Promise<void>;
@@ -47,9 +49,11 @@ const KEYS = {
   WEB_IS_PRO: 'easyseas_entitlements_web_is_pro',
   TRIAL_START: 'easyseas_trial_start',
   TRIAL_END: 'easyseas_trial_end',
+  FIRST_ACCOUNT_CREATED: 'easyseas_first_account_created',
 } as const;
 
 const TRIAL_DURATION_DAYS = 30;
+const GRANDFATHERING_CUTOFF_DATE = new Date('2026-02-08T23:59:59.999Z');
 
 const DEFAULT_TIMEOUT_MS = 5000 as const;
 
@@ -145,6 +149,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
+  const [isGrandfathered, setIsGrandfathered] = useState<boolean>(false);
+  const [accountCreatedAt, setAccountCreatedAt] = useState<Date | null>(null);
 
   const mountedRef = useRef<boolean>(true);
   const actionInFlightRef = useRef<boolean>(false);
@@ -155,6 +161,50 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     return () => {
       mountedRef.current = false;
     };
+  }, []);
+
+  const initializeAccountTracking = useCallback(async () => {
+    try {
+      const storedAccountCreated = await AsyncStorage.getItem(KEYS.FIRST_ACCOUNT_CREATED);
+      
+      let accountDate: Date;
+      if (storedAccountCreated) {
+        accountDate = new Date(storedAccountCreated);
+        console.log('[Entitlement] Account creation date found:', storedAccountCreated);
+      } else {
+        const storedTrialStart = await AsyncStorage.getItem(KEYS.TRIAL_START);
+        const hasImportedData = await AsyncStorage.getItem('easyseas_has_imported_data');
+        
+        if (storedTrialStart || hasImportedData) {
+          const existingUserDate = storedTrialStart ? new Date(storedTrialStart) : new Date('2026-01-01T00:00:00.000Z');
+          accountDate = existingUserDate;
+          console.log('[Entitlement] Existing user detected (has trial or data) - setting account creation to:', accountDate.toISOString());
+        } else {
+          accountDate = new Date();
+          console.log('[Entitlement] New user - account creation date set to now:', accountDate.toISOString());
+        }
+        
+        await AsyncStorage.setItem(KEYS.FIRST_ACCOUNT_CREATED, accountDate.toISOString());
+      }
+      
+      setAccountCreatedAt(accountDate);
+      
+      const isGrandfatheredUser = accountDate <= GRANDFATHERING_CUTOFF_DATE;
+      setIsGrandfathered(isGrandfatheredUser);
+      
+      if (isGrandfatheredUser) {
+        console.log('[Entitlement] ✅ GRANDFATHERED USER - Account created before cutoff date');
+        console.log('[Entitlement] Account created:', accountDate.toISOString());
+        console.log('[Entitlement] Cutoff date:', GRANDFATHERING_CUTOFF_DATE.toISOString());
+      } else {
+        console.log('[Entitlement] Not grandfathered - account created after:', GRANDFATHERING_CUTOFF_DATE.toISOString());
+      }
+      
+      return isGrandfatheredUser;
+    } catch (e) {
+      console.error('[Entitlement] Failed to initialize account tracking', e);
+      return false;
+    }
   }, []);
 
   const initializeTrial = useCallback(async () => {
@@ -186,38 +236,41 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     }
   }, []);
 
-  const computeTier = useCallback((isPro: boolean, isBasic: boolean, trialEnd: Date | null): SubscriptionTier => {
+  const computeTier = useCallback((isPro: boolean, isBasic: boolean, trialEnd: Date | null, isGrandfathered: boolean): SubscriptionTier => {
+    if (isGrandfathered) return 'pro';
     if (isPro) return 'pro';
     if (isBasic) return 'basic';
     if (trialEnd && new Date() < trialEnd) return 'trial';
     return 'view';
   }, []);
 
-  const setStateFromCustomerInfo = useCallback((info: CustomerInfo | null, currentTrialEnd: Date | null) => {
+  const setStateFromCustomerInfo = useCallback((info: CustomerInfo | null, currentTrialEnd: Date | null, currentIsGrandfathered: boolean) => {
     const computedIsPro = computeIsProFromCustomerInfo(info);
     const computedIsBasic = computeIsBasicFromCustomerInfo(info);
-    const computedTier = computeTier(computedIsPro, computedIsBasic, currentTrialEnd);
+    const computedTier = computeTier(computedIsPro, computedIsBasic, currentTrialEnd, currentIsGrandfathered);
     
     console.log('[Entitlement] setStateFromCustomerInfo', {
       computedIsPro,
       computedIsBasic,
       computedTier,
+      isGrandfathered: currentIsGrandfathered,
       activeSubscriptions: info?.activeSubscriptions ?? [],
       entitlementsActiveKeys: Object.keys(info?.entitlements?.active ?? {}),
     });
 
     const wasPro = lastIsProRef.current;
+    const finalIsPro = currentIsGrandfathered || computedIsPro;
 
     setCustomerInfo(info);
-    setIsPro(computedIsPro);
+    setIsPro(finalIsPro);
     setIsBasic(computedIsBasic);
     setTier(computedTier);
-    setSource(computedIsPro || computedIsBasic ? 'iap' : 'unknown');
+    setSource(currentIsGrandfathered ? 'grandfathered' : (computedIsPro || computedIsBasic ? 'iap' : 'unknown'));
     setLastCheckedAt(new Date().toISOString());
 
-    lastIsProRef.current = computedIsPro;
+    lastIsProRef.current = finalIsPro;
 
-    if (!wasPro && computedIsPro) {
+    if (!wasPro && finalIsPro) {
       try {
         if (typeof window !== 'undefined') {
           console.log('[Entitlement] Dispatching entitlementProUnlocked event');
@@ -304,6 +357,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     if (!mountedRef.current) return;
     setIsLoading(true);
 
+    const currentIsGrandfathered = await initializeAccountTracking();
     await initializeTrial();
 
     const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
@@ -313,12 +367,13 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       try {
         const stored = await AsyncStorage.getItem(KEYS.WEB_IS_PRO);
         const storedIsPro = stored === 'true';
-        console.log('[Entitlement] web refresh: storedIsPro', storedIsPro);
+        console.log('[Entitlement] web refresh: storedIsPro', storedIsPro, 'isGrandfathered', currentIsGrandfathered);
         if (!mountedRef.current) return;
-        setIsPro(storedIsPro);
+        const finalIsPro = currentIsGrandfathered || storedIsPro;
+        setIsPro(finalIsPro);
         setIsBasic(false);
-        setTier(computeTier(storedIsPro, false, currentTrialEnd));
-        setSource(storedIsPro ? 'dev' : 'unknown');
+        setTier(computeTier(storedIsPro, false, currentTrialEnd, currentIsGrandfathered));
+        setSource(currentIsGrandfathered ? 'grandfathered' : (storedIsPro ? 'dev' : 'unknown'));
         setLastCheckedAt(new Date().toISOString());
         setCustomerInfo(null);
         setOfferings([]);
@@ -356,7 +411,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       console.log('[Entitlement] Fetching customer info');
       const info = await withTimeout(purchases.getCustomerInfo(), DEFAULT_TIMEOUT_MS, 'Checking subscription status');
       if (!mountedRef.current) return;
-      setStateFromCustomerInfo(info, currentTrialEnd);
+      setStateFromCustomerInfo(info, currentTrialEnd, currentIsGrandfathered);
     } catch (e) {
       console.error('[Entitlement] refresh failed', e);
       if (!mountedRef.current) return;
@@ -365,7 +420,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       if (!mountedRef.current) return;
       setIsLoading(false);
     }
-  }, [ensurePurchasesLoaded, setStateFromCustomerInfo, initializeTrial, computeTier]);
+  }, [ensurePurchasesLoaded, setStateFromCustomerInfo, initializeAccountTracking, initializeTrial, computeTier]);
 
   useEffect(() => {
     console.log('[Entitlement] Provider mounted - refreshing entitlements');
@@ -463,7 +518,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       if (!mountedRef.current) return;
       const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
       const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
-      setStateFromCustomerInfo(result.customerInfo, currentTrialEnd);
+      setStateFromCustomerInfo(result.customerInfo, currentTrialEnd, isGrandfathered);
       Alert.alert('Success', 'Full access unlocked.');
     } catch (e) {
       console.error(`[Entitlement] subscribeToProduct failed`, e);
@@ -559,7 +614,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       
       const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
       const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
-      setStateFromCustomerInfo(info, currentTrialEnd);
+      setStateFromCustomerInfo(info, currentTrialEnd, isGrandfathered);
       
       if (!mountedRef.current) return;
       
@@ -646,6 +701,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       offerings,
       isLoading,
       error,
+      isGrandfathered,
+      accountCreatedAt,
       refresh,
       subscribeBasicMonthly,
       subscribeProMonthly,
@@ -668,6 +725,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       offerings,
       isLoading,
       error,
+      isGrandfathered,
+      accountCreatedAt,
       refresh,
       subscribeBasicMonthly,
       subscribeProMonthly,
