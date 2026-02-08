@@ -232,10 +232,19 @@ export const [PriceTrackingProvider, usePriceTracking] = createContextHook((): P
     let score = 0;
     const totalFields = 6;
 
-    if (cruise.price || cruise.balconyPrice || cruise.oceanviewPrice || cruise.interiorPrice || cruise.suitePrice) {
+    const pricingCategories = [
+      { name: 'Interior', value: cruise.interiorPrice },
+      { name: 'Oceanview', value: cruise.oceanviewPrice },
+      { name: 'Balcony', value: cruise.balconyPrice },
+      { name: 'Suite', value: cruise.suitePrice },
+    ].filter(cat => cat.value !== undefined && cat.value > 0);
+
+    const hasSufficientPricing = pricingCategories.length >= 2;
+
+    if (hasSufficientPricing || cruise.price) {
       score++;
     } else {
-      missingFields.push('Base Price');
+      missingFields.push(`Base Price (need at least 2 categories, have ${pricingCategories.length})`);
     }
 
     if (cruise.taxes !== undefined && cruise.taxes > 0) {
@@ -271,11 +280,12 @@ export const [PriceTrackingProvider, usePriceTracking] = createContextHook((): P
     const completeness = Math.round((score / totalFields) * 100);
 
     return {
-      hasPrice: score >= 1,
+      hasPrice: hasSufficientPricing || (cruise.price !== undefined && cruise.price > 0),
       hasTaxes: cruise.taxes !== undefined && cruise.taxes > 0,
       hasPerks: (cruise.freePlay || 0) > 0 || (cruise.freeOBC || 0) > 0 || (cruise.tradeInValue || 0) > 0,
       completeness,
       missingFields,
+      pricingCategories: pricingCategories.length,
     };
   }, []);
 
@@ -283,9 +293,28 @@ export const [PriceTrackingProvider, usePriceTracking] = createContextHook((): P
     if (isLoading) return;
 
     const autoTrack = async () => {
-      console.log('[PriceTracking] Auto-tracking prices for', bookedCruises.length, 'cruises and', casinoOffers.length, 'offers');
+      const upcomingCruises = bookedCruises.filter(cruise => {
+        const sailDate = new Date(cruise.sailDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return sailDate >= today && cruise.completionState !== 'completed';
+      });
+
+      console.log('[PriceTracking] Auto-tracking prices for', upcomingCruises.length, 'upcoming cruises (filtered from', bookedCruises.length, 'total)');
       
-      for (const cruise of bookedCruises) {
+      for (const cruise of upcomingCruises) {
+        const pricingCategories = [
+          cruise.interiorPrice,
+          cruise.oceanviewPrice,
+          cruise.balconyPrice,
+          cruise.suitePrice,
+        ].filter(price => price !== undefined && price > 0);
+
+        if (pricingCategories.length < 2 && !cruise.price) {
+          console.log('[PriceTracking] Skipping', cruise.shipName, '- insufficient pricing data (', pricingCategories.length, 'categories)');
+          continue;
+        }
+
         const cruiseKey = generateCruiseKey(
           cruise.shipName,
           cruise.sailDate,
@@ -297,14 +326,14 @@ export const [PriceTrackingProvider, usePriceTracking] = createContextHook((): P
         if (existing.length === 0 || 
             (existing.length > 0 && 
              Date.now() - new Date(existing[existing.length - 1].recordedAt).getTime() > 24 * 60 * 60 * 1000)) {
-          console.log('[PriceTracking] Taking initial snapshot for:', cruise.shipName);
+          console.log('[PriceTracking] Taking initial snapshot for:', cruise.shipName, 'with', pricingCategories.length, 'pricing categories');
           await recordPriceSnapshot(cruise, 'cruise');
         }
       }
     };
 
     autoTrack();
-  }, [bookedCruises.length, casinoOffers.length, isLoading, priceHistory, recordPriceSnapshot]);
+  }, [bookedCruises.length, casinoOffers.length, isLoading, priceHistory, recordPriceSnapshot, bookedCruises]);
 
   return {
     priceHistory,

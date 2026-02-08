@@ -20,6 +20,15 @@ export default function PricingSummaryScreen() {
   const { priceHistory, priceDrops, getCruisePricingStatus, getPriceHistoryForCruise } = usePriceTracking();
   const [selectedView, setSelectedView] = useState<'summary' | 'drops' | 'history'>('summary');
 
+  const upcomingCruises = useMemo(() => {
+    return bookedCruises.filter(cruise => {
+      const sailDate = new Date(cruise.sailDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return sailDate >= today && cruise.completionState !== 'completed';
+    });
+  }, [bookedCruises]);
+
   const pricingStats = useMemo(() => {
     const stats = {
       complete: 0,
@@ -30,7 +39,7 @@ export default function PricingSummaryScreen() {
       totalSavings: 0,
     };
 
-    bookedCruises.forEach(cruise => {
+    upcomingCruises.forEach(cruise => {
       const status = getCruisePricingStatus(cruise);
       if (status.completeness === 100) {
         stats.complete++;
@@ -46,10 +55,10 @@ export default function PricingSummaryScreen() {
     });
 
     return stats;
-  }, [bookedCruises, getCruisePricingStatus, priceHistory.length, priceDrops]);
+  }, [upcomingCruises, getCruisePricingStatus, priceHistory.length, priceDrops]);
 
   const cruiseDetails = useMemo(() => {
-    return bookedCruises.map(cruise => {
+    return upcomingCruises.map(cruise => {
       const status = getCruisePricingStatus(cruise);
       const cruiseKey = generateCruiseKey(cruise.shipName, cruise.sailDate, cruise.cabinType || 'unknown');
       const history = getPriceHistoryForCruise(cruiseKey);
@@ -63,7 +72,7 @@ export default function PricingSummaryScreen() {
         cruiseKey,
       };
     });
-  }, [bookedCruises, getCruisePricingStatus, getPriceHistoryForCruise, priceDrops]);
+  }, [upcomingCruises, getCruisePricingStatus, getPriceHistoryForCruise, priceDrops]);
 
   const sortedCruises = useMemo(() => {
     return [...cruiseDetails].sort((a, b) => b.status.completeness - a.status.completeness);
@@ -300,7 +309,7 @@ export default function PricingSummaryScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Pricing Summary</Text>
-          <Text style={styles.subtitle}>{bookedCruises.length} cruises tracked</Text>
+          <Text style={styles.subtitle}>{upcomingCruises.length} upcoming cruises tracked</Text>
         </View>
         <TouchableOpacity
           style={styles.closeButton}
