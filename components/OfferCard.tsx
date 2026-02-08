@@ -225,6 +225,7 @@ export function OfferCard({
             <View style={styles.compactDetails}>
               <Text style={styles.compactDate}>
                 {createDateFromString(offer.sailDate).toLocaleDateString('en-US', {
+                  timeZone: 'UTC',
                   month: 'short',
                   day: 'numeric',
                 })}
@@ -353,6 +354,7 @@ export function OfferCard({
                 numberOfLines={1}
               >
                 {createDateFromString(offer.offerExpiry).toLocaleDateString('en-US', {
+                  timeZone: 'UTC',
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric',

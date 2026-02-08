@@ -47,7 +47,7 @@ export function EasySeasHero({
     const monthsNeeded = Math.ceil(unitsToNext / averagePerMonth);
     const eta = new Date();
     eta.setMonth(eta.getMonth() + monthsNeeded);
-    return eta.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    return eta.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
   };
 
   return (

@@ -306,7 +306,7 @@ export default function EventsScreen() {
   }, [bookedCruises, coreData]);
 
   const formatMonthYear = useCallback((date: Date): string => {
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
   }, []);
 
   const renderEventDots = useCallback((events: { cruise: number; travel: number; personal: number }) => {
@@ -430,7 +430,7 @@ export default function EventsScreen() {
             <Text style={styles.eventCardTitle}>{cruise.shipName}</Text>
             <Text style={styles.eventCardSubtitle}>{cruise.destination}</Text>
             <Text style={styles.eventCardDate}>
-              {item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              {item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
             </Text>
           </View>
         </TouchableOpacity>
@@ -462,7 +462,7 @@ export default function EventsScreen() {
             <Text style={styles.eventCardSubtitle}>{event.location}</Text>
           )}
           <Text style={styles.eventCardDate}>
-            {item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
           </Text>
         </View>
       </TouchableOpacity>

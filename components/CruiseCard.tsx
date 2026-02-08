@@ -98,13 +98,13 @@ export function CruiseCard({
 
   const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {
     const start = createDateFromString(sailDate);
-    const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
+    const startMonth = start.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
     const startDay = start.getDate();
     const startYear = start.getFullYear();
     
     if (returnDate) {
       const end = createDateFromString(returnDate);
-      const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+      const endMonth = end.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
       const endDay = end.getDate();
       
       if (startMonth === endMonth) {
@@ -116,7 +116,7 @@ export function CruiseCard({
     if (nights) {
       const end = new Date(start);
       end.setDate(end.getDate() + nights);
-      const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+      const endMonth = end.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
       const endDay = end.getDate();
       
       if (startMonth === endMonth) {

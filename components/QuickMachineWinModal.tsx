@@ -66,7 +66,8 @@ export default function QuickMachineWinModal({ visible, onClose, machine, onSubm
 
   const currentDate = useMemo(() => {
     const now = new Date();
-    return now.toLocaleDateString('en-US', { 
+    return now.toLocaleDateString('en-US', {
+      timeZone: 'UTC', 
       weekday: 'short', 
       month: 'short', 
       day: 'numeric',

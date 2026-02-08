@@ -96,7 +96,8 @@ export function EditMachineSessionModal({
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { 
+    return date.toLocaleDateString('en-US', {
+      timeZone: 'UTC', 
       month: 'long', 
       day: 'numeric', 
       year: 'numeric' 

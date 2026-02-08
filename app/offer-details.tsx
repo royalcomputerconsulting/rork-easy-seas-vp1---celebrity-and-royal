@@ -427,7 +427,8 @@ export default function OfferDetailsScreen() {
             <View style={styles.headerDetailBlock}>
               <Text style={styles.headerDetailLabel}>Sail Date:</Text>
               <Text style={styles.headerDetailValue}>
-                {sailDate.toLocaleDateString('en-US', { 
+                {sailDate.toLocaleDateString('en-US', {
+                  timeZone: 'UTC', 
                   month: 'short', 
                   day: 'numeric', 
                   year: 'numeric' 

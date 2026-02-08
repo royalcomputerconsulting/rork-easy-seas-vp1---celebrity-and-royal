@@ -34,7 +34,7 @@ export function ClubRoyalePoints({
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
     const yy = String(date.getFullYear());
-    return `${mm}-${dd}-${yy}`;
+    return `${mm}/${dd}/${yy}`;
   };
 
   const pinnacleETA = pinnacleProgress.nightsToNext === 0 
@@ -119,7 +119,7 @@ export function ClubRoyalePoints({
                       const m = String(pinnacleProgress.pinnacleSailDate).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
                       if (!m) return pinnacleProgress.pinnacleSailDate;
                       const [, y, mo, da] = m;
-                      return `${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}-${y}`;
+                      return `${String(mo).padStart(2, '0')}/${String(da).padStart(2, '0')}/${y}`;
                     })() : pinnacleProgress.pinnacleSailDate}
                   </Text>
                 </View>

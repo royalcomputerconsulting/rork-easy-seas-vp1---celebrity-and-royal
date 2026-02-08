@@ -108,6 +108,7 @@ export default function DayAgendaScreen() {
 
   const formattedDate = useMemo(() => {
     return selectedDate.toLocaleDateString('en-US', {
+      timeZone: 'UTC',
       weekday: 'long',
       month: 'long',
       day: 'numeric',

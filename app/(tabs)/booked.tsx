@@ -391,7 +391,7 @@ export default function BookedScreen() {
                 {nextCruise.nights}N • {nextCruise.destination || nextCruise.itineraryName || 'Caribbean'}
               </Text>
               <Text style={styles.nextCruiseDate}>
-                {createDateFromString(nextCruise.sailDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {createDateFromString(nextCruise.sailDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
               </Text>
             </View>
           )}

@@ -36,7 +36,7 @@ export function createDateFromString(dateString: string): Date {
   return date;
 }
 
-export function formatDateMDY(date: Date | string, separator: '-' | '/' = '-'): string {
+export function formatDateMDY(date: Date | string, separator: '-' | '/' = '/'): string {
   const d = typeof date === 'string' ? createDateFromString(date) : date;
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -44,18 +44,33 @@ export function formatDateMDY(date: Date | string, separator: '-' | '/' = '-'): 
   return `${month}${separator}${day}${separator}${year}`;
 }
 
-export function formatDate(date: Date | string, format: 'short' | 'medium' | 'long' = 'medium'): string {
+export function formatDateMMDDYYYY(date: Date | string): string {
+  const d = typeof date === 'string' ? createDateFromString(date) : date;
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const year = String(d.getFullYear());
+  return `${month}/${day}/${year}`;
+}
+
+export function formatDate(date: Date | string, format: 'short' | 'medium' | 'long' | 'full' = 'medium'): string {
   const d = typeof date === 'string' ? createDateFromString(date) : date;
   
   switch (format) {
     case 'short':
-      return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+      const shortMonth = String(d.getMonth() + 1);
+      const shortDay = String(d.getDate());
+      return `${shortMonth}/${shortDay}`;
     case 'medium':
-      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const mediumMonth = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+      return `${mediumMonth} ${d.getDate()}, ${d.getFullYear()}`;
     case 'long':
-      return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const longWeekday = d.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+      const longMonth = d.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+      return `${longWeekday}, ${longMonth} ${d.getDate()}, ${d.getFullYear()}`;
+    case 'full':
+      return formatDateMMDDYYYY(d);
     default:
-      return d.toLocaleDateString();
+      return formatDateMMDDYYYY(d);
   }
 }
 
@@ -63,8 +78,8 @@ export function formatDateRange(startDate: Date | string, endDate: Date | string
   const start = typeof startDate === 'string' ? createDateFromString(startDate) : startDate;
   const end = typeof endDate === 'string' ? createDateFromString(endDate) : endDate;
   
-  const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
-  const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+  const startMonth = start.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+  const endMonth = end.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
   
   if (startMonth === endMonth && start.getFullYear() === end.getFullYear()) {
     return `${startMonth} ${start.getDate()}-${end.getDate()}, ${start.getFullYear()}`;

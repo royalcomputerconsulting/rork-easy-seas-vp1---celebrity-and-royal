@@ -213,7 +213,7 @@ export function SessionsSummaryCard({
                 <View style={styles.highlightInfo}>
                   <Text style={styles.highlightLabel}>Best Session</Text>
                   <Text style={styles.highlightSubtext}>
-                    {new Date(bestSession.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {new Date(bestSession.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
                   </Text>
                 </View>
               </View>

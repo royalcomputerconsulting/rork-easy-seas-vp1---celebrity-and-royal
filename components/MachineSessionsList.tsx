@@ -77,7 +77,7 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
   };
 
   const formatDuration = (minutes: number) => {

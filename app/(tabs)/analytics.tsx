@@ -690,13 +690,13 @@ export default function AnalyticsScreen() {
 
     const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {
       const start = createDateFromString(sailDate);
-      const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
+      const startMonth = start.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
       const startDay = start.getDate();
       const startYear = start.getFullYear();
       
       if (returnDate) {
         const end = createDateFromString(returnDate);
-        const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+        const endMonth = end.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
         const endDay = end.getDate();
         
         if (startMonth === endMonth) {
@@ -708,7 +708,7 @@ export default function AnalyticsScreen() {
       if (nights) {
         const end = new Date(start);
         end.setDate(end.getDate() + nights);
-        const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+        const endMonth = end.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
         const endDay = end.getDate();
         
         if (startMonth === endMonth) {
@@ -1307,7 +1307,8 @@ export default function AnalyticsScreen() {
                     ]} />
                     <View style={styles.recentSessionContent}>
                       <Text style={styles.recentSessionDate}>
-                        {new Date(session.date).toLocaleDateString('en-US', { 
+                        {new Date(session.date).toLocaleDateString('en-US', {
+                          timeZone: 'UTC', 
                           month: 'short', 
                           day: 'numeric',
                           year: 'numeric'

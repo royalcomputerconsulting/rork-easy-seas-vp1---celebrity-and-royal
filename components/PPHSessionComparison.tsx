@@ -52,7 +52,7 @@ export function PPHSessionComparison({ sessions }: PPHSessionComparisonProps) {
 
   const formatDate = (dateStr: string): string => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit', timeZone: 'UTC' });
   };
 
   const formatDuration = (minutes: number): string => {

@@ -686,6 +686,7 @@ export default function MachineDetailScreen() {
                   <View style={styles.winItemRow}>
                     <Text style={styles.winDate}>
                       {new Date(session.date).toLocaleDateString('en-US', {
+                        timeZone: 'UTC',
                         month: 'short',
                         day: 'numeric',
                       })}

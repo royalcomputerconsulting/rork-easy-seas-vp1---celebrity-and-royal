@@ -228,7 +228,7 @@ export function PPHHistoryChart({
                       index={index}
                     />
                     <Text style={styles.barLabel}>
-                      {new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).split(' ')[1]}
+                      {new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).split(' ')[1]}
                     </Text>
                   </View>
                 );
