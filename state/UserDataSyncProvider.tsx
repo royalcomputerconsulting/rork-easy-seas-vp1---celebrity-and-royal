@@ -7,7 +7,7 @@ import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearAllAppData } from "@/lib/dataManager";
 
 const LAST_SYNC_KEY = "easyseas_last_cloud_sync";
-const MAX_RETRY_ATTEMPTS = 2;
+const MAX_RETRY_ATTEMPTS = 1;
 const MIN_SYNC_INTERVAL_MS = 60000;
 const PENDING_ACCOUNT_SWITCH_KEY = "easyseas_pending_account_switch";
 
@@ -40,7 +40,9 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const isMountedRef = useRef(true);
   const hasInitializedRef = useRef(false);
 
-  const saveAllMutation = trpc.data.saveAllUserData.useMutation();
+  const saveAllMutation = trpc.data.saveAllUserData.useMutation({
+    retry: false,
+  });
 
   const fetchAllUserDataByEmail = useCallback(async (email: string) => {
     const normalizedEmail = email.toLowerCase().trim();

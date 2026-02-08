@@ -3,7 +3,7 @@ import Surreal from 'surrealdb.js';
 let db: Surreal | null = null;
 let isConnecting = false;
 let lastConnectionTime = 0;
-const CONNECTION_TIMEOUT = 10000;
+const CONNECTION_TIMEOUT = 5000;
 const CONNECTION_RETRY_DELAY = 1000;
 
 async function createConnection(): Promise<Surreal> {

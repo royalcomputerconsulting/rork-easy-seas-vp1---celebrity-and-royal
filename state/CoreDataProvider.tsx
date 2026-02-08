@@ -260,7 +260,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const { mutateAsync: saveAllUserDataMutateAsync } = trpc.data.saveAllUserData.useMutation();
   const { refetch: refetchBackendData } = trpc.data.getAllUserData.useQuery(
     { email: authenticatedEmail || '' },
-    { enabled: false, retry: false, staleTime: 0 }
+    { enabled: false, retry: false, staleTime: 0, timeout: 3000 }
   );
 
   const activeFilterCount = useMemo(() => {

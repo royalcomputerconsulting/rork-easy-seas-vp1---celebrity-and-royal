@@ -51,7 +51,7 @@ const KEYS = {
 
 const TRIAL_DURATION_DAYS = 30;
 
-const DEFAULT_TIMEOUT_MS = 20000 as const;
+const DEFAULT_TIMEOUT_MS = 5000 as const;
 
 async function withTimeout<T>(
   promise: Promise<T>,
@@ -343,11 +343,15 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       }
 
       console.log('[Entitlement] Fetching offerings');
-      const offers = await withTimeout(purchases.getOfferings(), DEFAULT_TIMEOUT_MS, 'Loading subscription options');
-      const allOfferings = Object.values(offers.all ?? {});
-      console.log('[Entitlement] Offerings fetched:', allOfferings.map(o => ({ identifier: o.identifier, packages: o.availablePackages?.length ?? 0 })));
-      if (!mountedRef.current) return;
-      setOfferings(allOfferings);
+      try {
+        const offers = await withTimeout(purchases.getOfferings(), DEFAULT_TIMEOUT_MS, 'Loading subscription options');
+        const allOfferings = Object.values(offers.all ?? {});
+        console.log('[Entitlement] Offerings fetched:', allOfferings.map(o => ({ identifier: o.identifier, packages: o.availablePackages?.length ?? 0 })));
+        if (!mountedRef.current) return;
+        setOfferings(allOfferings);
+      } catch (offerError) {
+        console.warn('[Entitlement] Failed to fetch offerings, continuing anyway:', offerError);
+      }
 
       console.log('[Entitlement] Fetching customer info');
       const info = await withTimeout(purchases.getCustomerInfo(), DEFAULT_TIMEOUT_MS, 'Checking subscription status');
