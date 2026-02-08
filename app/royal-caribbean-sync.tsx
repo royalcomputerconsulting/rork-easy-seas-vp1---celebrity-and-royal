@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 import { useMemo, useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Download, Anchor, Crown, Star, Award, ArrowLeft } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, ArrowLeft } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -491,11 +491,17 @@ function RoyalCaribbeanSyncScreen() {
               </Pressable>
 
               <Pressable 
-                style={styles.quickActionButton}
-                onPress={exportLog}
+                style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled]}
+                onPress={() => {
+                  if (canRunIngestion && !isRunning) {
+                    addLog('Starting pricing sync for upcoming cruises...', 'info');
+                    router.push('/pricing-summary');
+                  }
+                }}
+                disabled={!canRunIngestion || isRunning}
               >
-                <Download size={20} color="#94a3b8" />
-                <Text style={styles.quickActionLabel}>EXPORT LOG</Text>
+                <DollarSign size={20} color="#f59e0b" />
+                <Text style={styles.quickActionLabel}>SYNC PRICING</Text>
               </Pressable>
             </View>
           )}
