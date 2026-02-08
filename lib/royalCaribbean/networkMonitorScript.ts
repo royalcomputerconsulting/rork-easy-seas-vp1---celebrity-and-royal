@@ -151,6 +151,51 @@ export const NETWORK_MONITOR_SCRIPT = `
             }
           }
         }
+        
+        else if (url.includes('/manage/api/v1/bookings') || url.includes('/manage/api/')) {
+          const data = await clonedResponse.json();
+          window.capturedPayloads.manageBooking = window.capturedPayloads.manageBooking || [];
+          window.capturedPayloads.manageBooking.push({ url, data, timestamp: new Date().toISOString() });
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'network_capture',
+            endpoint: 'manageBooking',
+            data: data,
+            url: url
+          }));
+          
+          log(\`💰 [Fetch] Captured Booking Management API from \${url}\`, 'info');
+        }
+        
+        else if (url.includes('/graph') && (url.includes('royalcaribbean.com') || url.includes('celebritycruises.com'))) {
+          const data = await clonedResponse.json();
+          window.capturedPayloads.graphQL = window.capturedPayloads.graphQL || [];
+          window.capturedPayloads.graphQL.push({ url, data, timestamp: new Date().toISOString() });
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'network_capture',
+            endpoint: 'graphQL',
+            data: data,
+            url: url
+          }));
+          
+          log(\`📊 [Fetch] Captured GraphQL API from \${url}\`, 'info');
+        }
+        
+        else if (url.includes('/booked/') || url.includes('token=')) {
+          const data = await clonedResponse.json();
+          window.capturedPayloads.bookedDetails = window.capturedPayloads.bookedDetails || [];
+          window.capturedPayloads.bookedDetails.push({ url, data, timestamp: new Date().toISOString() });
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'network_capture',
+            endpoint: 'bookedDetails',
+            data: data,
+            url: url
+          }));
+          
+          log(\`🎫 [Fetch] Captured Booked Cruise Details from \${url}\`, 'info');
+        }
       } catch (err) {
         console.log('[NetworkMonitor] Error processing response:', err);
       }
@@ -250,6 +295,51 @@ export const NETWORK_MONITOR_SCRIPT = `
                 log(\`   🎰 Club Royale: \${loyaltyInfo.clubRoyaleLoyaltyTier}\`, 'info');
               }
             }
+          }
+          
+          else if (url.includes('/manage/api/v1/bookings') || url.includes('/manage/api/')) {
+            const data = JSON.parse(this.responseText);
+            window.capturedPayloads.manageBooking = window.capturedPayloads.manageBooking || [];
+            window.capturedPayloads.manageBooking.push({ url, data, timestamp: new Date().toISOString() });
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'network_capture',
+              endpoint: 'manageBooking',
+              data: data,
+              url: url
+            }));
+            
+            log(\`💰 [XHR] Captured Booking Management API from \${url}\`, 'info');
+          }
+          
+          else if (url.includes('/graph') && (url.includes('royalcaribbean.com') || url.includes('celebritycruises.com'))) {
+            const data = JSON.parse(this.responseText);
+            window.capturedPayloads.graphQL = window.capturedPayloads.graphQL || [];
+            window.capturedPayloads.graphQL.push({ url, data, timestamp: new Date().toISOString() });
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'network_capture',
+              endpoint: 'graphQL',
+              data: data,
+              url: url
+            }));
+            
+            log(\`📊 [XHR] Captured GraphQL API from \${url}\`, 'info');
+          }
+          
+          else if (url.includes('/booked/') || url.includes('token=')) {
+            const data = JSON.parse(this.responseText);
+            window.capturedPayloads.bookedDetails = window.capturedPayloads.bookedDetails || [];
+            window.capturedPayloads.bookedDetails.push({ url, data, timestamp: new Date().toISOString() });
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'network_capture',
+              endpoint: 'bookedDetails',
+              data: data,
+              url: url
+            }));
+            
+            log(\`🎫 [XHR] Captured Booked Cruise Details from \${url}\`, 'info');
           }
         } catch (err) {
           console.log('[NetworkMonitor] Error processing XHR response:', err);

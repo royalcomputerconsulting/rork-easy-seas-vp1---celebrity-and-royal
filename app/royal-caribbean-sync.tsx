@@ -1374,6 +1374,25 @@ const styles = StyleSheet.create({
     color: '#10b981',
     fontWeight: '600' as const
   },
+  pricingSyncButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    marginHorizontal: 12,
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#065f46',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#10b981'
+  },
+  pricingSyncButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700' as const
+  },
   staySignedInContainer: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
