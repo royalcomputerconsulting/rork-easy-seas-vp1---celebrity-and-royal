@@ -1769,15 +1769,9 @@ STEP 4: Optional Calendar Import
               )}
               {renderSettingRow(
                 <BookOpen size={18} color={COLORS.navyDeep} />,
-                'Purchase Book #1 on Amazon',
+                'Purchase "Smooth Sailing (In Rough Waters)" on Amazon',
                 <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
                 () => handleOpenLink('https://www.amazon.com/Smooth-Sailing-Rough-Waters-Consistently/dp/B0G4NMSM31/ref=sr_1_1?crid=BWS5ZWAQCC46&dib=eyJ2IjoiMSJ9.pTShQ0uJgtzeHg_EAFai2a6YTAan0h_35hcv7ZH0QKfGjHj071QN20LucGBJIEps.F_tIgnCOSc3EqGF6wUtOWK_hXH-5Ti3Miy6KYQ_JaLY&dib_tag=se&keywords=smooth+sailing+in+rough+waters&qid=1766758613&s=books&sprefix=smooth+sailing+in+rough+water%2Cstripbooks%2C189&sr=1-1')
-              )}
-              {renderSettingRow(
-                <BookOpen size={18} color={COLORS.navyDeep} />,
-                'Purchase Book #2 on Amazon',
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
-                () => handleOpenLink('https://www.amazon.com/dp/B0GCL69TV9')
               )}
               {renderSettingRow(
                 <Star size={18} color={COLORS.navyDeep} />,
@@ -2141,11 +2135,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.md,
     flex: 1,
+    flexShrink: 1,
   },
   settingLabel: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: CLEAN_THEME.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
   dangerLabel: {
     color: COLORS.error,
