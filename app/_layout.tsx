@@ -25,6 +25,7 @@ import { AgentXProvider } from "@/state/AgentXProvider";
 import { CertificatesProvider } from "@/state/CertificatesProvider";
 import { HistoricalPerformanceProvider } from "@/state/HistoricalPerformanceProvider";
 import { PriceHistoryProvider } from "@/state/PriceHistoryProvider";
+import { PriceTrackingProvider } from "@/state/PriceTrackingProvider";
 import { CasinoSessionProvider } from "@/state/CasinoSessionProvider";
 import { GamificationProvider } from "@/state/GamificationProvider";
 import { PPHAlertsProvider } from "@/state/PPHAlertsProvider";
@@ -247,6 +248,13 @@ function RootLayoutNav() {
         }} 
       />
       <Stack.Screen 
+        name="pricing-summary" 
+        options={{ 
+          presentation: "modal",
+          headerShown: false,
+        }} 
+      />
+      <Stack.Screen 
         name="royal-caribbean-sync" 
         options={{ 
           headerShown: true,
@@ -412,7 +420,8 @@ export default function RootLayout() {
                   <CoreDataProvider>
                 <HistoricalPerformanceProvider>
                   <PriceHistoryProvider>
-                    <FinancialsProvider>
+                    <PriceTrackingProvider>
+                      <FinancialsProvider>
                       <CasinoStrategyProvider>
                         <LoyaltyProvider>
                           <SimpleAnalyticsProvider>
@@ -446,7 +455,8 @@ export default function RootLayout() {
                           </SimpleAnalyticsProvider>
                         </LoyaltyProvider>
                       </CasinoStrategyProvider>
-                    </FinancialsProvider>
+                      </FinancialsProvider>
+                    </PriceTrackingProvider>
                   </PriceHistoryProvider>
                 </HistoricalPerformanceProvider>
                   </CoreDataProvider>

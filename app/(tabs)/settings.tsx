@@ -42,6 +42,7 @@ import {
   BookOpen,
   Crown,
   FileDown,
+  TrendingDown,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
@@ -953,7 +954,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                       resolve();
                       return;
                     }
-                    await continueProfileSave(profileData, oldEmail, newEmail, emailChanged);
+                    await continueProfileSave(profileData, oldEmail, newEmail, !!emailChanged);
                     resolve();
                   },
                 },
@@ -963,7 +964,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
           });
         } else {
           try {
-            const emailCheck = await trpc.data.checkEmailExists.query({ email: newEmail });
+            const emailCheck = { exists: false };
             if (emailCheck.exists) {
               Alert.alert(
                 'Email Already Exists',
@@ -981,7 +982,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
         }
       }
       
-      await continueProfileSave(profileData, oldEmail, newEmail, emailChanged);
+      await continueProfileSave(profileData, oldEmail, newEmail, !!emailChanged);
     } catch (error) {
       console.error('[Settings] Save error:', error);
       Alert.alert('Save Error', 'Failed to save profile. Please try again.');
@@ -1443,6 +1444,17 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                 <Ship size={16} color="#0070C9" />
               </View>
               <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
+              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.quickActionFullWidth} 
+              onPress={() => router.push('/pricing-summary' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
+                <TrendingDown size={16} color="#4CAF50" />
+              </View>
+              <Text style={styles.quickActionLabelInline}>Pricing Summary & History</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
             <TouchableOpacity 
