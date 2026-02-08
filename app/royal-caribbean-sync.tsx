@@ -381,9 +381,23 @@ function RoyalCaribbeanSyncScreen() {
                 sharedCookiesEnabled={true}
                 thirdPartyCookiesEnabled={true}
                 injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
+                keyboardDisplayRequiresUserAction={false}
+                allowsInlineMediaPlayback={true}
+                mediaPlaybackRequiresUserAction={false}
+                allowsLinkPreview={false}
+                bounces={false}
+                scrollEnabled={true}
+                automaticallyAdjustContentInsets={false}
+                contentInsetAdjustmentBehavior="never"
                 onError={(syntheticEvent) => {
                   const { nativeEvent } = syntheticEvent;
                   console.warn('WebView error:', nativeEvent);
+                }}
+                onContentProcessDidTerminate={() => {
+                  console.error('WebView content process terminated, reloading...');
+                  if (webViewRef.current) {
+                    webViewRef.current.reload();
+                  }
                 }}
               />
             )}
