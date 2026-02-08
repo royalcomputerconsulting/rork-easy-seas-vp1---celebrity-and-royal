@@ -930,13 +930,11 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
       console.log('[Settings] Email change check:', { oldEmail, newEmail, emailChanged });
       
       if (emailChanged) {
-        const isAdminEmail = newEmail === 'scott.merlis1@gmail.com';
-        
-        if (isAdminEmail) {
+        if (isAdmin) {
           return new Promise<void>((resolve) => {
             Alert.prompt(
               'Admin Email Verification',
-              'This is an admin email. Please enter the password to update:',
+              'You are an admin. Please enter the password to change your email:',
               [
                 {
                   text: 'Cancel',
