@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 import { useMemo, useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, ArrowLeft } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, ArrowLeft, Download } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
