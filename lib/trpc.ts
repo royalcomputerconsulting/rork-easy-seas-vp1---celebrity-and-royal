@@ -19,22 +19,10 @@ const getBaseUrl = () => {
   return url;
 };
 
-let _backendDisabled = false;
-let _lastErrorTime = 0;
-const BACKEND_RETRY_DELAY = 60000;
-
 export const isBackendAvailable = (): boolean => {
   const baseUrl = getBaseUrl();
   if (baseUrl === "https://fallback.local") return false;
-  if (_backendDisabled && Date.now() - _lastErrorTime < BACKEND_RETRY_DELAY) {
-    return false;
-  }
   return true;
-};
-
-export const resetBackendState = () => {
-  _backendDisabled = false;
-  _lastErrorTime = 0;
 };
 
 let _trpcClient: ReturnType<typeof trpc.createClient> | null = null;
@@ -51,11 +39,6 @@ export const getTrpcClient = () => {
             if (baseUrl === "https://fallback.local") {
               console.log("[tRPC] Backend not configured, skipping request");
               throw new Error("BACKEND_NOT_CONFIGURED");
-            }
-            
-            if (_backendDisabled && Date.now() - _lastErrorTime < BACKEND_RETRY_DELAY) {
-              console.log("[tRPC] Backend temporarily disabled due to previous errors");
-              throw new Error("BACKEND_TEMPORARILY_DISABLED");
             }
             
             try {
@@ -79,39 +62,8 @@ export const getTrpcClient = () => {
               });
               
               clearTimeout(timeoutId);
-              
-              if (response.status === 429) {
-                console.log('[tRPC] Rate limited (429), temporarily disabling backend');
-                _backendDisabled = true;
-                _lastErrorTime = Date.now();
-                throw new Error("RATE_LIMITED");
-              }
-              
-              if (response.status >= 500) {
-                console.log('[tRPC] Server error', response.status);
-                _backendDisabled = true;
-                _lastErrorTime = Date.now();
-                throw new Error("SERVER_ERROR");
-              }
-              
-              _backendDisabled = false;
               return response;
             } catch (error) {
-              if (error instanceof Error) {
-                if (error.name === 'AbortError') {
-                  console.log('[tRPC] Request aborted/timeout');
-                  throw error;
-                }
-                if (['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR'].includes(error.message)) {
-                  throw error;
-                }
-                if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
-                  console.log('[tRPC] Network error, temporarily disabling backend');
-                  _backendDisabled = true;
-                  _lastErrorTime = Date.now();
-                  throw new Error("NETWORK_ERROR");
-                }
-              }
               console.log('[tRPC] Fetch error:', error);
               throw error;
             }

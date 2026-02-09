@@ -18,9 +18,22 @@ interface CruiseDeal {
   departurePort: string;
 }
 
+interface CruisePricing {
+  bookingId: string;
+  shipName: string;
+  sailDate: string;
+  interiorPrice?: number;
+  oceanviewPrice?: number;
+  balconyPrice?: number;
+  suitePrice?: number;
+  source: 'icruise' | 'cruisesheet';
+  url: string;
+  lastUpdated: string;
+}
+
 export default function ImportCruisesScreen() {
   const router = useRouter();
-  const { addBookedCruise, bookedCruises } = useCoreData();
+  const { addBookedCruise, bookedCruises, updateBookedCruise } = useCoreData();
   
   const [importing, setImporting] = useState(false);
   const [importLog, setImportLog] = useState<string[]>([]);
@@ -31,6 +44,7 @@ export default function ImportCruisesScreen() {
   const [searchMode, setSearchMode] = useState<'manual' | 'auto'>('auto');
   
   const searchDealsMutation = trpc.cruiseDeals.searchForBookedCruises.useMutation();
+  const syncPricingMutation = trpc.cruiseDeals.syncPricingForBookedCruises.useMutation();
 
   const addToLog = (message: string) => {
     setImportLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
@@ -38,46 +52,66 @@ export default function ImportCruisesScreen() {
 
   const searchForDeals = async () => {
     if (bookedCruises.length === 0) {
-      addToLog('No booked cruises to search for');
+      addToLog('No booked cruises to sync');
       return;
     }
 
     setSearchingDeals(true);
     setDeals([]);
-    addToLog(`Starting search for ${bookedCruises.length} booked cruises...`);
+    addToLog(`Starting pricing sync for ${bookedCruises.length} booked cruises...`);
 
     try {
-      const cruiseSearchParams = bookedCruises
-        .filter(c => c.completionState === 'upcoming')
-        .map(cruise => ({
-          id: cruise.id,
-          shipName: cruise.shipName,
-          sailDate: cruise.sailDate,
-          nights: cruise.nights,
-          departurePort: cruise.departurePort,
-        }));
+      const upcomingCruises = bookedCruises.filter(c => c.completionState === 'upcoming');
+      
+      if (upcomingCruises.length === 0) {
+        addToLog('No upcoming cruises to sync');
+        setSearchingDeals(false);
+        return;
+      }
 
-      addToLog(`Searching ICruise and CruiseSheet for ${cruiseSearchParams.length} cruises...`);
+      const cruiseSearchParams = upcomingCruises.map(cruise => ({
+        id: cruise.id,
+        shipName: cruise.shipName,
+        sailDate: cruise.sailDate,
+        nights: cruise.nights,
+        departurePort: cruise.departurePort,
+      }));
 
-      const result = await searchDealsMutation.mutateAsync({
+      addToLog(`Fetching current pricing from ICruise and CruiseSheet...`);
+
+      const result = await syncPricingMutation.mutateAsync({
         cruises: cruiseSearchParams,
       });
 
-      if (result.deals && result.deals.length > 0) {
-        setDeals(result.deals);
-        addToLog(`Found ${result.deals.length} deals!`);
+      if (result.pricing && result.pricing.length > 0) {
+        addToLog(`✅ Received pricing for ${result.syncedCount} cruises`);
+        addToLog('Updating cruise pricing...');
+        
+        let updateCount = 0;
+        for (const pricingData of result.pricing) {
+          const cruise = bookedCruises.find(c => c.id === pricingData.bookingId);
+          if (cruise) {
+            updateBookedCruise(cruise.id, {
+              interiorPrice: pricingData.interiorPrice,
+              oceanviewPrice: pricingData.oceanviewPrice,
+              balconyPrice: pricingData.balconyPrice,
+              suitePrice: pricingData.suitePrice,
+              updatedAt: new Date().toISOString(),
+            });
+            updateCount++;
+          }
+        }
+        
+        addToLog(`✅ Successfully updated pricing for ${updateCount} cruises!`);
+        addToLog('Pricing data synced from ICruise.com and CruiseSheet.com');
       } else {
-        addToLog('No deals found. Try searching manually on the websites.');
+        addToLog('No pricing data received. Try again later.');
       }
     } catch (error: any) {
-      console.log('Search error:', error);
+      console.log('Pricing sync error:', error);
       const errorMessage = error?.message || String(error);
-      
-      if (errorMessage.includes('BACKEND') || errorMessage.includes('TRPC') || errorMessage.includes('NETWORK')) {
-        addToLog('Backend not available. Please use manual import mode.');
-      } else {
-        addToLog(`Search failed: ${errorMessage}`);
-      }
+      addToLog(`Sync failed: ${errorMessage}`);
+      addToLog('Please try again or check your connection.');
     } finally {
       setSearchingDeals(false);
     }
@@ -267,10 +301,10 @@ export default function ImportCruisesScreen() {
       
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Search size={32} color="#60a5fa" />
-          <Text style={styles.title}>Find Cruise Deals</Text>
+          <DollarSign size={32} color="#60a5fa" />
+          <Text style={styles.title}>Sync Cruise Pricing</Text>
           <Text style={styles.subtitle}>
-            Automatically search ICruise.com and CruiseSheet.com for your booked cruises
+            Automatically fetch current prices from ICruise.com and CruiseSheet.com
           </Text>
         </View>
 
@@ -281,7 +315,7 @@ export default function ImportCruisesScreen() {
           >
             <Search size={18} color={searchMode === 'auto' ? '#fff' : '#64748b'} />
             <Text style={[styles.modeButtonText, searchMode === 'auto' && styles.modeButtonTextActive]}>
-              Auto Search
+              Auto Sync
             </Text>
           </Pressable>
           <Pressable
@@ -298,9 +332,9 @@ export default function ImportCruisesScreen() {
         {searchMode === 'auto' ? (
           <>
             <View style={styles.instructionsCard}>
-              <Text style={styles.instructionsTitle}>🔍 Auto Search</Text>
+              <Text style={styles.instructionsTitle}>💰 Auto Pricing Sync</Text>
               <Text style={styles.autoSearchDesc}>
-                We'll automatically search ICruise.com and CruiseSheet.com for better prices on your {bookedCruises.filter(c => c.completionState === 'upcoming').length} upcoming cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}.
+                Sync current pricing (Interior, Oceanview, Balcony, Suite) from ICruise.com and CruiseSheet.com for your {bookedCruises.filter(c => c.completionState === 'upcoming').length} upcoming cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}.
               </Text>
               
               <Pressable
@@ -311,61 +345,20 @@ export default function ImportCruisesScreen() {
                 {searchingDeals ? (
                   <>
                     <ActivityIndicator size="small" color="#fff" />
-                    <Text style={styles.searchButtonText}>Searching...</Text>
+                    <Text style={styles.searchButtonText}>Syncing Pricing...</Text>
                   </>
                 ) : (
                   <>
-                    <Search size={20} color="#fff" />
+                    <DollarSign size={20} color="#fff" />
                     <Text style={styles.searchButtonText}>
-                      Search {bookedCruises.filter(c => c.completionState === 'upcoming').length} Cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}
+                      Sync Pricing for {bookedCruises.filter(c => c.completionState === 'upcoming').length} Cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}
                     </Text>
                   </>
                 )}
               </Pressable>
             </View>
 
-            {deals.length > 0 && (
-              <View style={styles.dealsCard}>
-                <View style={styles.dealsHeader}>
-                  <TrendingDown size={20} color="#10b981" />
-                  <Text style={styles.dealsTitle}>Found {deals.length} Deal{deals.length !== 1 ? 's' : ''}</Text>
-                </View>
-                <ScrollView style={styles.dealsScroll}>
-                  {deals.map((deal, index) => {
-                    const bookedCruise = bookedCruises.find(c => c.id === deal.bookingId);
-                    const savings = bookedCruise?.price ? bookedCruise.price - deal.price : 0;
-                    return (
-                      <Pressable
-                        key={index}
-                        style={styles.dealCard}
-                        onPress={() => Linking.openURL(deal.url)}
-                      >
-                        <View style={styles.dealInfo}>
-                          <Text style={styles.dealShip}>{deal.shipName}</Text>
-                          <Text style={styles.dealDate}>{new Date(deal.sailDate).toLocaleDateString()} • {deal.nights} nights</Text>
-                          <Text style={styles.dealPort}>{deal.departurePort}</Text>
-                          <View style={styles.dealPriceRow}>
-                            <DollarSign size={16} color="#10b981" />
-                            <Text style={styles.dealPrice}>${deal.price.toLocaleString()}</Text>
-                            <Text style={styles.dealCabin}>{deal.cabinType}</Text>
-                            {savings > 0 && (
-                              <View style={styles.savingsBadge}>
-                                <Text style={styles.savingsText}>Save ${savings.toLocaleString()}</Text>
-                              </View>
-                            )}
-                          </View>
-                          <View style={styles.dealSource}>
-                            <Globe size={12} color="#60a5fa" />
-                            <Text style={styles.dealSourceText}>{deal.source === 'icruise' ? 'ICruise.com' : 'CruiseSheet.com'}</Text>
-                          </View>
-                        </View>
-                        <ExternalLink size={20} color="#60a5fa" />
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
+
           </>
         ) : (
           <>
