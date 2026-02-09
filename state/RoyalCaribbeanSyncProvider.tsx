@@ -1383,7 +1383,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           .then(() => {
             console.log('[RoyalCaribbeanSync] Background refresh completed');
           })
-          .catch((refreshError) => {
+          .catch((refreshError: unknown) => {
             console.error('[RoyalCaribbeanSync] Background refresh error (non-fatal):', refreshError);
           });
       }
