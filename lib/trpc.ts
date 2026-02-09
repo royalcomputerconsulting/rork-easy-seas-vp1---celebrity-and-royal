@@ -10,24 +10,83 @@ const getBaseUrl = () => {
   const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
 
   if (!url) {
-    console.log(
-      "[tRPC] EXPO_PUBLIC_RORK_API_BASE_URL not set - backend features disabled",
-    );
     return "https://fallback.local";
   }
 
   return url;
 };
 
+let _backendReachable: boolean | null = null;
+let _lastHealthCheck = 0;
+const HEALTH_CHECK_INTERVAL = 120_000;
+const HEALTH_CHECK_TIMEOUT = 5_000;
+let _healthCheckPromise: Promise<boolean> | null = null;
+
+const checkBackendHealth = async (): Promise<boolean> => {
+  const baseUrl = getBaseUrl();
+  if (baseUrl === "https://fallback.local") return false;
+
+  const now = Date.now();
+  if (_backendReachable !== null && now - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
+    return _backendReachable;
+  }
+
+  if (_healthCheckPromise) return _healthCheckPromise;
+
+  _healthCheckPromise = (async () => {
+    try {
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
+      const res = await fetch(`${baseUrl}/api`, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' },
+      });
+      clearTimeout(tid);
+      _backendReachable = res.ok;
+      _lastHealthCheck = Date.now();
+      if (_backendReachable) {
+        console.log('[tRPC] Backend health check passed');
+      } else {
+        console.log('[tRPC] Backend returned non-ok status:', res.status);
+      }
+      return _backendReachable;
+    } catch {
+      _backendReachable = false;
+      _lastHealthCheck = Date.now();
+      console.log('[tRPC] Backend unreachable - operating in offline mode');
+      return false;
+    } finally {
+      _healthCheckPromise = null;
+    }
+  })();
+
+  return _healthCheckPromise;
+};
+
 export const isBackendAvailable = (): boolean => {
   const baseUrl = getBaseUrl();
   if (baseUrl === "https://fallback.local") return false;
+  if (_backendReachable === false && Date.now() - _lastHealthCheck < HEALTH_CHECK_INTERVAL) return false;
   return true;
+};
+
+export const isBackendReachable = async (): Promise<boolean> => {
+  return checkBackendHealth();
+};
+
+export const resetBackendHealthCache = () => {
+  _backendReachable = null;
+  _lastHealthCheck = 0;
+  _healthCheckPromise = null;
 };
 
 let _trpcClient: ReturnType<typeof trpc.createClient> | null = null;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+let _lastErrorLogTime = 0;
+const ERROR_LOG_THROTTLE = 30_000;
 
 const fetchWithRetry = async (
   url: string,
@@ -39,10 +98,7 @@ const fetchWithRetry = async (
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.log('[tRPC] Request timeout after 10s');
-        controller.abort();
-      }, 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       
       const existingSignal = options?.signal;
       if (existingSignal?.aborted) {
@@ -71,10 +127,14 @@ const fetchWithRetry = async (
         const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.min(1000 * Math.pow(2, attempt), 30000);
         
         if (attempt < maxRetries) {
-          console.log(`[tRPC] Rate limited (429). Retrying after ${waitTime}ms (attempt ${attempt + 1}/${maxRetries})`);
           await sleep(waitTime);
           continue;
         }
+      }
+      
+      if (response.ok) {
+        _backendReachable = true;
+        _lastHealthCheck = Date.now();
       }
       
       return response;
@@ -83,9 +143,16 @@ const fetchWithRetry = async (
       
       if (attempt < maxRetries) {
         const waitTime = Math.min(1000 * Math.pow(2, attempt), 5000);
-        console.log(`[tRPC] Request failed. Retrying after ${waitTime}ms (attempt ${attempt + 1}/${maxRetries})`);
         await sleep(waitTime);
       }
+    }
+  }
+  
+  if (lastError) {
+    const msg = lastError.message || '';
+    if (msg.includes('Failed to fetch') || msg.includes('Network request failed') || lastError.name === 'AbortError') {
+      _backendReachable = false;
+      _lastHealthCheck = Date.now();
     }
   }
   
@@ -102,31 +169,23 @@ export const getTrpcClient = () => {
           transformer: superjson,
           fetch: async (url, options) => {
             if (baseUrl === "https://fallback.local") {
-              console.log("[tRPC] Backend not configured, skipping request");
               throw new Error("BACKEND_NOT_CONFIGURED");
+            }
+
+            if (_backendReachable === false && Date.now() - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
+              throw new Error("BACKEND_OFFLINE");
             }
             
             try {
-              console.log(`[tRPC] Making request to: ${url}`);
               const response = await fetchWithRetry(url.toString(), options);
-              console.log(`[tRPC] Response: ${response.status} ${response.statusText}`);
-              
-              if (!response.ok) {
-                const text = await response.text().catch(() => 'Could not read response');
-                console.error(`[tRPC] HTTP Error ${response.status}:`, text);
-              }
-              
               return response;
             } catch (error) {
-              const errorMsg = error instanceof Error ? error.message : String(error);
-              console.error('[tRPC] Fetch error:', errorMsg);
-              
-              if (error instanceof DOMException && error.name === 'AbortError') {
-                console.error('[tRPC] Request timed out or was aborted');
-              } else if (errorMsg.includes('Network request failed') || errorMsg.includes('Failed to fetch')) {
-                console.error('[tRPC] Network error - check if backend is running at:', baseUrl);
+              const now = Date.now();
+              if (now - _lastErrorLogTime > ERROR_LOG_THROTTLE) {
+                _lastErrorLogTime = now;
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                console.log('[tRPC] Request failed:', errorMsg, '- operating in offline mode');
               }
-              
               throw error;
             }
           },

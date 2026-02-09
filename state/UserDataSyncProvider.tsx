@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
-import { trpc, trpcClient, isBackendAvailable } from "@/lib/trpc";
+import { trpc, trpcClient, isBackendReachable } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
 import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearAllAppData } from "@/lib/dataManager";
@@ -249,8 +249,9 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
   const checkCloudDataExists = useCallback(async (email: string): Promise<boolean> => {
     if (!email) return false;
-    if (!isBackendAvailable()) {
-      console.log("[UserDataSync] Backend not available, skipping cloud check");
+    const reachable = await isBackendReachable();
+    if (!reachable) {
+      console.log("[UserDataSync] Backend not reachable, skipping cloud check");
       return false;
     }
 
@@ -275,8 +276,9 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return false;
     }
 
-    if (!isBackendAvailable()) {
-      console.log("[UserDataSync] Backend not available, skipping cloud load");
+    const reachable = await isBackendReachable();
+    if (!reachable) {
+      console.log("[UserDataSync] Backend not reachable, skipping cloud load");
       setInitialCheckComplete(true);
       return false;
     }
@@ -379,8 +381,9 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return;
     }
 
-    if (!isBackendAvailable()) {
-      console.log("[UserDataSync] Backend not available, skipping cloud sync");
+    const reachable = await isBackendReachable();
+    if (!reachable) {
+      console.log("[UserDataSync] Backend not reachable, skipping cloud sync");
       return;
     }
 
@@ -500,14 +503,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return;
     }
 
-    if (!isBackendAvailable()) {
-      console.log("[UserDataSync] Backend not available, skipping initial sync");
-      setInitialCheckComplete(true);
-      hasInitializedRef.current = true;
-      return;
-    }
-
-    console.log("[UserDataSync] New user login detected, loading cloud data...");
+    console.log("[UserDataSync] New user login detected, checking backend...");
     hasInitializedRef.current = true;
     
     if (safetyTimeoutRef.current) {
@@ -521,6 +517,17 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     }, 6000);
     
     const initSync = async () => {
+      const reachable = await isBackendReachable();
+      if (!reachable) {
+        console.log("[UserDataSync] Backend not reachable, skipping initial sync");
+        setInitialCheckComplete(true);
+        if (safetyTimeoutRef.current) {
+          clearTimeout(safetyTimeoutRef.current);
+          safetyTimeoutRef.current = null;
+        }
+        return;
+      }
+
       const cloudLoaded = await loadFromCloud();
       
       if (safetyTimeoutRef.current) {
@@ -528,10 +535,10 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         safetyTimeoutRef.current = null;
       }
       
-      if (!cloudLoaded && isBackendAvailable() && isMountedRef.current) {
+      if (!cloudLoaded && isMountedRef.current) {
         console.log("[UserDataSync] No cloud data, will sync local data after delay");
         const timeoutId = setTimeout(() => {
-          if (isBackendAvailable() && isMountedRef.current) {
+          if (isMountedRef.current) {
             syncToCloud();
           }
         }, 5000);
