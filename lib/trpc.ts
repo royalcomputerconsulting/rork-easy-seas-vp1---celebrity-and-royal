@@ -1,10 +1,23 @@
-import { httpLink } from "@trpc/client";
+import { httpLink, splitLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 
 import type { AppRouter } from "@/backend/trpc/app-router";
 
 export const trpc = createTRPCReact<AppRouter>();
+
+export const RENDER_BACKEND_URL = "https://rork-easy-seas-vp1-2nep.onrender.com";
+
+const RENDER_ROUTED_PREFIXES = [
+  'cruiseDeals.',
+  'calendar.',
+  'royalCaribbeanSync.',
+  'example.',
+];
+
+const isRenderRoutedProcedure = (path: string): boolean => {
+  return RENDER_ROUTED_PREFIXES.some(prefix => path.startsWith(prefix));
+};
 
 const getBaseUrl = () => {
   const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
@@ -162,33 +175,51 @@ const fetchWithRetry = async (
 export const getTrpcClient = () => {
   if (!_trpcClient) {
     const baseUrl = getBaseUrl();
+    console.log('[tRPC] Initializing client - System backend:', baseUrl, '| Render backend:', RENDER_BACKEND_URL);
     _trpcClient = trpc.createClient({
       links: [
-        httpLink({
-          url: `${baseUrl}/trpc`,
-          transformer: superjson,
-          fetch: async (url, options) => {
-            if (baseUrl === "https://fallback.local") {
-              throw new Error("BACKEND_NOT_CONFIGURED");
-            }
-
-            if (_backendReachable === false && Date.now() - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
-              throw new Error("BACKEND_OFFLINE");
-            }
-            
-            try {
-              const response = await fetchWithRetry(url.toString(), options);
-              return response;
-            } catch (error) {
-              const now = Date.now();
-              if (now - _lastErrorLogTime > ERROR_LOG_THROTTLE) {
-                _lastErrorLogTime = now;
+        splitLink({
+          condition: (op) => isRenderRoutedProcedure(op.path),
+          true: httpLink({
+            url: `${RENDER_BACKEND_URL}/trpc`,
+            transformer: superjson,
+            fetch: async (url, options) => {
+              try {
+                const response = await fetchWithRetry(url.toString(), options);
+                return response;
+              } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
-                console.log('[tRPC] Request failed:', errorMsg, '- operating in offline mode');
+                console.log('[tRPC:Render] Request failed:', errorMsg);
+                throw error;
               }
-              throw error;
-            }
-          },
+            },
+          }),
+          false: httpLink({
+            url: `${baseUrl}/trpc`,
+            transformer: superjson,
+            fetch: async (url, options) => {
+              if (baseUrl === "https://fallback.local") {
+                throw new Error("BACKEND_NOT_CONFIGURED");
+              }
+
+              if (_backendReachable === false && Date.now() - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
+                throw new Error("BACKEND_OFFLINE");
+              }
+              
+              try {
+                const response = await fetchWithRetry(url.toString(), options);
+                return response;
+              } catch (error) {
+                const now = Date.now();
+                if (now - _lastErrorLogTime > ERROR_LOG_THROTTLE) {
+                  _lastErrorLogTime = now;
+                  const errorMsg = error instanceof Error ? error.message : String(error);
+                  console.log('[tRPC:System] Request failed:', errorMsg, '- operating in offline mode');
+                }
+                throw error;
+              }
+            },
+          }),
         }),
       ],
     });

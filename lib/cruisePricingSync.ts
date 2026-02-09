@@ -1,3 +1,5 @@
+import { RENDER_BACKEND_URL } from './trpc';
+
 interface CruisePricing {
   bookingId: string;
   shipName: string;
@@ -410,6 +412,72 @@ const processCruiseBatch = async (
   return { pricing: allPricing, errors };
 };
 
+const syncViaRenderBackend = async (
+  cruises: Array<{
+    id: string;
+    shipName: string;
+    sailDate: string;
+    nights: number;
+    departurePort: string;
+  }>
+): Promise<{ pricing: CruisePricing[]; syncedCount: number } | null> => {
+  try {
+    console.log(`[CruisePricing] Attempting sync via Render backend: ${RENDER_BACKEND_URL}`);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    const response = await fetch(
+      `${RENDER_BACKEND_URL}/trpc/cruiseDeals.syncPricingForBookedCruises`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          json: { cruises },
+        }),
+        signal: controller.signal,
+      }
+    );
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unable to read error');
+      console.log(`[CruisePricing] Render backend returned ${response.status}:`, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    const result = data?.result?.data?.json;
+
+    if (!result || !Array.isArray(result.pricing)) {
+      console.log('[CruisePricing] Unexpected response shape from Render backend:', JSON.stringify(data).substring(0, 200));
+      return null;
+    }
+
+    console.log(`[CruisePricing] Render backend returned ${result.pricing.length} pricing records`);
+    return {
+      pricing: result.pricing.map((p: any) => ({
+        bookingId: p.bookingId ?? '',
+        shipName: p.shipName ?? '',
+        sailDate: p.sailDate ?? '',
+        interiorPrice: p.interiorPrice,
+        oceanviewPrice: p.oceanviewPrice,
+        balconyPrice: p.balconyPrice,
+        suitePrice: p.suitePrice,
+        source: p.source ?? 'web',
+        url: p.url ?? '',
+        lastUpdated: p.lastUpdated ?? new Date().toISOString(),
+      })),
+      syncedCount: result.syncedCount ?? cruises.length,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.log('[CruisePricing] Render backend sync failed:', msg);
+    return null;
+  }
+};
+
 export const syncCruisePricing = async (cruises: Array<{
   id: string;
   shipName: string;
@@ -419,8 +487,22 @@ export const syncCruisePricing = async (cruises: Array<{
 }>) => {
   console.log(`[CruisePricing] Starting sync for ${cruises.length} cruises`);
 
+  const backendResult = await syncViaRenderBackend(cruises);
+  if (backendResult && backendResult.pricing.length > 0) {
+    const cruisesWithPricing = new Set(backendResult.pricing.map(p => p.bookingId));
+    console.log(`[CruisePricing] Render backend sync successful: ${backendResult.pricing.length} pricing records from ${cruisesWithPricing.size}/${cruises.length} cruises`);
+    return {
+      pricing: backendResult.pricing,
+      syncedCount: backendResult.syncedCount,
+      successCount: cruisesWithPricing.size,
+      errors: [] as string[],
+    };
+  }
+
+  console.log('[CruisePricing] Render backend unavailable or returned no data, falling back to direct search...');
+
   if (!process.env.EXPO_PUBLIC_TOOLKIT_URL) {
-    throw new Error('Web search service not configured. The EXPO_PUBLIC_TOOLKIT_URL environment variable is missing.');
+    throw new Error('Pricing sync unavailable. Backend returned no data and toolkit URL is not configured.');
   }
 
   console.log('[CruisePricing] Testing web search API availability...');
@@ -435,12 +517,11 @@ export const syncCruisePricing = async (cruises: Array<{
       throw new Error(`API returned status ${testResponse.status}`);
     }
     
-    console.log('[CruisePricing] ✓ Web search API is available');
+    console.log('[CruisePricing] Fallback web search API is available');
   } catch (error) {
-    console.error('[CruisePricing] Web search API test failed:', error);
+    console.error('[CruisePricing] Fallback web search API test failed:', error);
     throw new Error(
-      'Web search API is not available. The pricing sync feature requires a working web search endpoint. ' +
-      'Please ensure the toolkit URL is configured correctly, or manually update cruise prices in the app.'
+      'Pricing sync unavailable. The Render backend did not return data and the fallback web search is not reachable.'
     );
   }
 
