@@ -26,9 +26,10 @@ interface CruisePricing {
   oceanviewPrice?: number;
   balconyPrice?: number;
   suitePrice?: number;
-  source: 'icruise' | 'cruisesheet';
+  source: 'icruise' | 'cruisesheet' | 'royalcaribbean' | 'web';
   url: string;
   lastUpdated: string;
+  confidence?: 'high' | 'medium' | 'low';
 }
 
 export default function ImportCruisesScreen() {
@@ -84,28 +85,57 @@ export default function ImportCruisesScreen() {
       });
 
       if (result.pricing && result.pricing.length > 0) {
-        addToLog(`✅ Received pricing for ${result.syncedCount} cruises`);
-        addToLog('Updating cruise pricing...');
+        addToLog(`✅ Retrieved ${result.pricing.length} pricing records from multiple sources`);
+        addToLog('Aggregating and updating cruise pricing...');
+        
+        const pricingByCruise = new Map<string, typeof result.pricing>();
+        result.pricing.forEach(pricing => {
+          if (!pricingByCruise.has(pricing.bookingId)) {
+            pricingByCruise.set(pricing.bookingId, []);
+          }
+          pricingByCruise.get(pricing.bookingId)!.push(pricing);
+        });
         
         let updateCount = 0;
-        for (const pricingData of result.pricing) {
-          const cruise = bookedCruises.find(c => c.id === pricingData.bookingId);
-          if (cruise) {
-            updateBookedCruise(cruise.id, {
-              interiorPrice: pricingData.interiorPrice,
-              oceanviewPrice: pricingData.oceanviewPrice,
-              balconyPrice: pricingData.balconyPrice,
-              suitePrice: pricingData.suitePrice,
-              updatedAt: new Date().toISOString(),
-            });
-            updateCount++;
-          }
+        for (const [cruiseId, pricingRecords] of pricingByCruise.entries()) {
+          const cruise = bookedCruises.find(c => c.id === cruiseId);
+          if (!cruise) continue;
+          
+          const avgPrices = {
+            interior: [] as number[],
+            oceanview: [] as number[],
+            balcony: [] as number[],
+            suite: [] as number[],
+          };
+          
+          pricingRecords.forEach(record => {
+            if (record.interiorPrice) avgPrices.interior.push(record.interiorPrice);
+            if (record.oceanviewPrice) avgPrices.oceanview.push(record.oceanviewPrice);
+            if (record.balconyPrice) avgPrices.balcony.push(record.balconyPrice);
+            if (record.suitePrice) avgPrices.suite.push(record.suitePrice);
+          });
+          
+          const getAverage = (prices: number[]) => 
+            prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : undefined;
+          
+          updateBookedCruise(cruise.id, {
+            interiorPrice: getAverage(avgPrices.interior),
+            oceanviewPrice: getAverage(avgPrices.oceanview),
+            balconyPrice: getAverage(avgPrices.balcony),
+            suitePrice: getAverage(avgPrices.suite),
+            updatedAt: new Date().toISOString(),
+          });
+          updateCount++;
+          addToLog(`  → ${cruise.shipName}: Updated with ${pricingRecords.length} source(s)`);
         }
         
-        addToLog(`✅ Successfully updated pricing for ${updateCount} cruises!`);
-        addToLog('Pricing data synced from ICruise.com and CruiseSheet.com');
+        addToLog(`✅ Successfully updated pricing for ${updateCount} of ${upcomingCruises.length} cruises!`);
+        
+        if (updateCount < upcomingCruises.length) {
+          addToLog(`⚠️ ${upcomingCruises.length - updateCount} cruises had no pricing data available`);
+        }
       } else {
-        addToLog('No pricing data received. Try again later.');
+        addToLog('⚠️ No pricing data received from any source. Try again later.');
       }
     } catch (error: any) {
       console.log('Pricing sync error:', error);
