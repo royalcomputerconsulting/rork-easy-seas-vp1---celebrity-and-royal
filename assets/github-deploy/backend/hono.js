@@ -12,14 +12,14 @@ app.use("*", cors());
 app.use(
   "/trpc/*",
   trpcServer({
-    endpoint: "/api/trpc",
+    endpoint: "/trpc",
     router: appRouter,
     createContext,
   }),
 );
 
 app.get("/", (c) => {
-  return c.json({ status: "ok", message: "API is running", timestamp: Date.now() });
+  return c.json({ status: "Easy Seas Backend Running", message: "API is running", timestamp: Date.now() });
 });
 
 export default app;

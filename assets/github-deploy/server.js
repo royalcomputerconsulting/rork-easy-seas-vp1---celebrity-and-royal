@@ -13,6 +13,6 @@ serve({
   port,
 }, (info) => {
   console.log(`[Server] Backend running at http://localhost:${info.port}`);
-  console.log(`[Server] tRPC endpoint: http://localhost:${info.port}/api/trpc`);
-  console.log(`[Server] Health check: http://localhost:${info.port}/api`);
+  console.log(`[Server] tRPC endpoint: http://localhost:${info.port}/trpc`);
+  console.log(`[Server] Health check: http://localhost:${info.port}/`);
 });

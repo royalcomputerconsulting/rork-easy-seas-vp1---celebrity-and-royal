@@ -1,4 +1,4 @@
-import * as z from "zod";
+import { z } from "zod";
 import { getDb } from "../../db.js";
 import { createTRPCRouter, publicProcedure } from "../create-context.js";
 

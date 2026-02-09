@@ -37,7 +37,7 @@ const checkBackendHealth = async (): Promise<boolean> => {
     try {
       const controller = new AbortController();
       const tid = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
-      const res = await fetch(`${baseUrl}/api`, {
+      const res = await fetch(`${baseUrl}/`, {
         method: 'GET',
         signal: controller.signal,
         headers: { 'Accept': 'application/json' },
@@ -165,7 +165,7 @@ export const getTrpcClient = () => {
     _trpcClient = trpc.createClient({
       links: [
         httpLink({
-          url: `${baseUrl}/api/trpc`,
+          url: `${baseUrl}/trpc`,
           transformer: superjson,
           fetch: async (url, options) => {
             if (baseUrl === "https://fallback.local") {
