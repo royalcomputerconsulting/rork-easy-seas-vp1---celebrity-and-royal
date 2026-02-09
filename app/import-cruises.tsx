@@ -70,13 +70,13 @@ export default function ImportCruisesScreen() {
         addToLog('No deals found. Try searching manually on the websites.');
       }
     } catch (error: any) {
-      console.error('Search error:', error);
-      if (error.message?.includes('Backend') || error.message?.includes('TRPC')) {
-        addToLog('Auto-search requires backend. Opening websites manually...');
-        await openWebsite('https://www.icruise.com');
-        await openWebsite('https://www.cruisesheet.com');
+      console.log('Search error:', error);
+      const errorMessage = error?.message || String(error);
+      
+      if (errorMessage.includes('BACKEND') || errorMessage.includes('TRPC') || errorMessage.includes('NETWORK')) {
+        addToLog('Backend not available. Please use manual import mode.');
       } else {
-        addToLog(`Search failed: ${error.message || error}`);
+        addToLog(`Search failed: ${errorMessage}`);
       }
     } finally {
       setSearchingDeals(false);
