@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import app from './backend/hono.ts';
+import app from './backend/hono.js';
 
 const port = parseInt(process.env.PORT || '3000', 10);
 
