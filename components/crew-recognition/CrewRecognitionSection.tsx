@@ -7,7 +7,6 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { Users, Plus, Download, Search, Filter, X } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
@@ -17,7 +16,7 @@ import { RecognitionEntryDetailModal } from './RecognitionEntryDetailModal';
 import { SurveyListModal } from './SurveyListModal';
 import { exportToCSV } from '@/lib/csv-export';
 import { DEPARTMENTS } from '@/types/crew-recognition';
-import type { RecognitionEntryWithCrew } from '@/types/crew-recognition';
+import type { RecognitionEntryWithCrew, Department } from '@/types/crew-recognition';
 
 export function CrewRecognitionSection() {
   const {
@@ -296,7 +295,9 @@ export function CrewRecognitionSection() {
       <AddCrewMemberModal
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onSubmit={createCrewMember}
+        onSubmit={async (data) => {
+          await createCrewMember({ ...data, department: data.department as Department });
+        }}
         sailings={sailings}
       />
 
@@ -305,8 +306,12 @@ export function CrewRecognitionSection() {
         entry={selectedEntry}
         sailings={sailings}
         onClose={() => setSelectedEntry(null)}
-        onUpdate={updateRecognitionEntry}
-        onDelete={deleteRecognitionEntry}
+        onUpdate={async (id, data) => {
+          await updateRecognitionEntry({ id, ...data });
+        }}
+        onDelete={async (id) => {
+          await deleteRecognitionEntry({ id });
+        }}
       />
 
       <SurveyListModal
