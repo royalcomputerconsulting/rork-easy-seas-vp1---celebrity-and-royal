@@ -97,7 +97,7 @@ const fetchICruisePricing = async (shipName: string, sailDate: string, nights: n
     const searchQuery = `${shipName} cruise ${month} ${day} ${year} ${departurePort} ${nights} night interior oceanview balcony suite price site:icruise.com`;
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
     
     const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
       method: 'POST',
@@ -112,7 +112,8 @@ const fetchICruisePricing = async (shipName: string, sailDate: string, nights: n
     clearTimeout(timeoutId);
     
     if (!response.ok) {
-      console.error('[ICruise] Pricing fetch failed:', response.status, await response.text());
+      const errorText = await response.text().catch(() => 'Unable to read error');
+      console.error('[ICruise] Pricing fetch failed:', response.status, errorText);
       return null;
     }
     
@@ -214,7 +215,7 @@ const fetchCruiseSheetPricing = async (shipName: string, sailDate: string, night
     const searchQuery = `${shipName} cruise ${month} ${day} ${year} ${departurePort} ${nights} night interior oceanview balcony suite price site:cruisesheet.com`;
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
     
     const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
       method: 'POST',
@@ -229,7 +230,8 @@ const fetchCruiseSheetPricing = async (shipName: string, sailDate: string, night
     clearTimeout(timeoutId);
     
     if (!response.ok) {
-      console.error('[CruiseSheet] Pricing fetch failed:', response.status, await response.text());
+      const errorText = await response.text().catch(() => 'Unable to read error');
+      console.error('[CruiseSheet] Pricing fetch failed:', response.status, errorText);
       return null;
     }
     
@@ -382,10 +384,11 @@ export const cruiseDealsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }): Promise<{ pricing: CruisePricing[]; syncedCount: number }> => {
       console.log(`[CruiseDeals] Starting pricing sync for ${input.cruises.length} booked cruises`);
+      console.log(`[CruiseDeals] Toolkit URL: ${process.env.EXPO_PUBLIC_TOOLKIT_URL}`);
       
       if (!process.env.EXPO_PUBLIC_TOOLKIT_URL) {
         console.error('[CruiseDeals] EXPO_PUBLIC_TOOLKIT_URL not configured');
-        throw new Error('Backend web search service not available');
+        throw new Error('Web search service not configured. Please contact support.');
       }
       
       const allPricing: CruisePricing[] = [];

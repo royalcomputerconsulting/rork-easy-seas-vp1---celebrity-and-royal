@@ -338,10 +338,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.log('[CoreData] ✅ Backend sync successful');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorString = String(error);
+      
       if (['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage)) {
         console.log('[CoreData] Backend sync skipped:', errorMessage);
+      } else if (errorString.includes('Failed to fetch') || errorString.includes('Network request failed')) {
+        console.log('[CoreData] Backend sync skipped: Network error - backend may be unavailable');
       } else {
-        console.error('[CoreData] Backend sync failed:', error);
+        console.log('[CoreData] Backend sync failed (non-critical):', errorMessage);
       }
     }
   }, [saveAllUserDataMutateAsync, authenticatedEmail]);

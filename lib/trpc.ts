@@ -42,8 +42,12 @@ export const getTrpcClient = () => {
             }
             
             try {
+              console.log(`[tRPC] Making request to: ${url}`);
               const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 30000);
+              const timeoutId = setTimeout(() => {
+                console.log('[tRPC] Request timeout after 30s');
+                controller.abort();
+              }, 30000);
               
               const existingSignal = options?.signal;
               if (existingSignal?.aborted) {
@@ -59,12 +63,31 @@ export const getTrpcClient = () => {
               const response = await fetch(url, {
                 ...options,
                 signal: controller.signal,
+                headers: {
+                  ...options?.headers,
+                  'Accept': 'application/json',
+                },
               });
               
               clearTimeout(timeoutId);
+              console.log(`[tRPC] Response: ${response.status} ${response.statusText}`);
+              
+              if (!response.ok) {
+                const text = await response.text().catch(() => 'Could not read response');
+                console.error(`[tRPC] HTTP Error ${response.status}:`, text);
+              }
+              
               return response;
             } catch (error) {
-              console.log('[tRPC] Fetch error:', error);
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              console.error('[tRPC] Fetch error:', errorMsg);
+              
+              if (error instanceof DOMException && error.name === 'AbortError') {
+                console.error('[tRPC] Request timed out or was aborted');
+              } else if (errorMsg.includes('Network request failed') || errorMsg.includes('Failed to fetch')) {
+                console.error('[tRPC] Network error - check if backend is running at:', baseUrl);
+              }
+              
               throw error;
             }
           },

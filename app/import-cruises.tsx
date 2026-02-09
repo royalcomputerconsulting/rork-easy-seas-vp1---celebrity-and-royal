@@ -140,8 +140,17 @@ export default function ImportCruisesScreen() {
     } catch (error: any) {
       console.log('Pricing sync error:', error);
       const errorMessage = error?.message || String(error);
-      addToLog(`Sync failed: ${errorMessage}`);
-      addToLog('Please try again or check your connection.');
+      
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Network request failed')) {
+        addToLog('⚠️ Could not connect to backend service');
+        addToLog('This may be temporary. Please try again in a moment.');
+      } else if (errorMessage === 'BACKEND_NOT_CONFIGURED') {
+        addToLog('⚠️ Backend service not configured');
+        addToLog('Please contact support if this persists.');
+      } else {
+        addToLog(`⚠️ Sync error: ${errorMessage}`);
+        addToLog('Please try again or check your connection.');
+      }
     } finally {
       setSearchingDeals(false);
     }
