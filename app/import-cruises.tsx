@@ -1,22 +1,96 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Linking, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Download, Ship, ExternalLink, CheckCircle, AlertCircle, FileText, Globe } from 'lucide-react-native';
+import { useState, useEffect } from 'react';
+import { Download, Ship, ExternalLink, CheckCircle, AlertCircle, FileText, Globe, Search, DollarSign, TrendingDown } from 'lucide-react-native';
 import { useCoreData } from '@/state/CoreDataProvider';
 import type { BookedCruise } from '@/types/models';
+import { trpc } from '@/lib/trpc';
+
+interface CruiseDeal {
+  bookingId: string;
+  shipName: string;
+  sailDate: string;
+  source: 'icruise' | 'cruisesheet';
+  price: number;
+  cabinType: string;
+  url: string;
+  nights: number;
+  departurePort: string;
+}
 
 export default function ImportCruisesScreen() {
   const router = useRouter();
-  const { addBookedCruise } = useCoreData();
+  const { addBookedCruise, bookedCruises } = useCoreData();
   
   const [importing, setImporting] = useState(false);
   const [importLog, setImportLog] = useState<string[]>([]);
   const [importedCount, setImportedCount] = useState(0);
   const [pastedData, setPastedData] = useState('');
+  const [searchingDeals, setSearchingDeals] = useState(false);
+  const [deals, setDeals] = useState<CruiseDeal[]>([]);
+  const [searchMode, setSearchMode] = useState<'manual' | 'auto'>('auto');
+  
+  const searchDealsMutation = trpc.cruiseDeals.searchForBookedCruises.useMutation();
 
   const addToLog = (message: string) => {
     setImportLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
   };
+
+  const searchForDeals = async () => {
+    if (bookedCruises.length === 0) {
+      addToLog('No booked cruises to search for');
+      return;
+    }
+
+    setSearchingDeals(true);
+    setDeals([]);
+    addToLog(`Starting search for ${bookedCruises.length} booked cruises...`);
+
+    try {
+      const cruiseSearchParams = bookedCruises
+        .filter(c => c.completionState === 'upcoming')
+        .map(cruise => ({
+          id: cruise.id,
+          shipName: cruise.shipName,
+          sailDate: cruise.sailDate,
+          nights: cruise.nights,
+          departurePort: cruise.departurePort,
+        }));
+
+      addToLog(`Searching ICruise and CruiseSheet for ${cruiseSearchParams.length} cruises...`);
+
+      const result = await searchDealsMutation.mutateAsync({
+        cruises: cruiseSearchParams,
+      });
+
+      if (result.deals && result.deals.length > 0) {
+        setDeals(result.deals);
+        addToLog(`Found ${result.deals.length} deals!`);
+      } else {
+        addToLog('No deals found. Try searching manually on the websites.');
+      }
+    } catch (error: any) {
+      console.error('Search error:', error);
+      if (error.message?.includes('Backend') || error.message?.includes('TRPC')) {
+        addToLog('Auto-search requires backend. Opening websites manually...');
+        await openWebsite('https://www.icruise.com');
+        await openWebsite('https://www.cruisesheet.com');
+      } else {
+        addToLog(`Search failed: ${error.message || error}`);
+      }
+    } finally {
+      setSearchingDeals(false);
+    }
+  };
+
+  useEffect(() => {
+    if (searchMode === 'auto' && bookedCruises.length > 0) {
+      const upcomingCount = bookedCruises.filter(c => c.completionState === 'upcoming').length;
+      if (upcomingCount > 0) {
+        addToLog(`Found ${upcomingCount} upcoming cruises ready to search`);
+      }
+    }
+  }, [bookedCruises, searchMode]);
 
   const openWebsite = async (url: string) => {
     try {
@@ -193,14 +267,108 @@ export default function ImportCruisesScreen() {
       
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Download size={32} color="#60a5fa" />
-          <Text style={styles.title}>Import Cruise Deals</Text>
+          <Search size={32} color="#60a5fa" />
+          <Text style={styles.title}>Find Cruise Deals</Text>
           <Text style={styles.subtitle}>
-            Import cruises from ICruise.com and CruiseSheet.com
+            Automatically search ICruise.com and CruiseSheet.com for your booked cruises
           </Text>
         </View>
 
-        <View style={styles.instructionsCard}>
+        <View style={styles.modeToggle}>
+          <Pressable
+            style={[styles.modeButton, searchMode === 'auto' && styles.modeButtonActive]}
+            onPress={() => setSearchMode('auto')}
+          >
+            <Search size={18} color={searchMode === 'auto' ? '#fff' : '#64748b'} />
+            <Text style={[styles.modeButtonText, searchMode === 'auto' && styles.modeButtonTextActive]}>
+              Auto Search
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.modeButton, searchMode === 'manual' && styles.modeButtonActive]}
+            onPress={() => setSearchMode('manual')}
+          >
+            <FileText size={18} color={searchMode === 'manual' ? '#fff' : '#64748b'} />
+            <Text style={[styles.modeButtonText, searchMode === 'manual' && styles.modeButtonTextActive]}>
+              Manual Import
+            </Text>
+          </Pressable>
+        </View>
+
+        {searchMode === 'auto' ? (
+          <>
+            <View style={styles.instructionsCard}>
+              <Text style={styles.instructionsTitle}>🔍 Auto Search</Text>
+              <Text style={styles.autoSearchDesc}>
+                We'll automatically search ICruise.com and CruiseSheet.com for better prices on your {bookedCruises.filter(c => c.completionState === 'upcoming').length} upcoming cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}.
+              </Text>
+              
+              <Pressable
+                style={[styles.searchButton, searchingDeals && styles.searchButtonDisabled]}
+                onPress={searchForDeals}
+                disabled={searchingDeals || bookedCruises.filter(c => c.completionState === 'upcoming').length === 0}
+              >
+                {searchingDeals ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.searchButtonText}>Searching...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Search size={20} color="#fff" />
+                    <Text style={styles.searchButtonText}>
+                      Search {bookedCruises.filter(c => c.completionState === 'upcoming').length} Cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+
+            {deals.length > 0 && (
+              <View style={styles.dealsCard}>
+                <View style={styles.dealsHeader}>
+                  <TrendingDown size={20} color="#10b981" />
+                  <Text style={styles.dealsTitle}>Found {deals.length} Deal{deals.length !== 1 ? 's' : ''}</Text>
+                </View>
+                <ScrollView style={styles.dealsScroll}>
+                  {deals.map((deal, index) => {
+                    const bookedCruise = bookedCruises.find(c => c.id === deal.bookingId);
+                    const savings = bookedCruise?.price ? bookedCruise.price - deal.price : 0;
+                    return (
+                      <Pressable
+                        key={index}
+                        style={styles.dealCard}
+                        onPress={() => Linking.openURL(deal.url)}
+                      >
+                        <View style={styles.dealInfo}>
+                          <Text style={styles.dealShip}>{deal.shipName}</Text>
+                          <Text style={styles.dealDate}>{new Date(deal.sailDate).toLocaleDateString()} • {deal.nights} nights</Text>
+                          <Text style={styles.dealPort}>{deal.departurePort}</Text>
+                          <View style={styles.dealPriceRow}>
+                            <DollarSign size={16} color="#10b981" />
+                            <Text style={styles.dealPrice}>${deal.price.toLocaleString()}</Text>
+                            <Text style={styles.dealCabin}>{deal.cabinType}</Text>
+                            {savings > 0 && (
+                              <View style={styles.savingsBadge}>
+                                <Text style={styles.savingsText}>Save ${savings.toLocaleString()}</Text>
+                              </View>
+                            )}
+                          </View>
+                          <View style={styles.dealSource}>
+                            <Globe size={12} color="#60a5fa" />
+                            <Text style={styles.dealSourceText}>{deal.source === 'icruise' ? 'ICruise.com' : 'CruiseSheet.com'}</Text>
+                          </View>
+                        </View>
+                        <ExternalLink size={20} color="#60a5fa" />
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+          </>
+        ) : (
+          <View style={styles.instructionsCard}>
           <Text style={styles.instructionsTitle}>📋 How to Import:</Text>
           
           <View style={styles.step}>
@@ -247,7 +415,7 @@ export default function ImportCruisesScreen() {
           </View>
         </View>
 
-        <View style={styles.inputCard}>
+            <View style={styles.inputCard}>
           <View style={styles.inputHeader}>
             <FileText size={20} color="#64748b" />
             <Text style={styles.inputTitle}>Paste Cruise Data</Text>
@@ -266,9 +434,9 @@ export default function ImportCruisesScreen() {
           <Text style={styles.inputHint}>
             💡 Tip: You can paste multiple cruises at once
           </Text>
-        </View>
+            </View>
 
-        <Pressable 
+            <Pressable 
           style={[styles.importButton, importing && styles.importButtonDisabled]}
           onPress={handleImport}
           disabled={importing || !pastedData.trim()}
@@ -284,7 +452,9 @@ export default function ImportCruisesScreen() {
               <Text style={styles.importButtonText}>Import Cruises</Text>
             </>
           )}
-        </Pressable>
+            </Pressable>
+          </>
+        )}
 
         {importLog.length > 0 && (
           <View style={styles.logCard}>
@@ -473,5 +643,146 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#cbd5e1',
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+  },
+  modeToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+    gap: 4,
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  modeButtonActive: {
+    backgroundColor: '#3b82f6',
+  },
+  modeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  modeButtonTextActive: {
+    color: '#fff',
+  },
+  autoSearchDesc: {
+    fontSize: 15,
+    color: '#cbd5e1',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  searchButton: {
+    backgroundColor: '#10b981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 10,
+    gap: 8,
+  },
+  searchButtonDisabled: {
+    backgroundColor: '#475569',
+  },
+  searchButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  dealsCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  dealsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  dealsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  dealsScroll: {
+    maxHeight: 500,
+  },
+  dealCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0f172a',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  dealInfo: {
+    flex: 1,
+  },
+  dealShip: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  dealDate: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginBottom: 2,
+  },
+  dealPort: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginBottom: 8,
+  },
+  dealPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+    flexWrap: 'wrap',
+  },
+  dealPrice: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#10b981',
+  },
+  dealCabin: {
+    fontSize: 13,
+    color: '#64748b',
+  },
+  savingsBadge: {
+    backgroundColor: '#10b98120',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  savingsText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  dealSource: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dealSourceText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontStyle: 'italic',
   },
 });
