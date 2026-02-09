@@ -1,24 +1,52 @@
 import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, ArrowLeft, Download } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, ArrowLeft, Download, FileDown } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { trpc } from '@/lib/trpc';
 import { useEntitlement } from '@/state/EntitlementProvider';
-import { useAuth } from '@/state/AuthProvider';
+
 
 function RoyalCaribbeanSyncScreen() {
   const router = useRouter();
   const coreData = useCoreData();
   const loyalty = useLoyalty();
   const entitlement = useEntitlement();
-  const auth = useAuth();
+  
+  const {
+    state,
+    webViewRef,
+    cruiseLine,
+    setCruiseLine,
+    config,
+    openLogin,
+    runIngestion,
+    syncToApp,
+    cancelSync,
+    handleWebViewMessage,
+    addLog,
+    extendedLoyaltyData,
+    staySignedIn,
+    toggleStaySignedIn
+  } = useRoyalCaribbeanSync();
+  
+  const [webViewVisible, setWebViewVisible] = useState(true);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [webSyncError, setWebSyncError] = useState<string | null>(null);
+  
+  const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
+  
+  const isCelebrity = cruiseLine === 'celebrity';
+  const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
+  
+  const isBackendAvailable = !!process.env.EXPO_PUBLIC_RORK_API_BASE_URL && 
+    !process.env.EXPO_PUBLIC_RORK_API_BASE_URL.includes('fallback');
   
   useEffect(() => {
     if (entitlement.tier === 'view') {
@@ -30,38 +58,6 @@ function RoyalCaribbeanSyncScreen() {
   if (entitlement.tier === 'view') {
     return null;
   }
-  const {
-    state,
-    webViewRef,
-    cruiseLine,
-    setCruiseLine,
-    config,
-    openLogin,
-    runIngestion,
-    exportLog,
-    syncToApp,
-    cancelSync,
-    handleWebViewMessage,
-    addLog,
-    extendedLoyaltyData,
-    staySignedIn,
-    toggleStaySignedIn
-  } = useRoyalCaribbeanSync();
-  
-  const isCelebrity = cruiseLine === 'celebrity';
-  const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
-
-
-
-  const [webViewVisible, setWebViewVisible] = useState(true);
-  
-  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
-  const [webSyncError, setWebSyncError] = useState<string | null>(null);
-  
-  const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
-  
-  const isBackendAvailable = !!process.env.EXPO_PUBLIC_RORK_API_BASE_URL && 
-    !process.env.EXPO_PUBLIC_RORK_API_BASE_URL.includes('fallback');
   
   const handleWebSync = async (username: string, password: string) => {
     console.log('[WebSync] Starting web-based sync...');
@@ -227,12 +223,6 @@ function RoyalCaribbeanSyncScreen() {
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
 
-  useEffect(() => {
-    console.log('[RoyalCaribbeanSync Screen] Status changed:', state.status);
-    console.log('[RoyalCaribbeanSync Screen] showConfirmation:', showConfirmation);
-    console.log('[RoyalCaribbeanSync Screen] syncCounts:', state.syncCounts);
-  }, [state.status, showConfirmation, state.syncCounts]);
-
   return (
     <>
       <Stack.Screen 
@@ -284,6 +274,14 @@ function RoyalCaribbeanSyncScreen() {
             </Text>
           </View>
         </View>
+
+        <Pressable
+          style={styles.importCruisesButton}
+          onPress={() => router.push('/import-cruises' as any)}
+        >
+          <FileDown size={20} color="#10b981" />
+          <Text style={styles.importCruisesButtonText}>Import from ICruise/CruiseSheet</Text>
+        </Pressable>
 
         {false && Platform.OS !== 'web' && (
           <View style={styles.staySignedInContainer}>
@@ -1393,6 +1391,26 @@ const styles = StyleSheet.create({
   cruiseLineLabelCelebrity: {
     color: '#10b981',
     fontWeight: '600' as const
+  },
+  importCruisesButton: {
+    backgroundColor: '#1e293b',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  importCruisesButtonText: {
+    color: '#10b981',
+    fontSize: 15,
+    fontWeight: '600' as const,
   },
   pricingSyncButton: {
     flexDirection: 'row' as const,
