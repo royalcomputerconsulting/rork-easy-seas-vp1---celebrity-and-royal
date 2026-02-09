@@ -368,6 +368,7 @@ export default function ImportCruisesScreen() {
             )}
           </>
         ) : (
+          <>
           <View style={styles.instructionsCard}>
           <Text style={styles.instructionsTitle}>📋 How to Import:</Text>
           
