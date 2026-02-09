@@ -8,6 +8,10 @@ export const trpc = createTRPCReact<AppRouter>();
 
 export const RENDER_BACKEND_URL = "https://rork-easy-seas-vp1-2nep.onrender.com";
 
+export const isRenderBackendAvailable = () => {
+  return true;
+};
+
 const RENDER_ROUTED_PREFIXES = [
   'cruiseDeals.',
   'calendar.',
@@ -81,6 +85,10 @@ export const isBackendAvailable = (): boolean => {
   const baseUrl = getBaseUrl();
   if (baseUrl === "https://fallback.local") return false;
   if (_backendReachable === false && Date.now() - _lastHealthCheck < HEALTH_CHECK_INTERVAL) return false;
+  return true;
+};
+
+export const isWebSyncAvailable = (): boolean => {
   return true;
 };
 

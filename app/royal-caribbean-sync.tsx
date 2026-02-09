@@ -9,7 +9,7 @@ import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
-import { trpc } from '@/lib/trpc';
+import { trpc, isWebSyncAvailable, RENDER_BACKEND_URL } from '@/lib/trpc';
 import { syncCruisePricing } from '@/lib/cruisePricingSync';
 import { useEntitlement } from '@/state/EntitlementProvider';
 
@@ -48,8 +48,7 @@ function RoyalCaribbeanSyncScreen() {
   const isCelebrity = cruiseLine === 'celebrity';
   const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
   
-  const isBackendAvailable = !!process.env.EXPO_PUBLIC_RORK_API_BASE_URL && 
-    !process.env.EXPO_PUBLIC_RORK_API_BASE_URL.includes('fallback');
+  const isBackendAvailable = isWebSyncAvailable();
   
   useEffect(() => {
     if (entitlement.tier === 'view') {
@@ -64,7 +63,7 @@ function RoyalCaribbeanSyncScreen() {
   
   const handleWebSync = async (username: string, password: string) => {
     console.log('[WebSync] Starting web-based sync...');
-    console.log('[WebSync] Backend URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
+    console.log('[WebSync] Backend URL:', RENDER_BACKEND_URL);
     setWebSyncError(null);
     
     if (!isBackendAvailable) {
