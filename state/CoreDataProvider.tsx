@@ -689,7 +689,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           isSyncingRef.current = false;
         });
       }
-    }, 2000); // Debounce 2 seconds
+    }, 5000); // Debounce 5 seconds to reduce request frequency
     
     return () => clearTimeout(syncTimeout);
   }, [bookedCruises, casinoOffers, calendarEvents, settings, userPoints, clubRoyaleProfile, isAuthenticated, authenticatedEmail, syncToBackend]);

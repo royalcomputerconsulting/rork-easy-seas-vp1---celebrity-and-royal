@@ -27,6 +27,71 @@ export const isBackendAvailable = (): boolean => {
 
 let _trpcClient: ReturnType<typeof trpc.createClient> | null = null;
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const fetchWithRetry = async (
+  url: string,
+  options: RequestInit | undefined,
+  maxRetries = 3
+): Promise<Response> => {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.log('[tRPC] Request timeout after 30s');
+        controller.abort();
+      }, 30000);
+      
+      const existingSignal = options?.signal;
+      if (existingSignal?.aborted) {
+        clearTimeout(timeoutId);
+        throw new DOMException('Request was cancelled', 'AbortError');
+      }
+      
+      existingSignal?.addEventListener('abort', () => {
+        controller.abort();
+        clearTimeout(timeoutId);
+      });
+      
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          ...options?.headers,
+          'Accept': 'application/json',
+        },
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('retry-after');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.min(1000 * Math.pow(2, attempt), 30000);
+        
+        if (attempt < maxRetries) {
+          console.log(`[tRPC] Rate limited (429). Retrying after ${waitTime}ms (attempt ${attempt + 1}/${maxRetries})`);
+          await sleep(waitTime);
+          continue;
+        }
+      }
+      
+      return response;
+    } catch (error) {
+      lastError = error as Error;
+      
+      if (attempt < maxRetries) {
+        const waitTime = Math.min(1000 * Math.pow(2, attempt), 10000);
+        console.log(`[tRPC] Request failed. Retrying after ${waitTime}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await sleep(waitTime);
+      }
+    }
+  }
+  
+  throw lastError || new Error('Fetch failed after retries');
+};
+
 export const getTrpcClient = () => {
   if (!_trpcClient) {
     const baseUrl = getBaseUrl();
@@ -43,33 +108,7 @@ export const getTrpcClient = () => {
             
             try {
               console.log(`[tRPC] Making request to: ${url}`);
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => {
-                console.log('[tRPC] Request timeout after 30s');
-                controller.abort();
-              }, 30000);
-              
-              const existingSignal = options?.signal;
-              if (existingSignal?.aborted) {
-                clearTimeout(timeoutId);
-                throw new DOMException('Request was cancelled', 'AbortError');
-              }
-              
-              existingSignal?.addEventListener('abort', () => {
-                controller.abort();
-                clearTimeout(timeoutId);
-              });
-              
-              const response = await fetch(url, {
-                ...options,
-                signal: controller.signal,
-                headers: {
-                  ...options?.headers,
-                  'Accept': 'application/json',
-                },
-              });
-              
-              clearTimeout(timeoutId);
+              const response = await fetchWithRetry(url.toString(), options);
               console.log(`[tRPC] Response: ${response.status} ${response.statusText}`);
               
               if (!response.ok) {

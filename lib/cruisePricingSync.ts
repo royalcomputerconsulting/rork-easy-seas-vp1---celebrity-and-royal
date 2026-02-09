@@ -81,30 +81,50 @@ const extractPricesFromText = (text: string): {
 const fetchWithRetry = async (
   url: string,
   options: RequestInit,
-  maxRetries = 2
+  maxRetries = 3
 ): Promise<Response> => {
   let lastError: Error | null = null;
   
   for (let i = 0; i <= maxRetries; i++) {
     try {
       const response = await fetch(url, options);
-      if (response.ok) return response;
       
       if (response.status === 429) {
-        await new Promise(resolve => setTimeout(resolve, (i + 1) * 2000));
-        continue;
+        const retryAfter = response.headers.get('retry-after');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.min(2000 * Math.pow(2, i), 60000);
+        
+        if (i < maxRetries) {
+          console.log(`[CruisePricing] Rate limited. Waiting ${waitTime}ms before retry ${i + 1}/${maxRetries}`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        
+        throw new Error('Rate limited - please try again later');
+      }
+      
+      if (response.ok) return response;
+      
+      if (response.status >= 500) {
+        if (i < maxRetries) {
+          const waitTime = Math.min(1000 * Math.pow(2, i), 10000);
+          console.log(`[CruisePricing] Server error ${response.status}. Retrying after ${waitTime}ms`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
       }
       
       throw new Error(`HTTP ${response.status}`);
     } catch (error) {
       lastError = error as Error;
-      if (i < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, (i + 1) * 1000));
+      if (i < maxRetries && !(error instanceof Error && error.message.includes('Rate limited'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, i), 10000);
+        console.log(`[CruisePricing] Request failed. Retrying after ${waitTime}ms`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }
   }
   
-  throw lastError || new Error('Fetch failed');
+  throw lastError || new Error('Fetch failed after retries');
 };
 
 const fetchPricingFromICruise = async (
@@ -379,7 +399,7 @@ const processCruiseBatch = async (
         errors.push(`${cruise.shipName} (${cruise.sailDate}): No pricing found from any source`);
       }
 
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1500));
     } catch (error) {
       const msg = `${cruise.shipName}: ${error instanceof Error ? error.message : 'Unknown error'}`;
       console.error(`[CruisePricing] Error - ${msg}`);
@@ -442,8 +462,8 @@ export const syncCruisePricing = async (cruises: Array<{
     allErrors.push(...errors);
     
     if (i < batches.length - 1) {
-      console.log('[CruisePricing] Waiting 2 seconds before next batch...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('[CruisePricing] Waiting 3 seconds before next batch...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
     }
   }
 
