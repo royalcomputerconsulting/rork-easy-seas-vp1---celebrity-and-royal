@@ -37,6 +37,7 @@ import { SlotMachineLibraryProvider, useSlotMachineLibrary } from "@/state/SlotM
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
 import { UserDataSyncProvider, useUserDataSync } from "@/state/UserDataSyncProvider";
 import { EntitlementProvider } from "@/state/EntitlementProvider";
+import { CrewRecognitionProvider } from "@/state/CrewRecognitionProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 
 try {
@@ -436,6 +437,7 @@ export default function RootLayout() {
               <UserProvider>
                 <EntitlementProvider>
                   <CoreDataProvider>
+                    <CrewRecognitionProvider>
                 <HistoricalPerformanceProvider>
                   <PriceHistoryProvider>
                     <PriceTrackingProvider>
@@ -477,6 +479,7 @@ export default function RootLayout() {
                     </PriceTrackingProvider>
                   </PriceHistoryProvider>
                 </HistoricalPerformanceProvider>
+                    </CrewRecognitionProvider>
                   </CoreDataProvider>
                 </EntitlementProvider>
               </UserProvider>

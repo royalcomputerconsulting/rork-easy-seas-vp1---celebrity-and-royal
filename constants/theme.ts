@@ -83,6 +83,12 @@ export const COLORS = {
   goldLight: '#F59E0B',
   goldBg: 'rgba(212, 160, 10, 0.12)',
   
+  // Core colors
+  primary: '#1E3A5F',
+  text: '#1E3A5F',
+  textTertiary: '#9CA3AF',
+  border: '#E5E7EB',
+
   // Legacy support
   primaryDark: '#1E3A5F',
   primaryGradientStart: '#1E3A5F',
