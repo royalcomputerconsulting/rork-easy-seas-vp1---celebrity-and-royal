@@ -1220,9 +1220,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
   const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any, providedExtendedLoyalty?: ExtendedLoyaltyData | null) => {
     const loyaltyToSync = providedExtendedLoyalty ?? extendedLoyaltyData;
+    console.log('[RoyalCaribbeanSync] ========================================');
+    console.log('[RoyalCaribbeanSync] SYNC TO APP STARTED');
+    console.log('[RoyalCaribbeanSync] ========================================');
+    
     try {
-      console.log('[RoyalCaribbeanSync] Starting sync to app...');
+      console.log('[RoyalCaribbeanSync] Step 1: Setting status to syncing...');
       setState(prev => ({ ...prev, status: 'syncing' }));
+      addLog('🚀 Starting sync to app...', 'info');
+      
+      console.log('[RoyalCaribbeanSync] Step 2: Creating sync preview...');
       addLog('Creating sync preview...', 'info');
 
       const currentLoyalty = {
@@ -1274,31 +1281,52 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         bookedCruises: finalBookedCruises.length
       });
 
+      console.log('[RoyalCaribbeanSync] Step: Persisting offers...');
       addLog(`Setting ${finalOffers.length} total offers in app`, 'info');
       try {
-        await coreDataContext.setCasinoOffers(finalOffers);
+        console.log('[RoyalCaribbeanSync] Calling setCasinoOffers()...');
+        await Promise.race([
+          coreDataContext.setCasinoOffers(finalOffers),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('setCasinoOffers timed out')), 30000))
+        ]);
+        console.log('[RoyalCaribbeanSync] setCasinoOffers() completed');
         addLog('✅ Offers persisted to storage', 'success');
       } catch (offerError) {
         console.error('[RoyalCaribbeanSync] Error persisting offers:', offerError);
         addLog(`⚠️ Warning: Failed to persist offers: ${offerError}`, 'warning');
+        throw offerError;
       }
 
+      console.log('[RoyalCaribbeanSync] Step: Persisting available cruises...');
       addLog(`Setting ${finalCruises.length} total available cruises in app`, 'info');
       try {
-        await coreDataContext.setCruises(finalCruises);
+        console.log('[RoyalCaribbeanSync] Calling setCruises()...');
+        await Promise.race([
+          coreDataContext.setCruises(finalCruises),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('setCruises timed out')), 30000))
+        ]);
+        console.log('[RoyalCaribbeanSync] setCruises() completed');
         addLog('✅ Available cruises persisted to storage', 'success');
       } catch (cruiseError) {
         console.error('[RoyalCaribbeanSync] Error persisting cruises:', cruiseError);
         addLog(`⚠️ Warning: Failed to persist cruises: ${cruiseError}`, 'warning');
+        throw cruiseError;
       }
 
+      console.log('[RoyalCaribbeanSync] Step: Persisting booked cruises...');
       addLog(`Setting ${finalBookedCruises.length} total booked cruises in app`, 'info');
       try {
-        await coreDataContext.setBookedCruises(finalBookedCruises);
+        console.log('[RoyalCaribbeanSync] Calling setBookedCruises()...');
+        await Promise.race([
+          coreDataContext.setBookedCruises(finalBookedCruises),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('setBookedCruises timed out')), 30000))
+        ]);
+        console.log('[RoyalCaribbeanSync] setBookedCruises() completed');
         addLog('✅ Booked cruises persisted to storage', 'success');
       } catch (bookedError) {
         console.error('[RoyalCaribbeanSync] Error persisting booked cruises:', bookedError);
         addLog(`⚠️ Warning: Failed to persist booked cruises: ${bookedError}`, 'warning');
+        throw bookedError;
       }
 
       if (preview.loyalty) {
@@ -1357,28 +1385,47 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }));
       addLog('Data synced successfully to app!', 'success');
       
-      console.log('[RoyalCaribbeanSync] Triggering data refresh after sync...');
+      console.log('[RoyalCaribbeanSync] Step: Triggering data refresh after sync...');
       try {
-        if (coreDataContext.refreshData) {
-          await coreDataContext.refreshData();
+        if (coreDataContext.refreshData && typeof coreDataContext.refreshData === 'function') {
+          console.log('[RoyalCaribbeanSync] Calling refreshData()...');
+          const refreshPromise = coreDataContext.refreshData();
+          console.log('[RoyalCaribbeanSync] refreshData() called, waiting for completion...');
+          
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Data refresh timed out after 10 seconds')), 10000)
+          );
+          
+          await Promise.race([refreshPromise, timeoutPromise]);
           addLog('✅ Data refresh completed', 'success');
           console.log('[RoyalCaribbeanSync] Data refresh completed successfully');
         } else {
           console.log('[RoyalCaribbeanSync] No refreshData function available, skipping refresh');
+          addLog('ℹ️ Skipping data refresh (not available)', 'info');
         }
       } catch (refreshError) {
         console.error('[RoyalCaribbeanSync] Error during data refresh (non-fatal):', refreshError);
         addLog('⚠️ Data refresh had issues but sync completed', 'warning');
       }
       
-      console.log('[RoyalCaribbeanSync] Sync to app completed successfully!');
+      console.log('[RoyalCaribbeanSync] ========================================');
+      console.log('[RoyalCaribbeanSync] SYNC TO APP COMPLETED SUCCESSFULLY!');
+      console.log('[RoyalCaribbeanSync] ========================================');
     } catch (error) {
-      console.error('[RoyalCaribbeanSync] Sync error:', error);
+      console.error('[RoyalCaribbeanSync] ========================================');
+      console.error('[RoyalCaribbeanSync] SYNC ERROR:', error);
+      console.error('[RoyalCaribbeanSync] ========================================');
       if (error instanceof Error) {
+        console.error('[RoyalCaribbeanSync] Error name:', error.name);
+        console.error('[RoyalCaribbeanSync] Error message:', error.message);
         console.error('[RoyalCaribbeanSync] Error stack:', error.stack);
       }
-      setState(prev => ({ ...prev, status: 'error', error: String(error) }));
-      addLog(`Failed to sync data: ${error}`, 'error');
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.log('[RoyalCaribbeanSync] Setting status to error...');
+      setState(prev => ({ ...prev, status: 'error', error: errorMessage }));
+      addLog(`❌ Sync failed: ${errorMessage}`, 'error');
+      addLog('Please try again or contact support if the issue persists', 'error');
     }
   }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog]);
 
