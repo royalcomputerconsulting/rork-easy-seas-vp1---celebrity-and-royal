@@ -534,6 +534,7 @@ function RoyalCaribbeanSyncScreen() {
                       departurePort: cruise.departurePort,
                     }));
 
+                    addLog('Connecting to web search service...', 'info');
                     const result = await syncCruisePricing(cruiseParams);
 
                     addLog(`Pricing sync complete! Retrieved ${result.pricing.length} pricing records`, 'success');
@@ -581,7 +582,17 @@ function RoyalCaribbeanSyncScreen() {
 
                   } catch (error: any) {
                     console.error('[PricingSync] Error:', error);
-                    addLog(`Pricing sync failed: ${error.message || 'Unknown error'}`, 'error');
+                    const errorMsg = error.message || 'Unknown error';
+                    
+                    if (errorMsg.includes('not available') || errorMsg.includes('not configured')) {
+                      addLog('Pricing sync is not available on this deployment', 'error');
+                      addLog('Please manually update prices or contact support', 'warning');
+                    } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
+                      addLog('Network error: Unable to reach pricing service', 'error');
+                      addLog('Check your internet connection and try again', 'warning');
+                    } else {
+                      addLog(`Pricing sync failed: ${errorMsg}`, 'error');
+                    }
                   } finally {
                     setSyncingPricing(false);
                   }

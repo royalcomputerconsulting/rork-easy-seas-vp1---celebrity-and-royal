@@ -166,6 +166,23 @@ export const syncCruisePricing = async (cruises: Array<{
 }>) => {
   console.log(`[CruisePricing] Starting sync for ${cruises.length} cruises`);
 
+  if (!process.env.EXPO_PUBLIC_TOOLKIT_URL) {
+    throw new Error('Web search service not configured. The EXPO_PUBLIC_TOOLKIT_URL environment variable is missing.');
+  }
+
+  const testResponse = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: 'test', numResults: 1 }),
+  }).catch(() => null);
+
+  if (!testResponse || !testResponse.ok) {
+    throw new Error(
+      'Web search API is not available. The pricing sync feature requires a working web search endpoint at the toolkit URL. ' +
+      'Please contact support to enable this feature, or manually update cruise prices in the app.'
+    );
+  }
+
   const allPricing: CruisePricing[] = [];
   const errors: string[] = [];
 
