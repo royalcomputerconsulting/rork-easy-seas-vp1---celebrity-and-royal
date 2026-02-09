@@ -2,7 +2,7 @@ services:
   - type: web
     name: easy-seas-backend
     env: node
-    buildCommand: npm install
+    buildCommand: npm install --legacy-peer-deps
     startCommand: npm run backend
     envVars:
       - key: NODE_ENV
