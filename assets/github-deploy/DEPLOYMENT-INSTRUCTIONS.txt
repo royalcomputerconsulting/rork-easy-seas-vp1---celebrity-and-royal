@@ -1,0 +1,146 @@
+================================================================================
+RENDER.COM BACKEND DEPLOYMENT INSTRUCTIONS
+================================================================================
+
+Follow these steps EXACTLY to deploy your backend to Render.com:
+
+================================================================================
+STEP 1: PREPARE FILES IN YOUR GITHUB REPO
+================================================================================
+
+1. In your GitHub repository, replace these files with the ones from this folder:
+   
+   a) Replace package.json with the one in this folder
+      - This has matching tRPC versions (all 11.8.1)
+      - Added @hono/node-server dependency
+      - Added "backend" and "build" scripts
+   
+   b) Copy server.js to the root of your GitHub repo
+      - This is your backend entry point
+   
+   c) Rename "npmrc-RENAME-THIS.txt" to ".npmrc" in your GitHub repo
+      - GitHub and most systems allow .npmrc files
+      - This tells npm to use legacy-peer-deps
+      - If GitHub doesn't allow it, you can set it in Render settings instead
+
+2. Make sure your "backend" folder exists with these files:
+   - backend/hono.ts
+   - backend/db.ts
+   - backend/trpc/ (folder with all tRPC routes)
+
+3. Commit and push all changes to GitHub
+
+================================================================================
+STEP 2: CONFIGURE RENDER.COM
+================================================================================
+
+1. Go to your Render.com dashboard: https://dashboard.render.com
+
+2. Find your existing web service (easy-seas or similar)
+
+3. Click on it to open settings
+
+4. In the "Settings" tab, update these fields:
+
+   BUILD COMMAND (change to):
+   npm install && npm run build
+
+   START COMMAND (look for this field, it might be called "Start Command"):
+   npm run backend
+
+   If you don't see "Start Command", look for:
+   - "Command" field
+   - Or go to the "Environment" section
+
+5. If you couldn't create .npmrc file in GitHub, add this in Render:
+   - Scroll to "Environment Variables"
+   - Add a new variable:
+     Key: NPM_CONFIG_LEGACY_PEER_DEPS
+     Value: true
+
+================================================================================
+STEP 3: ADD ENVIRONMENT VARIABLES IN RENDER
+================================================================================
+
+In the "Environment" tab of your Render service, make sure these are set:
+
+Required variables:
+- EXPO_PUBLIC_RORK_DB_ENDPOINT
+- EXPO_PUBLIC_RORK_DB_NAMESPACE  
+- EXPO_PUBLIC_RORK_DB_TOKEN
+- EXPO_PUBLIC_TOOLKIT_URL
+
+Optional (if not already set):
+- PORT (Render usually sets this automatically to 10000)
+
+================================================================================
+STEP 4: DEPLOY
+================================================================================
+
+1. Save all settings in Render
+
+2. Click "Manual Deploy" > "Deploy latest commit"
+   (or push a new commit to GitHub to trigger auto-deploy)
+
+3. Watch the deployment logs:
+   - It should run "bun install" (from Render's auto-detection)
+   - Then "npm install && npm run build"
+   - Then start with "npm run backend"
+
+4. Look for success messages:
+   [Server] Starting backend on port 10000...
+   [Server] Backend running at http://localhost:10000
+   [Server] tRPC endpoint: http://localhost:10000/api/trpc
+
+================================================================================
+STEP 5: TEST YOUR BACKEND
+================================================================================
+
+1. Once deployed, your backend URL will be:
+   https://easy-seas.onrender.com
+
+2. Test the health endpoint:
+   https://easy-seas.onrender.com/api
+   (Should return "Backend is running")
+
+3. Test tRPC endpoint:
+   https://easy-seas.onrender.com/api/trpc
+   (Should return tRPC response)
+
+4. Your app should now connect successfully!
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+If build fails with peer dependency errors:
+- Make sure .npmrc file is in your GitHub repo
+- OR add NPM_CONFIG_LEGACY_PEER_DEPS=true in Render environment variables
+
+If "npm run backend" fails:
+- Check that server.js exists in root
+- Check that @hono/node-server is in package.json dependencies
+
+If tRPC errors persist:
+- Check all environment variables are set in Render
+- Check the server logs for the actual backend URL
+- Make sure your app is pointing to the correct backend URL
+
+If you see "command not found" for the start command:
+- Make sure you're setting the "Start Command" field, not just build
+- The field should contain: npm run backend
+
+================================================================================
+SUMMARY OF FILES TO COPY
+================================================================================
+
+✓ package.json          → Replace in GitHub root
+✓ server.js            → Copy to GitHub root  
+✓ .npmrc               → Rename npmrc-RENAME-THIS.txt to .npmrc in GitHub
+✓ backend/ folder      → Should already exist with your tRPC code
+
+Then configure Render with:
+  Build Command: npm install && npm run build
+  Start Command: npm run backend
+
+================================================================================
