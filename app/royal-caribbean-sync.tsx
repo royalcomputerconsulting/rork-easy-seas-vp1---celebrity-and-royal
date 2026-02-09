@@ -39,8 +39,11 @@ function RoyalCaribbeanSyncScreen() {
   const [webViewVisible, setWebViewVisible] = useState(true);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
+  const [syncingPricing, setSyncingPricing] = useState(false);
+  const [pricingSyncResults, setPricingSyncResults] = useState<{ updated: number; total: number } | null>(null);
   
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
+  const pricingSyncMutation = trpc.cruiseDeals.syncPricingForBookedCruises.useMutation();
   
   const isCelebrity = cruiseLine === 'celebrity';
   const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
@@ -503,17 +506,98 @@ function RoyalCaribbeanSyncScreen() {
               </Pressable>
 
               <Pressable 
-                style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled]}
-                onPress={() => {
-                  if (canRunIngestion && !isRunning) {
-                    addLog('Starting pricing sync for upcoming cruises...', 'info');
-                    router.push('/pricing-summary');
+                style={[styles.quickActionButton, syncingPricing && styles.buttonDisabled]}
+                onPress={async () => {
+                  if (syncingPricing) return;
+                  
+                  const upcomingCruises = coreData.bookedCruises.filter(c => {
+                    const sailDate = new Date(c.sailDate);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return sailDate >= today && c.completionState !== 'completed';
+                  });
+
+                  if (upcomingCruises.length === 0) {
+                    addLog('No upcoming cruises to sync pricing for', 'warning');
+                    return;
+                  }
+
+                  setSyncingPricing(true);
+                  addLog(`Starting pricing sync for ${upcomingCruises.length} upcoming cruises...`, 'info');
+
+                  try {
+                    const cruiseParams = upcomingCruises.map(cruise => ({
+                      id: cruise.id,
+                      shipName: cruise.shipName,
+                      sailDate: cruise.sailDate,
+                      nights: cruise.nights,
+                      departurePort: cruise.departurePort,
+                    }));
+
+                    const result = await pricingSyncMutation.mutateAsync({
+                      cruises: cruiseParams,
+                    });
+
+                    addLog(`Pricing sync complete! Retrieved ${result.pricing.length} pricing records`, 'success');
+
+                    const pricingByBookingId = new Map<string, typeof result.pricing>();
+                    result.pricing.forEach(p => {
+                      if (!pricingByBookingId.has(p.bookingId)) {
+                        pricingByBookingId.set(p.bookingId, []);
+                      }
+                      pricingByBookingId.get(p.bookingId)!.push(p);
+                    });
+
+                    let updatedCount = 0;
+                    for (const cruise of upcomingCruises) {
+                      const cruisePricing = pricingByBookingId.get(cruise.id);
+                      if (!cruisePricing || cruisePricing.length === 0) continue;
+
+                      const avgPricing = {
+                        interiorPrice: 0,
+                        oceanviewPrice: 0,
+                        balconyPrice: 0,
+                        suitePrice: 0,
+                      };
+
+                      cruisePricing.forEach(p => {
+                        if (p.interiorPrice) avgPricing.interiorPrice += p.interiorPrice;
+                        if (p.oceanviewPrice) avgPricing.oceanviewPrice += p.oceanviewPrice;
+                        if (p.balconyPrice) avgPricing.balconyPrice += p.balconyPrice;
+                        if (p.suitePrice) avgPricing.suitePrice += p.suitePrice;
+                      });
+
+                      const count = cruisePricing.length;
+                      avgPricing.interiorPrice = Math.round(avgPricing.interiorPrice / count);
+                      avgPricing.oceanviewPrice = Math.round(avgPricing.oceanviewPrice / count);
+                      avgPricing.balconyPrice = Math.round(avgPricing.balconyPrice / count);
+                      avgPricing.suitePrice = Math.round(avgPricing.suitePrice / count);
+
+                      await coreData.updateBookedCruise(cruise.id, avgPricing);
+                      updatedCount++;
+                      addLog(`Updated pricing for ${cruise.shipName}`, 'info');
+                    }
+
+                    setPricingSyncResults({ updated: updatedCount, total: upcomingCruises.length });
+                    addLog(`Successfully updated pricing for ${updatedCount} of ${upcomingCruises.length} cruises`, 'success');
+
+                  } catch (error: any) {
+                    console.error('[PricingSync] Error:', error);
+                    addLog(`Pricing sync failed: ${error.message || 'Unknown error'}`, 'error');
+                  } finally {
+                    setSyncingPricing(false);
                   }
                 }}
-                disabled={!canRunIngestion || isRunning}
+                disabled={syncingPricing}
               >
-                <DollarSign size={20} color="#f59e0b" />
-                <Text style={styles.quickActionLabel}>SYNC PRICING</Text>
+                {syncingPricing ? (
+                  <Loader2 size={20} color="#f59e0b" />
+                ) : (
+                  <DollarSign size={20} color="#f59e0b" />
+                )}
+                <Text style={styles.quickActionLabel}>
+                  {syncingPricing ? 'SYNCING...' : 'SYNC PRICING'}
+                </Text>
               </Pressable>
             </View>
           )}
