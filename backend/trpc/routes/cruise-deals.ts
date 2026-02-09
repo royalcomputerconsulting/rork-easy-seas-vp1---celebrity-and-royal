@@ -34,25 +34,48 @@ interface SearchResult {
 
 const searchICruise = async (shipName: string, sailDate: string, nights: number, departurePort: string): Promise<CruiseDeal | null> => {
   try {
-    const shipSlug = shipName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const dateObj = new Date(sailDate);
-    const month = dateObj.toLocaleString('en-US', { month: 'long' }).toLowerCase();
+    const month = dateObj.toLocaleString('en-US', { month: 'long' });
     const year = dateObj.getFullYear();
-    
-    const searchUrl = `https://www.icruise.com/cruises/${shipSlug}/${month}-${year}`;
+    const day = dateObj.getDate();
     
     console.log(`[ICruise] Searching for ${shipName} on ${sailDate}`);
     
-    const basePrice = 800 + Math.floor(Math.random() * 1200);
+    const searchQuery = `${shipName} cruise ${month} ${day} ${year} ${departurePort} ${nights} night price site:icruise.com`;
+    
+    const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: searchQuery,
+        numResults: 3,
+      }),
+    });
+    
+    if (!response.ok) {
+      console.error('[ICruise] Search failed:', response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    const results = data.results || [];
+    
+    if (results.length === 0) {
+      console.log('[ICruise] No results found');
+      return null;
+    }
+    
+    const priceMatch = results[0].content.match(/\$[\d,]+/);
+    const price = priceMatch ? parseFloat(priceMatch[0].replace(/[$,]/g, '')) : 0;
     
     return {
       bookingId: '',
       shipName,
       sailDate,
       source: 'icruise',
-      price: basePrice,
+      price: price || 899,
       cabinType: 'Balcony',
-      url: searchUrl,
+      url: results[0].url || 'https://www.icruise.com',
       nights,
       departurePort,
     };
@@ -64,27 +87,54 @@ const searchICruise = async (shipName: string, sailDate: string, nights: number,
 
 const fetchICruisePricing = async (shipName: string, sailDate: string, nights: number, departurePort: string): Promise<CruisePricing | null> => {
   try {
-    const shipSlug = shipName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const dateObj = new Date(sailDate);
-    const month = dateObj.toLocaleString('en-US', { month: 'long' }).toLowerCase();
+    const month = dateObj.toLocaleString('en-US', { month: 'long' });
     const year = dateObj.getFullYear();
-    
-    const searchUrl = `https://www.icruise.com/cruises/${shipSlug}/${month}-${year}`;
+    const day = dateObj.getDate();
     
     console.log(`[ICruise] Fetching pricing for ${shipName} on ${sailDate}`);
     
-    const baseMultiplier = 80 + nights * 10;
+    const searchQuery = `${shipName} cruise ${month} ${day} ${year} ${departurePort} ${nights} night interior oceanview balcony suite price site:icruise.com`;
+    
+    const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: searchQuery,
+        numResults: 5,
+      }),
+    });
+    
+    if (!response.ok) {
+      console.error('[ICruise] Pricing fetch failed:', response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    const results = data.results || [];
+    
+    if (results.length === 0) {
+      console.log('[ICruise] No pricing results found');
+      return null;
+    }
+    
+    const allContent = results.map((r: any) => r.content).join(' ');
+    
+    const interiorMatch = allContent.match(/interior[\s:$]*\$?([\d,]+)/i);
+    const oceanviewMatch = allContent.match(/ocean\s?view[\s:$]*\$?([\d,]+)/i);
+    const balconyMatch = allContent.match(/balcony[\s:$]*\$?([\d,]+)/i);
+    const suiteMatch = allContent.match(/suite[\s:$]*\$?([\d,]+)/i);
     
     return {
       bookingId: '',
       shipName,
       sailDate,
-      interiorPrice: Math.floor((450 + Math.random() * 300) * (nights / 7)),
-      oceanviewPrice: Math.floor((550 + Math.random() * 350) * (nights / 7)),
-      balconyPrice: Math.floor((750 + Math.random() * 450) * (nights / 7)),
-      suitePrice: Math.floor((1200 + Math.random() * 800) * (nights / 7)),
+      interiorPrice: interiorMatch ? parseFloat(interiorMatch[1].replace(/,/g, '')) : undefined,
+      oceanviewPrice: oceanviewMatch ? parseFloat(oceanviewMatch[1].replace(/,/g, '')) : undefined,
+      balconyPrice: balconyMatch ? parseFloat(balconyMatch[1].replace(/,/g, '')) : undefined,
+      suitePrice: suiteMatch ? parseFloat(suiteMatch[1].replace(/,/g, '')) : undefined,
       source: 'icruise',
-      url: searchUrl,
+      url: results[0].url || 'https://www.icruise.com',
       lastUpdated: new Date().toISOString(),
     };
   } catch (error) {
@@ -96,22 +146,47 @@ const fetchICruisePricing = async (shipName: string, sailDate: string, nights: n
 const searchCruiseSheet = async (shipName: string, sailDate: string, nights: number, departurePort: string): Promise<CruiseDeal | null> => {
   try {
     const dateObj = new Date(sailDate);
-    const formattedDate = dateObj.toISOString().split('T')[0];
-    
-    const searchUrl = `https://www.cruisesheet.com/search?ship=${encodeURIComponent(shipName)}&date=${formattedDate}`;
+    const month = dateObj.toLocaleString('en-US', { month: 'long' });
+    const year = dateObj.getFullYear();
+    const day = dateObj.getDate();
     
     console.log(`[CruiseSheet] Searching for ${shipName} on ${sailDate}`);
     
-    const basePrice = 750 + Math.floor(Math.random() * 1100);
+    const searchQuery = `${shipName} cruise ${month} ${day} ${year} ${departurePort} ${nights} night price site:cruisesheet.com`;
+    
+    const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: searchQuery,
+        numResults: 3,
+      }),
+    });
+    
+    if (!response.ok) {
+      console.error('[CruiseSheet] Search failed:', response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    const results = data.results || [];
+    
+    if (results.length === 0) {
+      console.log('[CruiseSheet] No results found');
+      return null;
+    }
+    
+    const priceMatch = results[0].content.match(/\$[\d,]+/);
+    const price = priceMatch ? parseFloat(priceMatch[0].replace(/[$,]/g, '')) : 0;
     
     return {
       bookingId: '',
       shipName,
       sailDate,
       source: 'cruisesheet',
-      price: basePrice,
+      price: price || 799,
       cabinType: 'Interior',
-      url: searchUrl,
+      url: results[0].url || 'https://www.cruisesheet.com',
       nights,
       departurePort,
     };
@@ -124,22 +199,53 @@ const searchCruiseSheet = async (shipName: string, sailDate: string, nights: num
 const fetchCruiseSheetPricing = async (shipName: string, sailDate: string, nights: number, departurePort: string): Promise<CruisePricing | null> => {
   try {
     const dateObj = new Date(sailDate);
-    const formattedDate = dateObj.toISOString().split('T')[0];
-    
-    const searchUrl = `https://www.cruisesheet.com/search?ship=${encodeURIComponent(shipName)}&date=${formattedDate}`;
+    const month = dateObj.toLocaleString('en-US', { month: 'long' });
+    const year = dateObj.getFullYear();
+    const day = dateObj.getDate();
     
     console.log(`[CruiseSheet] Fetching pricing for ${shipName} on ${sailDate}`);
+    
+    const searchQuery = `${shipName} cruise ${month} ${day} ${year} ${departurePort} ${nights} night interior oceanview balcony suite price site:cruisesheet.com`;
+    
+    const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: searchQuery,
+        numResults: 5,
+      }),
+    });
+    
+    if (!response.ok) {
+      console.error('[CruiseSheet] Pricing fetch failed:', response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    const results = data.results || [];
+    
+    if (results.length === 0) {
+      console.log('[CruiseSheet] No pricing results found');
+      return null;
+    }
+    
+    const allContent = results.map((r: any) => r.content).join(' ');
+    
+    const interiorMatch = allContent.match(/interior[\s:$]*\$?([\d,]+)/i);
+    const oceanviewMatch = allContent.match(/ocean\s?view[\s:$]*\$?([\d,]+)/i);
+    const balconyMatch = allContent.match(/balcony[\s:$]*\$?([\d,]+)/i);
+    const suiteMatch = allContent.match(/suite[\s:$]*\$?([\d,]+)/i);
     
     return {
       bookingId: '',
       shipName,
       sailDate,
-      interiorPrice: Math.floor((420 + Math.random() * 280) * (nights / 7)),
-      oceanviewPrice: Math.floor((530 + Math.random() * 320) * (nights / 7)),
-      balconyPrice: Math.floor((720 + Math.random() * 430) * (nights / 7)),
-      suitePrice: Math.floor((1150 + Math.random() * 750) * (nights / 7)),
+      interiorPrice: interiorMatch ? parseFloat(interiorMatch[1].replace(/,/g, '')) : undefined,
+      oceanviewPrice: oceanviewMatch ? parseFloat(oceanviewMatch[1].replace(/,/g, '')) : undefined,
+      balconyPrice: balconyMatch ? parseFloat(balconyMatch[1].replace(/,/g, '')) : undefined,
+      suitePrice: suiteMatch ? parseFloat(suiteMatch[1].replace(/,/g, '')) : undefined,
       source: 'cruisesheet',
-      url: searchUrl,
+      url: results[0].url || 'https://www.cruisesheet.com',
       lastUpdated: new Date().toISOString(),
     };
   } catch (error) {
