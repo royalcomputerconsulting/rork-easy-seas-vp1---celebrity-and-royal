@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.bgSecondary,
     borderBottomWidth: 2,
     borderBottomColor: COLORS.border,
   },
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   tableRowEven: {
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.bgSecondary,
   },
   tableCell: {
     padding: SPACING.sm,

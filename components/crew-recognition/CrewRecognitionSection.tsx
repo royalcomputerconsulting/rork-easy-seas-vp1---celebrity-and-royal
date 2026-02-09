@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   statCard: {
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.bgSecondary,
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
     flex: 1,
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
   },
   filtersPanel: {
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.bgSecondary,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.bgSecondary,
     borderBottomWidth: 2,
     borderBottomColor: COLORS.border,
   },
@@ -554,7 +554,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   tableRowEven: {
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.bgSecondary,
   },
   tableCell: {
     padding: SPACING.sm,
