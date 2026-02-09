@@ -10,6 +10,7 @@ import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { trpc } from '@/lib/trpc';
+import { syncCruisePricing } from '@/lib/cruisePricingSync';
 import { useEntitlement } from '@/state/EntitlementProvider';
 
 
@@ -43,7 +44,6 @@ function RoyalCaribbeanSyncScreen() {
   const [pricingSyncResults, setPricingSyncResults] = useState<{ updated: number; total: number } | null>(null);
   
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
-  const pricingSyncMutation = trpc.cruiseDeals.syncPricingForBookedCruises.useMutation();
   
   const isCelebrity = cruiseLine === 'celebrity';
   const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
@@ -534,9 +534,7 @@ function RoyalCaribbeanSyncScreen() {
                       departurePort: cruise.departurePort,
                     }));
 
-                    const result = await pricingSyncMutation.mutateAsync({
-                      cruises: cruiseParams,
-                    });
+                    const result = await syncCruisePricing(cruiseParams);
 
                     addLog(`Pricing sync complete! Retrieved ${result.pricing.length} pricing records`, 'success');
 

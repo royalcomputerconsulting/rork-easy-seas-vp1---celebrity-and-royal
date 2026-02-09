@@ -96,6 +96,9 @@ const fetchICruisePricing = async (shipName: string, sailDate: string, nights: n
     
     const searchQuery = `${shipName} cruise ${month} ${day} ${year} ${departurePort} ${nights} night interior oceanview balcony suite price site:icruise.com`;
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    
     const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -103,10 +106,13 @@ const fetchICruisePricing = async (shipName: string, sailDate: string, nights: n
         query: searchQuery,
         numResults: 5,
       }),
+      signal: controller.signal,
     });
     
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
-      console.error('[ICruise] Pricing fetch failed:', response.status);
+      console.error('[ICruise] Pricing fetch failed:', response.status, await response.text());
       return null;
     }
     
@@ -207,6 +213,9 @@ const fetchCruiseSheetPricing = async (shipName: string, sailDate: string, night
     
     const searchQuery = `${shipName} cruise ${month} ${day} ${year} ${departurePort} ${nights} night interior oceanview balcony suite price site:cruisesheet.com`;
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    
     const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -214,10 +223,13 @@ const fetchCruiseSheetPricing = async (shipName: string, sailDate: string, night
         query: searchQuery,
         numResults: 5,
       }),
+      signal: controller.signal,
     });
     
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
-      console.error('[CruiseSheet] Pricing fetch failed:', response.status);
+      console.error('[CruiseSheet] Pricing fetch failed:', response.status, await response.text());
       return null;
     }
     
@@ -371,39 +383,55 @@ export const cruiseDealsRouter = createTRPCRouter({
     .mutation(async ({ input }): Promise<{ pricing: CruisePricing[]; syncedCount: number }> => {
       console.log(`[CruiseDeals] Starting pricing sync for ${input.cruises.length} booked cruises`);
       
+      if (!process.env.EXPO_PUBLIC_TOOLKIT_URL) {
+        console.error('[CruiseDeals] EXPO_PUBLIC_TOOLKIT_URL not configured');
+        throw new Error('Backend web search service not available');
+      }
+      
       const allPricing: CruisePricing[] = [];
+      const errors: string[] = [];
       
       for (const cruise of input.cruises) {
-        console.log(`[CruiseDeals] Fetching pricing for ${cruise.shipName} - ${cruise.sailDate}`);
-        
-        const iCruisePricing = await fetchICruisePricing(
-          cruise.shipName,
-          cruise.sailDate,
-          cruise.nights,
-          cruise.departurePort
-        );
-        
-        if (iCruisePricing) {
-          iCruisePricing.bookingId = cruise.id;
-          allPricing.push(iCruisePricing);
+        try {
+          console.log(`[CruiseDeals] Fetching pricing for ${cruise.shipName} - ${cruise.sailDate}`);
+          
+          const iCruisePricing = await fetchICruisePricing(
+            cruise.shipName,
+            cruise.sailDate,
+            cruise.nights,
+            cruise.departurePort
+          );
+          
+          if (iCruisePricing) {
+            iCruisePricing.bookingId = cruise.id;
+            allPricing.push(iCruisePricing);
+          }
+          
+          const cruiseSheetPricing = await fetchCruiseSheetPricing(
+            cruise.shipName,
+            cruise.sailDate,
+            cruise.nights,
+            cruise.departurePort
+          );
+          
+          if (cruiseSheetPricing) {
+            cruiseSheetPricing.bookingId = cruise.id;
+            allPricing.push(cruiseSheetPricing);
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } catch (error) {
+          const msg = `Failed to sync ${cruise.shipName}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          console.error(`[CruiseDeals] ${msg}`);
+          errors.push(msg);
         }
-        
-        const cruiseSheetPricing = await fetchCruiseSheetPricing(
-          cruise.shipName,
-          cruise.sailDate,
-          cruise.nights,
-          cruise.departurePort
-        );
-        
-        if (cruiseSheetPricing) {
-          cruiseSheetPricing.bookingId = cruise.id;
-          allPricing.push(cruiseSheetPricing);
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 300));
       }
       
       console.log(`[CruiseDeals] Pricing sync complete: ${allPricing.length} pricing records for ${input.cruises.length} cruises`);
+      
+      if (errors.length > 0) {
+        console.log(`[CruiseDeals] Errors encountered: ${errors.join('; ')}`);
+      }
       
       return {
         pricing: allPricing,
