@@ -310,6 +310,17 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   const coreData = useCoreData();
   const { updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
   const [showLandingPage, setShowLandingPage] = useState(true);
+  const [forceSkipRestore, setForceSkipRestore] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated && !initialCheckComplete && !forceSkipRestore) {
+      const timeout = setTimeout(() => {
+        console.log('[AppContent] Cloud restore safety timeout - forcing past restore screen');
+        setForceSkipRestore(true);
+      }, 8000);
+      return () => clearTimeout(timeout);
+    }
+  }, [isAuthenticated, initialCheckComplete, forceSkipRestore]);
 
   const handleContinueToLogin = () => {
     console.log('[AppContent] Continue button pressed - moving to login screen');
@@ -386,7 +397,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
     );
   }
 
-  if (isAuthenticated && !initialCheckComplete) {
+  if (isAuthenticated && !initialCheckComplete && !forceSkipRestore) {
     return (
       <View style={rootStyles.cloudRestoreContainer} testID="cloudRestoreScreen">
         <View style={rootStyles.cloudRestoreCard}>

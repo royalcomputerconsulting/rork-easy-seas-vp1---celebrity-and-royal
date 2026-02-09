@@ -32,7 +32,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const fetchWithRetry = async (
   url: string,
   options: RequestInit | undefined,
-  maxRetries = 3
+  maxRetries = 1
 ): Promise<Response> => {
   let lastError: Error | null = null;
   
@@ -40,9 +40,9 @@ const fetchWithRetry = async (
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.log('[tRPC] Request timeout after 30s');
+        console.log('[tRPC] Request timeout after 10s');
         controller.abort();
-      }, 30000);
+      }, 10000);
       
       const existingSignal = options?.signal;
       if (existingSignal?.aborted) {
@@ -82,7 +82,7 @@ const fetchWithRetry = async (
       lastError = error as Error;
       
       if (attempt < maxRetries) {
-        const waitTime = Math.min(1000 * Math.pow(2, attempt), 10000);
+        const waitTime = Math.min(1000 * Math.pow(2, attempt), 5000);
         console.log(`[tRPC] Request failed. Retrying after ${waitTime}ms (attempt ${attempt + 1}/${maxRetries})`);
         await sleep(waitTime);
       }

@@ -39,6 +39,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const lastSyncAttemptRef = useRef<number>(0);
   const isMountedRef = useRef(true);
   const hasInitializedRef = useRef(false);
+  const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const saveAllMutation = trpc.data.saveAllUserData.useMutation({
     retry: false,
@@ -351,8 +352,15 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       console.log("[UserDataSync] Cloud load error (backend may be unavailable):", errorMessage);
       retryCountRef.current += 1;
       
-      // Don't set user-facing error for known backend issues
-      if (!['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage)) {
+      const isNetworkError = 
+        errorMessage.includes('Failed to fetch') ||
+        errorMessage.includes('Network request failed') ||
+        errorMessage.includes('fetch') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('AbortError') ||
+        ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage);
+      
+      if (!isNetworkError) {
         setSyncError(errorMessage);
       }
       
@@ -432,8 +440,15 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       console.log("[UserDataSync] Cloud sync error (backend may be unavailable):", errorMessage);
       retryCountRef.current += 1;
       
-      // Don't set user-facing error for known backend issues
-      if (!['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage)) {
+      const isNetworkError = 
+        errorMessage.includes('Failed to fetch') ||
+        errorMessage.includes('Network request failed') ||
+        errorMessage.includes('fetch') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('AbortError') ||
+        ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage);
+      
+      if (!isNetworkError) {
         if (isMountedRef.current) {
           setSyncError(errorMessage);
         }
@@ -495,10 +510,24 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     console.log("[UserDataSync] New user login detected, loading cloud data...");
     hasInitializedRef.current = true;
     
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+    }
+    safetyTimeoutRef.current = setTimeout(() => {
+      if (isMountedRef.current && !initialCheckComplete) {
+        console.log("[UserDataSync] Safety timeout reached - forcing initialCheckComplete");
+        setInitialCheckComplete(true);
+      }
+    }, 6000);
+    
     const initSync = async () => {
       const cloudLoaded = await loadFromCloud();
       
-      // Only try to sync local data once if no cloud data and backend is still available
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+        safetyTimeoutRef.current = null;
+      }
+      
       if (!cloudLoaded && isBackendAvailable() && isMountedRef.current) {
         console.log("[UserDataSync] No cloud data, will sync local data after delay");
         const timeoutId = setTimeout(() => {
@@ -512,7 +541,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     };
 
     initSync();
-  }, [isAuthenticated, authenticatedEmail, loadFromCloud, syncToCloud]);
+  }, [isAuthenticated, authenticatedEmail, loadFromCloud, syncToCloud, initialCheckComplete]);
 
   // Removed automatic storage change listener to prevent continuous sync loops
   // Users can manually trigger sync via forceSyncNow() if needed
@@ -521,6 +550,10 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
         syncTimeoutRef.current = null;
+      }
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+        safetyTimeoutRef.current = null;
       }
     };
   }, []);
