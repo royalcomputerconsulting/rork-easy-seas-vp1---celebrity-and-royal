@@ -213,7 +213,7 @@ export function CrewRecognitionSection() {
             />
           </View>
           <Text style={styles.syncProgressText}>
-            Processing {syncProgress.current} of {syncProgress.total} rows...
+            {`Processing ${syncProgress.current} of ${syncProgress.total} rows...`}
           </Text>
         </View>
       )}
@@ -264,7 +264,7 @@ export function CrewRecognitionSection() {
         >
           <Filter size={18} color={showFilters ? '#fff' : COLORS.primary} />
           <Text style={[styles.filterButtonText, showFilters && styles.filterButtonTextActive]}>
-            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+            {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : 'Filters'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -273,7 +273,7 @@ export function CrewRecognitionSection() {
         <View style={styles.filtersPanel}>
           <View style={styles.filterListSection}>
             <Text style={styles.filterLabel}>
-              Ship{filters.shipNames.length > 0 ? ` (${filters.shipNames.length} selected)` : ''}
+              {filters.shipNames.length > 0 ? `Ship (${filters.shipNames.length} selected)` : 'Ship'}
             </Text>
             <View style={styles.filterListContainer}>
               <ScrollView
@@ -315,7 +315,7 @@ export function CrewRecognitionSection() {
 
           <View style={styles.filterListSection}>
             <Text style={styles.filterLabel}>
-              Department{filters.departments.length > 0 ? ` (${filters.departments.length} selected)` : ''}
+              {filters.departments.length > 0 ? `Department (${filters.departments.length} selected)` : 'Department'}
             </Text>
             <View style={styles.filterListContainer}>
               <ScrollView
@@ -366,7 +366,7 @@ export function CrewRecognitionSection() {
 
       <View style={styles.resultsContainer}>
         <Text style={styles.resultsHeader}>
-          Results ({showMockData ? 1 : entriesTotal})
+          {`Results (${showMockData ? 1 : entriesTotal})`}
         </Text>
 
         {entriesLoading ? (
@@ -420,9 +420,11 @@ export function CrewRecognitionSection() {
                             <Text style={styles.crewCardRole} numberOfLines={1}>{entry.roleTitle}</Text>
                           ) : null}
                           {entry.roleTitle && entry.department ? (
-                            <Text style={styles.crewCardMetaDot}>·</Text>
+                            <Text style={styles.crewCardMetaDot}>{"·"}</Text>
                           ) : null}
-                          <Text style={styles.crewCardDept} numberOfLines={1}>{entry.department}</Text>
+                          {entry.department ? (
+                            <Text style={styles.crewCardDept} numberOfLines={1}>{entry.department}</Text>
+                          ) : null}
                         </View>
                       </View>
                       <ChevronRight size={14} color="#94A3B8" />
@@ -430,12 +432,15 @@ export function CrewRecognitionSection() {
                     <View style={styles.crewCardRow2}>
                       <Ship size={10} color="#0369A1" />
                       <Text style={styles.crewCardShip} numberOfLines={1}>{entry.shipName || 'Unknown Ship'}</Text>
-                      <Text style={styles.crewCardDateSep}>•</Text>
+                      <Text style={styles.crewCardDateSep}>{"•"}</Text>
                       <Calendar size={10} color="#6B7280" />
-                      <Text style={styles.crewCardDate} numberOfLines={1}>{entry.sailStartDate || 'Unknown Date'}{entry.sailEndDate && entry.sailEndDate !== entry.sailStartDate ? ` – ${entry.sailEndDate}` : ''}</Text>
+                      <Text style={styles.crewCardDate} numberOfLines={1}>
+                        {entry.sailStartDate || 'Unknown Date'}
+                        {entry.sailEndDate && entry.sailEndDate !== entry.sailStartDate ? ` – ${entry.sailEndDate}` : ''}
+                      </Text>
                     </View>
                     {entry.crewNotes ? (
-                      <Text style={styles.crewCardNotes} numberOfLines={1}>{entry.crewNotes}</Text>
+                      <Text style={styles.crewCardNotes} numberOfLines={1}>{String(entry.crewNotes)}</Text>
                     ) : null}
                   </View>
                 </TouchableOpacity>
