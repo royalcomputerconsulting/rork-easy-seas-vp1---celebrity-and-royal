@@ -70,10 +70,6 @@ export function CrewRecognitionSection() {
     filters,
     updateFilters,
     resetFilters,
-    page,
-    pageSize,
-    nextPage,
-    previousPage,
     createCrewMember,
     updateRecognitionEntry,
     deleteRecognitionEntry,
@@ -157,7 +153,6 @@ export function CrewRecognitionSection() {
     return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort();
   }, [entries]);
 
-  const totalPages = Math.ceil(entriesTotal / pageSize);
   const showMockData = stats.crewMemberCount === 0 && !statsLoading;
   const displayEntries = showMockData ? [] : entries;
 
@@ -436,27 +431,7 @@ export function CrewRecognitionSection() {
               </View>
             </ScrollView>
 
-            {totalPages > 1 && (
-              <View style={styles.pagination}>
-                <TouchableOpacity
-                  style={[styles.pageButton, page === 1 && styles.pageButtonDisabled]}
-                  onPress={previousPage}
-                  disabled={page === 1}
-                >
-                  <Text style={styles.pageButtonText}>Previous</Text>
-                </TouchableOpacity>
-                <Text style={styles.pageInfo}>
-                  Page {page} of {totalPages}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.pageButton, page === totalPages && styles.pageButtonDisabled]}
-                  onPress={nextPage}
-                  disabled={page === totalPages}
-                >
-                  <Text style={styles.pageButtonText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+
           </>
         )}
       </View>
@@ -795,7 +770,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: BORDER_RADIUS.md,
-    maxHeight: 400,
   },
   tableHeader: {
     flexDirection: 'row',
@@ -837,32 +811,7 @@ const styles = StyleSheet.create({
   dateColumn: {
     width: 100,
   },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: SPACING.md,
-    marginTop: SPACING.md,
-  },
-  pageButton: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-  },
-  pageButtonDisabled: {
-    opacity: 0.3,
-  },
-  pageButtonText: {
-    color: COLORS.primary,
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: '600' as const,
-  },
-  pageInfo: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
-  },
+
   mockDataContainer: {
     padding: SPACING.md,
   },

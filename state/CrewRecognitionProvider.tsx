@@ -241,10 +241,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     return result;
   }, [isOfflineMode, localEntries, filters]);
 
-  const paginatedLocalEntries = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredLocalEntries.slice(start, start + pageSize);
-  }, [filteredLocalEntries, page, pageSize]);
+
 
   const localStats = useMemo(() => {
     const uniqueCrewIds = new Set(localEntries.map(e => e.crewMemberId));
@@ -356,7 +353,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     goToPage,
     stats: useLocal ? localStats : (statsQuery.data || { crewMemberCount: 0, recognitionEntryCount: 0 }),
     statsLoading: !useLocal && statsQuery.isLoading,
-    entries: useLocal ? paginatedLocalEntries : backendEntries,
+    entries: useLocal ? filteredLocalEntries : backendEntries,
     entriesTotal: useLocal ? filteredLocalEntries.length : backendTotal,
     entriesLoading: !useLocal && entriesQuery.isLoading,
     sailings: useLocal ? localSailings : (sailingsQuery.data || []),
