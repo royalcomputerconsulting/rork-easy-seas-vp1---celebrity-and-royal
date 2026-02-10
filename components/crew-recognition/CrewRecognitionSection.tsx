@@ -77,23 +77,40 @@ export function CrewRecognitionSection() {
       
       if (isAdminOrSpecial) {
         console.log('[CrewRecognition] Admin/Special user sync - loading from CSV file');
+        console.log('[CrewRecognition] User email:', userEmail);
         try {
-          const response = await fetch('https://rork.app/pa/g131hcw7cxhvg2godfob0/Crew_Recognition.csv');
+          const csvUrl = 'https://rork.app/pa/g131hcw7cxhvg2godfob0/Crew_Recognition.csv';
+          console.log('[CrewRecognition] Fetching from:', csvUrl);
+          
+          const response = await fetch(csvUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'text/csv,text/plain,*/*',
+            },
+          });
+          
+          console.log('[CrewRecognition] Fetch response status:', response.status);
+          
           if (!response.ok) {
-            throw new Error('Failed to fetch CSV file');
+            throw new Error(`HTTP error! status: ${response.status}`);
           }
+          
           const csvText = await response.text();
+          console.log('[CrewRecognition] CSV text length:', csvText.length);
+          console.log('[CrewRecognition] CSV preview:', csvText.substring(0, 200));
           
           await syncFromCSVMutation.mutateAsync({ csvText, userId });
           Alert.alert('Success', 'Synced crew data from CSV file');
         } catch (error) {
           console.error('[CrewRecognition] CSV sync error:', error);
-          Alert.alert('Error', 'Failed to sync from CSV file. Syncing from database instead.');
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          Alert.alert('Error', `Failed to sync from CSV file: ${errorMessage}. Syncing from database instead.`);
           await refetch();
         }
       } else {
         console.log('[CrewRecognition] Regular user sync - loading from database');
         await refetch();
+        Alert.alert('Success', 'Synced from database');
       }
     } finally {
       setIsSyncing(false);
