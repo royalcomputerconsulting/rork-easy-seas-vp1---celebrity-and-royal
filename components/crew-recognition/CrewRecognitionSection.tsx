@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { Users, Plus, Download, Search, Filter, X, RefreshCcw, UserCheck, Check } from 'lucide-react-native';
+import { Users, Plus, Download, Search, Filter, X, RefreshCcw, UserCheck, Check, Ship, Calendar, ChevronRight } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
@@ -402,47 +402,44 @@ export function CrewRecognitionSection() {
             </Text>
           </View>
         ) : (
-          <>
-            <ScrollView style={styles.table} horizontal showsHorizontalScrollIndicator={true}>
-              <View>
-                <View style={styles.tableHeader}>
-                  <Text style={[styles.tableHeaderCell, styles.nameColumn]}>Name</Text>
-                  <Text style={[styles.tableHeaderCell, styles.deptColumn]}>Department</Text>
-                  <Text style={[styles.tableHeaderCell, styles.roleColumn]}>Role</Text>
-                  <Text style={[styles.tableHeaderCell, styles.shipColumn]}>Ship</Text>
-                  <Text style={[styles.tableHeaderCell, styles.dateColumn]}>Start Date</Text>
-                  <Text style={[styles.tableHeaderCell, styles.dateColumn]}>End Date</Text>
-                  <Text style={[styles.tableHeaderCell, styles.notesColumn]}>Notes</Text>
-                </View>
-
-                {displayEntries.map((entry, index) => (
-                  <TouchableOpacity
-                    key={entry.id}
-                    style={[styles.tableRow, index % 2 === 0 && styles.tableRowEven]}
-                    onPress={() => setSelectedEntry(entry)}
-                  >
-                    <Text style={[styles.tableCell, styles.nameColumn]}>{entry.fullName}</Text>
-                    <Text style={[styles.tableCell, styles.deptColumn]}>{entry.department}</Text>
-                    <Text style={[styles.tableCell, styles.roleColumn]}>
-                      {entry.roleTitle || 'N/A'}
-                    </Text>
-                    <Text style={[styles.tableCell, styles.shipColumn]}>{entry.shipName}</Text>
-                    <Text style={[styles.tableCell, styles.dateColumn]}>
-                      {entry.sailStartDate}
-                    </Text>
-                    <Text style={[styles.tableCell, styles.dateColumn]}>
-                      {entry.sailEndDate}
-                    </Text>
-                    <Text style={[styles.tableCell, styles.notesColumn]} numberOfLines={2}>
-                      {entry.crewNotes || '—'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-
-
-          </>
+          <View style={styles.cardList}>
+              {displayEntries.map((entry) => (
+                <TouchableOpacity
+                  key={entry.id}
+                  style={styles.crewCard}
+                  onPress={() => setSelectedEntry(entry)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.crewCardContent}>
+                    <View style={styles.crewCardTopRow}>
+                      <View style={styles.crewCardShipRow}>
+                        <Ship size={12} color="#0369A1" />
+                        <Text style={styles.crewCardShipName} numberOfLines={1}>{entry.shipName}</Text>
+                      </View>
+                      <View style={styles.crewCardDateRow}>
+                        <Calendar size={11} color="#6B7280" />
+                        <Text style={styles.crewCardDate}>{entry.sailStartDate}{entry.sailEndDate ? ` – ${entry.sailEndDate}` : ''}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.crewCardName} numberOfLines={1}>{entry.fullName}</Text>
+                    <View style={styles.crewCardMetaRow}>
+                      {entry.roleTitle ? (
+                        <View style={styles.crewCardRoleBadge}>
+                          <Text style={styles.crewCardRoleText} numberOfLines={1}>{entry.roleTitle}</Text>
+                        </View>
+                      ) : null}
+                      <View style={styles.crewCardDeptBadge}>
+                        <Text style={styles.crewCardDeptText} numberOfLines={1}>{entry.department}</Text>
+                      </View>
+                    </View>
+                    {entry.crewNotes ? (
+                      <Text style={styles.crewCardNotes} numberOfLines={2}>{entry.crewNotes}</Text>
+                    ) : null}
+                  </View>
+                  <ChevronRight size={16} color="#94A3B8" style={styles.crewCardChevron} />
+                </TouchableOpacity>
+              ))}
+            </View>
         )}
       </View>
 
@@ -793,53 +790,95 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     textAlign: 'center',
   },
-  table: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  cardList: {
+    gap: 6,
+  },
+  crewCard: {
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
-  },
-  tableHeader: {
     flexDirection: 'row',
-    backgroundColor: COLORS.bgSecondary,
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.border,
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingLeft: 10,
+    paddingRight: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.12)',
+    ...SHADOW.sm,
   },
-  tableHeaderCell: {
-    padding: SPACING.sm,
-    fontSize: TYPOGRAPHY.fontSizeSM,
+  crewCardContent: {
+    flex: 1,
+    gap: 2,
+  },
+  crewCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  crewCardShipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  crewCardShipName: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: '#0369A1',
+    flex: 1,
+  },
+  crewCardDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  crewCardDate: {
+    fontSize: 10,
+    color: '#6B7280',
+  },
+  crewCardName: {
+    fontSize: 14,
     fontWeight: '700' as const,
-    color: COLORS.text,
+    color: '#1E293B',
   },
-  tableRow: {
+  crewCardMetaRow: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    alignItems: 'center',
+    gap: 4,
+    flexWrap: 'wrap',
   },
-  tableRowEven: {
-    backgroundColor: COLORS.bgSecondary,
+  crewCardRoleBadge: {
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
   },
-  tableCell: {
-    padding: SPACING.sm,
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.text,
+  crewCardRoleText: {
+    fontSize: 10,
+    fontWeight: '600' as const,
+    color: '#0369A1',
   },
-  nameColumn: {
-    width: 150,
+  crewCardDeptBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  deptColumn: {
-    width: 120,
+  crewCardDeptText: {
+    fontSize: 10,
+    fontWeight: '500' as const,
+    color: '#475569',
   },
-  roleColumn: {
-    width: 120,
+  crewCardNotes: {
+    fontSize: 11,
+    color: '#64748B',
+    fontStyle: 'italic' as const,
+    marginTop: 1,
   },
-  shipColumn: {
-    width: 150,
-  },
-  dateColumn: {
-    width: 100,
-  },
-  notesColumn: {
-    width: 200,
+  crewCardChevron: {
+    marginLeft: 4,
   },
 
   mockDataContainer: {
