@@ -284,19 +284,33 @@ export function detectBookingConflicts(
       const hasOverlap = startA <= endB && endA >= startB;
 
       if (hasOverlap) {
+        const overlapStart = new Date(Math.max(startA.getTime(), startB.getTime()));
+        const overlapEnd = new Date(Math.min(endA.getTime(), endB.getTime()));
+        const overlapDays = Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        const formatDateRange = (start: Date, end: Date) => {
+          const startStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const endStr = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          return `${startStr} - ${endStr}`;
+        };
+        
+        const cruiseADetails = `${cruiseA.shipName} (${formatDateRange(startA, endA)})`;
+        const cruiseBDetails = `${cruiseB.shipName} (${formatDateRange(startB, endB)})`;
+        const overlapDetails = `${overlapDays} day${overlapDays !== 1 ? 's' : ''} overlap (${overlapStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${overlapEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+        
         anomalies.push({
           id: generateId(),
           type: 'booking_conflict',
           severity: 'critical',
-          title: 'Booking Date Conflict',
-          description: `${cruiseA.shipName} (${cruiseA.sailDate}) overlaps with ${cruiseB.shipName} (${cruiseB.sailDate})`,
+          title: 'Booking Date Conflict Detected',
+          description: `${cruiseADetails} conflicts with ${cruiseBDetails}. ${overlapDetails}. You cannot be on both ships at the same time - please review and cancel one booking.`,
           detectedAt: new Date().toISOString(),
           dataPoints: {
             cruiseId: cruiseA.id,
             metric: 'Date Overlap',
             expectedValue: 0,
-            actualValue: 1,
-            deviation: 1,
+            actualValue: overlapDays,
+            deviation: overlapDays,
             deviationPercent: 100,
           },
           relatedEntityId: cruiseA.id,
@@ -333,14 +347,21 @@ export function detectSpendingSpikes(
 
   completedCruises.forEach((cruise, index) => {
     const dailySpend = dailySpends[index];
+    const totalSpend = cruise.actualSpend || cruise.totalPrice || 0;
+    const nights = cruise.nights || 1;
+    const percentAboveAvg = meanDailySpend > 0 ? ((dailySpend - meanDailySpend) / meanDailySpend) * 100 : 0;
+    const sailDate = new Date(cruise.sailDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     
     if (dailySpend > config.spendingThresholds.dailyCritical) {
+      const criticalThreshold = config.spendingThresholds.dailyCritical;
+      const amountOver = dailySpend - criticalThreshold;
+      
       anomalies.push({
         id: generateId(),
         type: 'spending_spike',
         severity: 'critical',
-        title: 'Critical Spending Level',
-        description: `${cruise.shipName} had daily spending of ${dailySpend.toFixed(0)}/day, exceeding critical threshold`,
+        title: 'Critical Spending Level Detected',
+        description: `${cruise.shipName} (${sailDate}) - Total: ${totalSpend.toLocaleString()} over ${nights} night${nights !== 1 ? 's' : ''} = ${dailySpend.toFixed(0)}/day. This is ${amountOver.toFixed(0)}/day over the critical threshold (${criticalThreshold}/day) and ${percentAboveAvg.toFixed(0)}% above your average of ${meanDailySpend.toFixed(0)}/day. Consider reviewing your casino play and budget for future cruises.`,
         detectedAt: new Date().toISOString(),
         dataPoints: {
           cruiseId: cruise.id,
@@ -348,7 +369,7 @@ export function detectSpendingSpikes(
           expectedValue: meanDailySpend,
           actualValue: dailySpend,
           deviation: dailySpend - meanDailySpend,
-          deviationPercent: ((dailySpend - meanDailySpend) / meanDailySpend) * 100,
+          deviationPercent: percentAboveAvg,
         },
         relatedEntityId: cruise.id,
         relatedEntityType: 'cruise',
@@ -356,12 +377,15 @@ export function detectSpendingSpikes(
     } else if (dailySpend > config.spendingThresholds.dailyWarning) {
       const zScore = calculateZScore(dailySpend, meanDailySpend, stdDevDailySpend);
       if (zScore > 2) {
+        const warningThreshold = config.spendingThresholds.dailyWarning;
+        const amountOver = dailySpend - warningThreshold;
+        
         anomalies.push({
           id: generateId(),
           type: 'spending_spike',
           severity: 'high',
-          title: 'High Daily Spending',
-          description: `${cruise.shipName} had elevated daily spending of ${dailySpend.toFixed(0)}/day`,
+          title: 'Elevated Daily Spending',
+          description: `${cruise.shipName} (${sailDate}) - Total: ${totalSpend.toLocaleString()} over ${nights} night${nights !== 1 ? 's' : ''} = ${dailySpend.toFixed(0)}/day. This is ${amountOver.toFixed(0)}/day over the warning threshold (${warningThreshold}/day) and ${percentAboveAvg.toFixed(0)}% above your typical average of ${meanDailySpend.toFixed(0)}/day. Monitor your spending patterns to maintain better budget control.`,
           detectedAt: new Date().toISOString(),
           dataPoints: {
             cruiseId: cruise.id,
@@ -369,7 +393,7 @@ export function detectSpendingSpikes(
             expectedValue: meanDailySpend,
             actualValue: dailySpend,
             deviation: dailySpend - meanDailySpend,
-            deviationPercent: ((dailySpend - meanDailySpend) / meanDailySpend) * 100,
+            deviationPercent: percentAboveAvg,
           },
           relatedEntityId: cruise.id,
           relatedEntityType: 'cruise',
