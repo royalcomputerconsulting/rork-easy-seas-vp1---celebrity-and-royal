@@ -258,6 +258,54 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     },
   });
 
+  const addCrewMemberWithFallback = useCallback(async (data: {
+    fullName: string;
+    department: string;
+    roleTitle?: string;
+    notes?: string;
+    sailingId?: string;
+    userId: string;
+  }) => {
+    if (!isOfflineMode) {
+      try {
+        const result = await createCrewMemberMutation.mutateAsync(data as any);
+        return result;
+      } catch (err) {
+        console.log('[CrewRecognition] Backend create failed, falling back to local:', err);
+      }
+    }
+
+    const now = new Date().toISOString();
+    const crewId = `local_crew_manual_${Date.now()}`;
+    const sailing = data.sailingId ? localSailings.find(s => s.id === data.sailingId) : undefined;
+
+    const newEntry: RecognitionEntryWithCrew = {
+      id: `local_entry_manual_${Date.now()}`,
+      crewMemberId: crewId,
+      sailingId: sailing?.id || '',
+      shipName: sailing?.shipName || '',
+      sailStartDate: sailing?.sailStartDate || '',
+      sailEndDate: sailing?.sailEndDate || '',
+      sailingMonth: sailing?.sailStartDate?.substring(0, 7) || '',
+      sailingYear: sailing?.sailStartDate ? parseInt(sailing.sailStartDate.substring(0, 4), 10) : 0,
+      department: data.department,
+      roleTitle: data.roleTitle,
+      sourceText: 'Manually added',
+      userId: data.userId,
+      createdAt: now,
+      updatedAt: now,
+      fullName: data.fullName,
+      crewNotes: data.notes,
+    };
+
+    const updatedEntries = [newEntry, ...localEntries];
+    setLocalEntries(updatedEntries);
+    setIsOfflineMode(true);
+    await AsyncStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(updatedEntries));
+    console.log('[CrewRecognition] Added crew member locally with notes:', data.fullName, data.notes ? '(has notes)' : '(no notes)');
+    return newEntry;
+  }, [isOfflineMode, createCrewMemberMutation, localEntries, localSailings]);
+
   const updateCrewMemberMutation = trpc.crewRecognition.updateCrewMember.useMutation({
     onSuccess: () => {
       entriesQuery.refetch();
@@ -360,7 +408,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     sailingsLoading: !useLocal && sailingsQuery.isLoading,
     isOfflineMode: useLocal,
     syncFromCSVLocally,
-    createCrewMember: createCrewMemberMutation.mutateAsync,
+    createCrewMember: addCrewMemberWithFallback,
     updateCrewMember: updateCrewMemberMutation.mutateAsync,
     deleteCrewMember: deleteCrewMemberMutation.mutateAsync,
     createRecognitionEntry: createRecognitionEntryMutation.mutateAsync,
