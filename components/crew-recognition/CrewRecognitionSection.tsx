@@ -254,7 +254,7 @@ export function CrewRecognitionSection() {
           </View>
         ) : (
           <>
-            <ScrollView style={styles.table} horizontal showsHorizontalScrollIndicator>
+            <ScrollView style={styles.table} horizontal showsHorizontalScrollIndicator={true}>
               <View>
                 <View style={styles.tableHeader}>
                   <Text style={[styles.tableHeaderCell, styles.nameColumn]}>Name</Text>
