@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target } from 'lucide-react-native';
+import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/clubRoyaleTiers';
@@ -27,6 +27,7 @@ interface CompactDashboardHeaderProps {
   onBookedPress?: () => void;
   onOffersPress?: () => void;
   hideLogo?: boolean;
+  crewMemberCount?: number;
 }
 
 export function CompactDashboardHeader({
@@ -43,6 +44,7 @@ export function CompactDashboardHeader({
   onBookedPress,
   onOffersPress,
   hideLogo = false,
+  crewMemberCount = 0,
 }: CompactDashboardHeaderProps) {
   const {
     clubRoyalePoints,
@@ -169,13 +171,19 @@ export function CompactDashboardHeader({
       {activeBrand === 'royal' ? (
         <>
       <View style={styles.tierRow}>
-        <View style={[styles.tierBadge, { backgroundColor: getTierColor(clubRoyaleTier) + '30', borderColor: getTierColor(clubRoyaleTier) }]}>
-          <Text style={[styles.tierText, { color: getTierColor(clubRoyaleTier) }]}>{clubRoyaleTier.toUpperCase()}</Text>
+        <View style={[styles.tierBadge, { backgroundColor: '#FFFFFF', borderColor: 'rgba(0, 31, 63, 0.2)' }]}>
+          <Text style={[styles.tierText, { color: COLORS.navyDeep }]}>{clubRoyaleTier.toUpperCase()}</Text>
         </View>
-        <View style={[styles.tierBadge, { backgroundColor: COLORS.pointsBg, borderColor: COLORS.points }]}>
-          <Text style={[styles.tierText, { color: COLORS.points }]}>{crownAnchorLevel.toUpperCase()}</Text>
+        <View style={[styles.tierBadge, { backgroundColor: '#FFFFFF', borderColor: 'rgba(0, 31, 63, 0.2)' }]}>
+          <Text style={[styles.tierText, { color: COLORS.navyDeep }]}>{crownAnchorLevel.toUpperCase()}</Text>
         </View>
       </View>
+      {crewMemberCount > 0 && (
+        <View style={styles.crewCountRow}>
+          <Users size={13} color={CLEAN_THEME.text.secondary} />
+          <Text style={styles.crewCountText}>{crewMemberCount} crew members</Text>
+        </View>
+      )}
 
       <View style={styles.progressGrid}>
         {/* BAR 1: Loyalty Progress (Crown & Anchor) - Always show current → next level */}
@@ -821,5 +829,17 @@ const styles = StyleSheet.create({
   quickStatPillLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: CLEAN_THEME.data.label,
+  },
+  crewCountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: SPACING.xs,
+    paddingLeft: 2,
+  },
+  crewCountText: {
+    fontSize: 11,
+    color: CLEAN_THEME.text.secondary,
+    fontWeight: '500' as const,
   },
 });

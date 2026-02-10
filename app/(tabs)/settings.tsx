@@ -43,9 +43,14 @@ import {
   Crown,
   FileDown,
   TrendingDown,
+  Users,
+  Clock,
+  Award,
+  Anchor,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
+import { isDateInPast } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import type { PlayingHours } from '@/state/UserProvider';
@@ -81,6 +86,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
 import { trpc } from '@/lib/trpc';
 import { useEntitlement } from '@/state/EntitlementProvider';
+import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -125,6 +131,7 @@ export default function SettingsScreen() {
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
   const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist } = useAuth();
+  const { stats: crewStats } = useCrewRecognition();
 
 
 
@@ -265,15 +272,22 @@ export default function SettingsScreen() {
       uniqueCount: uniqueOfferCount,
     });
     
+    const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
+    const upcoming = allBooked.filter(c => !isDateInPast(c.returnDate)).length;
+    const completed = allBooked.filter(c => isDateInPast(c.returnDate)).length;
+
     return {
       cruises: cruises.length || localData.cruises?.length || 0,
-      booked: bookedCruises.length || localData.booked?.length || 0,
+      booked: allBooked.length,
+      upcoming,
+      completed,
       sailings: allOffers.length,
       uniqueOffers: uniqueOfferCount,
       events: localData.calendar?.length || 0,
       machines: myAtlasMachines.length || 0,
+      crewMembers: crewStats?.crewMemberCount || 0,
     };
-  }, [cruises, bookedCruises, casinoOffers, localData, myAtlasMachines]);
+  }, [cruises, bookedCruises, casinoOffers, localData, myAtlasMachines, crewStats]);
 
   const handleImportOffersCSV = useCallback(async () => {
     if (entitlement.tier === 'view') {
@@ -753,7 +767,7 @@ export default function SettingsScreen() {
       if (result.success) {
         Alert.alert(
           'Export Successful',
-          `All app data has been exported to ${result.fileName}. This includes cruises, offers, booked cruises, events, casino sessions, certificates, user profile (name, C&A #, playing hours), Club Royale points, loyalty points, and settings.`
+          `All app data has been exported to ${result.fileName}. This includes cruises, offers, booked cruises, events, casino sessions, certificates, machines, crew members, user profile (name, C&A #, playing hours), Club Royale points, loyalty points, and settings.`
         );
       } else {
         Alert.alert('Export Failed', result.error || 'Failed to export data.');
@@ -841,7 +855,7 @@ export default function SettingsScreen() {
         
         Alert.alert(
           'Import Successful',
-          `Imported:\n• ${importedCruises} cruises\n• ${importedBooked} booked cruises\n• ${importedOffers} offers\n• ${calendarEvents} events\n• ${importedSessions} casino sessions\n• ${certificates} certificates\n• ${importedMachines} machines\n• User profile (name, C&A #, playing hours)\n• Loyalty points\n\nData has been loaded successfully.`
+          `Imported:\n• ${importedCruises} cruises\n• ${importedBooked} booked cruises\n• ${importedOffers} offers\n• ${calendarEvents} events\n• ${importedSessions} casino sessions\n• ${certificates} certificates\n• ${importedMachines} machines\n• Crew members\n• User profile (name, C&A #, playing hours)\n• Loyalty points\n\nData has been loaded successfully.`
         );
       }
     } catch (error) {
@@ -1400,32 +1414,34 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
 
           <View style={styles.dataOverviewCard}>
             <View style={styles.dataOverviewHeader}>
-              <Database size={16} color={COLORS.navyDeep} />
-              <Text style={styles.dataOverviewTitle}>Data Overview</Text>
+              <View style={styles.dataOverviewIconBadge}>
+                <Anchor size={18} color={COLORS.white} />
+              </View>
+              <View style={styles.dataOverviewTitleGroup}>
+                <Text style={styles.dataOverviewTitle}>Data Overview</Text>
+                <Text style={styles.dataOverviewSubtitle}>{dataStats.booked} cruises total</Text>
+              </View>
+            </View>
+            <View style={styles.dataOverviewStatsRow}>
+              <View style={styles.dataOverviewStatItem}>
+                <Clock size={14} color={COLORS.aquaAccent || '#00BCD4'} />
+                <Text style={styles.dataOverviewStatValue}>{dataStats.upcoming}</Text>
+                <Text style={styles.dataOverviewStatLabel}>Upcoming</Text>
+              </View>
+              <View style={styles.dataOverviewDivider} />
+              <View style={styles.dataOverviewStatItem}>
+                <CheckCircle size={14} color={COLORS.success} />
+                <Text style={styles.dataOverviewStatValue}>{dataStats.completed}</Text>
+                <Text style={styles.dataOverviewStatLabel}>Completed</Text>
+              </View>
+              <View style={styles.dataOverviewDivider} />
+              <View style={styles.dataOverviewStatItem}>
+                <Award size={14} color={COLORS.goldDark} />
+                <Text style={styles.dataOverviewStatValue}>{dataStats.uniqueOffers}</Text>
+                <Text style={styles.dataOverviewStatLabel}>Offers</Text>
+              </View>
             </View>
             <View style={styles.dataOverviewGrid}>
-              <View style={styles.dataOverviewItem}>
-                <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(0, 31, 63, 0.1)' }]}>
-                  <Ship size={14} color={COLORS.navyDeep} />
-                </View>
-                <Text style={styles.dataOverviewValue}>{dataStats.cruises}</Text>
-                <Text style={styles.dataOverviewLabel}>Cruises</Text>
-              </View>
-              <View style={styles.dataOverviewItem}>
-                <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
-                  <CheckCircle size={14} color={COLORS.success} />
-                </View>
-                <Text style={styles.dataOverviewValue}>{dataStats.booked}</Text>
-                <Text style={styles.dataOverviewLabel}>Upcoming & Completed</Text>
-              </View>
-              <View style={styles.dataOverviewItem}>
-                <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(212, 165, 116, 0.15)' }]}>
-                  <Tag size={14} color={COLORS.goldDark} />
-                </View>
-                <Text style={styles.dataOverviewValue}>{dataStats.uniqueOffers}</Text>
-                <Text style={styles.dataOverviewLabel}>Offers</Text>
-                <Text style={styles.dataOverviewSubLabel}>({dataStats.sailings} sailings)</Text>
-              </View>
               <View style={styles.dataOverviewItem}>
                 <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(156, 39, 176, 0.1)' }]}>
                   <Calendar size={14} color="#9C27B0" />
@@ -1433,12 +1449,21 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                 <Text style={styles.dataOverviewValue}>{dataStats.events}</Text>
                 <Text style={styles.dataOverviewLabel}>Events</Text>
               </View>
+              <View style={styles.dataOverviewItemDivider} />
               <View style={styles.dataOverviewItem}>
                 <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(255, 87, 34, 0.1)' }]}>
                   <Database size={14} color="#FF5722" />
                 </View>
                 <Text style={styles.dataOverviewValue}>{dataStats.machines}</Text>
                 <Text style={styles.dataOverviewLabel}>Machines</Text>
+              </View>
+              <View style={styles.dataOverviewItemDivider} />
+              <View style={styles.dataOverviewItem}>
+                <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(0, 150, 136, 0.1)' }]}>
+                  <Users size={14} color="#009688" />
+                </View>
+                <Text style={styles.dataOverviewValue}>{dataStats.crewMembers}</Text>
+                <Text style={styles.dataOverviewLabel}>Crew</Text>
               </View>
             </View>
           </View>
@@ -2329,55 +2354,102 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.xs,
   },
   dataOverviewCard: {
-    backgroundColor: '#DBEAFE',
     borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
+    overflow: 'hidden',
     marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: COLORS.navyDeep,
+    ...SHADOW.md,
   },
   dataOverviewHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    paddingBottom: SPACING.sm,
+  },
+  dataOverviewIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  dataOverviewTitleGroup: {
+    flex: 1,
   },
   dataOverviewTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: CLEAN_THEME.text.primary,
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: COLORS.white,
+    letterSpacing: 0.3,
+  },
+  dataOverviewSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginTop: 2,
+  },
+  dataOverviewStatsRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.sm,
+    justifyContent: 'space-around',
+  },
+  dataOverviewStatItem: {
+    alignItems: 'center',
+    gap: 3,
+  },
+  dataOverviewStatValue: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: COLORS.white,
+  },
+  dataOverviewStatLabel: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  dataOverviewDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   dataOverviewGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
   },
   dataOverviewItem: {
     flex: 1,
     alignItems: 'center',
   },
+  dataOverviewItemDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    marginVertical: 4,
+  },
   dataOverviewIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.xs,
+    marginBottom: 4,
   },
   dataOverviewValue: {
     fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    fontWeight: '700' as const,
+    color: COLORS.white,
   },
   dataOverviewLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.7)',
     marginTop: 2,
-  },
-  dataOverviewSubLabel: {
-    fontSize: 9,
-    color: CLEAN_THEME.text.secondary,
-    marginTop: 1,
-    opacity: 0.7,
+    textAlign: 'center' as const,
   },
   quickActionsSection: {
     marginBottom: SPACING.md,

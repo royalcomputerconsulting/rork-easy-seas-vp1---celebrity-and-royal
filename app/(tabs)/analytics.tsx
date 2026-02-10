@@ -89,6 +89,7 @@ import type { MachineType, Denomination } from '@/state/CasinoSessionProvider';
 import { SessionsSummaryCard } from '@/components/SessionsSummaryCard';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { useEntitlement } from '@/state/EntitlementProvider';
+import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -167,6 +168,7 @@ export default function AnalyticsScreen() {
   const haptics = useHaptics();
   const isScreenReady = useDeferredRender();
   const { alerts: pphAlerts, dismissAlert: dismissPPHAlert } = usePPHAlerts();
+  const { stats: crewStats } = useCrewRecognition();
   const {
     w2gRecords,
     addW2GRecord,
@@ -843,6 +845,7 @@ export default function AnalyticsScreen() {
           hideLogo={true}
           memberName={clubRoyaleProfile?.memberName || 'Player'}
           crownAnchorNumber={(clubRoyaleProfile as any)?.crownAnchorNumber}
+          crewMemberCount={crewStats?.crewMemberCount || 0}
         />
       </View>
 

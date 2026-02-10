@@ -82,7 +82,7 @@ export default function BookedScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterType>('all');
-  const [sortBy, setSortBy] = useState<SortType>('oldest');
+  const [sortBy, setSortBy] = useState<SortType>('newest');
   const [searchQuery, setSearchQuery] = useState('');
   const [hideCompleted, setHideCompleted] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -104,7 +104,10 @@ export default function BookedScreen() {
     } else if (filter === 'completed') {
       result = result.filter(cruise => isDateInPast(cruise.returnDate));
     } else if (filter === 'celebrity') {
-      result = result.filter(cruise => cruise.cruiseSource === 'celebrity');
+      result = result.filter(cruise => 
+        cruise.cruiseSource === 'celebrity' || 
+        cruise.shipName?.toLowerCase().startsWith('celebrity')
+      );
     }
 
     if (hideCompleted) {
@@ -213,7 +216,7 @@ export default function BookedScreen() {
     setFilter('all');
     setSearchQuery('');
     setHideCompleted(false);
-    setSortBy('oldest');
+    setSortBy('newest');
   }, []);
 
   const handleCruisePress = useCallback((cruise: BookedCruise) => {
