@@ -37,3 +37,45 @@ export function exportToCSV(
   
   console.log(`Exported ${data.length} rows to ${filename}`);
 }
+
+export function exportSurveyToText(
+  shipName: string,
+  sailDate: string,
+  crewMembers: Array<{ fullName: string; roleTitle?: string; department: string }>,
+  filename: string
+): void {
+  if (crewMembers.length === 0) {
+    console.log('No crew members to export');
+    return;
+  }
+
+  const textLines: string[] = [];
+  
+  textLines.push(
+    `On ${shipName}, for SAILING DATE: ${sailDate}, the following crew members gave exceptional and outstanding service and show every example of displaying "The Royal Way":`
+  );
+  textLines.push('');
+  
+  crewMembers.forEach(member => {
+    const role = member.roleTitle || member.department;
+    textLines.push(`${member.fullName} - ${role}`);
+  });
+
+  const textContent = textLines.join('\n');
+  
+  const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  URL.revokeObjectURL(url);
+  
+  console.log(`Exported survey for ${shipName} on ${sailDate} to ${filename}`);
+}

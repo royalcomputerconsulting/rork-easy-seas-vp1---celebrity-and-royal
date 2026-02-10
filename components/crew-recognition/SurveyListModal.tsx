@@ -11,7 +11,7 @@ import {
 import { X, Download, ClipboardList } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { trpc } from '@/lib/trpc';
-import { exportToCSV } from '@/lib/csv-export';
+import { exportSurveyToText } from '@/lib/csv-export';
 import type { Sailing } from '@/types/crew-recognition';
 
 interface SurveyListModalProps {
@@ -37,22 +37,16 @@ export function SurveyListModal({ visible, onClose, sailings }: SurveyListModalP
   const surveyList = surveyListQuery.data || [];
 
   const handleExport = () => {
-    if (surveyList.length === 0) {
+    if (surveyList.length === 0 || !selectedSailing) {
       return;
     }
 
-    const filename = selectedSailing
-      ? `survey-list-${selectedSailing.shipName.replace(/\s+/g, '-')}-${selectedSailing.sailStartDate}.csv`
-      : `survey-list-${new Date().toISOString().split('T')[0]}.csv`;
+    const filename = `survey-${selectedSailing.shipName.replace(/\s+/g, '-')}-${selectedSailing.sailStartDate}.txt`;
 
-    exportToCSV(
+    exportSurveyToText(
+      selectedSailing.shipName,
+      selectedSailing.sailStartDate,
       surveyList,
-      [
-        { key: 'fullName', label: 'Full Name' },
-        { key: 'department', label: 'Department' },
-        { key: 'roleTitle', label: 'Role' },
-        { key: 'mentionCount', label: 'Mentions' },
-      ],
       filename
     );
   };
@@ -116,7 +110,7 @@ export function SurveyListModal({ visible, onClose, sailings }: SurveyListModalP
                   </Text>
                   <TouchableOpacity style={styles.exportButton} onPress={handleExport}>
                     <Download size={16} color="#fff" />
-                    <Text style={styles.exportButtonText}>Export</Text>
+                    <Text style={styles.exportButtonText}>Export Survey</Text>
                   </TouchableOpacity>
                 </View>
 
