@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import { X, Download, ClipboardList } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { trpc } from '@/lib/trpc';
 import { exportSurveyToText } from '@/lib/csv-export';
-import type { Sailing } from '@/types/crew-recognition';
+import type { Sailing, SurveyListItem } from '@/types/crew-recognition';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 
 interface SurveyListModalProps {
@@ -22,21 +22,53 @@ interface SurveyListModalProps {
 }
 
 export function SurveyListModal({ visible, onClose, sailings }: SurveyListModalProps) {
-  const { userId } = useCrewRecognition();
+  const { userId, isOfflineMode, entries: allEntries } = useCrewRecognition();
   const [selectedSailingId, setSelectedSailingId] = useState('');
   const [showSailingPicker, setShowSailingPicker] = useState(false);
 
   const surveyListQuery = trpc.crewRecognition.getSurveyList.useQuery(
     { sailingId: selectedSailingId, userId },
     {
-      enabled: !!selectedSailingId && !!userId,
+      enabled: !!selectedSailingId && !!userId && !isOfflineMode,
       refetchOnMount: true,
       refetchOnWindowFocus: false,
     }
   );
 
   const selectedSailing = sailings.find(s => s.id === selectedSailingId);
-  const surveyList = surveyListQuery.data || [];
+
+  const localSurveyList = useMemo<SurveyListItem[]>(() => {
+    if (!isOfflineMode || !selectedSailingId || !selectedSailing) return [];
+
+    const sailingEntries = allEntries.filter(e => {
+      if (e.sailingId === selectedSailingId) return true;
+      if (e.shipName === selectedSailing.shipName && e.sailStartDate === selectedSailing.sailStartDate) return true;
+      return false;
+    });
+
+    console.log('[SurveyList] Local filter for sailing:', selectedSailingId, 'ship:', selectedSailing.shipName, 'date:', selectedSailing.sailStartDate, 'found:', sailingEntries.length, 'of', allEntries.length, 'total entries');
+
+    const grouped = new Map<string, { fullName: string; department: string; roleTitle?: string; mentionCount: number }>();
+    for (const entry of sailingEntries) {
+      const key = entry.crewMemberId || entry.fullName;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.mentionCount += 1;
+      } else {
+        grouped.set(key, {
+          fullName: entry.fullName,
+          department: entry.department,
+          roleTitle: entry.roleTitle,
+          mentionCount: 1,
+        });
+      }
+    }
+
+    return Array.from(grouped.values()).sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }, [isOfflineMode, selectedSailingId, selectedSailing, allEntries]);
+
+  const surveyList = isOfflineMode ? localSurveyList : (surveyListQuery.data || []);
+  const isLoading = !isOfflineMode && surveyListQuery.isLoading;
 
   const handleExport = () => {
     if (surveyList.length === 0 || !selectedSailing) {
@@ -116,7 +148,7 @@ export function SurveyListModal({ visible, onClose, sailings }: SurveyListModalP
                   </TouchableOpacity>
                 </View>
 
-                {surveyListQuery.isLoading ? (
+                {isLoading ? (
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={COLORS.primary} />
                   </View>
