@@ -406,6 +406,7 @@ export function CrewRecognitionSection() {
                   <Text style={[styles.tableHeaderCell, styles.shipColumn]}>Ship</Text>
                   <Text style={[styles.tableHeaderCell, styles.dateColumn]}>Start Date</Text>
                   <Text style={[styles.tableHeaderCell, styles.dateColumn]}>End Date</Text>
+                  <Text style={[styles.tableHeaderCell, styles.notesColumn]}>Notes</Text>
                 </View>
 
                 {displayEntries.map((entry, index) => (
@@ -425,6 +426,9 @@ export function CrewRecognitionSection() {
                     </Text>
                     <Text style={[styles.tableCell, styles.dateColumn]}>
                       {entry.sailEndDate}
+                    </Text>
+                    <Text style={[styles.tableCell, styles.notesColumn]} numberOfLines={2}>
+                      {entry.crewNotes || '—'}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -810,6 +814,9 @@ const styles = StyleSheet.create({
   },
   dateColumn: {
     width: 100,
+  },
+  notesColumn: {
+    width: 200,
   },
 
   mockDataContainer: {
