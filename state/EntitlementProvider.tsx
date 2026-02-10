@@ -80,8 +80,8 @@ export const BASIC_PRODUCT_ID_MONTHLY = 'easyseas_basic_monthly' as const;
 export const PRO_PRODUCT_ID_MONTHLY = 'easyseas_pro_monthly' as const;
 export const PRO_PRODUCT_ID_ANNUAL = 'easyseas_pro_annual' as const;
 
-const PRIVACY_URL = 'https://example.com/privacy' as const;
-const TERMS_URL = 'https://example.com/terms' as const;
+const PRIVACY_URL = 'https://www.royalcomputerconsulting.com/privacy-policy' as const;
+const TERMS_URL = 'https://www.royalcomputerconsulting.com/support-policy' as const;
 const MANAGE_SUBS_IOS_URL = 'https://apps.apple.com/account/subscriptions' as const;
 const MANAGE_SUBS_ANDROID_URL = 'https://play.google.com/store/account/subscriptions' as const;
 
