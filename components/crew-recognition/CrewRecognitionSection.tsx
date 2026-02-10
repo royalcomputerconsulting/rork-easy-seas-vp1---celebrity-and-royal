@@ -13,25 +13,14 @@ import { Users, Plus, Download, Search, Filter, X, RefreshCcw, UserCheck, Check 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
-import { useAuth } from '@/state/AuthProvider';
-import { trpc } from '@/lib/trpc';
 import { AddCrewMemberModal } from './AddCrewMemberModal';
 import { RecognitionEntryDetailModal } from './RecognitionEntryDetailModal';
 import { SurveyListModal } from './SurveyListModal';
 import { exportToCSV } from '@/lib/csv-export';
 import { getAllShipNames } from '@/constants/shipInfo';
-import { CREW_RECOGNITION_CSV } from '@/constants/crew-recognition-csv';
 import type { RecognitionEntryWithCrew, Department } from '@/types/crew-recognition';
 
-interface CSVRow {
-  crewName: string;
-  department: string;
-  roleTitle: string;
-  notes: string;
-  shipName: string;
-  startDate: string;
-  endDate: string;
-}
+
 
 const ALL_FILTER_DEPARTMENTS = [
   'Activities',
@@ -59,33 +48,6 @@ const ALL_FILTER_DEPARTMENTS = [
   'Windjammer / Cafe',
 ];
 
-function parseCSVRows(csvText: string): CSVRow[] {
-  const lines = csvText.split('\n').filter(line => line.trim());
-  if (lines.length < 2) return [];
-
-  const headers = lines[0]
-    .split(',')
-    .map(h => h.trim().replace(/^[\uFEFF"']/g, '').replace(/["']$/g, ''));
-
-  return lines.slice(1).map(line => {
-    const values = line.split(',').map(v => v.trim());
-    const row: Record<string, string> = {};
-    headers.forEach((header, index) => {
-      row[header] = values[index] || '';
-    });
-
-    return {
-      crewName: row['Crew_Name'] || '',
-      department: row['Department'] || '',
-      roleTitle: row['Role'] || '',
-      notes: row['Notes'] || '',
-      shipName: row['Ship'] || '',
-      startDate: row['Start_Date'] || '',
-      endDate: row['End_Date'] || '',
-    };
-  }).filter(r => r.crewName && r.department);
-}
-
 const MOCK_CREW_MEMBER = {
   id: 'mock-scott-astin',
   fullName: 'Scott A. Astin',
@@ -96,10 +58,7 @@ const MOCK_CREW_MEMBER = {
   updatedAt: new Date().toISOString(),
 };
 
-const BATCH_SIZE = 25;
-
 export function CrewRecognitionSection() {
-  const auth = useAuth();
   const {
     userId,
     stats,
@@ -118,10 +77,8 @@ export function CrewRecognitionSection() {
     createCrewMember,
     updateRecognitionEntry,
     deleteRecognitionEntry,
-    refetch,
+    syncFromCSVLocally,
   } = useCrewRecognition();
-
-  const syncBatchMutation = trpc.crewRecognition.syncBatch.useMutation();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<RecognitionEntryWithCrew | null>(null);
@@ -134,52 +91,15 @@ export function CrewRecognitionSection() {
     setIsSyncing(true);
     setSyncProgress(null);
     try {
-      const userEmail = auth.authenticatedEmail?.toLowerCase().trim();
-      const isAdminOrSpecial = userEmail === 'scott.merlis1@gmail.com' || userEmail === 's@a.com';
+      console.log('[CrewRecognition] Starting local CSV sync...');
+      setSyncProgress({ current: 0, total: 100 });
 
-      if (isAdminOrSpecial) {
-        console.log('[CrewRecognition] Admin sync - parsing CSV client-side');
-        console.log('[CrewRecognition] User email:', userEmail);
+      const result = await syncFromCSVLocally();
 
-        const rows = parseCSVRows(CREW_RECOGNITION_CSV);
-        console.log('[CrewRecognition] Parsed rows:', rows.length);
+      setSyncProgress({ current: result.totalRows, total: result.totalRows });
+      console.log('[CrewRecognition] Local sync complete:', result.importedCount, 'entries');
 
-        if (rows.length === 0) {
-          Alert.alert('Error', 'No valid rows found in CSV data');
-          return;
-        }
-
-        let totalImported = 0;
-        let batchErrors = 0;
-
-        for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-          const batch = rows.slice(i, i + BATCH_SIZE);
-          const progress = Math.min(i + BATCH_SIZE, rows.length);
-          setSyncProgress({ current: progress, total: rows.length });
-          console.log(`[CrewRecognition] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(rows.length / BATCH_SIZE)}`);
-
-          try {
-            const result = await syncBatchMutation.mutateAsync({ rows: batch, userId });
-            totalImported += result.importedCount;
-          } catch (error) {
-            console.error(`[CrewRecognition] Batch error at rows ${i}-${progress}:`, error);
-            batchErrors++;
-          }
-        }
-
-        setSyncProgress(null);
-        refetch();
-
-        if (batchErrors > 0) {
-          Alert.alert('Partial Sync', `Synced ${totalImported} new crew members. ${batchErrors} batch(es) had errors.`);
-        } else {
-          Alert.alert('Success', `Synced ${rows.length} rows (${totalImported} new crew members)`);
-        }
-      } else {
-        console.log('[CrewRecognition] Regular user sync - loading from database');
-        await refetch();
-        Alert.alert('Success', 'Synced from database');
-      }
+      Alert.alert('Success', `Loaded ${result.importedCount} crew recognition entries from CSV`);
     } catch (error) {
       console.error('[CrewRecognition] Sync error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -188,7 +108,7 @@ export function CrewRecognitionSection() {
       setIsSyncing(false);
       setSyncProgress(null);
     }
-  }, [auth.authenticatedEmail, userId, syncBatchMutation, refetch]);
+  }, [syncFromCSVLocally]);
 
   const handleExportResults = useCallback(() => {
     if (entries.length === 0) return;
