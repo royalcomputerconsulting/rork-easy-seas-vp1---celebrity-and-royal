@@ -8,8 +8,9 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { Users, Plus, Download, Search, Filter, X, RefreshCcw } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { Users, Plus, Download, Search, Filter, X, RefreshCcw, UserCheck } from 'lucide-react-native';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { AddCrewMemberModal } from './AddCrewMemberModal';
 import { RecognitionEntryDetailModal } from './RecognitionEntryDetailModal';
@@ -81,25 +82,34 @@ export function CrewRecognitionSection() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Users size={24} color={COLORS.primary} />
-          <Text style={styles.title}>Crew Recognition</Text>
+      <LinearGradient
+        colors={['#0369A1', '#0284C7']}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <View style={styles.headerIcon}>
+            <UserCheck size={20} color={COLORS.white} />
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>Crew Recognition</Text>
+            <Text style={styles.headerSubtitle}>Track exceptional service</Text>
+          </View>
         </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-            <Plus size={20} color="#fff" />
-            <Text style={styles.addButtonText}>Add Crew</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]} 
-            onPress={handleSync}
-            disabled={isSyncing}
-          >
-            <RefreshCcw size={18} color="#fff" />
-            <Text style={styles.syncButtonText}>{isSyncing ? 'Syncing...' : 'Sync'}</Text>
-          </TouchableOpacity>
-        </View>
+      </LinearGradient>
+
+      <View style={styles.actionButtons}>
+        <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
+          <Plus size={18} color="#0369A1" />
+          <Text style={styles.addButtonText}>Add Crew</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]} 
+          onPress={handleSync}
+          disabled={isSyncing}
+        >
+          <RefreshCcw size={18} color="#0369A1" />
+          <Text style={styles.syncButtonText}>{isSyncing ? 'Syncing...' : 'Sync'}</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.statsRow}>
@@ -346,60 +356,88 @@ export function CrewRecognitionSection() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F0F9FF',
     borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.2)',
     marginTop: SPACING.lg,
+    ...SHADOW.sm,
   },
   header: {
+    padding: SPACING.md,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
   },
-  headerLeft: {
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
+    flex: 1,
   },
-  headerRight: {
-    flexDirection: 'row',
+  headerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: SPACING.sm,
   },
-  title: {
-    fontSize: TYPOGRAPHY.fontSizeXL,
-    fontWeight: '700' as const,
-    color: COLORS.text,
+  headerText: {
+    gap: 2,
+  },
+  headerTitle: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  headerSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    paddingTop: SPACING.sm,
   },
   addButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: SPACING.xs,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.md,
+    backgroundColor: 'rgba(3, 105, 161, 0.08)',
     paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.3)',
   },
   addButtonText: {
-    color: '#fff',
+    color: '#0369A1',
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
   },
   syncButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: SPACING.xs,
-    backgroundColor: COLORS.secondary,
-    paddingHorizontal: SPACING.md,
+    backgroundColor: 'rgba(3, 105, 161, 0.08)',
     paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.3)',
   },
   syncButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   syncButtonText: {
-    color: '#fff',
+    color: '#0369A1',
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
   },
@@ -407,14 +445,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: SPACING.sm,
-    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    paddingTop: 0,
   },
   statCard: {
-    backgroundColor: COLORS.bgSecondary,
+    backgroundColor: COLORS.white,
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
     flex: 1,
     minWidth: 120,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.15)',
   },
   statValue: {
     fontSize: TYPOGRAPHY.fontSizeXL,
@@ -433,10 +474,11 @@ const styles = StyleSheet.create({
     padding: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: '#0369A1',
+    backgroundColor: COLORS.white,
   },
   exportButtonText: {
-    color: COLORS.primary,
+    color: '#0369A1',
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
   },
@@ -444,16 +486,18 @@ const styles = StyleSheet.create({
     padding: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: '#0369A1',
+    backgroundColor: COLORS.white,
   },
   surveyButtonText: {
-    color: COLORS.primary,
+    color: '#0369A1',
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
   },
   filterBar: {
     flexDirection: 'row',
     gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     marginBottom: SPACING.md,
   },
   searchContainer: {
@@ -489,10 +533,13 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
   },
   filtersPanel: {
-    backgroundColor: COLORS.bgSecondary,
+    backgroundColor: 'rgba(3, 105, 161, 0.05)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
+    marginHorizontal: SPACING.md,
     marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.15)',
   },
   filterRow: {
     flexDirection: 'row',
@@ -550,7 +597,8 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
   },
   resultsContainer: {
-    marginTop: SPACING.md,
+    padding: SPACING.md,
+    paddingTop: 0,
   },
   resultsHeader: {
     fontSize: TYPOGRAPHY.fontSizeMD,
