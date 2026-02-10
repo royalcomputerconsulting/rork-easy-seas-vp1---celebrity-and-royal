@@ -410,33 +410,34 @@ export function CrewRecognitionSection() {
                   onPress={() => setSelectedEntry(entry)}
                   activeOpacity={0.7}
                 >
+                  <View style={styles.crewCardAccent} />
                   <View style={styles.crewCardContent}>
-                    <View style={styles.crewCardTopRow}>
-                      <View style={styles.crewCardShipRow}>
-                        <Ship size={12} color="#0369A1" />
-                        <Text style={styles.crewCardShipName} numberOfLines={1}>{entry.shipName}</Text>
-                      </View>
-                      <View style={styles.crewCardDateRow}>
-                        <Calendar size={11} color="#6B7280" />
-                        <Text style={styles.crewCardDate}>{entry.sailStartDate}{entry.sailEndDate ? ` – ${entry.sailEndDate}` : ''}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.crewCardName} numberOfLines={1}>{entry.fullName}</Text>
-                    <View style={styles.crewCardMetaRow}>
-                      {entry.roleTitle ? (
-                        <View style={styles.crewCardRoleBadge}>
-                          <Text style={styles.crewCardRoleText} numberOfLines={1}>{entry.roleTitle}</Text>
+                    <View style={styles.crewCardRow1}>
+                      <View style={styles.crewCardNameBlock}>
+                        <Text style={styles.crewCardName} numberOfLines={1}>{entry.fullName}</Text>
+                        <View style={styles.crewCardMetaInline}>
+                          {entry.roleTitle ? (
+                            <Text style={styles.crewCardRole} numberOfLines={1}>{entry.roleTitle}</Text>
+                          ) : null}
+                          {entry.roleTitle && entry.department ? (
+                            <Text style={styles.crewCardMetaDot}>·</Text>
+                          ) : null}
+                          <Text style={styles.crewCardDept} numberOfLines={1}>{entry.department}</Text>
                         </View>
-                      ) : null}
-                      <View style={styles.crewCardDeptBadge}>
-                        <Text style={styles.crewCardDeptText} numberOfLines={1}>{entry.department}</Text>
                       </View>
+                      <ChevronRight size={14} color="#94A3B8" />
+                    </View>
+                    <View style={styles.crewCardRow2}>
+                      <Ship size={10} color="#0369A1" />
+                      <Text style={styles.crewCardShip} numberOfLines={1}>{entry.shipName || 'Unknown Ship'}</Text>
+                      <Text style={styles.crewCardDateSep}>•</Text>
+                      <Calendar size={10} color="#6B7280" />
+                      <Text style={styles.crewCardDate} numberOfLines={1}>{entry.sailStartDate || 'Unknown Date'}{entry.sailEndDate && entry.sailEndDate !== entry.sailStartDate ? ` – ${entry.sailEndDate}` : ''}</Text>
                     </View>
                     {entry.crewNotes ? (
-                      <Text style={styles.crewCardNotes} numberOfLines={2}>{entry.crewNotes}</Text>
+                      <Text style={styles.crewCardNotes} numberOfLines={1}>{entry.crewNotes}</Text>
                     ) : null}
                   </View>
-                  <ChevronRight size={16} color="#94A3B8" style={styles.crewCardChevron} />
                 </TouchableOpacity>
               ))}
             </View>
@@ -791,94 +792,90 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cardList: {
-    gap: 6,
+    gap: 4,
   },
   crewCard: {
     backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: 8,
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingLeft: 10,
-    paddingRight: 6,
+    alignItems: 'stretch',
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.12)',
+    borderColor: 'rgba(3, 105, 161, 0.1)',
     ...SHADOW.sm,
+  },
+  crewCardAccent: {
+    width: 3,
+    backgroundColor: '#0369A1',
   },
   crewCardContent: {
     flex: 1,
-    gap: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    gap: 1,
   },
-  crewCardTopRow: {
+  crewCardRow1: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
+    gap: 4,
   },
-  crewCardShipRow: {
+  crewCardNameBlock: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    flex: 1,
+    gap: 6,
   },
-  crewCardShipName: {
-    fontSize: 11,
+  crewCardName: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: '#1E293B',
+    flexShrink: 1,
+  },
+  crewCardMetaInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    flexShrink: 0,
+  },
+  crewCardRole: {
+    fontSize: 10,
     fontWeight: '600' as const,
     color: '#0369A1',
-    flex: 1,
   },
-  crewCardDateRow: {
+  crewCardMetaDot: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  crewCardDept: {
+    fontSize: 10,
+    fontWeight: '500' as const,
+    color: '#64748B',
+  },
+  crewCardRow2: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
   },
-  crewCardDate: {
-    fontSize: 10,
-    color: '#6B7280',
-  },
-  crewCardName: {
-    fontSize: 14,
-    fontWeight: '700' as const,
-    color: '#1E293B',
-  },
-  crewCardMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    flexWrap: 'wrap',
-  },
-  crewCardRoleBadge: {
-    backgroundColor: '#F0F9FF',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-  crewCardRoleText: {
+  crewCardShip: {
     fontSize: 10,
     fontWeight: '600' as const,
     color: '#0369A1',
+    flexShrink: 1,
   },
-  crewCardDeptBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  crewCardDeptText: {
+  crewCardDateSep: {
     fontSize: 10,
-    fontWeight: '500' as const,
-    color: '#475569',
+    color: '#CBD5E1',
+  },
+  crewCardDate: {
+    fontSize: 10,
+    color: '#6B7280',
+    flexShrink: 1,
   },
   crewCardNotes: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748B',
     fontStyle: 'italic' as const,
-    marginTop: 1,
-  },
-  crewCardChevron: {
-    marginLeft: 4,
   },
 
   mockDataContainer: {
