@@ -156,20 +156,7 @@ export const DEFAULT_ALERT_RULES: AlertRule[] = [
     notifyOnTrigger: true,
     createdAt: new Date().toISOString(),
   },
-  {
-    id: 'rule_points_mismatch',
-    name: 'Unusual Points Earning',
-    description: 'Alert when points earning deviates significantly from average',
-    type: 'points_mismatch',
-    enabled: true,
-    conditions: [
-      { field: 'deviationPercent', operator: 'gt', value: 30, unit: '%' },
-    ],
-    priority: 'medium',
-    cooldownMinutes: 1440,
-    notifyOnTrigger: false,
-    createdAt: new Date().toISOString(),
-  },
+
 ];
 
 export function evaluateCondition(

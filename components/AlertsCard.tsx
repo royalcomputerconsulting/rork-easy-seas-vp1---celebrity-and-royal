@@ -162,7 +162,7 @@ export function AlertItem({ alert, onDismiss, onSnooze, onAction, compact = fals
           </View>
         </View>
 
-        <Text style={styles.alertMessage} numberOfLines={2}>
+        <Text style={styles.alertMessage} numberOfLines={alert.type === 'booking_conflict' || alert.type === 'price_drop' ? undefined : 3}>
           {alert.message}
         </Text>
 

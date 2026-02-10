@@ -8,6 +8,7 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   X,
@@ -25,6 +26,8 @@ import {
   Zap,
   CalendarX,
   TrendingDown,
+  ChevronRight,
+  ExternalLink,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { useAlerts } from '@/state/AlertsProvider';
@@ -36,6 +39,7 @@ interface AlertsManagerModalProps {
 }
 
 export function AlertsManagerModal({ visible, onClose }: AlertsManagerModalProps) {
+  const router = useRouter();
   const { 
     alerts, 
     activeAlerts,
@@ -47,6 +51,7 @@ export function AlertsManagerModal({ visible, onClose }: AlertsManagerModalProps
   } = useAlerts();
 
   const [filter, setFilter] = useState<'all' | 'active' | 'dismissed'>('all');
+  const [expandedAlertId, setExpandedAlertId] = useState<string | null>(null);
 
   const filteredAlerts = useMemo(() => {
     switch (filter) {
@@ -115,8 +120,22 @@ export function AlertsManagerModal({ visible, onClose }: AlertsManagerModalProps
 
   const handleDismiss = useCallback((id: string) => {
     dismissAlert(id);
+    if (expandedAlertId === id) setExpandedAlertId(null);
     console.log('[AlertsManager] Alert dismissed:', id);
-  }, [dismissAlert]);
+  }, [dismissAlert, expandedAlertId]);
+
+  const handleToggleExpand = useCallback((id: string) => {
+    setExpandedAlertId(prev => prev === id ? null : id);
+  }, []);
+
+  const handleNavigateToAlert = useCallback((alert: Alert) => {
+    if (alert.actionRoute) {
+      onClose();
+      setTimeout(() => {
+        router.push(alert.actionRoute as never);
+      }, 300);
+    }
+  }, [router, onClose]);
 
   const handleClearAll = useCallback(() => {
     clearAllAlerts();
@@ -136,6 +155,7 @@ export function AlertsManagerModal({ visible, onClose }: AlertsManagerModalProps
     const isDismissed = alert.status === 'dismissed';
     const isResolved = alert.status === 'resolved';
     const isSnoozed = alert.status === 'snoozed';
+    const isExpanded = expandedAlertId === alert.id;
 
     return (
       <View 
@@ -144,67 +164,146 @@ export function AlertsManagerModal({ visible, onClose }: AlertsManagerModalProps
           styles.alertItem, 
           (isDismissed || isResolved) && styles.alertItemRead,
           isSnoozed && styles.alertItemSnoozed,
+          isExpanded && styles.alertItemExpanded,
         ]}
       >
         <TouchableOpacity
-          style={styles.readToggle}
-          onPress={() => handleMarkAsRead(alert.id)}
-          activeOpacity={0.7}
+          style={styles.alertTouchable}
+          onPress={() => handleToggleExpand(alert.id)}
+          activeOpacity={0.8}
         >
-          {isResolved ? (
-            <CheckCircle size={20} color={COLORS.success} />
-          ) : (
-            <Circle size={20} color={COLORS.beigeWarm} />
-          )}
+          <View style={styles.alertTopRow}>
+            <TouchableOpacity
+              style={styles.readToggle}
+              onPress={() => handleMarkAsRead(alert.id)}
+              activeOpacity={0.7}
+            >
+              {isResolved ? (
+                <CheckCircle size={20} color={COLORS.success} />
+              ) : (
+                <Circle size={20} color={COLORS.beigeWarm} />
+              )}
+            </TouchableOpacity>
+
+            <View style={[styles.alertIconContainer, { backgroundColor: `${color}20` }]}>
+              <Icon size={18} color={color} />
+            </View>
+
+            <View style={styles.alertContent}>
+              <View style={styles.alertTitleRow}>
+                <Text style={[styles.alertTitle, (isDismissed || isResolved) && styles.alertTitleRead]} numberOfLines={isExpanded ? undefined : 1}>
+                  {alert.title}
+                </Text>
+                <View style={[styles.priorityPill, { backgroundColor: `${color}25` }]}>
+                  <Text style={[styles.priorityPillText, { color }]}>
+                    {alert.priority.toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+              {!isExpanded && (
+                <Text style={styles.alertMessage} numberOfLines={1}>
+                  {alert.message}
+                </Text>
+              )}
+            </View>
+
+            <ChevronRight 
+              size={16} 
+              color={COLORS.beigeWarm} 
+              style={{ transform: [{ rotate: isExpanded ? '90deg' : '0deg' }] }}
+            />
+          </View>
         </TouchableOpacity>
 
-        <View style={[styles.alertIconContainer, { backgroundColor: `${color}20` }]}>
-          <Icon size={18} color={color} />
-        </View>
-
-        <View style={styles.alertContent}>
-          <Text style={[styles.alertTitle, (isDismissed || isResolved) && styles.alertTitleRead]}>
-            {alert.title}
-          </Text>
-          <Text style={styles.alertMessage} numberOfLines={2}>
-            {alert.message}
-          </Text>
-          {alert.createdAt && (
-            <Text style={styles.alertTime}>
-              {new Date(alert.createdAt).toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-              })}
+        {isExpanded && (
+          <View style={styles.expandedContent}>
+            <View style={[styles.expandedDivider, { backgroundColor: `${color}30` }]} />
+            
+            <Text style={styles.expandedMessage}>
+              {alert.message}
             </Text>
-          )}
-          {isSnoozed && alert.snoozedUntil && (
-            <View style={styles.snoozedBadge}>
-              <Store size={12} color={COLORS.warning} />
-              <Text style={styles.snoozedText}>
-                Snoozed until {new Date(alert.snoozedUntil).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-              </Text>
-            </View>
-          )}
-        </View>
 
-        <View style={styles.alertActions}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => handleSnooze(alert.id)}
-            activeOpacity={0.7}
-          >
-            <Store size={16} color={COLORS.beigeWarm} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => handleDismiss(alert.id)}
-            activeOpacity={0.7}
-          >
-            <Trash2 size={16} color={COLORS.error} />
-          </TouchableOpacity>
-        </View>
+            {alert.anomaly?.dataPoints && (
+              <View style={styles.dataPointsContainer}>
+                {alert.anomaly.dataPoints.metric && (
+                  <View style={styles.dataPointRow}>
+                    <Text style={styles.dataPointLabel}>Metric</Text>
+                    <Text style={styles.dataPointValue}>{alert.anomaly.dataPoints.metric}</Text>
+                  </View>
+                )}
+                {alert.anomaly.dataPoints.expectedValue !== undefined && alert.anomaly.dataPoints.actualValue !== undefined && (
+                  <View style={styles.dataPointRow}>
+                    <Text style={styles.dataPointLabel}>Change</Text>
+                    <Text style={[styles.dataPointValue, { color: (alert.anomaly.dataPoints.deviation ?? 0) < 0 ? COLORS.success : COLORS.error }]}>
+                      {typeof alert.anomaly.dataPoints.expectedValue === 'number' 
+                        ? `${alert.anomaly.dataPoints.expectedValue.toFixed(0)} → ${alert.anomaly.dataPoints.actualValue.toFixed(0)}`
+                        : `${alert.anomaly.dataPoints.expectedValue} → ${alert.anomaly.dataPoints.actualValue}`
+                      }
+                    </Text>
+                  </View>
+                )}
+                {alert.anomaly.dataPoints.deviationPercent !== undefined && alert.anomaly.dataPoints.deviationPercent !== 0 && (
+                  <View style={styles.dataPointRow}>
+                    <Text style={styles.dataPointLabel}>Difference</Text>
+                    <Text style={[styles.dataPointValue, { color: (alert.anomaly.dataPoints.deviationPercent ?? 0) < 0 ? COLORS.success : COLORS.error }]}>
+                      {(alert.anomaly.dataPoints.deviationPercent ?? 0) > 0 ? '+' : ''}{(alert.anomaly.dataPoints.deviationPercent ?? 0).toFixed(1)}%
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {alert.createdAt && (
+              <Text style={styles.alertTime}>
+                Detected: {new Date(alert.createdAt).toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+              </Text>
+            )}
+
+            {isSnoozed && alert.snoozedUntil && (
+              <View style={styles.snoozedBadge}>
+                <Store size={12} color={COLORS.warning} />
+                <Text style={styles.snoozedText}>
+                  Snoozed until {new Date(alert.snoozedUntil).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.expandedActions}>
+              {alert.actionRoute && (
+                <TouchableOpacity
+                  style={[styles.viewDetailsBtn, { borderColor: `${color}50` }]}
+                  onPress={() => handleNavigateToAlert(alert)}
+                  activeOpacity={0.7}
+                >
+                  <ExternalLink size={14} color={color} />
+                  <Text style={[styles.viewDetailsBtnText, { color }]}>
+                    {alert.actionLabel || 'View Details'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => handleSnooze(alert.id)}
+                activeOpacity={0.7}
+              >
+                <Store size={16} color={COLORS.beigeWarm} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => handleDismiss(alert.id)}
+                activeOpacity={0.7}
+              >
+                <Trash2 size={16} color={COLORS.error} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
     );
   };
@@ -414,14 +513,11 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   alertItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    gap: SPACING.sm,
     borderWidth: 1,
     borderColor: 'rgba(212, 165, 116, 0.15)',
+    overflow: 'hidden',
   },
   alertItemRead: {
     opacity: 0.7,
@@ -430,6 +526,18 @@ const styles = StyleSheet.create({
   alertItemSnoozed: {
     borderColor: 'rgba(255, 152, 0, 0.3)',
     backgroundColor: 'rgba(255, 152, 0, 0.05)',
+  },
+  alertItemExpanded: {
+    borderColor: 'rgba(212, 165, 116, 0.35)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  alertTouchable: {
+    padding: SPACING.md,
+  },
+  alertTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
   readToggle: {
     padding: SPACING.xs,
@@ -444,43 +552,111 @@ const styles = StyleSheet.create({
   alertContent: {
     flex: 1,
   },
+  alertTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
   alertTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.white,
-    marginBottom: 2,
+    flex: 1,
   },
   alertTitleRead: {
     color: 'rgba(255,255,255,0.7)',
   },
+  priorityPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  priorityPillText: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    letterSpacing: 0.5,
+  },
   alertMessage: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.55)',
     lineHeight: 18,
+    marginTop: 2,
+  },
+  expandedContent: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+  },
+  expandedDivider: {
+    height: 1,
+    marginBottom: SPACING.md,
+  },
+  expandedMessage: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255,255,255,0.8)',
+    lineHeight: 20,
+    marginBottom: SPACING.md,
+  },
+  dataPointsContainer: {
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    marginBottom: SPACING.md,
+    gap: SPACING.xs,
+  },
+  dataPointRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dataPointLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.5)',
+    fontWeight: '500' as const,
+  },
+  dataPointValue: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.white,
+    fontWeight: '600' as const,
   },
   alertTime: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: 'rgba(255,255,255,0.4)',
-    marginTop: 4,
+    marginBottom: SPACING.sm,
   },
   snoozedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
+    marginBottom: SPACING.sm,
   },
   snoozedText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: COLORS.warning,
   },
-  alertActions: {
+  expandedActions: {
     flexDirection: 'row',
-    gap: SPACING.xs,
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  viewDetailsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  viewDetailsBtnText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '600' as const,
   },
   actionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center',
     alignItems: 'center',

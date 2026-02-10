@@ -408,7 +408,8 @@ export function detectSpendingSpikes(
 
 export function detectPriceDrops(
   priceDropAlerts: PriceDropAlert[],
-  minDropPercent: number = 5
+  minDropPercent: number = 5,
+  bookedCruises: BookedCruise[] = []
 ): Anomaly[] {
   const anomalies: Anomaly[] = [];
   const now = new Date();
@@ -417,6 +418,10 @@ export function detectPriceDrops(
     const sailDate = new Date(alert.sailDate);
     return sailDate > now && alert.priceDropPercent >= minDropPercent;
   });
+
+  const upcomingBooked = bookedCruises.filter(c =>
+    c.status === 'booked' || c.completionState === 'upcoming'
+  );
 
   activeDrops.forEach(drop => {
     let severity: AlertPriority = 'info';
@@ -437,12 +442,22 @@ export function detectPriceDrops(
       year: 'numeric',
     });
 
+    const isBookedCruise = upcomingBooked.some(c => {
+      const shipMatch = c.shipName?.toLowerCase() === drop.shipName?.toLowerCase();
+      const dateMatch = c.sailDate === drop.sailDate;
+      return shipMatch && dateMatch;
+    });
+
+    const cabinLabel = drop.cabinType || 'Cabin';
+    const bookedTag = isBookedCruise ? ' [BOOKED]' : '';
+    const titlePrefix = isBookedCruise ? 'Price Drop on Your Booked Cruise' : 'Price Drop';
+
     anomalies.push({
       id: generateId(),
       type: 'price_drop',
-      severity,
-      title: `Price Drop: ${drop.priceDrop.toFixed(0)} off ${drop.shipName}`,
-      description: `${drop.cabinType} cabin on ${drop.shipName} (${formattedSailDate}) dropped from ${drop.previousPrice.toFixed(0)} to ${drop.currentPrice.toFixed(0)} - Save ${drop.priceDropPercent.toFixed(1)}%!`,
+      severity: isBookedCruise && severity === 'low' ? 'medium' : severity,
+      title: `${titlePrefix}: ${drop.priceDrop.toFixed(0)} off ${cabinLabel}${bookedTag}`,
+      description: `${cabinLabel} price on ${drop.shipName} (${formattedSailDate}) dropped from ${drop.previousPrice.toFixed(0)} to ${drop.currentPrice.toFixed(0)} — save ${drop.priceDropPercent.toFixed(1)}%.${isBookedCruise ? ' This is one of your booked cruises. Consider contacting Royal Caribbean to reprice or get onboard credit for the difference.' : ''}`,
       detectedAt: drop.currentRecordedAt,
       dataPoints: {
         offerId: drop.offerId,
@@ -451,13 +466,14 @@ export function detectPriceDrops(
         actualValue: drop.currentPrice,
         deviation: -drop.priceDrop,
         deviationPercent: -drop.priceDropPercent,
+        isBookedCruise: isBookedCruise ? 1 : 0,
       },
       relatedEntityId: drop.offerId,
       relatedEntityType: 'offer',
     });
   });
 
-  console.log(`[AnomalyDetection] Found ${anomalies.length} price drop alerts`);
+  console.log(`[AnomalyDetection] Found ${anomalies.length} price drop alerts (${anomalies.filter(a => a.dataPoints.isBookedCruise === 1).length} on booked cruises)`);
   return anomalies;
 }
 
@@ -675,7 +691,6 @@ export function runFullAnomalyDetection(
 
   const allAnomalies: Anomaly[] = [
     ...detectROIAnomalies(cruises, config),
-    ...detectPointsMismatch(cruises, config),
     ...detectExpiringOffers(offers, config),
     ...detectTierMilestones(currentPoints, [
       { name: 'Prime', threshold: 2501 },
@@ -684,7 +699,7 @@ export function runFullAnomalyDetection(
     ], config),
     ...detectBookingConflicts(cruises),
     ...detectSpendingSpikes(cruises, config),
-    ...detectPriceDrops(priceDropAlerts),
+    ...detectPriceDrops(priceDropAlerts, 5, cruises),
   ];
 
   const insights = generatePatternInsights(cruises);

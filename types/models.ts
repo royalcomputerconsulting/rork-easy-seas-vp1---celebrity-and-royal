@@ -668,6 +668,7 @@ export interface Anomaly {
     actualValue: number;
     deviation: number;
     deviationPercent: number;
+    isBookedCruise?: number;
   };
   relatedEntityId?: string;
   relatedEntityType?: 'cruise' | 'offer' | 'financial';
