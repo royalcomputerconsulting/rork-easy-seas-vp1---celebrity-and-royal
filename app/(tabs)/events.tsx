@@ -21,6 +21,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import type { CalendarEvent, BookedCruise } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
+import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -690,6 +691,10 @@ export default function EventsScreen() {
               </View>
             </View>
           )}
+
+          <View style={styles.crewSectionContainer}>
+            <CrewRecognitionSection />
+          </View>
           
           <View style={styles.bottomSpacer} />
         </ScrollView>
@@ -1093,5 +1098,9 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 120,
+  },
+  crewSectionContainer: {
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.md,
   },
 });
