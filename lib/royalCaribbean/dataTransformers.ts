@@ -4,10 +4,39 @@ import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 function parseDate(dateStr: string): string {
   if (!dateStr) return '';
   
+  const trimmed = dateStr.trim();
+  
   try {
-    // Handle various date formats
-    // Format: "Mar 16, 2026" or "Mar 16 2026"
-    const monthNameMatch = dateStr.match(/(\w{3})\s+(\d{1,2}),?\s*(\d{4})/);
+    // PRIORITY 1: ISO format "YYYY-MM-DD" or "YYYY-MM-DDT..." — parse WITHOUT timezone shift
+    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      const year = isoMatch[1];
+      const month = isoMatch[2];
+      const day = isoMatch[3];
+      console.log(`[parseDate] ISO date detected: ${trimmed} -> ${month}-${day}-${year}`);
+      return `${month}-${day}-${year}`;
+    }
+    
+    // PRIORITY 2: Already in MM-DD-YYYY format
+    const mmddyyyyDash = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (mmddyyyyDash) {
+      const month = mmddyyyyDash[1].padStart(2, '0');
+      const day = mmddyyyyDash[2].padStart(2, '0');
+      const year = mmddyyyyDash[3];
+      return `${month}-${day}-${year}`;
+    }
+    
+    // PRIORITY 3: MM/DD/YYYY format
+    const mmddyyyySlash = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (mmddyyyySlash) {
+      const month = mmddyyyySlash[1].padStart(2, '0');
+      const day = mmddyyyySlash[2].padStart(2, '0');
+      const year = mmddyyyySlash[3].length === 2 ? '20' + mmddyyyySlash[3] : mmddyyyySlash[3];
+      return `${month}-${day}-${year}`;
+    }
+    
+    // PRIORITY 4: "Mar 16, 2026" or "Mar 16 2026"
+    const monthNameMatch = trimmed.match(/(\w{3})\s+(\d{1,2}),?\s*(\d{4})/);
     if (monthNameMatch) {
       const monthNames: Record<string, number> = {
         'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
@@ -23,16 +52,34 @@ function parseDate(dateStr: string): string {
       }
     }
     
-    // Try standard Date parsing
-    const date = new Date(dateStr);
+    // PRIORITY 5: "March 16, 2026" (full month name)
+    const fullMonthMatch = trimmed.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s*(\d{4})/i);
+    if (fullMonthMatch) {
+      const fullMonthNames: Record<string, number> = {
+        'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5,
+        'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11
+      };
+      const month = fullMonthNames[fullMonthMatch[1].toLowerCase()];
+      const day = parseInt(fullMonthMatch[2], 10);
+      const year = parseInt(fullMonthMatch[3], 10);
+      if (month !== undefined && !isNaN(day) && !isNaN(year)) {
+        const monthStr = String(month + 1).padStart(2, '0');
+        const dayStr = String(day).padStart(2, '0');
+        return `${monthStr}-${dayStr}-${year}`;
+      }
+    }
+    
+    // LAST RESORT: Use Date constructor but extract UTC components to avoid timezone shift
+    const date = new Date(trimmed + (trimmed.includes('T') ? '' : 'T12:00:00'));
     if (!isNaN(date.getTime())) {
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       const year = String(date.getFullYear());
+      console.log(`[parseDate] Fallback Date parse: ${trimmed} -> ${month}-${day}-${year}`);
       return `${month}-${day}-${year}`;
     }
   } catch {
-    console.warn('Failed to parse date:', dateStr);
+    console.warn('[parseDate] Failed to parse date:', dateStr);
   }
   
   return dateStr;

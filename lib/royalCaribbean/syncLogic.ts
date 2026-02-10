@@ -237,9 +237,31 @@ function findMatchingBookedCruise(
       }
     }
     
-    // REMOVED PRIORITY 3: Do NOT match by ship + date alone
-    // Multiple bookings can be on the same ship/sailing date
-    // Only match if we have explicit identifiers (reservation number or booking ID)
+    // PRIORITY 3: Match by ship + normalized sail date + cabin type for same-source cruises
+    // This catches duplicates from re-syncs or imports where IDs might differ slightly
+    if (cruise.cruiseSource === existing.cruiseSource && cruise.cruiseSource === 'royal') {
+      const cruiseShip = normalizeShipName(cruise.shipName);
+      const existingShip = normalizeShipName(existing.shipName);
+      const cruiseDate = normalizeSailDate(cruise.sailDate);
+      const existingDate = normalizeSailDate(existing.sailDate);
+      const cruiseCabin = normalizeCabinType(cruise.cabinType);
+      const existingCabin = normalizeCabinType(existing.cabinType);
+      
+      if (
+        cruiseShip && existingShip && cruiseShip === existingShip &&
+        cruiseDate && existingDate && cruiseDate === existingDate &&
+        (cruiseCabin === existingCabin || cruiseCabin === 'unknown' || existingCabin === 'unknown' ||
+         cruiseCabin.includes(existingCabin) || existingCabin.includes(cruiseCabin))
+      ) {
+        // Only match if neither has a different booking ID
+        const cruiseBook = (cruise.bookingId || '').toString().trim();
+        const existingBook = (existing.bookingId || '').toString().trim();
+        if (!cruiseBook || !existingBook || cruiseBook === existingBook) {
+          console.log(`[Dedup BookedCruise] Matched by ship+date+cabin (same source): ${cruise.shipName} on ${cruise.sailDate}`);
+          return true;
+        }
+      }
+    }
     
     return false;
   }) || null;
@@ -280,6 +302,38 @@ function mergeBookedCruise(existing: BookedCruise, synced: BookedCruise): Booked
   };
 }
 
+function deduplicateExtractedCruises(cruises: BookedCruiseRow[]): BookedCruiseRow[] {
+  const byBookingId = new Map<string, BookedCruiseRow>();
+  const byShipDate = new Map<string, BookedCruiseRow>();
+  const result: BookedCruiseRow[] = [];
+  
+  for (const cruise of cruises) {
+    const bookingId = (cruise.bookingId || '').toString().trim();
+    const shipName = (cruise.shipName || '').toLowerCase().trim();
+    const sailDate = (cruise.sailingStartDate || '').trim();
+    const shipDateKey = `${shipName}|${sailDate}`;
+    
+    if (bookingId && byBookingId.has(bookingId)) {
+      console.log(`[SyncLogic] Dedup: Skipping duplicate bookingId: ${bookingId} (${cruise.shipName})`);
+      continue;
+    }
+    
+    if (!bookingId && shipName && sailDate && byShipDate.has(shipDateKey)) {
+      console.log(`[SyncLogic] Dedup: Skipping duplicate ship+date: ${cruise.shipName} on ${sailDate}`);
+      continue;
+    }
+    
+    if (bookingId) byBookingId.set(bookingId, cruise);
+    if (shipName && sailDate) byShipDate.set(shipDateKey, cruise);
+    result.push(cruise);
+  }
+  
+  if (result.length < cruises.length) {
+    console.log(`[SyncLogic] Deduplication: ${cruises.length} -> ${result.length} extracted cruises (removed ${cruises.length - result.length} duplicates)`);
+  }
+  return result;
+}
+
 export function createSyncPreview(
   extractedOffers: OfferRow[],
   extractedBookedCruises: BookedCruiseRow[],
@@ -289,6 +343,10 @@ export function createSyncPreview(
   existingBookedCruises: BookedCruise[],
   currentLoyalty: { clubRoyalePoints: number; clubRoyaleTier: string; crownAndAnchorPoints: number; crownAndAnchorLevel: string }
 ): SyncPreview {
+  // STEP 0: Deduplicate raw extracted cruises (prevents duplicates from multiple API captures)
+  const dedupedBookedCruises = deduplicateExtractedCruises(extractedBookedCruises);
+  console.log(`[SyncLogic] After dedup: ${dedupedBookedCruises.length} unique cruises from ${extractedBookedCruises.length} raw`);
+
   // Filter out IN PROGRESS offers before transformation
   const filteredOffers = extractedOffers.filter(offer => {
     if (isInProgressOffer(offer.offerCode, offer.offerName)) {
@@ -304,7 +362,7 @@ export function createSyncPreview(
   }
 
   const { cruises: transformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(filteredOffers, loyaltyData);
-  const transformedBookedCruises = transformBookedCruisesToAppFormat(extractedBookedCruises, loyaltyData);
+  const transformedBookedCruises = transformBookedCruisesToAppFormat(dedupedBookedCruises, loyaltyData);
 
   console.log(`[SyncLogic] Transformed ${transformedCruises.length} cruise records from ${filteredOffers.length} offer rows`);
 

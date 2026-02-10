@@ -1,34 +1,32 @@
 import JSZip from 'jszip';
 import { Platform } from 'react-native';
 
-const SCRAPER_EXTENSION_VERSION = '5.6.3';
+const SCRAPER_EXTENSION_VERSION = '6.0.0';
 const GRID_BUILDER_EXTENSION_VERSION = '2.0';
 
 const EMBEDDED_FILES: Record<string, string> = {
   'manifest.json': JSON.stringify({
     "manifest_version": 3,
-    "name": "Easy Seas — Dual Domain (Royal + Celebrity)",
-    "version": "5.6.3",
-    "description": "Exports offers.csv with named-column mapping, Offer Value column, ship class derivation from ship name, cleaned Ports & Times text, and Destination→Itinerary normalization.",
+    "name": "Easy Seas\u2122 \u2014 Sync Extension",
+    "version": "6.0.0",
+    "description": "Syncs casino offers, booked cruises, and loyalty data from Royal Caribbean & Celebrity Cruises websites. Mirrors the in-app sync functionality.",
     "permissions": [
       "downloads"
     ],
     "content_scripts": [
       {
         "matches": [
-          "https://www.celebritycruises.com/blue-chip-club/offers/*",
-          "https://www.royalcaribbean.com/club-royale/*"
+          "https://www.celebritycruises.com/*",
+          "https://www.royalcaribbean.com/*"
         ],
         "js": [
           "app.js",
+          "network-monitor.js",
+          "sync-engine.js",
           "integration.js",
-          "scraper.content.js",
-          "tableBuilder.js",
-          "tableRenderer.js",
-          "modal.js",
           "styles.js"
         ],
-        "run_at": "document_idle"
+        "run_at": "document_start"
       }
     ],
     "icons": {
@@ -50,60 +48,24 @@ const EMBEDDED_FILES: Record<string, string> = {
     ]
   }, null, 2),
   
-  'app.js': `// app.js — namespace bootstrap
-(function(){
+  'app.js': `(function(){
   window.EasySeas = window.EasySeas || {};
-  EasySeas.version = "5.6.2";
+  EasySeas.version = "6.0.0";
+  EasySeas.capturedData = {
+    offers: null,
+    bookedCruises: [],
+    loyaltyData: null,
+    logs: []
+  };
+  EasySeas.log = function(msg, type) {
+    var entry = { time: new Date().toLocaleTimeString(), message: msg, type: type || 'info' };
+    EasySeas.capturedData.logs.push(entry);
+    console.log('[EasySeas] ' + msg);
+  };
 })();`,
 
-  'integration.js': `// integration.js — add overlay trigger that calls scrapeOnce
-(function(){
-  window.EasySeas = window.EasySeas || {};
-
-  function ensureButton(){
-    if (document.querySelector('#escr-trigger')) return;
-    const btn = document.createElement('button');
-    btn.id = 'escr-trigger';
-    btn.className = 'escr-btn';
-    btn.type = 'button';
-    btn.textContent = 'Scrape Website';
-    btn.addEventListener('click', async () => {
-      try {
-        if (window.EasySeas && typeof window.EasySeas.scrapeOnce === 'function') {
-          await window.EasySeas.scrapeOnce();
-        } else {
-          console.warn('EasySeas.scrapeOnce not ready yet.');
-        }
-      } catch(e){ console.error(e); }
-    });
-    document.documentElement.appendChild(btn);
-  }
-
-  const start = Date.now();
-  const interval = setInterval(()=>{
-    const grid = document.querySelector('tr.newest-offer-row, a.gobo-itinerary-link[data-itinerary-key], [col-id]');
-    if (grid || (Date.now()-start)>15000){
-      clearInterval(interval);
-      ensureButton();
-    }
-  }, 400);
-})();`,
-
-  'styles.js': `// styles.js — floating trigger button
-(function(){
-  const css = \`
-    .escr-btn {
-      position: fixed; z-index: 2147483646; right: 16px; bottom: 16px;
-      padding: 10px 14px; background:#5a2ea6; color:#fff; border:none; border-radius:12px;
-      font-weight:600; box-shadow:0 6px 18px rgba(0,0,0,.25); cursor:pointer;
-    }
-    .escr-btn:active { transform: translateY(1px); }
-  \`;
-  const style = document.createElement('style');
-  style.textContent = css;
-  document.documentElement.appendChild(style);
-})();`,
-
+  'styles.js': getSyncExtensionStyles(),
+  
   'tableBuilder.js': `(function(){window.EasySeas=window.EasySeas||{};EasySeas.TableBuilder={};})();`,
   
   'tableRenderer.js': `(function(){window.EasySeas=window.EasySeas||{};EasySeas.TableRenderer={};})();`,
@@ -124,13 +86,16 @@ export async function downloadScraperExtension(): Promise<{ success: boolean; er
       console.log(`[ChromeExtension] ✓ Added ${filename}`);
     }
 
-    const scraperContent = await getScraperContent();
-    zip.file('scraper.content.js', scraperContent);
-    console.log('[ChromeExtension] ✓ Added scraper.content.js');
-    
-    const modalContent = await getModalContent();
-    zip.file('modal.js', modalContent);
-    console.log('[ChromeExtension] ✓ Added modal.js');
+    const networkMonitor = await getModalContent();
+    zip.file('network-monitor.js', networkMonitor);
+    console.log('[ChromeExtension] ✓ Added network-monitor.js');
+
+    const syncEngine = await getScraperContent();
+    zip.file('sync-engine.js', syncEngine);
+    console.log('[ChromeExtension] ✓ Added sync-engine.js');
+
+    zip.file('integration.js', getSyncIntegrationContent());
+    console.log('[ChromeExtension] ✓ Added integration.js');
 
     const iconsFolder = zip.folder('icons');
     if (iconsFolder) {
@@ -284,159 +249,11 @@ export async function downloadChromeExtension(): Promise<{ success: boolean; err
 }
 
 async function getScraperContent(): Promise<string> {
-  return `// [DualDomainPatch] Support Royal & Celebrity — dynamic filename
-(function(){
-  const IS_CELEBRITY = (location.hostname || '').includes('celebritycruises.com');
-  const hookDownload = () => {
-    if (typeof window.downloadCSV === 'function'){
-      const orig = window.downloadCSV;
-      window.downloadCSV = function(filename, rows, headers){
-        const newFile = IS_CELEBRITY ? 'Celebrity_offers.csv' : filename;
-        console.log('[EasySeas] DualDomainPatch →', newFile);
-        return orig(newFile, rows, headers);
-      };
-    }
-  };
-  if (document.readyState === 'complete'){
-    hookDownload();
-  } else {
-    window.addEventListener('load', hookDownload);
-    setTimeout(hookDownload, 1200);
-  }
-})();
-
-function getAllVisibleRows() {
-  const primary = Array.from(document.querySelectorAll('tr, .gobo-table-row, [role="row"]')).filter(r => r.offsetParent !== null);
-  if (primary.length >= 174) {
-    console.log(\`[EasySeas] Detected \${primary.length} rows before color change\`);
-    try {
-      const extra = Array.from(document.querySelectorAll('tbody tr, .yellow-row, .white-row')).filter(r => r.offsetParent !== null);
-      if (extra.length > primary.length) {
-        console.log('[EasySeas] Continuing scrape beyond color boundary (row 174)');
-        const merged = [...new Set([...primary, ...extra])];
-        return merged.filter(r => r.querySelector('a.gobo-itinerary-link'));
-      }
-    } catch (err) {
-      console.warn('[EasySeas] Boundary continuation failed', err);
-    }
-  }
-  return primary.filter(r => r.querySelector('a.gobo-itinerary-link'));
-}
-
-(function(){
-  window.EasySeas = window.EasySeas || {};
-  const HEADERS = [
-    "Ship Name","Sailing Date","Itinerary","Offer Code","Offer Name","Room Type","Guests Info","Perks",
-    "Offer Value","Ship Class","Trade-In Value","Offer Expiry Date","Price Interior","Price Ocean View","Price Balcony",
-    "Price Suite","Taxes & Fees","Ports & Times","Offer Type / Category","Nights","Departure Port"
-  ];
-  const MANDATORY = ["Ship Name","Sailing Date","Offer Code","Offer Name","Itinerary","Room Type"];
-  const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
-  const t = (el)=> (el && el.textContent ? el.textContent.replace(/\\s+/g,' ').trim() : "");
-  
-  function cleanText(s){
-    const str = String(s || "");
-    const fixed = str
-      .replace(/\\u201A\\u00DC\\u00ED/g, '→')
-      .replace(/\\uFFFD+/g, ' ')
-      .replace(/[\\u2013\\u2014]/g, '-')
-      .replace(/[\\u2192\\u2794]/g, '→');
-    return fixed.replace(/[^\\x20-\\x7E→]/g, ' ').replace(/\\s+/g, ' ').trim();
-  }
-  
-  function normCurrency(v){
-    const s = String(v||'').trim();
-    if (!s) return '';
-    const m = s.match(/\\$\\s*([0-9][0-9,]*)(?:\\.(\\d{1,2}))?/);
-    if (!m) return '';
-    const dollars = m[1].replace(/,/g,'');
-    const cents = (m[2] || '').padEnd(2,'0');
-    return m[2] ? \`\$\${dollars}.\${cents}\` : \`\$\${dollars}\`;
-  }
-  
-  function deriveShipClass(shipName){
-    const n = String(shipName||'').toLowerCase();
-    if (!n) return '';
-    if (/(^|\\b)(icon|star)\\b/.test(n)) return 'Icon Class';
-    if (n.includes('odyssey')) return 'Ultra Quantum Class';
-    if (n.includes('quantum') || n.includes('anthem') || n.includes('ovation')) return 'Quantum Class';
-    if (n.includes('oasis') || n.includes('allure') || n.includes('harmony') || n.includes('symphony') || n.includes('wonder') || n.includes('utopia')) return 'Oasis Class';
-    if (n.includes('freedom') || n.includes('liberty') || n.includes('independence')) return 'Freedom Class';
-    if (n.includes('navigator') || n.includes('voyager') || n.includes('explorer') || n.includes('adventure') || n.includes('mariner')) return 'Voyager Class';
-    if (n.includes('vision') || n.includes('rhapsody') || n.includes('grandeur') || n.includes('enchantment') || n.includes('radiance') || n.includes('serenade') || n.includes('jewel') || n.includes('brilliance')) return 'Vision Class';
-    return '';
-  }
-  
-  function num(n){ return String(n||"").replace(/[^0-9.]/g,""); }
-  
-  function formatItinerary(nightsRaw, destRaw){
-    const dest = cleanText(destRaw || '');
-    const n = String(nightsRaw||'').replace(/[^0-9]/g,'');
-    if (!dest) return '';
-    if (/\\b\\d+\\s*-?\\s*(night|nights)\\b/i.test(dest)) return dest;
-    if (n) return \`\${n}-Night \${dest}\`;
-    return dest;
-  }
-  
-  // Minimal scraper implementation - full version is too large
-  window.EasySeas.scrapeOnce = async function(){
-    alert('Scraper loaded. Full implementation available in complete extension.');
-  };
-})();`;
+  return getSyncEngineContent();
 }
 
 async function getModalContent(): Promise<string> {
-  return `// modal.js — CSV helper
-(function(){
-  window.EasySeas = window.EasySeas || {};
-
-  function csvEscape(val){
-    if (val == null) return "";
-    const s = String(val).replace(/\\r?\\n|\\r/g, " ").replace(/\\s+/g," ").trim();
-    if (/[",\\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
-    return s;
-  }
-
-  function downloadCSV(filename, rows, headers){
-    if (!Array.isArray(headers) || !headers.length){
-      console.error('[EasySeas] downloadCSV: missing headers; aborting export.');
-      return;
-    }
-    if (!Array.isArray(rows) || !rows.length){
-      console.error('[EasySeas] downloadCSV: no row data; aborting export.');
-      return;
-    }
-
-    const lines = [];
-    lines.push(headers.join(','));
-
-    rows.forEach((row, idx)=>{
-      if (!row || typeof row !== 'object'){
-        console.warn('[EasySeas] downloadCSV: skipping non-object row at index', idx);
-        return;
-      }
-      const missing = headers.filter(h => !(h in row));
-      if (missing.length){
-        console.warn('[EasySeas] downloadCSV: row missing expected keys', { index: idx, missing });
-      }
-      const ordered = headers.map(h => csvEscape(row[h] ?? ""));
-      lines.push(ordered.join(','));
-    });
-
-    const blob = new Blob([lines.join('\\n')], {type: 'text/csv;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  window.downloadCSV = downloadCSV;
-  EasySeas.Helpers = { downloadCSV };
-})();`;
+  return getNetworkMonitorContent();
 }
 
 function createPlaceholderIcon(text: string = 'ES', bgColor: string = '#5a2ea6'): Uint8Array {
@@ -1198,5 +1015,563 @@ function getGridBuilderAppContent(): string {
     init() { this.DOMUtils.waitForDom(); }
   };
   App.init();
+})();`;
+}
+
+function getSyncExtensionStyles(): string {
+  return `(function(){
+  const css = \`
+    #easyseas-sync-panel {
+      position: fixed; z-index: 2147483646; right: 16px; bottom: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .es-sync-btn {
+      padding: 12px 20px; background: #0f172a; color: #fff; border: 2px solid #3b82f6;
+      border-radius: 14px; font-weight: 700; font-size: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.3); cursor: pointer;
+      display: flex; align-items: center; gap: 8px; transition: all 0.2s;
+    }
+    .es-sync-btn:hover { background: #1e293b; border-color: #60a5fa; transform: translateY(-1px); }
+    .es-sync-btn:active { transform: translateY(1px); }
+    .es-sync-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .es-sync-btn .es-icon { font-size: 18px; }
+    .es-status-panel {
+      position: fixed; z-index: 2147483647; right: 16px; bottom: 70px;
+      width: 380px; max-height: 500px; background: #0f172a; color: #e2e8f0;
+      border: 1px solid #334155; border-radius: 16px;
+      box-shadow: 0 20px 50px rgba(0,0,0,.4); overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .es-status-header {
+      padding: 16px; background: #1e293b; border-bottom: 1px solid #334155;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .es-status-title { font-size: 16px; font-weight: 700; color: #fff; }
+    .es-status-close { background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; padding: 4px 8px; }
+    .es-status-close:hover { color: #fff; }
+    .es-status-body { padding: 16px; max-height: 300px; overflow-y: auto; }
+    .es-status-body::-webkit-scrollbar { width: 6px; }
+    .es-status-body::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    .es-log-entry { padding: 4px 0; font-size: 12px; line-height: 1.4; font-family: monospace; }
+    .es-log-entry.success { color: #10b981; }
+    .es-log-entry.error { color: #ef4444; }
+    .es-log-entry.warning { color: #f59e0b; }
+    .es-log-entry.info { color: #94a3b8; }
+    .es-status-footer {
+      padding: 12px 16px; background: #1e293b; border-top: 1px solid #334155;
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .es-action-btn {
+      flex: 1; padding: 10px 12px; border: none; border-radius: 10px;
+      font-weight: 600; font-size: 13px; cursor: pointer; text-align: center;
+    }
+    .es-action-btn.primary { background: #3b82f6; color: #fff; }
+    .es-action-btn.primary:hover { background: #2563eb; }
+    .es-action-btn.success { background: #10b981; color: #fff; }
+    .es-action-btn.success:hover { background: #059669; }
+    .es-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .es-count-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .es-count-badge {
+      flex: 1; background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+      padding: 10px; text-align: center;
+    }
+    .es-count-num { font-size: 22px; font-weight: 800; color: #fff; }
+    .es-count-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+  \`;
+  const style = document.createElement('style');
+  style.textContent = css;
+  document.head.appendChild(style);
+})();`;
+}
+
+function getNetworkMonitorContent(): string {
+  return `(function(){
+  window.EasySeas = window.EasySeas || {};
+  EasySeas.capturedData = EasySeas.capturedData || { offers: null, bookedCruises: [], loyaltyData: null, logs: [] };
+
+  var SHIP_CODES = {
+    'AL':'Allure of the Seas','AN':'Anthem of the Seas','AD':'Adventure of the Seas',
+    'BR':'Brilliance of the Seas','EN':'Enchantment of the Seas','EX':'Explorer of the Seas',
+    'FR':'Freedom of the Seas','GR':'Grandeur of the Seas','HM':'Harmony of the Seas',
+    'IC':'Icon of the Seas','ID':'Independence of the Seas','JW':'Jewel of the Seas',
+    'LB':'Liberty of the Seas','MR':'Mariner of the Seas','NV':'Navigator of the Seas',
+    'OA':'Oasis of the Seas','OV':'Ovation of the Seas','OY':'Odyssey of the Seas',
+    'QN':'Quantum of the Seas','RD':'Radiance of the Seas','SE':'Serenade of the Seas',
+    'SP':'Spectrum of the Seas','SY':'Symphony of the Seas','UT':'Utopia of the Seas',
+    'VI':'Vision of the Seas','VY':'Voyager of the Seas','WN':'Wonder of the Seas'
+  };
+  var CABIN_TYPES = {'I':'Interior','O':'Ocean View','B':'Balcony','S':'Suite'};
+
+  function resolveShip(code){ return SHIP_CODES[code] || (code ? code+' of the Seas' : 'Unknown Ship'); }
+  function resolveCabin(code){ return CABIN_TYPES[code] || code || ''; }
+
+  function processBookings(bookings, source){
+    if (!bookings || !Array.isArray(bookings) || !bookings.length) return;
+    var existingIds = new Set(EasySeas.capturedData.bookedCruises.map(function(c){ return c.bookingId; }).filter(Boolean));
+    var added = 0;
+    bookings.forEach(function(b){
+      var bid = b.bookingId ? b.bookingId.toString() : '';
+      if (bid && existingIds.has(bid)) return;
+      existingIds.add(bid);
+      EasySeas.capturedData.bookedCruises.push({
+        bookingId: bid,
+        shipName: b.shipName || resolveShip(b.shipCode),
+        shipCode: b.shipCode || '',
+        sailDate: b.sailDate || '',
+        numberOfNights: b.numberOfNights || 0,
+        cabinType: resolveCabin(b.stateroomType),
+        cabinCategory: b.stateroomCategoryCode || '',
+        stateroomNumber: b.stateroomNumber || '',
+        bookingStatus: b.bookingStatus || 'BK',
+        isCourtesyHold: b.bookingStatus === 'OF',
+        paidInFull: b.paidInFull || false,
+        passengers: b.passengers || [],
+        source: source
+      });
+      added++;
+    });
+    if (added > 0) EasySeas.log('Captured ' + added + ' booking(s) from ' + source, 'success');
+  }
+
+  function extractBookingsFromPayload(data){
+    if (data && data.payload && Array.isArray(data.payload.sailingInfo)) return data.payload.sailingInfo;
+    if (data && data.payload && Array.isArray(data.payload.profileBookings)) return data.payload.profileBookings;
+    if (data && Array.isArray(data.sailingInfo)) return data.sailingInfo;
+    if (data && Array.isArray(data.profileBookings)) return data.profileBookings;
+    if (Array.isArray(data)) return data;
+    if (data && data.bookings && Array.isArray(data.bookings)) return data.bookings;
+    return null;
+  }
+
+  var origFetch = window.fetch;
+  window.fetch = function(){
+    var args = arguments;
+    return origFetch.apply(this, args).then(function(response){
+      var url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
+      if (!url || !response.ok) return response;
+      var cloned = response.clone();
+
+      if (url.indexOf('/profileBookings/enriched') !== -1 || url.indexOf('/api/account/upcoming-cruises') !== -1 || url.indexOf('/api/profile/bookings') !== -1){
+        cloned.json().then(function(data){
+          var bookings = extractBookingsFromPayload(data);
+          if (bookings) processBookings(bookings, 'API:' + url.split('?')[0].split('/').pop());
+        }).catch(function(){});
+      }
+
+      if (url.indexOf('/guestAccounts/loyalty/info') !== -1 || url.indexOf('/en/celebrity/web/v3/guestAccounts/') !== -1){
+        cloned.json().then(function(data){
+          EasySeas.capturedData.loyaltyData = data;
+          EasySeas.log('Captured loyalty data from API', 'success');
+        }).catch(function(){});
+      }
+
+      if (url.indexOf('/api/casino/casino-offers') !== -1){
+        cloned.json().then(function(data){
+          EasySeas.capturedData.offers = data;
+          var count = (data && data.offers) ? data.offers.length : 0;
+          EasySeas.log('Captured ' + count + ' offers from Casino API', 'success');
+        }).catch(function(){});
+      }
+
+      return response;
+    });
+  };
+
+  var origOpen = XMLHttpRequest.prototype.open;
+  var origSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function(m, url){ this._esUrl = url; return origOpen.apply(this, arguments); };
+  XMLHttpRequest.prototype.send = function(){
+    var xhr = this;
+    xhr.addEventListener('load', function(){
+      if (!xhr._esUrl) return;
+      try {
+        var data = JSON.parse(xhr.responseText);
+        if (xhr._esUrl.indexOf('/profileBookings/enriched') !== -1 || xhr._esUrl.indexOf('/api/account/upcoming-cruises') !== -1){
+          var bookings = extractBookingsFromPayload(data);
+          if (bookings) processBookings(bookings, 'XHR:bookings');
+        }
+        if (xhr._esUrl.indexOf('/guestAccounts/loyalty') !== -1){
+          EasySeas.capturedData.loyaltyData = data;
+          EasySeas.log('Captured loyalty data (XHR)', 'success');
+        }
+        if (xhr._esUrl.indexOf('/api/casino/casino-offers') !== -1){
+          EasySeas.capturedData.offers = data;
+          EasySeas.log('Captured offers (XHR)', 'success');
+        }
+      } catch(e){}
+    });
+    return origSend.apply(this, arguments);
+  };
+
+  EasySeas.log('Network monitor active - capturing API payloads', 'info');
+})();`;
+}
+
+function getSyncEngineContent(): string {
+  return `(function(){
+  window.EasySeas = window.EasySeas || {};
+
+  function wait(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+  function getAuthContext(){
+    var raw = localStorage.getItem('persist:session');
+    if (!raw) throw new Error('No session data. Please log in first.');
+    var session = JSON.parse(raw);
+    var token = session.token ? JSON.parse(session.token) : null;
+    var user = session.user ? JSON.parse(session.user) : null;
+    if (!token || !user || !user.accountId) throw new Error('Invalid session. Please log in again.');
+    var auth = token.toString ? token.toString() : '';
+    if (auth && !auth.startsWith('Bearer ')) auth = 'Bearer ' + auth;
+    var isCelebrity = location.hostname.indexOf('celebritycruises.com') !== -1;
+    return {
+      headers: {
+        'accept': 'application/json',
+        'accept-language': 'en-US,en;q=0.9',
+        'account-id': user.accountId,
+        'authorization': auth,
+        'content-type': 'application/json'
+      },
+      accountId: user.accountId,
+      loyaltyId: user.cruiseLoyaltyId || '',
+      isCelebrity: isCelebrity,
+      brandCode: isCelebrity ? 'C' : 'R',
+      baseUrl: isCelebrity ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com'
+    };
+  }
+
+  async function fetchOffers(ctx){
+    EasySeas.log('Fetching casino offers via API...', 'info');
+    var endpoint = ctx.baseUrl + (ctx.brandCode === 'C' ? '/api/casino/casino-offers/v2' : '/api/casino/casino-offers/v1');
+    var body = { cruiseLoyaltyId: ctx.loyaltyId, offerCode: '', brand: ctx.brandCode };
+    var res = await fetch(endpoint, { method: 'POST', headers: ctx.headers, credentials: 'omit', body: JSON.stringify(body) });
+    if (!res.ok) throw new Error('Offers API error: ' + res.status);
+    var data = await res.json();
+    EasySeas.capturedData.offers = data;
+    var count = (data && data.offers) ? data.offers.length : 0;
+    EasySeas.log('Fetched ' + count + ' casino offers', 'success');
+    return data;
+  }
+
+  async function fetchBookings(ctx){
+    EasySeas.log('Fetching booked cruises via API...', 'info');
+    var endpoint = ctx.baseUrl + '/api/account/upcoming-cruises';
+    try {
+      var res = await fetch(endpoint, { method: 'GET', headers: ctx.headers, credentials: 'omit' });
+      if (res.ok) {
+        var data = await res.json();
+        var bookings = null;
+        if (data && data.payload && Array.isArray(data.payload.sailingInfo)) bookings = data.payload.sailingInfo;
+        else if (data && data.payload && Array.isArray(data.payload.profileBookings)) bookings = data.payload.profileBookings;
+        else if (Array.isArray(data)) bookings = data;
+        if (bookings && bookings.length > 0){
+          EasySeas.log('Fetched ' + bookings.length + ' bookings from API', 'success');
+          return bookings;
+        }
+      }
+    } catch(e){ EasySeas.log('Direct booking fetch failed: ' + e.message, 'warning'); }
+
+    EasySeas.log('Trying enriched bookings endpoint...', 'info');
+    try {
+      var enrichedUrl = 'https://aws-prd.api.rccl.com/en/' + (ctx.brandCode === 'C' ? 'celebrity' : 'royal') + '/web/v1/profileBookings/enriched';
+      var res2 = await fetch(enrichedUrl, { method: 'GET', headers: ctx.headers, credentials: 'omit' });
+      if (res2.ok){
+        var data2 = await res2.json();
+        var bk = null;
+        if (data2 && data2.payload && Array.isArray(data2.payload.sailingInfo)) bk = data2.payload.sailingInfo;
+        else if (Array.isArray(data2)) bk = data2;
+        if (bk && bk.length > 0){
+          EasySeas.log('Fetched ' + bk.length + ' enriched bookings', 'success');
+          return bk;
+        }
+      }
+    } catch(e2){ EasySeas.log('Enriched booking fetch failed: ' + e2.message, 'warning'); }
+
+    if (EasySeas.capturedData.bookedCruises.length > 0){
+      EasySeas.log('Using ' + EasySeas.capturedData.bookedCruises.length + ' bookings from network capture', 'info');
+      return null;
+    }
+    EasySeas.log('No bookings found from any source', 'warning');
+    return null;
+  }
+
+  async function fetchLoyalty(ctx){
+    EasySeas.log('Fetching loyalty data...', 'info');
+    var url = ctx.isCelebrity
+      ? 'https://aws-prd.api.rccl.com/en/celebrity/web/v3/guestAccounts/' + encodeURIComponent(ctx.accountId)
+      : 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info';
+    try {
+      var res = await fetch(url, { method: 'GET', headers: ctx.headers, credentials: 'omit' });
+      if (res.ok){
+        var data = await res.json();
+        EasySeas.capturedData.loyaltyData = data;
+        EasySeas.log('Fetched loyalty data successfully', 'success');
+        return data;
+      }
+      EasySeas.log('Loyalty API returned ' + res.status, 'warning');
+    } catch(e){ EasySeas.log('Loyalty fetch failed: ' + e.message, 'warning'); }
+    return EasySeas.capturedData.loyaltyData;
+  }
+
+  function formatExportDate(dateStr){
+    if (!dateStr) return '';
+    try {
+      var m = dateStr.match(/(\\d{4})-(\\d{2})-(\\d{2})/);
+      if (m) return m[2] + '-' + m[3] + '-' + m[1];
+      var d = new Date(dateStr + 'T12:00:00');
+      if (!isNaN(d.getTime())){
+        return String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + '-' + d.getFullYear();
+      }
+    } catch(e){}
+    return dateStr;
+  }
+
+  function buildExportPayload(){
+    var SHIP_CODES = {
+      'AL':'Allure of the Seas','AN':'Anthem of the Seas','AD':'Adventure of the Seas',
+      'BR':'Brilliance of the Seas','FR':'Freedom of the Seas','GR':'Grandeur of the Seas',
+      'HM':'Harmony of the Seas','IC':'Icon of the Seas','ID':'Independence of the Seas',
+      'JW':'Jewel of the Seas','LB':'Liberty of the Seas','MR':'Mariner of the Seas',
+      'NV':'Navigator of the Seas','OA':'Oasis of the Seas','OV':'Ovation of the Seas',
+      'OY':'Odyssey of the Seas','QN':'Quantum of the Seas','RD':'Radiance of the Seas',
+      'SE':'Serenade of the Seas','SP':'Spectrum of the Seas','SY':'Symphony of the Seas',
+      'UT':'Utopia of the Seas','VI':'Vision of the Seas','VY':'Voyager of the Seas','WN':'Wonder of the Seas'
+    };
+    var CABIN_MAP = {'I':'Interior','O':'Ocean View','B':'Balcony','S':'Suite'};
+
+    var offersData = EasySeas.capturedData.offers;
+    var offerRows = [];
+    if (offersData && offersData.offers){
+      offersData.offers.forEach(function(o){
+        var co = o.campaignOffer || o;
+        var sailings = co.sailings || [];
+        sailings.forEach(function(s){
+          offerRows.push({
+            offerCode: co.offerCode || '',
+            offerName: co.name || '',
+            offerExpirationDate: co.reserveByDate || '',
+            shipName: s.shipName || SHIP_CODES[s.shipCode] || (s.shipCode ? s.shipCode + ' of the Seas' : ''),
+            shipCode: s.shipCode || '',
+            sailingDate: s.sailDate || '',
+            itinerary: s.itineraryDescription || '',
+            departurePort: (s.departurePort && s.departurePort.name) || s.departurePortName || '',
+            cabinType: s.roomType || s.stateroomType || '',
+            numberOfGuests: s.isGOBO ? '1' : '2',
+            perks: co.tradeInValue ? 'Trade-in value: 
+ + co.tradeInValue : '',
+            offerType: 'Club Royale'
+          });
+        });
+      });
+    }
+
+    var cruiseRows = EasySeas.capturedData.bookedCruises.map(function(c){
+      return {
+        bookingId: c.bookingId || '',
+        shipName: c.shipName || SHIP_CODES[c.shipCode] || '',
+        shipCode: c.shipCode || '',
+        sailingStartDate: formatExportDate(c.sailDate),
+        sailingEndDate: '',
+        numberOfNights: c.numberOfNights || 0,
+        cabinType: c.cabinType || CABIN_MAP[c.stateroomType] || '',
+        cabinCategory: c.cabinCategory || c.stateroomCategoryCode || '',
+        cabinNumberOrGTY: c.stateroomNumber === 'GTY' ? 'GTY' : (c.stateroomNumber || 'GTY'),
+        status: c.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
+        bookingStatus: c.bookingStatus || 'BK',
+        paidInFull: c.paidInFull ? 'Yes' : 'No'
+      };
+    });
+
+    return {
+      version: '6.0.0',
+      exportedAt: new Date().toISOString(),
+      source: 'EasySeas Chrome Extension',
+      offers: offerRows,
+      bookedCruises: cruiseRows,
+      loyaltyData: EasySeas.capturedData.loyaltyData,
+      counts: {
+        offers: offerRows.length,
+        bookedCruises: cruiseRows.length,
+        hasLoyalty: !!EasySeas.capturedData.loyaltyData
+      }
+    };
+  }
+
+  function downloadJSON(data, filename){
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  EasySeas.runFullSync = async function(){
+    EasySeas.capturedData.logs = [];
+    EasySeas.log('Starting full sync...', 'info');
+    try {
+      var ctx = getAuthContext();
+      EasySeas.log('Authenticated as account: ' + ctx.accountId, 'success');
+
+      await fetchOffers(ctx);
+      await wait(500);
+
+      var apiBookings = await fetchBookings(ctx);
+      if (apiBookings && apiBookings.length > 0){
+        var SHIP_CODES = {
+          'AL':'Allure of the Seas','AN':'Anthem of the Seas','AD':'Adventure of the Seas',
+          'BR':'Brilliance of the Seas','FR':'Freedom of the Seas','HM':'Harmony of the Seas',
+          'IC':'Icon of the Seas','ID':'Independence of the Seas','LB':'Liberty of the Seas',
+          'MR':'Mariner of the Seas','NV':'Navigator of the Seas','OA':'Oasis of the Seas',
+          'OV':'Ovation of the Seas','OY':'Odyssey of the Seas','QN':'Quantum of the Seas',
+          'SE':'Serenade of the Seas','SY':'Symphony of the Seas','UT':'Utopia of the Seas',
+          'VY':'Voyager of the Seas','WN':'Wonder of the Seas'
+        };
+        var CABIN_MAP = {'I':'Interior','O':'Ocean View','B':'Balcony','S':'Suite'};
+        var existingIds = new Set(EasySeas.capturedData.bookedCruises.map(function(c){ return c.bookingId; }).filter(Boolean));
+        apiBookings.forEach(function(b){
+          var bid = b.bookingId ? b.bookingId.toString() : '';
+          if (bid && existingIds.has(bid)) return;
+          existingIds.add(bid);
+          EasySeas.capturedData.bookedCruises.push({
+            bookingId: bid,
+            shipName: b.shipName || SHIP_CODES[b.shipCode] || (b.shipCode ? b.shipCode + ' of the Seas' : ''),
+            shipCode: b.shipCode || '',
+            sailDate: b.sailDate || '',
+            numberOfNights: b.numberOfNights || 0,
+            cabinType: CABIN_MAP[b.stateroomType] || b.stateroomType || '',
+            cabinCategory: b.stateroomCategoryCode || '',
+            stateroomNumber: b.stateroomNumber || '',
+            bookingStatus: b.bookingStatus || 'BK',
+            isCourtesyHold: b.bookingStatus === 'OF',
+            paidInFull: b.paidInFull || false,
+            passengers: b.passengers || [],
+            source: 'directAPI'
+          });
+        });
+      }
+      await wait(500);
+
+      await fetchLoyalty(ctx);
+
+      var payload = buildExportPayload();
+      EasySeas.log('Sync complete! ' + payload.counts.offers + ' offer sailings, ' + payload.counts.bookedCruises + ' booked cruises', 'success');
+      EasySeas._lastPayload = payload;
+      return payload;
+    } catch(e){
+      EasySeas.log('Sync error: ' + e.message, 'error');
+      throw e;
+    }
+  };
+
+  EasySeas.exportJSON = function(){
+    var payload = EasySeas._lastPayload || buildExportPayload();
+    var stamp = new Date().toISOString().slice(0,10);
+    downloadJSON(payload, 'EasySeas_Sync_' + stamp + '.json');
+    EasySeas.log('Exported JSON file', 'success');
+  };
+
+  EasySeas.buildExportPayload = buildExportPayload;
+})();`;
+}
+
+function getSyncIntegrationContent(): string {
+  return `(function(){
+  window.EasySeas = window.EasySeas || {};
+  var panelVisible = false;
+  var syncing = false;
+
+  function createUI(){
+    if (document.getElementById('easyseas-sync-panel')) return;
+
+    var panel = document.createElement('div');
+    panel.id = 'easyseas-sync-panel';
+
+    var btn = document.createElement('button');
+    btn.className = 'es-sync-btn';
+    btn.innerHTML = '<span class="es-icon">\u2693</span> Easy Seas\u2122 Sync';
+    btn.addEventListener('click', toggleStatusPanel);
+    panel.appendChild(btn);
+    document.body.appendChild(panel);
+
+    var status = document.createElement('div');
+    status.id = 'easyseas-status-panel';
+    status.className = 'es-status-panel';
+    status.style.display = 'none';
+    status.innerHTML = '<div class="es-status-header"><span class="es-status-title">Easy Seas\u2122 Sync</span><button class="es-status-close" id="es-close-btn">&times;</button></div>'
+      + '<div class="es-status-body" id="es-status-body"><div class="es-count-row"><div class="es-count-badge"><div class="es-count-num" id="es-offers-count">0</div><div class="es-count-label">Offers</div></div><div class="es-count-badge"><div class="es-count-num" id="es-cruises-count">0</div><div class="es-count-label">Cruises</div></div><div class="es-count-badge"><div class="es-count-num" id="es-loyalty-count">\u2014</div><div class="es-count-label">Loyalty</div></div></div><div id="es-log-container"></div></div>'
+      + '<div class="es-status-footer"><button class="es-action-btn primary" id="es-sync-btn">Sync Now</button><button class="es-action-btn success" id="es-export-btn" disabled>Export JSON</button></div>';
+    document.body.appendChild(status);
+
+    document.getElementById('es-close-btn').addEventListener('click', function(){ status.style.display = 'none'; panelVisible = false; });
+    document.getElementById('es-sync-btn').addEventListener('click', doSync);
+    document.getElementById('es-export-btn').addEventListener('click', function(){
+      if (EasySeas.exportJSON) EasySeas.exportJSON();
+    });
+
+    setInterval(updateCounts, 2000);
+    setInterval(updateLogs, 1000);
+  }
+
+  function toggleStatusPanel(){
+    var el = document.getElementById('easyseas-status-panel');
+    if (!el) return;
+    panelVisible = !panelVisible;
+    el.style.display = panelVisible ? 'block' : 'none';
+  }
+
+  function updateCounts(){
+    var d = EasySeas.capturedData || {};
+    var offersEl = document.getElementById('es-offers-count');
+    var cruisesEl = document.getElementById('es-cruises-count');
+    var loyaltyEl = document.getElementById('es-loyalty-count');
+    if (offersEl){
+      var oc = (d.offers && d.offers.offers) ? d.offers.offers.length : 0;
+      offersEl.textContent = oc;
+    }
+    if (cruisesEl) cruisesEl.textContent = (d.bookedCruises || []).length;
+    if (loyaltyEl) loyaltyEl.textContent = d.loyaltyData ? '\u2713' : '\u2014';
+  }
+
+  var lastLogCount = 0;
+  function updateLogs(){
+    var logs = (EasySeas.capturedData && EasySeas.capturedData.logs) || [];
+    if (logs.length === lastLogCount) return;
+    lastLogCount = logs.length;
+    var container = document.getElementById('es-log-container');
+    if (!container) return;
+    container.innerHTML = '';
+    logs.slice(-30).forEach(function(entry){
+      var div = document.createElement('div');
+      div.className = 'es-log-entry ' + (entry.type || 'info');
+      div.textContent = entry.time + ' ' + entry.message;
+      container.appendChild(div);
+    });
+    container.scrollTop = container.scrollHeight;
+  }
+
+  async function doSync(){
+    if (syncing) return;
+    syncing = true;
+    var btn = document.getElementById('es-sync-btn');
+    var expBtn = document.getElementById('es-export-btn');
+    if (btn){ btn.disabled = true; btn.textContent = 'Syncing...'; }
+    if (expBtn) expBtn.disabled = true;
+    try {
+      await EasySeas.runFullSync();
+      if (expBtn) expBtn.disabled = false;
+      if (btn) btn.textContent = 'Sync Again';
+    } catch(e){
+      if (btn) btn.textContent = 'Retry Sync';
+    } finally {
+      syncing = false;
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(createUI, 1500); });
+  } else {
+    setTimeout(createUI, 1500);
+  }
 })();`;
 }

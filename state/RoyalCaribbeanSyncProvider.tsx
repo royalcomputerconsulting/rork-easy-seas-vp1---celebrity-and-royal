@@ -217,8 +217,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       case 'cruise_batch':
         if (message.data && message.data.length > 0) {
           setState(prev => {
-            const newCruises = [...prev.extractedBookedCruises, ...(message.data as BookedCruiseRow[])];
-            console.log(`[RoyalCaribbeanSync] Cruise batch received: ${message.data.length} items, total now: ${newCruises.length}`);
+            const incoming = message.data as BookedCruiseRow[];
+            const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
+            const deduped = incoming.filter(c => !c.bookingId || !existingIds.has(c.bookingId));
+            if (deduped.length < incoming.length) {
+              console.log(`[RoyalCaribbeanSync] Deduped cruise_batch: ${incoming.length} -> ${deduped.length} (removed ${incoming.length - deduped.length} duplicates)`);
+            }
+            const newCruises = [...prev.extractedBookedCruises, ...deduped];
+            console.log(`[RoyalCaribbeanSync] Cruise batch received: ${deduped.length} items, total now: ${newCruises.length}`);
             
             // Show detailed cruise capture info with more context
             const batch = message.data as BookedCruiseRow[];
@@ -257,7 +263,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
 
       case 'all_bookings_data':
-        // New: All bookings received from Step 1 consolidated API call
         if (message.bookings && Array.isArray(message.bookings)) {
           const formattedCruises = message.bookings.map((booking: any) => ({
             rawBooking: booking,
@@ -294,10 +299,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             stateroomType: booking.stateroomType
           }));
           
-          setState(prev => ({
-            ...prev,
-            extractedBookedCruises: [...prev.extractedBookedCruises, ...formattedCruises]
-          }));
+          setState(prev => {
+            const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
+            const deduped = formattedCruises.filter((c: any) => !c.bookingId || !existingIds.has(c.bookingId));
+            if (deduped.length < formattedCruises.length) {
+              console.log(`[RoyalCaribbeanSync] Deduped all_bookings_data: ${formattedCruises.length} -> ${deduped.length}`);
+            }
+            return {
+              ...prev,
+              extractedBookedCruises: [...prev.extractedBookedCruises, ...deduped]
+            };
+          });
           
           addLog(`✅ Captured ${message.bookings.length} booking(s) from consolidated API call`, 'success');
           formattedCruises.forEach((c: any) => {
@@ -530,17 +542,24 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               };
             });
             
-            setState(prev => ({
-              ...prev,
-              extractedBookedCruises: [...prev.extractedBookedCruises, ...formattedCruises]
-            }));
+            setState(prev => {
+              const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
+              const deduped = formattedCruises.filter((c: any) => !c.bookingId || !existingIds.has(c.bookingId));
+              if (deduped.length < formattedCruises.length) {
+                console.log(`[RoyalCaribbeanSync] Deduped network_payload bookings: ${formattedCruises.length} -> ${deduped.length}`);
+                addLog(`ℹ️ Skipped ${formattedCruises.length - deduped.length} duplicate booking(s)`, 'info');
+              }
+              return {
+                ...prev,
+                extractedBookedCruises: [...prev.extractedBookedCruises, ...deduped]
+              };
+            });
             
             addLog(`✅ Captured ${bookings.length} booking(s) from Royal Caribbean API`, 'success');
             formattedCruises.forEach((c: any) => {
               addLog(`✅ Captured booking: ${c.shipName} - ${c.sailingStartDate} - ${c.cabinType} ${c.cabinNumberOrGTY} (${c.numberOfNights} nights)`, 'success');
             });
             
-            // Auto-complete Step 2 immediately since we have the bookings data
             setState(prev => {
               if (prev.status === 'running_step_2') {
                 addLog(`✅ Step 2 auto-completing with ${bookings.length} bookings from network monitor`, 'success');
