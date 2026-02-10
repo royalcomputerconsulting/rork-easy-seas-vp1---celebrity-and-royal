@@ -1,36 +1,10 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Linking, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { Download, Ship, ExternalLink, CheckCircle, AlertCircle, FileText, Globe, Search, DollarSign, TrendingDown } from 'lucide-react-native';
+import { Download, Ship, ExternalLink, CheckCircle, AlertCircle, FileText, Globe, Search, DollarSign } from 'lucide-react-native';
 import { useCoreData } from '@/state/CoreDataProvider';
 import type { BookedCruise } from '@/types/models';
-import { trpc } from '@/lib/trpc';
-
-interface CruiseDeal {
-  bookingId: string;
-  shipName: string;
-  sailDate: string;
-  source: 'icruise' | 'cruisesheet';
-  price: number;
-  cabinType: string;
-  url: string;
-  nights: number;
-  departurePort: string;
-}
-
-interface CruisePricing {
-  bookingId: string;
-  shipName: string;
-  sailDate: string;
-  interiorPrice?: number;
-  oceanviewPrice?: number;
-  balconyPrice?: number;
-  suitePrice?: number;
-  source: 'icruise' | 'cruisesheet' | 'royalcaribbean' | 'web';
-  url: string;
-  lastUpdated: string;
-  confidence?: 'high' | 'medium' | 'low';
-}
+import { syncCruisePricing } from '@/lib/cruisePricingSync';
 
 export default function ImportCruisesScreen() {
   const router = useRouter();
@@ -41,11 +15,10 @@ export default function ImportCruisesScreen() {
   const [importedCount, setImportedCount] = useState(0);
   const [pastedData, setPastedData] = useState('');
   const [searchingDeals, setSearchingDeals] = useState(false);
-  const [deals, setDeals] = useState<CruiseDeal[]>([]);
+
   const [searchMode, setSearchMode] = useState<'manual' | 'auto'>('auto');
   
-  const searchDealsMutation = trpc.cruiseDeals.searchForBookedCruises.useMutation();
-  const syncPricingMutation = trpc.cruiseDeals.syncPricingForBookedCruises.useMutation();
+
 
   const addToLog = (message: string) => {
     setImportLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
@@ -58,8 +31,6 @@ export default function ImportCruisesScreen() {
     }
 
     setSearchingDeals(true);
-    setDeals([]);
-    addToLog(`Starting pricing sync for ${bookedCruises.length} booked cruises...`);
 
     try {
       const upcomingCruises = bookedCruises.filter(c => c.completionState === 'upcoming');
@@ -70,6 +41,8 @@ export default function ImportCruisesScreen() {
         return;
       }
 
+      addToLog(`Starting pricing sync for ${upcomingCruises.length} upcoming cruises...`);
+
       const cruiseSearchParams = upcomingCruises.map(cruise => ({
         id: cruise.id,
         shipName: cruise.shipName,
@@ -78,18 +51,23 @@ export default function ImportCruisesScreen() {
         departurePort: cruise.departurePort,
       }));
 
-      addToLog(`Fetching current pricing from ICruise and CruiseSheet...`);
+      addToLog(`Fetching current pricing from ICruise, CruiseSheet, and web sources...`);
 
-      const result = await syncPricingMutation.mutateAsync({
-        cruises: cruiseSearchParams,
-      });
+      const result = await syncCruisePricing(cruiseSearchParams);
+
+      console.log('[ImportCruises] syncCruisePricing result:', JSON.stringify({
+        pricingCount: result.pricing.length,
+        syncedCount: result.syncedCount,
+        successCount: result.successCount,
+        errorCount: result.errors.length,
+      }));
 
       if (result.pricing && result.pricing.length > 0) {
         addToLog(`✅ Retrieved ${result.pricing.length} pricing records from multiple sources`);
         addToLog('Aggregating and updating cruise pricing...');
         
         const pricingByCruise = new Map<string, typeof result.pricing>();
-        result.pricing.forEach(pricing => {
+        result.pricing.forEach((pricing: any) => {
           if (!pricingByCruise.has(pricing.bookingId)) {
             pricingByCruise.set(pricing.bookingId, []);
           }
@@ -108,7 +86,7 @@ export default function ImportCruisesScreen() {
             suite: [] as number[],
           };
           
-          pricingRecords.forEach(record => {
+          pricingRecords.forEach((record: any) => {
             if (record.interiorPrice) avgPrices.interior.push(record.interiorPrice);
             if (record.oceanviewPrice) avgPrices.oceanview.push(record.oceanviewPrice);
             if (record.balconyPrice) avgPrices.balcony.push(record.balconyPrice);
@@ -135,18 +113,22 @@ export default function ImportCruisesScreen() {
           addToLog(`⚠️ ${upcomingCruises.length - updateCount} cruises had no pricing data available`);
         }
       } else {
-        addToLog('⚠️ No pricing data received from any source. Try again later.');
+        addToLog('⚠️ No pricing data found from any source.');
+        if (result.errors.length > 0) {
+          result.errors.slice(0, 5).forEach(err => addToLog(`  ⚠️ ${err}`));
+        }
+        addToLog('Try again later or check that your cruise details (ship name, port) are correct.');
       }
     } catch (error: any) {
-      console.log('Pricing sync error:', error);
+      console.log('[ImportCruises] Pricing sync error:', error);
       const errorMessage = error?.message || String(error);
       
       if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Network request failed')) {
-        addToLog('⚠️ Could not connect to backend service');
+        addToLog('⚠️ Could not connect to pricing service');
         addToLog('This may be temporary. Please try again in a moment.');
-      } else if (errorMessage === 'BACKEND_NOT_CONFIGURED') {
-        addToLog('⚠️ Backend service not configured');
-        addToLog('Please contact support if this persists.');
+      } else if (errorMessage.includes('unavailable')) {
+        addToLog('⚠️ Pricing service temporarily unavailable');
+        addToLog('Please try again in a few minutes.');
       } else {
         addToLog(`⚠️ Sync error: ${errorMessage}`);
         addToLog('Please try again or check your connection.');
