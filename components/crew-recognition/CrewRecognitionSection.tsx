@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { Users, Plus, Download, Search, Filter, X, RefreshCcw, UserCheck } from 'lucide-react-native';
+import { Users, Plus, Download, Search, Filter, X, RefreshCcw, UserCheck, Check } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
@@ -19,10 +19,72 @@ import { AddCrewMemberModal } from './AddCrewMemberModal';
 import { RecognitionEntryDetailModal } from './RecognitionEntryDetailModal';
 import { SurveyListModal } from './SurveyListModal';
 import { exportToCSV } from '@/lib/csv-export';
-import { DEPARTMENTS } from '@/types/crew-recognition';
 import { getAllShipNames } from '@/constants/shipInfo';
 import { CREW_RECOGNITION_CSV } from '@/constants/crew-recognition-csv';
 import type { RecognitionEntryWithCrew, Department } from '@/types/crew-recognition';
+
+interface CSVRow {
+  crewName: string;
+  department: string;
+  roleTitle: string;
+  notes: string;
+  shipName: string;
+  startDate: string;
+  endDate: string;
+}
+
+const ALL_FILTER_DEPARTMENTS = [
+  'Activities',
+  'Attractions',
+  'Beverage',
+  'Cafe',
+  'Casino',
+  'Casino / Beverage',
+  'Crown Lounge',
+  'Cruise Staff',
+  'Deck',
+  'Diamond Club',
+  'Dining',
+  'Front Desk',
+  'Guest Relations',
+  'Housekeeping',
+  'Leadership',
+  'Loyalty',
+  'NextCruise',
+  'Public Areas',
+  'Retail',
+  'Sanitation',
+  'Spa',
+  'Windjammer',
+  'Windjammer / Cafe',
+];
+
+function parseCSVRows(csvText: string): CSVRow[] {
+  const lines = csvText.split('\n').filter(line => line.trim());
+  if (lines.length < 2) return [];
+
+  const headers = lines[0]
+    .split(',')
+    .map(h => h.trim().replace(/^[\uFEFF"']/g, '').replace(/["']$/g, ''));
+
+  return lines.slice(1).map(line => {
+    const values = line.split(',').map(v => v.trim());
+    const row: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      row[header] = values[index] || '';
+    });
+
+    return {
+      crewName: row['Crew_Name'] || '',
+      department: row['Department'] || '',
+      roleTitle: row['Role'] || '',
+      notes: row['Notes'] || '',
+      shipName: row['Ship'] || '',
+      startDate: row['Start_Date'] || '',
+      endDate: row['End_Date'] || '',
+    };
+  }).filter(r => r.crewName && r.department);
+}
 
 const MOCK_CREW_MEMBER = {
   id: 'mock-scott-astin',
@@ -33,6 +95,8 @@ const MOCK_CREW_MEMBER = {
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
+
+const BATCH_SIZE = 25;
 
 export function CrewRecognitionSection() {
   const auth = useAuth();
@@ -56,58 +120,78 @@ export function CrewRecognitionSection() {
     deleteRecognitionEntry,
     refetch,
   } = useCrewRecognition();
-  
-  const syncFromCSVMutation = trpc.crewRecognition.syncFromCSV.useMutation({
-    onSuccess: () => {
-      refetch();
-    },
-  });
+
+  const syncBatchMutation = trpc.crewRecognition.syncBatch.useMutation();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<RecognitionEntryWithCrew | null>(null);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [showShipPicker, setShowShipPicker] = useState(false);
-  const [showDepartmentPicker, setShowDepartmentPicker] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
 
-  const handleSync = async () => {
+  const handleSync = useCallback(async () => {
     setIsSyncing(true);
+    setSyncProgress(null);
     try {
       const userEmail = auth.authenticatedEmail?.toLowerCase().trim();
       const isAdminOrSpecial = userEmail === 'scott.merlis1@gmail.com' || userEmail === 's@a.com';
-      
+
       if (isAdminOrSpecial) {
-        console.log('[CrewRecognition] Admin/Special user sync - loading from embedded CSV data');
+        console.log('[CrewRecognition] Admin sync - parsing CSV client-side');
         console.log('[CrewRecognition] User email:', userEmail);
-        try {
-          const csvText = CREW_RECOGNITION_CSV;
-          console.log('[CrewRecognition] CSV text length:', csvText.length);
-          console.log('[CrewRecognition] CSV preview:', csvText.substring(0, 200));
-          
-          await syncFromCSVMutation.mutateAsync({ csvText, userId });
-          Alert.alert('Success', 'Synced crew data from CSV file');
-        } catch (error) {
-          console.error('[CrewRecognition] CSV sync error:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          Alert.alert('Error', `Failed to sync from CSV: ${errorMessage}. Syncing from database instead.`);
-          await refetch();
+
+        const rows = parseCSVRows(CREW_RECOGNITION_CSV);
+        console.log('[CrewRecognition] Parsed rows:', rows.length);
+
+        if (rows.length === 0) {
+          Alert.alert('Error', 'No valid rows found in CSV data');
+          return;
+        }
+
+        let totalImported = 0;
+        let batchErrors = 0;
+
+        for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+          const batch = rows.slice(i, i + BATCH_SIZE);
+          const progress = Math.min(i + BATCH_SIZE, rows.length);
+          setSyncProgress({ current: progress, total: rows.length });
+          console.log(`[CrewRecognition] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(rows.length / BATCH_SIZE)}`);
+
+          try {
+            const result = await syncBatchMutation.mutateAsync({ rows: batch, userId });
+            totalImported += result.importedCount;
+          } catch (error) {
+            console.error(`[CrewRecognition] Batch error at rows ${i}-${progress}:`, error);
+            batchErrors++;
+          }
+        }
+
+        setSyncProgress(null);
+        refetch();
+
+        if (batchErrors > 0) {
+          Alert.alert('Partial Sync', `Synced ${totalImported} new crew members. ${batchErrors} batch(es) had errors.`);
+        } else {
+          Alert.alert('Success', `Synced ${rows.length} rows (${totalImported} new crew members)`);
         }
       } else {
         console.log('[CrewRecognition] Regular user sync - loading from database');
         await refetch();
         Alert.alert('Success', 'Synced from database');
       }
+    } catch (error) {
+      console.error('[CrewRecognition] Sync error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Error', `Sync failed: ${errorMessage}`);
     } finally {
       setIsSyncing(false);
+      setSyncProgress(null);
     }
-  };
+  }, [auth.authenticatedEmail, userId, syncBatchMutation, refetch]);
 
-  const handleExportResults = () => {
-    if (entries.length === 0) {
-      return;
-    }
-
+  const handleExportResults = useCallback(() => {
+    if (entries.length === 0) return;
     exportToCSV(
       entries,
       [
@@ -121,15 +205,51 @@ export function CrewRecognitionSection() {
       ],
       `crew-recognition-${new Date().toISOString().split('T')[0]}.csv`
     );
-  };
+  }, [entries]);
 
-  const allRoyalShips = getAllShipNames();
-  const sailingShips = sailings.map(s => s.shipName);
-  const uniqueShips = Array.from(new Set([...allRoyalShips, ...sailingShips])).sort();
+  const toggleShipFilter = useCallback((ship: string) => {
+    const current = filters.shipNames;
+    if (current.includes(ship)) {
+      updateFilters({ shipNames: current.filter(s => s !== ship) });
+    } else {
+      updateFilters({ shipNames: [...current, ship] });
+    }
+  }, [filters.shipNames, updateFilters]);
+
+  const toggleDeptFilter = useCallback((dept: string) => {
+    const current = filters.departments;
+    if (current.includes(dept)) {
+      updateFilters({ departments: current.filter(d => d !== dept) });
+    } else {
+      updateFilters({ departments: [...current, dept] });
+    }
+  }, [filters.departments, updateFilters]);
+
+  const allRoyalShips = useMemo(() => getAllShipNames().sort(), []);
+  const sailingShips = useMemo(() => sailings.map(s => s.shipName), [sailings]);
+  const uniqueShips = useMemo(
+    () => Array.from(new Set([...allRoyalShips, ...sailingShips])).sort(),
+    [allRoyalShips, sailingShips]
+  );
+
+  const uniqueDepts = useMemo(() => {
+    const entryDepts = entries.map(e => e.department);
+    return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort();
+  }, [entries]);
+
   const totalPages = Math.ceil(entriesTotal / pageSize);
-  
   const showMockData = stats.crewMemberCount === 0 && !statsLoading;
   const displayEntries = showMockData ? [] : entries;
+
+  const activeFilterCount = filters.shipNames.length + filters.departments.length;
+
+  const syncButtonLabel = useMemo(() => {
+    if (syncProgress) {
+      return `Syncing ${syncProgress.current}/${syncProgress.total}`;
+    }
+    if (isSyncing) return 'Syncing...';
+    return 'Sync';
+  }, [isSyncing, syncProgress]);
 
   return (
     <View style={styles.container}>
@@ -153,15 +273,35 @@ export function CrewRecognitionSection() {
           <Plus size={18} color="#0369A1" />
           <Text style={styles.addButtonText}>Add Crew</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]} 
+        <TouchableOpacity
+          style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
           onPress={handleSync}
           disabled={isSyncing}
         >
-          <RefreshCcw size={18} color="#0369A1" />
-          <Text style={styles.syncButtonText}>{isSyncing ? 'Syncing...' : 'Sync'}</Text>
+          {isSyncing ? (
+            <ActivityIndicator size="small" color="#0369A1" />
+          ) : (
+            <RefreshCcw size={18} color="#0369A1" />
+          )}
+          <Text style={styles.syncButtonText}>{syncButtonLabel}</Text>
         </TouchableOpacity>
       </View>
+
+      {syncProgress && (
+        <View style={styles.syncProgressContainer}>
+          <View style={styles.syncProgressBar}>
+            <View
+              style={[
+                styles.syncProgressFill,
+                { width: `${(syncProgress.current / syncProgress.total) * 100}%` as any },
+              ]}
+            />
+          </View>
+          <Text style={styles.syncProgressText}>
+            Processing {syncProgress.current} of {syncProgress.total} rows...
+          </Text>
+        </View>
+      )}
 
       <View style={styles.statsRow}>
         {statsLoading ? (
@@ -204,95 +344,102 @@ export function CrewRecognitionSection() {
           )}
         </View>
         <TouchableOpacity
-          style={styles.filterButton}
+          style={[styles.filterButton, showFilters && styles.filterButtonActive]}
           onPress={() => setShowFilters(!showFilters)}
         >
-          <Filter size={18} color={COLORS.primary} />
-          <Text style={styles.filterButtonText}>Filters</Text>
+          <Filter size={18} color={showFilters ? '#fff' : COLORS.primary} />
+          <Text style={[styles.filterButtonText, showFilters && styles.filterButtonTextActive]}>
+            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+          </Text>
         </TouchableOpacity>
       </View>
 
       {showFilters && (
         <View style={styles.filtersPanel}>
-          <View style={styles.filterRow}>
-            <View style={styles.filterField}>
-              <Text style={styles.filterLabel}>Ship</Text>
+          <View style={styles.chipFilterSection}>
+            <Text style={styles.filterLabel}>
+              Ship{filters.shipNames.length > 0 ? ` (${filters.shipNames.length} selected)` : ''}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipScrollView}
+              contentContainerStyle={styles.chipScrollContent}
+            >
               <TouchableOpacity
-                style={styles.filterPicker}
-                onPress={() => setShowShipPicker(!showShipPicker)}
+                style={[styles.chip, filters.shipNames.length === 0 && styles.chipActive]}
+                onPress={() => updateFilters({ shipNames: [] })}
               >
-                <Text style={filters.shipName ? styles.filterPickerText : styles.filterPickerPlaceholder}>
-                  {filters.shipName || 'All ships'}
+                <Text style={[styles.chipText, filters.shipNames.length === 0 && styles.chipTextActive]}>
+                  All Ships
                 </Text>
               </TouchableOpacity>
-              {showShipPicker && (
-                <View style={styles.pickerOptions}>
+              {uniqueShips.map(ship => {
+                const isSelected = filters.shipNames.includes(ship);
+                return (
                   <TouchableOpacity
-                    style={styles.pickerOption}
-                    onPress={() => {
-                      updateFilters({ shipName: '' });
-                      setShowShipPicker(false);
-                    }}
+                    key={ship}
+                    style={[styles.chip, isSelected && styles.chipActive]}
+                    onPress={() => toggleShipFilter(ship)}
                   >
-                    <Text style={styles.pickerOptionText}>All ships</Text>
-                  </TouchableOpacity>
-                  {uniqueShips.map(ship => (
-                    <TouchableOpacity
-                      key={ship}
-                      style={styles.pickerOption}
-                      onPress={() => {
-                        updateFilters({ shipName: ship });
-                        setShowShipPicker(false);
-                      }}
+                    {isSelected && <Check size={12} color="#fff" />}
+                    <Text
+                      style={[styles.chipText, isSelected && styles.chipTextActive]}
+                      numberOfLines={1}
                     >
-                      <Text style={styles.pickerOptionText}>{ship}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            <View style={styles.filterField}>
-              <Text style={styles.filterLabel}>Department</Text>
-              <TouchableOpacity
-                style={styles.filterPicker}
-                onPress={() => setShowDepartmentPicker(!showDepartmentPicker)}
-              >
-                <Text style={filters.department ? styles.filterPickerText : styles.filterPickerPlaceholder}>
-                  {filters.department || 'All departments'}
-                </Text>
-              </TouchableOpacity>
-              {showDepartmentPicker && (
-                <View style={styles.pickerOptions}>
-                  <TouchableOpacity
-                    style={styles.pickerOption}
-                    onPress={() => {
-                      updateFilters({ department: '' });
-                      setShowDepartmentPicker(false);
-                    }}
-                  >
-                    <Text style={styles.pickerOptionText}>All departments</Text>
+                      {ship}
+                    </Text>
                   </TouchableOpacity>
-                  {DEPARTMENTS.map(dept => (
-                    <TouchableOpacity
-                      key={dept}
-                      style={styles.pickerOption}
-                      onPress={() => {
-                        updateFilters({ department: dept });
-                        setShowDepartmentPicker(false);
-                      }}
-                    >
-                      <Text style={styles.pickerOptionText}>{dept}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
+                );
+              })}
+            </ScrollView>
           </View>
 
-          <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
-            <Text style={styles.resetButtonText}>Reset Filters</Text>
-          </TouchableOpacity>
+          <View style={styles.chipFilterSection}>
+            <Text style={styles.filterLabel}>
+              Department{filters.departments.length > 0 ? ` (${filters.departments.length} selected)` : ''}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipScrollView}
+              contentContainerStyle={styles.chipScrollContent}
+            >
+              <TouchableOpacity
+                style={[styles.chip, filters.departments.length === 0 && styles.chipActive]}
+                onPress={() => updateFilters({ departments: [] })}
+              >
+                <Text style={[styles.chipText, filters.departments.length === 0 && styles.chipTextActive]}>
+                  All Depts
+                </Text>
+              </TouchableOpacity>
+              {uniqueDepts.map(dept => {
+                const isSelected = filters.departments.includes(dept);
+                return (
+                  <TouchableOpacity
+                    key={dept}
+                    style={[styles.chip, isSelected && styles.chipActive]}
+                    onPress={() => toggleDeptFilter(dept)}
+                  >
+                    {isSelected && <Check size={12} color="#fff" />}
+                    <Text
+                      style={[styles.chipText, isSelected && styles.chipTextActive]}
+                      numberOfLines={1}
+                    >
+                      {dept}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {activeFilterCount > 0 && (
+            <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
+              <X size={14} color="#0369A1" />
+              <Text style={styles.resetButtonText}>Clear all filters</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -512,6 +659,27 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
   },
+  syncProgressContainer: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.sm,
+  },
+  syncProgressBar: {
+    height: 6,
+    backgroundColor: 'rgba(3, 105, 161, 0.15)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  syncProgressFill: {
+    height: 6,
+    backgroundColor: '#0369A1',
+    borderRadius: 3,
+  },
+  syncProgressText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: '#0369A1',
+    marginTop: 4,
+    textAlign: 'center',
+  },
   statsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -598,10 +766,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.primary,
   },
+  filterButtonActive: {
+    backgroundColor: '#0369A1',
+    borderColor: '#0369A1',
+  },
   filterButtonText: {
     color: COLORS.primary,
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
+  },
+  filterButtonTextActive: {
+    color: '#fff',
   },
   filtersPanel: {
     backgroundColor: 'rgba(3, 105, 161, 0.05)',
@@ -611,59 +786,58 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     borderWidth: 1,
     borderColor: 'rgba(3, 105, 161, 0.15)',
+    gap: SPACING.md,
   },
-  filterRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  filterField: {
-    flex: 1,
+  chipFilterSection: {
+    gap: SPACING.xs,
   },
   filterLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
     color: COLORS.text,
-    marginBottom: SPACING.xs,
   },
-  filterPicker: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
+  chipScrollView: {
+    flexGrow: 0,
+  },
+  chipScrollContent: {
+    gap: 8,
+    paddingRight: SPACING.sm,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(3, 105, 161, 0.4)',
     backgroundColor: '#fff',
   },
-  filterPickerText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.text,
+  chipActive: {
+    backgroundColor: '#0369A1',
+    borderColor: '#0369A1',
   },
-  filterPickerPlaceholder: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textTertiary,
+  chipText: {
+    fontSize: 12,
+    fontWeight: '500' as const,
+    color: '#0369A1',
   },
-  pickerOptions: {
-    marginTop: SPACING.xs,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: BORDER_RADIUS.md,
-    maxHeight: 200,
-    backgroundColor: '#fff',
-  },
-  pickerOption: {
-    padding: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  pickerOptionText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.text,
+  chipTextActive: {
+    color: '#fff',
   },
   resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
-    padding: SPACING.sm,
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: 'rgba(3, 105, 161, 0.1)',
   },
   resetButtonText: {
-    color: COLORS.primary,
+    color: '#0369A1',
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
   },

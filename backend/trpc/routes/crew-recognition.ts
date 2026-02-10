@@ -329,10 +329,10 @@ export const crewRecognitionRouter = createTRPCRouter({
     .input(
       z.object({
         search: z.string().optional(),
-        shipName: z.string().optional(),
+        shipNames: z.array(z.string()).optional(),
         month: z.string().optional(),
         year: z.number().optional(),
-        department: z.string().optional(),
+        departments: z.array(z.string()).optional(),
         roleTitle: z.string().optional(),
         startDate: z.string().optional(),
         endDate: z.string().optional(),
@@ -359,8 +359,8 @@ export const crewRecognitionRouter = createTRPCRouter({
         }
       }
       
-      if (input.shipName) {
-        conditions.push(`shipName = "${input.shipName}"`);
+      if (input.shipNames && input.shipNames.length > 0) {
+        conditions.push(`shipName IN [${input.shipNames.map(s => `"${s}"`).join(',')}]`);
       }
       
       if (input.month) {
@@ -371,8 +371,8 @@ export const crewRecognitionRouter = createTRPCRouter({
         conditions.push(`sailingYear = ${input.year}`);
       }
       
-      if (input.department) {
-        conditions.push(`department = "${input.department}"`);
+      if (input.departments && input.departments.length > 0) {
+        conditions.push(`department IN [${input.departments.map(d => `"${d}"`).join(',')}]`);
       }
       
       if (input.roleTitle) {
@@ -513,6 +513,105 @@ export const crewRecognitionRouter = createTRPCRouter({
       const db = await getDb();
       await db.delete(input.id);
       return { success: true };
+    }),
+
+  syncBatch: publicProcedure
+    .input(
+      z.object({
+        rows: z.array(z.object({
+          crewName: z.string(),
+          department: z.string(),
+          roleTitle: z.string(),
+          notes: z.string(),
+          shipName: z.string(),
+          startDate: z.string(),
+          endDate: z.string(),
+        })),
+        userId: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const now = new Date().toISOString();
+      let importedCount = 0;
+
+      for (const row of input.rows) {
+        if (!row.crewName || !row.department) continue;
+
+        const normalizedName = normalizeString(row.crewName);
+        const existingResult = await db.query(
+          `SELECT * FROM crew_members WHERE string::lowercase(fullName) = "${normalizedName}" AND userId = "${input.userId}" AND isDeleted != true LIMIT 1`
+        );
+
+        let crewMember = (existingResult[0] as any[])?.[0];
+
+        if (!crewMember) {
+          const crewData = {
+            fullName: row.crewName.trim(),
+            department: row.department.trim(),
+            roleTitle: row.roleTitle?.trim() || undefined,
+            notes: row.notes?.trim() || undefined,
+            userId: input.userId,
+            isDeleted: false,
+            createdAt: now,
+            updatedAt: now,
+          };
+
+          const createResult = await db.create('crew_members', crewData);
+          crewMember = Array.isArray(createResult) ? createResult[0] : createResult;
+          importedCount++;
+        }
+
+        if (crewMember?.id && row.shipName && row.startDate) {
+          const sailingResult = await db.query(
+            `SELECT * FROM sailings WHERE shipName = "${row.shipName.trim()}" AND sailStartDate = "${row.startDate.trim()}" AND userId = "${input.userId}" LIMIT 1`
+          );
+
+          let sailing = (sailingResult[0] as any[])?.[0];
+
+          if (!sailing) {
+            const sailingData = {
+              shipName: row.shipName.trim(),
+              sailStartDate: row.startDate.trim(),
+              sailEndDate: row.endDate?.trim() || row.startDate.trim(),
+              userId: input.userId,
+              createdAt: now,
+              updatedAt: now,
+            };
+
+            const createSailingResult = await db.create('sailings', sailingData);
+            sailing = Array.isArray(createSailingResult) ? createSailingResult[0] : createSailingResult;
+          }
+
+          if (sailing?.id) {
+            const existingEntryResult = await db.query(
+              `SELECT * FROM recognition_entries WHERE crewMemberId = "${crewMember.id}" AND sailingId = "${sailing.id}" LIMIT 1`
+            );
+
+            if ((existingEntryResult[0] as any[])?.length === 0) {
+              const entryData = {
+                crewMemberId: crewMember.id,
+                sailingId: sailing.id,
+                shipName: sailing.shipName,
+                sailStartDate: sailing.sailStartDate,
+                sailEndDate: sailing.sailEndDate,
+                sailingMonth: generateSailingMonth(sailing.sailStartDate),
+                sailingYear: generateSailingYear(sailing.sailStartDate),
+                department: row.department.trim(),
+                roleTitle: row.roleTitle?.trim() || undefined,
+                sourceText: 'Imported from CSV',
+                userId: input.userId,
+                createdAt: now,
+                updatedAt: now,
+              };
+
+              await db.create('recognition_entries', entryData);
+            }
+          }
+        }
+      }
+
+      return { success: true, importedCount };
     }),
 
   getSailings: publicProcedure

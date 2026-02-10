@@ -5,10 +5,10 @@ import { useAuth } from '@/state/AuthProvider';
 
 interface CrewRecognitionFilters {
   search: string;
-  shipName: string;
+  shipNames: string[];
   month: string;
   year: number | null;
-  department: string;
+  departments: string[];
   roleTitle: string;
   startDate: string;
   endDate: string;
@@ -16,10 +16,10 @@ interface CrewRecognitionFilters {
 
 const DEFAULT_FILTERS: CrewRecognitionFilters = {
   search: '',
-  shipName: '',
+  shipNames: [],
   month: '',
   year: null,
-  department: '',
+  departments: [],
   roleTitle: '',
   startDate: '',
   endDate: '',
@@ -45,10 +45,10 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   const entriesQuery = trpc.crewRecognition.getRecognitionEntries.useQuery(
     {
       search: filters.search || undefined,
-      shipName: filters.shipName || undefined,
+      shipNames: filters.shipNames.length > 0 ? filters.shipNames : undefined,
       month: filters.month || undefined,
       year: filters.year || undefined,
-      department: filters.department || undefined,
+      departments: filters.departments.length > 0 ? filters.departments : undefined,
       roleTitle: filters.roleTitle || undefined,
       startDate: filters.startDate || undefined,
       endDate: filters.endDate || undefined,
