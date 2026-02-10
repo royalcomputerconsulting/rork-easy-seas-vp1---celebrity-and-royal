@@ -15,7 +15,6 @@ export const isRenderBackendAvailable = () => {
 const RENDER_ROUTED_PREFIXES = [
   'calendar.',
   'royalCaribbeanSync.',
-  'cruiseDeals.',
   'example.',
 ];
 

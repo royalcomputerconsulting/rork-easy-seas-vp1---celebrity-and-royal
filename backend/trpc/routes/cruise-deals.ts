@@ -1,6 +1,20 @@
 import * as z from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 
+interface CruisePricing {
+  bookingId: string;
+  shipName: string;
+  sailDate: string;
+  interiorPrice?: number;
+  oceanviewPrice?: number;
+  balconyPrice?: number;
+  suitePrice?: number;
+  source: 'icruise' | 'cruisesheet' | 'royalcaribbean' | 'web';
+  url: string;
+  lastUpdated: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
 interface CruiseDeal {
   bookingId: string;
   shipName: string;
@@ -13,29 +27,49 @@ interface CruiseDeal {
   departurePort: string;
 }
 
-interface CruisePricing {
-  bookingId: string;
-  shipName: string;
-  sailDate: string;
-  interiorPrice?: number;
-  oceanviewPrice?: number;
-  balconyPrice?: number;
-  suitePrice?: number;
-  source: 'icruise' | 'cruisesheet' | 'web';
-  url: string;
-  lastUpdated: string;
-}
+const SHIP_SLUGS: Record<string, string> = {
+  'adventure of the seas': 'adventure-of-the-seas',
+  'allure of the seas': 'allure-of-the-seas',
+  'anthem of the seas': 'anthem-of-the-seas',
+  'brilliance of the seas': 'brilliance-of-the-seas',
+  'enchantment of the seas': 'enchantment-of-the-seas',
+  'explorer of the seas': 'explorer-of-the-seas',
+  'freedom of the seas': 'freedom-of-the-seas',
+  'grandeur of the seas': 'grandeur-of-the-seas',
+  'harmony of the seas': 'harmony-of-the-seas',
+  'icon of the seas': 'icon-of-the-seas',
+  'independence of the seas': 'independence-of-the-seas',
+  'jewel of the seas': 'jewel-of-the-seas',
+  'liberty of the seas': 'liberty-of-the-seas',
+  'mariner of the seas': 'mariner-of-the-seas',
+  'navigator of the seas': 'navigator-of-the-seas',
+  'oasis of the seas': 'oasis-of-the-seas',
+  'odyssey of the seas': 'odyssey-of-the-seas',
+  'ovation of the seas': 'ovation-of-the-seas',
+  'quantum of the seas': 'quantum-of-the-seas',
+  'radiance of the seas': 'radiance-of-the-seas',
+  'rhapsody of the seas': 'rhapsody-of-the-seas',
+  'serenade of the seas': 'serenade-of-the-seas',
+  'spectrum of the seas': 'spectrum-of-the-seas',
+  'star of the seas': 'star-of-the-seas',
+  'symphony of the seas': 'symphony-of-the-seas',
+  'utopia of the seas': 'utopia-of-the-seas',
+  'vision of the seas': 'vision-of-the-seas',
+  'voyager of the seas': 'voyager-of-the-seas',
+  'wonder of the seas': 'wonder-of-the-seas',
+};
 
-interface SearchResult {
-  deals: CruiseDeal[];
-  searchedCount: number;
-  foundCount: number;
-}
+const getShipSlug = (shipName: string): string => {
+  const lower = shipName.toLowerCase().trim();
+  if (SHIP_SLUGS[lower]) return SHIP_SLUGS[lower];
+  return lower.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+};
 
-const getSearchApiUrl = (passedUrl?: string): string | null => {
-  const url = passedUrl || process.env.EXPO_PUBLIC_TOOLKIT_URL || null;
-  console.log(`[CruiseDeals] getSearchApiUrl: passedUrl=${passedUrl ? 'yes' : 'no'}, env=${process.env.EXPO_PUBLIC_TOOLKIT_URL ? 'yes' : 'no'}, resolved=${url ? 'yes' : 'no'}`);
-  return url;
+const getShipShortName = (shipName: string): string => {
+  return shipName
+    .replace(/\s+of\s+the\s+Seas$/i, '')
+    .replace(/^Royal Caribbean\s*/i, '')
+    .trim();
 };
 
 const extractPricesFromText = (text: string): {
@@ -45,26 +79,31 @@ const extractPricesFromText = (text: string): {
   suite?: number;
 } => {
   const prices: { interior?: number; oceanview?: number; balcony?: number; suite?: number } = {};
+  const normalizedText = text.toLowerCase();
 
   const interiorPatterns = [
     /interior[\s:]*(?:from\s*)?\$?([\d,]+)/gi,
     /inside[\s:]*(?:from\s*)?\$?([\d,]+)/gi,
-    /interior\s+(?:cabin|stateroom|room)[\s:]*(?:from\s*)?\$?([\d,]+)/gi,
+    /interior\s+(?:cabin|stateroom|room|guarantee)[\s:]*(?:from\s*)?\$?([\d,]+)/gi,
+    /(?:int|interior)\s*[\-:]\s*\$?([\d,]+)/gi,
   ];
 
   const oceanviewPatterns = [
     /ocean\s?view[\s:]*(?:from\s*)?\$?([\d,]+)/gi,
     /outside[\s:]*(?:from\s*)?\$?([\d,]+)/gi,
+    /(?:ocn|ov)\s*[\-:]\s*\$?([\d,]+)/gi,
   ];
 
   const balconyPatterns = [
     /balcony[\s:]*(?:from\s*)?\$?([\d,]+)/gi,
     /verandah?[\s:]*(?:from\s*)?\$?([\d,]+)/gi,
+    /(?:bal)\s*[\-:]\s*\$?([\d,]+)/gi,
   ];
 
   const suitePatterns = [
     /suite[\s:]*(?:from\s*)?\$?([\d,]+)/gi,
     /junior\s+suite[\s:]*(?:from\s*)?\$?([\d,]+)/gi,
+    /(?:ste|js)\s*[\-:]\s*\$?([\d,]+)/gi,
   ];
 
   const findLowest = (patterns: RegExp[], source: string): number | undefined => {
@@ -80,7 +119,6 @@ const extractPricesFromText = (text: string): {
     return found.length > 0 ? Math.min(...found) : undefined;
   };
 
-  const normalizedText = text.toLowerCase();
   prices.interior = findLowest(interiorPatterns, normalizedText);
   prices.oceanview = findLowest(oceanviewPatterns, normalizedText);
   prices.balcony = findLowest(balconyPatterns, normalizedText);
@@ -105,11 +143,52 @@ const extractPricesFromText = (text: string): {
   return prices;
 };
 
-const webSearch = async (apiUrl: string, query: string, numResults: number = 5): Promise<any[]> => {
+const safeFetch = async (url: string, timeoutMs: number = 15000): Promise<string | null> => {
+  try {
+    console.log(`[CruiseDeals] Fetching: ${url}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.log(`[CruiseDeals] ${url} returned ${response.status}`);
+      return null;
+    }
+
+    const text = await response.text();
+    console.log(`[CruiseDeals] ${url} returned ${text.length} chars`);
+    return text;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes('AbortError') || msg.includes('abort')) {
+      console.log(`[CruiseDeals] ${url} timed out`);
+    } else {
+      console.log(`[CruiseDeals] ${url} fetch error: ${msg}`);
+    }
+    return null;
+  }
+};
+
+const tryWebSearch = async (
+  apiUrl: string,
+  query: string,
+  numResults: number = 5
+): Promise<{ results: { url?: string; title?: string; content?: string }[] } | null> => {
   try {
     console.log(`[CruiseDeals] Web search: "${query.substring(0, 80)}..."`);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     const response = await fetch(`${apiUrl}/api/web-search`, {
       method: 'POST',
@@ -121,64 +200,41 @@ const webSearch = async (apiUrl: string, query: string, numResults: number = 5):
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      console.error(`[CruiseDeals] Web search HTTP ${response.status}: ${errText.substring(0, 200)}`);
-      return [];
+      console.log(`[CruiseDeals] Web search returned ${response.status}`);
+      return null;
     }
 
     const data = await response.json();
-    const results = data.results || [];
-    console.log(`[CruiseDeals] Web search returned ${results.length} results`);
-    return results;
+    return { results: data.results || [] };
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('[CruiseDeals] Web search timed out');
-    } else {
-      console.error('[CruiseDeals] Web search error:', error);
-    }
-    return [];
+    console.log(`[CruiseDeals] Web search failed: ${error instanceof Error ? error.message : error}`);
+    return null;
   }
 };
 
-const fetchPricingWithSearch = async (
-  apiUrl: string,
+const scrapeICruise = async (
   shipName: string,
   sailDate: string,
   nights: number,
-  departurePort: string,
-  site: string,
-  source: 'icruise' | 'cruisesheet' | 'web'
+  departurePort: string
 ): Promise<CruisePricing | null> => {
-  const dateObj = new Date(sailDate);
-  const month = dateObj.toLocaleString('en-US', { month: 'long' });
-  const year = dateObj.getFullYear();
+  const slug = getShipSlug(shipName);
 
-  const cleanShipName = shipName
-    .replace(/\s+of\s+the\s+Seas/i, '')
-    .replace(/Royal Caribbean\s*/i, '')
-    .trim();
+  const urls = [
+    `https://www.icruise.com/cruiselines/royal-caribbean-${slug}-sailplan.html`,
+    `https://www.icruise.com/cruises/royal-caribbean/${slug}`,
+    `https://www.icruise.com/cruises/royal-caribbean-${slug}.html`,
+    `https://m.icruise.com/cruise-lines/royal-caribbean-${slug}.html`,
+    `https://lp.icruise.com/royal-caribbean-cruise-lines`,
+  ];
 
-  const queries = site
-    ? [
-        `${cleanShipName} cruise ${month} ${year} ${departurePort} ${nights} night price site:${site}`,
-        `${shipName} ${month} ${year} cruise pricing site:${site}`,
-        `${cleanShipName} ${month} ${year} interior balcony suite price site:${site}`,
-      ]
-    : [
-        `${shipName} cruise ${month} ${year} ${departurePort} ${nights} night interior balcony suite price`,
-        `Royal Caribbean ${cleanShipName} ${month} ${year} cruise pricing per person`,
-      ];
+  for (const url of urls) {
+    const html = await safeFetch(url);
+    if (!html) continue;
 
-  for (const query of queries) {
-    const results = await webSearch(apiUrl, query, 8);
-
-    if (results.length === 0) continue;
-
-    const allContent = results.map((r: any) => `${r.title || ''} ${r.content || ''}`).join(' ');
-    const prices = extractPricesFromText(allContent);
-
+    const prices = extractPricesFromText(html);
     if (prices.interior || prices.oceanview || prices.balcony || prices.suite) {
-      console.log(`[CruiseDeals] [${source}] Extracted prices for ${shipName}:`, prices);
+      console.log(`[CruiseDeals] [icruise] Found prices from ${url}:`, prices);
       return {
         bookingId: '',
         shipName,
@@ -187,95 +243,157 @@ const fetchPricingWithSearch = async (
         oceanviewPrice: prices.oceanview,
         balconyPrice: prices.balcony,
         suitePrice: prices.suite,
-        source,
-        url: results[0]?.url || (site ? `https://www.${site}` : ''),
+        source: 'icruise',
+        url,
         lastUpdated: new Date().toISOString(),
+        confidence: 'medium',
       };
     }
-
-    console.log(`[CruiseDeals] [${source}] No prices extracted from query: "${query.substring(0, 60)}..."`);
   }
 
+  console.log(`[CruiseDeals] [icruise] No prices found for ${shipName} from any URL`);
   return null;
 };
 
-const directScrapeSite = async (
+const scrapeCruiseSheet = async (
   shipName: string,
   sailDate: string,
   nights: number,
-  site: 'icruise.com' | 'cruisesheet.com',
-  source: 'icruise' | 'cruisesheet'
+  departurePort: string
 ): Promise<CruisePricing | null> => {
-  try {
-    const cleanShipName = shipName
-      .replace(/\s+of\s+the\s+Seas/i, '')
-      .replace(/Royal Caribbean\s*/i, '')
-      .trim();
+  const slug = getShipSlug(shipName);
 
-    const slug = cleanShipName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const urls = [
+    `https://cruisesheet.com/cruise-line/royal-caribbean/${slug}`,
+    `https://cruisesheet.com/ship/${slug}`,
+    `https://cruisesheet.com/cruise/royal-caribbean/${slug}`,
+  ];
 
-    const urls = site === 'icruise.com'
-      ? [
-          `https://www.icruise.com/cruises/royal-caribbean/${slug}-of-the-seas`,
-          `https://www.icruise.com/cruises/royal-caribbean/${slug}`,
-        ]
-      : [
-          `https://www.cruisesheet.com/cruise/royal-caribbean/${slug}-of-the-seas`,
-          `https://www.cruisesheet.com/cruise/royal-caribbean/${slug}`,
-        ];
+  for (const url of urls) {
+    const html = await safeFetch(url);
+    if (!html) continue;
 
-    for (const url of urls) {
-      try {
-        console.log(`[CruiseDeals] [${source}] Direct scrape attempt: ${url}`);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-        const response = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml',
-          },
-          signal: controller.signal,
-          redirect: 'follow',
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          console.log(`[CruiseDeals] [${source}] Direct scrape ${url} returned ${response.status}`);
-          continue;
-        }
-
-        const html = await response.text();
-        const prices = extractPricesFromText(html);
-
-        if (prices.interior || prices.oceanview || prices.balcony || prices.suite) {
-          console.log(`[CruiseDeals] [${source}] Direct scrape found prices:`, prices);
-          return {
-            bookingId: '',
-            shipName,
-            sailDate,
-            interiorPrice: prices.interior,
-            oceanviewPrice: prices.oceanview,
-            balconyPrice: prices.balcony,
-            suitePrice: prices.suite,
-            source,
-            url,
-            lastUpdated: new Date().toISOString(),
-          };
-        }
-
-        console.log(`[CruiseDeals] [${source}] Direct scrape returned HTML but no prices found`);
-      } catch (err) {
-        console.log(`[CruiseDeals] [${source}] Direct scrape error for ${url}:`, err instanceof Error ? err.message : err);
-      }
+    if (html.includes('Cloudflare') && html.includes('blocked')) {
+      console.log(`[CruiseDeals] [cruisesheet] Blocked by Cloudflare at ${url}`);
+      continue;
     }
 
-    return null;
-  } catch (error) {
-    console.error(`[CruiseDeals] [${source}] Direct scrape failed:`, error);
-    return null;
+    const prices = extractPricesFromText(html);
+    if (prices.interior || prices.oceanview || prices.balcony || prices.suite) {
+      console.log(`[CruiseDeals] [cruisesheet] Found prices from ${url}:`, prices);
+      return {
+        bookingId: '',
+        shipName,
+        sailDate,
+        interiorPrice: prices.interior,
+        oceanviewPrice: prices.oceanview,
+        balconyPrice: prices.balcony,
+        suitePrice: prices.suite,
+        source: 'cruisesheet',
+        url,
+        lastUpdated: new Date().toISOString(),
+        confidence: 'medium',
+      };
+    }
   }
+
+  console.log(`[CruiseDeals] [cruisesheet] No prices found for ${shipName}`);
+  return null;
+};
+
+const scrapeRoyalCaribbean = async (
+  shipName: string,
+  sailDate: string,
+  nights: number,
+  departurePort: string
+): Promise<CruisePricing | null> => {
+  const slug = getShipSlug(shipName);
+  const shortSlug = slug.replace(/-of-the-seas$/, '');
+
+  const urls = [
+    `https://www.royalcaribbean.com/cruises?ships=${encodeURIComponent(shipName)}&departurePort=${encodeURIComponent(departurePort)}`,
+    `https://www.royalcaribbean.com/cruise-ships/${slug}`,
+    `https://www.royalcaribbean.com/cruise-ships/${shortSlug}-of-the-seas`,
+  ];
+
+  for (const url of urls) {
+    const html = await safeFetch(url);
+    if (!html) continue;
+
+    const prices = extractPricesFromText(html);
+    if (prices.interior || prices.oceanview || prices.balcony || prices.suite) {
+      console.log(`[CruiseDeals] [rc] Found prices from ${url}:`, prices);
+      return {
+        bookingId: '',
+        shipName,
+        sailDate,
+        interiorPrice: prices.interior,
+        oceanviewPrice: prices.oceanview,
+        balconyPrice: prices.balcony,
+        suitePrice: prices.suite,
+        source: 'royalcaribbean',
+        url,
+        lastUpdated: new Date().toISOString(),
+        confidence: 'medium',
+      };
+    }
+  }
+
+  console.log(`[CruiseDeals] [rc] No prices found for ${shipName}`);
+  return null;
+};
+
+const searchWithToolkit = async (
+  apiUrl: string,
+  shipName: string,
+  sailDate: string,
+  nights: number,
+  departurePort: string
+): Promise<CruisePricing[]> => {
+  const results: CruisePricing[] = [];
+  const dateObj = new Date(sailDate);
+  const month = dateObj.toLocaleString('en-US', { month: 'long' });
+  const year = dateObj.getFullYear();
+  const shortName = getShipShortName(shipName);
+
+  const queries = [
+    `${shipName} cruise ${month} ${year} ${departurePort} ${nights} night interior balcony suite price site:icruise.com`,
+    `${shipName} cruise ${month} ${year} ${departurePort} ${nights} night price site:cruisesheet.com`,
+    `Royal Caribbean ${shortName} ${month} ${year} cruise pricing per person interior balcony suite`,
+  ];
+
+  for (const query of queries) {
+    const searchData = await tryWebSearch(apiUrl, query, 8);
+    if (!searchData || searchData.results.length === 0) continue;
+
+    const allContent = searchData.results
+      .map((r) => `${r.title || ''} ${r.content || ''}`)
+      .join(' ');
+
+    const prices = extractPricesFromText(allContent);
+    if (prices.interior || prices.oceanview || prices.balcony || prices.suite) {
+      const source = query.includes('icruise.com') ? 'icruise' as const
+        : query.includes('cruisesheet.com') ? 'cruisesheet' as const
+        : 'web' as const;
+
+      console.log(`[CruiseDeals] [toolkit] Found prices via search for "${query.substring(0, 50)}":`, prices);
+      results.push({
+        bookingId: '',
+        shipName,
+        sailDate,
+        interiorPrice: prices.interior,
+        oceanviewPrice: prices.oceanview,
+        balconyPrice: prices.balcony,
+        suitePrice: prices.suite,
+        source,
+        url: searchData.results[0]?.url || '',
+        lastUpdated: new Date().toISOString(),
+        confidence: 'high',
+      });
+    }
+  }
+
+  return results;
 };
 
 const fetchPricingForCruise = async (
@@ -288,38 +406,35 @@ const fetchPricingForCruise = async (
   const results: CruisePricing[] = [];
 
   if (apiUrl) {
-    const [icruiseResult, cruisesheetResult] = await Promise.allSettled([
-      fetchPricingWithSearch(apiUrl, shipName, sailDate, nights, departurePort, 'icruise.com', 'icruise'),
-      fetchPricingWithSearch(apiUrl, shipName, sailDate, nights, departurePort, 'cruisesheet.com', 'cruisesheet'),
-    ]);
+    console.log(`[CruiseDeals] Strategy 1: Toolkit web search for ${shipName}`);
+    const searchResults = await searchWithToolkit(apiUrl, shipName, sailDate, nights, departurePort);
+    if (searchResults.length > 0) {
+      results.push(...searchResults);
+      console.log(`[CruiseDeals] Toolkit search found ${searchResults.length} pricing records`);
+      return results;
+    }
+    console.log(`[CruiseDeals] Toolkit search returned no results, trying direct scraping...`);
+  }
 
-    if (icruiseResult.status === 'fulfilled' && icruiseResult.value) {
-      results.push(icruiseResult.value);
-    }
-    if (cruisesheetResult.status === 'fulfilled' && cruisesheetResult.value) {
-      results.push(cruisesheetResult.value);
-    }
+  console.log(`[CruiseDeals] Strategy 2: Direct scraping for ${shipName}`);
+  const [icruiseResult, cruisesheetResult, rcResult] = await Promise.allSettled([
+    scrapeICruise(shipName, sailDate, nights, departurePort),
+    scrapeCruiseSheet(shipName, sailDate, nights, departurePort),
+    scrapeRoyalCaribbean(shipName, sailDate, nights, departurePort),
+  ]);
 
-    if (results.length === 0) {
-      console.log(`[CruiseDeals] Site-specific searches found nothing, trying general web search...`);
-      const webResult = await fetchPricingWithSearch(apiUrl, shipName, sailDate, nights, departurePort, '', 'web');
-      if (webResult) results.push(webResult);
-    }
+  if (icruiseResult.status === 'fulfilled' && icruiseResult.value) {
+    results.push(icruiseResult.value);
+  }
+  if (cruisesheetResult.status === 'fulfilled' && cruisesheetResult.value) {
+    results.push(cruisesheetResult.value);
+  }
+  if (rcResult.status === 'fulfilled' && rcResult.value) {
+    results.push(rcResult.value);
   }
 
   if (results.length === 0) {
-    console.log(`[CruiseDeals] Web search found nothing, trying direct scrape...`);
-    const [icruiseDirect, cruisesheetDirect] = await Promise.allSettled([
-      directScrapeSite(shipName, sailDate, nights, 'icruise.com', 'icruise'),
-      directScrapeSite(shipName, sailDate, nights, 'cruisesheet.com', 'cruisesheet'),
-    ]);
-
-    if (icruiseDirect.status === 'fulfilled' && icruiseDirect.value) {
-      results.push(icruiseDirect.value);
-    }
-    if (cruisesheetDirect.status === 'fulfilled' && cruisesheetDirect.value) {
-      results.push(cruisesheetDirect.value);
-    }
+    console.log(`[CruiseDeals] All direct scraping failed for ${shipName}`);
   }
 
   return results;
@@ -341,9 +456,10 @@ export const cruiseDealsRouter = createTRPCRouter({
         searchApiUrl: z.string().optional(),
       })
     )
-    .mutation(async ({ input }): Promise<SearchResult> => {
+    .mutation(async ({ input }) => {
       console.log(`[CruiseDeals] Starting search for ${input.cruises.length} cruises`);
-      const apiUrl = getSearchApiUrl(input.searchApiUrl);
+      const apiUrl = input.searchApiUrl || process.env.EXPO_PUBLIC_TOOLKIT_URL || null;
+      console.log(`[CruiseDeals] API URL available: ${apiUrl ? 'yes' : 'no'}`);
 
       const deals: CruiseDeal[] = [];
 
@@ -401,9 +517,9 @@ export const cruiseDealsRouter = createTRPCRouter({
         searchApiUrl: z.string().optional(),
       })
     )
-    .mutation(async ({ input }): Promise<{ deals: CruiseDeal[] }> => {
+    .mutation(async ({ input }) => {
       console.log(`[CruiseDeals] Searching single cruise: ${input.shipName}`);
-      const apiUrl = getSearchApiUrl(input.searchApiUrl);
+      const apiUrl = input.searchApiUrl || process.env.EXPO_PUBLIC_TOOLKIT_URL || null;
 
       const pricingResults = await fetchPricingForCruise(
         apiUrl,
@@ -454,11 +570,8 @@ export const cruiseDealsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }): Promise<{ pricing: CruisePricing[]; syncedCount: number }> => {
       console.log(`[CruiseDeals] Starting pricing sync for ${input.cruises.length} booked cruises`);
-      const apiUrl = getSearchApiUrl(input.searchApiUrl);
-
-      if (!apiUrl) {
-        console.log('[CruiseDeals] No web search API URL available, will attempt direct scraping only');
-      }
+      const apiUrl = input.searchApiUrl || process.env.EXPO_PUBLIC_TOOLKIT_URL || null;
+      console.log(`[CruiseDeals] Toolkit URL: ${apiUrl ? 'available' : 'NOT available'}`);
 
       const allPricing: CruisePricing[] = [];
       const errors: string[] = [];
