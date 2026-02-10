@@ -39,7 +39,7 @@ function getOfferImage(offer: Cruise): string {
   );
 }
 
-export function OfferCard({
+export const OfferCard = React.memo(function OfferCard({
   offer,
   allCruises = [],
   offerNameOverride,
@@ -372,7 +372,7 @@ export function OfferCard({
       </LinearGradient>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

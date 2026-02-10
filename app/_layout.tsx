@@ -2,9 +2,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { StyleSheet, View, Text, ActivityIndicator } from "react-native";
+import { StyleSheet, View, Text, ActivityIndicator, Platform } from "react-native";
 import { CoreDataProvider, useCoreData } from "@/state/CoreDataProvider";
 import { clearAllAppData } from "@/lib/dataManager";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -39,11 +39,11 @@ import { UserDataSyncProvider, useUserDataSync } from "@/state/UserDataSyncProvi
 import { EntitlementProvider } from "@/state/EntitlementProvider";
 import { CrewRecognitionProvider } from "@/state/CrewRecognitionProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
+import { composeProviders } from "@/lib/composeProviders";
 
 try {
   SplashScreen.preventAutoHideAsync();
 } catch {
-  // Safe to ignore - splash screen may not be available in all contexts
 }
 
 const queryClient = new QueryClient({
@@ -82,7 +82,7 @@ const rootStyles = StyleSheet.create({
   },
   cloudRestoreTitle: {
     fontSize: 22,
-    fontWeight: "800",
+    fontWeight: "800" as const,
     color: COLORS.navy,
     marginBottom: 6,
   },
@@ -101,58 +101,6 @@ const rootStyles = StyleSheet.create({
     color: "#B00020",
   },
 });
-
-function FreshStartHandler({ onComplete }: { onComplete: () => void }) {
-  const { clearFreshStartFlag } = useAuth();
-  const router = useRouter();
-  const [status, setStatus] = useState('Setting up your profile...');
-
-  useEffect(() => {
-    const handleFirstLaunch = async () => {
-      try {
-        const hasLaunchedBefore = await AsyncStorage.getItem(ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE);
-        
-        if (!hasLaunchedBefore) {
-          console.log('[FreshStartHandler] First time user - clearing all data...');
-          setStatus('Setting up your profile...');
-          await clearAllAppData();
-          await AsyncStorage.setItem(ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE, 'true');
-          console.log('[FreshStartHandler] First launch flag set');
-        } else {
-          console.log('[FreshStartHandler] Returning user - preserving existing data');
-          setStatus('Loading your profile...');
-        }
-        
-        console.log('[FreshStartHandler] Clearing fresh start flag...');
-        await clearFreshStartFlag();
-        
-        console.log('[FreshStartHandler] Redirecting to settings...');
-        setTimeout(() => {
-          router.replace('/(tabs)/settings' as any);
-          onComplete();
-        }, 500);
-      } catch (error) {
-        console.error('[FreshStartHandler] Error during fresh start:', error);
-        setStatus('Error occurred, redirecting...');
-        await clearFreshStartFlag();
-        setTimeout(() => {
-          router.replace('/(tabs)/settings' as any);
-          onComplete();
-        }, 1000);
-      }
-    };
-    
-    handleFirstLaunch();
-  }, [clearFreshStartFlag, router, onComplete]);
-
-  return (
-    <View style={freshStartStyles.container}>
-      <ActivityIndicator size="large" color={COLORS.navy} />
-      <Text style={freshStartStyles.text}>{status}</Text>
-      <Text style={freshStartStyles.subtext}>Please enter your profile information</Text>
-    </View>
-  );
-}
 
 const freshStartStyles = StyleSheet.create({
   container: {
@@ -177,22 +125,80 @@ const freshStartStyles = StyleSheet.create({
   },
 });
 
-function RootLayoutNav() {
+function FreshStartHandler({ onComplete }: { onComplete: () => void }) {
+  const { clearFreshStartFlag } = useAuth();
+  const router = useRouter();
+  const [status, setStatus] = useState('Setting up your profile...');
+
+  useEffect(() => {
+    const handleFirstLaunch = async () => {
+      try {
+        const hasLaunchedBefore = await AsyncStorage.getItem(ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE);
+        
+        if (!hasLaunchedBefore) {
+          if (__DEV__) console.log('[FreshStartHandler] First time user');
+          setStatus('Setting up your profile...');
+          await clearAllAppData();
+          await AsyncStorage.setItem(ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE, 'true');
+        } else {
+          setStatus('Loading your profile...');
+        }
+        
+        await clearFreshStartFlag();
+        
+        setTimeout(() => {
+          router.replace('/(tabs)/settings' as any);
+          onComplete();
+        }, 150);
+      } catch (error) {
+        console.error('[FreshStartHandler] Error:', error);
+        setStatus('Error occurred, redirecting...');
+        await clearFreshStartFlag();
+        setTimeout(() => {
+          router.replace('/(tabs)/settings' as any);
+          onComplete();
+        }, 300);
+      }
+    };
+    
+    handleFirstLaunch();
+  }, [clearFreshStartFlag, router, onComplete]);
+
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+    <View style={freshStartStyles.container}>
+      <ActivityIndicator size="large" color={COLORS.navy} />
+      <Text style={freshStartStyles.text}>{status}</Text>
+      <Text style={freshStartStyles.subtext}>Please enter your profile information</Text>
+    </View>
+  );
+}
+
+const SCREEN_ANIMATION = Platform.OS === 'ios' ? 'default' : 'fade_from_bottom' as const;
+
+function RootLayoutNav() {
+  const screenOptions = useMemo(() => ({
+    headerBackTitle: "Back",
+    animation: SCREEN_ANIMATION,
+    animationDuration: 200,
+  }), []);
+
+  return (
+    <Stack screenOptions={screenOptions}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="paywall"
         options={{
           presentation: "modal",
           headerShown: false,
+          animation: 'slide_from_bottom' as const,
         }}
       />
       <Stack.Screen 
         name="modal" 
         options={{ 
           presentation: "modal",
-          title: "Modal"
+          title: "Modal",
+          animation: 'slide_from_bottom' as const,
         }} 
       />
       <Stack.Screen 
@@ -206,6 +212,7 @@ function RootLayoutNav() {
         options={{ 
           presentation: "modal",
           headerShown: false,
+          animation: 'slide_from_bottom' as const,
         }} 
       />
       <Stack.Screen 
@@ -213,6 +220,7 @@ function RootLayoutNav() {
         options={{ 
           presentation: "modal",
           headerShown: false,
+          animation: 'slide_from_bottom' as const,
         }} 
       />
       <Stack.Screen 
@@ -220,6 +228,7 @@ function RootLayoutNav() {
         options={{ 
           presentation: "modal",
           headerShown: false,
+          animation: 'slide_from_bottom' as const,
         }} 
       />
       <Stack.Screen 
@@ -233,6 +242,7 @@ function RootLayoutNav() {
         options={{ 
           presentation: "modal",
           headerShown: false,
+          animation: 'slide_from_bottom' as const,
         }} 
       />
       <Stack.Screen 
@@ -246,6 +256,7 @@ function RootLayoutNav() {
         options={{ 
           presentation: "modal",
           headerShown: false,
+          animation: 'slide_from_bottom' as const,
         }} 
       />
       <Stack.Screen 
@@ -253,6 +264,7 @@ function RootLayoutNav() {
         options={{ 
           presentation: "modal",
           headerShown: false,
+          animation: 'slide_from_bottom' as const,
         }} 
       />
       <Stack.Screen 
@@ -270,28 +282,20 @@ function AppContent() {
   const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
-    console.log('[AppContent] === MOUNT ===');
     const hideSplash = async () => {
       try {
         await SplashScreen.hideAsync();
-        console.log('[AppContent] Native splash hidden');
       } catch {
-        // Safe to ignore - splash screen may not be registered
       }
     };
     
-    const timer = setTimeout(() => {
-      hideSplash();
-    }, 100);
+    hideSplash();
     
     const timeout = setTimeout(() => {
-      console.log('[AppContent] === TIMEOUT: Forcing splash to hide after 1.8s ===');
       setShowSplash(false);
-    }, 1800);
+    }, 900);
     
     return () => {
-      console.log('[AppContent] === UNMOUNT ===');
-      clearTimeout(timer);
       clearTimeout(timeout);
     };
   }, []);
@@ -316,17 +320,16 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   useEffect(() => {
     if (isAuthenticated && !initialCheckComplete && !forceSkipRestore) {
       const timeout = setTimeout(() => {
-        console.log('[AppContent] Cloud restore safety timeout - forcing past restore screen');
+        if (__DEV__) console.log('[AppContent] Cloud restore safety timeout');
         setForceSkipRestore(true);
-      }, 8000);
+      }, 4000);
       return () => clearTimeout(timeout);
     }
   }, [isAuthenticated, initialCheckComplete, forceSkipRestore]);
 
-  const handleContinueToLogin = () => {
-    console.log('[AppContent] Continue button pressed - moving to login screen');
+  const handleContinueToLogin = useCallback(() => {
     setShowLandingPage(false);
-  };
+  }, []);
 
   useEffect(() => {
     const syncEmailToProfile = async () => {
@@ -334,11 +337,10 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
         try {
           const owner = await ensureOwner();
           if (owner && owner.email !== authenticatedEmail) {
-            console.log('[AppContent] Syncing authenticated email to user profile:', authenticatedEmail);
             await updateUser(owner.id, { email: authenticatedEmail });
           }
         } catch (error) {
-          console.error('[AppContent] Error syncing email to profile:', error);
+          console.error('[AppContent] Error syncing email:', error);
         }
       }
     };
@@ -349,43 +351,35 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
     if (!isAuthenticated) return;
     if (!lastRestoreTime) return;
 
-    console.log('[AppContent] Cloud restore completed - refreshing providers:', { lastRestoreTime, authenticatedEmail });
-
     Promise.all([
       coreData.refreshData(),
       syncUserFromStorage(),
     ]).catch((error) => {
-      console.error('[AppContent] Error refreshing providers after cloud restore:', error);
+      console.error('[AppContent] Error refreshing after cloud restore:', error);
     });
   }, [isAuthenticated, lastRestoreTime, authenticatedEmail, coreData, syncUserFromStorage]);
 
   useEffect(() => {
-    console.log('[AppContent] Syncing whitelist status to machine library:', isWhitelisted);
     setIsUserWhitelisted(isWhitelisted);
   }, [isWhitelisted, setIsUserWhitelisted]);
 
-  const handleSplashComplete = () => {
-    console.log('[AppContent] === SPLASH COMPLETE: Setting showSplash to false ===');
+  const handleSplashComplete = useCallback(() => {
     setShowSplash(false);
-  };
-
-  console.log('[AppContent] Render - showSplash:', showSplash, 'isAuthenticated:', isAuthenticated, 'authLoading:', authLoading, 'isFreshStart:', isFreshStart, 'isClearing:', isClearing, 'initialCheckComplete:', initialCheckComplete, 'isSyncing:', isSyncing, 'hasCloudData:', hasCloudData, 'syncError:', syncError);
+  }, [setShowSplash]);
 
   if (authLoading) {
     return (
       <WelcomeSplash 
         onAnimationComplete={() => {}}
-        duration={3000}
+        duration={1500}
       />
     );
   }
 
   if (!isAuthenticated) {
     if (showLandingPage) {
-      console.log('[AppContent] Rendering LandingPage');
       return <LandingPage onContinue={handleContinueToLogin} />;
     }
-    console.log('[AppContent] Rendering LoginScreen');
     return <LoginScreen />;
   }
 
@@ -393,7 +387,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
     return (
       <WelcomeSplash 
         onAnimationComplete={handleSplashComplete}
-        duration={1500}
+        duration={800}
       />
     );
   }
@@ -426,67 +420,60 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   return <RootLayoutNav />;
 }
 
+const DataProviders = composeProviders(
+  CoreDataProvider,
+  CrewRecognitionProvider,
+  HistoricalPerformanceProvider,
+  PriceHistoryProvider,
+  PriceTrackingProvider,
+  FinancialsProvider,
+  LoyaltyProvider,
+  SimpleAnalyticsProvider,
+  DeckPlanProvider,
+  CelebrityProvider,
+);
+
+const CasinoProviders = composeProviders(
+  CasinoStrategyProvider,
+  CasinoSessionProvider,
+  SlotMachineProvider,
+  SlotMachineLibraryProvider,
+  MachineStrategyProvider,
+  BankrollProvider,
+  GamificationProvider,
+  PPHAlertsProvider,
+);
+
+const ServiceProviders = composeProviders(
+  TaxProvider,
+  AlertsProvider,
+  AgentXProvider,
+  CertificatesProvider,
+);
+
 export default function RootLayout() {
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-      <GestureHandlerRootView style={rootStyles.gestureHandler}>
-        <ErrorBoundary>
-          <AuthProvider>
-            <UserDataSyncProvider>
-              <UserProvider>
-                <EntitlementProvider>
-                  <CoreDataProvider>
-                    <CrewRecognitionProvider>
-                <HistoricalPerformanceProvider>
-                  <PriceHistoryProvider>
-                    <PriceTrackingProvider>
-                      <FinancialsProvider>
-                      <CasinoStrategyProvider>
-                        <LoyaltyProvider>
-                          <SimpleAnalyticsProvider>
-                            <CasinoSessionProvider>
-                              <SlotMachineProvider>
-                                <SlotMachineLibraryProvider>
-                                  <DeckPlanProvider>
-                                    <MachineStrategyProvider>
-                                      <BankrollProvider>
-                                        <TaxProvider>
-                                          <GamificationProvider>
-                                            <PPHAlertsProvider>
-                                              <AlertsProvider>
-                                                <AgentXProvider>
-                                                  <CertificatesProvider>
-                                                    <CelebrityProvider>
-                                                      <AppContent />
-                                                    </CelebrityProvider>
-                                                  </CertificatesProvider>
-                                                </AgentXProvider>
-                                              </AlertsProvider>
-                                            </PPHAlertsProvider>
-                                          </GamificationProvider>
-                                        </TaxProvider>
-                                      </BankrollProvider>
-                                    </MachineStrategyProvider>
-                                  </DeckPlanProvider>
-                                </SlotMachineLibraryProvider>
-                              </SlotMachineProvider>
-                            </CasinoSessionProvider>
-                          </SimpleAnalyticsProvider>
-                        </LoyaltyProvider>
-                      </CasinoStrategyProvider>
-                      </FinancialsProvider>
-                    </PriceTrackingProvider>
-                  </PriceHistoryProvider>
-                </HistoricalPerformanceProvider>
-                    </CrewRecognitionProvider>
-                  </CoreDataProvider>
-                </EntitlementProvider>
-              </UserProvider>
-            </UserDataSyncProvider>
-          </AuthProvider>
-        </ErrorBoundary>
-      </GestureHandlerRootView>
+        <GestureHandlerRootView style={rootStyles.gestureHandler}>
+          <ErrorBoundary>
+            <AuthProvider>
+              <UserDataSyncProvider>
+                <UserProvider>
+                  <EntitlementProvider>
+                    <DataProviders>
+                      <CasinoProviders>
+                        <ServiceProviders>
+                          <AppContent />
+                        </ServiceProviders>
+                      </CasinoProviders>
+                    </DataProviders>
+                  </EntitlementProvider>
+                </UserProvider>
+              </UserDataSyncProvider>
+            </AuthProvider>
+          </ErrorBoundary>
+        </GestureHandlerRootView>
       </QueryClientProvider>
     </trpc.Provider>
   );

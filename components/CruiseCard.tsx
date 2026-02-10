@@ -35,7 +35,7 @@ function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'acti
   return 'upcoming';
 }
 
-export function CruiseCard({ 
+export const CruiseCard = React.memo(function CruiseCard({ 
   cruise, 
   onPress, 
   showPricePerNight = true, 
@@ -603,6 +603,8 @@ export function CruiseCard({
     </Animated.View>
   );
 }
+
+});
 
 const styles = StyleSheet.create({
   container: {

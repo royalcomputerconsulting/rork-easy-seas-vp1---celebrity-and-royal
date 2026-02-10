@@ -93,7 +93,7 @@ function getPriorityGradient(priority: AlertPriority): [string, string] {
   }
 }
 
-export function AlertItem({ alert, onDismiss, onSnooze, onAction, compact = false }: AlertItemProps) {
+export const AlertItem = React.memo(function AlertItem({ alert, onDismiss, onSnooze, onAction, compact = false }: AlertItemProps) {
   const router = useRouter();
   const priorityColor = getPriorityColor(alert.priority);
   const gradientColors = getPriorityGradient(alert.priority);
@@ -200,7 +200,7 @@ export function AlertItem({ alert, onDismiss, onSnooze, onAction, compact = fals
       </View>
     </View>
   );
-}
+});
 
 interface InsightItemProps {
   insight: PatternInsight;

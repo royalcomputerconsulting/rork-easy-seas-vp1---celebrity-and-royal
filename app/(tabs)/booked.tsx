@@ -11,6 +11,7 @@ import {
   Image,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import { useDeferredRender } from '@/hooks/useDeferredRender';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Ship,
@@ -657,10 +658,11 @@ export default function BookedScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={Platform.OS === 'android'}
-          initialNumToRender={8}
-          maxToRenderPerBatch={8}
-          windowSize={10}
+          removeClippedSubviews={true}
+          initialNumToRender={6}
+          maxToRenderPerBatch={5}
+          windowSize={7}
+          updateCellsBatchingPeriod={50}
         />
       </SafeAreaView>
 

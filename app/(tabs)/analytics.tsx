@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Image,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -79,6 +80,7 @@ import { PPHSessionComparison } from '@/components/PPHSessionComparison';
 import { PPHLeaderboard } from '@/components/PPHLeaderboard';
 import { PPHAlertContainer } from '@/components/PPHAlertNotification';
 import { useHaptics } from '@/lib/useHaptics';
+import { useDeferredRender } from '@/hooks/useDeferredRender';
 import { usePPHAlerts } from '@/state/PPHAlertsProvider';
 import { W2GTracker } from '@/components/W2GTracker';
 import { CompValueCalculator } from '@/components/CompValueCalculator';
@@ -163,6 +165,7 @@ export default function AnalyticsScreen() {
   } = useGamification();
 
   const haptics = useHaptics();
+  const isScreenReady = useDeferredRender();
   const { alerts: pphAlerts, dismissAlert: dismissPPHAlert } = usePPHAlerts();
   const {
     w2gRecords,
@@ -1674,6 +1677,7 @@ export default function AnalyticsScreen() {
         <ScrollView 
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          removeClippedSubviews={true}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1683,10 +1687,18 @@ export default function AnalyticsScreen() {
             />
           }
         >
-          {activeTab === 'intelligence' && renderIntelligenceTab()}
-          {activeTab === 'charts' && renderChartsTab()}
-          {activeTab === 'session' && renderSessionTab()}
-          {activeTab === 'calcs' && renderCalcsTab()}
+          {!isScreenReady ? (
+            <View style={{ paddingTop: 40, alignItems: 'center' }}>
+              <ActivityIndicator size="large" color={COLORS.navyDeep} />
+            </View>
+          ) : (
+            <>
+              {activeTab === 'intelligence' && renderIntelligenceTab()}
+              {activeTab === 'charts' && renderChartsTab()}
+              {activeTab === 'session' && renderSessionTab()}
+              {activeTab === 'calcs' && renderCalcsTab()}
+            </>
+          )}
 
           {realAnalytics.totalCruises === 0 && !storeLoading && (
             <View style={styles.emptyState}>
