@@ -13,12 +13,8 @@ export default function PaywallScreen() {
   const [overridePassword, setOverridePassword] = useState('');
 
   const handleClose = useCallback(() => {
-    console.log('[Paywall] Close requested. canGoBack:', router.canGoBack());
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.replace('/(tabs)/analytics');
+    console.log('[Paywall] Close requested - navigating to home');
+    router.replace('/(tabs)/home');
   }, [router]);
 
   const handleManualOverride = async () => {
