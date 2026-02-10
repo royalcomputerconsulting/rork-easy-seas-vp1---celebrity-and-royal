@@ -1,4 +1,4 @@
-import { RENDER_BACKEND_URL } from './trpc';
+import { trpcClient } from './trpc';
 
 interface CruisePricing {
   bookingId: string;
@@ -422,36 +422,16 @@ const syncViaRenderBackend = async (
   }>
 ): Promise<{ pricing: CruisePricing[]; syncedCount: number } | null> => {
   try {
-    console.log(`[CruisePricing] Attempting sync via Render backend: ${RENDER_BACKEND_URL}`);
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const searchApiUrl = process.env.EXPO_PUBLIC_TOOLKIT_URL || undefined;
+    console.log(`[CruisePricing] Attempting sync via Render backend (tRPC client), searchApiUrl: ${searchApiUrl ? 'provided' : 'not available'}`);
 
-    const response = await fetch(
-      `${RENDER_BACKEND_URL}/trpc/cruiseDeals.syncPricingForBookedCruises`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          json: { cruises },
-        }),
-        signal: controller.signal,
-      }
-    );
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unable to read error');
-      console.log(`[CruisePricing] Render backend returned ${response.status}:`, errorText);
-      return null;
-    }
-
-    const data = await response.json();
-    const result = data?.result?.data?.json;
+    const result = await trpcClient.cruiseDeals.syncPricingForBookedCruises.mutate({
+      cruises,
+      searchApiUrl,
+    });
 
     if (!result || !Array.isArray(result.pricing)) {
-      console.log('[CruisePricing] Unexpected response shape from Render backend:', JSON.stringify(data).substring(0, 200));
+      console.log('[CruisePricing] Unexpected response from Render backend:', JSON.stringify(result).substring(0, 200));
       return null;
     }
 

@@ -37,6 +37,8 @@ export const ALL_STORAGE_KEYS = {
   LOYALTY_ACCOUNT_ID: 'easyseas_loyalty_account_id',
   CROWN_ANCHOR_ID: 'easyseas_crown_anchor_id',
   EXTENDED_LOYALTY_DATA: 'easyseas_extended_loyalty_data',
+  CREW_RECOGNITION_ENTRIES: 'crew_recognition_entries_v2',
+  CREW_RECOGNITION_SAILINGS: 'crew_recognition_sailings_v2',
 } as const;
 
 export const STORAGE_KEYS = ALL_STORAGE_KEYS;

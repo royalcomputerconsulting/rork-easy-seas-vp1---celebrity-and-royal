@@ -10,6 +10,7 @@ import type {
 import type { UserProfile } from '@/state/UserProvider';
 import type { Certificate } from '@/components/CertificateManagerModal';
 import type { CasinoSession } from '@/state/CasinoSessionProvider';
+import type { RecognitionEntryWithCrew, Sailing } from '@/types/crew-recognition';
 import { ALL_STORAGE_KEYS, type AppSettings } from '../storage/storageKeys';
 import { applyKnownRetailValuesToBooked } from '../dataEnrichment/retailValueEnrichment';
 
@@ -47,6 +48,10 @@ export interface FullAppDataBundle {
     encyclopedia: MachineEncyclopediaEntry[];
     atlasIds: string[];
   };
+  crewRecognition: {
+    entries: RecognitionEntryWithCrew[];
+    sailings: Sailing[];
+  };
   metadata: {
     totalCruises: number;
     totalBooked: number;
@@ -55,6 +60,7 @@ export interface FullAppDataBundle {
     totalCertificates: number;
     totalSessions: number;
     totalMachines: number;
+    totalCrewEntries: number;
   };
 }
 
@@ -77,6 +83,8 @@ export async function getAllStoredData(): Promise<FullAppDataBundle> {
       usersData,
       machineEncyclopediaData,
       myAtlasData,
+      crewEntriesData,
+      crewSailingsData,
     ] = await Promise.all([
       AsyncStorage.getItem(ALL_STORAGE_KEYS.CRUISES),
       AsyncStorage.getItem(ALL_STORAGE_KEYS.BOOKED_CRUISES),
@@ -92,6 +100,8 @@ export async function getAllStoredData(): Promise<FullAppDataBundle> {
       AsyncStorage.getItem(ALL_STORAGE_KEYS.USERS),
       AsyncStorage.getItem(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA),
       AsyncStorage.getItem(ALL_STORAGE_KEYS.MY_SLOT_ATLAS),
+      AsyncStorage.getItem(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES),
+      AsyncStorage.getItem(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS),
     ]);
 
     let cruises: Cruise[] = [];
@@ -105,6 +115,8 @@ export async function getAllStoredData(): Promise<FullAppDataBundle> {
     let users: UserProfile[] = [];
     let machineEncyclopedia: MachineEncyclopediaEntry[] = [];
     let myAtlasIds: string[] = [];
+    let crewEntries: RecognitionEntryWithCrew[] = [];
+    let crewSailings: Sailing[] = [];
     
     const usedOfferCodes = new Set<string>();
     const usedCruiseIds = new Set<string>();
@@ -234,6 +246,22 @@ export async function getAllStoredData(): Promise<FullAppDataBundle> {
       myAtlasIds = [];
     }
 
+    try {
+      crewEntries = crewEntriesData ? JSON.parse(crewEntriesData) : [];
+      if (!Array.isArray(crewEntries)) crewEntries = [];
+    } catch (e) {
+      console.error('[DataBundle] Error parsing crew entries:', e);
+      crewEntries = [];
+    }
+
+    try {
+      crewSailings = crewSailingsData ? JSON.parse(crewSailingsData) : [];
+      if (!Array.isArray(crewSailings)) crewSailings = [];
+    } catch (e) {
+      console.error('[DataBundle] Error parsing crew sailings:', e);
+      crewSailings = [];
+    }
+
     const ownerUser = users.find(u => u.isOwner);
     const clubRoyalePoints = manualClubRoyale ? parseInt(manualClubRoyale, 10) : 0;
     const loyaltyPoints = manualCrownAnchor ? parseInt(manualCrownAnchor, 10) : 0;
@@ -276,6 +304,10 @@ export async function getAllStoredData(): Promise<FullAppDataBundle> {
         encyclopedia: machineEncyclopedia,
         atlasIds: myAtlasIds,
       },
+      crewRecognition: {
+        entries: crewEntries,
+        sailings: crewSailings,
+      },
       metadata: {
         totalCruises: cruises.length,
         totalBooked: bookedCruises.length,
@@ -284,6 +316,7 @@ export async function getAllStoredData(): Promise<FullAppDataBundle> {
         totalCertificates: certificates.length,
         totalSessions: casinoSessions.length,
         totalMachines: myAtlasIds.length,
+        totalCrewEntries: crewEntries.length,
       },
     };
 
@@ -491,6 +524,22 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
   } catch (error) {
     console.error('[DataBundle] Error importing machines:', error);
     errors.push(`Failed to import machines: ${error}`);
+  }
+
+  try {
+    if (bundle.crewRecognition) {
+      if (bundle.crewRecognition.entries && Array.isArray(bundle.crewRecognition.entries)) {
+        await AsyncStorage.setItem(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES, JSON.stringify(bundle.crewRecognition.entries));
+        console.log('[DataBundle] Imported crew recognition entries:', bundle.crewRecognition.entries.length);
+      }
+      if (bundle.crewRecognition.sailings && Array.isArray(bundle.crewRecognition.sailings)) {
+        await AsyncStorage.setItem(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS, JSON.stringify(bundle.crewRecognition.sailings));
+        console.log('[DataBundle] Imported crew recognition sailings:', bundle.crewRecognition.sailings.length);
+      }
+    }
+  } catch (error) {
+    console.error('[DataBundle] Error importing crew recognition:', error);
+    errors.push(`Failed to import crew recognition: ${error}`);
   }
 
   const success = errors.length === 0;

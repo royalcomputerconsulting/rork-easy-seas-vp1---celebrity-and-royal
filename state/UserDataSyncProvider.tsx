@@ -73,6 +73,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         celebrityCCNumberRaw,
         celebrityCCPointsRaw,
         celebrityBlueChipRaw,
+        crewEntriesRaw,
+        crewSailingsRaw,
       ] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.BOOKED_CRUISES),
         AsyncStorage.getItem(STORAGE_KEYS.CASINO_OFFERS),
@@ -91,6 +93,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         AsyncStorage.getItem(STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_NUMBER),
         AsyncStorage.getItem(STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_POINTS),
         AsyncStorage.getItem(STORAGE_KEYS.CELEBRITY_BLUE_CHIP_POINTS),
+        AsyncStorage.getItem(STORAGE_KEYS.CREW_RECOGNITION_ENTRIES),
+        AsyncStorage.getItem(STORAGE_KEYS.CREW_RECOGNITION_SAILINGS),
       ]);
 
       const celebrityData = {
@@ -115,6 +119,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         loyaltyData: loyaltyDataRaw ? JSON.parse(loyaltyDataRaw) : null,
         bankrollData: bankrollDataRaw ? JSON.parse(bankrollDataRaw) : null,
         celebrityData,
+        crewRecognitionEntries: crewEntriesRaw ? JSON.parse(crewEntriesRaw) : [],
+        crewRecognitionSailings: crewSailingsRaw ? JSON.parse(crewSailingsRaw) : [],
       };
 
       console.log("[UserDataSync] Gathered data:", {
@@ -124,6 +130,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         sessions: data.casinoSessions.length,
         hasProfile: !!data.clubRoyaleProfile,
         hasSettings: !!data.settings,
+        crewEntries: data.crewRecognitionEntries.length,
+        crewSailings: data.crewRecognitionSailings.length,
       });
 
       return data;
@@ -227,6 +235,17 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         }
       }
 
+      if (cloudData.crewRecognitionEntries?.length > 0) {
+        savePromises.push(
+          AsyncStorage.setItem(STORAGE_KEYS.CREW_RECOGNITION_ENTRIES, JSON.stringify(cloudData.crewRecognitionEntries))
+        );
+      }
+      if (cloudData.crewRecognitionSailings?.length > 0) {
+        savePromises.push(
+          AsyncStorage.setItem(STORAGE_KEYS.CREW_RECOGNITION_SAILINGS, JSON.stringify(cloudData.crewRecognitionSailings))
+        );
+      }
+
       savePromises.push(
         AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, "true")
       );
@@ -238,6 +257,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         offers: cloudData.casinoOffers?.length ?? 0,
         events: cloudData.calendarEvents?.length ?? 0,
         sessions: cloudData.casinoSessions?.length ?? 0,
+        crewEntries: cloudData.crewRecognitionEntries?.length ?? 0,
+        crewSailings: cloudData.crewRecognitionSailings?.length ?? 0,
       });
 
       return true;

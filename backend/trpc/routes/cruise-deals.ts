@@ -32,8 +32,17 @@ interface SearchResult {
   foundCount: number;
 }
 
-const searchICruise = async (shipName: string, sailDate: string, nights: number, departurePort: string): Promise<CruiseDeal | null> => {
+const getSearchApiUrl = (passedUrl?: string): string | null => {
+  return passedUrl || process.env.EXPO_PUBLIC_TOOLKIT_URL || null;
+};
+
+const searchICruise = async (shipName: string, sailDate: string, nights: number, departurePort: string, searchApiUrl?: string): Promise<CruiseDeal | null> => {
   try {
+    const apiUrl = getSearchApiUrl(searchApiUrl);
+    if (!apiUrl) {
+      console.error('[ICruise] No search API URL available');
+      return null;
+    }
     const dateObj = new Date(sailDate);
     const month = dateObj.toLocaleString('en-US', { month: 'long' });
     const year = dateObj.getFullYear();
@@ -43,7 +52,7 @@ const searchICruise = async (shipName: string, sailDate: string, nights: number,
     
     const searchQuery = `${shipName} cruise ${month} ${day} ${year} ${departurePort} ${nights} night price site:icruise.com`;
     
-    const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
+    const response = await fetch(`${apiUrl}/api/web-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -85,8 +94,13 @@ const searchICruise = async (shipName: string, sailDate: string, nights: number,
   }
 };
 
-const fetchICruisePricing = async (shipName: string, sailDate: string, nights: number, departurePort: string): Promise<CruisePricing | null> => {
+const fetchICruisePricing = async (shipName: string, sailDate: string, nights: number, departurePort: string, searchApiUrl?: string): Promise<CruisePricing | null> => {
   try {
+    const apiUrl = getSearchApiUrl(searchApiUrl);
+    if (!apiUrl) {
+      console.error('[ICruise] No search API URL available for pricing');
+      return null;
+    }
     const dateObj = new Date(sailDate);
     const month = dateObj.toLocaleString('en-US', { month: 'long' });
     const year = dateObj.getFullYear();
@@ -99,7 +113,7 @@ const fetchICruisePricing = async (shipName: string, sailDate: string, nights: n
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
     
-    const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
+    const response = await fetch(`${apiUrl}/api/web-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -150,8 +164,13 @@ const fetchICruisePricing = async (shipName: string, sailDate: string, nights: n
   }
 };
 
-const searchCruiseSheet = async (shipName: string, sailDate: string, nights: number, departurePort: string): Promise<CruiseDeal | null> => {
+const searchCruiseSheet = async (shipName: string, sailDate: string, nights: number, departurePort: string, searchApiUrl?: string): Promise<CruiseDeal | null> => {
   try {
+    const apiUrl = getSearchApiUrl(searchApiUrl);
+    if (!apiUrl) {
+      console.error('[CruiseSheet] No search API URL available');
+      return null;
+    }
     const dateObj = new Date(sailDate);
     const month = dateObj.toLocaleString('en-US', { month: 'long' });
     const year = dateObj.getFullYear();
@@ -161,7 +180,7 @@ const searchCruiseSheet = async (shipName: string, sailDate: string, nights: num
     
     const searchQuery = `${shipName} cruise ${month} ${day} ${year} ${departurePort} ${nights} night price site:cruisesheet.com`;
     
-    const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
+    const response = await fetch(`${apiUrl}/api/web-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -203,8 +222,13 @@ const searchCruiseSheet = async (shipName: string, sailDate: string, nights: num
   }
 };
 
-const fetchCruiseSheetPricing = async (shipName: string, sailDate: string, nights: number, departurePort: string): Promise<CruisePricing | null> => {
+const fetchCruiseSheetPricing = async (shipName: string, sailDate: string, nights: number, departurePort: string, searchApiUrl?: string): Promise<CruisePricing | null> => {
   try {
+    const apiUrl = getSearchApiUrl(searchApiUrl);
+    if (!apiUrl) {
+      console.error('[CruiseSheet] No search API URL available for pricing');
+      return null;
+    }
     const dateObj = new Date(sailDate);
     const month = dateObj.toLocaleString('en-US', { month: 'long' });
     const year = dateObj.getFullYear();
@@ -217,7 +241,7 @@ const fetchCruiseSheetPricing = async (shipName: string, sailDate: string, night
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
     
-    const response = await fetch(`${process.env.EXPO_PUBLIC_TOOLKIT_URL}/api/web-search`, {
+    const response = await fetch(`${apiUrl}/api/web-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -281,6 +305,7 @@ export const cruiseDealsRouter = createTRPCRouter({
             departurePort: z.string(),
           })
         ),
+        searchApiUrl: z.string().optional(),
       })
     )
     .mutation(async ({ input }): Promise<SearchResult> => {
@@ -295,7 +320,8 @@ export const cruiseDealsRouter = createTRPCRouter({
           cruise.shipName,
           cruise.sailDate,
           cruise.nights,
-          cruise.departurePort
+          cruise.departurePort,
+          input.searchApiUrl
         );
         
         if (iCruiseDeal) {
@@ -307,7 +333,8 @@ export const cruiseDealsRouter = createTRPCRouter({
           cruise.shipName,
           cruise.sailDate,
           cruise.nights,
-          cruise.departurePort
+          cruise.departurePort,
+          input.searchApiUrl
         );
         
         if (cruiseSheetDeal) {
@@ -334,6 +361,7 @@ export const cruiseDealsRouter = createTRPCRouter({
         sailDate: z.string(),
         nights: z.number(),
         departurePort: z.string(),
+        searchApiUrl: z.string().optional(),
       })
     )
     .mutation(async ({ input }): Promise<{ deals: CruiseDeal[] }> => {
@@ -345,7 +373,8 @@ export const cruiseDealsRouter = createTRPCRouter({
         input.shipName,
         input.sailDate,
         input.nights,
-        input.departurePort
+        input.departurePort,
+        input.searchApiUrl
       );
       
       if (iCruiseDeal) {
@@ -356,7 +385,8 @@ export const cruiseDealsRouter = createTRPCRouter({
         input.shipName,
         input.sailDate,
         input.nights,
-        input.departurePort
+        input.departurePort,
+        input.searchApiUrl
       );
       
       if (cruiseSheetDeal) {
@@ -380,14 +410,16 @@ export const cruiseDealsRouter = createTRPCRouter({
             departurePort: z.string(),
           })
         ),
+        searchApiUrl: z.string().optional(),
       })
     )
     .mutation(async ({ input }): Promise<{ pricing: CruisePricing[]; syncedCount: number }> => {
       console.log(`[CruiseDeals] Starting pricing sync for ${input.cruises.length} booked cruises`);
-      console.log(`[CruiseDeals] Toolkit URL: ${process.env.EXPO_PUBLIC_TOOLKIT_URL}`);
+      const resolvedApiUrl = getSearchApiUrl(input.searchApiUrl);
+      console.log(`[CruiseDeals] Search API URL resolved: ${resolvedApiUrl ? 'yes' : 'no'}`);
       
-      if (!process.env.EXPO_PUBLIC_TOOLKIT_URL) {
-        console.error('[CruiseDeals] EXPO_PUBLIC_TOOLKIT_URL not configured');
+      if (!resolvedApiUrl) {
+        console.error('[CruiseDeals] No search API URL available (neither passed nor in env)');
         throw new Error('Web search service not configured. Please contact support.');
       }
       
@@ -402,7 +434,8 @@ export const cruiseDealsRouter = createTRPCRouter({
             cruise.shipName,
             cruise.sailDate,
             cruise.nights,
-            cruise.departurePort
+            cruise.departurePort,
+            resolvedApiUrl
           );
           
           if (iCruisePricing) {
@@ -414,7 +447,8 @@ export const cruiseDealsRouter = createTRPCRouter({
             cruise.shipName,
             cruise.sailDate,
             cruise.nights,
-            cruise.departurePort
+            cruise.departurePort,
+            resolvedApiUrl
           );
           
           if (cruiseSheetPricing) {
