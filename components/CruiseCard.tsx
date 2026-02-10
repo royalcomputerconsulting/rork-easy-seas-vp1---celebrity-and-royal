@@ -604,7 +604,7 @@ export const CruiseCard = React.memo(function CruiseCard({
   );
 }
 
-});
+);
 
 const styles = StyleSheet.create({
   container: {
