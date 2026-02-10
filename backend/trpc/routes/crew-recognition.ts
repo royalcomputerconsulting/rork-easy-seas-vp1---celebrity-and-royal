@@ -34,6 +34,7 @@ export const crewRecognitionRouter = createTRPCRouter({
     .input(
       z.object({
         csvText: z.string(),
+        userId: z.string(),
       })
     )
     .mutation(async ({ input }) => {
@@ -74,7 +75,7 @@ export const crewRecognitionRouter = createTRPCRouter({
         
         const normalizedName = normalizeString(crewName);
         const existingResult = await db.query(
-          `SELECT * FROM crew_members WHERE string::lowercase(fullName) = "${normalizedName}" AND isDeleted != true LIMIT 1`
+          `SELECT * FROM crew_members WHERE string::lowercase(fullName) = "${normalizedName}" AND userId = "${input.userId}" AND isDeleted != true LIMIT 1`
         );
         
         let crewMember = (existingResult[0] as any[])?.[0];
@@ -85,6 +86,7 @@ export const crewRecognitionRouter = createTRPCRouter({
             department: department.trim(),
             roleTitle: roleTitle?.trim() || undefined,
             notes: notes?.trim() || undefined,
+            userId: input.userId,
             isDeleted: false,
             createdAt: now,
             updatedAt: now,
@@ -97,7 +99,7 @@ export const crewRecognitionRouter = createTRPCRouter({
         
         if (crewMember?.id && shipName && startDate) {
           const sailingResult = await db.query(
-            `SELECT * FROM sailings WHERE shipName = "${shipName.trim()}" AND sailStartDate = "${startDate.trim()}" LIMIT 1`
+            `SELECT * FROM sailings WHERE shipName = "${shipName.trim()}" AND sailStartDate = "${startDate.trim()}" AND userId = "${input.userId}" LIMIT 1`
           );
           
           let sailing = (sailingResult[0] as any[])?.[0];
@@ -107,6 +109,7 @@ export const crewRecognitionRouter = createTRPCRouter({
               shipName: shipName.trim(),
               sailStartDate: startDate.trim(),
               sailEndDate: endDate?.trim() || startDate.trim(),
+              userId: input.userId,
               createdAt: now,
               updatedAt: now,
             };
@@ -132,6 +135,7 @@ export const crewRecognitionRouter = createTRPCRouter({
                 department: department.trim(),
                 roleTitle: roleTitle?.trim() || undefined,
                 sourceText: `Imported from CSV`,
+                userId: input.userId,
                 createdAt: now,
                 updatedAt: now,
               };
@@ -150,12 +154,13 @@ export const crewRecognitionRouter = createTRPCRouter({
       z.object({
         search: z.string().optional(),
         department: z.string().optional(),
+        userId: z.string(),
       })
     )
     .query(async ({ input }) => {
       const db = await getDb();
       
-      let query = 'SELECT * FROM crew_members WHERE isDeleted != true';
+      let query = `SELECT * FROM crew_members WHERE userId = "${input.userId}" AND isDeleted != true`;
       const conditions: string[] = [];
       
       if (input.search) {
@@ -184,6 +189,7 @@ export const crewRecognitionRouter = createTRPCRouter({
         roleTitle: z.string().optional(),
         notes: z.string().optional(),
         sailingId: z.string().optional(),
+        userId: z.string(),
       })
     )
     .mutation(async ({ input }) => {
@@ -191,7 +197,7 @@ export const crewRecognitionRouter = createTRPCRouter({
       
       const normalizedName = normalizeString(input.fullName);
       const existingResult = await db.query(
-        `SELECT * FROM crew_members WHERE string::lowercase(fullName) = "${normalizedName}" AND isDeleted != true LIMIT 1`
+        `SELECT * FROM crew_members WHERE string::lowercase(fullName) = "${normalizedName}" AND userId = "${input.userId}" AND isDeleted != true LIMIT 1`
       );
       
       const existing = (existingResult[0] as any[])?.[0];
@@ -208,6 +214,7 @@ export const crewRecognitionRouter = createTRPCRouter({
         department: input.department,
         roleTitle: input.roleTitle?.trim() || undefined,
         notes: input.notes?.trim() || undefined,
+        userId: input.userId,
         isDeleted: false,
         createdAt: now,
         updatedAt: now,
@@ -232,6 +239,7 @@ export const crewRecognitionRouter = createTRPCRouter({
             department: input.department,
             roleTitle: input.roleTitle?.trim() || undefined,
             sourceText: undefined,
+            userId: input.userId,
             createdAt: now,
             updatedAt: now,
           };
@@ -303,16 +311,17 @@ export const crewRecognitionRouter = createTRPCRouter({
         endDate: z.string().optional(),
         page: z.number().default(1),
         pageSize: z.number().default(50),
+        userId: z.string(),
       })
     )
     .query(async ({ input }) => {
       const db = await getDb();
       
-      const conditions: string[] = [];
+      const conditions: string[] = [`userId = "${input.userId}"`];
       
       if (input.search) {
         const crewResult = await db.query(
-          `SELECT id FROM crew_members WHERE string::lowercase(fullName) CONTAINS "${normalizeString(input.search)}"`
+          `SELECT id FROM crew_members WHERE userId = "${input.userId}" AND string::lowercase(fullName) CONTAINS "${normalizeString(input.search)}"`
         );
         const crewIds = ((crewResult[0] as any[]) || []).map((c: any) => c.id);
         
@@ -387,6 +396,7 @@ export const crewRecognitionRouter = createTRPCRouter({
         department: departmentEnum,
         roleTitle: z.string().optional(),
         sourceText: z.string().optional(),
+        userId: z.string(),
       })
     )
     .mutation(async ({ input }) => {
@@ -414,6 +424,7 @@ export const crewRecognitionRouter = createTRPCRouter({
         department: input.department,
         roleTitle: input.roleTitle?.trim() || undefined,
         sourceText: input.sourceText?.trim() || undefined,
+        userId: input.userId,
         createdAt: now,
         updatedAt: now,
       };
@@ -477,11 +488,13 @@ export const crewRecognitionRouter = createTRPCRouter({
       return { success: true };
     }),
 
-  getSailings: publicProcedure.query(async () => {
-    const db = await getDb();
-    const result = await db.query('SELECT * FROM sailings ORDER BY sailStartDate DESC');
-    return (result[0] || []) as any[];
-  }),
+  getSailings: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const result = await db.query(`SELECT * FROM sailings WHERE userId = "${input.userId}" ORDER BY sailStartDate DESC`);
+      return (result[0] || []) as any[];
+    }),
 
   createSailing: publicProcedure
     .input(
@@ -490,6 +503,7 @@ export const crewRecognitionRouter = createTRPCRouter({
         sailStartDate: z.string(),
         sailEndDate: z.string(),
         nights: z.number().optional(),
+        userId: z.string(),
       })
     )
     .mutation(async ({ input }) => {
@@ -501,6 +515,7 @@ export const crewRecognitionRouter = createTRPCRouter({
         sailStartDate: input.sailStartDate,
         sailEndDate: input.sailEndDate,
         nights: input.nights,
+        userId: input.userId,
         createdAt: now,
         updatedAt: now,
       };
@@ -510,7 +525,7 @@ export const crewRecognitionRouter = createTRPCRouter({
     }),
 
   getSurveyList: publicProcedure
-    .input(z.object({ sailingId: z.string() }))
+    .input(z.object({ sailingId: z.string(), userId: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       
@@ -548,20 +563,22 @@ export const crewRecognitionRouter = createTRPCRouter({
       return surveyList.sort((a, b) => a.fullName.localeCompare(b.fullName));
     }),
 
-  getStats: publicProcedure.query(async () => {
-    const db = await getDb();
+  getStats: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      
+      const crewCountQuery = `SELECT count() FROM crew_members WHERE userId = "${input.userId}" AND isDeleted != true GROUP ALL`;
+      const crewCountResult = await db.query(crewCountQuery);
+      const crewCount = (crewCountResult[0] as any[])?.[0]?.count || 0;
+      
+      const entriesCountQuery = `SELECT count() FROM recognition_entries WHERE userId = "${input.userId}" GROUP ALL`;
+      const entriesCountResult = await db.query(entriesCountQuery);
+      const entriesCount = (entriesCountResult[0] as any[])?.[0]?.count || 0;
     
-    const crewCountQuery = 'SELECT count() FROM crew_members WHERE isDeleted != true GROUP ALL';
-    const crewCountResult = await db.query(crewCountQuery);
-    const crewCount = (crewCountResult[0] as any[])?.[0]?.count || 0;
-    
-    const entriesCountQuery = 'SELECT count() FROM recognition_entries GROUP ALL';
-    const entriesCountResult = await db.query(entriesCountQuery);
-    const entriesCount = (entriesCountResult[0] as any[])?.[0]?.count || 0;
-    
-    return {
-      crewMemberCount: crewCount,
-      recognitionEntryCount: entriesCount,
-    };
-  }),
+      return {
+        crewMemberCount: crewCount,
+        recognitionEntryCount: entriesCount,
+      };
+    }),
 });

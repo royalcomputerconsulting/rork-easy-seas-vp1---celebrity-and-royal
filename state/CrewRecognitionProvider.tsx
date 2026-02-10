@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useState, useCallback } from 'react';
 import { trpc } from '@/lib/trpc';
-import type { CrewMember, RecognitionEntryWithCrew, Sailing, SurveyListItem } from '@/types/crew-recognition';
+import { useAuth } from '@/state/AuthProvider';
 
 interface CrewRecognitionFilters {
   search: string;
@@ -26,14 +26,21 @@ const DEFAULT_FILTERS: CrewRecognitionFilters = {
 };
 
 export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook(() => {
+  const auth = useAuth();
+  const userId = auth.authenticatedEmail || 'guest';
+  
   const [filters, setFilters] = useState<CrewRecognitionFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
 
-  const statsQuery = trpc.crewRecognition.getStats.useQuery(undefined, {
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-  });
+  const statsQuery = trpc.crewRecognition.getStats.useQuery(
+    { userId },
+    {
+      refetchOnMount: true,
+      refetchOnWindowFocus: false,
+      enabled: !!userId,
+    }
+  );
 
   const entriesQuery = trpc.crewRecognition.getRecognitionEntries.useQuery(
     {
@@ -47,17 +54,23 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
       endDate: filters.endDate || undefined,
       page,
       pageSize,
+      userId,
     },
     {
       refetchOnMount: true,
       refetchOnWindowFocus: false,
+      enabled: !!userId,
     }
   );
 
-  const sailingsQuery = trpc.crewRecognition.getSailings.useQuery(undefined, {
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-  });
+  const sailingsQuery = trpc.crewRecognition.getSailings.useQuery(
+    { userId },
+    {
+      refetchOnMount: true,
+      refetchOnWindowFocus: false,
+      enabled: !!userId,
+    }
+  );
 
   const createCrewMemberMutation = trpc.crewRecognition.createCrewMember.useMutation({
     onSuccess: () => {
@@ -128,6 +141,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   }, []);
 
   return {
+    userId,
     filters,
     updateFilters,
     resetFilters,

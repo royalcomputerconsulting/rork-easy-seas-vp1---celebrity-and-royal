@@ -35,6 +35,7 @@ const MOCK_CREW_MEMBER = {
 export function CrewRecognitionSection() {
   const auth = useAuth();
   const {
+    userId,
     stats,
     statsLoading,
     entries,
@@ -83,7 +84,7 @@ export function CrewRecognitionSection() {
           }
           const csvText = await response.text();
           
-          await syncFromCSVMutation.mutateAsync({ csvText });
+          await syncFromCSVMutation.mutateAsync({ csvText, userId });
           Alert.alert('Success', 'Synced crew data from CSV file');
         } catch (error) {
           console.error('[CrewRecognition] CSV sync error:', error);
@@ -392,7 +393,7 @@ export function CrewRecognitionSection() {
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSubmit={async (data) => {
-          await createCrewMember({ ...data, department: data.department as Department });
+          await createCrewMember({ ...data, department: data.department as Department, userId });
         }}
         sailings={sailings}
       />

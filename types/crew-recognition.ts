@@ -4,6 +4,7 @@ export interface CrewMember {
   department: string;
   roleTitle?: string;
   notes?: string;
+  userId: string;
   isDeleted?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -15,6 +16,7 @@ export interface Sailing {
   sailStartDate: string;
   sailEndDate: string;
   nights?: number;
+  userId: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -31,6 +33,7 @@ export interface RecognitionEntry {
   department: string;
   roleTitle?: string;
   sourceText?: string;
+  userId: string;
   createdAt: string;
   updatedAt: string;
 }

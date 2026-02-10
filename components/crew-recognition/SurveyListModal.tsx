@@ -13,6 +13,7 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { trpc } from '@/lib/trpc';
 import { exportSurveyToText } from '@/lib/csv-export';
 import type { Sailing } from '@/types/crew-recognition';
+import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 
 interface SurveyListModalProps {
   visible: boolean;
@@ -21,13 +22,14 @@ interface SurveyListModalProps {
 }
 
 export function SurveyListModal({ visible, onClose, sailings }: SurveyListModalProps) {
+  const { userId } = useCrewRecognition();
   const [selectedSailingId, setSelectedSailingId] = useState('');
   const [showSailingPicker, setShowSailingPicker] = useState(false);
 
   const surveyListQuery = trpc.crewRecognition.getSurveyList.useQuery(
-    { sailingId: selectedSailingId },
+    { sailingId: selectedSailingId, userId },
     {
-      enabled: !!selectedSailingId,
+      enabled: !!selectedSailingId && !!userId,
       refetchOnMount: true,
       refetchOnWindowFocus: false,
     }
