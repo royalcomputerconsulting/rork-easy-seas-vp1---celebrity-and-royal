@@ -271,21 +271,24 @@ export function CrewRecognitionSection() {
 
       {showFilters && (
         <View style={styles.filtersPanel}>
-          <View style={styles.chipFilterSection}>
+          <View style={styles.filterListSection}>
             <Text style={styles.filterLabel}>
               Ship{filters.shipNames.length > 0 ? ` (${filters.shipNames.length} selected)` : ''}
             </Text>
-            <ScrollView
-              style={styles.verticalChipScroll}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={true}
-            >
-              <View style={styles.chipWrapContainer}>
+            <View style={styles.filterListContainer}>
+              <ScrollView
+                style={styles.filterListScroll}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={true}
+              >
                 <TouchableOpacity
-                  style={[styles.chip, filters.shipNames.length === 0 && styles.chipActive]}
+                  style={[styles.filterRow, filters.shipNames.length === 0 && styles.filterRowActive]}
                   onPress={() => updateFilters({ shipNames: [] })}
                 >
-                  <Text style={[styles.chipText, filters.shipNames.length === 0 && styles.chipTextActive]}>
+                  <View style={[styles.filterCheckbox, filters.shipNames.length === 0 && styles.filterCheckboxActive]}>
+                    {filters.shipNames.length === 0 && <Check size={12} color="#fff" />}
+                  </View>
+                  <Text style={[styles.filterRowText, filters.shipNames.length === 0 && styles.filterRowTextActive]}>
                     All Ships
                   </Text>
                 </TouchableOpacity>
@@ -294,38 +297,40 @@ export function CrewRecognitionSection() {
                   return (
                     <TouchableOpacity
                       key={ship}
-                      style={[styles.chip, isSelected && styles.chipActive]}
+                      style={[styles.filterRow, isSelected && styles.filterRowActive]}
                       onPress={() => toggleShipFilter(ship)}
                     >
-                      {isSelected && <Check size={12} color="#fff" />}
-                      <Text
-                        style={[styles.chipText, isSelected && styles.chipTextActive]}
-                        numberOfLines={1}
-                      >
+                      <View style={[styles.filterCheckbox, isSelected && styles.filterCheckboxActive]}>
+                        {isSelected && <Check size={12} color="#fff" />}
+                      </View>
+                      <Text style={[styles.filterRowText, isSelected && styles.filterRowTextActive]} numberOfLines={1}>
                         {ship}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
-              </View>
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
 
-          <View style={styles.chipFilterSection}>
+          <View style={styles.filterListSection}>
             <Text style={styles.filterLabel}>
               Department{filters.departments.length > 0 ? ` (${filters.departments.length} selected)` : ''}
             </Text>
-            <ScrollView
-              style={styles.verticalChipScroll}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={true}
-            >
-              <View style={styles.chipWrapContainer}>
+            <View style={styles.filterListContainer}>
+              <ScrollView
+                style={styles.filterListScroll}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={true}
+              >
                 <TouchableOpacity
-                  style={[styles.chip, filters.departments.length === 0 && styles.chipActive]}
+                  style={[styles.filterRow, filters.departments.length === 0 && styles.filterRowActive]}
                   onPress={() => updateFilters({ departments: [] })}
                 >
-                  <Text style={[styles.chipText, filters.departments.length === 0 && styles.chipTextActive]}>
+                  <View style={[styles.filterCheckbox, filters.departments.length === 0 && styles.filterCheckboxActive]}>
+                    {filters.departments.length === 0 && <Check size={12} color="#fff" />}
+                  </View>
+                  <Text style={[styles.filterRowText, filters.departments.length === 0 && styles.filterRowTextActive]}>
                     All Depts
                   </Text>
                 </TouchableOpacity>
@@ -334,21 +339,20 @@ export function CrewRecognitionSection() {
                   return (
                     <TouchableOpacity
                       key={dept}
-                      style={[styles.chip, isSelected && styles.chipActive]}
+                      style={[styles.filterRow, isSelected && styles.filterRowActive]}
                       onPress={() => toggleDeptFilter(dept)}
                     >
-                      {isSelected && <Check size={12} color="#fff" />}
-                      <Text
-                        style={[styles.chipText, isSelected && styles.chipTextActive]}
-                        numberOfLines={1}
-                      >
+                      <View style={[styles.filterCheckbox, isSelected && styles.filterCheckboxActive]}>
+                        {isSelected && <Check size={12} color="#fff" />}
+                      </View>
+                      <Text style={[styles.filterRowText, isSelected && styles.filterRowTextActive]} numberOfLines={1}>
                         {dept}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
-              </View>
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
 
           {activeFilterCount > 0 && (
@@ -689,7 +693,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(3, 105, 161, 0.15)',
     gap: SPACING.md,
   },
-  chipFilterSection: {
+  filterListSection: {
     gap: SPACING.xs,
   },
   filterLabel: {
@@ -697,38 +701,52 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: COLORS.text,
   },
-  verticalChipScroll: {
-    maxHeight: 150,
+  filterListContainer: {
+    backgroundColor: '#fff',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.15)',
+    overflow: 'hidden',
+  },
+  filterListScroll: {
+    maxHeight: 180,
     flexGrow: 0,
   },
-  chipWrapContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingBottom: 4,
-  },
-  chip: {
+  filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 10,
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(3, 105, 161, 0.08)',
+  },
+  filterRowActive: {
+    backgroundColor: 'rgba(3, 105, 161, 0.06)',
+  },
+  filterCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
     borderWidth: 1.5,
     borderColor: 'rgba(3, 105, 161, 0.4)',
     backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  chipActive: {
+  filterCheckboxActive: {
     backgroundColor: '#0369A1',
     borderColor: '#0369A1',
   },
-  chipText: {
-    fontSize: 12,
+  filterRowText: {
+    fontSize: 13,
     fontWeight: '500' as const,
-    color: '#0369A1',
+    color: '#334155',
+    flex: 1,
   },
-  chipTextActive: {
-    color: '#fff',
+  filterRowTextActive: {
+    color: '#0369A1',
+    fontWeight: '600' as const,
   },
   resetButton: {
     flexDirection: 'row',
