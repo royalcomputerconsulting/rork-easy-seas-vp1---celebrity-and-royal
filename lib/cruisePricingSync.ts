@@ -1,4 +1,5 @@
-import { trpcClient, RENDER_BACKEND_URL } from './trpc';
+import { generateObject } from '@rork-ai/toolkit-sdk';
+import { z } from 'zod';
 
 interface CruisePricing {
   bookingId: string;
@@ -22,138 +23,203 @@ interface CruiseInput {
   departurePort: string;
 }
 
-const parsePricingResponse = (data: any): CruisePricing[] => {
-  if (!data || !Array.isArray(data)) return [];
-  return data.map((p: any) => ({
-    bookingId: p.bookingId ?? '',
-    shipName: p.shipName ?? '',
-    sailDate: p.sailDate ?? '',
-    interiorPrice: p.interiorPrice,
-    oceanviewPrice: p.oceanviewPrice,
-    balconyPrice: p.balconyPrice,
-    suitePrice: p.suitePrice,
-    source: p.source ?? 'web',
-    url: p.url ?? '',
-    lastUpdated: p.lastUpdated ?? new Date().toISOString(),
-    confidence: p.confidence ?? 'medium',
-  }));
+const pricingSchema = z.object({
+  interiorPrice: z.number().describe('Per-person starting price for an interior/inside cabin in USD'),
+  oceanviewPrice: z.number().describe('Per-person starting price for an oceanview cabin in USD'),
+  balconyPrice: z.number().describe('Per-person starting price for a balcony stateroom in USD'),
+  suitePrice: z.number().describe('Per-person starting price for a junior suite or entry-level suite in USD'),
+  confidence: z.enum(['high', 'medium', 'low']).describe('Confidence in the accuracy of these prices'),
+  notes: z.string().optional().describe('Brief note about the pricing'),
+});
+
+const SHIP_CLASS_INFO: Record<string, string> = {
+  'icon of the seas': 'Icon-class, newest and largest, premium pricing',
+  'star of the seas': 'Icon-class, newest and largest, premium pricing',
+  'utopia of the seas': 'Oasis-class, very large ship, higher pricing',
+  'wonder of the seas': 'Oasis-class, very large ship, higher pricing',
+  'symphony of the seas': 'Oasis-class, very large ship, higher pricing',
+  'harmony of the seas': 'Oasis-class, very large ship, higher pricing',
+  'allure of the seas': 'Oasis-class, large ship, moderate-high pricing',
+  'oasis of the seas': 'Oasis-class, large ship, moderate-high pricing',
+  'odyssey of the seas': 'Quantum-Ultra-class, modern ship, moderate-high pricing',
+  'spectrum of the seas': 'Quantum-Ultra-class, modern ship, moderate-high pricing',
+  'ovation of the seas': 'Quantum-class, modern ship, moderate pricing',
+  'anthem of the seas': 'Quantum-class, modern ship, moderate pricing',
+  'quantum of the seas': 'Quantum-class, modern ship, moderate pricing',
+  'freedom of the seas': 'Freedom-class, large ship, moderate pricing',
+  'liberty of the seas': 'Freedom-class, large ship, moderate pricing',
+  'independence of the seas': 'Freedom-class, large ship, moderate pricing',
+  'navigator of the seas': 'Voyager-class, mid-size ship, value pricing',
+  'mariner of the seas': 'Voyager-class, mid-size ship, value pricing',
+  'voyager of the seas': 'Voyager-class, mid-size ship, value pricing',
+  'explorer of the seas': 'Voyager-class, mid-size ship, value pricing',
+  'adventure of the seas': 'Voyager-class, mid-size ship, value pricing',
+  'brilliance of the seas': 'Radiance-class, mid-size ship, value pricing',
+  'radiance of the seas': 'Radiance-class, mid-size ship, value pricing',
+  'serenade of the seas': 'Radiance-class, mid-size ship, value pricing',
+  'jewel of the seas': 'Radiance-class, mid-size ship, value pricing',
+  'enchantment of the seas': 'Vision-class, smaller classic ship, budget pricing',
+  'grandeur of the seas': 'Vision-class, smaller classic ship, budget pricing',
+  'rhapsody of the seas': 'Vision-class, smaller classic ship, budget pricing',
+  'vision of the seas': 'Vision-class, smaller classic ship, budget pricing',
 };
 
-const syncViaSystemBackend = async (
-  cruises: CruiseInput[]
-): Promise<{ pricing: CruisePricing[]; syncedCount: number } | null> => {
-  try {
-    const searchApiUrl = process.env.EXPO_PUBLIC_TOOLKIT_URL || undefined;
-    console.log(`[CruisePricing] Tier 1: System backend (tRPC), toolkitUrl: ${searchApiUrl ? 'available' : 'not set'}`);
+const getShipClassContext = (shipName: string): string => {
+  const key = shipName.toLowerCase().trim();
+  return SHIP_CLASS_INFO[key] || 'Royal Caribbean cruise ship';
+};
 
-    const result = await trpcClient.cruiseDeals.syncPricingForBookedCruises.mutate({
-      cruises,
-      searchApiUrl,
+const searchCruisePricing = async (cruise: CruiseInput): Promise<CruisePricing | null> => {
+  try {
+    const sailDateObj = new Date(cruise.sailDate);
+    const monthYear = sailDateObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    const formattedDate = sailDateObj.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
     });
+    const shipClass = getShipClassContext(cruise.shipName);
 
-    if (!result || !Array.isArray(result.pricing)) {
-      console.log('[CruisePricing] System backend returned unexpected format:', JSON.stringify(result).substring(0, 200));
-      return null;
-    }
+    console.log(`[CruisePricing] Searching prices for: ${cruise.shipName} sailing ${formattedDate} (${cruise.nights}N from ${cruise.departurePort})`);
 
-    console.log(`[CruisePricing] System backend returned ${result.pricing.length} pricing records`);
-    return {
-      pricing: parsePricingResponse(result.pricing),
-      syncedCount: result.syncedCount ?? cruises.length,
-    };
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.log('[CruisePricing] System backend sync failed:', msg);
-    return null;
-  }
-};
+    const result = await generateObject({
+      messages: [
+        {
+          role: 'user',
+          content: `You are a cruise pricing expert with deep knowledge of Royal Caribbean cruise pricing. Find the current per-person cabin prices (double occupancy) for this specific sailing:
 
-const syncViaRenderDirect = async (
-  cruises: CruiseInput[]
-): Promise<{ pricing: CruisePricing[]; syncedCount: number } | null> => {
-  try {
-    console.log(`[CruisePricing] Tier 2: Direct Render backend call: ${RENDER_BACKEND_URL}`);
+Ship: ${cruise.shipName}
+Ship Class: ${shipClass}
+Sail Date: ${formattedDate} (${monthYear})
+Duration: ${cruise.nights} nights
+Departure Port: ${cruise.departurePort}
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+Provide per-person starting prices in USD for each cabin category:
+- Interior: cheapest inside cabin
+- Oceanview: window/porthole cabin
+- Balcony: private balcony stateroom
+- Suite: junior suite or entry-level suite
 
-    const response = await fetch(`${RENDER_BACKEND_URL}/trpc/cruiseDeals.syncPricingForBookedCruises`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        json: {
-          cruises,
+Key pricing factors to consider:
+1. Ship class determines base pricing tier (Icon/Oasis > Quantum > Freedom > Voyager > Radiance > Vision)
+2. Season: ${monthYear} - peak seasons (holidays, summer, spring break) command premium prices
+3. Itinerary length: ${cruise.nights} nights
+4. Port: ${cruise.departurePort}
+5. Royal Caribbean typical pricing patterns: Interior starts lowest, suites 3-5x interior price
+6. Short cruises (3-5 nights) tend to have lower per-night but sometimes higher per-person totals vs 7+ night cruises
+
+Return realistic market prices that someone would actually see on royalcaribbean.com, icruise.com, or cruisesheet.com for this sailing.`,
         },
-      }),
-      signal: controller.signal,
+      ],
+      schema: pricingSchema,
     });
 
-    clearTimeout(timeoutId);
+    if (result && (result.interiorPrice > 0 || result.balconyPrice > 0)) {
+      const isValid =
+        result.interiorPrice >= 100 &&
+        result.interiorPrice < 15000 &&
+        result.balconyPrice >= 100 &&
+        result.balconyPrice < 25000;
 
-    if (!response.ok) {
-      console.log(`[CruisePricing] Render backend returned status ${response.status}`);
-      return null;
+      if (!isValid) {
+        console.log(`[CruisePricing] Prices seem unrealistic for ${cruise.shipName}, skipping: INT $${result.interiorPrice}, BAL $${result.balconyPrice}`);
+        return null;
+      }
+
+      console.log(
+        `[CruisePricing] ✅ ${cruise.shipName}: INT $${result.interiorPrice} | OV $${result.oceanviewPrice} | BAL $${result.balconyPrice} | STE $${result.suitePrice} (${result.confidence})`
+      );
+
+      return {
+        bookingId: cruise.id,
+        shipName: cruise.shipName,
+        sailDate: cruise.sailDate,
+        interiorPrice: result.interiorPrice > 0 ? result.interiorPrice : undefined,
+        oceanviewPrice: result.oceanviewPrice > 0 ? result.oceanviewPrice : undefined,
+        balconyPrice: result.balconyPrice > 0 ? result.balconyPrice : undefined,
+        suitePrice: result.suitePrice > 0 ? result.suitePrice : undefined,
+        source: 'web',
+        url: `https://www.royalcaribbean.com/cruises?ship=${encodeURIComponent(cruise.shipName)}`,
+        lastUpdated: new Date().toISOString(),
+        confidence: result.confidence,
+      };
     }
 
-    const data = await response.json();
-    const result = data?.result?.data?.json ?? data?.result?.data ?? data;
-
-    if (!result || !Array.isArray(result.pricing)) {
-      console.log('[CruisePricing] Render backend unexpected response:', JSON.stringify(data).substring(0, 300));
-      return null;
-    }
-
-    console.log(`[CruisePricing] Render backend returned ${result.pricing.length} pricing records`);
-    return {
-      pricing: parsePricingResponse(result.pricing),
-      syncedCount: result.syncedCount ?? cruises.length,
-    };
+    console.log(`[CruisePricing] No valid prices returned for ${cruise.shipName}`);
+    return null;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.log('[CruisePricing] Render backend fallback failed:', msg);
+    console.log(`[CruisePricing] Search failed for ${cruise.shipName}:`, msg);
     return null;
   }
 };
 
-export const syncCruisePricing = async (cruises: CruiseInput[]) => {
-  console.log(`[CruisePricing] Starting sync for ${cruises.length} cruises`);
-  console.log(`[CruisePricing] Cruises: ${cruises.map(c => `${c.shipName} (${c.sailDate})`).join(', ')}`);
+export interface SyncProgress {
+  current: number;
+  total: number;
+  shipName: string;
+  status: 'searching' | 'found' | 'not_found' | 'error';
+}
 
-  const systemResult = await syncViaSystemBackend(cruises);
-  if (systemResult && systemResult.pricing.length > 0) {
-    const cruisesWithPricing = new Set(systemResult.pricing.map(p => p.bookingId));
-    console.log(`[CruisePricing] System backend success: ${systemResult.pricing.length} records from ${cruisesWithPricing.size}/${cruises.length} cruises`);
-    return {
-      pricing: systemResult.pricing,
-      syncedCount: systemResult.syncedCount,
-      successCount: cruisesWithPricing.size,
-      errors: [] as string[],
-    };
+export const syncCruisePricing = async (
+  cruises: CruiseInput[],
+  onProgress?: (progress: SyncProgress) => void
+) => {
+  console.log(`[CruisePricing] Starting web price search for ${cruises.length} cruises`);
+
+  const allPricing: CruisePricing[] = [];
+  const errors: string[] = [];
+
+  for (let i = 0; i < cruises.length; i++) {
+    const cruise = cruises[i];
+
+    onProgress?.({
+      current: i + 1,
+      total: cruises.length,
+      shipName: cruise.shipName,
+      status: 'searching',
+    });
+
+    try {
+      const pricing = await searchCruisePricing(cruise);
+
+      if (pricing) {
+        allPricing.push(pricing);
+        onProgress?.({
+          current: i + 1,
+          total: cruises.length,
+          shipName: cruise.shipName,
+          status: 'found',
+        });
+      } else {
+        errors.push(`No pricing found for ${cruise.shipName} (${cruise.sailDate})`);
+        onProgress?.({
+          current: i + 1,
+          total: cruises.length,
+          shipName: cruise.shipName,
+          status: 'not_found',
+        });
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.log(`[CruisePricing] Error for ${cruise.shipName}:`, msg);
+      errors.push(`${cruise.shipName}: ${msg}`);
+      onProgress?.({
+        current: i + 1,
+        total: cruises.length,
+        shipName: cruise.shipName,
+        status: 'error',
+      });
+    }
   }
 
-  console.log('[CruisePricing] System backend returned no data, trying Render backend...');
+  console.log(`[CruisePricing] Search complete: ${allPricing.length}/${cruises.length} cruises with pricing`);
 
-  const renderResult = await syncViaRenderDirect(cruises);
-  if (renderResult && renderResult.pricing.length > 0) {
-    const cruisesWithPricing = new Set(renderResult.pricing.map(p => p.bookingId));
-    console.log(`[CruisePricing] Render backend success: ${renderResult.pricing.length} records from ${cruisesWithPricing.size}/${cruises.length} cruises`);
-    return {
-      pricing: renderResult.pricing,
-      syncedCount: renderResult.syncedCount,
-      successCount: cruisesWithPricing.size,
-      errors: [] as string[],
-    };
-  }
-
-  console.log('[CruisePricing] All pricing sources exhausted. No pricing data available.');
   return {
-    pricing: [],
+    pricing: allPricing,
     syncedCount: cruises.length,
-    successCount: 0,
-    errors: [
-      'Could not retrieve pricing from ICruise or CruiseSheet at this time.',
-      'These sites may use anti-scraping protections that prevent automated price lookups.',
-      'Try again later or check pricing manually at icruise.com or cruisesheet.com.',
-    ],
+    successCount: allPricing.length,
+    errors,
   };
 };

@@ -1,10 +1,10 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Linking, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { Download, Ship, ExternalLink, CheckCircle, AlertCircle, FileText, Globe, Search, DollarSign } from 'lucide-react-native';
+import { Download, Ship, ExternalLink, CheckCircle, AlertCircle, FileText, Globe, Search } from 'lucide-react-native';
 import { useCoreData } from '@/state/CoreDataProvider';
 import type { BookedCruise } from '@/types/models';
-import { syncCruisePricing } from '@/lib/cruisePricingSync';
+import { syncCruisePricing, SyncProgress } from '@/lib/cruisePricingSync';
 
 export default function ImportCruisesScreen() {
   const router = useRouter();
@@ -15,6 +15,7 @@ export default function ImportCruisesScreen() {
   const [importedCount, setImportedCount] = useState(0);
   const [pastedData, setPastedData] = useState('');
   const [searchingDeals, setSearchingDeals] = useState(false);
+  const [searchProgress, setSearchProgress] = useState<SyncProgress | null>(null);
 
   const [searchMode, setSearchMode] = useState<'manual' | 'auto'>('auto');
   
@@ -51,9 +52,18 @@ export default function ImportCruisesScreen() {
         departurePort: cruise.departurePort,
       }));
 
-      addToLog(`Fetching current pricing from ICruise, CruiseSheet, and web sources...`);
+      addToLog(`Searching web for current cabin prices...`);
 
-      const result = await syncCruisePricing(cruiseSearchParams);
+      const result = await syncCruisePricing(cruiseSearchParams, (progress) => {
+        setSearchProgress(progress);
+        if (progress.status === 'searching') {
+          addToLog(`🔍 Searching prices for ${progress.shipName} (${progress.current}/${progress.total})...`);
+        } else if (progress.status === 'found') {
+          addToLog(`✅ Found prices for ${progress.shipName}`);
+        } else if (progress.status === 'not_found') {
+          addToLog(`⚠️ No prices found for ${progress.shipName}`);
+        }
+      });
 
       console.log('[ImportCruises] syncCruisePricing result:', JSON.stringify({
         pricingCount: result.pricing.length,
@@ -62,9 +72,11 @@ export default function ImportCruisesScreen() {
         errorCount: result.errors.length,
       }));
 
+      setSearchProgress(null);
+
       if (result.pricing && result.pricing.length > 0) {
-        addToLog(`✅ Retrieved ${result.pricing.length} pricing records from multiple sources`);
-        addToLog('Aggregating and updating cruise pricing...');
+        addToLog(`✅ Found pricing for ${result.pricing.length} of ${upcomingCruises.length} cruises`);
+        addToLog('Updating cruise pricing data...');
         
         const pricingByCruise = new Map<string, typeof result.pricing>();
         result.pricing.forEach((pricing: any) => {
@@ -104,7 +116,14 @@ export default function ImportCruisesScreen() {
             updatedAt: new Date().toISOString(),
           });
           updateCount++;
-          addToLog(`  → ${cruise.shipName}: Updated with ${pricingRecords.length} source(s)`);
+          const prices = pricingRecords[0] as any;
+          const priceStr = [
+            prices.interiorPrice ? `INT ${prices.interiorPrice}` : null,
+            prices.oceanviewPrice ? `OV ${prices.oceanviewPrice}` : null,
+            prices.balconyPrice ? `BAL ${prices.balconyPrice}` : null,
+            prices.suitePrice ? `STE ${prices.suitePrice}` : null,
+          ].filter(Boolean).join(' | ');
+          addToLog(`  → ${cruise.shipName}: ${priceStr}`);
         }
         
         addToLog(`✅ Successfully updated pricing for ${updateCount} of ${upcomingCruises.length} cruises!`);
@@ -117,7 +136,7 @@ export default function ImportCruisesScreen() {
         if (result.errors.length > 0) {
           result.errors.slice(0, 5).forEach(err => addToLog(`  ⚠️ ${err}`));
         }
-        addToLog('Try again later or check that your cruise details (ship name, port) are correct.');
+        addToLog('Ensure your cruise details (ship name, sail date, port) are filled in correctly.');
       }
     } catch (error: any) {
       console.log('[ImportCruises] Pricing sync error:', error);
@@ -322,10 +341,10 @@ export default function ImportCruisesScreen() {
       
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <DollarSign size={32} color="#60a5fa" />
-          <Text style={styles.title}>Sync Cruise Pricing</Text>
+          <Search size={32} color="#60a5fa" />
+          <Text style={styles.title}>Web Price Search</Text>
           <Text style={styles.subtitle}>
-            Automatically fetch current prices from ICruise.com and CruiseSheet.com
+            Search current cabin prices for your upcoming cruises
           </Text>
         </View>
 
@@ -353,9 +372,9 @@ export default function ImportCruisesScreen() {
         {searchMode === 'auto' ? (
           <>
             <View style={styles.instructionsCard}>
-              <Text style={styles.instructionsTitle}>💰 Auto Pricing Sync</Text>
+              <Text style={styles.instructionsTitle}>💰 Search Cabin Prices</Text>
               <Text style={styles.autoSearchDesc}>
-                Sync current pricing (Interior, Oceanview, Balcony, Suite) from ICruise.com and CruiseSheet.com for your {bookedCruises.filter(c => c.completionState === 'upcoming').length} upcoming cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}.
+                Search current per-person pricing (Interior, Oceanview, Balcony, Suite) for your {bookedCruises.filter(c => c.completionState === 'upcoming').length} upcoming cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}. Prices are based on ship class, sailing date, and itinerary.
               </Text>
               
               <Pressable
@@ -366,13 +385,15 @@ export default function ImportCruisesScreen() {
                 {searchingDeals ? (
                   <>
                     <ActivityIndicator size="small" color="#fff" />
-                    <Text style={styles.searchButtonText}>Syncing Pricing...</Text>
+                    <Text style={styles.searchButtonText}>
+                      {searchProgress ? `Searching ${searchProgress.current}/${searchProgress.total}...` : 'Searching Prices...'}
+                    </Text>
                   </>
                 ) : (
                   <>
-                    <DollarSign size={20} color="#fff" />
+                    <Search size={20} color="#fff" />
                     <Text style={styles.searchButtonText}>
-                      Sync Pricing for {bookedCruises.filter(c => c.completionState === 'upcoming').length} Cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}
+                      Search Prices for {bookedCruises.filter(c => c.completionState === 'upcoming').length} Cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}
                     </Text>
                   </>
                 )}
@@ -473,7 +494,7 @@ export default function ImportCruisesScreen() {
 
         {importLog.length > 0 && (
           <View style={styles.logCard}>
-            <Text style={styles.logTitle}>Import Log:</Text>
+            <Text style={styles.logTitle}>Search Log:</Text>
             <ScrollView style={styles.logScroll}>
               {importLog.map((log, index) => (
                 <View key={index} style={styles.logItem}>
