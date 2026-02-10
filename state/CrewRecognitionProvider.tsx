@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/state/AuthProvider';
 import { CREW_RECOGNITION_CSV } from '@/constants/crew-recognition-csv';
-import type { RecognitionEntryWithCrew, Sailing } from '@/types/crew-recognition';
+import type { RecognitionEntryWithCrew, Sailing, Department } from '@/types/crew-recognition';
 
 const STORAGE_KEY_ENTRIES = 'crew_recognition_entries_v2';
 const STORAGE_KEY_SAILINGS = 'crew_recognition_sailings_v2';
@@ -339,6 +339,75 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     },
   });
 
+  const deleteRecognitionEntryWithFallback = useCallback(async (data: { id: string }) => {
+    if (!isOfflineMode) {
+      try {
+        const result = await deleteRecognitionEntryMutation.mutateAsync(data);
+        return result;
+      } catch (err) {
+        console.log('[CrewRecognition] Backend delete failed, falling back to local:', err);
+      }
+    }
+
+    const updatedEntries = localEntries.filter(e => e.id !== data.id);
+    setLocalEntries(updatedEntries);
+    await AsyncStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(updatedEntries));
+    console.log('[CrewRecognition] Deleted entry locally:', data.id);
+    return { success: true };
+  }, [isOfflineMode, deleteRecognitionEntryMutation, localEntries]);
+
+  const updateRecognitionEntryWithFallback = useCallback(async (data: { id: string; department?: Department; roleTitle?: string; sourceText?: string; sailingId?: string }) => {
+    if (!isOfflineMode) {
+      try {
+        const result = await updateRecognitionEntryMutation.mutateAsync(data);
+        return result;
+      } catch (err) {
+        console.log('[CrewRecognition] Backend update failed, falling back to local:', err);
+      }
+    }
+
+    const updatedEntries = localEntries.map(e => {
+      if (e.id !== data.id) return e;
+      const updated = { ...e, updatedAt: new Date().toISOString() };
+      if (data.department !== undefined) updated.department = data.department;
+      if (data.roleTitle !== undefined) updated.roleTitle = data.roleTitle;
+      if (data.sourceText !== undefined) updated.sourceText = data.sourceText;
+      if (data.sailingId !== undefined) {
+        const sailing = localSailings.find(s => s.id === data.sailingId);
+        if (sailing) {
+          updated.sailingId = sailing.id;
+          updated.shipName = sailing.shipName;
+          updated.sailStartDate = sailing.sailStartDate;
+          updated.sailEndDate = sailing.sailEndDate;
+          updated.sailingMonth = sailing.sailStartDate?.substring(0, 7) || '';
+          updated.sailingYear = sailing.sailStartDate ? parseInt(sailing.sailStartDate.substring(0, 4), 10) : 0;
+        }
+      }
+      return updated;
+    });
+    setLocalEntries(updatedEntries);
+    await AsyncStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(updatedEntries));
+    console.log('[CrewRecognition] Updated entry locally:', data.id);
+    return { success: true };
+  }, [isOfflineMode, updateRecognitionEntryMutation, localEntries, localSailings]);
+
+  const deleteCrewMemberWithFallback = useCallback(async (data: { id: string }) => {
+    if (!isOfflineMode) {
+      try {
+        const result = await deleteCrewMemberMutation.mutateAsync(data);
+        return result;
+      } catch (err) {
+        console.log('[CrewRecognition] Backend delete crew member failed, falling back to local:', err);
+      }
+    }
+
+    const updatedEntries = localEntries.filter(e => e.crewMemberId !== data.id);
+    setLocalEntries(updatedEntries);
+    await AsyncStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(updatedEntries));
+    console.log('[CrewRecognition] Deleted crew member entries locally:', data.id);
+    return { success: true };
+  }, [isOfflineMode, deleteCrewMemberMutation, localEntries]);
+
   const createSailingMutation = trpc.crewRecognition.createSailing.useMutation({
     onSuccess: () => {
       sailingsQuery.refetch();
@@ -413,10 +482,10 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     syncFromCSVLocally,
     createCrewMember: addCrewMemberWithFallback,
     updateCrewMember: updateCrewMemberMutation.mutateAsync,
-    deleteCrewMember: deleteCrewMemberMutation.mutateAsync,
+    deleteCrewMember: deleteCrewMemberWithFallback,
     createRecognitionEntry: createRecognitionEntryMutation.mutateAsync,
-    updateRecognitionEntry: updateRecognitionEntryMutation.mutateAsync,
-    deleteRecognitionEntry: deleteRecognitionEntryMutation.mutateAsync,
+    updateRecognitionEntry: updateRecognitionEntryWithFallback,
+    deleteRecognitionEntry: deleteRecognitionEntryWithFallback,
     createSailing: createSailingMutation.mutateAsync,
     refetch: () => {
       statsQuery.refetch();
