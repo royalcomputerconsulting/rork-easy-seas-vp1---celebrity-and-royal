@@ -7,11 +7,14 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Users, Plus, Download, Search, Filter, X, RefreshCcw, UserCheck } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+import { useAuth } from '@/state/AuthProvider';
+import { trpc } from '@/lib/trpc';
 import { AddCrewMemberModal } from './AddCrewMemberModal';
 import { RecognitionEntryDetailModal } from './RecognitionEntryDetailModal';
 import { SurveyListModal } from './SurveyListModal';
@@ -19,7 +22,18 @@ import { exportToCSV } from '@/lib/csv-export';
 import { DEPARTMENTS } from '@/types/crew-recognition';
 import type { RecognitionEntryWithCrew, Department } from '@/types/crew-recognition';
 
+const MOCK_CREW_MEMBER = {
+  id: 'mock-scott-astin',
+  fullName: 'Scott A. Astin',
+  department: 'Other',
+  roleTitle: 'Permanent Passenger',
+  notes: 'Mock data - will disappear when real crew members are added',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+
 export function CrewRecognitionSection() {
+  const auth = useAuth();
   const {
     stats,
     statsLoading,
@@ -39,6 +53,12 @@ export function CrewRecognitionSection() {
     deleteRecognitionEntry,
     refetch,
   } = useCrewRecognition();
+  
+  const syncFromCSVMutation = trpc.crewRecognition.syncFromCSV.useMutation({
+    onSuccess: () => {
+      refetch();
+    },
+  });
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<RecognitionEntryWithCrew | null>(null);
@@ -51,7 +71,29 @@ export function CrewRecognitionSection() {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      await refetch();
+      const userEmail = auth.authenticatedEmail?.toLowerCase().trim();
+      const isAdminOrSpecial = userEmail === 'scott.merlis1@gmail.com' || userEmail === 's@a.com';
+      
+      if (isAdminOrSpecial) {
+        console.log('[CrewRecognition] Admin/Special user sync - loading from CSV file');
+        try {
+          const response = await fetch('https://rork.app/pa/g131hcw7cxhvg2godfob0/crew_recognition.csv');
+          if (!response.ok) {
+            throw new Error('Failed to fetch CSV file');
+          }
+          const csvText = await response.text();
+          
+          await syncFromCSVMutation.mutateAsync({ csvText });
+          Alert.alert('Success', 'Synced crew data from CSV file');
+        } catch (error) {
+          console.error('[CrewRecognition] CSV sync error:', error);
+          Alert.alert('Error', 'Failed to sync from CSV file. Syncing from database instead.');
+          await refetch();
+        }
+      } else {
+        console.log('[CrewRecognition] Regular user sync - loading from database');
+        await refetch();
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -79,6 +121,9 @@ export function CrewRecognitionSection() {
 
   const uniqueShips = Array.from(new Set(sailings.map(s => s.shipName))).sort();
   const totalPages = Math.ceil(entriesTotal / pageSize);
+  
+  const showMockData = stats.crewMemberCount === 0 && !statsLoading;
+  const displayEntries = showMockData ? [] : entries;
 
   return (
     <View style={styles.container}>
@@ -118,11 +163,11 @@ export function CrewRecognitionSection() {
         ) : (
           <>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.crewMemberCount}</Text>
+              <Text style={styles.statValue}>{showMockData ? 1 : stats.crewMemberCount}</Text>
               <Text style={styles.statLabel}>Crew Members</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.recognitionEntryCount}</Text>
+              <Text style={styles.statValue}>{showMockData ? 0 : stats.recognitionEntryCount}</Text>
               <Text style={styles.statLabel}>Recognition Entries</Text>
             </View>
             <TouchableOpacity style={styles.exportButton} onPress={handleExportResults}>
@@ -247,14 +292,34 @@ export function CrewRecognitionSection() {
 
       <View style={styles.resultsContainer}>
         <Text style={styles.resultsHeader}>
-          Results ({entriesTotal})
+          Results ({showMockData ? 1 : entriesTotal})
         </Text>
 
         {entriesLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
           </View>
-        ) : entries.length === 0 ? (
+        ) : showMockData ? (
+          <View style={styles.mockDataContainer}>
+            <View style={styles.mockDataBanner}>
+              <Text style={styles.mockDataBannerText}>Mock Data - Add real crew members to hide this</Text>
+            </View>
+            <View style={styles.mockCrewCard}>
+              <View style={styles.mockCrewRow}>
+                <Text style={styles.mockCrewLabel}>Name:</Text>
+                <Text style={styles.mockCrewValue}>{MOCK_CREW_MEMBER.fullName}</Text>
+              </View>
+              <View style={styles.mockCrewRow}>
+                <Text style={styles.mockCrewLabel}>Role:</Text>
+                <Text style={styles.mockCrewValue}>{MOCK_CREW_MEMBER.roleTitle}</Text>
+              </View>
+              <View style={styles.mockCrewRow}>
+                <Text style={styles.mockCrewLabel}>Department:</Text>
+                <Text style={styles.mockCrewValue}>{MOCK_CREW_MEMBER.department}</Text>
+              </View>
+            </View>
+          </View>
+        ) : displayEntries.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Users size={48} color={COLORS.textTertiary} />
             <Text style={styles.emptyText}>No recognition entries found</Text>
@@ -275,7 +340,7 @@ export function CrewRecognitionSection() {
                   <Text style={[styles.tableHeaderCell, styles.dateColumn]}>End Date</Text>
                 </View>
 
-                {entries.map((entry, index) => (
+                {displayEntries.map((entry, index) => (
                   <TouchableOpacity
                     key={entry.id}
                     style={[styles.tableRow, index % 2 === 0 && styles.tableRowEven]}
@@ -697,5 +762,45 @@ const styles = StyleSheet.create({
   pageInfo: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.textSecondary,
+  },
+  mockDataContainer: {
+    padding: SPACING.md,
+  },
+  mockDataBanner: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  mockDataBannerText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#D97706',
+    fontWeight: '600' as const,
+    textAlign: 'center',
+  },
+  mockCrewCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  mockCrewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  mockCrewLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '600' as const,
+    color: COLORS.textSecondary,
+  },
+  mockCrewValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.text,
   },
 });

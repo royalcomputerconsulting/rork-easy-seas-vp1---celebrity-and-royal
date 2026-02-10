@@ -30,6 +30,121 @@ function generateSailingYear(date: string): number {
 }
 
 export const crewRecognitionRouter = createTRPCRouter({
+  syncFromCSV: publicProcedure
+    .input(
+      z.object({
+        csvText: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      
+      const lines = input.csvText.split('\n').filter(line => line.trim());
+      if (lines.length < 2) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'CSV file is empty or invalid',
+        });
+      }
+      
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^[\uFEFF"']/g, '').replace(/["']$/g, ''));
+      const data = lines.slice(1);
+      
+      let importedCount = 0;
+      const now = new Date().toISOString();
+      
+      for (const line of data) {
+        const values = line.split(',').map(v => v.trim().replace(/^["']/g, '').replace(/["']$/g, ''));
+        const row: any = {};
+        headers.forEach((header, index) => {
+          row[header] = values[index] || '';
+        });
+        
+        const crewName = row['Crew_Name'] || row['crew_name'] || row['Crew Name'];
+        const department = row['Department'] || row['department'];
+        const roleTitle = row['Role'] || row['role'] || row['Role_Title'] || row['roleTitle'];
+        const notes = row['Notes'] || row['notes'];
+        const shipName = row['Ship'] || row['ship'] || row['Ship_Name'] || row['shipName'];
+        const startDate = row['Start_Date'] || row['start_date'] || row['Start Date'];
+        const endDate = row['End_Date'] || row['end_date'] || row['End Date'];
+        
+        if (!crewName || !department) {
+          continue;
+        }
+        
+        const normalizedName = normalizeString(crewName);
+        const existingResult = await db.query(
+          `SELECT * FROM crew_members WHERE string::lowercase(fullName) = "${normalizedName}" AND isDeleted != true LIMIT 1`
+        );
+        
+        let crewMember = (existingResult[0] as any[])?.[0];
+        
+        if (!crewMember) {
+          const crewData = {
+            fullName: crewName.trim(),
+            department: department.trim(),
+            roleTitle: roleTitle?.trim() || undefined,
+            notes: notes?.trim() || undefined,
+            isDeleted: false,
+            createdAt: now,
+            updatedAt: now,
+          };
+          
+          const createResult = await db.create('crew_members', crewData);
+          crewMember = Array.isArray(createResult) ? createResult[0] : createResult;
+          importedCount++;
+        }
+        
+        if (crewMember?.id && shipName && startDate) {
+          const sailingResult = await db.query(
+            `SELECT * FROM sailings WHERE shipName = "${shipName.trim()}" AND sailStartDate = "${startDate.trim()}" LIMIT 1`
+          );
+          
+          let sailing = (sailingResult[0] as any[])?.[0];
+          
+          if (!sailing) {
+            const sailingData = {
+              shipName: shipName.trim(),
+              sailStartDate: startDate.trim(),
+              sailEndDate: endDate?.trim() || startDate.trim(),
+              createdAt: now,
+              updatedAt: now,
+            };
+            
+            const createSailingResult = await db.create('sailings', sailingData);
+            sailing = Array.isArray(createSailingResult) ? createSailingResult[0] : createSailingResult;
+          }
+          
+          if (sailing?.id) {
+            const existingEntryResult = await db.query(
+              `SELECT * FROM recognition_entries WHERE crewMemberId = "${crewMember.id}" AND sailingId = "${sailing.id}" LIMIT 1`
+            );
+            
+            if ((existingEntryResult[0] as any[])?.length === 0) {
+              const entryData = {
+                crewMemberId: crewMember.id,
+                sailingId: sailing.id,
+                shipName: sailing.shipName,
+                sailStartDate: sailing.sailStartDate,
+                sailEndDate: sailing.sailEndDate,
+                sailingMonth: generateSailingMonth(sailing.sailStartDate),
+                sailingYear: generateSailingYear(sailing.sailStartDate),
+                department: department.trim(),
+                roleTitle: roleTitle?.trim() || undefined,
+                sourceText: `Imported from CSV`,
+                createdAt: now,
+                updatedAt: now,
+              };
+              
+              await db.create('recognition_entries', entryData);
+            }
+          }
+        }
+      }
+      
+      return { success: true, importedCount };
+    }),
+
   getCrewMembers: publicProcedure
     .input(
       z.object({
