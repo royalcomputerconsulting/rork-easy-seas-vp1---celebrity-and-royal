@@ -8,7 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { Users, Plus, Download, Search, Filter, X } from 'lucide-react-native';
+import { Users, Plus, Download, Search, Filter, X, RefreshCcw } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { AddCrewMemberModal } from './AddCrewMemberModal';
@@ -36,6 +36,7 @@ export function CrewRecognitionSection() {
     createCrewMember,
     updateRecognitionEntry,
     deleteRecognitionEntry,
+    refetch,
   } = useCrewRecognition();
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -44,6 +45,16 @@ export function CrewRecognitionSection() {
   const [showFilters, setShowFilters] = useState(false);
   const [showShipPicker, setShowShipPicker] = useState(false);
   const [showDepartmentPicker, setShowDepartmentPicker] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleExportResults = () => {
     if (entries.length === 0) {
@@ -75,10 +86,20 @@ export function CrewRecognitionSection() {
           <Users size={24} color={COLORS.primary} />
           <Text style={styles.title}>Crew Recognition</Text>
         </View>
-        <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-          <Plus size={20} color="#fff" />
-          <Text style={styles.addButtonText}>Add Crew</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
+            <Plus size={20} color="#fff" />
+            <Text style={styles.addButtonText}>Add Crew</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]} 
+            onPress={handleSync}
+            disabled={isSyncing}
+          >
+            <RefreshCcw size={18} color="#fff" />
+            <Text style={styles.syncButtonText}>{isSyncing ? 'Syncing...' : 'Sync'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.statsRow}>
@@ -341,6 +362,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
   title: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: '700' as const,
@@ -356,6 +382,23 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
   },
   addButtonText: {
+    color: '#fff',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '600' as const,
+  },
+  syncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    backgroundColor: COLORS.secondary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  syncButtonDisabled: {
+    opacity: 0.6,
+  },
+  syncButtonText: {
     color: '#fff',
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
