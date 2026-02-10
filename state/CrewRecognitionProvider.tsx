@@ -386,7 +386,10 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   }, []);
 
   const useLocal = isOfflineMode || (statsQuery.isError && localLoaded);
-  const backendEntries = entriesQuery.data?.entries || [];
+  const backendEntries = useMemo(() => {
+    const raw = entriesQuery.data?.entries || [];
+    return [...raw].sort((a, b) => (b.sailStartDate || '').localeCompare(a.sailStartDate || ''));
+  }, [entriesQuery.data?.entries]);
   const backendTotal = entriesQuery.data?.total || 0;
 
   return {
