@@ -21,6 +21,7 @@ import { SurveyListModal } from './SurveyListModal';
 import { exportToCSV } from '@/lib/csv-export';
 import { DEPARTMENTS } from '@/types/crew-recognition';
 import { getAllShipNames } from '@/constants/shipInfo';
+import { CREW_RECOGNITION_CSV } from '@/constants/crew-recognition-csv';
 import type { RecognitionEntryWithCrew, Department } from '@/types/crew-recognition';
 
 const MOCK_CREW_MEMBER = {
@@ -70,10 +71,6 @@ export function CrewRecognitionSection() {
   const [showDepartmentPicker, setShowDepartmentPicker] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const csvContentQuery = trpc.crewRecognition.getCSVContent.useQuery(undefined, {
-    enabled: false,
-  });
-
   const handleSync = async () => {
     setIsSyncing(true);
     try {
@@ -81,16 +78,10 @@ export function CrewRecognitionSection() {
       const isAdminOrSpecial = userEmail === 'scott.merlis1@gmail.com' || userEmail === 's@a.com';
       
       if (isAdminOrSpecial) {
-        console.log('[CrewRecognition] Admin/Special user sync - loading from CSV via backend');
+        console.log('[CrewRecognition] Admin/Special user sync - loading from embedded CSV data');
         console.log('[CrewRecognition] User email:', userEmail);
         try {
-          const csvResult = await csvContentQuery.refetch();
-          
-          if (!csvResult.data?.content) {
-            throw new Error('No CSV content received from backend');
-          }
-          
-          const csvText = csvResult.data.content;
+          const csvText = CREW_RECOGNITION_CSV;
           console.log('[CrewRecognition] CSV text length:', csvText.length);
           console.log('[CrewRecognition] CSV preview:', csvText.substring(0, 200));
           
@@ -99,7 +90,7 @@ export function CrewRecognitionSection() {
         } catch (error) {
           console.error('[CrewRecognition] CSV sync error:', error);
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          Alert.alert('Error', `Failed to sync from CSV file: ${errorMessage}. Syncing from database instead.`);
+          Alert.alert('Error', `Failed to sync from CSV: ${errorMessage}. Syncing from database instead.`);
           await refetch();
         }
       } else {
