@@ -78,7 +78,7 @@ export function CrewRecognitionSection() {
       if (isAdminOrSpecial) {
         console.log('[CrewRecognition] Admin/Special user sync - loading from CSV file');
         try {
-          const response = await fetch('https://rork.app/pa/g131hcw7cxhvg2godfob0/crew_recognition.csv');
+          const response = await fetch('https://rork.app/pa/g131hcw7cxhvg2godfob0/Crew_Recognition.csv');
           if (!response.ok) {
             throw new Error('Failed to fetch CSV file');
           }

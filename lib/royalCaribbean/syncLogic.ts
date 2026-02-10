@@ -222,7 +222,7 @@ function findMatchingBookedCruise(
       const cruiseRes = cruise.reservationNumber.toString().trim();
       const existingRes = existing.reservationNumber.toString().trim();
       if (cruiseRes && existingRes && cruiseRes === existingRes) {
-        console.log(`[Dedup] Matched by reservation number: ${cruise.reservationNumber}`);
+        console.log(`[Dedup BookedCruise] Matched by reservation number: ${cruise.reservationNumber}`);
         return true;
       }
     }
@@ -232,21 +232,14 @@ function findMatchingBookedCruise(
       const cruiseBook = cruise.bookingId.toString().trim();
       const existingBook = existing.bookingId.toString().trim();
       if (cruiseBook && existingBook && cruiseBook === existingBook) {
-        console.log(`[Dedup] Matched by booking ID: ${cruise.bookingId}`);
+        console.log(`[Dedup BookedCruise] Matched by booking ID: ${cruise.bookingId}`);
         return true;
       }
     }
     
-    // PRIORITY 3: Match by ship name + sail date (exact match)
-    if (
-      cruise.shipName && existing.shipName &&
-      cruise.sailDate && existing.sailDate &&
-      cruise.shipName.trim() === existing.shipName.trim() &&
-      cruise.sailDate.trim() === existing.sailDate.trim()
-    ) {
-      console.log(`[Dedup] Matched by ship + date: ${cruise.shipName} on ${cruise.sailDate}`);
-      return true;
-    }
+    // REMOVED PRIORITY 3: Do NOT match by ship + date alone
+    // Multiple bookings can be on the same ship/sailing date
+    // Only match if we have explicit identifiers (reservation number or booking ID)
     
     return false;
   }) || null;
