@@ -467,6 +467,16 @@ function OverviewScreenContent() {
     router.push('/events' as any);
   }, [router]);
 
+  const handleAddCrewmemberPress = useCallback(() => {
+    console.log('[Overview] Add Crewmember pressed');
+    router.push('/events' as any);
+  }, [router]);
+
+  const handleAddSessionPress = useCallback(() => {
+    console.log('[Overview] Add Session pressed');
+    router.push('/machines' as any);
+  }, [router]);
+
   const handleLogoutPress = useCallback(async () => {
     console.log('[Overview] Logout pressed');
     await logout();
@@ -722,6 +732,8 @@ function OverviewScreenContent() {
           onBrowseCruises={handleCruisesPress}
           onImportData={handleSettingsPress}
           onViewCalendar={handleCalendarPress}
+          onAddCrewmember={handleAddCrewmemberPress}
+          onAddSession={handleAddSessionPress}
         />
         
         <FlatList

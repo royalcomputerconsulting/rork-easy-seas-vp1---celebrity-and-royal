@@ -8,7 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Plus, X, Ship, FileUp, Calendar } from 'lucide-react-native';
+import { Plus, X, Ship, FileUp, Calendar, UserPlus, Gamepad2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 
@@ -24,12 +24,16 @@ interface QuickActionsFABProps {
   onBrowseCruises?: () => void;
   onImportData?: () => void;
   onViewCalendar?: () => void;
+  onAddCrewmember?: () => void;
+  onAddSession?: () => void;
 }
 
 export function QuickActionsFAB({
   onBrowseCruises,
   onImportData,
   onViewCalendar,
+  onAddCrewmember,
+  onAddSession,
 }: QuickActionsFABProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -81,6 +85,20 @@ export function QuickActionsFAB({
   }, [toggleExpanded, triggerHaptic]);
 
   const actions: QuickAction[] = [
+    {
+      id: 'crewmember',
+      label: 'Add Crewmember',
+      icon: <UserPlus size={20} color={COLORS.white} />,
+      color: '#0284C7',
+      onPress: () => handleActionPress(onAddCrewmember),
+    },
+    {
+      id: 'session',
+      label: 'Add Session',
+      icon: <Gamepad2 size={20} color={COLORS.white} />,
+      color: '#8B5CF6',
+      onPress: () => handleActionPress(onAddSession),
+    },
     {
       id: 'browse',
       label: 'Browse Cruises',
