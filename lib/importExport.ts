@@ -3,6 +3,8 @@ export { parseBookedCSV, generateBookedCSV } from './csv/bookedParser';
 export { parseICSFile, generateCalendarICS } from './calendar/icsParser';
 export { pickAndReadFile, exportFile, downloadFromURL } from './fileIO/fileOperations';
 export { parseCSVLine } from './csv/csvParser';
+export { healImportedData } from './dataHealing';
 
 export type { ParsedOfferRow } from './csv/offersParser';
 export type { ParsedBookedRow } from './csv/bookedParser';
+export type { HealingReport } from './dataHealing';

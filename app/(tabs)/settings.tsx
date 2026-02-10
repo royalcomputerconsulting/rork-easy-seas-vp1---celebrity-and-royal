@@ -58,7 +58,8 @@ import {
   generateCalendarICS,
   generateBookedCSV,
   exportFile,
-  downloadFromURL 
+  downloadFromURL,
+  healImportedData
 } from '@/lib/importExport';
 import {
   clearAllAppData,
@@ -300,13 +301,21 @@ export default function SettingsScreen() {
       }
 
       console.log('[Settings] File selected:', result.fileName);
-      const { cruises: parsedCruises, offers: parsedOffers } = parseOffersCSV(result.content);
+      const { cruises: rawCruises, offers: rawOffers } = parseOffersCSV(result.content);
       
-      if (parsedCruises.length === 0) {
+      if (rawCruises.length === 0) {
         Alert.alert('Import Failed', 'No valid cruise data found in the CSV file. Please check the file format.');
         setIsImporting(false);
         return;
       }
+
+      console.log('[Settings] Running data healing pass...');
+      const { cruises: parsedCruises, offers: parsedOffers, report: healingReport } = healImportedData(rawCruises, rawOffers);
+      console.log('[Settings] Data healing complete:', {
+        cruisesHealed: healingReport.cruisesHealed,
+        offersHealed: healingReport.offersHealed,
+        fieldsFixed: healingReport.fieldsFixed.length,
+      });
 
       await setCruises(parsedCruises);
       await setCasinoOffers(parsedOffers);
@@ -318,10 +327,11 @@ export default function SettingsScreen() {
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
       console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
+      const healNote = healingReport.fieldsFixed.length > 0 ? `\n\nData healing fixed ${healingReport.fieldsFixed.length} field(s).` : '';
       setLastImportResult({ type: 'offers', count: parsedCruises.length });
       Alert.alert(
         'Import Successful', 
-        `Imported ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}`
+        `Imported ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}${healNote}`
       );
       console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {

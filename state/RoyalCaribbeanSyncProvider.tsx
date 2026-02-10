@@ -19,6 +19,7 @@ import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
+import { healImportedData } from '@/lib/dataHealing';
 
 export type CruiseLine = 'royal_caribbean' | 'celebrity';
 
@@ -1287,12 +1288,23 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState(prev => ({ ...prev, syncPreview: preview }));
 
       addLog('Applying sync...', 'info');
-      const { offers: finalOffers, cruises: finalCruises, bookedCruises: finalBookedCruises } = applySyncPreview(
+      const { offers: rawOffers, cruises: rawCruises, bookedCruises: finalBookedCruises } = applySyncPreview(
         preview,
         coreDataContext.casinoOffers,
         coreDataContext.cruises,
         coreDataContext.bookedCruises
       );
+
+      console.log('[RoyalCaribbeanSync] Running data healing pass...');
+      const { cruises: finalCruises, offers: finalOffers, report: healingReport } = healImportedData(rawCruises, rawOffers);
+      console.log('[RoyalCaribbeanSync] Data healing:', {
+        cruisesHealed: healingReport.cruisesHealed,
+        offersHealed: healingReport.offersHealed,
+        fieldsFixed: healingReport.fieldsFixed.length,
+      });
+      if (healingReport.fieldsFixed.length > 0) {
+        addLog(`Data healing fixed ${healingReport.fieldsFixed.length} field(s)`, 'info');
+      }
 
       console.log('[RoyalCaribbeanSync] Sync applied. Final counts:', {
         offers: finalOffers.length,
