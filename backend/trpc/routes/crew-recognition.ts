@@ -30,6 +30,21 @@ function generateSailingYear(date: string): number {
 }
 
 export const crewRecognitionRouter = createTRPCRouter({
+  getCSVContent: publicProcedure.query(async () => {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const csvPath = path.join(process.cwd(), 'assets', 'Crew_Recognition.csv');
+      const csvContent = fs.readFileSync(csvPath, 'utf-8');
+      return { content: csvContent };
+    } catch (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to read CSV file',
+      });
+    }
+  }),
+
   syncFromCSV: publicProcedure
     .input(
       z.object({

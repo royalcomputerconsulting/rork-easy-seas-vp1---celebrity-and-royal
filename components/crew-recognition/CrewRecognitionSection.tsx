@@ -69,6 +69,10 @@ export function CrewRecognitionSection() {
   const [showDepartmentPicker, setShowDepartmentPicker] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const getCSVContentQuery = trpc.crewRecognition.getCSVContent.useQuery(undefined, {
+    enabled: false,
+  });
+
   const handleSync = async () => {
     setIsSyncing(true);
     try {
@@ -79,23 +83,15 @@ export function CrewRecognitionSection() {
         console.log('[CrewRecognition] Admin/Special user sync - loading from CSV file');
         console.log('[CrewRecognition] User email:', userEmail);
         try {
-          const csvUrl = 'https://rork.app/pa/g131hcw7cxhvg2godfob0/Crew_Recognition.csv';
-          console.log('[CrewRecognition] Fetching from:', csvUrl);
+          console.log('[CrewRecognition] Fetching CSV content from backend');
           
-          const response = await fetch(csvUrl, {
-            method: 'GET',
-            headers: {
-              'Accept': 'text/csv,text/plain,*/*',
-            },
-          });
+          const result = await getCSVContentQuery.refetch();
           
-          console.log('[CrewRecognition] Fetch response status:', response.status);
-          
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+          if (!result.data?.content) {
+            throw new Error('No CSV content received');
           }
           
-          const csvText = await response.text();
+          const csvText = result.data.content;
           console.log('[CrewRecognition] CSV text length:', csvText.length);
           console.log('[CrewRecognition] CSV preview:', csvText.substring(0, 200));
           
