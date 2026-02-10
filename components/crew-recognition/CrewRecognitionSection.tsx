@@ -276,37 +276,38 @@ export function CrewRecognitionSection() {
               Ship{filters.shipNames.length > 0 ? ` (${filters.shipNames.length} selected)` : ''}
             </Text>
             <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.chipScrollView}
-              contentContainerStyle={styles.chipScrollContent}
+              style={styles.verticalChipScroll}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={true}
             >
-              <TouchableOpacity
-                style={[styles.chip, filters.shipNames.length === 0 && styles.chipActive]}
-                onPress={() => updateFilters({ shipNames: [] })}
-              >
-                <Text style={[styles.chipText, filters.shipNames.length === 0 && styles.chipTextActive]}>
-                  All Ships
-                </Text>
-              </TouchableOpacity>
-              {uniqueShips.map(ship => {
-                const isSelected = filters.shipNames.includes(ship);
-                return (
-                  <TouchableOpacity
-                    key={ship}
-                    style={[styles.chip, isSelected && styles.chipActive]}
-                    onPress={() => toggleShipFilter(ship)}
-                  >
-                    {isSelected && <Check size={12} color="#fff" />}
-                    <Text
-                      style={[styles.chipText, isSelected && styles.chipTextActive]}
-                      numberOfLines={1}
+              <View style={styles.chipWrapContainer}>
+                <TouchableOpacity
+                  style={[styles.chip, filters.shipNames.length === 0 && styles.chipActive]}
+                  onPress={() => updateFilters({ shipNames: [] })}
+                >
+                  <Text style={[styles.chipText, filters.shipNames.length === 0 && styles.chipTextActive]}>
+                    All Ships
+                  </Text>
+                </TouchableOpacity>
+                {uniqueShips.map(ship => {
+                  const isSelected = filters.shipNames.includes(ship);
+                  return (
+                    <TouchableOpacity
+                      key={ship}
+                      style={[styles.chip, isSelected && styles.chipActive]}
+                      onPress={() => toggleShipFilter(ship)}
                     >
-                      {ship}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                      {isSelected && <Check size={12} color="#fff" />}
+                      <Text
+                        style={[styles.chipText, isSelected && styles.chipTextActive]}
+                        numberOfLines={1}
+                      >
+                        {ship}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </ScrollView>
           </View>
 
@@ -315,37 +316,38 @@ export function CrewRecognitionSection() {
               Department{filters.departments.length > 0 ? ` (${filters.departments.length} selected)` : ''}
             </Text>
             <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.chipScrollView}
-              contentContainerStyle={styles.chipScrollContent}
+              style={styles.verticalChipScroll}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={true}
             >
-              <TouchableOpacity
-                style={[styles.chip, filters.departments.length === 0 && styles.chipActive]}
-                onPress={() => updateFilters({ departments: [] })}
-              >
-                <Text style={[styles.chipText, filters.departments.length === 0 && styles.chipTextActive]}>
-                  All Depts
-                </Text>
-              </TouchableOpacity>
-              {uniqueDepts.map(dept => {
-                const isSelected = filters.departments.includes(dept);
-                return (
-                  <TouchableOpacity
-                    key={dept}
-                    style={[styles.chip, isSelected && styles.chipActive]}
-                    onPress={() => toggleDeptFilter(dept)}
-                  >
-                    {isSelected && <Check size={12} color="#fff" />}
-                    <Text
-                      style={[styles.chipText, isSelected && styles.chipTextActive]}
-                      numberOfLines={1}
+              <View style={styles.chipWrapContainer}>
+                <TouchableOpacity
+                  style={[styles.chip, filters.departments.length === 0 && styles.chipActive]}
+                  onPress={() => updateFilters({ departments: [] })}
+                >
+                  <Text style={[styles.chipText, filters.departments.length === 0 && styles.chipTextActive]}>
+                    All Depts
+                  </Text>
+                </TouchableOpacity>
+                {uniqueDepts.map(dept => {
+                  const isSelected = filters.departments.includes(dept);
+                  return (
+                    <TouchableOpacity
+                      key={dept}
+                      style={[styles.chip, isSelected && styles.chipActive]}
+                      onPress={() => toggleDeptFilter(dept)}
                     >
-                      {dept}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                      {isSelected && <Check size={12} color="#fff" />}
+                      <Text
+                        style={[styles.chipText, isSelected && styles.chipTextActive]}
+                        numberOfLines={1}
+                      >
+                        {dept}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </ScrollView>
           </View>
 
@@ -695,12 +697,15 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: COLORS.text,
   },
-  chipScrollView: {
+  verticalChipScroll: {
+    maxHeight: 150,
     flexGrow: 0,
   },
-  chipScrollContent: {
+  chipWrapContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
-    paddingRight: SPACING.sm,
+    paddingBottom: 4,
   },
   chip: {
     flexDirection: 'row',
