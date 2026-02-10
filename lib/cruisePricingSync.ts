@@ -1,7 +1,7 @@
 import { generateObject } from '@rork-ai/toolkit-sdk';
 import { z } from 'zod';
 
-interface CruisePricing {
+export interface CruisePricing {
   bookingId: string;
   shipName: string;
   sailDate: string;
@@ -9,6 +9,7 @@ interface CruisePricing {
   oceanviewPrice?: number;
   balconyPrice?: number;
   suitePrice?: number;
+  portTaxesFees?: number;
   source: 'icruise' | 'cruisesheet' | 'royalcaribbean' | 'web';
   url: string;
   lastUpdated: string;
@@ -28,6 +29,7 @@ const pricingSchema = z.object({
   oceanviewPrice: z.number().describe('Per-person starting price for an oceanview cabin in USD'),
   balconyPrice: z.number().describe('Per-person starting price for a balcony stateroom in USD'),
   suitePrice: z.number().describe('Per-person starting price for a junior suite or entry-level suite in USD'),
+  portTaxesFees: z.number().describe('Per-person port taxes, fees, and government charges in USD. Typically $50-$200+ depending on itinerary length and ports visited'),
   confidence: z.enum(['high', 'medium', 'low']).describe('Confidence in the accuracy of these prices'),
   notes: z.string().optional().describe('Brief note about the pricing'),
 });
@@ -100,6 +102,7 @@ Provide per-person starting prices in USD for each cabin category:
 - Oceanview: window/porthole cabin
 - Balcony: private balcony stateroom
 - Suite: junior suite or entry-level suite
+- Port Taxes & Fees: government taxes, port charges, and fees per person
 
 Key pricing factors to consider:
 1. Ship class determines base pricing tier (Icon/Oasis > Quantum > Freedom > Voyager > Radiance > Vision)
@@ -139,6 +142,7 @@ Return realistic market prices that someone would actually see on royalcaribbean
         oceanviewPrice: result.oceanviewPrice > 0 ? result.oceanviewPrice : undefined,
         balconyPrice: result.balconyPrice > 0 ? result.balconyPrice : undefined,
         suitePrice: result.suitePrice > 0 ? result.suitePrice : undefined,
+        portTaxesFees: result.portTaxesFees > 0 ? result.portTaxesFees : undefined,
         source: 'web',
         url: `https://www.royalcaribbean.com/cruises?ship=${encodeURIComponent(cruise.shipName)}`,
         lastUpdated: new Date().toISOString(),

@@ -1,10 +1,23 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Linking, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { Download, Ship, ExternalLink, CheckCircle, AlertCircle, FileText, Globe, Search } from 'lucide-react-native';
+import { Download, Ship, ExternalLink, CheckCircle, AlertCircle, FileText, Globe, Search, DollarSign } from 'lucide-react-native';
 import { useCoreData } from '@/state/CoreDataProvider';
 import type { BookedCruise } from '@/types/models';
-import { syncCruisePricing, SyncProgress } from '@/lib/cruisePricingSync';
+import { syncCruisePricing, SyncProgress, CruisePricing } from '@/lib/cruisePricingSync';
+
+interface SyncedCruiseResult {
+  cruiseId: string;
+  shipName: string;
+  sailDate: string;
+  interiorPrice?: number;
+  oceanviewPrice?: number;
+  balconyPrice?: number;
+  suitePrice?: number;
+  portTaxesFees?: number;
+  confidence?: 'high' | 'medium' | 'low';
+  saved: boolean;
+}
 
 export default function ImportCruisesScreen() {
   const router = useRouter();
@@ -18,8 +31,7 @@ export default function ImportCruisesScreen() {
   const [searchProgress, setSearchProgress] = useState<SyncProgress | null>(null);
 
   const [searchMode, setSearchMode] = useState<'manual' | 'auto'>('auto');
-  
-
+  const [syncedResults, setSyncedResults] = useState<SyncedCruiseResult[]>([]);
 
   const addToLog = (message: string) => {
     setImportLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
@@ -75,68 +87,80 @@ export default function ImportCruisesScreen() {
       setSearchProgress(null);
 
       if (result.pricing && result.pricing.length > 0) {
-        addToLog(`✅ Found pricing for ${result.pricing.length} of ${upcomingCruises.length} cruises`);
-        addToLog('Updating cruise pricing data...');
+        addToLog(`Found pricing for ${result.pricing.length} of ${upcomingCruises.length} cruises`);
+        addToLog('Saving prices to your cruise records...');
         
-        const pricingByCruise = new Map<string, typeof result.pricing>();
-        result.pricing.forEach((pricing: any) => {
-          if (!pricingByCruise.has(pricing.bookingId)) {
-            pricingByCruise.set(pricing.bookingId, []);
-          }
-          pricingByCruise.get(pricing.bookingId)!.push(pricing);
-        });
-        
+        const newSyncedResults: SyncedCruiseResult[] = [];
         let updateCount = 0;
-        for (const [cruiseId, pricingRecords] of pricingByCruise.entries()) {
-          const cruise = bookedCruises.find(c => c.id === cruiseId);
-          if (!cruise) continue;
-          
-          const avgPrices = {
-            interior: [] as number[],
-            oceanview: [] as number[],
-            balcony: [] as number[],
-            suite: [] as number[],
-          };
-          
-          pricingRecords.forEach((record: any) => {
-            if (record.interiorPrice) avgPrices.interior.push(record.interiorPrice);
-            if (record.oceanviewPrice) avgPrices.oceanview.push(record.oceanviewPrice);
-            if (record.balconyPrice) avgPrices.balcony.push(record.balconyPrice);
-            if (record.suitePrice) avgPrices.suite.push(record.suitePrice);
-          });
-          
-          const getAverage = (prices: number[]) => 
-            prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : undefined;
-          
-          updateBookedCruise(cruise.id, {
-            interiorPrice: getAverage(avgPrices.interior),
-            oceanviewPrice: getAverage(avgPrices.oceanview),
-            balconyPrice: getAverage(avgPrices.balcony),
-            suitePrice: getAverage(avgPrices.suite),
+
+        for (const pricing of result.pricing) {
+          const cruise = bookedCruises.find(c => c.id === pricing.bookingId);
+          if (!cruise) {
+            console.log('[ImportCruises] Cruise not found for pricing:', pricing.bookingId);
+            continue;
+          }
+
+          const updatePayload: Partial<BookedCruise> = {
             updatedAt: new Date().toISOString(),
-          });
+          };
+
+          if (pricing.interiorPrice) updatePayload.interiorPrice = pricing.interiorPrice;
+          if (pricing.oceanviewPrice) updatePayload.oceanviewPrice = pricing.oceanviewPrice;
+          if (pricing.balconyPrice) updatePayload.balconyPrice = pricing.balconyPrice;
+          if (pricing.suitePrice) updatePayload.suitePrice = pricing.suitePrice;
+          if (pricing.portTaxesFees) updatePayload.taxes = pricing.portTaxesFees;
+
+          console.log('[ImportCruises] Saving prices to cruise:', cruise.id, cruise.shipName, updatePayload);
+          updateBookedCruise(cruise.id, updatePayload);
           updateCount++;
-          const prices = pricingRecords[0] as any;
-          const priceStr = [
-            prices.interiorPrice ? `INT ${prices.interiorPrice}` : null,
-            prices.oceanviewPrice ? `OV ${prices.oceanviewPrice}` : null,
-            prices.balconyPrice ? `BAL ${prices.balconyPrice}` : null,
-            prices.suitePrice ? `STE ${prices.suitePrice}` : null,
-          ].filter(Boolean).join(' | ');
-          addToLog(`  → ${cruise.shipName}: ${priceStr}`);
+
+          newSyncedResults.push({
+            cruiseId: cruise.id,
+            shipName: cruise.shipName,
+            sailDate: cruise.sailDate,
+            interiorPrice: pricing.interiorPrice,
+            oceanviewPrice: pricing.oceanviewPrice,
+            balconyPrice: pricing.balconyPrice,
+            suitePrice: pricing.suitePrice,
+            portTaxesFees: pricing.portTaxesFees,
+            confidence: pricing.confidence,
+            saved: true,
+          });
+
+          addToLog(`  Saved → ${cruise.shipName}: INT ${pricing.interiorPrice || '-'} | OV ${pricing.oceanviewPrice || '-'} | BAL ${pricing.balconyPrice || '-'} | STE ${pricing.suitePrice || '-'} | TAX ${pricing.portTaxesFees || '-'}`);
         }
-        
-        addToLog(`✅ Successfully updated pricing for ${updateCount} of ${upcomingCruises.length} cruises!`);
+
+        const missingCruises = upcomingCruises.filter(
+          c => !result.pricing.some((p: CruisePricing) => p.bookingId === c.id)
+        );
+        missingCruises.forEach(c => {
+          newSyncedResults.push({
+            cruiseId: c.id,
+            shipName: c.shipName,
+            sailDate: c.sailDate,
+            saved: false,
+          });
+        });
+
+        setSyncedResults(newSyncedResults);
+        addToLog(`Saved pricing for ${updateCount} of ${upcomingCruises.length} cruises!`);
         
         if (updateCount < upcomingCruises.length) {
-          addToLog(`⚠️ ${upcomingCruises.length - updateCount} cruises had no pricing data available`);
+          addToLog(`${upcomingCruises.length - updateCount} cruises had no pricing data available`);
         }
       } else {
-        addToLog('⚠️ No pricing data found from any source.');
+        addToLog('No pricing data found from any source.');
         if (result.errors.length > 0) {
-          result.errors.slice(0, 5).forEach(err => addToLog(`  ⚠️ ${err}`));
+          result.errors.slice(0, 5).forEach(err => addToLog(`  ${err}`));
         }
         addToLog('Ensure your cruise details (ship name, sail date, port) are filled in correctly.');
+
+        setSyncedResults(upcomingCruises.map(c => ({
+          cruiseId: c.id,
+          shipName: c.shipName,
+          sailDate: c.sailDate,
+          saved: false,
+        })));
       }
     } catch (error: any) {
       console.log('[ImportCruises] Pricing sync error:', error);
@@ -372,9 +396,9 @@ export default function ImportCruisesScreen() {
         {searchMode === 'auto' ? (
           <>
             <View style={styles.instructionsCard}>
-              <Text style={styles.instructionsTitle}>💰 Search Cabin Prices</Text>
+              <Text style={styles.instructionsTitle}>💰 Sync Cabin Prices</Text>
               <Text style={styles.autoSearchDesc}>
-                Search current per-person pricing (Interior, Oceanview, Balcony, Suite) for your {bookedCruises.filter(c => c.completionState === 'upcoming').length} upcoming cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}. Prices are based on ship class, sailing date, and itinerary.
+                Search and save current per-person pricing (Interior, Oceanview, Balcony, Suite, Port Taxes & Fees) to your {bookedCruises.filter(c => c.completionState === 'upcoming').length} upcoming cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}. Prices will be saved directly to each cruise record.
               </Text>
               
               <Pressable
@@ -386,21 +410,104 @@ export default function ImportCruisesScreen() {
                   <>
                     <ActivityIndicator size="small" color="#fff" />
                     <Text style={styles.searchButtonText}>
-                      {searchProgress ? `Searching ${searchProgress.current}/${searchProgress.total}...` : 'Searching Prices...'}
+                      {searchProgress ? `Syncing ${searchProgress.current}/${searchProgress.total}...` : 'Syncing Prices...'}
                     </Text>
                   </>
                 ) : (
                   <>
                     <Search size={20} color="#fff" />
                     <Text style={styles.searchButtonText}>
-                      Search Prices for {bookedCruises.filter(c => c.completionState === 'upcoming').length} Cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}
+                      Sync Prices for {bookedCruises.filter(c => c.completionState === 'upcoming').length} Cruise{bookedCruises.filter(c => c.completionState === 'upcoming').length !== 1 ? 's' : ''}
                     </Text>
                   </>
                 )}
               </Pressable>
             </View>
 
+            {syncedResults.length > 0 && (
+              <View style={styles.syncResultsCard}>
+                <View style={styles.syncResultsHeader}>
+                  <DollarSign size={20} color="#10b981" />
+                  <Text style={styles.syncResultsTitle}>Synced Prices</Text>
+                  <View style={styles.syncBadge}>
+                    <Text style={styles.syncBadgeText}>
+                      {syncedResults.filter(r => r.saved).length}/{syncedResults.length} saved
+                    </Text>
+                  </View>
+                </View>
 
+                {syncedResults.map((result) => (
+                  <View key={result.cruiseId} style={[styles.syncCruiseCard, !result.saved && styles.syncCruiseCardFailed]}>
+                    <View style={styles.syncCruiseHeader}>
+                      <View style={styles.syncCruiseInfo}>
+                        <Ship size={14} color={result.saved ? '#60a5fa' : '#64748b'} />
+                        <Text style={styles.syncCruiseName} numberOfLines={1}>{result.shipName}</Text>
+                      </View>
+                      <Text style={styles.syncCruiseDate}>{result.sailDate}</Text>
+                    </View>
+
+                    {result.saved ? (
+                      <View style={styles.syncPriceGrid}>
+                        <View style={styles.syncPriceItem}>
+                          <Text style={styles.syncPriceLabel}>Interior</Text>
+                          <Text style={styles.syncPriceValue}>
+                            {result.interiorPrice ? `${result.interiorPrice.toLocaleString()}` : '—'}
+                          </Text>
+                        </View>
+                        <View style={styles.syncPriceItem}>
+                          <Text style={styles.syncPriceLabel}>Oceanview</Text>
+                          <Text style={styles.syncPriceValue}>
+                            {result.oceanviewPrice ? `${result.oceanviewPrice.toLocaleString()}` : '—'}
+                          </Text>
+                        </View>
+                        <View style={styles.syncPriceItem}>
+                          <Text style={styles.syncPriceLabel}>Balcony</Text>
+                          <Text style={styles.syncPriceValue}>
+                            {result.balconyPrice ? `${result.balconyPrice.toLocaleString()}` : '—'}
+                          </Text>
+                        </View>
+                        <View style={styles.syncPriceItem}>
+                          <Text style={styles.syncPriceLabel}>Suite</Text>
+                          <Text style={styles.syncPriceValue}>
+                            {result.suitePrice ? `${result.suitePrice.toLocaleString()}` : '—'}
+                          </Text>
+                        </View>
+                        <View style={[styles.syncPriceItem, styles.syncPriceItemWide]}>
+                          <Text style={styles.syncPriceLabel}>Port Taxes & Fees</Text>
+                          <Text style={styles.syncPriceValue}>
+                            {result.portTaxesFees ? `${result.portTaxesFees.toLocaleString()}` : '—'}
+                          </Text>
+                        </View>
+                        {result.confidence && (
+                          <View style={[styles.syncPriceItem, styles.syncPriceItemWide]}>
+                            <Text style={styles.syncPriceLabel}>Confidence</Text>
+                            <View style={[styles.confidenceBadge, 
+                              result.confidence === 'high' && styles.confidenceHigh,
+                              result.confidence === 'medium' && styles.confidenceMedium,
+                              result.confidence === 'low' && styles.confidenceLow,
+                            ]}>
+                              <Text style={styles.confidenceText}>{result.confidence}</Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    ) : (
+                      <View style={styles.syncFailedRow}>
+                        <AlertCircle size={14} color="#f59e0b" />
+                        <Text style={styles.syncFailedText}>No pricing data found</Text>
+                      </View>
+                    )}
+
+                    {result.saved && (
+                      <View style={styles.syncSavedRow}>
+                        <CheckCircle size={12} color="#10b981" />
+                        <Text style={styles.syncSavedText}>Saved to cruise record</Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
           </>
         ) : (
           <>
@@ -732,7 +839,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  dealsCard: {
+  syncResultsCard: {
     backgroundColor: '#1e293b',
     borderRadius: 16,
     padding: 16,
@@ -740,85 +847,134 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#10b981',
   },
-  dealsHeader: {
+  syncResultsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 16,
   },
-  dealsTitle: {
+  syncResultsTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#fff',
+    flex: 1,
   },
-  dealsScroll: {
-    maxHeight: 500,
+  syncBadge: {
+    backgroundColor: '#10b98130',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  dealCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  syncBadgeText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#10b981',
+  },
+  syncCruiseCard: {
     backgroundColor: '#0f172a',
-    padding: 16,
     borderRadius: 12,
+    padding: 14,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  dealInfo: {
-    flex: 1,
+  syncCruiseCardFailed: {
+    borderColor: '#f59e0b40',
+    opacity: 0.7,
   },
-  dealShip: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 4,
+  syncCruiseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  dealDate: {
-    fontSize: 13,
-    color: '#94a3b8',
-    marginBottom: 2,
-  },
-  dealPort: {
-    fontSize: 13,
-    color: '#94a3b8',
-    marginBottom: 8,
-  },
-  dealPriceRow: {
+  syncCruiseInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 6,
-    flexWrap: 'wrap',
+    flex: 1,
   },
-  dealPrice: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#10b981',
+  syncCruiseName: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#fff',
+    flex: 1,
   },
-  dealCabin: {
-    fontSize: 13,
-    color: '#64748b',
-  },
-  savingsBadge: {
-    backgroundColor: '#10b98120',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  savingsText: {
+  syncCruiseDate: {
     fontSize: 12,
-    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  syncPriceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  syncPriceItem: {
+    backgroundColor: '#1e293b',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minWidth: '22%' as unknown as number,
+    flex: 1,
+  },
+  syncPriceItemWide: {
+    minWidth: '45%' as unknown as number,
+  },
+  syncPriceLabel: {
+    fontSize: 10,
+    color: '#64748b',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  syncPriceValue: {
+    fontSize: 15,
+    fontWeight: '700' as const,
     color: '#10b981',
   },
-  dealSource: {
+  confidenceBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start' as const,
+  },
+  confidenceHigh: {
+    backgroundColor: '#10b98130',
+  },
+  confidenceMedium: {
+    backgroundColor: '#f59e0b30',
+  },
+  confidenceLow: {
+    backgroundColor: '#ef444430',
+  },
+  confidenceText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#e2e8f0',
+    textTransform: 'capitalize' as const,
+  },
+  syncFailedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    paddingVertical: 4,
   },
-  dealSourceText: {
+  syncFailedText: {
+    fontSize: 13,
+    color: '#f59e0b',
+  },
+  syncSavedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  syncSavedText: {
     fontSize: 11,
-    color: '#64748b',
-    fontStyle: 'italic',
+    color: '#10b981',
+    fontWeight: '500' as const,
   },
 });
