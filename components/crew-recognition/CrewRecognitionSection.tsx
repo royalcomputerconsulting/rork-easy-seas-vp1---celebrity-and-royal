@@ -20,6 +20,7 @@ import { RecognitionEntryDetailModal } from './RecognitionEntryDetailModal';
 import { SurveyListModal } from './SurveyListModal';
 import { exportToCSV } from '@/lib/csv-export';
 import { DEPARTMENTS } from '@/types/crew-recognition';
+import { getAllShipNames } from '@/constants/shipInfo';
 import type { RecognitionEntryWithCrew, Department } from '@/types/crew-recognition';
 
 const MOCK_CREW_MEMBER = {
@@ -69,6 +70,10 @@ export function CrewRecognitionSection() {
   const [showDepartmentPicker, setShowDepartmentPicker] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const csvContentQuery = trpc.crewRecognition.getCSVContent.useQuery(undefined, {
+    enabled: false,
+  });
+
   const handleSync = async () => {
     setIsSyncing(true);
     try {
@@ -76,25 +81,16 @@ export function CrewRecognitionSection() {
       const isAdminOrSpecial = userEmail === 'scott.merlis1@gmail.com' || userEmail === 's@a.com';
       
       if (isAdminOrSpecial) {
-        console.log('[CrewRecognition] Admin/Special user sync - loading from CSV file');
+        console.log('[CrewRecognition] Admin/Special user sync - loading from CSV via backend');
         console.log('[CrewRecognition] User email:', userEmail);
         try {
-          const projectId = process.env.EXPO_PUBLIC_PROJECT_ID || 'g131hcw7cxhvg2godfob0';
-          const csvUrl = `https://rork.app/pa/${projectId}/Crew_Recognition.csv`;
-          console.log('[CrewRecognition] Fetching from:', csvUrl);
+          const csvResult = await csvContentQuery.refetch();
           
-          const response = await fetch(csvUrl);
-          
-          if (!response.ok) {
-            throw new Error(`Failed to fetch CSV: ${response.status} ${response.statusText}`);
+          if (!csvResult.data?.content) {
+            throw new Error('No CSV content received from backend');
           }
           
-          const csvText = await response.text();
-          
-          if (!csvText || csvText.trim().length === 0) {
-            throw new Error('CSV file is empty');
-          }
-          
+          const csvText = csvResult.data.content;
           console.log('[CrewRecognition] CSV text length:', csvText.length);
           console.log('[CrewRecognition] CSV preview:', csvText.substring(0, 200));
           
@@ -136,7 +132,9 @@ export function CrewRecognitionSection() {
     );
   };
 
-  const uniqueShips = Array.from(new Set(sailings.map(s => s.shipName))).sort();
+  const allRoyalShips = getAllShipNames();
+  const sailingShips = sailings.map(s => s.shipName);
+  const uniqueShips = Array.from(new Set([...allRoyalShips, ...sailingShips])).sort();
   const totalPages = Math.ceil(entriesTotal / pageSize);
   
   const showMockData = stats.crewMemberCount === 0 && !statsLoading;

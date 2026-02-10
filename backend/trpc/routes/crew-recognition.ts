@@ -32,15 +32,27 @@ function generateSailingYear(date: string): number {
 export const crewRecognitionRouter = createTRPCRouter({
   getCSVContent: publicProcedure.query(async () => {
     try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const csvPath = path.join(process.cwd(), 'assets', 'Crew_Recognition.csv');
-      const csvContent = fs.readFileSync(csvPath, 'utf-8');
+      const projectId = process.env.EXPO_PUBLIC_PROJECT_ID || 'g131hcw7cxhvg2godfob0';
+      const csvUrl = `https://rork.app/pa/${projectId}/Crew_Recognition.csv`;
+      console.log('[CrewRecognition Backend] Fetching CSV from:', csvUrl);
+      
+      const response = await fetch(csvUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const csvContent = await response.text();
+      
+      if (!csvContent || csvContent.trim().length === 0) {
+        throw new Error('CSV content is empty');
+      }
+      
+      console.log('[CrewRecognition Backend] CSV fetched, length:', csvContent.length);
       return { content: csvContent };
     } catch (error) {
+      console.error('[CrewRecognition Backend] Failed to fetch CSV:', error);
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to read CSV file',
+        message: `Failed to read CSV file: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
     }
   }),

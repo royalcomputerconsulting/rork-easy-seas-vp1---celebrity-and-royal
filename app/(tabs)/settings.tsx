@@ -1406,7 +1406,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                   <CheckCircle size={14} color={COLORS.success} />
                 </View>
                 <Text style={styles.dataOverviewValue}>{dataStats.booked}</Text>
-                <Text style={styles.dataOverviewLabel}>Booked</Text>
+                <Text style={styles.dataOverviewLabel}>Upcoming & Completed</Text>
               </View>
               <View style={styles.dataOverviewItem}>
                 <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(212, 165, 116, 0.15)' }]}>
