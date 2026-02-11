@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle, Ban } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCruiseStore } from '@/state/CruiseStore';
@@ -276,6 +276,25 @@ export default function EventsScreen() {
     setCurrentDate(new Date());
   }, []);
 
+  const handleClearEvents = useCallback(() => {
+    Alert.alert(
+      'Clear All Events',
+      'Are you sure you want to clear all calendar events? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' as const },
+        {
+          text: 'Clear',
+          style: 'destructive' as const,
+          onPress: () => {
+            console.log('[Events] Clearing all calendar events');
+            coreData.setCalendarEvents([]);
+            setRefreshKey(prev => prev + 1);
+          },
+        },
+      ]
+    );
+  }, [coreData]);
+
   const formatMonthYear = useCallback((date: Date): string => {
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
   }, []);
@@ -510,6 +529,15 @@ export default function EventsScreen() {
               >
                 <Text style={styles.monthYearText}>{formatMonthYear(currentDate)}</Text>
                 <Text style={styles.eventCountText}>{totalEventsThisMonth} events • Tap to go to today</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.clearEventsButton}
+                onPress={handleClearEvents}
+                activeOpacity={0.7}
+                testID="clear-events-button"
+              >
+                <Ban size={18} color="#DC2626" />
               </TouchableOpacity>
               
               <TouchableOpacity
@@ -760,6 +788,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  clearEventsButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(220, 38, 38, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(220, 38, 38, 0.3)',
+    marginLeft: 6,
   },
   monthYearContainer: {
     alignItems: 'center',
