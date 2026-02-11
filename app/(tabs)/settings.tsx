@@ -1530,6 +1530,28 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
     />
   );
 
+  const renderSectionHeader = (
+    icon: React.ReactNode,
+    title: string,
+    subtitle: string,
+    gradientColors: [string, string] = ['#0369A1', '#0284C7']
+  ) => (
+    <LinearGradient
+      colors={gradientColors}
+      style={styles.sectionGradientHeader}
+    >
+      <View style={styles.sectionHeaderContent}>
+        <View style={styles.sectionHeaderIcon}>
+          {icon}
+        </View>
+        <View>
+          <Text style={styles.sectionHeaderTitle}>{title}</Text>
+          <Text style={styles.sectionHeaderSubtitle}>{subtitle}</Text>
+        </View>
+      </View>
+    </LinearGradient>
+  );
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -1610,8 +1632,9 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
             </View>
           </View>
 
-          <View style={styles.quickActionsSection}>
-            <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
+          <View style={[styles.sectionCard, { marginBottom: SPACING.md }]}>
+            {renderSectionHeader(<Ship size={18} color={COLORS.white} />, 'Quick Actions', 'Sync, import & backup shortcuts')}
+            <View style={styles.quickActionsBody}>
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/royal-caribbean-sync' as any)}
@@ -1682,6 +1705,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                 <Text style={styles.quickActionLabelInline}>Load Backup</Text>
               </TouchableOpacity>
             </View>
+            </View>
           </View>
 
           <UserProfileCard
@@ -1698,8 +1722,8 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
           />
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>DISPLAY PREFERENCES</Text>
             <View style={styles.sectionCard}>
+              {renderSectionHeader(<Moon size={18} color={COLORS.white} />, 'Display Preferences', 'Customize how data appears')}
               {renderSettingRow(
                 <DollarSign size={18} color={COLORS.navyDeep} />,
                 'Show Taxes in List',
@@ -1719,8 +1743,8 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
             <View style={styles.sectionCard}>
+              {renderSectionHeader(<Bell size={18} color={COLORS.white} />, 'Notifications', 'Alert preferences')}
               {renderSettingRow(
                 <Bell size={18} color={COLORS.navyDeep} />,
                 'Price Drop Alerts',
@@ -1735,8 +1759,8 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>DATA MANAGEMENT</Text>
             <View style={styles.sectionCard}>
+              {renderSectionHeader(<Database size={18} color={COLORS.white} />, 'Data Management', 'Import, export & backup your data')}
               <View style={[styles.dataSubsection, styles.importBanner]}>
                 <Text style={styles.subsectionLabel}>IMPORT</Text>
                 <Text style={styles.subsectionHelper}>Bring in new CSV manifests, booked logs, or calendar drops.</Text>
@@ -1982,8 +2006,8 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
 
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>SUPPORT</Text>
             <View style={styles.sectionCard}>
+              {renderSectionHeader(<HelpCircle size={18} color={COLORS.white} />, 'Support', 'Help & resources')}
               {renderSettingRow(
                 <HelpCircle size={18} color={COLORS.navyDeep} />,
                 'Help Center',
@@ -2056,8 +2080,8 @@ STEP 4: Optional Calendar Import
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>SUBSCRIPTIONS & PURCHASES</Text>
             <View style={styles.sectionCard}>
+              {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan')}
               <View style={styles.subscriptionStatusBanner}>
                 <Crown size={18} color={entitlement.isPro ? '#10B981' : entitlement.isBasic ? '#3B82F6' : '#F59E0B'} />
                 <View style={styles.subscriptionStatusText}>
@@ -2109,8 +2133,8 @@ STEP 4: Optional Calendar Import
 
           {isAdmin && (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>ADMIN - EMAIL WHITELIST</Text>
               <View style={styles.sectionCard}>
+                {renderSectionHeader(<Shield size={18} color={COLORS.white} />, 'Admin', 'Email whitelist & data tools')}
                 <View style={styles.adminHeader}>
                   <Text style={styles.adminHeaderText}>Manage user access</Text>
                   <Text style={styles.adminHeaderSubtext}>
@@ -2239,8 +2263,8 @@ STEP 4: Optional Calendar Import
           )}
 
           <View style={styles.section}>
-            <Text style={[styles.sectionLabel, styles.dangerTitle]}>DANGER ZONE</Text>
             <View style={[styles.sectionCard, styles.dangerCard]}>
+              {renderSectionHeader(<Trash2 size={18} color={COLORS.white} />, 'Danger Zone', 'Irreversible actions', ['#DC2626', '#B91C1C'])}
               {renderSettingRow(
                 <Trash2 size={18} color={COLORS.error} />,
                 'Clear All Data',
@@ -2252,8 +2276,8 @@ STEP 4: Optional Calendar Import
           </View>
 
 <View style={styles.section}>
-            <Text style={styles.sectionLabel}>ABOUT</Text>
             <View style={styles.sectionCard}>
+              {renderSectionHeader(<Info size={18} color={COLORS.white} />, 'About', 'App information')}
               {renderSettingRow(
                 <Info size={18} color={COLORS.navyDeep} />,
                 'App Version',
@@ -2388,7 +2412,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F9FF',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
+    borderColor: 'rgba(3, 105, 161, 0.2)',
     overflow: 'hidden',
     ...SHADOW.sm,
   },
@@ -3051,5 +3075,39 @@ const styles = StyleSheet.create({
     color: CLEAN_THEME.text.secondary,
     marginTop: SPACING.sm,
     lineHeight: 16,
+  },
+  sectionGradientHeader: {
+    padding: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    flex: 1,
+  },
+  sectionHeaderIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectionHeaderTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+    letterSpacing: 0.3,
+  },
+  sectionHeaderSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: 2,
+  },
+  quickActionsBody: {
+    padding: SPACING.md,
   },
 });
