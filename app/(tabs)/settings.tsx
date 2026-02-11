@@ -2276,14 +2276,6 @@ STEP 4: Optional Calendar Import
           </View>
 
 <View style={styles.section}>
-            <View style={styles.sectionCard}>
-              {renderSectionHeader(<Info size={18} color={COLORS.white} />, 'About', 'App information')}
-              {renderSettingRow(
-                <Info size={18} color={COLORS.navyDeep} />,
-                'App Version',
-                '1.0.0'
-              )}
-            </View>
             <View style={styles.aboutPromoSection}>
               <Image
                 source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/h9viq065jv5liw4sy78sl' }}
@@ -2318,22 +2310,7 @@ STEP 4: Optional Calendar Import
               <Text style={styles.footerAppName}>EasySeas</Text>
             </View>
             <Text style={styles.footerTagline}>Cruise Point Tracker</Text>
-            <View style={styles.footerVersionRow}>
-              <Text style={styles.footerVersion}>v1.0.0</Text>
-              <Text style={styles.footerDot}>•</Text>
-              <Text style={styles.footerBuild}>Build 2025.11</Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.changelogButton}
-              onPress={() => Alert.alert(
-                'What\'s New in v1.0.0',
-                '• Redesigned Settings with unified Data Management\n• Improved Analytics with 3 sub-tabs\n• Enhanced Events tab with calendar views\n• Streamlined My Cruises with timeline\n• Better Scheduling filters\n• Updated UI across all tabs\n\nThank you for using EasySeas!'
-              )}
-              activeOpacity={0.7}
-            >
-              <FileText size={12} color={COLORS.navyDeep} />
-              <Text style={styles.changelogText}>View Changelog</Text>
-            </TouchableOpacity>
+
             <Text style={styles.footerCopyright}>© 2025 Royal Computer Consulting, LLC</Text>
             
             <View style={styles.legalDisclaimerSection}>
@@ -2484,41 +2461,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     marginTop: SPACING.md,
   },
-  footerVersionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.sm,
-  },
-  footerVersion: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-  },
-  footerDot: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: CLEAN_THEME.text.secondary,
-  },
-  footerBuild: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: CLEAN_THEME.text.secondary,
-  },
-  changelogButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.round,
-    borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
-  },
-  changelogText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
+
   legalDisclaimerSection: {
     marginTop: SPACING.xl,
     paddingTop: SPACING.lg,
