@@ -841,13 +841,33 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
   }, [persistData, syncToBackend]);
 
+  const buildCalendarEventFromCruise = useCallback((cruise: BookedCruise): CalendarEvent => ({
+    id: `cruise-${cruise.id}`,
+    title: cruise.shipName,
+    description: cruise.itineraryName || `${cruise.nights} Night Cruise`,
+    startDate: cruise.sailDate,
+    endDate: cruise.returnDate,
+    type: 'cruise',
+    allDay: true,
+    location: cruise.departurePort,
+    cruiseId: cruise.id,
+  }), []);
+
   const addBookedCruise = useCallback((cruise: BookedCruise) => {
     setBookedCruisesState(prev => {
       const updated = [...prev, cruise];
       persistData(STORAGE_KEYS.BOOKED_CRUISES, updated);
       return updated;
     });
-  }, [persistData]);
+    const calEvent = buildCalendarEventFromCruise(cruise);
+    setCalendarEventsState(prev => {
+      const filtered = prev.filter(e => e.id !== calEvent.id);
+      const updated = [...filtered, calEvent];
+      persistData(STORAGE_KEYS.CALENDAR_EVENTS, updated);
+      console.log('[CoreData] Auto-added calendar event for cruise:', cruise.id, cruise.shipName);
+      return updated;
+    });
+  }, [persistData, buildCalendarEventFromCruise]);
 
   const updateBookedCruise = useCallback((id: string, updates: Partial<BookedCruise>) => {
     setBookedCruisesState(prev => {
@@ -860,10 +880,26 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           newPoints: updates.earnedPoints,
         });
       }
+
+      const hasCalendarFields = updates.shipName || updates.sailDate || updates.returnDate || updates.departurePort || updates.itineraryName || updates.nights;
+      if (hasCalendarFields) {
+        const updatedCruise = updated.find(c => c.id === id);
+        if (updatedCruise) {
+          const calEvent = buildCalendarEventFromCruise(updatedCruise);
+          setCalendarEventsState(prevEvents => {
+            const updatedEvents = prevEvents.map(e => e.id === calEvent.id ? calEvent : e);
+            const exists = prevEvents.some(e => e.id === calEvent.id);
+            const finalEvents = exists ? updatedEvents : [...prevEvents, calEvent];
+            persistData(STORAGE_KEYS.CALENDAR_EVENTS, finalEvents);
+            console.log('[CoreData] Auto-updated calendar event for cruise:', id);
+            return finalEvents;
+          });
+        }
+      }
       
       return updated;
     });
-  }, [persistData]);
+  }, [persistData, buildCalendarEventFromCruise]);
 
   const removeBookedCruise = useCallback((id: string) => {
     setBookedCruisesState(prev => {
@@ -889,6 +925,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       const updated = prev.filter(c => c.id !== id);
       persistData(STORAGE_KEYS.BOOKED_CRUISES, updated);
+      return updated;
+    });
+    const calEventId = `cruise-${id}`;
+    setCalendarEventsState(prev => {
+      const updated = prev.filter(e => e.id !== calEventId && e.cruiseId !== id);
+      persistData(STORAGE_KEYS.CALENDAR_EVENTS, updated);
+      console.log('[CoreData] Auto-removed calendar event for cruise:', id);
       return updated;
     });
   }, [persistData]);

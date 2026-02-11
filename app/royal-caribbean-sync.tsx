@@ -242,14 +242,6 @@ function RoyalCaribbeanSyncScreen() {
           showsVerticalScrollIndicator={true}
           persistentScrollbar={true}
         >
-        <TouchableOpacity 
-          style={styles.backButtonTop}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={20} color="#fff" strokeWidth={2.5} />
-          <Text style={styles.backButtonTopText}>Back</Text>
-        </TouchableOpacity>
 
         <View style={styles.cruiseLineToggleContainer}>
           <View style={styles.cruiseLineOption}>
@@ -478,12 +470,7 @@ function RoyalCaribbeanSyncScreen() {
                 </View>
               </View>
 
-              <Pressable
-                style={styles.webBackButton}
-                onPress={() => router.back()}
-              >
-                <Text style={styles.webBackButtonText}>← Back</Text>
-              </Pressable>
+
             </View>
           ) : (
             <View style={styles.quickActionsGrid}>
@@ -890,24 +877,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0f172a'
   },
-  backButtonTop: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    margin: 12,
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: '#3b82f6',
-  },
-  backButtonTopText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700' as const,
-  },
+
   scrollView: {
     flex: 1
   },
@@ -1548,21 +1518,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16
   },
-  webBackButton: {
-    marginTop: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#475569',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const
-  },
-  webBackButtonText: {
-    color: '#94a3b8',
-    fontSize: 15,
-    fontWeight: '500' as const
-  },
+
   webCredentialsContainer: {
     backgroundColor: '#1e293b',
     borderRadius: 16,

@@ -252,7 +252,7 @@ export default function DayAgendaScreen() {
             title: 'At Sea',
             subtitle: cruise.shipName,
             isAllDay: true,
-            color: EVENT_COLORS.seaDay,
+            color: '#FFFFFF',
             icon: 'sea',
           });
           
@@ -264,7 +264,7 @@ export default function DayAgendaScreen() {
               subtitle: 'Morning gambling window',
               startTime: '05:00',
               endTime: '07:30',
-              color: EVENT_COLORS.casino,
+              color: '#FFFFFF',
               icon: 'casino',
             });
             
@@ -276,7 +276,7 @@ export default function DayAgendaScreen() {
               subtitle: casinoInfo.reason,
               startTime: '10:00',
               endTime: casinoInfo.closeTime || undefined,
-              color: EVENT_COLORS.casino,
+              color: '#FFFFFF',
               icon: 'casino',
               notes: `Until ${closeTimeDisplay}`,
             });
@@ -288,7 +288,7 @@ export default function DayAgendaScreen() {
               type: 'arrival',
               title: `Arrive: ${itineraryDay.port}`,
               startTime: itineraryDay.arrival,
-              color: EVENT_COLORS.port,
+              color: '#FFFFFF',
               icon: 'port',
               notes: itineraryDay.notes,
             });
@@ -302,7 +302,7 @@ export default function DayAgendaScreen() {
               subtitle: 'Ship docked at port',
               startTime: itineraryDay.arrival,
               endTime: itineraryDay.departure,
-              color: EVENT_COLORS.port,
+              color: '#FFFFFF',
               icon: 'port',
             });
           } else if (!itineraryDay.arrival && itineraryDay.departure) {
@@ -347,7 +347,7 @@ export default function DayAgendaScreen() {
               subtitle: casinoInfo.reason,
               startTime: casinoInfo.openTime,
               endTime: casinoInfo.closeTime || undefined,
-              color: EVENT_COLORS.casino,
+              color: '#FFFFFF',
               icon: 'casino',
               notes: `Opens ~1.5 hrs after sail away, until ${closeTimeDisplay}`,
             });
@@ -383,7 +383,7 @@ export default function DayAgendaScreen() {
               subtitle: casinoInfo.reason,
               startTime: casinoInfo.openTime,
               endTime: casinoInfo.closeTime || undefined,
-              color: EVENT_COLORS.casino,
+              color: '#FFFFFF',
               icon: 'casino',
               notes: `Opens ~1.5 hrs after sail away, until ${closeTimeDisplay}`,
             });
@@ -819,7 +819,7 @@ export default function DayAgendaScreen() {
               </View>
             ) : item.startTime && (
               <View style={styles.timeContainer}>
-                <Clock size={12} color={COLORS.textSecondary} />
+                <Clock size={12} color="#FFFFFF" />
                 <Text style={styles.timeText}>
                   {item.startTime}{item.endTime ? ` - ${item.endTime}` : ''}
                 </Text>
@@ -833,7 +833,7 @@ export default function DayAgendaScreen() {
 
           {item.location && (
             <View style={styles.locationContainer}>
-              <MapPin size={12} color={COLORS.textSecondary} />
+              <MapPin size={12} color="#FFFFFF" />
               <Text style={styles.locationText} numberOfLines={1}>{item.location}</Text>
             </View>
           )}
@@ -868,13 +868,13 @@ export default function DayAgendaScreen() {
               
               <View style={styles.cruiseDetails}>
                 <View style={styles.cruiseDetailItem}>
-                  <Anchor size={12} color={COLORS.beigeWarm} />
+                  <Anchor size={12} color="#FFFFFF" />
                   <Text style={styles.cruiseDetailText}>
                     {cruiseData.nights} nights
                   </Text>
                 </View>
                 <View style={styles.cruiseDetailItem}>
-                  <Users size={12} color={COLORS.beigeWarm} />
+                  <Users size={12} color="#FFFFFF" />
                   <Text style={styles.cruiseDetailText}>
                     {cruiseData.bookings.length} cabin{cruiseData.bookings.length > 1 ? 's' : ''}
                   </Text>
@@ -933,10 +933,10 @@ export default function DayAgendaScreen() {
             onPress={() => router.back()}
             activeOpacity={0.7}
           >
-            <ChevronLeft size={24} color={COLORS.textPrimary} />
+            <ChevronLeft size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <Calendar size={20} color={COLORS.beigeWarm} />
+            <Calendar size={20} color="#FFFFFF" />
             <Text style={styles.headerTitle}>Day Agenda</Text>
           </View>
           <TouchableOpacity
@@ -945,7 +945,7 @@ export default function DayAgendaScreen() {
             activeOpacity={0.7}
             disabled={isSyncing}
           >
-            <RefreshCcw size={20} color={isSyncing ? COLORS.textSecondary : COLORS.beigeWarm} />
+            <RefreshCcw size={20} color={isSyncing ? 'rgba(255,255,255,0.4)' : '#FFFFFF'} />
           </TouchableOpacity>
         </View>
 
@@ -964,7 +964,7 @@ export default function DayAgendaScreen() {
           {agendaItems.length === 0 && timelineEvents.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconContainer}>
-                <Calendar size={48} color={COLORS.textSecondary} />
+                <Calendar size={48} color="#FFFFFF" />
               </View>
               <Text style={styles.emptyTitle}>No Events</Text>
               <Text style={styles.emptyText}>
@@ -1061,7 +1061,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.textPrimary,
+    color: '#FFFFFF',
   },
   syncButton: {
     width: 40,
@@ -1080,12 +1080,12 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.textPrimary,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   eventCount: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
@@ -1100,7 +1100,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.beigeWarm,
+    color: '#FFFFFF',
     marginBottom: SPACING.sm,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -1110,12 +1110,11 @@ const styles = StyleSheet.create({
   },
   agendaItem: {
     flexDirection: 'row',
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    ...SHADOW.md,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   itemIndicator: {
     width: 5,
@@ -1152,7 +1151,7 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.textPrimary,
+    color: '#FFFFFF',
     flex: 1,
   },
   dayStatusBadge: {
@@ -1164,7 +1163,7 @@ const styles = StyleSheet.create({
   dayStatusText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.beigeWarm,
+    color: '#FFFFFF',
   },
   allDayBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -1175,7 +1174,7 @@ const styles = StyleSheet.create({
   allDayText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
   },
   timeContainer: {
     flexDirection: 'row',
@@ -1184,11 +1183,11 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
   },
   itemSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
     marginBottom: SPACING.xs,
     lineHeight: 20,
   },
@@ -1199,7 +1198,7 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
   },
   portStatusBadge: {
     marginTop: SPACING.sm,
@@ -1217,7 +1216,7 @@ const styles = StyleSheet.create({
   seaDayText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: EVENT_COLORS.seaDay,
+    color: '#FFFFFF',
   },
   casinoOpenBadge: {
     backgroundColor: 'rgba(245, 158, 11, 0.2)',
@@ -1229,7 +1228,7 @@ const styles = StyleSheet.create({
   casinoOpenText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: EVENT_COLORS.casino,
+    color: '#FFFFFF',
   },
   portDayBadge: {
     flexDirection: 'row',
@@ -1244,12 +1243,12 @@ const styles = StyleSheet.create({
   portDayText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: EVENT_COLORS.port,
+    color: '#FFFFFF',
     flex: 1,
   },
   portTimes: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
   },
   cruiseDetails: {
     flexDirection: 'row',
@@ -1266,12 +1265,12 @@ const styles = StyleSheet.create({
   },
   cruiseDetailLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
   },
   cruiseDetailText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.textPrimary,
+    color: '#FFFFFF',
   },
   bookingsContainer: {
     marginTop: SPACING.sm,
@@ -1294,24 +1293,24 @@ const styles = StyleSheet.create({
   },
   bookingLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
   },
   bookingValue: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.textPrimary,
+    color: '#FFFFFF',
   },
   guestNames: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
     flex: 1,
   },
   timelineContainer: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   timelineEvent: {
     flexDirection: 'row',
@@ -1326,15 +1325,15 @@ const styles = StyleSheet.create({
   timelineTimeText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.textPrimary,
+    color: '#FFFFFF',
   },
   timelineAllDay: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
   },
   timelineEndTime: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
     marginTop: 2,
   },
   timelineDot: {
@@ -1367,16 +1366,16 @@ const styles = StyleSheet.create({
   timelineTitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.textPrimary,
+    color: '#FFFFFF',
   },
   timelineSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
     marginTop: 2,
   },
   timelineNotes: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.beigeWarm,
+    color: '#FFFFFF',
     fontStyle: 'italic' as const,
     marginTop: 2,
   },
@@ -1396,18 +1395,18 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.textPrimary,
+    color: '#FFFFFF',
     marginBottom: SPACING.xs,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.textSecondary,
+    color: '#FFFFFF',
     textAlign: 'center',
   },
   sectionTitleOpportune: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#10B981',
+    color: '#FFFFFF',
     marginBottom: SPACING.sm,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -1426,11 +1425,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xs,
   },
   timelineTimeTextOpportune: {
-    color: '#10B981',
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   timelineEndTimeOpportune: {
-    color: '#10B981',
+    color: '#FFFFFF',
   },
   timelineDotInnerOpportune: {
     width: 14,
@@ -1443,10 +1442,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
   },
   timelineTitleOpportune: {
-    color: '#10B981',
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   timelineSubtitleOpportune: {
-    color: '#059669',
+    color: '#FFFFFF',
   },
 });
