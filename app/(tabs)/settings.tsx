@@ -53,6 +53,7 @@ import {
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
 import { isDateInPast } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
@@ -1547,61 +1548,64 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
           </View>
 
           <View style={styles.dataOverviewCard}>
-            <View style={styles.dataOverviewHeader}>
-              <View style={styles.dataOverviewIconBadge}>
-                <Anchor size={18} color={COLORS.white} />
-              </View>
-              <View style={styles.dataOverviewTitleGroup}>
-                <Text style={styles.dataOverviewTitle}>Data Overview</Text>
-                <Text style={styles.dataOverviewSubtitle}>{dataStats.cruises} cruises in system</Text>
-              </View>
-            </View>
-            <View style={styles.dataOverviewStatsRow}>
-              <View style={styles.dataOverviewStatItem}>
-                <Anchor size={14} color={COLORS.aquaAccent || '#00BCD4'} />
-                <Text style={styles.dataOverviewStatValue}>{dataStats.cruises}</Text>
-                <Text style={styles.dataOverviewStatLabel}>Total Cruises</Text>
-              </View>
-              <View style={styles.dataOverviewDivider} />
-              <View style={styles.dataOverviewStatItem}>
-                <View style={styles.dataOverviewUpcomingCompletedRow}>
-                  <Text style={styles.dataOverviewMiniStat}>{dataStats.upcoming} upcoming</Text>
-                  <Text style={styles.dataOverviewMiniStatDivider}>/</Text>
-                  <Text style={styles.dataOverviewMiniStat}>{dataStats.completed} completed</Text>
+            <LinearGradient
+              colors={['#0369A1', '#0284C7'] as [string, string]}
+              style={styles.dataOverviewHeader}
+            >
+              <View style={styles.dataOverviewHeaderContent}>
+                <View style={styles.dataOverviewIconBadge}>
+                  <Anchor size={18} color={COLORS.white} />
                 </View>
-                <Text style={styles.dataOverviewStatValue}>{dataStats.booked}</Text>
-                <Text style={styles.dataOverviewStatLabel}>Booked</Text>
-              </View>
-              <View style={styles.dataOverviewDivider} />
-              <View style={styles.dataOverviewStatItem}>
-                <Award size={14} color={COLORS.goldDark} />
-                <Text style={styles.dataOverviewStatValue}>{dataStats.uniqueOffers}</Text>
-                <Text style={styles.dataOverviewStatLabel}>Offers</Text>
-              </View>
-            </View>
-            <View style={styles.dataOverviewGrid}>
-              <View style={styles.dataOverviewItem}>
-                <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(156, 39, 176, 0.1)' }]}>
-                  <Calendar size={14} color="#9C27B0" />
+                <View style={styles.dataOverviewTitleGroup}>
+                  <Text style={styles.dataOverviewTitle}>Data Overview</Text>
+                  <Text style={styles.dataOverviewSubtitle}>{dataStats.cruises} cruises in system</Text>
                 </View>
-                <Text style={styles.dataOverviewValue}>{dataStats.events}</Text>
-                <Text style={styles.dataOverviewLabel}>Events</Text>
               </View>
-              <View style={styles.dataOverviewItemDivider} />
-              <View style={styles.dataOverviewItem}>
-                <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(255, 87, 34, 0.1)' }]}>
-                  <Database size={14} color="#FF5722" />
+            </LinearGradient>
+            <View style={styles.dataOverviewBody}>
+              <View style={styles.dataOverviewStatsRow}>
+                <View style={styles.dataOverviewStatCard}>
+                  <Anchor size={14} color="#0369A1" />
+                  <Text style={styles.dataOverviewStatValue}>{dataStats.cruises}</Text>
+                  <Text style={styles.dataOverviewStatLabel}>Total Cruises</Text>
                 </View>
-                <Text style={styles.dataOverviewValue}>{dataStats.machines}</Text>
-                <Text style={styles.dataOverviewLabel}>Machines</Text>
+                <View style={styles.dataOverviewStatCard}>
+                  <View style={styles.dataOverviewUpcomingCompletedRow}>
+                    <Text style={styles.dataOverviewMiniStat}>{dataStats.upcoming} up</Text>
+                    <Text style={styles.dataOverviewMiniStatDivider}>/</Text>
+                    <Text style={styles.dataOverviewMiniStat}>{dataStats.completed} done</Text>
+                  </View>
+                  <Text style={styles.dataOverviewStatValue}>{dataStats.booked}</Text>
+                  <Text style={styles.dataOverviewStatLabel}>Booked</Text>
+                </View>
+                <View style={styles.dataOverviewStatCard}>
+                  <Award size={14} color="#D97706" />
+                  <Text style={styles.dataOverviewStatValue}>{dataStats.uniqueOffers}</Text>
+                  <Text style={styles.dataOverviewStatLabel}>Offers</Text>
+                </View>
               </View>
-              <View style={styles.dataOverviewItemDivider} />
-              <View style={styles.dataOverviewItem}>
-                <View style={[styles.dataOverviewIcon, { backgroundColor: 'rgba(0, 150, 136, 0.1)' }]}>
-                  <Users size={14} color="#009688" />
+              <View style={styles.dataOverviewGrid}>
+                <View style={styles.dataOverviewGridCard}>
+                  <View style={[styles.dataOverviewGridIcon, { backgroundColor: 'rgba(156, 39, 176, 0.1)' }]}>
+                    <Calendar size={13} color="#9C27B0" />
+                  </View>
+                  <Text style={styles.dataOverviewGridValue}>{dataStats.events}</Text>
+                  <Text style={styles.dataOverviewGridLabel}>Events</Text>
                 </View>
-                <Text style={styles.dataOverviewValue}>{dataStats.crewMembers}</Text>
-                <Text style={styles.dataOverviewLabel}>Crew</Text>
+                <View style={styles.dataOverviewGridCard}>
+                  <View style={[styles.dataOverviewGridIcon, { backgroundColor: 'rgba(255, 87, 34, 0.1)' }]}>
+                    <Database size={13} color="#FF5722" />
+                  </View>
+                  <Text style={styles.dataOverviewGridValue}>{dataStats.machines}</Text>
+                  <Text style={styles.dataOverviewGridLabel}>Machines</Text>
+                </View>
+                <View style={styles.dataOverviewGridCard}>
+                  <View style={[styles.dataOverviewGridIcon, { backgroundColor: 'rgba(0, 150, 136, 0.1)' }]}>
+                    <Users size={13} color="#009688" />
+                  </View>
+                  <Text style={styles.dataOverviewGridValue}>{dataStats.crewMembers}</Text>
+                  <Text style={styles.dataOverviewGridLabel}>Crew</Text>
+                </View>
               </View>
             </View>
           </View>
@@ -2579,61 +2583,71 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.md,
-    backgroundColor: COLORS.navyDeep,
-    ...SHADOW.md,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.2)',
+    ...SHADOW.sm,
   },
   dataOverviewHeader: {
+    padding: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dataOverviewHeaderContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    padding: SPACING.md,
-    paddingBottom: SPACING.sm,
+    flex: 1,
   },
   dataOverviewIconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   dataOverviewTitleGroup: {
     flex: 1,
   },
   dataOverviewTitle: {
-    fontSize: 18,
-    fontWeight: '700' as const,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.white,
     letterSpacing: 0.3,
   },
   dataOverviewSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255, 255, 255, 0.9)',
     marginTop: 2,
+  },
+  dataOverviewBody: {
+    padding: SPACING.sm,
   },
   dataOverviewStatsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
-    marginHorizontal: SPACING.md,
-    marginBottom: SPACING.sm,
-    justifyContent: 'space-around',
+    gap: SPACING.xs,
+    marginBottom: SPACING.xs,
   },
-  dataOverviewStatItem: {
+  dataOverviewStatCard: {
+    flex: 1,
     alignItems: 'center',
     gap: 3,
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.15)',
   },
   dataOverviewStatValue: {
     fontSize: 18,
     fontWeight: '700' as const,
-    color: COLORS.white,
+    color: '#0F172A',
   },
   dataOverviewStatLabel: {
     fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#64748B',
   },
   dataOverviewUpcomingCompletedRow: {
     flexDirection: 'row' as const,
@@ -2642,47 +2656,41 @@ const styles = StyleSheet.create({
   },
   dataOverviewMiniStat: {
     fontSize: 9,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: '#64748B',
   },
   dataOverviewMiniStatDivider: {
     fontSize: 9,
-    color: 'rgba(255, 255, 255, 0.35)',
-  },
-  dataOverviewDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    color: '#94A3B8',
   },
   dataOverviewGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.md,
+    gap: SPACING.xs,
   },
-  dataOverviewItem: {
+  dataOverviewGridCard: {
     flex: 1,
     alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.15)',
   },
-  dataOverviewItemDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    marginVertical: 4,
-  },
-  dataOverviewIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  dataOverviewGridIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 3,
   },
-  dataOverviewValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
+  dataOverviewGridValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '700' as const,
-    color: COLORS.white,
+    color: '#0F172A',
   },
-  dataOverviewLabel: {
+  dataOverviewGridLabel: {
     fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#64748B',
     marginTop: 2,
     textAlign: 'center' as const,
   },
