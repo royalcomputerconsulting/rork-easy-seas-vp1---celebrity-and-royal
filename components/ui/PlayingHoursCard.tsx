@@ -145,7 +145,7 @@ export function PlayingHoursCard({
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#3B82F6', '#2563EB']}
+        colors={['#0369A1', '#0284C7']}
         style={styles.header}
       >
         <View style={styles.headerContent}>
@@ -163,7 +163,7 @@ export function PlayingHoursCard({
           value={formData.enabled}
           onValueChange={handleToggleEnabled}
           trackColor={{ false: 'rgba(255,255,255,0.3)', true: 'rgba(255,255,255,0.5)' }}
-          thumbColor={formData.enabled ? '#3B82F6' : '#9CA3AF'}
+          thumbColor={formData.enabled ? '#0369A1' : '#9CA3AF'}
         />
       </LinearGradient>
 
@@ -220,7 +220,7 @@ export function PlayingHoursCard({
                   onPress={() => handleEditSession(session)}
                   activeOpacity={0.7}
                 >
-                  <Edit2 size={16} color="#3B82F6" />
+                  <Edit2 size={16} color="#0369A1" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.sessionActionButton}
@@ -237,7 +237,7 @@ export function PlayingHoursCard({
             onPress={handleAddSession}
             activeOpacity={0.7}
           >
-            <Plus size={16} color="#3B82F6" />
+            <Plus size={16} color="#0369A1" />
             <Text style={styles.addSessionText}>Add Playing Session</Text>
           </TouchableOpacity>
         </View>
@@ -248,7 +248,7 @@ export function PlayingHoursCard({
           disabled={isSaving}
         >
           <LinearGradient
-            colors={['#3B82F6', '#2563EB']}
+            colors={['#0369A1', '#0284C7']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.saveButtonGradient}
@@ -276,7 +276,7 @@ export function PlayingHoursCard({
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <View style={styles.modalHeaderLeft}>
-                  <Clock size={20} color="#3B82F6" />
+                  <Clock size={20} color="#0369A1" />
                   <Text style={styles.modalTitle}>
                     {editingSession ? 'Edit' : 'Add'} Playing Session
                   </Text>
@@ -344,7 +344,7 @@ export function PlayingHoursCard({
                   activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={['#3B82F6', '#2563EB']}
+                    colors={['#0369A1', '#0284C7']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.modalSaveButtonGradient}
@@ -364,11 +364,11 @@ export function PlayingHoursCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F0F9FF',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.2)',
+    borderColor: 'rgba(3, 105, 161, 0.2)',
     ...SHADOW.sm,
     marginTop: SPACING.md,
   },
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
+    color: '#0369A1',
     letterSpacing: 1,
     marginBottom: SPACING.xs,
   },
@@ -423,12 +423,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.15)',
+    borderColor: 'rgba(3, 105, 161, 0.15)',
     overflow: 'hidden',
   },
   sessionRowEnabled: {
-    backgroundColor: '#DBEAFE',
-    borderColor: '#3B82F6',
+    backgroundColor: '#E0F2FE',
+    borderColor: '#0369A1',
   },
   sessionMainContent: {
     flex: 1,
@@ -450,7 +450,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   sessionDotEnabled: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#0369A1',
   },
   sessionDotDisabled: {
     backgroundColor: '#D1D5DB',
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
   sessionName: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#1E40AF',
+    color: '#0C4A6E',
   },
   sessionNameDisabled: {
     color: '#9CA3AF',
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   sessionToggleEnabled: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#0369A1',
   },
   sessionToggleText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderLeftWidth: 1,
-    borderLeftColor: 'rgba(59, 130, 246, 0.15)',
+    borderLeftColor: 'rgba(3, 105, 161, 0.15)',
   },
   sessionActionButton: {
     padding: SPACING.xs,
@@ -515,19 +515,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    backgroundColor: 'rgba(3, 105, 161, 0.08)',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#3B82F6',
+    borderColor: 'rgba(3, 105, 161, 0.3)',
     borderStyle: 'dashed',
     gap: SPACING.xs,
   },
   addSessionText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#2563EB',
+    color: '#0369A1',
   },
   modalOverlay: {
     flex: 1,
@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
+    color: '#0369A1',
   },
   modalCloseButton: {
     padding: SPACING.xs,
@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#1E40AF',
+    color: '#0369A1',
   },
   textInput: {
     backgroundColor: '#F9FAFB',
