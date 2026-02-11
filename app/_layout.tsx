@@ -173,7 +173,7 @@ function FreshStartHandler({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-const SCREEN_ANIMATION = Platform.OS === 'ios' ? 'default' : 'fade_from_bottom' as const;
+const SCREEN_ANIMATION: 'default' | 'fade_from_bottom' = Platform.OS === 'ios' ? 'default' : 'fade_from_bottom';
 
 function RootLayoutNav() {
   const screenOptions = useMemo(() => ({
