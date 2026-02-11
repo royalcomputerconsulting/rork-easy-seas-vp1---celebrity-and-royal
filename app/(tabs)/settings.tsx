@@ -1553,20 +1553,24 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
               </View>
               <View style={styles.dataOverviewTitleGroup}>
                 <Text style={styles.dataOverviewTitle}>Data Overview</Text>
-                <Text style={styles.dataOverviewSubtitle}>{dataStats.booked} cruises total</Text>
+                <Text style={styles.dataOverviewSubtitle}>{dataStats.cruises} cruises in system</Text>
               </View>
             </View>
             <View style={styles.dataOverviewStatsRow}>
               <View style={styles.dataOverviewStatItem}>
-                <Clock size={14} color={COLORS.aquaAccent || '#00BCD4'} />
-                <Text style={styles.dataOverviewStatValue}>{dataStats.upcoming}</Text>
-                <Text style={styles.dataOverviewStatLabel}>Upcoming</Text>
+                <Anchor size={14} color={COLORS.aquaAccent || '#00BCD4'} />
+                <Text style={styles.dataOverviewStatValue}>{dataStats.cruises}</Text>
+                <Text style={styles.dataOverviewStatLabel}>Total Cruises</Text>
               </View>
               <View style={styles.dataOverviewDivider} />
               <View style={styles.dataOverviewStatItem}>
-                <CheckCircle size={14} color={COLORS.success} />
-                <Text style={styles.dataOverviewStatValue}>{dataStats.completed}</Text>
-                <Text style={styles.dataOverviewStatLabel}>Completed</Text>
+                <View style={styles.dataOverviewUpcomingCompletedRow}>
+                  <Text style={styles.dataOverviewMiniStat}>{dataStats.upcoming} upcoming</Text>
+                  <Text style={styles.dataOverviewMiniStatDivider}>/</Text>
+                  <Text style={styles.dataOverviewMiniStat}>{dataStats.completed} completed</Text>
+                </View>
+                <Text style={styles.dataOverviewStatValue}>{dataStats.booked}</Text>
+                <Text style={styles.dataOverviewStatLabel}>Booked</Text>
               </View>
               <View style={styles.dataOverviewDivider} />
               <View style={styles.dataOverviewStatItem}>
@@ -2630,6 +2634,19 @@ const styles = StyleSheet.create({
   dataOverviewStatLabel: {
     fontSize: 10,
     color: 'rgba(255, 255, 255, 0.7)',
+  },
+  dataOverviewUpcomingCompletedRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+  },
+  dataOverviewMiniStat: {
+    fontSize: 9,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  dataOverviewMiniStatDivider: {
+    fontSize: 9,
+    color: 'rgba(255, 255, 255, 0.35)',
   },
   dataOverviewDivider: {
     width: 1,
