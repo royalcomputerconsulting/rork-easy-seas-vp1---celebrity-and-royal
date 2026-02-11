@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -264,9 +264,10 @@ export function AlertsCard({
   showInsights = true,
   title = 'Alerts & Insights',
 }: AlertsCardProps) {
+  const [expanded, setExpanded] = useState<boolean>(false);
   const criticalCount = alerts.filter(a => a.priority === 'critical').length;
   const highCount = alerts.filter(a => a.priority === 'high').length;
-  const displayAlerts = alerts.slice(0, maxAlerts);
+  const displayAlerts = expanded ? alerts : alerts.slice(0, maxAlerts);
   const displayInsights = insights.slice(0, 3);
 
   if (alerts.length === 0 && insights.length === 0) {
@@ -330,11 +331,15 @@ export function AlertsCard({
           ))}
           
           {alerts.length > maxAlerts && (
-            <TouchableOpacity style={styles.viewMoreButton} activeOpacity={0.7}>
+            <TouchableOpacity 
+              style={styles.viewMoreButton} 
+              activeOpacity={0.7}
+              onPress={() => setExpanded(prev => !prev)}
+            >
               <Text style={styles.viewMoreText}>
-                View {alerts.length - maxAlerts} more alerts
+                {expanded ? 'Show fewer alerts' : `View ${alerts.length - maxAlerts} more alerts`}
               </Text>
-              <ChevronRight size={14} color={COLORS.beigeWarm} />
+              <ChevronRight size={14} color={COLORS.beigeWarm} style={expanded ? { transform: [{ rotate: '90deg' }] } : undefined} />
             </TouchableOpacity>
           )}
         </View>
