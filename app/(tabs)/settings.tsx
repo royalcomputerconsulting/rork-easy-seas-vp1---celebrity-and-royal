@@ -47,6 +47,9 @@ import {
   Clock,
   Award,
   Anchor,
+  Link2,
+  Copy,
+  Rss,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
@@ -72,6 +75,8 @@ import {
   importAllDataFromFile,
 } from '@/lib/dataManager';
 import { downloadChromeExtension } from '@/lib/chromeExtension';
+import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
+import { RENDER_BACKEND_URL } from '@/lib/trpc';
 
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -127,6 +132,11 @@ export default function SettingsScreen() {
   const [isUserManualVisible, setIsUserManualVisible] = useState(false);
   const [secretTapCount, setSecretTapCount] = useState(0);
   const secretTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [calendarFeedToken, setCalendarFeedToken] = useState<string | null>(null);
+  const [calendarFeedUrl, setCalendarFeedUrl] = useState<string | null>(null);
+  const [isPublishingFeed, setIsPublishingFeed] = useState(false);
+  const [feedLastUpdated, setFeedLastUpdated] = useState<string | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
@@ -357,6 +367,130 @@ export default function SettingsScreen() {
   }, [entitlement.tier, router, setCruises, setCasinoOffers, setLocalData]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
+  const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
+
+  useEffect(() => {
+    const loadFeedToken = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('easyseas_calendar_feed_token');
+        if (stored) {
+          setCalendarFeedToken(stored);
+          setCalendarFeedUrl(`${RENDER_BACKEND_URL}/api/calendar-feed/${stored}`);
+          const lastUpdate = await AsyncStorage.getItem('easyseas_calendar_feed_updated');
+          if (lastUpdate) setFeedLastUpdated(lastUpdate);
+          console.log('[Settings] Loaded calendar feed token:', stored.slice(0, 8) + '...');
+        }
+      } catch (error) {
+        console.error('[Settings] Error loading feed token:', error);
+      }
+    };
+    loadFeedToken();
+  }, []);
+
+  const handlePublishCalendarFeed = useCallback(async () => {
+    const email = currentUser?.email;
+    if (!email) {
+      Alert.alert('Profile Required', 'Please set your email in your profile before publishing a calendar feed.');
+      return;
+    }
+
+    try {
+      setIsPublishingFeed(true);
+      console.log('[Settings] Publishing calendar feed...');
+
+      let token = calendarFeedToken;
+      if (!token) {
+        token = generateFeedToken();
+        setCalendarFeedToken(token);
+        await AsyncStorage.setItem('easyseas_calendar_feed_token', token);
+        console.log('[Settings] Generated new feed token:', token.slice(0, 8) + '...');
+      }
+
+      const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
+      const allEvents = localData.calendar || [];
+      console.log('[Settings] Generating ICS from', allBooked.length, 'cruises and', allEvents.length, 'events');
+
+      const icsContent = generateCalendarFeed(allBooked, allEvents);
+
+      await saveCalendarFeedMutation.mutateAsync({
+        email,
+        token,
+        icsContent,
+      });
+
+      const feedUrl = `${RENDER_BACKEND_URL}/api/calendar-feed/${token}`;
+      setCalendarFeedUrl(feedUrl);
+      const now = new Date().toISOString();
+      setFeedLastUpdated(now);
+      await AsyncStorage.setItem('easyseas_calendar_feed_updated', now);
+
+      console.log('[Settings] Calendar feed published successfully:', feedUrl);
+      Alert.alert(
+        'Calendar Feed Published',
+        `Your calendar feed is live with ${allBooked.length} cruises.\n\nYou can now subscribe to this feed from any calendar app (Apple Calendar, Google Calendar, Outlook, etc.).\n\nTap "Copy URL" to copy the feed link.`
+      );
+    } catch (error) {
+      console.error('[Settings] Publish feed error:', error);
+      Alert.alert('Publish Failed', 'Failed to publish calendar feed. Please check your internet connection and try again.');
+    } finally {
+      setIsPublishingFeed(false);
+    }
+  }, [calendarFeedToken, currentUser, bookedCruises, localData, saveCalendarFeedMutation]);
+
+  const handleCopyFeedUrl = useCallback(async () => {
+    if (!calendarFeedUrl) return;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(calendarFeedUrl);
+      }
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+      console.log('[Settings] Calendar feed URL copied to clipboard');
+    } catch (error) {
+      console.error('[Settings] Copy error:', error);
+      Alert.alert('Feed URL', calendarFeedUrl);
+    }
+  }, [calendarFeedUrl]);
+
+  const handleSubscribeToFeed = useCallback(() => {
+    if (!calendarFeedUrl) return;
+    const webcalUrl = calendarFeedUrl.replace(/^https?:\/\//, 'webcal://');
+    console.log('[Settings] Opening webcal URL:', webcalUrl);
+    Linking.openURL(webcalUrl).catch(() => {
+      Alert.alert(
+        'Subscribe to Calendar',
+        `Copy this URL and add it as a calendar subscription in your calendar app:\n\n${calendarFeedUrl}`,
+        [
+          { text: 'Copy URL', onPress: handleCopyFeedUrl },
+          { text: 'OK', style: 'cancel' },
+        ]
+      );
+    });
+  }, [calendarFeedUrl, handleCopyFeedUrl]);
+
+  const handleRegenerateFeedToken = useCallback(() => {
+    Alert.alert(
+      'Regenerate Feed URL',
+      'This will create a new unique URL for your calendar feed. Your old URL will stop working. Any calendar apps subscribed to the old URL will need to be updated.\n\nContinue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Regenerate',
+          style: 'destructive',
+          onPress: async () => {
+            const newToken = generateFeedToken();
+            setCalendarFeedToken(newToken);
+            setCalendarFeedUrl(null);
+            setFeedLastUpdated(null);
+            await AsyncStorage.setItem('easyseas_calendar_feed_token', newToken);
+            await AsyncStorage.removeItem('easyseas_calendar_feed_updated');
+            console.log('[Settings] Regenerated feed token:', newToken.slice(0, 8) + '...');
+            Alert.alert('Token Regenerated', 'Your feed URL has been reset. Tap "Publish Feed" to make it live with the new URL.');
+          },
+        },
+      ]
+    );
+  }, []);
 
   const handleImportCalendarFromURL = useCallback(async () => {
     try {
@@ -1639,6 +1773,90 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                 handleImportCalendarICS
               )}
 <View style={styles.dataDivider} />
+
+              <View style={[styles.dataSubsection, styles.calendarFeedBanner]}>
+                <Text style={styles.subsectionLabel}>CALENDAR FEED</Text>
+                <Text style={styles.subsectionHelper}>Publish your cruises as a subscribable calendar feed.</Text>
+              </View>
+              <View style={styles.calendarFeedSection}>
+                <TouchableOpacity
+                  style={styles.publishFeedButton}
+                  onPress={handlePublishCalendarFeed}
+                  activeOpacity={0.7}
+                  disabled={isPublishingFeed}
+                >
+                  {isPublishingFeed ? (
+                    <ActivityIndicator size="small" color={COLORS.white} />
+                  ) : (
+                    <Rss size={16} color={COLORS.white} />
+                  )}
+                  <Text style={styles.publishFeedButtonText}>
+                    {calendarFeedUrl ? 'Update Feed' : 'Publish Feed'}
+                  </Text>
+                  {calendarFeedUrl && (
+                    <View style={styles.feedLiveBadge}>
+                      <View style={styles.feedLiveDot} />
+                      <Text style={styles.feedLiveText}>Live</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {calendarFeedUrl && (
+                  <>
+                    <View style={styles.feedUrlContainer}>
+                      <Link2 size={14} color={CLEAN_THEME.text.secondary} />
+                      <Text style={styles.feedUrlText} numberOfLines={1} ellipsizeMode="middle">
+                        {calendarFeedUrl}
+                      </Text>
+                    </View>
+                    <View style={styles.feedActionsRow}>
+                      <TouchableOpacity
+                        style={[styles.feedActionButton, isCopied && styles.feedActionButtonActive]}
+                        onPress={handleCopyFeedUrl}
+                        activeOpacity={0.7}
+                      >
+                        {isCopied ? (
+                          <CheckCircle size={14} color={COLORS.success} />
+                        ) : (
+                          <Copy size={14} color={COLORS.navyDeep} />
+                        )}
+                        <Text style={[styles.feedActionText, isCopied && styles.feedActionTextActive]}>
+                          {isCopied ? 'Copied!' : 'Copy URL'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.feedActionButton}
+                        onPress={handleSubscribeToFeed}
+                        activeOpacity={0.7}
+                      >
+                        <Calendar size={14} color={COLORS.navyDeep} />
+                        <Text style={styles.feedActionText}>Subscribe</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.feedActionButton}
+                        onPress={handleRegenerateFeedToken}
+                        activeOpacity={0.7}
+                      >
+                        <RefreshCcw size={14} color={COLORS.navyDeep} />
+                        <Text style={styles.feedActionText}>New URL</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {feedLastUpdated && (
+                      <Text style={styles.feedLastUpdated}>
+                        Last published: {new Date(feedLastUpdated).toLocaleDateString()} at {new Date(feedLastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    )}
+                  </>
+                )}
+
+                {!calendarFeedUrl && (
+                  <Text style={styles.feedHelperText}>
+                    Publish your booked cruises and events as an .ics calendar feed that you can subscribe to from Apple Calendar, Google Calendar, Outlook, or any calendar app.
+                  </Text>
+                )}
+              </View>
+
+              <View style={styles.dataDivider} />
               
               <View style={[styles.dataSubsection, styles.fullBackupBanner]}>
                 <Text style={styles.subsectionLabel}>FULL BACKUP</Text>
@@ -2694,6 +2912,110 @@ const styles = StyleSheet.create({
     color: CLEAN_THEME.text.secondary,
     marginTop: SPACING.xs,
     marginHorizontal: SPACING.xs,
+    lineHeight: 16,
+  },
+  calendarFeedBanner: {
+    backgroundColor: 'rgba(0, 150, 136, 0.1)',
+  },
+  calendarFeedSection: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+  },
+  publishFeedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    backgroundColor: '#00796B',
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 12,
+    paddingHorizontal: SPACING.lg,
+  },
+  publishFeedButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.white,
+  },
+  feedLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.round,
+    marginLeft: 4,
+  },
+  feedLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4CAF50',
+  },
+  feedLiveText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: COLORS.white,
+    letterSpacing: 0.5,
+  },
+  feedUrlContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    marginTop: SPACING.sm,
+    borderWidth: 1,
+    borderColor: CLEAN_THEME.border.light,
+  },
+  feedUrlText: {
+    flex: 1,
+    fontSize: 11,
+    color: CLEAN_THEME.text.secondary,
+    fontFamily: undefined,
+  },
+  feedActionsRow: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
+  },
+  feedActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(0, 31, 63, 0.06)',
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 10,
+    paddingHorizontal: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  feedActionButtonActive: {
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderColor: 'rgba(76, 175, 80, 0.3)',
+  },
+  feedActionText: {
+    fontSize: 12,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: COLORS.navyDeep,
+  },
+  feedActionTextActive: {
+    color: COLORS.success,
+  },
+  feedLastUpdated: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: CLEAN_THEME.text.secondary,
+    marginTop: SPACING.sm,
+    textAlign: 'center' as const,
+  },
+  feedHelperText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: CLEAN_THEME.text.secondary,
+    marginTop: SPACING.sm,
     lineHeight: 16,
   },
 });

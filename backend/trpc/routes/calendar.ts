@@ -1,8 +1,97 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "../create-context";
+import { getDb } from "@/backend/db";
 
 export const calendarRouter = createTRPCRouter({
+  saveCalendarFeed: publicProcedure
+    .input(z.object({
+      email: z.string().email(),
+      token: z.string().min(16),
+      icsContent: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const normalizedEmail = input.email.toLowerCase().trim();
+      const now = new Date().toISOString();
+
+      console.log('[Calendar API] Saving calendar feed for:', normalizedEmail, 'token:', input.token.slice(0, 8) + '...');
+
+      const existing = await db.query<[{ id: string }[]]>(
+        `SELECT id FROM calendar_feeds WHERE email = $email LIMIT 1`,
+        { email: normalizedEmail }
+      );
+
+      if (existing?.[0]?.length > 0) {
+        await db.query(
+          `UPDATE calendar_feeds SET token = $token, icsContent = $icsContent, updatedAt = $updatedAt WHERE email = $email`,
+          { email: normalizedEmail, token: input.token, icsContent: input.icsContent, updatedAt: now }
+        );
+        console.log('[Calendar API] Updated existing calendar feed');
+      } else {
+        await db.query(
+          `CREATE calendar_feeds CONTENT $data`,
+          { data: { email: normalizedEmail, token: input.token, icsContent: input.icsContent, createdAt: now, updatedAt: now } as Record<string, unknown> }
+        );
+        console.log('[Calendar API] Created new calendar feed');
+      }
+
+      return { success: true, updatedAt: now };
+    }),
+
+  getCalendarFeedByToken: publicProcedure
+    .input(z.object({ token: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      console.log('[Calendar API] Looking up feed by token:', input.token.slice(0, 8) + '...');
+
+      const results = await db.query<[{ icsContent: string; updatedAt: string }[]]>(
+        `SELECT icsContent, updatedAt FROM calendar_feeds WHERE token = $token LIMIT 1`,
+        { token: input.token }
+      );
+
+      if (results?.[0]?.length > 0) {
+        console.log('[Calendar API] Feed found, content length:', results[0][0].icsContent?.length);
+        return { found: true, icsContent: results[0][0].icsContent, updatedAt: results[0][0].updatedAt };
+      }
+
+      console.log('[Calendar API] Feed not found for token');
+      return { found: false, icsContent: null, updatedAt: null };
+    }),
+
+  getCalendarFeedToken: publicProcedure
+    .input(z.object({ email: z.string().email() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const normalizedEmail = input.email.toLowerCase().trim();
+
+      const results = await db.query<[{ token: string; updatedAt: string }[]]>(
+        `SELECT token, updatedAt FROM calendar_feeds WHERE email = $email LIMIT 1`,
+        { email: normalizedEmail }
+      );
+
+      if (results?.[0]?.length > 0) {
+        return { found: true, token: results[0][0].token, updatedAt: results[0][0].updatedAt };
+      }
+
+      return { found: false, token: null, updatedAt: null };
+    }),
+
+  deleteCalendarFeed: publicProcedure
+    .input(z.object({ email: z.string().email() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const normalizedEmail = input.email.toLowerCase().trim();
+
+      await db.query(
+        `DELETE FROM calendar_feeds WHERE email = $email`,
+        { email: normalizedEmail }
+      );
+
+      console.log('[Calendar API] Deleted calendar feed for:', normalizedEmail);
+      return { success: true };
+    }),
+
   fetchICS: publicProcedure
     .input(z.object({ url: z.string().url() }))
     .mutation(async ({ input }) => {
