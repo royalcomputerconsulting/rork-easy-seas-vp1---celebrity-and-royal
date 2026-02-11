@@ -50,6 +50,8 @@ function getAlertIcon(type: AnomalyType, size: number = 20) {
       return <TrendingUp {...iconProps} color={COLORS.success} />;
     case 'booking_conflict':
       return <Calendar {...iconProps} color={COLORS.error} />;
+    case 'back_to_back':
+      return <Calendar {...iconProps} color={COLORS.success} />;
     case 'value_drop':
       return <TrendingDown {...iconProps} color={COLORS.warning} />;
     case 'unusual_pattern':

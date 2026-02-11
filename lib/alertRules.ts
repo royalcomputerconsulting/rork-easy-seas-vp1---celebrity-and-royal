@@ -239,6 +239,8 @@ function getActionLabel(type: AnomalyType): string {
       return 'View Progress';
     case 'booking_conflict':
       return 'Resolve Conflict';
+    case 'back_to_back':
+      return 'View Cruises';
     case 'unusual_pattern':
       return 'View Pattern';
     case 'price_drop':
@@ -254,6 +256,7 @@ function getActionRoute(anomaly: Anomaly): string {
     case 'spending_spike':
     case 'points_mismatch':
     case 'booking_conflict':
+    case 'back_to_back':
       return anomaly.relatedEntityId ? `/cruise-details?id=${anomaly.relatedEntityId}` : '/analytics';
     case 'offer_expiring':
     case 'price_drop':

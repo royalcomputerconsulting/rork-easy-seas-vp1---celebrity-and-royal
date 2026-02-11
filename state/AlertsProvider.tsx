@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { 
@@ -75,6 +75,14 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   const [lastDetectionRun, setLastDetectionRun] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [dismissedEntities, setDismissedEntities] = useState<Set<string>>(new Set());
+
+  const alertsRef = useRef<Alert[]>([]);
+  const dismissedIdsRef = useRef<Set<string>>(new Set());
+  const dismissedEntitiesRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => { alertsRef.current = alerts; }, [alerts]);
+  useEffect(() => { dismissedIdsRef.current = dismissedIds; }, [dismissedIds]);
+  useEffect(() => { dismissedEntitiesRef.current = dismissedEntities; }, [dismissedEntities]);
 
   useEffect(() => {
     const loadStoredData = async () => {
@@ -190,16 +198,20 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
       setAnomalies(result.anomalies);
       setInsights(result.insights);
 
+      const currentAlerts = alertsRef.current;
+      const currentDismissedIds = dismissedIdsRef.current;
+      const currentDismissedEntities = dismissedEntitiesRef.current;
+
       const newAlerts = processAnomaliesWithRules(
         result.anomalies,
         rules,
-        alerts
+        currentAlerts
       );
 
       const filteredNewAlerts = newAlerts.filter(a => {
-        if (dismissedIds.has(a.id)) return false;
+        if (currentDismissedIds.has(a.id)) return false;
         const entityKey = `${a.type}_${a.relatedEntityId || 'global'}`;
-        if (dismissedEntities.has(entityKey)) return false;
+        if (currentDismissedEntities.has(entityKey)) return false;
         return true;
       });
 
@@ -218,7 +230,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     } finally {
       setIsLoading(false);
     }
-  }, [tier, bookedCruises, casinoOffers, clubRoyaleProfile, config, rules, alerts, dismissedIds, dismissedEntities, priceDropAlerts]);
+  }, [tier, bookedCruises, casinoOffers, clubRoyaleProfile, config, rules, priceDropAlerts]);
 
   useEffect(() => {
     if (bookedCruises.length > 0 || casinoOffers.length > 0 || priceDropAlerts.length > 0) {

@@ -293,29 +293,64 @@ export function detectBookingConflicts(
           const endStr = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           return `${startStr} - ${endStr}`;
         };
+
+        const endADate = endA.toDateString();
+        const startBDate = startB.toDateString();
+        const endBDate = endB.toDateString();
+        const startADate = startA.toDateString();
+        const isBackToBack = overlapDays === 1 && (endADate === startBDate || endBDate === startADate);
         
         const cruiseADetails = `${cruiseA.shipName} (${formatDateRange(startA, endA)})`;
         const cruiseBDetails = `${cruiseB.shipName} (${formatDateRange(startB, endB)})`;
-        const overlapDetails = `${overlapDays} day${overlapDays !== 1 ? 's' : ''} overlap (${overlapStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${overlapEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
-        
-        anomalies.push({
-          id: generateId(),
-          type: 'booking_conflict',
-          severity: 'critical',
-          title: 'Booking Date Conflict Detected',
-          description: `${cruiseADetails} conflicts with ${cruiseBDetails}. ${overlapDetails}. You cannot be on both ships at the same time - please review and cancel one booking.`,
-          detectedAt: new Date().toISOString(),
-          dataPoints: {
-            cruiseId: cruiseA.id,
-            metric: 'Date Overlap',
-            expectedValue: 0,
-            actualValue: overlapDays,
-            deviation: overlapDays,
-            deviationPercent: 100,
-          },
-          relatedEntityId: cruiseA.id,
-          relatedEntityType: 'cruise',
-        });
+
+        if (isBackToBack) {
+          const turnaroundDate = endADate === startBDate
+            ? endA.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : endB.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const isSameShip = (cruiseA.shipName || '').toLowerCase() === (cruiseB.shipName || '').toLowerCase();
+
+          anomalies.push({
+            id: generateId(),
+            type: 'back_to_back',
+            severity: 'info',
+            title: 'Back to Back Cruise',
+            description: isSameShip
+              ? `${cruiseADetails} transitions to ${cruiseBDetails} on turnaround day ${turnaroundDate}. This is a back-to-back sailing on ${cruiseA.shipName}.`
+              : `${cruiseADetails} transitions to ${cruiseBDetails} on ${turnaroundDate}. Back-to-back sailing across ships.`,
+            detectedAt: new Date().toISOString(),
+            dataPoints: {
+              cruiseId: cruiseA.id,
+              metric: 'Back to Back',
+              expectedValue: 0,
+              actualValue: 1,
+              deviation: 0,
+              deviationPercent: 0,
+            },
+            relatedEntityId: cruiseA.id,
+            relatedEntityType: 'cruise',
+          });
+        } else {
+          const overlapDetails = `${overlapDays} day${overlapDays !== 1 ? 's' : ''} overlap (${overlapStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${overlapEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+
+          anomalies.push({
+            id: generateId(),
+            type: 'booking_conflict',
+            severity: 'critical',
+            title: 'Booking Date Conflict Detected',
+            description: `${cruiseADetails} conflicts with ${cruiseBDetails}. ${overlapDetails}. You cannot be on both ships at the same time - please review and cancel one booking.`,
+            detectedAt: new Date().toISOString(),
+            dataPoints: {
+              cruiseId: cruiseA.id,
+              metric: 'Date Overlap',
+              expectedValue: 0,
+              actualValue: overlapDays,
+              deviation: overlapDays,
+              deviationPercent: 100,
+            },
+            relatedEntityId: cruiseA.id,
+            relatedEntityType: 'cruise',
+          });
+        }
       }
     }
   }

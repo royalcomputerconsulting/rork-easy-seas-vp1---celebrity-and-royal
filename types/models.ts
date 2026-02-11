@@ -647,6 +647,7 @@ export type AnomalyType =
   | 'offer_expiring'
   | 'tier_milestone'
   | 'booking_conflict'
+  | 'back_to_back'
   | 'price_drop';
 
 export type AlertPriority = 'critical' | 'high' | 'medium' | 'low' | 'info';

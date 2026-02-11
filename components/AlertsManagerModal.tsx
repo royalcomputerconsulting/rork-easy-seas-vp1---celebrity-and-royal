@@ -25,6 +25,7 @@ import {
   TrendingUp,
   Zap,
   CalendarX,
+  Calendar,
   TrendingDown,
   ChevronRight,
   ExternalLink,
@@ -83,6 +84,8 @@ export function AlertsManagerModal({ visible, onClose }: AlertsManagerModalProps
         return AlertTriangle;
       case 'booking_conflict':
         return CalendarX;
+      case 'back_to_back':
+        return Calendar;
       case 'unusual_pattern':
         return Zap;
       case 'price_drop':

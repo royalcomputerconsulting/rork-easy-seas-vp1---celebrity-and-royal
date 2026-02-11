@@ -405,12 +405,14 @@ export default function AnalyticsScreen() {
   useEffect(() => {
     console.log('[Analytics] Page loaded, syncing casino analytics...');
     resyncAnalytics();
-  }, [resyncAnalytics]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    console.log('[Analytics] Data changed (bookedCruises, sessions, casinoAnalytics), resyncing...');
+    console.log('[Analytics] Data changed (bookedCruises, sessions), resyncing...');
     resyncAnalytics();
-  }, [bookedCruises.length, sessions.length, casinoAnalytics, resyncAnalytics]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookedCruises.length, sessions.length]);
 
   const handleCruisePress = useCallback((cruiseId: string) => {
     router.push({ pathname: '/(tabs)/(overview)/cruise-details' as any, params: { id: cruiseId } });
