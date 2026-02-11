@@ -274,7 +274,7 @@ function RoyalCaribbeanSyncScreen() {
           onPress={() => router.push('/import-cruises' as any)}
         >
           <FileDown size={20} color="#10b981" />
-          <Text style={styles.importCruisesButtonText}>Import from ICruise/CruiseSheet</Text>
+          <Text style={styles.importCruisesButtonText}>Fetch Booked Cruise Pricing</Text>
         </Pressable>
 
         {false && Platform.OS !== 'web' && (

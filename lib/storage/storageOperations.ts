@@ -41,7 +41,7 @@ export async function clearAllAppData(): Promise<{
   try {
     const additionalKeys = await AsyncStorage.getAllKeys();
     const easySeaKeys = additionalKeys.filter(
-      key => key.startsWith('easyseas') || key.startsWith('@easyseas')
+      key => key.startsWith('easyseas') || key.startsWith('@easyseas') || key.startsWith('crew_recognition')
     );
     
     const preserveAdditionalKeys = new Set<string>([
@@ -112,6 +112,11 @@ export async function clearAllAppData(): Promise<{
     clearedCount: clearedKeys.length, 
     errorCount: errors.length 
   });
+
+  if (typeof window !== 'undefined') {
+    console.log('[StorageOps] Dispatching appDataCleared event');
+    window.dispatchEvent(new CustomEvent('appDataCleared'));
+  }
 
   return { success, clearedKeys, errors };
 }

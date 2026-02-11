@@ -2,17 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
-  CalendarDays, 
-  ChevronLeft,
-  ChevronRight,
-  Ship,
-  Plane,
-  User,
-  Plus,
-  AlertTriangle,
-  RefreshCcw,
-} from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCruiseStore } from '@/state/CruiseStore';
@@ -54,7 +44,6 @@ export default function EventsScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
 
   const calendarEvents = useMemo(() => {
     const events = [...(localData.calendar || []), ...(localData.tripit || [])];
@@ -71,14 +60,24 @@ export default function EventsScreen() {
     let cruise = 0;
     let travel = 0;
     let personal = 0;
+    const countedCruiseIds = new Set<string>();
 
     calendarEvents.forEach(event => {
-      if (event.type === 'cruise') cruise++;
-      else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') travel++;
-      else personal++;
+      if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
+        cruise++;
+        if ((event as any).cruiseId) countedCruiseIds.add((event as any).cruiseId);
+      } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
+        travel++;
+      } else {
+        personal++;
+      }
     });
 
-    bookedCruises.forEach(() => cruise++);
+    bookedCruises.forEach((bc) => {
+      if (!countedCruiseIds.has(bc.id)) {
+        cruise++;
+      }
+    });
 
     return { cruise, travel, personal };
   }, [calendarEvents, bookedCruises]);
@@ -124,6 +123,7 @@ export default function EventsScreen() {
     let travel = 0;
     let personal = 0;
     const dateStr = date.toISOString().split('T')[0];
+    const countedCruiseIds = new Set<string>();
 
     calendarEvents.forEach(event => {
       const eventStart = event.startDate || event.start || '';
@@ -134,15 +134,20 @@ export default function EventsScreen() {
         const endDate = eventEnd.split('T')[0];
         
         if (dateStr >= startDate && dateStr <= endDate) {
-          if (event.type === 'cruise') cruise++;
-          else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') travel++;
-          else personal++;
+          if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
+            cruise++;
+            if ((event as any).cruiseId) countedCruiseIds.add((event as any).cruiseId);
+          } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
+            travel++;
+          } else {
+            personal++;
+          }
         }
       }
     });
 
     bookedCruises.forEach((bc: BookedCruise) => {
-      if (bc.sailDate && bc.returnDate) {
+      if (bc.sailDate && bc.returnDate && !countedCruiseIds.has(bc.id)) {
         if (isDateInRange(date, bc.sailDate, bc.returnDate)) {
           cruise++;
         }
@@ -270,41 +275,6 @@ export default function EventsScreen() {
   const goToToday = useCallback(() => {
     setCurrentDate(new Date());
   }, []);
-
-  const handleSyncEvents = useCallback(async () => {
-    console.log('[Events] Syncing calendar events from booked cruises...');
-    setIsSyncing(true);
-    
-    try {
-      const existingEvents = coreData.calendarEvents.filter(e => e.sourceType !== 'cruise');
-      
-      const cruiseEvents: CalendarEvent[] = bookedCruises.map(cruise => ({
-        id: `cruise-event-${cruise.id}`,
-        title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
-        startDate: cruise.sailDate,
-        endDate: cruise.returnDate,
-        start: cruise.sailDate,
-        end: cruise.returnDate,
-        type: 'cruise' as const,
-        sourceType: 'cruise' as const,
-        location: cruise.departurePort,
-        description: `${cruise.nights} night cruise${cruise.reservationNumber ? ` - Res# ${cruise.reservationNumber}` : ''}${cruise.cabinNumber ? ` - Cabin ${cruise.cabinNumber}` : ''}`,
-        cruiseId: cruise.id,
-        allDay: true,
-        source: 'import' as const,
-      }));
-      
-      const allEvents = [...existingEvents, ...cruiseEvents];
-      coreData.setCalendarEvents(allEvents);
-      
-      console.log(`[Events] Synced ${cruiseEvents.length} cruise events`);
-      setRefreshKey(prev => prev + 1);
-    } catch (error) {
-      console.error('[Events] Error syncing events:', error);
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [bookedCruises, coreData]);
 
   const formatMonthYear = useCallback((date: Date): string => {
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -544,15 +514,6 @@ export default function EventsScreen() {
               
               <TouchableOpacity
                 style={styles.navButton}
-                onPress={handleSyncEvents}
-                activeOpacity={0.7}
-                disabled={isSyncing}
-              >
-                <RefreshCcw size={20} color={isSyncing ? COLORS.navyDeep : COLORS.navyDeep} style={isSyncing ? { opacity: 0.5 } : undefined} />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.navButton}
                 onPress={() => navigateMonth('next')}
                 activeOpacity={0.7}
               >
@@ -634,15 +595,15 @@ export default function EventsScreen() {
           <View style={styles.legendContainer}>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.cruise }]} />
-              <Text style={styles.legendText}>Cruise ({eventCounts.cruise})</Text>
+              <Text style={styles.legendText}>Easy Seas</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.travel }]} />
-              <Text style={styles.legendText}>Travel ({eventCounts.travel})</Text>
+              <Text style={styles.legendText}>Travel</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.personal }]} />
-              <Text style={styles.legendText}>Personal ({eventCounts.personal})</Text>
+              <Text style={styles.legendText}>Personal</Text>
             </View>
           </View>
 

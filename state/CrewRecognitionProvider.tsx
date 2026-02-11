@@ -138,17 +138,60 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
         ]);
         if (storedEntries) {
           setLocalEntries(JSON.parse(storedEntries));
+        } else {
+          setLocalEntries([]);
         }
         if (storedSailings) {
           setLocalSailings(JSON.parse(storedSailings));
+        } else {
+          setLocalSailings([]);
         }
-        console.log('[CrewRecognition] Loaded local data:', storedEntries ? JSON.parse(storedEntries).length : 0, 'entries');
+        console.log('[CrewRecognition] Loaded local data for user:', userId, storedEntries ? JSON.parse(storedEntries).length : 0, 'entries');
       } catch (e) {
         console.error('[CrewRecognition] Error loading local data:', e);
+        setLocalEntries([]);
+        setLocalSailings([]);
       } finally {
         setLocalLoaded(true);
       }
     })();
+  }, [userId]);
+
+  useEffect(() => {
+    const handleDataCleared = () => {
+      console.log('[CrewRecognition] Data cleared event detected, resetting crew data');
+      setLocalEntries([]);
+      setLocalSailings([]);
+      setFilters(DEFAULT_FILTERS);
+      setPage(1);
+      setIsOfflineMode(false);
+    };
+
+    const handleCloudRestore = () => {
+      console.log('[CrewRecognition] Cloud data restored, reloading crew data');
+      (async () => {
+        try {
+          const [storedEntries, storedSailings] = await Promise.all([
+            AsyncStorage.getItem(STORAGE_KEY_ENTRIES),
+            AsyncStorage.getItem(STORAGE_KEY_SAILINGS),
+          ]);
+          setLocalEntries(storedEntries ? JSON.parse(storedEntries) : []);
+          setLocalSailings(storedSailings ? JSON.parse(storedSailings) : []);
+          console.log('[CrewRecognition] Reloaded after cloud restore:', storedEntries ? JSON.parse(storedEntries).length : 0, 'entries');
+        } catch (e) {
+          console.error('[CrewRecognition] Error reloading after cloud restore:', e);
+        }
+      })();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('appDataCleared', handleDataCleared);
+      window.addEventListener('cloudDataRestored', handleCloudRestore);
+      return () => {
+        window.removeEventListener('appDataCleared', handleDataCleared);
+        window.removeEventListener('cloudDataRestored', handleCloudRestore);
+      };
+    }
   }, []);
 
   const statsQuery = trpc.crewRecognition.getStats.useQuery(
@@ -414,6 +457,24 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     },
   });
 
+  const clearCrewData = useCallback(async () => {
+    console.log('[CrewRecognition] Clearing all crew data...');
+    setLocalEntries([]);
+    setLocalSailings([]);
+    setFilters(DEFAULT_FILTERS);
+    setPage(1);
+    setIsOfflineMode(false);
+    try {
+      await Promise.all([
+        AsyncStorage.removeItem(STORAGE_KEY_ENTRIES),
+        AsyncStorage.removeItem(STORAGE_KEY_SAILINGS),
+      ]);
+      console.log('[CrewRecognition] Crew data cleared from storage');
+    } catch (e) {
+      console.error('[CrewRecognition] Error clearing crew data:', e);
+    }
+  }, []);
+
   const syncFromCSVLocally = useCallback(async () => {
     console.log('[CrewRecognition] Parsing CSV locally...');
     const { entries: parsedEntries, sailings: parsedSailings } = parseCSVToEntries(CREW_RECOGNITION_CSV);
@@ -487,6 +548,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     updateRecognitionEntry: updateRecognitionEntryWithFallback,
     deleteRecognitionEntry: deleteRecognitionEntryWithFallback,
     createSailing: createSailingMutation.mutateAsync,
+    clearCrewData,
     refetch: () => {
       statsQuery.refetch();
       entriesQuery.refetch();
