@@ -30,7 +30,7 @@ import { useCruiseStore } from '@/state/CruiseStore';
 import { useUser } from '@/state/UserProvider';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
-import { isDateInPast, getDaysUntil, createDateFromString } from '@/lib/date';
+import { isDateInPast, getDaysUntil, createDateFromString, formatDateMDY } from '@/lib/date';
 import { CruiseCard } from '@/components/CruiseCard';
 import type { Cruise, BookedCruise } from '@/types/models';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
@@ -455,7 +455,7 @@ export default function SchedulingScreen() {
               <Text style={styles.b2bSummaryText}>{set.departurePort}</Text>
             </View>
           </View>
-          <Text style={styles.b2bDateRange}>{set.startDate} → {set.endDate}</Text>
+          <Text style={styles.b2bDateRange}>{formatDateMDY(set.startDate, '-')} → {formatDateMDY(set.endDate, '-')}</Text>
         </LinearGradient>
         
         {slots.map((slot, slotIndex) => (
@@ -486,7 +486,7 @@ export default function SchedulingScreen() {
               <View style={styles.b2bCruiseHeader}>
                 <Calendar size={14} color={COLORS.navyDeep} />
                 <Text style={styles.b2bShipName}>
-                  {slot.sailDate} → {slot.returnDate}
+                  {formatDateMDY(slot.sailDate, '-')} → {formatDateMDY(slot.returnDate, '-')}
                 </Text>
                 <View style={styles.nightsBadge}>
                   <Text style={styles.nightsBadgeText}>{slot.nights}N</Text>

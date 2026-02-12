@@ -141,18 +141,33 @@ function extractNightsFromText(text: string): number | null {
 
 function calculateReturnDate(startDate: string, nights: number): string {
   if (!startDate) return '';
+  if (typeof nights !== 'number' || isNaN(nights) || nights <= 0) {
+    console.warn('[calculateReturnDate] Invalid nights value:', nights);
+    return '';
+  }
   
   try {
-    // Parse MM-DD-YYYY format
-    const parts = startDate.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
     let date: Date;
     
-    if (parts) {
-      const [, month, day, year] = parts;
+    const dashParts = startDate.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
+    if (dashParts) {
+      const [, month, day, year] = dashParts;
       date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     } else {
-      // Fallback to standard parsing
-      date = new Date(startDate);
+      const slashParts = startDate.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+      if (slashParts) {
+        const [, month, day, yearStr] = slashParts;
+        const year = yearStr.length === 2 ? 2000 + parseInt(yearStr) : parseInt(yearStr);
+        date = new Date(year, parseInt(month) - 1, parseInt(day));
+      } else {
+        const isoParts = startDate.match(/(\d{4})-(\d{2})-(\d{2})/);
+        if (isoParts) {
+          const [, year, month, day] = isoParts;
+          date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        } else {
+          date = new Date(startDate);
+        }
+      }
     }
     
     if (isNaN(date.getTime())) {
@@ -161,6 +176,12 @@ function calculateReturnDate(startDate: string, nights: number): string {
     }
     
     date.setDate(date.getDate() + nights);
+    
+    if (isNaN(date.getTime())) {
+      console.warn('[calculateReturnDate] Date became invalid after adding nights:', startDate, nights);
+      return '';
+    }
+    
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const year = String(date.getFullYear());
