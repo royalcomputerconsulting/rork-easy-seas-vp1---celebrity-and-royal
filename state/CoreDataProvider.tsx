@@ -14,6 +14,25 @@ import {
 } from "./coreData/dataEnrichment";
 import { DEFAULT_FILTERS } from "./coreData/filterLogic";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, type AppSettings } from "./coreData/storageConfig";
+import { logger } from "@/lib/logger";
+
+const PERSIST_DEBOUNCE_MS = 300;
+const pendingWrites = new Map<string, ReturnType<typeof setTimeout>>();
+
+function debouncedPersist(key: string, data: unknown) {
+  const existing = pendingWrites.get(key);
+  if (existing) clearTimeout(existing);
+  const timeout = setTimeout(async () => {
+    pendingWrites.delete(key);
+    try {
+      await AsyncStorage.setItem(key, JSON.stringify(data));
+      logger.log(`[CoreData] Persisted ${key}`);
+    } catch (error) {
+      logger.error(`[CoreData] Failed to persist ${key}:`, error);
+    }
+  }, PERSIST_DEBOUNCE_MS);
+  pendingWrites.set(key, timeout);
+}
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -26,7 +45,7 @@ const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUI
       COMPLETED_CRUISES_DATA: completedModule.COMPLETED_CRUISES_DATA || [] 
     };
   } catch (error) {
-    console.error('[CoreData] Failed to load mock data:', error);
+    logger.error('[CoreData] Failed to load mock data:', error);
     return { BOOKED_CRUISES_DATA: [], COMPLETED_CRUISES_DATA: [] };
   }
 };
@@ -234,8 +253,7 @@ interface CoreDataState {
 
 
 export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataState => {
-  console.log('[CoreData] === CONTEXT HOOK INITIALIZING ===');
-  console.log('[CoreData] === CREATING STATE ===');
+  logger.log('[CoreData] === CONTEXT HOOK INITIALIZING ===');
   const { authenticatedEmail, isAuthenticated } = useAuth();
   const { initialCheckComplete, hasCloudData } = useUserDataSync();
   const [cruises, setCruisesState] = useState<Cruise[]>([]);
@@ -245,7 +263,6 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const [isLoading, setIsLoading] = useState(true);
   const loadAttemptedRef = useRef(false);
   const lastAuthEmailRef = useRef<string | null>(null);
-  console.log('[CoreData] === STATE CREATED ===');
   const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
   
   const [filters, setFiltersState] = useState<CruiseFilter>(DEFAULT_FILTERS);
@@ -283,86 +300,79 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const hasActiveFilters = activeFilterCount > 0;
 
-  const persistData = useCallback(async <T,>(key: string, data: T) => {
-    try {
-      await AsyncStorage.setItem(key, JSON.stringify(data));
-      console.log(`[CoreData] Persisted ${key}`);
-    } catch (error) {
-      console.error(`[CoreData] Failed to persist ${key}:`, error);
-    }
+  const persistData = useCallback(<T,>(key: string, data: T) => {
+    debouncedPersist(key, data);
   }, []);
+
+  const bookedCruisesRef = useRef(bookedCruises);
+  const casinoOffersRef = useRef(casinoOffers);
+  const calendarEventsRef = useRef(calendarEvents);
+  const settingsRef = useRef(settings);
+  const userPointsRef = useRef(userPoints);
+  const clubRoyaleProfileRef = useRef(clubRoyaleProfile);
+  useEffect(() => { bookedCruisesRef.current = bookedCruises; }, [bookedCruises]);
+  useEffect(() => { casinoOffersRef.current = casinoOffers; }, [casinoOffers]);
+  useEffect(() => { calendarEventsRef.current = calendarEvents; }, [calendarEvents]);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { userPointsRef.current = userPoints; }, [userPoints]);
+  useEffect(() => { clubRoyaleProfileRef.current = clubRoyaleProfile; }, [clubRoyaleProfile]);
 
   const syncToBackend = useCallback(async () => {
     if (!isBackendAvailable() || !authenticatedEmail) {
-      console.log('[CoreData] Backend sync skipped - not authenticated or backend unavailable');
+      logger.log('[CoreData] Backend sync skipped - not authenticated or backend unavailable');
       return;
     }
     
     try {
-      const [bookedData, offersData, eventsData, settingsData, pointsData, profileData, extendedLoyaltyData] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.BOOKED_CRUISES),
-        AsyncStorage.getItem(STORAGE_KEYS.CASINO_OFFERS),
-        AsyncStorage.getItem(STORAGE_KEYS.CALENDAR_EVENTS),
-        AsyncStorage.getItem(STORAGE_KEYS.SETTINGS),
-        AsyncStorage.getItem(STORAGE_KEYS.USER_POINTS),
-        AsyncStorage.getItem(STORAGE_KEYS.CLUB_PROFILE),
-        AsyncStorage.getItem('easyseas_extended_loyalty_data'),
-      ]);
-      
-      const parsedBooked = bookedData ? JSON.parse(bookedData) : [];
-      const parsedOffers = offersData ? JSON.parse(offersData) : [];
-      const parsedEvents = eventsData ? JSON.parse(eventsData) : [];
-      const parsedSettings = settingsData ? JSON.parse(settingsData) : undefined;
-      const parsedPoints = pointsData ? parseInt(pointsData, 10) : undefined;
-      const parsedProfile = profileData ? JSON.parse(profileData) : undefined;
+      const extendedLoyaltyData = await AsyncStorage.getItem('easyseas_extended_loyalty_data').catch(() => null);
       const parsedExtendedLoyalty = extendedLoyaltyData ? JSON.parse(extendedLoyaltyData) : undefined;
       
-      console.log('[CoreData] Syncing to backend:', {
+      logger.log('[CoreData] Syncing to backend:', {
         email: authenticatedEmail,
-        cruises: parsedBooked.length,
-        offers: parsedOffers.length,
-        events: parsedEvents.length,
+        cruises: bookedCruisesRef.current.length,
+        offers: casinoOffersRef.current.length,
+        events: calendarEventsRef.current.length,
       });
       
       await saveAllUserDataMutateAsync({
         email: authenticatedEmail,
-        bookedCruises: parsedBooked,
-        casinoOffers: parsedOffers,
-        calendarEvents: parsedEvents,
-        settings: parsedSettings,
-        userPoints: parsedPoints,
-        clubRoyaleProfile: parsedProfile,
+        bookedCruises: bookedCruisesRef.current,
+        casinoOffers: casinoOffersRef.current,
+        calendarEvents: calendarEventsRef.current,
+        settings: settingsRef.current,
+        userPoints: userPointsRef.current,
+        clubRoyaleProfile: clubRoyaleProfileRef.current,
         loyaltyData: parsedExtendedLoyalty,
       });
       
-      console.log('[CoreData] ✅ Backend sync successful');
+      logger.log('[CoreData] ✅ Backend sync successful');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorString = String(error);
       
       if (['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage)) {
-        console.log('[CoreData] Backend sync skipped:', errorMessage);
+        logger.log('[CoreData] Backend sync skipped:', errorMessage);
       } else if (errorString.includes('Failed to fetch') || errorString.includes('Network request failed')) {
-        console.log('[CoreData] Backend sync skipped: Network error - backend may be unavailable');
+        logger.log('[CoreData] Backend sync skipped: Network error - backend may be unavailable');
       } else {
-        console.log('[CoreData] Backend sync failed (non-critical):', errorMessage);
+        logger.log('[CoreData] Backend sync failed (non-critical):', errorMessage);
       }
     }
   }, [saveAllUserDataMutateAsync, authenticatedEmail]);
 
   const loadFromBackend = useCallback(async () => {
     if (!isBackendAvailable() || !authenticatedEmail) {
-      console.log('[CoreData] Backend load skipped - not authenticated or backend unavailable');
+      logger.log('[CoreData] Backend load skipped - not authenticated or backend unavailable');
       return false;
     }
     
     try {
-      console.log('[CoreData] 🔄 Loading data from backend for:', authenticatedEmail);
+      logger.log('[CoreData] Loading data from backend for:', authenticatedEmail);
       const result = await refetchBackendData();
       
       if (result.data && result.data.found && result.data.data) {
         const userData = result.data.data;
-        console.log('[CoreData] ✅ Backend data found:', {
+        logger.log('[CoreData] Backend data found:', {
           email: authenticatedEmail,
           cruises: userData.bookedCruises?.length || 0,
           offers: userData.casinoOffers?.length || 0,
@@ -397,59 +407,53 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         await Promise.all(savePromises);
         await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true');
         
-        console.log('[CoreData] ✅ Backend data loaded and cached locally');
+        logger.log('[CoreData] Backend data loaded and cached locally');
         return true;
       }
       
-      console.log('[CoreData] No backend data found for:', authenticatedEmail);
+      logger.log('[CoreData] No backend data found for:', authenticatedEmail);
       return false;
     } catch (error) {
-      console.error('[CoreData] Backend load failed:', error);
+      logger.error('[CoreData] Backend load failed:', error);
       return false;
     }
   }, [refetchBackendData, authenticatedEmail]);
 
   const loadFromStorage = useCallback(async (force = false) => {
-    console.log('[CoreData] === START LOADING FROM STORAGE ===', { force, alreadyAttempted: loadAttemptedRef.current });
+    logger.log('[CoreData] Loading from storage', { force });
     if (loadAttemptedRef.current && !force) {
-      console.log('[CoreData] Load already attempted, skipping');
+      logger.log('[CoreData] Load already attempted, skipping');
       return;
     }
     setIsLoading(true);
-    if (!force) {
-      loadAttemptedRef.current = true;
-    } else {
-      console.log('[CoreData] Force reload requested, resetting attempt flag');
-      loadAttemptedRef.current = true;
-    }
+    loadAttemptedRef.current = true;
     
     try {
       // Try to load from backend first if authenticated
       if (authenticatedEmail) {
         const hasBackendData = await loadFromBackend();
         if (hasBackendData) {
-          console.log('[CoreData] Loaded user data from backend, will refresh from storage');
+          logger.log('[CoreData] Loaded user data from backend, will refresh from storage');
         }
       }
       
-      console.log('[CoreData] Loading from storage...');
+
 
       const storagePromises = [
-        AsyncStorage.getItem(STORAGE_KEYS.CRUISES).catch(e => { console.error('[CoreData] Error loading cruises:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.BOOKED_CRUISES).catch(e => { console.error('[CoreData] Error loading booked:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.CASINO_OFFERS).catch(e => { console.error('[CoreData] Error loading offers:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.CALENDAR_EVENTS).catch(e => { console.error('[CoreData] Error loading events:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.LAST_SYNC).catch(e => { console.error('[CoreData] Error loading lastSync:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.SETTINGS).catch(e => { console.error('[CoreData] Error loading settings:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.USER_POINTS).catch(e => { console.error('[CoreData] Error loading points:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.CLUB_PROFILE).catch(e => { console.error('[CoreData] Error loading profile:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.HAS_IMPORTED_DATA).catch(e => { console.error('[CoreData] Error loading import flag:', e); return null; }),
+        AsyncStorage.getItem(STORAGE_KEYS.CRUISES).catch(() => null),
+        AsyncStorage.getItem(STORAGE_KEYS.BOOKED_CRUISES).catch(() => null),
+        AsyncStorage.getItem(STORAGE_KEYS.CASINO_OFFERS).catch(() => null),
+        AsyncStorage.getItem(STORAGE_KEYS.CALENDAR_EVENTS).catch(() => null),
+        AsyncStorage.getItem(STORAGE_KEYS.LAST_SYNC).catch(() => null),
+        AsyncStorage.getItem(STORAGE_KEYS.SETTINGS).catch(() => null),
+        AsyncStorage.getItem(STORAGE_KEYS.USER_POINTS).catch(() => null),
+        AsyncStorage.getItem(STORAGE_KEYS.CLUB_PROFILE).catch(() => null),
+        AsyncStorage.getItem(STORAGE_KEYS.HAS_IMPORTED_DATA).catch(() => null),
       ];
 
       const [cruisesData, bookedData, offersData, eventsData, lastSync, settingsData, pointsData, profileData, hasImportedData] = await Promise.all(storagePromises);
-      console.log('[CoreData] Storage promises resolved');
 
-      const hasImported = hasImportedData === 'true';
+      const _hasImported = hasImportedData === 'true';
       const hasAnyExistingData = !!(bookedData || offersData || profileData || pointsData || cruisesData);
       
       // Parse existing data to check if there's any real (non-mock) data
@@ -461,19 +465,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       // 1. Cloud sync hasn't completed yet or cloud has data
       // 2. There's ANY existing data (prevents showing sample data to returning users)
       const isFirstTimeUser = hasImportedData === null && !hasAnyExistingData && initialCheckComplete && !hasCloudData;
-      console.log('[CoreData] Data status:', { 
-        hasImported, 
-        isFirstTimeUser, 
-        hasAnyExistingData, 
-        hasRealData,
-        bookedCount: parsedBookedData.length,
-        offersCount: parsedOffersData.length,
-        initialCheckComplete, 
-        hasCloudData 
-      });
 
-      // Only show offers if they exist (no mock offers)
-      console.log('[CoreData] Parsed offers:', parsedOffersData.length);
       setCasinoOffersState(parsedOffersData);
 
       if (cruisesData) {
@@ -487,7 +479,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           if (cruise.returnDate) {
             const returnDate = new Date(cruise.returnDate);
             if (returnDate < today && cruise.completionState !== 'completed') {
-              console.log('[CoreData] Auto-transitioning cruise to completed:', cruise.id, cruise.shipName, cruise.returnDate);
+              logger.log('[CoreData] Auto-transitioning cruise to completed:', cruise.id);
               return {
                 ...cruise,
                 status: 'completed',
@@ -502,9 +494,6 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       let finalBookedCount = 0;
       
       if (bookedData && parsedBookedData.length > 0) {
-        console.log('[CoreData] Found existing booked data, processing...');
-        
-        // Filter out any mock/demo cruises if real data exists
         const nonMockCruises = parsedBookedData.filter((cruise: any) => 
           !cruise.id?.includes('demo-') && 
           !cruise.id?.includes('booked-virtual') &&
@@ -512,11 +501,6 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           cruise.reservationNumber !== 'DEMO456' &&
           cruise.shipName !== 'Virtually a Ship of the Seas'
         );
-        
-        console.log('[CoreData] Filtered cruises:', { 
-          original: parsedBookedData.length, 
-          afterFilter: nonMockCruises.length 
-        });
         
         const withTransition = transitionCruisesToCompleted(nonMockCruises);
         const withItineraries = enrichCruisesWithMockItineraries(withTransition);
@@ -526,7 +510,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         finalBookedCount = enrichedBooked.length;
         setBookedCruisesState(enrichedBooked);
       } else if (isFirstTimeUser && !hasRealData) {
-        console.log('[CoreData] First time user with no real data - loading sample demo data');
+        logger.log('[CoreData] First time user - loading sample demo data');
         const { sampleCruises, sampleOffers } = getFirstTimeUserSampleData();
         const withItineraries = enrichCruisesWithMockItineraries(sampleCruises);
         const withKnownRetail = applyKnownRetailValues(withItineraries);
@@ -538,16 +522,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         await AsyncStorage.setItem(STORAGE_KEYS.BOOKED_CRUISES, JSON.stringify(enrichedSample));
         await AsyncStorage.setItem(STORAGE_KEYS.CASINO_OFFERS, JSON.stringify(sampleOffers));
         await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true');
-        console.log('[CoreData] Sample demo data loaded:', enrichedSample.length, 'cruises,', sampleOffers.length, 'offers');
+        logger.log('[CoreData] Sample demo data loaded:', enrichedSample.length, 'cruises');
       } else {
-        console.log('[CoreData] No booked cruises or real data exists - keeping empty state');
         finalBookedCount = 0;
         setBookedCruisesState([]);
       }
       
       let parsedEvents: CalendarEvent[] = eventsData ? JSON.parse(eventsData) : [];
       
-      console.log('[CoreData] Parsed events:', parsedEvents.length);
       setCalendarEventsState(parsedEvents);
       if (lastSync) setLastSyncDate(lastSync);
       
@@ -561,24 +543,12 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       if (profileData) {
         setClubRoyaleProfileState(JSON.parse(profileData));
-        console.log('[CoreData] Loaded existing loyalty profile');
       } else if (isFirstTimeUser) {
-        console.log('[CoreData] First time user - initializing with default loyalty profile');
         setClubRoyaleProfileState(SAMPLE_CLUB_ROYALE_PROFILE);
-      } else {
-        console.log('[CoreData] No profile data, but not first time user - keeping current state');
       }
 
-      console.log('[CoreData] === LOAD COMPLETE ===');
-      console.log('[CoreData] Loaded data summary:', {
-        cruises: cruisesData ? JSON.parse(cruisesData).length : 0,
-        booked: finalBookedCount,
-        offers: parsedOffersData.length,
-        events: parsedEvents.length,
-        hasImportedData: hasImported,
-      });
+      logger.log('[CoreData] Load complete:', { booked: finalBookedCount, offers: parsedOffersData.length });
       
-      // Auto-sync to backend after load if authenticated
       if (authenticatedEmail && !isSyncingRef.current) {
         isSyncingRef.current = true;
         syncToBackend().finally(() => {
@@ -589,9 +559,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       // Mark initial load as complete
       isInitialLoadRef.current = false;
     } catch (error) {
-      console.error('[CoreData] === LOAD FAILED ===');
-      console.error('[CoreData] Error details:', error);
-      console.error('[CoreData] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      logger.error('[CoreData] Load failed:', error);
       
       setCruisesState([]);
       setBookedCruisesState([]);
@@ -599,16 +567,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setCalendarEventsState([]);
     }
     
-    console.log('[CoreData] === SETTING isLoading to FALSE ===');
     setTimeout(() => {
       setIsLoading(false);
-      console.log('[CoreData] === isLoading set to FALSE ===');
     }, 0);
   }, [loadFromBackend, initialCheckComplete, hasCloudData, authenticatedEmail, syncToBackend]);
 
   useEffect(() => {
     if (!isAuthenticated) {
-      console.log('[CoreData] User not authenticated, clearing data');
+      logger.log('[CoreData] User not authenticated, clearing data');
       setCruisesState([]);
       setBookedCruisesState([]);
       setCasinoOffersState([]);
@@ -619,7 +585,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
 
     if (authenticatedEmail !== lastAuthEmailRef.current) {
-      console.log('[CoreData] User changed from', lastAuthEmailRef.current, 'to', authenticatedEmail, '- reloading data');
+      logger.log('[CoreData] User changed, reloading data');
       lastAuthEmailRef.current = authenticatedEmail;
       loadAttemptedRef.current = false;
       isInitialLoadRef.current = true;
@@ -632,14 +598,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setUserPointsState(0);
     }
 
-    console.log('[CoreData] === MOUNT: Starting initial load ===');
+    logger.log('[CoreData] Starting initial load');
     let isMounted = true;
     
     const loadTimeout = setTimeout(() => {
-      console.warn('[CoreData] === TIMEOUT: Forcing load to complete after 1s ===');
+      logger.warn('[CoreData] Timeout: Forcing load to complete');
       if (isMounted) {
         setIsLoading(false);
-        console.log('[CoreData] === TIMEOUT: isLoading forced to FALSE ===');
+
       }
     }, 1000);
     
@@ -648,15 +614,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         // Wait for cloud sync check to complete before loading
         // This prevents showing sample data to returning users
         if (!initialCheckComplete) {
-          console.log('[CoreData] === Waiting for cloud sync check to complete ===');
+          logger.log('[CoreData] Waiting for cloud sync check');
           return;
         }
         
-        console.log('[CoreData] === Calling loadFromStorage ===');
         await loadFromStorage();
-        console.log('[CoreData] === loadFromStorage completed ===');
       } catch (error) {
-        console.error('[CoreData] === ERROR during load ===', error);
+        logger.error('[CoreData] Error during load:', error);
         if (isMounted) {
           setIsLoading(false);
         }
@@ -670,7 +634,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     doLoad();
     
     return () => {
-      console.log('[CoreData] === Cleanup: clearing timeout ===');
+
       isMounted = false;
       clearTimeout(loadTimeout);
     };
@@ -683,7 +647,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     
     const syncTimeout = setTimeout(() => {
       if (!isSyncingRef.current) {
-        console.log('[CoreData] Auto-syncing to backend...');
+        logger.log('[CoreData] Auto-syncing to backend...');
         isSyncingRef.current = true;
         syncToBackend().finally(() => {
           isSyncingRef.current = false;
@@ -697,19 +661,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   useEffect(() => {
     const handleSessionPointsUpdate = (event: any) => {
       const { cruiseId, points } = event.detail;
-      console.log('[CoreDataProvider] Received points update event:', { cruiseId, points });
+      logger.log('[CoreDataProvider] Points update event:', { cruiseId, points });
       
       setBookedCruisesState(prev => {
         const updated = prev.map(cruise => {
           if (cruise.id === cruiseId) {
             const currentPoints = cruise.earnedPoints || 0;
             const newPoints = currentPoints + points;
-            console.log('[CoreDataProvider] Updating cruise points:', {
-              cruiseId,
-              oldPoints: currentPoints,
-              addedPoints: points,
-              newPoints,
-            });
+
             return {
               ...cruise,
               earnedPoints: newPoints,
@@ -724,7 +683,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     };
 
     const handleCloudDataRestored = () => {
-      console.log('[CoreDataProvider] Cloud data restored event received, reloading data...');
+      logger.log('[CoreDataProvider] Cloud data restored, reloading...');
       loadAttemptedRef.current = false;
       loadFromStorage(true);
     };
@@ -732,7 +691,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     try {
       if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
         const handleEntitlementProUnlocked = () => {
-          console.log('[CoreDataProvider] entitlementProUnlocked event received, reloading data...');
+          logger.log('[CoreDataProvider] Pro unlocked, reloading...');
           loadAttemptedRef.current = false;
           loadFromStorage(true);
         };
@@ -746,8 +705,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           window.removeEventListener('entitlementProUnlocked', handleEntitlementProUnlocked as EventListener);
         };
       }
-    } catch (error) {
-      console.log('[CoreDataProvider] Could not set up event listener (not on web):', error);
+    } catch (_e) {
     }
   }, [persistData, loadFromStorage]);
 
@@ -755,7 +713,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     setCruisesState(newCruises);
     await persistData(STORAGE_KEYS.CRUISES, newCruises);
     await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
-    console.log('[CoreData] Cruises state updated and persisted:', newCruises.length);
+
   }, [persistData]);
 
   const addCruise = useCallback((cruise: Cruise) => {
@@ -794,11 +752,6 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       cruise.shipName !== 'Virtually a Ship of the Seas'
     );
     
-    console.log('[CoreData] Setting booked cruises:', { 
-      total: booked.length, 
-      nonMock: nonMockCruises.length 
-    });
-    
     const withItineraries = enrichCruisesWithMockItineraries(nonMockCruises);
     const withKnownRetail = applyKnownRetailValues(withItineraries);
     const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
@@ -808,7 +761,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
     
     // Auto-generate calendar events from booked cruises
-    console.log('[CoreData] Auto-generating calendar events from', enrichedCruises.length, 'booked cruises');
+
     const newCalendarEvents: CalendarEvent[] = enrichedCruises.map(cruise => ({
       id: `cruise-${cruise.id}`,
       title: `${cruise.shipName}`,
@@ -828,10 +781,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       updatedAt: new Date().toISOString()
     }));
     
-    console.log('[CoreData] Generated', newCalendarEvents.length, 'calendar events from cruises');
+
     setCalendarEventsState(newCalendarEvents);
     await persistData(STORAGE_KEYS.CALENDAR_EVENTS, newCalendarEvents);
-    console.log('[CoreData] Booked cruises state updated and persisted:', enrichedCruises.length);
+    logger.log('[CoreData] Booked cruises updated:', enrichedCruises.length);
     
     if (!isSyncingRef.current) {
       isSyncingRef.current = true;
@@ -864,7 +817,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const filtered = prev.filter(e => e.id !== calEvent.id);
       const updated = [...filtered, calEvent];
       persistData(STORAGE_KEYS.CALENDAR_EVENTS, updated);
-      console.log('[CoreData] Auto-added calendar event for cruise:', cruise.id, cruise.shipName);
+
       return updated;
     });
   }, [persistData, buildCalendarEventFromCruise]);
@@ -874,13 +827,6 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const updated = prev.map(c => c.id === id ? { ...c, ...updates } : c);
       persistData(STORAGE_KEYS.BOOKED_CRUISES, updated);
       
-      if (updates.earnedPoints !== undefined) {
-        console.log('[CoreDataProvider] Cruise points updated via updateBookedCruise:', {
-          cruiseId: id,
-          newPoints: updates.earnedPoints,
-        });
-      }
-
       const hasCalendarFields = updates.shipName || updates.sailDate || updates.returnDate || updates.departurePort || updates.itineraryName || updates.nights;
       if (hasCalendarFields) {
         const updatedCruise = updated.find(c => c.id === id);
@@ -891,7 +837,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
             const exists = prevEvents.some(e => e.id === calEvent.id);
             const finalEvents = exists ? updatedEvents : [...prevEvents, calEvent];
             persistData(STORAGE_KEYS.CALENDAR_EVENTS, finalEvents);
-            console.log('[CoreData] Auto-updated calendar event for cruise:', id);
+
             return finalEvents;
           });
         }
@@ -918,7 +864,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
             return AsyncStorage.setItem(STORAGE_KEYS.REMOVED_MOCK_CRUISES, JSON.stringify([...existing]));
           })
           .then(() => {
-            console.log('[CoreData] Marked mock cruise as removed:', id);
+
           })
           .catch(console.error);
       }
@@ -931,7 +877,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     setCalendarEventsState(prev => {
       const updated = prev.filter(e => e.id !== calEventId && e.cruiseId !== id);
       persistData(STORAGE_KEYS.CALENDAR_EVENTS, updated);
-      console.log('[CoreData] Auto-removed calendar event for cruise:', id);
+
       return updated;
     });
   }, [persistData]);
@@ -943,15 +889,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       offer.offerCode !== 'NOWHERE2025'
     );
     
-    console.log('[CoreData] Setting casino offers:', { 
-      total: newOffers.length, 
-      nonMock: nonMockOffers.length 
-    });
-    
     setCasinoOffersState(nonMockOffers);
     await persistData(STORAGE_KEYS.CASINO_OFFERS, nonMockOffers);
     await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
-    console.log('[CoreData] Casino offers state updated and persisted:', nonMockOffers.length);
+    logger.log('[CoreData] Casino offers updated:', nonMockOffers.length);
     
     if (!isSyncingRef.current) {
       isSyncingRef.current = true;
@@ -986,7 +927,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, [persistData]);
 
   const setCalendarEvents = useCallback((newEvents: CalendarEvent[]) => {
-    console.log('[CoreData] Setting calendar events:', newEvents.length);
+
     setCalendarEventsState(newEvents);
     persistData(STORAGE_KEYS.CALENDAR_EVENTS, newEvents);
     AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true').catch(console.error);
@@ -1081,21 +1022,21 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setCasinoOffersState([]);
       setCalendarEventsState([]);
       setLastSyncDate(null);
-      console.log('[CoreData] All data cleared successfully - state reset to empty arrays, mock data prevented from loading');
+      logger.log('[CoreData] All data cleared');
     } catch (error) {
-      console.error('[CoreData] Failed to clear data:', error);
+      logger.error('[CoreData] Failed to clear data:', error);
       throw error;
     }
   }, []);
 
   const refreshData = useCallback(async () => {
-    console.log('[CoreData] === REFRESH DATA CALLED (FORCE RELOAD) ===');
+    logger.log('[CoreData] Refresh data called');
     await loadFromStorage(true);
   }, [loadFromStorage]);
 
   const restoreMockData = useCallback(async () => {
     try {
-      console.log('[CoreData] Restoring mock data to AsyncStorage...');
+      logger.log('[CoreData] Restoring mock data...');
       const { BOOKED_CRUISES_DATA, COMPLETED_CRUISES_DATA } = getMockCruises();
       const allMockCruises = [
         ...COMPLETED_CRUISES_DATA,
@@ -1114,9 +1055,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       ]);
       
       setBookedCruisesState(enrichedCruises);
-      console.log('[CoreData] Mock data restored successfully:', enrichedCruises.length, 'cruises');
+      logger.log('[CoreData] Mock data restored:', enrichedCruises.length);
     } catch (error) {
-      console.error('[CoreData] Failed to restore mock data:', error);
+      logger.error('[CoreData] Failed to restore mock data:', error);
       throw error;
     }
   }, []);
@@ -1133,7 +1074,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     });
   }, [bookedCruises]);
 
-  return {
+  return useMemo(() => ({
     cruises,
     bookedCruises,
     completedCruises,
@@ -1174,5 +1115,16 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     clearAllData,
     refreshData,
     restoreMockData,
-  };
+  }), [
+    cruises, bookedCruises, completedCruises, casinoOffers, calendarEvents,
+    isLoading, lastSyncDate, filters, activeFilterCount, hasActiveFilters,
+    settings, userPoints, clubRoyaleProfile, hasLocalData,
+    setCruises, addCruise, updateCruise, removeCruise,
+    setBookedCruises, addBookedCruise, updateBookedCruise, removeBookedCruise,
+    setCasinoOffers, addCasinoOffer, updateCasinoOffer, removeCasinoOffer,
+    setCalendarEvents, addCalendarEvent, updateCalendarEvent, removeCalendarEvent,
+    setFilter, setFilters, clearFilters, clearFilter,
+    updateSettings, setUserPoints, setClubRoyaleProfile,
+    clearAllData, refreshData, restoreMockData,
+  ]);
 });
