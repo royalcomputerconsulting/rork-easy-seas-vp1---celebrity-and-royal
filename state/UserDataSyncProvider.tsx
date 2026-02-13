@@ -5,6 +5,7 @@ import { trpc, trpcClient, isBackendReachable } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
 import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearAllAppData } from "@/lib/dataManager";
+import { safeDispatchEvent } from "@/lib/safeEventDispatch";
 
 const LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 1;
@@ -352,12 +353,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           retryCountRef.current = 0;
           console.log("[UserDataSync] Successfully loaded and restored cloud data");
           
-          if (typeof window !== "undefined") {
-            console.log("[UserDataSync] Emitting cloudDataRestored event");
-            window.dispatchEvent(new CustomEvent("cloudDataRestored", { 
-              detail: { email: authenticatedEmail } 
-            }));
-          }
+          console.log("[UserDataSync] Emitting cloudDataRestored event");
+          safeDispatchEvent("cloudDataRestored", { email: authenticatedEmail });
           
           setInitialCheckComplete(true);
           return true;

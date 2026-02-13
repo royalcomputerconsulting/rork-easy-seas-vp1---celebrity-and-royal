@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StyleSheet, View, Text, ActivityIndicator, Platform } from "react-native";
 import { CoreDataProvider, useCoreData } from "@/state/CoreDataProvider";
@@ -317,6 +317,15 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   const [showLandingPage, setShowLandingPage] = useState(true);
   const [forceSkipRestore, setForceSkipRestore] = useState(false);
 
+  const coreDataRef = useRef(coreData);
+  coreDataRef.current = coreData;
+  const syncUserRef = useRef(syncUserFromStorage);
+  syncUserRef.current = syncUserFromStorage;
+  const ensureOwnerRef = useRef(ensureOwner);
+  ensureOwnerRef.current = ensureOwner;
+  const updateUserRef = useRef(updateUser);
+  updateUserRef.current = updateUser;
+
   useEffect(() => {
     if (isAuthenticated && !initialCheckComplete && !forceSkipRestore) {
       const timeout = setTimeout(() => {
@@ -335,9 +344,9 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
     const syncEmailToProfile = async () => {
       if (isAuthenticated && authenticatedEmail) {
         try {
-          const owner = await ensureOwner();
+          const owner = await ensureOwnerRef.current();
           if (owner && owner.email !== authenticatedEmail) {
-            await updateUser(owner.id, { email: authenticatedEmail });
+            await updateUserRef.current(owner.id, { email: authenticatedEmail });
           }
         } catch (error) {
           console.error('[AppContent] Error syncing email:', error);
@@ -345,19 +354,19 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
       }
     };
     syncEmailToProfile();
-  }, [isAuthenticated, authenticatedEmail, ensureOwner, updateUser]);
+  }, [isAuthenticated, authenticatedEmail]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
     if (!lastRestoreTime) return;
 
     Promise.all([
-      coreData.refreshData(),
-      syncUserFromStorage(),
+      coreDataRef.current.refreshData(),
+      syncUserRef.current(),
     ]).catch((error) => {
       console.error('[AppContent] Error refreshing after cloud restore:', error);
     });
-  }, [isAuthenticated, lastRestoreTime, authenticatedEmail, coreData, syncUserFromStorage]);
+  }, [isAuthenticated, lastRestoreTime, authenticatedEmail]);
 
   useEffect(() => {
     setIsUserWhitelisted(isWhitelisted);

@@ -1,4 +1,5 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
+import { safeDispatchEvent } from '@/lib/safeEventDispatch';
 import { 
   View, 
   Text, 
@@ -1310,14 +1311,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                         {
                           text: 'OK',
                           onPress: () => {
-                            try {
-                              if (typeof window !== 'undefined') {
-                                console.log('[Settings] Dispatching entitlementProUnlocked event');
-                                window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
-                              }
-                            } catch (e) {
-                              console.error('[Settings] Failed to dispatch event', e);
-                            }
+                            safeDispatchEvent('entitlementProUnlocked');
                           }
                         }
                       ]

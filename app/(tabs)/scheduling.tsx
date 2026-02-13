@@ -413,9 +413,9 @@ export default function SchedulingScreen() {
               >
                 <View style={styles.offerOptionLeft}>
                   <Text style={styles.offerCabinType}>{offer.cabinType || 'Any Room'}</Text>
-                  <Text style={styles.offerGuests}>{offer.guestsInfo}</Text>
+                  <Text style={styles.offerGuests}>{String(offer.guestsInfo || '')}</Text>
                 </View>
-                {offer.offerName && (
+                {!!offer.offerName && (
                   <Text style={styles.offerNameSmall} numberOfLines={1}>{offer.offerName}</Text>
                 )}
               </TouchableOpacity>
@@ -428,6 +428,7 @@ export default function SchedulingScreen() {
 
   const renderB2BSetCard = useCallback((set: BackToBackSet, index: number) => {
     const slots = set.slots || [];
+    const gapDays = Array.isArray(set.gapDays) ? set.gapDays : [];
     
     return (
       <View key={set.id} style={styles.b2bSetCard}>
@@ -439,7 +440,7 @@ export default function SchedulingScreen() {
         >
           <View style={styles.b2bSetBadge}>
             <Link2 size={14} color={COLORS.navyDeep} />
-            <Text style={styles.b2bSetBadgeText}>BACK-TO-BACK SET #{index + 1}</Text>
+            <Text style={styles.b2bSetBadgeText}>{'BACK-TO-BACK SET #'}{index + 1}</Text>
           </View>
           <View style={styles.b2bSetSummary}>
             <View style={styles.b2bSummaryItem}>
@@ -448,14 +449,14 @@ export default function SchedulingScreen() {
             </View>
             <View style={styles.b2bSummaryItem}>
               <Calendar size={12} color={COLORS.navyDeep} />
-              <Text style={styles.b2bSummaryText}>{set.totalNights} nights total</Text>
+              <Text style={styles.b2bSummaryText}>{String(set.totalNights)} nights total</Text>
             </View>
             <View style={styles.b2bSummaryItem}>
               <Anchor size={12} color={COLORS.navyDeep} />
-              <Text style={styles.b2bSummaryText}>{set.departurePort}</Text>
+              <Text style={styles.b2bSummaryText}>{set.departurePort || 'Unknown'}</Text>
             </View>
           </View>
-          <Text style={styles.b2bDateRange}>{formatDateMDY(set.startDate, '-')} → {formatDateMDY(set.endDate, '-')}</Text>
+          <Text style={styles.b2bDateRange}>{formatDateMDY(set.startDate, '-') || '?'}{' → '}{formatDateMDY(set.endDate, '-') || '?'}</Text>
         </LinearGradient>
         
         {slots.map((slot, slotIndex) => (
@@ -468,28 +469,28 @@ export default function SchedulingScreen() {
           >
             <View style={styles.b2bCruisePosition}>
               <Text style={styles.b2bPositionNumber}>{slotIndex + 1}</Text>
-              {slotIndex < slots.length - 1 && (
+              {slotIndex < slots.length - 1 ? (
                 <View style={styles.b2bConnectorContainer}>
                   <View style={styles.b2bConnector} />
-                  {set.gapDays && set.gapDays[slotIndex] !== undefined && (
+                  {gapDays[slotIndex] !== undefined ? (
                     <View style={styles.b2bGapBadge}>
                       <Text style={styles.b2bGapText}>
-                        {set.gapDays[slotIndex] === 0 ? 'Same day' : `${set.gapDays[slotIndex]}d gap`}
+                        {gapDays[slotIndex] === 0 ? 'Same day' : `${gapDays[slotIndex]}d gap`}
                       </Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
-              )}
+              ) : null}
             </View>
             
             <View style={styles.b2bCruiseContent}>
               <View style={styles.b2bCruiseHeader}>
                 <Calendar size={14} color={COLORS.navyDeep} />
                 <Text style={styles.b2bShipName}>
-                  {formatDateMDY(slot.sailDate, '-')} → {formatDateMDY(slot.returnDate, '-')}
+                  {formatDateMDY(slot.sailDate, '-') || '?'}{' → '}{formatDateMDY(slot.returnDate, '-') || '?'}
                 </Text>
                 <View style={styles.nightsBadge}>
-                  <Text style={styles.nightsBadgeText}>{slot.nights}N</Text>
+                  <Text style={styles.nightsBadgeText}>{String(slot.nights)}{'N'}</Text>
                 </View>
               </View>
               
@@ -506,9 +507,9 @@ export default function SchedulingScreen() {
                 <Text style={styles.b2bOfferTagText}>{code}</Text>
               </View>
             ))}
-            {set.offerCodes.length === 0 && (
+            {set.offerCodes.length === 0 ? (
               <Text style={styles.b2bNoOfferText}>No offer codes specified</Text>
-            )}
+            ) : null}
           </View>
           <Text style={styles.b2bFooterHint}>
             Pick ONE offer per sailing. Each sailing in the chain can use a different code.
@@ -694,14 +695,14 @@ export default function SchedulingScreen() {
         </Text>
       </View>
       
-      {activeTab === 'foryou' && b2bSets.length > 0 && (
+      {activeTab === 'foryou' && b2bSets.length > 0 ? (
         <View style={styles.b2bExplanation}>
           <Link2 size={14} color={COLORS.navyDeep} />
           <Text style={styles.b2bExplanationText}>
             Each set shows consecutive cruises with different offer codes that you can book back-to-back.
           </Text>
         </View>
-      )}
+      ) : null}
     </View>
   );
 

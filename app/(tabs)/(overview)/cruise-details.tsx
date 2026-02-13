@@ -753,23 +753,23 @@ export default function CruiseDetailsScreen() {
                   </Text>
                 </View>
                 
-                {((cruise as any).balanceDue && parseFloat((cruise as any).balanceDue) > 0) && (
+                {!!(cruise as any).balanceDue && parseFloat((cruise as any).balanceDue) > 0 ? (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailRowLabel}>Balance Due</Text>
                     <Text style={[styles.detailRowValue, { color: COLORS.error }]}>
                       {formatCurrency(parseFloat((cruise as any).balanceDue))}
                     </Text>
                   </View>
-                )}
+                ) : null}
                 
-                {cruise.guests && (
+                {!!cruise.guests ? (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailRowLabel}>Number of Guests</Text>
-                    <Text style={styles.detailRowValue}>{cruise.guests}</Text>
+                    <Text style={styles.detailRowValue}>{String(cruise.guests)}</Text>
                   </View>
-                )}
+                ) : null}
                 
-                {(cruise as BookedCruise).guestNames && (cruise as BookedCruise).guestNames!.length > 0 && (
+                {!!(cruise as BookedCruise).guestNames && (cruise as BookedCruise).guestNames!.length > 0 && (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailRowLabel}>Guests</Text>
                     <Text style={styles.detailRowValue}>{(cruise as BookedCruise).guestNames!.join(', ')}</Text>
@@ -779,57 +779,57 @@ export default function CruiseDetailsScreen() {
             </View>
           )}
 
-          {((cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 || (cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0) && (
+          {((cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 || (cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0) ? (
             <View style={styles.fpObcQuickView}>
-              {(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 && (
+              {(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 ? (
                 <View style={styles.fpQuickBadge}>
                   <Text style={styles.fpQuickLabel}>FreePlay</Text>
                   <Text style={styles.fpQuickValue}>${(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0).toLocaleString()}</Text>
                 </View>
-              )}
-              {(cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0 && (
+              ) : null}
+              {(cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0 ? (
                 <View style={styles.obcQuickBadge}>
                   <Text style={styles.obcQuickLabel}>OBC</Text>
                   <Text style={styles.obcQuickValue}>${(cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0).toLocaleString()}</Text>
                 </View>
-              )}
+              ) : null}
             </View>
-          )}
+          ) : null}
 
-          {(cruise.interiorPrice ?? 0) > 0 && (
+          {(cruise.interiorPrice ?? 0) > 0 ? (
             <View style={styles.pricingCategoryCard}>
               <Text style={styles.pricingCategoryLabel}>Interior</Text>
               <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.interiorPrice ?? 0)}</Text>
             </View>
-          )}
+          ) : null}
 
-          {(cruise.oceanviewPrice ?? 0) > 0 && (
+          {(cruise.oceanviewPrice ?? 0) > 0 ? (
             <View style={styles.pricingCategoryCard}>
               <Text style={styles.pricingCategoryLabel}>Oceanview</Text>
               <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.oceanviewPrice ?? 0)}</Text>
             </View>
-          )}
+          ) : null}
 
-          {(cruise.balconyPrice ?? 0) > 0 && (
+          {(cruise.balconyPrice ?? 0) > 0 ? (
             <View style={styles.pricingCategoryCard}>
               <Text style={styles.pricingCategoryLabel}>Balcony</Text>
               <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.balconyPrice ?? 0)}</Text>
             </View>
-          )}
+          ) : null}
 
-          {(cruise.suitePrice ?? 0) > 0 && (
+          {(cruise.suitePrice ?? 0) > 0 ? (
             <View style={styles.pricingCategoryCard}>
               <Text style={styles.pricingCategoryLabel}>Suite</Text>
               <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.suitePrice ?? 0)}</Text>
             </View>
-          )}
+          ) : null}
 
-          {(cruise.taxes ?? 0) > 0 && (
+          {(cruise.taxes ?? 0) > 0 ? (
             <View style={styles.pricingCategoryCard}>
               <Text style={styles.pricingCategoryLabel}>Port Taxes & Fees</Text>
               <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.taxes ?? 0)}</Text>
             </View>
-          )}
+          ) : null}
 
           {isBooked && (
             <TouchableOpacity 
