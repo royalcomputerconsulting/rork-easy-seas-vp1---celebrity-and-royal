@@ -35,6 +35,7 @@ import {
   Dices,
   Calculator,
   Download,
+  DoorOpen,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -634,6 +635,82 @@ export default function AnalyticsScreen() {
     }
   }, [bookedCruises, buildCasinoCruisesCsv]);
 
+  const buildFinancialOverviewCsv = useCallback((cruises: BookedCruise[]): string => {
+    const escapeCsv = (value: unknown): string => {
+      const str = String(value ?? '');
+      const needsQuotes = /[\n\r\t",]/.test(str);
+      const escaped = str.replace(/"/g, '""');
+      return needsQuotes ? `"${escaped}"` : escaped;
+    };
+
+    const header = ['Cruise Ship', 'Sailing Date', 'Retail Cost', 'Points Won/Lost', '$ Won/Lost'];
+
+    const rows = cruises.map((cruise) => {
+      const breakdown = calculateCruiseValue(cruise);
+      const points = cruise.earnedPoints ?? cruise.casinoPoints ?? 0;
+      const winLoss = cruise.winnings ?? cruise.netResult ?? cruise.totalWinnings ?? 0;
+
+      return [
+        cruise.shipName,
+        cruise.sailDate,
+        breakdown.totalRetailValue,
+        points,
+        winLoss,
+      ].map(escapeCsv).join(',');
+    });
+
+    return [header.join(','), ...rows].join('\n');
+  }, []);
+
+  const handleExportFinancialOverview = useCallback(async () => {
+    try {
+      console.log('[FinancialExport] Export requested, total cruises:', bookedCruises.length);
+
+      if (bookedCruises.length === 0) {
+        console.log('[FinancialExport] No cruises to export');
+        return;
+      }
+
+      const filename = 'FinancialOverview.csv';
+      const csv = buildFinancialOverviewCsv(bookedCruises);
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        console.log('[FinancialExport] Web download started');
+        return;
+      }
+
+      const directory = Paths.cache ?? Paths.document;
+      const file = new File(directory, filename);
+      file.write(csv, { encoding: 'utf8' });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        console.log('[FinancialExport] Sharing not available');
+        return;
+      }
+
+      await Sharing.shareAsync(file.uri, {
+        mimeType: 'text/csv',
+        UTI: 'public.comma-separated-values-text',
+        dialogTitle: 'Export Financial Overview',
+      });
+
+      console.log('[FinancialExport] Share sheet opened');
+    } catch (e) {
+      console.log('[FinancialExport] Export failed', e);
+    }
+  }, [bookedCruises, buildFinancialOverviewCsv]);
+
   const ROIFilterTabs = () => (
     <View style={styles.filterTabsRow}>
       <View style={styles.filterTabs}>
@@ -854,8 +931,18 @@ export default function AnalyticsScreen() {
       <View style={styles.section}>
         <View style={styles.cleanCard}>
           <View style={styles.cleanCardHeader}>
-            <Receipt size={16} color={COLORS.navyDeep} />
-            <Text style={styles.cleanCardTitle}>Financial Overview</Text>
+            <View style={styles.cleanCardHeaderLeft}>
+              <Receipt size={16} color={COLORS.navyDeep} />
+              <Text style={styles.cleanCardTitle}>Financial Overview</Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleExportFinancialOverview}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              testID="financial-overview-export"
+            >
+              <DoorOpen size={18} color={COLORS.navyDeep} />
+            </TouchableOpacity>
           </View>
           <View style={styles.dataGrid}>
             <View style={styles.dataRow}>
@@ -1799,11 +1886,16 @@ const styles = StyleSheet.create({
   cleanCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    justifyContent: 'space-between',
     marginBottom: SPACING.sm,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+  },
+  cleanCardHeaderLeft: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.sm,
   },
   cleanCardTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
