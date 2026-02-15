@@ -184,13 +184,17 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
       })();
     };
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('appDataCleared', handleDataCleared);
-      window.addEventListener('cloudDataRestored', handleCloudRestore);
-      return () => {
-        window.removeEventListener('appDataCleared', handleDataCleared);
-        window.removeEventListener('cloudDataRestored', handleCloudRestore);
-      };
+    try {
+      if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
+        window.addEventListener('appDataCleared', handleDataCleared);
+        window.addEventListener('cloudDataRestored', handleCloudRestore);
+        return () => {
+          window.removeEventListener('appDataCleared', handleDataCleared);
+          window.removeEventListener('cloudDataRestored', handleCloudRestore);
+        };
+      }
+    } catch (e) {
+      console.log('[CrewRecognition] Could not set up event listeners:', e);
     }
   }, []);
 

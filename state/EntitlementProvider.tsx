@@ -272,7 +272,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
     if (!wasPro && finalIsPro) {
       try {
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
           console.log('[Entitlement] Dispatching entitlementProUnlocked event');
           window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
         }
@@ -577,7 +577,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         
         if (!wasPro) {
           try {
-            if (typeof window !== 'undefined') {
+            if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
               console.log('[Entitlement] Dispatching entitlementProUnlocked event for whitelisted user');
               window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
             }
@@ -672,7 +672,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       
       if (!wasPro) {
         try {
-          if (typeof window !== 'undefined') {
+          if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
             console.log('[Entitlement] Dispatching entitlementProUnlocked event for manual unlock');
             window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
           }

@@ -352,7 +352,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           retryCountRef.current = 0;
           console.log("[UserDataSync] Successfully loaded and restored cloud data");
           
-          if (typeof window !== "undefined") {
+          if (typeof window !== "undefined" && typeof CustomEvent !== "undefined") {
             console.log("[UserDataSync] Emitting cloudDataRestored event");
             window.dispatchEvent(new CustomEvent("cloudDataRestored", { 
               detail: { email: authenticatedEmail } 

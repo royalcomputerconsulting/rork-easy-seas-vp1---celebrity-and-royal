@@ -1311,7 +1311,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                           text: 'OK',
                           onPress: () => {
                             try {
-                              if (typeof window !== 'undefined') {
+                              if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
                                 console.log('[Settings] Dispatching entitlementProUnlocked event');
                                 window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
                               }

@@ -113,9 +113,13 @@ export async function clearAllAppData(): Promise<{
     errorCount: errors.length 
   });
 
-  if (typeof window !== 'undefined') {
-    console.log('[StorageOps] Dispatching appDataCleared event');
-    window.dispatchEvent(new CustomEvent('appDataCleared'));
+  try {
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+      console.log('[StorageOps] Dispatching appDataCleared event');
+      window.dispatchEvent(new CustomEvent('appDataCleared'));
+    }
+  } catch (e) {
+    console.log('[StorageOps] Could not dispatch appDataCleared event:', e);
   }
 
   return { success, clearedKeys, errors };
