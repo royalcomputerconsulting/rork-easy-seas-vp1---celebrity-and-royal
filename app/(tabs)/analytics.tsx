@@ -192,7 +192,7 @@ export default function AnalyticsScreen() {
   useEffect(() => {
     if (tier !== 'pro') {
       console.log('[Analytics] Access denied. Tier:', tier);
-      router.replace('/paywall');
+      router.replace('/paywall' as any);
     }
   }, [tier, router]);
 

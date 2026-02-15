@@ -14,7 +14,7 @@ export default function PaywallScreen() {
 
   const handleClose = useCallback(() => {
     console.log('[Paywall] Close requested - navigating to home');
-    router.replace('/(tabs)/(overview)');
+    router.replace('/(tabs)/(overview)' as any);
   }, [router]);
 
   const handleManualOverride = async () => {
