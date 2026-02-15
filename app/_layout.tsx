@@ -273,6 +273,14 @@ function RootLayoutNav() {
           headerShown: true,
         }} 
       />
+      <Stack.Screen 
+        name="import-cruises" 
+        options={{ 
+          presentation: "modal",
+          headerShown: false,
+          animation: 'slide_from_bottom' as const,
+        }} 
+      />
     </Stack>
   );
 }

@@ -613,7 +613,7 @@ export default function AnalyticsScreen() {
 
       const directory = Paths.cache ?? Paths.document;
       const file = new File(directory, filename);
-      file.write(csv, { encoding: 'utf8' });
+      file.write(csv);
 
       const fileUri = file.uri;
 
@@ -691,7 +691,7 @@ export default function AnalyticsScreen() {
 
       const directory = Paths.cache ?? Paths.document;
       const file = new File(directory, filename);
-      file.write(csv, { encoding: 'utf8' });
+      file.write(csv);
 
       const canShare = await Sharing.isAvailableAsync();
       if (!canShare) {
