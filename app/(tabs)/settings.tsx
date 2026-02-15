@@ -1,5 +1,4 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
-import { safeDispatchEvent } from '@/lib/safeEventDispatch';
 import { 
   View, 
   Text, 
@@ -308,7 +307,7 @@ export default function SettingsScreen() {
         'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
+          { text: 'Upgrade', onPress: () => router.push('/paywall') },
         ]
       );
       return;
@@ -589,7 +588,7 @@ export default function SettingsScreen() {
         'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
+          { text: 'Upgrade', onPress: () => router.push('/paywall') },
         ]
       );
       return;
@@ -663,7 +662,7 @@ export default function SettingsScreen() {
         'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
+          { text: 'Upgrade', onPress: () => router.push('/paywall') },
         ]
       );
       return;
@@ -923,7 +922,7 @@ export default function SettingsScreen() {
         'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
+          { text: 'Upgrade', onPress: () => router.push('/paywall') },
         ]
       );
       return;
@@ -1311,7 +1310,14 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                         {
                           text: 'OK',
                           onPress: () => {
-                            safeDispatchEvent('entitlementProUnlocked');
+                            try {
+                              if (typeof window !== 'undefined') {
+                                console.log('[Settings] Dispatching entitlementProUnlocked event');
+                                window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
+                              }
+                            } catch (e) {
+                              console.error('[Settings] Failed to dispatch event', e);
+                            }
                           }
                         }
                       ]
@@ -2104,7 +2110,7 @@ STEP 4: Optional Calendar Import
                 <Crown size={18} color={COLORS.navyDeep} />,
                 'Upgrade to Pro',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
-                () => router.push('/paywall' as any)
+                () => router.push('/paywall')
               )}
               <View style={styles.dataDivider} />
               {renderSettingRow(

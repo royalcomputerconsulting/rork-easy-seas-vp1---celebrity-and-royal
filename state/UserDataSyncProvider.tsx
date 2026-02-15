@@ -5,8 +5,6 @@ import { trpc, trpcClient, isBackendReachable } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
 import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearAllAppData } from "@/lib/dataManager";
-import { safeDispatchEvent } from "@/lib/safeEventDispatch";
-import { logger } from "@/lib/logger";
 
 const LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 1;
@@ -49,12 +47,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
   const fetchAllUserDataByEmail = useCallback(async (email: string) => {
     const normalizedEmail = email.toLowerCase().trim();
-    logger.log("[UserDataSync] Fetching cloud data for:", normalizedEmail);
+    console.log("[UserDataSync] Fetching cloud data for:", normalizedEmail);
     return trpcClient.data.getAllUserData.query({ email: normalizedEmail });
   }, []);
 
   const gatherAllLocalData = useCallback(async () => {
-    logger.log("[UserDataSync] Gathering all local data for sync...");
+    console.log("[UserDataSync] Gathering all local data for sync...");
     
     try {
       const [
@@ -125,17 +123,26 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         crewRecognitionSailings: crewSailingsRaw ? JSON.parse(crewSailingsRaw) : [],
       };
 
-      logger.log("[UserDataSync] Gathered data:", { cruises: data.bookedCruises.length, offers: data.casinoOffers.length });
+      console.log("[UserDataSync] Gathered data:", {
+        cruises: data.bookedCruises.length,
+        offers: data.casinoOffers.length,
+        events: data.calendarEvents.length,
+        sessions: data.casinoSessions.length,
+        hasProfile: !!data.clubRoyaleProfile,
+        hasSettings: !!data.settings,
+        crewEntries: data.crewRecognitionEntries.length,
+        crewSailings: data.crewRecognitionSailings.length,
+      });
 
       return data;
     } catch (error) {
-      logger.error("[UserDataSync] Error gathering local data:", error);
+      console.error("[UserDataSync] Error gathering local data:", error);
       return null;
     }
   }, []);
 
   const restoreDataToLocal = useCallback(async (cloudData: any) => {
-    logger.log("[UserDataSync] Restoring cloud data to local storage...");
+    console.log("[UserDataSync] Restoring cloud data to local storage...");
 
     try {
       const savePromises: Promise<void>[] = [];
@@ -245,11 +252,18 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
       await Promise.all(savePromises);
 
-      logger.log("[UserDataSync] Cloud data restored to local storage");
+      console.log("[UserDataSync] Cloud data restored to local storage:", {
+        cruises: cloudData.bookedCruises?.length ?? 0,
+        offers: cloudData.casinoOffers?.length ?? 0,
+        events: cloudData.calendarEvents?.length ?? 0,
+        sessions: cloudData.casinoSessions?.length ?? 0,
+        crewEntries: cloudData.crewRecognitionEntries?.length ?? 0,
+        crewSailings: cloudData.crewRecognitionSailings?.length ?? 0,
+      });
 
       return true;
     } catch (error) {
-      logger.error("[UserDataSync] Error restoring data to local:", error);
+      console.error("[UserDataSync] Error restoring data to local:", error);
       return false;
     }
   }, []);
@@ -258,60 +272,60 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     if (!email) return false;
     const reachable = await isBackendReachable();
     if (!reachable) {
-      logger.log("[UserDataSync] Backend not reachable, skipping cloud check");
+      console.log("[UserDataSync] Backend not reachable, skipping cloud check");
       return false;
     }
 
     try {
-      logger.log("[UserDataSync] Checking cloud data for:", email);
+      console.log("[UserDataSync] Checking if cloud data exists for:", email);
       const result = await fetchAllUserDataByEmail(email);
 
       const exists = !!(result?.found && result.data);
-      logger.log("[UserDataSync] Cloud data exists:", exists);
+      console.log("[UserDataSync] Cloud data exists:", exists);
       retryCountRef.current = 0;
       return exists;
     } catch (error) {
-      logger.log("[UserDataSync] Error checking cloud data:", error);
+      console.log("[UserDataSync] Error checking cloud data (backend may be unavailable):", error);
       return false;
     }
   }, [fetchAllUserDataByEmail]);
 
   const loadFromCloud = useCallback(async (): Promise<boolean> => {
     if (!authenticatedEmail) {
-      logger.log("[UserDataSync] No authenticated email, skipping cloud load");
+      console.log("[UserDataSync] No authenticated email, skipping cloud load");
       setInitialCheckComplete(true);
       return false;
     }
 
     const reachable = await isBackendReachable();
     if (!reachable) {
-      logger.log("[UserDataSync] Backend not reachable, skipping cloud load");
+      console.log("[UserDataSync] Backend not reachable, skipping cloud load");
       setInitialCheckComplete(true);
       return false;
     }
 
     const now = Date.now();
     if (retryCountRef.current >= MAX_RETRY_ATTEMPTS) {
-      logger.log("[UserDataSync] Max retry attempts reached, skipping");
+      console.log("[UserDataSync] Max retry attempts reached, skipping sync");
       setInitialCheckComplete(true);
       return false;
     }
 
     if (now - lastSyncAttemptRef.current < MIN_SYNC_INTERVAL_MS) {
-      logger.log("[UserDataSync] Too soon since last sync, skipping");
+      console.log("[UserDataSync] Too soon since last sync attempt, skipping");
       setInitialCheckComplete(true);
       return false;
     }
 
     lastSyncAttemptRef.current = now;
-    logger.log("[UserDataSync] Loading from cloud for:", authenticatedEmail);
+    console.log("[UserDataSync] Loading data from cloud for:", authenticatedEmail);
     setIsSyncing(true);
     setSyncError(null);
 
     try {
       const pendingSwitch = await AsyncStorage.getItem(PENDING_ACCOUNT_SWITCH_KEY);
       if (pendingSwitch === "true") {
-        logger.log("[UserDataSync] Pending account switch detected");
+        console.log("[UserDataSync] Pending account switch detected - will only clear local data AFTER confirming cloud data exists");
       }
 
       const result = await fetchAllUserDataByEmail(authenticatedEmail);
@@ -320,11 +334,11 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
       if (result?.found && result.data) {
         if (pendingSwitch === "true") {
-          logger.log("[UserDataSync] Cloud data found for new account - clearing local data");
+          console.log("[UserDataSync] Cloud data found for new account - clearing local app data now (safe) before restore");
           await clearAllAppData();
           await AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY);
         }
-        logger.log("[UserDataSync] Cloud data found, restoring...");
+        console.log("[UserDataSync] Cloud data found, restoring...");
         setHasCloudData(true);
 
         const restored = await restoreDataToLocal(result.data);
@@ -336,14 +350,20 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           await AsyncStorage.setItem(LAST_SYNC_KEY, syncTime);
           lastSyncedEmailRef.current = authenticatedEmail;
           retryCountRef.current = 0;
-          logger.log("[UserDataSync] Successfully loaded and restored cloud data");
-          safeDispatchEvent("cloudDataRestored", { email: authenticatedEmail });
+          console.log("[UserDataSync] Successfully loaded and restored cloud data");
+          
+          if (typeof window !== "undefined") {
+            console.log("[UserDataSync] Emitting cloudDataRestored event");
+            window.dispatchEvent(new CustomEvent("cloudDataRestored", { 
+              detail: { email: authenticatedEmail } 
+            }));
+          }
           
           setInitialCheckComplete(true);
           return true;
         }
       } else {
-        logger.log("[UserDataSync] No cloud data found");
+        console.log("[UserDataSync] No cloud data found for this user");
         setHasCloudData(false);
         retryCountRef.current = 0;
       }
@@ -352,7 +372,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return false;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      logger.log("[UserDataSync] Cloud load error:", errorMessage);
+      console.log("[UserDataSync] Cloud load error (backend may be unavailable):", errorMessage);
       retryCountRef.current += 1;
       
       const isNetworkError = 
@@ -378,7 +398,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
   const syncToCloud = useCallback(async () => {
     if (!authenticatedEmail) {
-      logger.log("[UserDataSync] No authenticated email, skipping cloud sync");
+      console.log("[UserDataSync] No authenticated email, skipping cloud sync");
       return;
     }
 
@@ -389,18 +409,18 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     }
 
     if (retryCountRef.current >= MAX_RETRY_ATTEMPTS) {
-      logger.log("[UserDataSync] Max retry attempts reached, skipping");
+      console.log("[UserDataSync] Max retry attempts reached, skipping sync");
       return;
     }
 
     const now = Date.now();
     if (now - lastSyncAttemptRef.current < MIN_SYNC_INTERVAL_MS) {
-      logger.log("[UserDataSync] Too soon since last sync, skipping");
+      console.log("[UserDataSync] Too soon since last sync attempt, skipping");
       return;
     }
 
     lastSyncAttemptRef.current = now;
-    logger.log("[UserDataSync] Syncing to cloud for:", authenticatedEmail);
+    console.log("[UserDataSync] Syncing data to cloud for:", authenticatedEmail);
     setIsSyncing(true);
     setSyncError(null);
 
@@ -408,7 +428,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       const localData = await gatherAllLocalData();
       
       if (!localData || !isMountedRef.current) {
-        logger.log("[UserDataSync] No local data to sync");
+        console.log("[UserDataSync] No local data to sync or component unmounted");
         return;
       }
 
@@ -420,7 +440,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         localData.clubRoyaleProfile;
 
       if (!hasData) {
-        logger.log("[UserDataSync] No meaningful data to sync, skipping");
+        console.log("[UserDataSync] No meaningful data to sync, skipping");
         return;
       }
 
@@ -438,10 +458,10 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       lastSyncedEmailRef.current = authenticatedEmail;
       retryCountRef.current = 0;
       
-      logger.log("[UserDataSync] Successfully synced to cloud");
+      console.log("[UserDataSync] Successfully synced to cloud");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      logger.log("[UserDataSync] Cloud sync error:", errorMessage);
+      console.log("[UserDataSync] Cloud sync error (backend may be unavailable):", errorMessage);
       retryCountRef.current += 1;
       
       const isNetworkError = 
@@ -474,17 +494,17 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
   useEffect(() => {
     isMountedRef.current = true;
-    logger.log('[UserDataSync] Provider mounted');
+    console.log('[UserDataSync] Provider mounted/remounted, resetting initialization');
     
     return () => {
       isMountedRef.current = false;
-
+      console.log('[UserDataSync] Provider unmounting');
     };
   }, []);
 
   useEffect(() => {
     if (!isAuthenticated || !authenticatedEmail) {
-      logger.log("[UserDataSync] User not authenticated, clearing sync state");
+      console.log("[UserDataSync] User not authenticated, clearing sync state");
       setHasCloudData(false);
       setLastSyncTime(null);
       setInitialCheckComplete(false);
@@ -495,16 +515,16 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
     // On hot reload, if initialCheckComplete is false but hasInitialized is true, reset
     if (hasInitializedRef.current && !initialCheckComplete) {
-      logger.log("[UserDataSync] Detected incomplete initialization, resetting");
+      console.log("[UserDataSync] Detected incomplete initialization (hot reload?), resetting");
       hasInitializedRef.current = false;
     }
 
     if (hasInitializedRef.current && lastSyncedEmailRef.current === authenticatedEmail) {
-
+      console.log("[UserDataSync] Already initialized for this email, skipping");
       return;
     }
 
-    logger.log("[UserDataSync] New user login detected, checking backend...");
+    console.log("[UserDataSync] New user login detected, checking backend...");
     hasInitializedRef.current = true;
     
     if (safetyTimeoutRef.current) {
@@ -512,7 +532,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     }
     safetyTimeoutRef.current = setTimeout(() => {
       if (isMountedRef.current && !initialCheckComplete) {
-        logger.log("[UserDataSync] Safety timeout reached");
+        console.log("[UserDataSync] Safety timeout reached - forcing initialCheckComplete");
         setInitialCheckComplete(true);
       }
     }, 6000);
@@ -520,7 +540,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     const initSync = async () => {
       const reachable = await isBackendReachable();
       if (!reachable) {
-        logger.log("[UserDataSync] Backend not reachable, skipping initial sync");
+        console.log("[UserDataSync] Backend not reachable, skipping initial sync");
         setInitialCheckComplete(true);
         if (safetyTimeoutRef.current) {
           clearTimeout(safetyTimeoutRef.current);
@@ -537,7 +557,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       }
       
       if (!cloudLoaded && isMountedRef.current) {
-        logger.log("[UserDataSync] No cloud data, will sync local data after delay");
+        console.log("[UserDataSync] No cloud data, will sync local data after delay");
         const timeoutId = setTimeout(() => {
           if (isMountedRef.current) {
             syncToCloud();

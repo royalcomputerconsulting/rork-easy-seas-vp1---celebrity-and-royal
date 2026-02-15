@@ -10,37 +10,19 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
     this.state = { hasError: false, errorMessage: '', errorStack: '' };
   }
 
-  static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
-    let message = 'An unexpected error occurred';
-    let stack = '';
-    try {
-      if (error instanceof Error) {
-        message = error.message || 'Unknown error';
-        stack = error.stack || '';
-      } else if (typeof error === 'string') {
-        message = error;
-      } else if (error !== null && error !== undefined) {
-        message = String(error);
-      }
-    } catch {
-      message = 'Failed to process error';
-    }
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    const message = error?.message || 'Unknown error';
+    const stack = error?.stack || '';
     console.error('[ErrorBoundary] getDerivedStateFromError', message, stack);
     return { hasError: true, errorMessage: message, errorStack: stack };
   }
 
-  componentDidCatch(error: unknown, errorInfo: React.ErrorInfo) {
-    try {
-      const msg = error instanceof Error ? error.message : String(error);
-      const stk = error instanceof Error ? error.stack : '';
-      console.error('[ErrorBoundary] componentDidCatch', {
-        error: msg,
-        stack: stk,
-        componentStack: errorInfo?.componentStack
-      });
-    } catch {
-      console.error('[ErrorBoundary] componentDidCatch - could not log error details');
-    }
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[ErrorBoundary] componentDidCatch', {
+      error: error?.message,
+      stack: error?.stack,
+      componentStack: errorInfo?.componentStack
+    });
   }
 
   handleReset = () => {

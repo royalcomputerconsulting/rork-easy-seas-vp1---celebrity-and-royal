@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: easy-seas-backend
+    env: node
+    buildCommand: npm install --legacy-peer-deps
+    startCommand: npm run backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: EXPO_PUBLIC_TOOLKIT_URL
+        sync: false
+      - key: EXPO_PUBLIC_RORK_DB_ENDPOINT
+        sync: false
+      - key: EXPO_PUBLIC_RORK_DB_NAMESPACE
+        sync: false
+      - key: EXPO_PUBLIC_RORK_DB_TOKEN
+        sync: false

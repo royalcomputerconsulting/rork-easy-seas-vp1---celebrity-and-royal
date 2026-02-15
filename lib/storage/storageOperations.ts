@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ALL_STORAGE_KEYS } from './storageKeys';
-import { safeDispatchEvent } from '@/lib/safeEventDispatch';
 
 export async function clearAllAppData(): Promise<{
   success: boolean;
@@ -114,7 +113,10 @@ export async function clearAllAppData(): Promise<{
     errorCount: errors.length 
   });
 
-  safeDispatchEvent('appDataCleared');
+  if (typeof window !== 'undefined') {
+    console.log('[StorageOps] Dispatching appDataCleared event');
+    window.dispatchEvent(new CustomEvent('appDataCleared'));
+  }
 
   return { success, clearedKeys, errors };
 }

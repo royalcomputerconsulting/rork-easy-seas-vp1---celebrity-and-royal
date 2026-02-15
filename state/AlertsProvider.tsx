@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
-import { logger } from '@/lib/logger';
 import type { 
   Alert, 
   AlertRule, 
@@ -23,6 +22,7 @@ import {
   processAnomaliesWithRules,
   filterActiveAlerts,
   sortAlertsByPriority,
+  dismissAlert as dismissAlertFn,
   snoozeAlert as snoozeAlertFn,
   resolveAlert as resolveAlertFn,
   getAlertSummary,
@@ -96,62 +96,93 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
         if (storedAlerts) {
           const parsed = JSON.parse(storedAlerts);
           setAlerts(parsed);
-          logger.log('[AlertsProvider] Loaded stored alerts:', parsed.length);
+          console.log('[AlertsProvider] Loaded stored alerts:', parsed.length);
         }
 
         if (storedRules) {
           const parsed = JSON.parse(storedRules);
           setRules(parsed);
-          logger.log('[AlertsProvider] Loaded stored rules:', parsed.length);
+          console.log('[AlertsProvider] Loaded stored rules:', parsed.length);
         }
 
         if (storedDismissed) {
           const parsed = JSON.parse(storedDismissed);
           setDismissedIds(new Set(parsed));
-          logger.log('[AlertsProvider] Loaded dismissed IDs:', parsed.length);
+          console.log('[AlertsProvider] Loaded dismissed IDs:', parsed.length);
         }
 
         const storedDismissedEntities = await AsyncStorage.getItem(DISMISSED_ENTITIES_KEY);
         if (storedDismissedEntities) {
           const parsed = JSON.parse(storedDismissedEntities);
           setDismissedEntities(new Set(parsed));
+          console.log('[AlertsProvider] Loaded dismissed entities:', parsed.length);
         }
       } catch (error) {
-        logger.error('[AlertsProvider] Error loading stored data:', error);
+        console.error('[AlertsProvider] Error loading stored data:', error);
       }
     };
 
     loadStoredData();
   }, []);
 
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(async () => {
+    const saveAlerts = async () => {
       try {
-        await Promise.all([
-          AsyncStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify(alerts)),
-          AsyncStorage.setItem(RULES_STORAGE_KEY, JSON.stringify(rules)),
-          AsyncStorage.setItem(DISMISSED_IDS_KEY, JSON.stringify([...dismissedIds])),
-          AsyncStorage.setItem(DISMISSED_ENTITIES_KEY, JSON.stringify([...dismissedEntities])),
-        ]);
+        await AsyncStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify(alerts));
       } catch (error) {
-        logger.error('[AlertsProvider] Error saving data:', error);
+        console.error('[AlertsProvider] Error saving alerts:', error);
       }
-    }, 500);
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [alerts, rules, dismissedIds, dismissedEntities]);
+
+    if (alerts.length > 0) {
+      saveAlerts();
+    }
+  }, [alerts]);
+
+  useEffect(() => {
+    const saveRules = async () => {
+      try {
+        await AsyncStorage.setItem(RULES_STORAGE_KEY, JSON.stringify(rules));
+      } catch (error) {
+        console.error('[AlertsProvider] Error saving rules:', error);
+      }
+    };
+
+    saveRules();
+  }, [rules]);
+
+  useEffect(() => {
+    const saveDismissed = async () => {
+      try {
+        await AsyncStorage.setItem(DISMISSED_IDS_KEY, JSON.stringify([...dismissedIds]));
+      } catch (error) {
+        console.error('[AlertsProvider] Error saving dismissed IDs:', error);
+      }
+    };
+
+    saveDismissed();
+  }, [dismissedIds]);
+
+  useEffect(() => {
+    const saveDismissedEntities = async () => {
+      try {
+        await AsyncStorage.setItem(DISMISSED_ENTITIES_KEY, JSON.stringify([...dismissedEntities]));
+      } catch (error) {
+        console.error('[AlertsProvider] Error saving dismissed entities:', error);
+      }
+    };
+
+    saveDismissedEntities();
+  }, [dismissedEntities]);
 
   const runDetection = useCallback(() => {
     if (tier !== 'pro') {
-      logger.log('[AlertsProvider] Alerts are Pro-only. Tier:', tier);
+      console.log('[AlertsProvider] Alerts are Pro-only. Tier:', tier);
       return;
     }
     
     setIsLoading(true);
-    logger.log('[AlertsProvider] Running anomaly detection...');
+    console.log('[AlertsProvider] Running anomaly detection...');
 
     try {
       const currentPoints = clubRoyaleProfile?.tierPoints || 26331;
@@ -189,9 +220,13 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
       }
 
       setLastDetectionRun(new Date().toISOString());
-      logger.log('[AlertsProvider] Detection complete:', { newAlerts: filteredNewAlerts.length });
+      console.log('[AlertsProvider] Detection complete:', {
+        anomalies: result.anomalies.length,
+        insights: result.insights.length,
+        newAlerts: filteredNewAlerts.length,
+      });
     } catch (error) {
-      logger.error('[AlertsProvider] Detection error:', error);
+      console.error('[AlertsProvider] Detection error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -215,21 +250,21 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     }
     setAlerts(prev => prev.filter(a => a.id !== alertId));
     setDismissedIds(prev => new Set([...prev, alertId]));
-
+    console.log('[AlertsProvider] Dismissed and removed alert:', alertId);
   }, [alerts]);
 
   const snoozeAlert = useCallback((alertId: string, minutes: number) => {
     setAlerts(prev => prev.map(a => 
       a.id === alertId ? snoozeAlertFn(a, minutes) : a
     ));
-
+    console.log('[AlertsProvider] Snoozed alert:', alertId, 'for', minutes, 'minutes');
   }, []);
 
   const resolveAlert = useCallback((alertId: string) => {
     setAlerts(prev => prev.map(a => 
       a.id === alertId ? resolveAlertFn(a) : a
     ));
-
+    console.log('[AlertsProvider] Resolved alert:', alertId);
   }, []);
 
   const clearAllAlerts = useCallback(async () => {
@@ -242,24 +277,24 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     
     try {
       await AsyncStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify([]));
-
+      console.log('[AlertsProvider] Cleared all alerts from storage');
     } catch (error) {
-      logger.error('[AlertsProvider] Error clearing alerts:', error);
+      console.error('[AlertsProvider] Error clearing alerts from storage:', error);
     }
     
-
+    console.log('[AlertsProvider] Cleared all alerts:', allIds.length);
   }, [alerts]);
 
   const toggleRule = useCallback((ruleId: string) => {
     setRules(prev => prev.map(r => 
       r.id === ruleId ? { ...r, enabled: !r.enabled } : r
     ));
-
+    console.log('[AlertsProvider] Toggled rule:', ruleId);
   }, []);
 
   const updateConfig = useCallback((newConfig: Partial<AnomalyDetectionConfig>) => {
     setConfig(prev => ({ ...prev, ...newConfig }));
-
+    console.log('[AlertsProvider] Updated config:', newConfig);
   }, []);
 
   const getAlertsByType = useCallback((type: AnomalyType): Alert[] => {

@@ -49,7 +49,7 @@ export function ContextualPaywall({
 
   const handleUpgrade = () => {
     onClose();
-    router.push('/paywall' as any);
+    router.push('/paywall');
   };
 
   const displayTitle = title || FEATURE_TITLES[feature] || 'Premium Feature';

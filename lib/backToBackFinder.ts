@@ -101,23 +101,11 @@ function getDaysDifference(date1: string | undefined, date2: string | undefined)
   }
 }
 
-function isValidDateString(dateStr: string): boolean {
-  if (!dateStr || dateStr.includes('NaN') || dateStr.includes('undefined') || dateStr.includes('null')) return false;
-  const d = createDateFromString(dateStr);
-  return !isNaN(d.getTime());
-}
-
 function calculateReturnDate(sailDate: string, nights: number): string {
   try {
-    if (!sailDate || isNaN(nights) || nights <= 0) return sailDate;
     const sail = createDateFromString(sailDate);
-    if (isNaN(sail.getTime())) return sailDate;
     sail.setDate(sail.getDate() + nights);
-    if (isNaN(sail.getTime())) return sailDate;
-    const month = String(sail.getMonth() + 1).padStart(2, '0');
-    const day = String(sail.getDate()).padStart(2, '0');
-    const year = String(sail.getFullYear());
-    return `${month}-${day}-${year}`;
+    return sail.toISOString().split('T')[0];
   } catch {
     return sailDate;
   }
@@ -164,10 +152,7 @@ function groupCruisesIntoSlots(cruises: Cruise[]): SailingSlot[] {
     const key = `${normalizedShip}_${cruise.sailDate}`;
     
     const nights = cruise.nights || 7;
-    let returnDate = cruise.returnDate;
-    if (!returnDate || !isValidDateString(returnDate)) {
-      returnDate = calculateReturnDate(cruise.sailDate, nights);
-    }
+    const returnDate = cruise.returnDate || calculateReturnDate(cruise.sailDate, nights);
     
     const offer: CruiseOffer = {
       cruiseId: cruise.id,

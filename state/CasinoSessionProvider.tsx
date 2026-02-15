@@ -3,7 +3,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { generateSessionsFromCruise } from '@/lib/historicalSessionCalculator';
 import type { BookedCruise } from '@/types/models';
-import { safeDispatchEvent } from '@/lib/safeEventDispatch';
 
 export type MachineType = 
   | 'penny-slots'
@@ -223,7 +222,16 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
     
     if (newSession.cruiseId && newSession.pointsEarned) {
       console.log('[CasinoSessionProvider] Dispatching points update event for cruise:', newSession.cruiseId, 'points:', newSession.pointsEarned);
-      safeDispatchEvent('casinoSessionPointsUpdated', { cruiseId: newSession.cruiseId, points: newSession.pointsEarned });
+      try {
+        if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+          const event = new CustomEvent('casinoSessionPointsUpdated', {
+            detail: { cruiseId: newSession.cruiseId, points: newSession.pointsEarned }
+          });
+          window.dispatchEvent(event);
+        }
+      } catch (error) {
+        console.log('[CasinoSessionProvider] Could not dispatch event (not on web):', error);
+      }
     }
     
     return newSession;
@@ -250,7 +258,16 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
       const pointsDelta = (updatedSession.pointsEarned || 0) - (oldSession?.pointsEarned || 0);
       if (pointsDelta !== 0) {
         console.log('[CasinoSessionProvider] Dispatching points delta event for cruise:', updatedSession.cruiseId, 'delta:', pointsDelta);
-        safeDispatchEvent('casinoSessionPointsUpdated', { cruiseId: updatedSession.cruiseId, points: pointsDelta });
+        try {
+          if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+            const event = new CustomEvent('casinoSessionPointsUpdated', {
+              detail: { cruiseId: updatedSession.cruiseId, points: pointsDelta }
+            });
+            window.dispatchEvent(event);
+          }
+        } catch (error) {
+          console.log('[CasinoSessionProvider] Could not dispatch event (not on web):', error);
+        }
       }
     }
   }, [sessions, persistSessions]);

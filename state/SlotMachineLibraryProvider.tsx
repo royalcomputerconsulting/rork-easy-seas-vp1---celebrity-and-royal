@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
-import { logger } from '@/lib/logger';
 import { 
   MachineEncyclopediaEntry, 
   AddGameWizardData,
@@ -85,10 +84,10 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     currentAtlasIds: string[]
   ): Promise<{ success: boolean; count: number; encyclopedia: MachineEncyclopediaEntry[]; atlasIds: string[]; error?: string }> => {
     try {
-      logger.log('[SlotMachineLibrary] Loading machines from index...');
+      console.log('[SlotMachineLibrary] Loading machines from index (lightweight mode)...');
 
       const machineIndex = await machineIndexHelper.getOrCreateIndex();
-      logger.log(`[SlotMachineLibrary] Loaded ${machineIndex.length} machines from index`);
+      console.log(`[SlotMachineLibrary] Loaded ${machineIndex.length} machines from index`);
 
       const newEntries: MachineEncyclopediaEntry[] = [];
 
@@ -124,7 +123,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
         }
       }
 
-      logger.log('[SlotMachineLibrary] Created', newEntries.length, 'new entries from index');
+      console.log('[SlotMachineLibrary] Created', newEntries.length, 'new entries from index');
 
       const updatedEncyclopedia = [...currentEncyclopedia, ...newEntries];
       await AsyncStorage.setItem(STORAGE_KEY_ENCYCLOPEDIA, JSON.stringify(updatedEncyclopedia));
@@ -136,7 +135,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
         atlasIds: currentAtlasIds,
       };
     } catch (error) {
-      logger.error('[SlotMachineLibrary] Load from index error:', error);
+      console.error('[SlotMachineLibrary] Load from index error:', error);
       return {
         success: false,
         count: 0,
@@ -152,7 +151,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     currentAtlasIds: string[]
   ): Promise<{ didChange: boolean; encyclopedia: MachineEncyclopediaEntry[] }> => {
     try {
-      logger.log('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro called', {
+      console.log('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro called', {
         currentCount: currentEncyclopedia.length,
         currentAtlasIds: currentAtlasIds.length,
       });
@@ -188,7 +187,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       }
 
       if (newEntries.length === 0) {
-        logger.log('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro: nothing to add', {
+        console.log('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro: nothing to add', {
           currentCount: currentEncyclopedia.length,
           indexCount,
         });
@@ -199,7 +198,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       await AsyncStorage.setItem(STORAGE_KEY_ENCYCLOPEDIA, JSON.stringify(updated));
       await AsyncStorage.setItem(STORAGE_KEY_INDEX_LOADED, 'true');
 
-      logger.log('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro: added entries', {
+      console.log('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro: added entries', {
         added: newEntries.length,
         after: updated.length,
         indexCount,
@@ -207,7 +206,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
       return { didChange: true, encyclopedia: updated };
     } catch (e) {
-      logger.error('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro failed', e);
+      console.error('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro failed', e);
       return { didChange: false, encyclopedia: currentEncyclopedia };
     }
   }, []);
@@ -215,7 +214,9 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   const initializeAndLoadData = useCallback(async () => {
     try {
       setIsLoading(true);
-      logger.log('[SlotMachineLibrary] Loading data...');
+      console.log('[SlotMachineLibrary] Loading data from MACHINES_262.json only...');
+
+      console.log('[SlotMachineLibrary] Loading user data from storage...');
 
       const [encyclopediaStr, atlasStr, indexLoaded] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEY_ENCYCLOPEDIA),
@@ -226,32 +227,34 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       const loadedEncyclopedia: MachineEncyclopediaEntry[] = encyclopediaStr ? JSON.parse(encyclopediaStr) : [];
       const loadedAtlasIds: string[] = atlasStr ? JSON.parse(atlasStr) : [];
 
-      logger.log(`[SlotMachineLibrary] Loaded ${loadedEncyclopedia.length} entries, ${loadedAtlasIds.length} atlas`);
+      console.log(`[SlotMachineLibrary] Loaded ${loadedEncyclopedia.length} encyclopedia entries`);
+      console.log(`[SlotMachineLibrary] Loaded ${loadedAtlasIds.length} atlas entries`);
+      console.log(`[SlotMachineLibrary] Index loaded flag:`, indexLoaded);
 
       if (loadedEncyclopedia.length === 0 && !indexLoaded) {
-        logger.log('[SlotMachineLibrary] First startup - loading from index...');
+        console.log('[SlotMachineLibrary] First startup detected - loading from index...');
         
         const importResult = await loadMachinesFromIndex(loadedEncyclopedia, loadedAtlasIds);
         
         if (importResult.success) {
-          logger.log(`[SlotMachineLibrary] Loaded ${importResult.count} machines from index`);
+          console.log(`[SlotMachineLibrary] ✓ Successfully loaded ${importResult.count} machines from index`);
           setEncyclopedia(importResult.encyclopedia);
           setMyAtlasIds(importResult.atlasIds);
           setIndexLoadComplete(true);
           await AsyncStorage.setItem(STORAGE_KEY_INDEX_LOADED, 'true');
         } else {
-          logger.error('[SlotMachineLibrary] Failed to load machines:', importResult.error);
+          console.error('[SlotMachineLibrary] Failed to load machines:', importResult.error);
           setEncyclopedia([]);
           setMyAtlasIds([]);
         }
       } else {
-
+        console.log('[SlotMachineLibrary] Loading existing data from storage');
         setEncyclopedia(loadedEncyclopedia);
         setMyAtlasIds(loadedAtlasIds);
         setIndexLoadComplete(indexLoaded === 'true');
       }
     } catch (error) {
-      logger.error('[SlotMachineLibrary] Error loading data:', error);
+      console.error('[SlotMachineLibrary] Error loading data:', error);
       setEncyclopedia([]);
       setMyAtlasIds([]);
     } finally {
@@ -267,18 +270,18 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   const saveEncyclopedia = async (data: MachineEncyclopediaEntry[]) => {
     try {
       await AsyncStorage.setItem(STORAGE_KEY_ENCYCLOPEDIA, JSON.stringify(data));
-      logger.log(`[SlotMachineLibrary] Saved ${data.length} encyclopedia entries`);
+      console.log(`[SlotMachineLibrary] Saved ${data.length} encyclopedia entries`);
     } catch (error) {
-      logger.error('[SlotMachineLibrary] Error saving encyclopedia:', error);
+      console.error('[SlotMachineLibrary] Error saving encyclopedia:', error);
     }
   };
 
   const saveAtlas = async (ids: string[]) => {
     try {
       await AsyncStorage.setItem(STORAGE_KEY_MY_ATLAS, JSON.stringify(ids));
-      logger.log(`[SlotMachineLibrary] Saved ${ids.length} atlas IDs`);
+      console.log(`[SlotMachineLibrary] Saved ${ids.length} atlas IDs`);
     } catch (error) {
-      logger.error('[SlotMachineLibrary] Error saving atlas:', error);
+      console.error('[SlotMachineLibrary] Error saving atlas:', error);
     }
   };
 
@@ -286,7 +289,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     const allGlobalMachines = permanentDB.getAllMachines();
     const globalMachine = allGlobalMachines.find(m => m.id === globalMachineId);
     if (!globalMachine) {
-      logger.error('[SlotMachineLibrary] Global machine not found:', globalMachineId);
+      console.error('[SlotMachineLibrary] Global machine not found:', globalMachineId);
       return;
     }
 
@@ -319,7 +322,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     setMyAtlasIds(updatedAtlasIds);
     await saveAtlas(updatedAtlasIds);
 
-    logger.log('[SlotMachineLibrary] Added machine from global:', newEntry.machineName);
+    console.log('[SlotMachineLibrary] Added machine from global:', newEntry.machineName);
     return newEntry.id;
   };
 
@@ -350,7 +353,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     };
 
     await permanentDB.addOrUpdateMachine(globalMachine, 'manual');
-
+    console.log('[SlotMachineLibrary] Added machine to permanent database');
 
     const newEntry: MachineEncyclopediaEntry = {
       ...data,
@@ -370,7 +373,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     setMyAtlasIds(updatedAtlasIds);
     await saveAtlas(updatedAtlasIds);
 
-    logger.log('[SlotMachineLibrary] Added custom machine:', newEntry.machineName);
+    console.log('[SlotMachineLibrary] Added custom machine:', newEntry.machineName);
     return newEntry.id;
   };
 
@@ -382,7 +385,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     );
     setEncyclopedia(updatedEncyclopedia);
     await saveEncyclopedia(updatedEncyclopedia);
-
+    console.log('[SlotMachineLibrary] Updated machine:', id);
   };
 
   const removeMachineFromAtlas = async (id: string) => {
@@ -398,7 +401,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     setMyAtlasIds(updatedAtlasIds);
     await saveAtlas(updatedAtlasIds);
 
-
+    console.log('[SlotMachineLibrary] Removed from atlas:', id);
   };
 
   const deleteMachine = async (id: string) => {
@@ -410,7 +413,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     setMyAtlasIds(updatedAtlasIds);
     await saveAtlas(updatedAtlasIds);
 
-
+    console.log('[SlotMachineLibrary] Deleted machine:', id);
   };
 
   const getMachineById = (id: string): MachineEncyclopediaEntry | undefined => {
@@ -426,7 +429,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   };
 
   const exportMachinesJSON = async (): Promise<string> => {
-    logger.log('[SlotMachineLibrary] Starting export...');
+    console.log('[SlotMachineLibrary] Starting full export with clean verbose data...');
     
     const cleanedMachines = await Promise.all(
       myAtlasMachines.map(async (machine) => {
@@ -496,10 +499,10 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
             cleanedMachine.images = machine.images;
           }
           
-
+          console.log(`[SlotMachineLibrary] Cleaned machine: ${machine.machineName}`);
           return cleanedMachine;
         } catch (error) {
-          logger.error(`[SlotMachineLibrary] Error processing machine ${machine.machineName}:`, error);
+          console.error(`[SlotMachineLibrary] Error processing machine ${machine.machineName}:`, error);
           return {
             header: {
               machineName: machine.machineName,
@@ -511,13 +514,13 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       })
     );
     
-    logger.log(`[SlotMachineLibrary] Export complete: ${cleanedMachines.length} machines`);
+    console.log(`[SlotMachineLibrary] Export complete with ${cleanedMachines.length} machines`);
     return JSON.stringify(cleanedMachines, null, 2);
   };
 
   const importMachinesJSON = async (jsonString: string): Promise<{ success: boolean; count: number; error?: string; details?: string }> => {
     try {
-      logger.log('[SlotMachineLibrary] Starting import...');
+      console.log('[SlotMachineLibrary] Starting import...');
       
       let machines: any[];
       try {
@@ -549,10 +552,10 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
         };
       }
 
-      logger.log(`[SlotMachineLibrary] Processing ${machines.length} machines...`);
+      console.log(`[SlotMachineLibrary] Processing ${machines.length} machines from import...`);
       
-      await permanentDB.importFromJSON(jsonString);
-
+      const result = await permanentDB.importFromJSON(jsonString);
+      console.log('[SlotMachineLibrary] Permanent DB import result:', result);
 
       const newEntries: MachineEncyclopediaEntry[] = [];
       const skippedEntries: string[] = [];
@@ -564,7 +567,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
           const hasValidId = machine.id || machine.name || machine.machineName || header.machineName;
           
           if (!hasValidId) {
-
+            console.warn('[SlotMachineLibrary] Skipping machine with no id or name:', machine);
             errorCount++;
             continue;
           }
@@ -582,7 +585,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
           
           if (existingEntry) {
             skippedEntries.push(machineName);
-
+            console.log('[SlotMachineLibrary] Skipping duplicate machine:', machineName);
             continue;
           }
 
@@ -626,11 +629,11 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
           newEntries.push(newEntry);
         } catch (itemError) {
           errorCount++;
-          logger.error('[SlotMachineLibrary] Error processing machine:', itemError);
+          console.error('[SlotMachineLibrary] Error processing machine:', machine, itemError);
         }
       }
 
-      logger.log(`[SlotMachineLibrary] Import: ${newEntries.length} new, ${skippedEntries.length} duplicates, ${errorCount} errors`);
+      console.log(`[SlotMachineLibrary] Import summary: ${newEntries.length} new, ${skippedEntries.length} duplicates, ${errorCount} errors`);
       
       if (newEntries.length === 0 && skippedEntries.length > 0) {
         return { 
@@ -659,7 +662,8 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       setMyAtlasIds(updatedAtlasIds);
       await saveAtlas(updatedAtlasIds);
 
-      logger.log('[SlotMachineLibrary] Import complete. Total:', updatedAtlasIds.length);
+      console.log('[SlotMachineLibrary] Import complete. Total machines in atlas:', updatedAtlasIds.length);
+      console.log('[SlotMachineLibrary] Permanent DB now has', permanentDB.getStats().total, 'machines');
 
       let details = `Successfully imported ${newEntries.length} machines.`;
       if (skippedEntries.length > 0) {
@@ -671,7 +675,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
       return { success: true, count: newEntries.length, details };
     } catch (error) {
-      logger.error('[SlotMachineLibrary] Import error:', error);
+      console.error('[SlotMachineLibrary] Import error:', error);
       return { 
         success: false, 
         count: 0, 
@@ -683,11 +687,11 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
   const getMachineFullDetails = useCallback(async (machineId: string): Promise<MachineFullDetails | null> => {
     try {
-
+      console.log(`[SlotMachineLibrary] Fetching full details for machine: ${machineId}`);
       const details = await machineIndexHelper.getMachineDetails(machineId);
       return details;
     } catch (error) {
-      logger.error('[SlotMachineLibrary] Error fetching machine details:', error);
+      console.error('[SlotMachineLibrary] Error fetching machine details:', error);
       return null;
     }
   }, []);
@@ -700,14 +704,18 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     if (!hasFullAccess) return;
     if (isLoading) return;
 
-    logger.log('[SlotMachineLibrary] Pro access - ensuring full encyclopedia loaded');
+    console.log('[SlotMachineLibrary] Pro access detected - ensuring full encyclopedia is loaded', {
+      encyclopediaCount: encyclopedia.length,
+      myAtlasIds: myAtlasIds.length,
+      indexLoadComplete,
+    });
 
     ensureEncyclopediaFullyLoadedForPro(encyclopedia, myAtlasIds)
       .then((result) => {
         if (!result.didChange) return;
         setEncyclopedia(result.encyclopedia);
       })
-      .catch((e) => logger.error('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro error', e));
+      .catch((e) => console.error('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro unhandled error', e));
   }, [ensureEncyclopediaFullyLoadedForPro, encyclopedia, hasFullAccess, indexLoadComplete, isLoading, myAtlasIds]);
 
   const globalLibrary = useMemo(() => {
@@ -829,7 +837,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   const toggleFavorite = async (id: string) => {
     const machine = encyclopedia.find(e => e.id === id);
     if (!machine) {
-      logger.error('[SlotMachineLibrary] Machine not found:', id);
+      console.error('[SlotMachineLibrary] Machine not found:', id);
       return;
     }
 
@@ -845,7 +853,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     );
     setEncyclopedia(updatedEncyclopedia);
     await saveEncyclopedia(updatedEncyclopedia);
-
+    console.log('[SlotMachineLibrary] Toggled favorite:', id, !machine.isFavorite);
   };
 
   const clearAllFilters = () => {
@@ -971,10 +979,10 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
         return id;
       }
 
-      logger.error('[SlotMachineLibrary] Incomplete wizard data');
+      console.error('[SlotMachineLibrary] Incomplete wizard data');
       return undefined;
     } catch (error) {
-      logger.error('[SlotMachineLibrary] Error completing wizard:', error);
+      console.error('[SlotMachineLibrary] Error completing wizard:', error);
       return undefined;
     }
   };

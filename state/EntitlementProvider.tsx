@@ -5,7 +5,6 @@ import createContextHook from '@nkzw/create-context-hook';
 import Constants from 'expo-constants';
 import type { CustomerInfo, PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 import { useAuth } from './AuthProvider';
-import { safeDispatchEvent } from '@/lib/safeEventDispatch';
 
 type PurchasesModule = {
   getOfferings: () => Promise<{ all?: Record<string, PurchasesOffering> }>;
@@ -272,7 +271,14 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     lastIsProRef.current = finalIsPro;
 
     if (!wasPro && finalIsPro) {
-      safeDispatchEvent('entitlementProUnlocked');
+      try {
+        if (typeof window !== 'undefined') {
+          console.log('[Entitlement] Dispatching entitlementProUnlocked event');
+          window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
+        }
+      } catch (e) {
+        console.error('[Entitlement] Failed to dispatch entitlementProUnlocked event', e);
+      }
     }
   }, [computeTier]);
 
@@ -573,7 +579,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
           try {
             if (typeof window !== 'undefined') {
               console.log('[Entitlement] Dispatching entitlementProUnlocked event for whitelisted user');
-              safeDispatchEvent('entitlementProUnlocked');
+              window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
             }
           } catch (e) {
             console.error('[Entitlement] Failed to dispatch entitlementProUnlocked event', e);
@@ -668,7 +674,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         try {
           if (typeof window !== 'undefined') {
             console.log('[Entitlement] Dispatching entitlementProUnlocked event for manual unlock');
-            safeDispatchEvent('entitlementProUnlocked');
+            window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
           }
         } catch (e) {
           console.error('[Entitlement] Failed to dispatch entitlementProUnlocked event', e);

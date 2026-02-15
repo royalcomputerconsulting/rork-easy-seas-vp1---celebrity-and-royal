@@ -53,7 +53,7 @@ function RoyalCaribbeanSyncScreen() {
   useEffect(() => {
     if (entitlement.tier === 'view') {
       console.log('[RoyalCaribbeanSync] View-only mode detected. Redirecting to paywall.');
-      router.replace('/paywall' as any);
+      router.replace('/paywall');
     }
   }, [entitlement.tier, router]);
   
