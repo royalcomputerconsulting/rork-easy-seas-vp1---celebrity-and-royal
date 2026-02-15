@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/state/AuthProvider';
 import { CREW_RECOGNITION_CSV } from '@/constants/crew-recognition-csv';
+import { safeAddEventListener } from '@/lib/safeEventDispatch';
 import type { RecognitionEntryWithCrew, Sailing, Department } from '@/types/crew-recognition';
 
 const STORAGE_KEY_ENTRIES = 'crew_recognition_entries_v2';
@@ -184,14 +185,12 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
       })();
     };
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('appDataCleared', handleDataCleared);
-      window.addEventListener('cloudDataRestored', handleCloudRestore);
-      return () => {
-        window.removeEventListener('appDataCleared', handleDataCleared);
-        window.removeEventListener('cloudDataRestored', handleCloudRestore);
-      };
-    }
+    const removeClear = safeAddEventListener('appDataCleared', handleDataCleared);
+    const removeRestore = safeAddEventListener('cloudDataRestored', handleCloudRestore);
+    return () => {
+      removeClear?.();
+      removeRestore?.();
+    };
   }, []);
 
   const statsQuery = trpc.crewRecognition.getStats.useQuery(

@@ -15,6 +15,7 @@ import {
 import { DEFAULT_FILTERS } from "./coreData/filterLogic";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, type AppSettings } from "./coreData/storageConfig";
 import { logger } from "@/lib/logger";
+import { safeAddEventListener } from "@/lib/safeEventDispatch";
 
 const PERSIST_DEBOUNCE_MS = 300;
 const pendingWrites = new Map<string, ReturnType<typeof setTimeout>>();
@@ -688,25 +689,20 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       loadFromStorage(true);
     };
 
-    try {
-      if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
-        const handleEntitlementProUnlocked = () => {
-          logger.log('[CoreDataProvider] Pro unlocked, reloading...');
-          loadAttemptedRef.current = false;
-          loadFromStorage(true);
-        };
+    const handleEntitlementProUnlocked = () => {
+      logger.log('[CoreDataProvider] Pro unlocked, reloading...');
+      loadAttemptedRef.current = false;
+      loadFromStorage(true);
+    };
 
-        window.addEventListener('casinoSessionPointsUpdated', handleSessionPointsUpdate as EventListener);
-        window.addEventListener('cloudDataRestored', handleCloudDataRestored as EventListener);
-        window.addEventListener('entitlementProUnlocked', handleEntitlementProUnlocked as EventListener);
-        return () => {
-          window.removeEventListener('casinoSessionPointsUpdated', handleSessionPointsUpdate as EventListener);
-          window.removeEventListener('cloudDataRestored', handleCloudDataRestored as EventListener);
-          window.removeEventListener('entitlementProUnlocked', handleEntitlementProUnlocked as EventListener);
-        };
-      }
-    } catch (_e) {
-    }
+    const removePoints = safeAddEventListener('casinoSessionPointsUpdated', handleSessionPointsUpdate as EventListener);
+    const removeCloud = safeAddEventListener('cloudDataRestored', handleCloudDataRestored as EventListener);
+    const removePro = safeAddEventListener('entitlementProUnlocked', handleEntitlementProUnlocked as EventListener);
+    return () => {
+      removePoints?.();
+      removeCloud?.();
+      removePro?.();
+    };
   }, [persistData, loadFromStorage]);
 
   const setCruises = useCallback(async (newCruises: Cruise[]) => {
