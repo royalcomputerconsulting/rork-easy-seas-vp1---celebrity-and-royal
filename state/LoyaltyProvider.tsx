@@ -358,8 +358,8 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
 
     bookedCruises.forEach((cruise: BookedCruise) => {
       const nights = cruise.nights || 0;
-      const sailDate = cruise.sailDate ? createDateFromString(cruise.sailDate) : new Date(cruise.returnDate);
-      const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : new Date(sailDate);
+      const sailDate = cruise.sailDate ? createDateFromString(cruise.sailDate) : (cruise.returnDate ? createDateFromString(cruise.returnDate) : new Date());
+      const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : sailDate;
       const isCompleted = returnDate < today || cruise.completionState === 'completed';
       
       // Only count Royal Caribbean ships for loyalty/casino calculations

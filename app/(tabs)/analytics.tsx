@@ -11,7 +11,6 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
@@ -191,7 +190,7 @@ export default function AnalyticsScreen() {
   useEffect(() => {
     if (tier !== 'pro') {
       console.log('[Analytics] Access denied. Tier:', tier);
-      router.replace('/paywall');
+      router.replace('/paywall' as any);
     }
   }, [tier, router]);
 
@@ -610,9 +609,10 @@ export default function AnalyticsScreen() {
         return;
       }
 
-      const directory = Paths.cache ?? Paths.document;
-      const file = new File(directory, filename);
-      file.write(csv, { encoding: 'utf8' });
+      const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
+      const directory = ExpoPaths.cache ?? ExpoPaths.document;
+      const file = new ExpoFile(directory, filename);
+      await file.write(csv);
 
       const fileUri = file.uri;
 

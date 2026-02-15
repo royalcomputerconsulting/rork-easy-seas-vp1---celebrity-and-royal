@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { getAllStoredData, importAllData, type FullAppDataBundle } from '../dataBundle/bundleOperations';
 
@@ -37,7 +36,8 @@ export async function exportAllDataToFile(): Promise<{
       return { success: true, fileName };
     }
 
-    const file = new File(Paths.cache, fileName);
+    const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
+    const file = new ExpoFile(ExpoPaths.cache, fileName);
     await file.write(jsonContent);
 
     const canShare = await Sharing.isAvailableAsync();
@@ -105,7 +105,8 @@ export async function importAllDataFromFile(): Promise<{
       
       console.log('[DataFileIO] Web file read successfully, length:', content.length);
     } else {
-      const file = new File(asset.uri);
+      const { File: ExpoFile2 } = await import('expo-file-system');
+      const file = new ExpoFile2(asset.uri);
       content = await file.text();
     }
 

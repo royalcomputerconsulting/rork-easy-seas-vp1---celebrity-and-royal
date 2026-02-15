@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { File, Paths } from 'expo-file-system';
+
 import * as Sharing from 'expo-sharing';
 import { 
   validateFileSize, 
@@ -61,7 +61,8 @@ export async function pickAndReadFile(fileType: 'csv' | 'ics' | 'json'): Promise
       
       console.log('[FileIO] Web file read successfully, length:', content.length);
     } else {
-      const file = new File(asset.uri);
+      const { File: ExpoFile } = await import('expo-file-system');
+      const file = new ExpoFile(asset.uri);
       content = await file.text();
     }
 
@@ -119,7 +120,8 @@ export async function downloadFromURL(url: string): Promise<{ content: string; s
     
     // Native: Use FileSystem.downloadAsync which can access device cookies/credentials
     const fileName = `ics_import_${Date.now()}.ics`;
-    const tempFile = new File(Paths.cache, fileName);
+    const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
+    const tempFile = new ExpoFile(ExpoPaths.cache, fileName);
     const fileUri = tempFile.uri;
     
     console.log('[FileIO] Native download to:', fileUri);
@@ -173,8 +175,9 @@ export async function exportFile(content: string, fileName: string): Promise<boo
       return true;
     }
 
-    const file = new File(Paths.cache, fileName);
-    file.write(content);
+    const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
+    const file = new ExpoFile(ExpoPaths.cache, fileName);
+    await file.write(content);
 
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {

@@ -307,7 +307,7 @@ export default function SettingsScreen() {
         'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall') },
+          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
         ]
       );
       return;
@@ -588,7 +588,7 @@ export default function SettingsScreen() {
         'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall') },
+          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
         ]
       );
       return;
@@ -662,7 +662,7 @@ export default function SettingsScreen() {
         'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall') },
+          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
         ]
       );
       return;
@@ -922,7 +922,7 @@ export default function SettingsScreen() {
         'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall') },
+          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
         ]
       );
       return;
@@ -2110,7 +2110,7 @@ STEP 4: Optional Calendar Import
                 <Crown size={18} color={COLORS.navyDeep} />,
                 'Upgrade to Pro',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
-                () => router.push('/paywall')
+                () => router.push('/paywall' as any)
               )}
               <View style={styles.dataDivider} />
               {renderSettingRow(

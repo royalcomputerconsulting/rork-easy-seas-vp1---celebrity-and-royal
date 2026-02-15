@@ -64,7 +64,8 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   const { tier } = useEntitlement();
   const { bookedCruises, casinoOffers } = useCruiseStore();
   const { clubRoyaleProfile } = useAppState();
-  const { priceDropAlerts } = usePriceHistory();
+  const priceHistoryState = usePriceHistory();
+  const priceDropAlerts = priceHistoryState?.priceDropAlerts ?? [];
   
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [rules, setRules] = useState<AlertRule[]>(DEFAULT_ALERT_RULES);
@@ -233,14 +234,14 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   }, [tier, bookedCruises, casinoOffers, clubRoyaleProfile, config, rules, priceDropAlerts]);
 
   useEffect(() => {
-    if (bookedCruises.length > 0 || casinoOffers.length > 0 || priceDropAlerts.length > 0) {
+    if ((bookedCruises?.length ?? 0) > 0 || (casinoOffers?.length ?? 0) > 0 || (priceDropAlerts?.length ?? 0) > 0) {
       const timeout = setTimeout(() => {
         runDetection();
       }, 1000);
       return () => clearTimeout(timeout);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookedCruises.length, casinoOffers.length, priceDropAlerts.length]);
+  }, [bookedCruises?.length, casinoOffers?.length, priceDropAlerts?.length]);
 
   const dismissAlert = useCallback((alertId: string) => {
     const alertToRemove = alerts.find(a => a.id === alertId);

@@ -24,7 +24,7 @@ export default function TabLayout() {
     if (routeName === 'machines' && tier !== 'pro') {
       e.preventDefault();
       console.log('[TabLayout] Blocked Slots tab access. Tier:', tier);
-      router.push('/paywall');
+      router.push('/paywall' as any);
       return;
     }
 

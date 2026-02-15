@@ -419,10 +419,10 @@ export function CompactDashboardHeader({
       ) : (
         <>
       <View style={styles.tierRow}>
-        <View style={[styles.tierBadge, { backgroundColor: CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color + '30' || '#F0EAD6' + '30', borderColor: CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#F0EAD6' }]}>
+        <View style={[styles.tierBadge, { backgroundColor: (CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color ?? '#F0EAD6') + '30', borderColor: CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color ?? '#F0EAD6' }]}>
           <Text style={[styles.tierText, { color: CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#F0EAD6' }]}>{celebrityTier.toUpperCase()}</Text>
         </View>
-        <View style={[styles.tierBadge, { backgroundColor: CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color + '30' || '#708090' + '30', borderColor: CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color || '#708090' }]}>
+        <View style={[styles.tierBadge, { backgroundColor: (CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color ?? '#708090') + '30', borderColor: CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color ?? '#708090' }]}>
           <Text style={[styles.tierText, { color: CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color || '#708090' }]}>{celebrityLevel.toUpperCase()}</Text>
         </View>
       </View>
