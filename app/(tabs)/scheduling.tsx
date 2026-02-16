@@ -501,12 +501,12 @@ export default function SchedulingScreen() {
         <View style={styles.b2bSetFooter}>
           <Text style={styles.b2bFooterLabel}>All Available Offer Codes in this Set:</Text>
           <View style={styles.b2bOfferTags}>
-            {set.offerCodes.map((code, i) => (
+            {(set.offerCodes || []).filter(code => code && code.trim()).map((code, i) => (
               <View key={i} style={styles.b2bOfferTag}>
                 <Text style={styles.b2bOfferTagText}>{code}</Text>
               </View>
             ))}
-            {set.offerCodes.length === 0 && (
+            {(!set.offerCodes || set.offerCodes.length === 0 || set.offerCodes.filter(code => code && code.trim()).length === 0) && (
               <Text style={styles.b2bNoOfferText}>No offer codes specified</Text>
             )}
           </View>
