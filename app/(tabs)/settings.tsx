@@ -361,7 +361,23 @@ export default function SettingsScreen() {
       console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {
       console.error('[Settings] Import error:', error);
-      Alert.alert('Import Error', 'Failed to import the file. Please check the file format and try again.');
+      
+      let errorMessage = 'Failed to import the file. Please check the file format and try again.';
+      
+      if (error && typeof error === 'object' && 'validationErrors' in error) {
+        const validationErrors = (error as any).validationErrors;
+        if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+          const firstError = validationErrors[0];
+          errorMessage = firstError.message || errorMessage;
+          if (firstError.suggestions && firstError.suggestions.length > 0) {
+            errorMessage += '\n\nSuggestions:\n' + firstError.suggestions.join('\n');
+          }
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Import Error', errorMessage);
     } finally {
       setIsImporting(false);
     }
@@ -713,7 +729,23 @@ export default function SettingsScreen() {
       console.log('[Settings] Booked import complete:', parsedBooked.length, 'new cruises added');
     } catch (error) {
       console.error('[Settings] Booked import error:', error);
-      Alert.alert('Import Error', 'Failed to import the file. Please check the file format and try again.');
+      
+      let errorMessage = 'Failed to import the file. Please check the file format and try again.';
+      
+      if (error && typeof error === 'object' && 'validationErrors' in error) {
+        const validationErrors = (error as any).validationErrors;
+        if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+          const firstError = validationErrors[0];
+          errorMessage = firstError.message || errorMessage;
+          if (firstError.suggestions && firstError.suggestions.length > 0) {
+            errorMessage += '\n\nSuggestions:\n' + firstError.suggestions.join('\n');
+          }
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Import Error', errorMessage);
     } finally {
       setIsImporting(false);
     }
