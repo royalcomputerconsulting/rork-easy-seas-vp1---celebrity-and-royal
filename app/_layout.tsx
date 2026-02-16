@@ -4,7 +4,7 @@ import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { StyleSheet, View, Text, ActivityIndicator, Platform } from "react-native";
+import { StyleSheet, View, Text, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
 import { CoreDataProvider, useCoreData } from "@/state/CoreDataProvider";
 import { clearAllAppData } from "@/lib/dataManager";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -174,6 +174,38 @@ function FreshStartHandler({ onComplete }: { onComplete: () => void }) {
 }
 
 const SCREEN_ANIMATION: 'default' | 'fade_from_bottom' = Platform.OS === 'ios' ? 'default' : 'fade_from_bottom';
+
+const WEB_MAX_WIDTH = 430;
+const WEB_BREAKPOINT = 600;
+
+function WebResponsiveWrapper({ children }: { children: React.ReactNode }) {
+  const { width, height } = useWindowDimensions();
+
+  if (Platform.OS !== 'web') {
+    return <>{children}</>;
+  }
+
+  const isWide = width > WEB_BREAKPOINT;
+
+  if (!isWide) {
+    return <>{children}</>;
+  }
+
+  return (
+    <View style={webStyles.outerContainer}>
+      <View style={webStyles.background}>
+        <View style={webStyles.bgPattern} />
+        <View style={webStyles.bgAccent} />
+      </View>
+      <View style={[webStyles.phoneFrame, { maxHeight: height - 40 }]}> 
+        <View style={webStyles.phoneNotch} />
+        <View style={webStyles.phoneContent}>
+          {children}
+        </View>
+      </View>
+    </View>
+  );
+}
 
 function RootLayoutNav() {
   const screenOptions = useMemo(() => ({
@@ -457,24 +489,83 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={rootStyles.gestureHandler}>
           <ErrorBoundary>
-            <AuthProvider>
-              <UserDataSyncProvider>
-                <UserProvider>
-                  <EntitlementProvider>
-                    <DataProviders>
-                      <CasinoProviders>
-                        <ServiceProviders>
-                          <AppContent />
-                        </ServiceProviders>
-                      </CasinoProviders>
-                    </DataProviders>
-                  </EntitlementProvider>
-                </UserProvider>
-              </UserDataSyncProvider>
-            </AuthProvider>
+            <WebResponsiveWrapper>
+              <AuthProvider>
+                <UserDataSyncProvider>
+                  <UserProvider>
+                    <EntitlementProvider>
+                      <DataProviders>
+                        <CasinoProviders>
+                          <ServiceProviders>
+                            <AppContent />
+                          </ServiceProviders>
+                        </CasinoProviders>
+                      </DataProviders>
+                    </EntitlementProvider>
+                  </UserProvider>
+                </UserDataSyncProvider>
+              </AuthProvider>
+            </WebResponsiveWrapper>
           </ErrorBoundary>
         </GestureHandlerRootView>
       </QueryClientProvider>
     </trpc.Provider>
   );
 }
+
+const webStyles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0F1B2D',
+  },
+  background: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  bgPattern: {
+    position: 'absolute',
+    top: -100,
+    right: -100,
+    width: 500,
+    height: 500,
+    borderRadius: 250,
+    backgroundColor: 'rgba(30, 58, 95, 0.4)',
+  },
+  bgAccent: {
+    position: 'absolute',
+    bottom: -150,
+    left: -80,
+    width: 400,
+    height: 400,
+    borderRadius: 200,
+    backgroundColor: 'rgba(0, 151, 167, 0.15)',
+  },
+  phoneFrame: {
+    width: WEB_MAX_WIDTH,
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 32,
+    overflow: 'hidden',
+    marginVertical: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  phoneNotch: {
+    width: 120,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  phoneContent: {
+    flex: 1,
+  },
+});
