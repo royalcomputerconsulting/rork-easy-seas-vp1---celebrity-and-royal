@@ -262,6 +262,15 @@ export const ROYAL_CARIBBEAN_SHIPS: Record<string, ShipInfo> = {
     homePort: 'Barcelona',
     typicalItineraries: ['Mediterranean', 'Europe'],
   },
+  'Legend of the Seas': {
+    name: 'Legend of the Seas',
+    class: 'Vision Class',
+    passengerCapacity: 1800,
+    grossTonnage: 69130,
+    yearBuilt: 1995,
+    homePort: 'Fort Lauderdale',
+    typicalItineraries: ['Bahamas', 'Perfect Day at CocoCay'],
+  },
 };
 
 export const SHIP_CLASSES = [
