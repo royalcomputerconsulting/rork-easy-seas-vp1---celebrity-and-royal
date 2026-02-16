@@ -9,7 +9,10 @@ export const STORAGE_KEYS = {
   CLUB_PROFILE: 'easyseas_club_profile',
   REMOVED_MOCK_CRUISES: 'easyseas_removed_mock_cruises',
   HAS_IMPORTED_DATA: 'easyseas_has_imported_data',
+  CRUISE_DATA_VERSION: 'easyseas_cruise_data_version',
 };
+
+export const CURRENT_CRUISE_DATA_VERSION = '2';
 
 export interface AppSettings {
   showTaxesInList: boolean;

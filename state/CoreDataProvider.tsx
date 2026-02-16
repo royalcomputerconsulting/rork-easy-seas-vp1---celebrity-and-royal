@@ -13,7 +13,7 @@ import {
   applyFreeplayOBCData,
 } from "./coreData/dataEnrichment";
 import { DEFAULT_FILTERS } from "./coreData/filterLogic";
-import { STORAGE_KEYS, DEFAULT_SETTINGS, type AppSettings } from "./coreData/storageConfig";
+import { STORAGE_KEYS, DEFAULT_SETTINGS, CURRENT_CRUISE_DATA_VERSION, type AppSettings } from "./coreData/storageConfig";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -504,7 +504,6 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       if (bookedData && parsedBookedData.length > 0) {
         console.log('[CoreData] Found existing booked data, processing...');
         
-        // Filter out any mock/demo cruises if real data exists
         const nonMockCruises = parsedBookedData.filter((cruise: any) => 
           !cruise.id?.includes('demo-') && 
           !cruise.id?.includes('booked-virtual') &&
@@ -513,18 +512,51 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           cruise.shipName !== 'Virtually a Ship of the Seas'
         );
         
+        const storedVersion = await AsyncStorage.getItem(STORAGE_KEYS.CRUISE_DATA_VERSION).catch(() => null);
+        let mergedCruises = nonMockCruises;
+        
+        if (storedVersion !== CURRENT_CRUISE_DATA_VERSION) {
+          console.log('[CoreData] Cruise data version changed:', storedVersion, '->', CURRENT_CRUISE_DATA_VERSION, '- merging missing cruises');
+          const { BOOKED_CRUISES_DATA } = getMockCruises();
+          const realMockCruises = BOOKED_CRUISES_DATA.filter((mc: BookedCruise) =>
+            !mc.id?.includes('demo-') &&
+            !mc.id?.includes('booked-virtual') &&
+            mc.reservationNumber !== 'DEMO123' &&
+            mc.reservationNumber !== 'DEMO456' &&
+            mc.shipName !== 'Virtually a Ship of the Seas'
+          );
+          
+          const existingResNums = new Set(mergedCruises.map((c: any) => c.reservationNumber));
+          const missingCruises = realMockCruises.filter((mc: BookedCruise) => !existingResNums.has(mc.reservationNumber));
+          
+          if (missingCruises.length > 0) {
+            console.log('[CoreData] Adding', missingCruises.length, 'missing cruises:', missingCruises.map((c: BookedCruise) => c.reservationNumber));
+            mergedCruises = [...mergedCruises, ...missingCruises];
+          } else {
+            console.log('[CoreData] No missing cruises to add');
+          }
+          
+          await AsyncStorage.setItem(STORAGE_KEYS.CRUISE_DATA_VERSION, CURRENT_CRUISE_DATA_VERSION).catch(console.error);
+        }
+        
         console.log('[CoreData] Filtered cruises:', { 
           original: parsedBookedData.length, 
-          afterFilter: nonMockCruises.length 
+          afterFilter: nonMockCruises.length,
+          afterMerge: mergedCruises.length,
         });
         
-        const withTransition = transitionCruisesToCompleted(nonMockCruises);
+        const withTransition = transitionCruisesToCompleted(mergedCruises);
         const withItineraries = enrichCruisesWithMockItineraries(withTransition);
         const withKnownRetail = applyKnownRetailValues(withItineraries);
         const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
         const enrichedBooked = enrichCruisesWithReceiptData(withFreeplayOBC);
         finalBookedCount = enrichedBooked.length;
         setBookedCruisesState(enrichedBooked);
+        
+        if (mergedCruises.length > nonMockCruises.length) {
+          await persistData(STORAGE_KEYS.BOOKED_CRUISES, enrichedBooked);
+          console.log('[CoreData] Persisted merged cruise data with', enrichedBooked.length, 'cruises');
+        }
       } else if (isFirstTimeUser && !hasRealData) {
         console.log('[CoreData] First time user with no real data - loading sample demo data');
         const { sampleCruises, sampleOffers } = getFirstTimeUserSampleData();
