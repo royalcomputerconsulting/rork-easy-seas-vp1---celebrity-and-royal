@@ -364,12 +364,145 @@ export default function ImportCruisesScreen() {
     }
   };
 
+  const parseCSVLine = (line: string, delimiter: string = '\t'): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === delimiter && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
   const parseCruiseData = (text: string): BookedCruise[] => {
     const cruises: BookedCruise[] = [];
     addToLog('Parsing cruise data...');
 
     try {
       const lines = text.split('\n').filter(line => line.trim());
+
+      const firstLine = lines[0];
+      const hasTabDelimiters = firstLine.includes('\t');
+      const hasCommaDelimiters = firstLine.split(',').length > firstLine.split('\t').length;
+      const delimiter = hasTabDelimiters ? '\t' : hasCommaDelimiters ? ',' : null;
+
+      if (delimiter && (firstLine.toLowerCase().includes('ship name') || firstLine.toLowerCase().includes('sailing date'))) {
+        addToLog(`Detected CSV/TSV format with ${delimiter === '\t' ? 'tab' : 'comma'} delimiter`);
+        const headers = parseCSVLine(firstLine, delimiter).map(h => h.toLowerCase().trim());
+        addToLog(`Found ${headers.length} columns: ${headers.slice(0, 5).join(', ')}...`);
+
+        const shipIndex = headers.findIndex(h => h.includes('ship') && h.includes('name'));
+        const dateIndex = headers.findIndex(h => h.includes('sailing') && h.includes('date'));
+        const itineraryIndex = headers.findIndex(h => h.includes('itinerary'));
+        const nightsIndex = headers.findIndex(h => h.includes('night'));
+        const departureIndex = headers.findIndex(h => h.includes('departure') && h.includes('port'));
+        const guestsIndex = headers.findIndex(h => h.includes('guests') && h.includes('info'));
+        const roomTypeIndex = headers.findIndex(h => h.includes('room') && h.includes('type'));
+        const interiorIndex = headers.findIndex(h => h.includes('interior'));
+        const oceanviewIndex = headers.findIndex(h => h.includes('ocean'));
+        const balconyIndex = headers.findIndex(h => h.includes('balcony'));
+        const suiteIndex = headers.findIndex(h => h.includes('suite'));
+        const taxesIndex = headers.findIndex(h => h.includes('taxes') || h.includes('fees'));
+
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+
+          const values = parseCSVLine(line, delimiter);
+          if (values.length < headers.length - 5) continue;
+
+          const shipName = shipIndex >= 0 ? values[shipIndex]?.trim() : '';
+          const sailDateStr = dateIndex >= 0 ? values[dateIndex]?.trim() : '';
+          const itinerary = itineraryIndex >= 0 ? values[itineraryIndex]?.trim() : '';
+          const nightsStr = nightsIndex >= 0 ? values[nightsIndex]?.trim() : '7';
+          const departurePort = departureIndex >= 0 ? values[departureIndex]?.trim() : '';
+          const guestsStr = guestsIndex >= 0 ? values[guestsIndex]?.trim() : '2';
+          const roomType = roomTypeIndex >= 0 ? values[roomTypeIndex]?.trim() : '';
+
+          if (!shipName && !sailDateStr) continue;
+
+          let sailDate = '';
+          if (sailDateStr) {
+            const dateMatch = sailDateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+            if (dateMatch) {
+              const month = dateMatch[1].padStart(2, '0');
+              const day = dateMatch[2].padStart(2, '0');
+              let year = dateMatch[3];
+              if (year.length === 2) year = '20' + year;
+              sailDate = `${year}-${month}-${day}`;
+            }
+          }
+
+          const nights = parseInt(nightsStr) || 7;
+          const guests = parseInt(guestsStr.match(/\d+/)?.[0] || '2');
+
+          const sailDateObj = new Date(sailDate || new Date());
+          const returnDateObj = new Date(sailDateObj);
+          returnDateObj.setDate(sailDateObj.getDate() + nights);
+          const returnDate = returnDateObj.toISOString().split('T')[0];
+
+          const parsePrice = (val?: string): number | undefined => {
+            if (!val) return undefined;
+            const cleaned = val.replace(/[^0-9.]/g, '');
+            const parsed = parseFloat(cleaned);
+            return isNaN(parsed) || parsed === 0 ? undefined : parsed;
+          };
+
+          const interiorPrice = interiorIndex >= 0 ? parsePrice(values[interiorIndex]) : undefined;
+          const oceanviewPrice = oceanviewIndex >= 0 ? parsePrice(values[oceanviewIndex]) : undefined;
+          const balconyPrice = balconyIndex >= 0 ? parsePrice(values[balconyIndex]) : undefined;
+          const suitePrice = suiteIndex >= 0 ? parsePrice(values[suiteIndex]) : undefined;
+          const taxes = taxesIndex >= 0 ? parsePrice(values[taxesIndex]) : undefined;
+
+          const cabinType = roomType ? (
+            roomType.match(/interior/i) ? 'Interior' :
+            roomType.match(/ocean|view/i) ? 'Oceanview' :
+            roomType.match(/balcony/i) ? 'Balcony' :
+            roomType.match(/suite/i) ? 'Suite' : 'Balcony'
+          ) : 'Balcony';
+
+          const cruise: BookedCruise = {
+            id: `imported-csv-${Date.now()}-${i}`,
+            shipName: shipName || 'Unknown Ship',
+            sailDate: sailDate || new Date().toISOString().split('T')[0],
+            returnDate,
+            departurePort: departurePort || 'Unknown Port',
+            destination: itinerary || 'Caribbean',
+            itineraryName: itinerary || `${nights} Night Cruise`,
+            nights,
+            cabinType,
+            status: 'available',
+            completionState: 'upcoming',
+            guests,
+            guestNames: [],
+            interiorPrice,
+            oceanviewPrice,
+            balconyPrice,
+            suitePrice,
+            taxes,
+            cruiseSource: 'royal',
+            createdAt: new Date().toISOString(),
+          };
+
+          cruises.push(cruise);
+          addToLog(`Parsed CSV: ${cruise.shipName} - ${cruise.sailDate}`);
+        }
+
+        if (cruises.length > 0) {
+          addToLog(`Successfully parsed ${cruises.length} cruises from CSV/TSV`);
+          return cruises;
+        }
+      }
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
