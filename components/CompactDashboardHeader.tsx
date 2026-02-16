@@ -247,7 +247,7 @@ export function CompactDashboardHeader({
                     <View style={styles.pinnacleDetailContent}>
                       <Text style={styles.pinnacleDetailLabel}>Threshold Crossed On:</Text>
                       <Text style={styles.pinnacleDetailValue} numberOfLines={1}>
-                        {pinnacleProgress.thresholdCrossedShip} • {formatCruiseDate(pinnacleProgress.thresholdCrossedSailDate)}
+                        {`${pinnacleProgress.thresholdCrossedShip} • ${formatCruiseDate(pinnacleProgress.thresholdCrossedSailDate)}`}
                       </Text>
                     </View>
                   </View>
