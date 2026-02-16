@@ -177,7 +177,10 @@ export function MinimalistFilterBar({
             <Text style={styles.statsLabel}> of </Text>
             <Text style={styles.statsHighlight}>{totalCount}</Text>
             {bookedCount !== undefined && bookedCount > 0 && (
-              <Text style={styles.statsLabel}> • <Text style={styles.statsBooked}>{bookedCount} booked</Text></Text>
+              <>
+                <Text style={styles.statsLabel}> • </Text>
+                <Text style={styles.statsBooked}>{bookedCount} booked</Text>
+              </>
             )}
           </Text>
         </View>
