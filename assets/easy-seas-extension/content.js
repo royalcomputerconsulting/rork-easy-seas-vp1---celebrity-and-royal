@@ -1,14 +1,16 @@
-if (window.__easySeasExtensionLoaded) {
-  console.log('[Easy Seas] Extension already loaded, skipping');
-} else {
-  window.__easySeasExtensionLoaded = true;
-  
-(function() {
+void function() {
   'use strict';
+
+  if (window.__easySeasExtensionLoaded) {
+    console.log('[Easy Seas] Extension already loaded, skipping');
+    return;
+  }
+  window.__easySeasExtensionLoaded = true;
+
   console.log('[Easy Seas] Content script loaded');
 
-  let overlayElement = null;
-  let capturedData = {
+  var overlayElement = null;
+  var capturedData = {
     offers: null,
     upcomingCruises: null,
     courtesyHolds: null,
@@ -17,7 +19,7 @@ if (window.__easySeasExtensionLoaded) {
     cruiseLine: window.location.hostname.includes('celebrity') ? 'celebrity' : 'royal'
   };
 
-  let syncState = {
+  var syncState = {
     isRunning: false,
     currentStep: 0,
     totalSteps: 4,
@@ -27,56 +29,39 @@ if (window.__easySeasExtensionLoaded) {
   function createOverlay() {
     if (overlayElement) return;
 
-    const overlay = document.createElement('div');
+    var overlay = document.createElement('div');
     overlay.id = 'easy-seas-overlay';
-    overlay.innerHTML = `
-      <div id="easy-seas-header">
-        <div id="easy-seas-icon">⚓</div>
-        <div style="flex: 1;">
-          <div id="easy-seas-title">Easy Seas™</div>
-          <div id="easy-seas-subtitle">Automated Cruise Data Sync</div>
-        </div>
-      </div>
-      <div id="easy-seas-content">
-        <div id="easy-seas-progress">
-          <div class="es-step-indicator">
-            <div class="es-step" data-step="1"></div>
-            <div class="es-step" data-step="2"></div>
-            <div class="es-step" data-step="3"></div>
-            <div class="es-step" data-step="4"></div>
-          </div>
-          <div class="es-progress-text">Syncing Data...</div>
-          <div class="es-progress-bar">
-            <div class="es-progress-fill" id="progress-fill"></div>
-          </div>
-        </div>
-        <div class="es-status-row">
-          <span class="es-status-label">Login Status</span>
-          <span class="es-badge es-badge-warning" id="login-status">NOT LOGGED IN</span>
-        </div>
-        <div class="es-status-row">
-          <span class="es-status-label">Casino Offers</span>
-          <span class="es-status-value" id="offer-count">0</span>
-        </div>
-        <div class="es-status-row">
-          <span class="es-status-label">Booked Cruises</span>
-          <span class="es-status-value" id="booking-count">0</span>
-        </div>
-        <div class="es-status-row">
-          <span class="es-status-label">Cruise Line</span>
-          <span class="es-status-value" id="cruise-line">Royal Caribbean</span>
-        </div>
-        <div id="easy-seas-buttons">
-          <button class="es-button es-button-primary" id="sync-btn">
-            <span>START SYNC</span>
-          </button>
-          <button class="es-button es-button-secondary" id="download-btn" disabled>
-            <span>DOWNLOAD CSV</span>
-          </button>
-        </div>
-        <div id="easy-seas-log"></div>
-      </div>
-    `;
+    overlay.innerHTML = '<div id="easy-seas-header">' +
+      '<div id="easy-seas-icon">\u2693</div>' +
+      '<div style="flex: 1;">' +
+      '<div id="easy-seas-title">Easy Seas\u2122</div>' +
+      '<div id="easy-seas-subtitle">Automated Cruise Data Sync</div>' +
+      '</div></div>' +
+      '<div id="easy-seas-content">' +
+      '<div id="easy-seas-progress">' +
+      '<div class="es-step-indicator">' +
+      '<div class="es-step" data-step="1"></div>' +
+      '<div class="es-step" data-step="2"></div>' +
+      '<div class="es-step" data-step="3"></div>' +
+      '<div class="es-step" data-step="4"></div>' +
+      '</div>' +
+      '<div class="es-progress-text">Syncing Data...</div>' +
+      '<div class="es-progress-bar"><div class="es-progress-fill" id="progress-fill"></div></div>' +
+      '</div>' +
+      '<div class="es-status-row"><span class="es-status-label">Login Status</span>' +
+      '<span class="es-badge es-badge-warning" id="login-status">NOT LOGGED IN</span></div>' +
+      '<div class="es-status-row"><span class="es-status-label">Casino Offers</span>' +
+      '<span class="es-status-value" id="offer-count">0</span></div>' +
+      '<div class="es-status-row"><span class="es-status-label">Booked Cruises</span>' +
+      '<span class="es-status-value" id="booking-count">0</span></div>' +
+      '<div class="es-status-row"><span class="es-status-label">Cruise Line</span>' +
+      '<span class="es-status-value" id="cruise-line">Royal Caribbean</span></div>' +
+      '<div id="easy-seas-buttons">' +
+      '<button class="es-button es-button-primary" id="sync-btn"><span>START SYNC</span></button>' +
+      '<button class="es-button es-button-secondary" id="download-btn" disabled><span>DOWNLOAD CSV</span></button>' +
+      '</div>' +
+      '<div id="easy-seas-log"></div>' +
+      '</div>';
 
     document.body.appendChild(overlay);
     overlayElement = overlay;
@@ -90,12 +75,12 @@ if (window.__easySeasExtensionLoaded) {
   function updateUI() {
     if (!overlayElement) return;
 
-    const loginStatus = document.getElementById('login-status');
-    const offerCount = document.getElementById('offer-count');
-    const bookingCount = document.getElementById('booking-count');
-    const cruiseLine = document.getElementById('cruise-line');
-    const syncBtn = document.getElementById('sync-btn');
-    const downloadBtn = document.getElementById('download-btn');
+    var loginStatus = document.getElementById('login-status');
+    var offerCount = document.getElementById('offer-count');
+    var bookingCount = document.getElementById('booking-count');
+    var cruiseLine = document.getElementById('cruise-line');
+    var syncBtn = document.getElementById('sync-btn');
+    var downloadBtn = document.getElementById('download-btn');
 
     if (loginStatus) {
       if (capturedData.isLoggedIn) {
@@ -108,13 +93,12 @@ if (window.__easySeasExtensionLoaded) {
     }
 
     if (offerCount) {
-      const count = capturedData.offers?.offers?.length || 0;
-      offerCount.textContent = count;
+      offerCount.textContent = (capturedData.offers && capturedData.offers.offers && capturedData.offers.offers.length) || 0;
     }
 
     if (bookingCount) {
-      const upcomingCount = capturedData.upcomingCruises?.profileBookings?.length || 0;
-      const holdsCount = capturedData.courtesyHolds?.payload?.sailingInfo?.length || 0;
+      var upcomingCount = (capturedData.upcomingCruises && capturedData.upcomingCruises.profileBookings && capturedData.upcomingCruises.profileBookings.length) || 0;
+      var holdsCount = (capturedData.courtesyHolds && capturedData.courtesyHolds.payload && capturedData.courtesyHolds.payload.sailingInfo && capturedData.courtesyHolds.payload.sailingInfo.length) || 0;
       bookingCount.textContent = upcomingCount + holdsCount;
     }
 
@@ -134,58 +118,60 @@ if (window.__easySeasExtensionLoaded) {
     }
 
     if (downloadBtn) {
-      const hasData = (capturedData.offers?.offers?.length > 0) || 
-                      (capturedData.upcomingCruises?.profileBookings?.length > 0) ||
-                      (capturedData.courtesyHolds?.payload?.sailingInfo?.length > 0);
-      downloadBtn.disabled = !hasData || syncState.isRunning;
+      var hasOffers = capturedData.offers && capturedData.offers.offers && capturedData.offers.offers.length > 0;
+      var hasBookings = capturedData.upcomingCruises && capturedData.upcomingCruises.profileBookings && capturedData.upcomingCruises.profileBookings.length > 0;
+      var hasHolds = capturedData.courtesyHolds && capturedData.courtesyHolds.payload && capturedData.courtesyHolds.payload.sailingInfo && capturedData.courtesyHolds.payload.sailingInfo.length > 0;
+      downloadBtn.disabled = !(hasOffers || hasBookings || hasHolds) || syncState.isRunning;
     }
   }
 
   function updateProgress(step, total, message) {
-    const progressEl = document.getElementById('easy-seas-progress');
-    const progressFill = document.getElementById('progress-fill');
-    const progressText = progressEl?.querySelector('.es-progress-text');
+    var progressEl = document.getElementById('easy-seas-progress');
+    var progressFill = document.getElementById('progress-fill');
+    var progressText = progressEl ? progressEl.querySelector('.es-progress-text') : null;
 
     if (progressEl) {
       progressEl.classList.add('active');
     }
 
     if (progressFill) {
-      const percentage = (step / total) * 100;
-      progressFill.style.width = `${percentage}%`;
+      var percentage = (step / total) * 100;
+      progressFill.style.width = percentage + '%';
     }
 
     if (progressText) {
-      progressText.textContent = message || `Step ${step} of ${total}`;
+      progressText.textContent = message || ('Step ' + step + ' of ' + total);
     }
 
-    document.querySelectorAll('.es-step').forEach((stepEl, idx) => {
-      stepEl.classList.remove('active', 'completed');
-      if (idx + 1 < step) {
-        stepEl.classList.add('completed');
-      } else if (idx + 1 === step) {
-        stepEl.classList.add('active');
+    var stepEls = document.querySelectorAll('.es-step');
+    for (var i = 0; i < stepEls.length; i++) {
+      stepEls[i].classList.remove('active', 'completed');
+      if (i + 1 < step) {
+        stepEls[i].classList.add('completed');
+      } else if (i + 1 === step) {
+        stepEls[i].classList.add('active');
       }
-    });
+    }
 
     if (step >= total) {
-      setTimeout(() => {
+      setTimeout(function() {
         if (progressEl) progressEl.classList.remove('active');
       }, 2000);
     }
   }
 
-  function addLog(message, type = 'info') {
-    console.log(`[Easy Seas] ${message}`);
-    
-    syncState.logs.push({ message, type, timestamp: new Date().toISOString() });
+  function addLog(message, type) {
+    type = type || 'info';
+    console.log('[Easy Seas] ' + message);
+
+    syncState.logs.push({ message: message, type: type, timestamp: new Date().toISOString() });
     if (syncState.logs.length > 50) syncState.logs.shift();
 
-    const logContainer = document.getElementById('easy-seas-log');
+    var logContainer = document.getElementById('easy-seas-log');
     if (logContainer) {
-      const logEntry = document.createElement('div');
-      logEntry.className = `es-log-entry es-log-${type}`;
-      logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      var logEntry = document.createElement('div');
+      logEntry.className = 'es-log-entry es-log-' + type;
+      logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
       logContainer.appendChild(logEntry);
       logContainer.scrollTop = logContainer.scrollHeight;
 
@@ -196,65 +182,50 @@ if (window.__easySeasExtensionLoaded) {
   }
 
   function interceptNetworkCalls() {
-    const originalFetch = window.fetch;
-    window.fetch = function(...args) {
-      return originalFetch.apply(this, args).then(response => {
-        const clonedResponse = response.clone();
-        const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+    var originalFetch = window.fetch;
+    window.fetch = function() {
+      var args = arguments;
+      return originalFetch.apply(this, args).then(function(response) {
+        var clonedResponse = response.clone();
+        var url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url ? args[0].url : '');
 
         if (typeof url === 'string' && url) {
-          if (url.includes('/api/casino/casino-offers')) {
-            clonedResponse.json().then(data => {
+          if (url.indexOf('/api/casino/casino-offers') !== -1) {
+            clonedResponse.json().then(function(data) {
               capturedData.offers = data;
-              addLog(`✅ Captured ${data?.offers?.length || 0} casino offers`, 'success');
+              addLog('Captured ' + ((data && data.offers && data.offers.length) || 0) + ' casino offers', 'success');
               updateUI();
-              chrome.runtime.sendMessage({
-                type: 'data_captured',
-                dataKey: 'offers',
-                data: data
-              }).catch(() => {});
-            }).catch(() => {});
+              chrome.runtime.sendMessage({ type: 'data_captured', dataKey: 'offers', data: data }).catch(function() {});
+            }).catch(function() {});
           }
 
-          if (url.includes('/profileBookings/enriched') || url.includes('/api/account/upcoming-cruises')) {
-            clonedResponse.json().then(data => {
+          if (url.indexOf('/profileBookings/enriched') !== -1 || url.indexOf('/api/account/upcoming-cruises') !== -1) {
+            clonedResponse.json().then(function(data) {
               capturedData.upcomingCruises = data;
-              const count = data?.profileBookings?.length || 0;
-              addLog(`✅ Captured ${count} upcoming cruises`, 'success');
+              var count = (data && data.profileBookings && data.profileBookings.length) || 0;
+              addLog('Captured ' + count + ' upcoming cruises', 'success');
               updateUI();
-              chrome.runtime.sendMessage({
-                type: 'data_captured',
-                dataKey: 'upcomingCruises',
-                data: data
-              }).catch(() => {});
-            }).catch(() => {});
+              chrome.runtime.sendMessage({ type: 'data_captured', dataKey: 'upcomingCruises', data: data }).catch(function() {});
+            }).catch(function() {});
           }
 
-          if (url.includes('/api/account/courtesy-holds')) {
-            clonedResponse.json().then(data => {
+          if (url.indexOf('/api/account/courtesy-holds') !== -1) {
+            clonedResponse.json().then(function(data) {
               capturedData.courtesyHolds = data;
-              const count = data?.payload?.sailingInfo?.length || 0;
-              addLog(`✅ Captured ${count} courtesy holds`, 'success');
+              var count = (data && data.payload && data.payload.sailingInfo && data.payload.sailingInfo.length) || 0;
+              addLog('Captured ' + count + ' courtesy holds', 'success');
               updateUI();
-              chrome.runtime.sendMessage({
-                type: 'data_captured',
-                dataKey: 'courtesyHolds',
-                data: data
-              }).catch(() => {});
-            }).catch(() => {});
+              chrome.runtime.sendMessage({ type: 'data_captured', dataKey: 'courtesyHolds', data: data }).catch(function() {});
+            }).catch(function() {});
           }
 
-          if (url.includes('/guestAccounts/loyalty/info')) {
-            clonedResponse.json().then(data => {
+          if (url.indexOf('/guestAccounts/loyalty/info') !== -1) {
+            clonedResponse.json().then(function(data) {
               capturedData.loyalty = data;
-              addLog(`✅ Captured loyalty data`, 'success');
+              addLog('Captured loyalty data', 'success');
               updateUI();
-              chrome.runtime.sendMessage({
-                type: 'data_captured',
-                dataKey: 'loyalty',
-                data: data
-              }).catch(() => {});
-            }).catch(() => {});
+              chrome.runtime.sendMessage({ type: 'data_captured', dataKey: 'loyalty', data: data }).catch(function() {});
+            }).catch(function() {});
           }
         }
 
@@ -266,14 +237,14 @@ if (window.__easySeasExtensionLoaded) {
   }
 
   function checkAuthStatus() {
-    const cookies = document.cookie;
-    const hasCookies = cookies.includes('RCAUTH') || cookies.includes('auth') || cookies.length > 100;
-    const hasLogoutButton = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"]').length > 0;
-    const isOnAccountPage = window.location.href.includes('/account/') || 
-                             window.location.href.includes('club-royale') || 
-                             window.location.href.includes('blue-chip');
+    var cookies = document.cookie;
+    var hasCookies = cookies.indexOf('RCAUTH') !== -1 || cookies.indexOf('auth') !== -1 || cookies.length > 100;
+    var hasLogoutButton = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"]').length > 0;
+    var isOnAccountPage = window.location.href.indexOf('/account/') !== -1 ||
+                          window.location.href.indexOf('club-royale') !== -1 ||
+                          window.location.href.indexOf('blue-chip') !== -1;
 
-    const wasLoggedIn = capturedData.isLoggedIn;
+    var wasLoggedIn = capturedData.isLoggedIn;
     capturedData.isLoggedIn = hasLogoutButton || (hasCookies && isOnAccountPage);
 
     if (wasLoggedIn !== capturedData.isLoggedIn) {
@@ -302,7 +273,7 @@ if (window.__easySeasExtensionLoaded) {
     updateUI();
 
     addLog('Starting automated sync...', 'info');
-    chrome.runtime.sendMessage({ 
+    chrome.runtime.sendMessage({
       type: 'start_sync',
       cruiseLine: capturedData.cruiseLine
     });
@@ -310,29 +281,29 @@ if (window.__easySeasExtensionLoaded) {
 
   function downloadCSV() {
     addLog('Generating CSV export...', 'info');
-    
-    const script = document.createElement('script');
+
+    var script = document.createElement('script');
     script.src = chrome.runtime.getURL('csv-exporter.js');
-    script.onload = () => {
+    script.onload = function() {
       if (typeof window.exportToCSV === 'function') {
-        const result = window.exportToCSV(capturedData, true, true);
+        var result = window.exportToCSV(capturedData, true, true);
         if (result.success) {
-          addLog(`✅ CSV exported: ${result.filename}`, 'success');
+          addLog('CSV exported: ' + result.filename, 'success');
         } else {
-          addLog(`❌ Export failed: ${result.error}`, 'error');
+          addLog('Export failed: ' + result.error, 'error');
         }
       }
     };
     document.head.appendChild(script);
   }
 
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.type === 'sync_progress') {
       syncState.currentStep = request.step;
       syncState.totalSteps = request.totalSteps;
       updateProgress(request.step, request.totalSteps, request.message);
       if (request.message) addLog(request.message, request.status === 'error' ? 'error' : 'info');
-      
+
       if (request.status === 'completed' || request.status === 'stopped') {
         syncState.isRunning = false;
         updateUI();
@@ -355,26 +326,23 @@ if (window.__easySeasExtensionLoaded) {
   });
 
   function init() {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(() => {
-          createOverlay();
-          interceptNetworkCalls();
-          checkAuthStatus();
-          updateUI();
-        }, 1000);
-      });
-    } else {
-      setTimeout(() => {
-        createOverlay();
-        interceptNetworkCalls();
-        checkAuthStatus();
-        updateUI();
-      }, 1000);
+    function bootstrap() {
+      createOverlay();
+      interceptNetworkCalls();
+      checkAuthStatus();
+      updateUI();
     }
 
-    const observer = new MutationObserver(checkAuthStatus);
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(bootstrap, 1000);
+      });
+    } else {
+      setTimeout(bootstrap, 1000);
+    }
+
     if (document.body) {
+      var observer = new MutationObserver(checkAuthStatus);
       observer.observe(document.body, { childList: true, subtree: true });
     }
 
@@ -382,6 +350,4 @@ if (window.__easySeasExtensionLoaded) {
   }
 
   init();
-})();
-
-}
+}();
