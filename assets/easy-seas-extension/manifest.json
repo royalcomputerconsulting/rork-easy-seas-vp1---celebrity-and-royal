@@ -32,6 +32,15 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["page-script.js"],
+      "matches": [
+        "https://*.royalcaribbean.com/*",
+        "https://*.celebritycruises.com/*"
+      ]
+    }
+  ],
   "action": {
     "default_title": "Easy Seas\u2122 \u2014 Automated Cruise Data Sync",
     "default_icon": {
