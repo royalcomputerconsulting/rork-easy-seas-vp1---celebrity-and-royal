@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Easy Seas™ — Sync Extension",
   "version": "1.0.0",
-  "description": "Scrape Royal Caribbean and Celebrity cruise data and export to CSV for Easy Seas app import",
+  "description": "Syncs casino offers, booked cruises, and loyalty data from Royal Caribbean & Celebrity Cruises websites. Mirrors the in-app sync functionality.",
   "permissions": [
     "storage",
     "downloads",
@@ -23,10 +23,21 @@
         "https://*.celebritycruises.com/*"
       ],
       "js": ["content.js"],
-      "run_at": "document_start"
+      "css": ["overlay.css"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["csv-exporter.js"],
+      "matches": [
+        "https://*.royalcaribbean.com/*",
+        "https://*.celebritycruises.com/*"
+      ]
     }
   ],
   "action": {
-    "default_popup": "popup.html"
+    "default_title": "Easy Seas™ — Automated Cruise Data Sync"
   }
 }

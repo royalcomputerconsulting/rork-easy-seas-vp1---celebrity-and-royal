@@ -1,14 +1,3 @@
-let currentStatus = {
-  isLoggedIn: false,
-  hasOffers: false,
-  hasBookings: false,
-  offerCount: 0,
-  bookingCount: 0,
-  cruiseLine: 'royal',
-  lastUpdate: null,
-  syncProgress: null
-};
-
 let syncState = {
   isRunning: false,
   tabId: null,
@@ -20,276 +9,214 @@ let syncState = {
     courtesyHolds: null,
     loyalty: null
   },
-  errors: []
+  cruiseLine: 'royal',
+  baseUrl: ''
 };
 
 const SYNC_STEPS = [
   {
     name: 'Casino Offers',
-    url: '/account/club-royale/offers',
-    waitForEndpoint: '/api/casino/casino-offers',
+    royal: '/club-royale/offers',
+    celebrity: '/blue-chip-club/offers',
+    waitFor: '/api/casino/casino-offers',
     dataKey: 'offers'
   },
   {
     name: 'Upcoming Cruises',
-    url: '/account/upcoming-cruises',
-    waitForEndpoint: '/profileBookings/enriched',
+    royal: '/account/upcoming-cruises',
+    celebrity: '/account/upcoming-cruises',
+    waitFor: '/profileBookings/enriched',
     dataKey: 'upcomingCruises'
   },
   {
     name: 'Courtesy Holds',
-    url: '/account/courtesy-holds',
-    waitForEndpoint: '/api/account/courtesy-holds',
+    royal: '/account/courtesy-holds',
+    celebrity: '/account/courtesy-holds',
+    waitFor: '/api/account/courtesy-holds',
     dataKey: 'courtesyHolds'
   },
   {
     name: 'Loyalty Info',
-    url: '/account/loyalty-status',
-    waitForEndpoint: '/guestAccounts/loyalty/info',
+    royal: '/account/loyalty-status',
+    celebrity: '/account/loyalty-status',
+    waitFor: '/guestAccounts/loyalty/info',
     dataKey: 'loyalty'
   }
 ];
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'status_update') {
-    currentStatus = { ...currentStatus, ...request.data };
-    chrome.storage.local.set({ status: currentStatus });
-    
-    chrome.action.setBadgeText({
-      text: currentStatus.hasOffers || currentStatus.hasBookings ? '✓' : ''
-    });
-    chrome.action.setBadgeBackgroundColor({ color: '#10b981' });
-  }
-  
   if (request.type === 'data_captured') {
-    console.log(`[Easy Seas] Data captured: ${request.endpoint}, count: ${request.count}`);
+    console.log(`[Easy Seas BG] Data captured: ${request.dataKey}`);
     
     if (syncState.isRunning && request.data) {
       syncState.capturedData[request.dataKey] = request.data;
       
-      broadcastSyncProgress({
+      broadcastProgress({
         step: syncState.step,
-        stepName: SYNC_STEPS[syncState.step - 1]?.name || 'Unknown',
-        status: 'completed',
-        message: `Captured ${request.count} items`
+        totalSteps: syncState.totalSteps,
+        message: `✅ ${SYNC_STEPS[syncState.step - 1]?.name || 'Step'} completed`,
+        status: 'completed'
       });
       
-      setTimeout(() => nextSyncStep(), 1500);
+      setTimeout(() => nextStep(), 1500);
     }
   }
-  
+
   if (request.type === 'start_sync') {
-    startSync(sender.tab?.id || request.tabId).then(result => {
+    startSync(sender.tab?.id, request.cruiseLine).then(result => {
       sendResponse(result);
     });
     return true;
   }
-  
+
   if (request.type === 'stop_sync') {
     stopSync();
     sendResponse({ success: true });
-    return true;
-  }
-  
-  if (request.type === 'get_sync_state') {
-    sendResponse({ 
-      success: true, 
-      isRunning: syncState.isRunning,
-      step: syncState.step,
-      totalSteps: syncState.totalSteps,
-      capturedData: syncState.capturedData
-    });
-    return true;
   }
 });
 
-async function startSync(tabId) {
+async function startSync(tabId, cruiseLine = 'royal') {
   if (syncState.isRunning) {
     return { success: false, error: 'Sync already running' };
   }
-  
+
   try {
     let targetTabId = tabId;
-    
     if (!targetTabId) {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tabs[0]) {
-        return { success: false, error: 'No active tab found' };
-      }
+      if (!tabs[0]) return { success: false, error: 'No active tab' };
       targetTabId = tabs[0].id;
     }
-    
+
     const tab = await chrome.tabs.get(targetTabId);
-    
-    if (!tab.url.includes('royalcaribbean.com') && !tab.url.includes('celebritycruises.com')) {
-      return { success: false, error: 'Please open Royal Caribbean or Celebrity Cruises website first' };
-    }
-    
+    const isCelebrity = tab.url.includes('celebrity');
+    const baseUrl = isCelebrity ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
+
     syncState = {
       isRunning: true,
       tabId: targetTabId,
       step: 0,
       totalSteps: SYNC_STEPS.length,
-      capturedData: {
-        offers: null,
-        upcomingCruises: null,
-        courtesyHolds: null,
-        loyalty: null
-      },
-      errors: [],
-      cruiseLine: tab.url.includes('celebrity') ? 'celebrity' : 'royal',
-      baseUrl: tab.url.includes('celebrity') ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com'
+      capturedData: { offers: null, upcomingCruises: null, courtesyHolds: null, loyalty: null },
+      cruiseLine: isCelebrity ? 'celebrity' : 'royal',
+      baseUrl: baseUrl
     };
-    
-    broadcastSyncProgress({
+
+    await chrome.storage.local.set({ syncState, lastCapturedData: null });
+
+    broadcastProgress({
       step: 0,
-      stepName: 'Starting',
-      status: 'started',
-      message: 'Initializing sync...'
+      totalSteps: syncState.totalSteps,
+      message: 'Initializing sync...',
+      status: 'started'
     });
-    
-    await chrome.storage.local.set({ syncState });
-    
-    nextSyncStep();
-    
-    return { success: true, message: 'Sync started' };
+
+    nextStep();
+    return { success: true };
   } catch (error) {
-    console.error('[Easy Seas] Start sync error:', error);
+    console.error('[Easy Seas BG] Start error:', error);
     return { success: false, error: error.message };
   }
 }
 
 function stopSync() {
   syncState.isRunning = false;
-  broadcastSyncProgress({
+  broadcastProgress({
     step: syncState.step,
-    stepName: 'Stopped',
-    status: 'stopped',
-    message: 'Sync stopped by user'
+    totalSteps: syncState.totalSteps,
+    message: 'Sync stopped',
+    status: 'stopped'
   });
-  chrome.storage.local.set({ syncState });
 }
 
-async function nextSyncStep() {
+async function nextStep() {
   if (!syncState.isRunning) return;
-  
+
   syncState.step++;
-  
+
   if (syncState.step > syncState.totalSteps) {
     await finishSync();
     return;
   }
-  
+
   const step = SYNC_STEPS[syncState.step - 1];
-  
-  broadcastSyncProgress({
+  const url = syncState.cruiseLine === 'celebrity' ? step.celebrity : step.royal;
+  const fullUrl = `${syncState.baseUrl}${url}`;
+
+  broadcastProgress({
     step: syncState.step,
-    stepName: step.name,
-    status: 'loading',
-    message: `Navigating to ${step.name}...`
+    totalSteps: syncState.totalSteps,
+    message: `Loading ${step.name}...`,
+    status: 'loading'
   });
-  
+
   try {
-    const fullUrl = `${syncState.baseUrl}${step.url}`;
-    
     await chrome.tabs.update(syncState.tabId, { url: fullUrl });
-    
     await chrome.storage.local.set({ syncState });
-    
+
     setTimeout(() => {
       if (syncState.isRunning && syncState.step === SYNC_STEPS.indexOf(step) + 1) {
-        checkStepTimeout(step);
+        if (!syncState.capturedData[step.dataKey]) {
+          console.warn(`[Easy Seas BG] Timeout for ${step.name}`);
+          broadcastProgress({
+            step: syncState.step,
+            totalSteps: syncState.totalSteps,
+            message: `⚠️ ${step.name} timed out, continuing...`,
+            status: 'warning'
+          });
+          setTimeout(() => nextStep(), 1000);
+        }
       }
     }, 30000);
-    
   } catch (error) {
-    console.error(`[Easy Seas] Error navigating to ${step.name}:`, error);
-    syncState.errors.push(`${step.name}: ${error.message}`);
-    
-    broadcastSyncProgress({
+    console.error(`[Easy Seas BG] Error at step ${step.name}:`, error);
+    broadcastProgress({
       step: syncState.step,
-      stepName: step.name,
-      status: 'error',
-      message: `Failed to load ${step.name}`
+      totalSteps: syncState.totalSteps,
+      message: `❌ Failed to load ${step.name}`,
+      status: 'error'
     });
-    
-    setTimeout(() => nextSyncStep(), 2000);
-  }
-}
-
-function checkStepTimeout(step) {
-  if (!syncState.capturedData[step.dataKey]) {
-    console.warn(`[Easy Seas] Timeout waiting for ${step.name} data`);
-    syncState.errors.push(`${step.name}: Timeout - no data captured`);
-    
-    broadcastSyncProgress({
-      step: syncState.step,
-      stepName: step.name,
-      status: 'warning',
-      message: `${step.name} timed out, continuing...`
-    });
-    
-    setTimeout(() => nextSyncStep(), 1000);
+    setTimeout(() => nextStep(), 2000);
   }
 }
 
 async function finishSync() {
   syncState.isRunning = false;
-  
+
   const totalCaptured = {
     offers: syncState.capturedData.offers?.offers?.length || 0,
     bookings: (syncState.capturedData.upcomingCruises?.profileBookings?.length || 0) + 
               (syncState.capturedData.courtesyHolds?.payload?.sailingInfo?.length || 0),
     hasLoyalty: !!syncState.capturedData.loyalty
   };
-  
-  broadcastSyncProgress({
+
+  broadcastProgress({
     step: syncState.totalSteps,
-    stepName: 'Complete',
+    totalSteps: syncState.totalSteps,
+    message: `🎉 Sync complete! ${totalCaptured.offers} offers, ${totalCaptured.bookings} bookings`,
     status: 'completed',
-    message: `Sync complete! ${totalCaptured.offers} offers, ${totalCaptured.bookings} bookings`,
-    capturedData: syncState.capturedData,
-    errors: syncState.errors
+    capturedData: syncState.capturedData
   });
-  
-  currentStatus = {
-    ...currentStatus,
-    hasOffers: totalCaptured.offers > 0,
-    hasBookings: totalCaptured.bookings > 0,
-    offerCount: totalCaptured.offers,
-    bookingCount: totalCaptured.bookings,
-    lastUpdate: new Date().toISOString()
-  };
-  
-  await chrome.storage.local.set({ 
-    status: currentStatus, 
+
+  await chrome.storage.local.set({
     syncState,
     lastCapturedData: syncState.capturedData
   });
 }
 
-function broadcastSyncProgress(progress) {
-  chrome.runtime.sendMessage({
+function broadcastProgress(progress) {
+  chrome.tabs.sendMessage(syncState.tabId, {
     type: 'sync_progress',
-    progress: {
-      ...progress,
-      step: syncState.step,
-      totalSteps: syncState.totalSteps
-    }
+    ...progress
   }).catch(() => {});
-  
-  chrome.storage.local.set({ 
-    syncProgress: {
-      ...progress,
-      step: syncState.step,
-      totalSteps: syncState.totalSteps,
-      timestamp: Date.now()
-    }
+
+  chrome.storage.local.set({
+    syncProgress: { ...progress, timestamp: Date.now() }
   });
 }
 
-chrome.storage.local.get(['status'], (result) => {
-  if (result.status) {
-    currentStatus = result.status;
+chrome.storage.local.get(['syncState'], (result) => {
+  if (result.syncState) {
+    syncState = { ...syncState, ...result.syncState, isRunning: false };
   }
 });

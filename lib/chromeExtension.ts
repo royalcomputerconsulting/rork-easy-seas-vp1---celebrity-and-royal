@@ -5,50 +5,61 @@ const SCRAPER_EXTENSION_VERSION = '1.0.0';
 const GRID_BUILDER_EXTENSION_VERSION = '2.0';
 
 function getEasySeasExtensionFiles(): Record<string, string> {
-  return {
-    'manifest.json': JSON.stringify({
-      "manifest_version": 3,
-      "name": "Easy Seas™ — Sync Extension",
-      "version": "1.0.0",
-      "description": "Syncs casino offers, booked cruises, and loyalty data from Royal Caribbean & Celebrity Cruises websites. Mirrors the in-app sync functionality.",
-      "permissions": [
-        "storage",
-        "downloads",
-        "tabs",
-        "scripting"
-      ],
-      "host_permissions": [
+  const manifestContent = `{
+  "manifest_version": 3,
+  "name": "Easy Seas™ — Sync Extension",
+  "version": "1.0.0",
+  "description": "Syncs casino offers, booked cruises, and loyalty data from Royal Caribbean & Celebrity Cruises websites. Mirrors the in-app sync functionality.",
+  "permissions": [
+    "storage",
+    "downloads",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.royalcaribbean.com/*",
+    "https://*.celebritycruises.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
         "https://*.royalcaribbean.com/*",
         "https://*.celebritycruises.com/*"
       ],
-      "background": {
-        "service_worker": "background.js"
-      },
-      "content_scripts": [
-        {
-          "matches": [
-            "https://*.royalcaribbean.com/*",
-            "https://*.celebritycruises.com/*"
-          ],
-          "js": ["content.js"],
-          "run_at": "document_start"
-        }
-      ],
-      "action": {
-        "default_popup": "popup.html"
-      }
-    }, null, 2),
-    
+      "js": ["content.js"],
+      "css": ["overlay.css"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["csv-exporter.js"],
+      "matches": [
+        "https://*.royalcaribbean.com/*",
+        "https://*.celebritycruises.com/*"
+      ]
+    }
+  ],
+  "action": {
+    "default_title": "Easy Seas™ — Automated Cruise Data Sync"
+  }
+}`;
+
+  return {
+    'manifest.json': manifestContent,
     'background.js': getBackgroundJS(),
     'content.js': getContentJS(),
-    'popup.html': getPopupHTML(),
-    'popup.js': getPopupJS(),
+    'overlay.css': getOverlayCSS(),
     'csv-exporter.js': getCSVExporterJS()
   };
 }
 
 function getBackgroundJS(): string {
-  return `let currentStatus = {
+  return `let syncState = {
   isLoggedIn: false,
   hasOffers: false,
   hasBookings: false,
@@ -345,9 +356,14 @@ chrome.storage.local.get(['status'], (result) => {
 });`;
 }
 
+function getOverlayCSS(): string {
+  return `/* Easy Seas Floating Overlay */
+#easy-seas-overlay{position:fixed!important;top:20px!important;right:20px!important;width:400px!important;max-height:600px!important;background:linear-gradient(135deg,#1e3a8a 0%,#0f172a 100%)!important;border-radius:16px!important;box-shadow:0 20px 60px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.1)!important;z-index:2147483647!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif!important;color:#fff!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;backdrop-filter:blur(20px)!important}#easy-seas-overlay *{box-sizing:border-box!important;margin:0!important;padding:0!important}#easy-seas-header{padding:20px!important;border-bottom:1px solid rgba(255,255,255,0.1)!important;display:flex!important;align-items:center!important;gap:12px!important}#easy-seas-icon{width:32px!important;height:32px!important;font-size:24px!important}#easy-seas-title{flex:1!important;font-size:18px!important;font-weight:600!important;color:#fff!important}#easy-seas-subtitle{font-size:12px!important;color:rgba(255,255,255,0.6)!important;margin-top:4px!important}#easy-seas-content{padding:20px!important;overflow-y:auto!important;max-height:450px!important}#easy-seas-content::-webkit-scrollbar{width:6px!important}#easy-seas-content::-webkit-scrollbar-track{background:rgba(255,255,255,0.05)!important;border-radius:3px!important}#easy-seas-content::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2)!important;border-radius:3px!important}.es-status-row{display:flex!important;justify-content:space-between!important;align-items:center!important;padding:12px 0!important;border-bottom:1px solid rgba(255,255,255,0.05)!important}.es-status-label{font-size:13px!important;color:rgba(255,255,255,0.7)!important}.es-status-value{font-size:14px!important;font-weight:600!important;color:#fff!important}.es-badge{padding:4px 10px!important;border-radius:12px!important;font-size:12px!important;font-weight:600!important}.es-badge-success{background:rgba(16,185,129,0.2)!important;color:#10b981!important}.es-badge-warning{background:rgba(245,158,11,0.2)!important;color:#f59e0b!important}.es-badge-error{background:rgba(239,68,68,0.2)!important;color:#ef4444!important}.es-badge-info{background:rgba(59,130,246,0.2)!important;color:#3b82f6!important}#easy-seas-progress{margin:16px 0!important;display:none!important}#easy-seas-progress.active{display:block!important}.es-progress-bar{height:6px!important;background:rgba(255,255,255,0.1)!important;border-radius:3px!important;overflow:hidden!important;margin-bottom:12px!important}.es-progress-fill{height:100%!important;background:linear-gradient(90deg,#3b82f6,#10b981)!important;border-radius:3px!important;transition:width 0.3s ease!important;width:0%!important}.es-progress-text{font-size:12px!important;color:rgba(255,255,255,0.7)!important;text-align:center!important;margin-bottom:8px!important}.es-step-indicator{display:flex!important;gap:8px!important;margin-bottom:12px!important}.es-step{flex:1!important;height:4px!important;background:rgba(255,255,255,0.1)!important;border-radius:2px!important;transition:background 0.3s ease!important}.es-step.completed{background:#10b981!important}.es-step.active{background:#3b82f6!important;animation:pulse 1.5s ease-in-out infinite!important}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}#easy-seas-buttons{display:flex!important;gap:12px!important;margin-top:20px!important}.es-button{flex:1!important;padding:12px 20px!important;border:none!important;border-radius:8px!important;font-size:14px!important;font-weight:600!important;cursor:pointer!important;transition:all 0.2s ease!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important}.es-button:disabled{opacity:0.5!important;cursor:not-allowed!important}.es-button-primary{background:#10b981!important;color:#fff!important}.es-button-primary:hover:not(:disabled){background:#059669!important;transform:translateY(-1px)!important}.es-button-secondary{background:rgba(59,130,246,0.2)!important;color:#3b82f6!important;border:1px solid #3b82f6!important}.es-button-secondary:hover:not(:disabled){background:rgba(59,130,246,0.3)!important}.es-button-stop{background:rgba(239,68,68,0.2)!important;color:#ef4444!important;border:1px solid #ef4444!important}.es-button-stop:hover:not(:disabled){background:rgba(239,68,68,0.3)!important}.es-spinner{width:14px!important;height:14px!important;border:2px solid rgba(255,255,255,0.3)!important;border-top-color:#fff!important;border-radius:50%!important;animation:spin 0.8s linear infinite!important}@keyframes spin{to{transform:rotate(360deg)}}#easy-seas-log{margin-top:16px!important;max-height:120px!important;overflow-y:auto!important;padding:12px!important;background:rgba(0,0,0,0.3)!important;border-radius:8px!important;font-size:11px!important;font-family:'Monaco','Menlo',monospace!important;color:rgba(255,255,255,0.7)!important;line-height:1.6!important}#easy-seas-log::-webkit-scrollbar{width:4px!important}#easy-seas-log::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2)!important;border-radius:2px!important}.es-log-entry{margin-bottom:4px!important;padding:4px 0!important}.es-log-success{color:#10b981!important}.es-log-warning{color:#f59e0b!important}.es-log-error{color:#ef4444!important}.es-log-info{color:#3b82f6!important}`;
+}
+
 function getContentJS(): string {
   return `(function() {
-  console.log('[Easy Seas] Content script loaded on:', window.location.href);
+  console.log('[Easy Seas] Content script loaded');
 
   let capturedData = {
     offers: null,
