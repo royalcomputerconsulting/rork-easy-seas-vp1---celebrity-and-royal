@@ -25,7 +25,7 @@
         cruiseLine: capturedData.cruiseLine,
         lastUpdate: capturedData.lastUpdate
       }
-    });
+    }).catch(() => {});
   }
 
   function interceptNetworkCalls() {
@@ -45,8 +45,10 @@
                 chrome.runtime.sendMessage({
                   type: 'data_captured',
                   endpoint: 'offers',
-                  count: data?.offers?.length || 0
-                });
+                  count: data?.offers?.length || 0,
+                  dataKey: 'offers',
+                  data: data
+                }).catch(() => {});
                 sendStatusUpdate();
               }).catch(() => {});
             }
@@ -62,8 +64,10 @@
                 chrome.runtime.sendMessage({
                   type: 'data_captured',
                   endpoint: 'bookings',
-                  count: count
-                });
+                  count: count,
+                  dataKey: 'upcomingCruises',
+                  data: data
+                }).catch(() => {});
                 sendStatusUpdate();
               }).catch(() => {});
             }
@@ -79,8 +83,10 @@
                 chrome.runtime.sendMessage({
                   type: 'data_captured',
                   endpoint: 'holds',
-                  count: count
-                });
+                  count: count,
+                  dataKey: 'courtesyHolds',
+                  data: data
+                }).catch(() => {});
                 sendStatusUpdate();
               }).catch(() => {});
             }
@@ -107,6 +113,13 @@
               capturedData.loyalty = data;
               capturedData.lastUpdate = new Date().toISOString();
               console.log('[Easy Seas] Captured Loyalty Data');
+              chrome.runtime.sendMessage({
+                type: 'data_captured',
+                endpoint: 'loyalty',
+                count: 1,
+                dataKey: 'loyalty',
+                data: data
+              }).catch(() => {});
               sendStatusUpdate();
             }).catch(() => {});
           }
@@ -137,8 +150,10 @@
               chrome.runtime.sendMessage({
                 type: 'data_captured',
                 endpoint: 'offers',
-                count: data?.offers?.length || 0
-              });
+                count: data?.offers?.length || 0,
+                dataKey: 'offers',
+                data: data
+              }).catch(() => {});
               sendStatusUpdate();
             }
             
@@ -150,8 +165,10 @@
               chrome.runtime.sendMessage({
                 type: 'data_captured',
                 endpoint: 'bookings',
-                count: count
-              });
+                count: count,
+                dataKey: 'upcomingCruises',
+                data: data
+              }).catch(() => {});
               sendStatusUpdate();
             }
             
@@ -162,8 +179,10 @@
               chrome.runtime.sendMessage({
                 type: 'data_captured',
                 endpoint: 'holds',
-                count: data?.payload?.sailingInfo?.length || 0
-              });
+                count: data?.payload?.sailingInfo?.length || 0,
+                dataKey: 'courtesyHolds',
+                data: data
+              }).catch(() => {});
               sendStatusUpdate();
             }
             
@@ -171,6 +190,13 @@
               capturedData.loyalty = data;
               capturedData.lastUpdate = new Date().toISOString();
               console.log('[Easy Seas] [XHR] Captured Loyalty Data');
+              chrome.runtime.sendMessage({
+                type: 'data_captured',
+                endpoint: 'loyalty',
+                count: 1,
+                dataKey: 'loyalty',
+                data: data
+              }).catch(() => {});
               sendStatusUpdate();
             }
           } catch (e) {}
