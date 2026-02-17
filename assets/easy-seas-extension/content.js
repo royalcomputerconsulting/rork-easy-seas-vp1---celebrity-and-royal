@@ -7,7 +7,7 @@ void function() {
   }
   window.__easySeasExtensionLoaded = true;
 
-  console.log('[Easy Seas] Content script loaded');
+  console.log('[Easy Seas] Content script loaded on', window.location.href);
 
   var overlayElement = null;
   var capturedData = {
@@ -26,8 +26,21 @@ void function() {
     logs: []
   };
 
+  var networkIntercepted = false;
+
   function createOverlay() {
-    if (overlayElement) return;
+    var existing = document.getElementById('easy-seas-overlay');
+    if (existing) {
+      overlayElement = existing;
+      console.log('[Easy Seas] Overlay already exists in DOM');
+      return;
+    }
+
+    if (!document.body) {
+      console.log('[Easy Seas] document.body not ready, retrying...');
+      setTimeout(createOverlay, 200);
+      return;
+    }
 
     var overlay = document.createElement('div');
     overlay.id = 'easy-seas-overlay';
@@ -66,10 +79,22 @@ void function() {
     document.body.appendChild(overlay);
     overlayElement = overlay;
 
-    document.getElementById('sync-btn').addEventListener('click', toggleSync);
-    document.getElementById('download-btn').addEventListener('click', downloadCSV);
+    var syncBtn = document.getElementById('sync-btn');
+    var downloadBtn = document.getElementById('download-btn');
+    if (syncBtn) syncBtn.addEventListener('click', toggleSync);
+    if (downloadBtn) downloadBtn.addEventListener('click', downloadCSV);
 
-    console.log('[Easy Seas] Overlay created');
+    console.log('[Easy Seas] Overlay created and appended to body');
+    updateUI();
+  }
+
+  function ensureOverlay() {
+    var existing = document.getElementById('easy-seas-overlay');
+    if (!existing && document.body) {
+      console.log('[Easy Seas] Overlay missing from DOM, re-creating...');
+      overlayElement = null;
+      createOverlay();
+    }
   }
 
   function updateUI() {
@@ -182,6 +207,9 @@ void function() {
   }
 
   function interceptNetworkCalls() {
+    if (networkIntercepted) return;
+    networkIntercepted = true;
+
     var originalFetch = window.fetch;
     window.fetch = function() {
       var args = arguments;
@@ -233,19 +261,75 @@ void function() {
       });
     };
 
-    addLog('Network monitoring active', 'info');
+    var originalXHROpen = XMLHttpRequest.prototype.open;
+    var originalXHRSend = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function(method, url) {
+      this._easySeasUrl = url;
+      return originalXHROpen.apply(this, arguments);
+    };
+
+    XMLHttpRequest.prototype.send = function() {
+      var xhr = this;
+      var url = xhr._easySeasUrl || '';
+
+      xhr.addEventListener('load', function() {
+        try {
+          if (typeof url === 'string' && url && xhr.responseText) {
+            var data = null;
+            try { data = JSON.parse(xhr.responseText); } catch(e) { return; }
+
+            if (url.indexOf('/api/casino/casino-offers') !== -1 && data) {
+              capturedData.offers = data;
+              addLog('XHR: Captured ' + ((data.offers && data.offers.length) || 0) + ' casino offers', 'success');
+              updateUI();
+              chrome.runtime.sendMessage({ type: 'data_captured', dataKey: 'offers', data: data }).catch(function() {});
+            }
+
+            if ((url.indexOf('/profileBookings/enriched') !== -1 || url.indexOf('/api/account/upcoming-cruises') !== -1) && data) {
+              capturedData.upcomingCruises = data;
+              addLog('XHR: Captured ' + ((data.profileBookings && data.profileBookings.length) || 0) + ' upcoming cruises', 'success');
+              updateUI();
+              chrome.runtime.sendMessage({ type: 'data_captured', dataKey: 'upcomingCruises', data: data }).catch(function() {});
+            }
+
+            if (url.indexOf('/api/account/courtesy-holds') !== -1 && data) {
+              capturedData.courtesyHolds = data;
+              addLog('XHR: Captured courtesy holds', 'success');
+              updateUI();
+              chrome.runtime.sendMessage({ type: 'data_captured', dataKey: 'courtesyHolds', data: data }).catch(function() {});
+            }
+
+            if (url.indexOf('/guestAccounts/loyalty/info') !== -1 && data) {
+              capturedData.loyalty = data;
+              addLog('XHR: Captured loyalty data', 'success');
+              updateUI();
+              chrome.runtime.sendMessage({ type: 'data_captured', dataKey: 'loyalty', data: data }).catch(function() {});
+            }
+          }
+        } catch(e) {
+          console.warn('[Easy Seas] XHR intercept error:', e);
+        }
+      });
+
+      return originalXHRSend.apply(this, arguments);
+    };
+
+    addLog('Network monitoring active (fetch + XHR)', 'info');
   }
 
   function checkAuthStatus() {
     var cookies = document.cookie;
     var hasCookies = cookies.indexOf('RCAUTH') !== -1 || cookies.indexOf('auth') !== -1 || cookies.length > 100;
-    var hasLogoutButton = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"]').length > 0;
+    var hasLogoutButton = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"], button[data-testid*="logout"], [class*="logout"], [class*="sign-out"]').length > 0;
+    var hasAccountLinks = document.querySelectorAll('a[href*="/account/"], a[href*="/my-account"], [class*="myAccount"]').length > 0;
     var isOnAccountPage = window.location.href.indexOf('/account/') !== -1 ||
                           window.location.href.indexOf('club-royale') !== -1 ||
                           window.location.href.indexOf('blue-chip') !== -1;
+    var hasProfileElements = document.querySelectorAll('[class*="profile"], [class*="user-name"], [class*="greeting"]').length > 0;
 
     var wasLoggedIn = capturedData.isLoggedIn;
-    capturedData.isLoggedIn = hasLogoutButton || (hasCookies && isOnAccountPage);
+    capturedData.isLoggedIn = hasLogoutButton || hasProfileElements || (hasCookies && (isOnAccountPage || hasAccountLinks));
 
     if (wasLoggedIn !== capturedData.isLoggedIn) {
       addLog(capturedData.isLoggedIn ? 'User logged in' : 'User logged out', capturedData.isLoggedIn ? 'success' : 'warning');
@@ -299,6 +383,7 @@ void function() {
 
   chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.type === 'sync_progress') {
+      ensureOverlay();
       syncState.currentStep = request.step;
       syncState.totalSteps = request.totalSteps;
       updateProgress(request.step, request.totalSteps, request.message);
@@ -325,28 +410,54 @@ void function() {
     }
   });
 
-  function init() {
-    function bootstrap() {
-      createOverlay();
-      interceptNetworkCalls();
-      checkAuthStatus();
-      updateUI();
+  function bootstrap() {
+    console.log('[Easy Seas] Bootstrapping overlay...');
+    createOverlay();
+    interceptNetworkCalls();
+    checkAuthStatus();
+    updateUI();
+    addLog('Extension ready on ' + capturedData.cruiseLine, 'info');
+  }
+
+  function watchForOverlayRemoval() {
+    if (!document.body) {
+      setTimeout(watchForOverlayRemoval, 300);
+      return;
     }
+
+    var observer = new MutationObserver(function() {
+      ensureOverlay();
+      checkAuthStatus();
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    console.log('[Easy Seas] MutationObserver watching for DOM changes');
+  }
+
+  function init() {
+    console.log('[Easy Seas] Initializing, readyState:', document.readyState);
+
+    interceptNetworkCalls();
 
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(bootstrap, 1000);
+        console.log('[Easy Seas] DOMContentLoaded fired');
+        bootstrap();
+        watchForOverlayRemoval();
       });
     } else {
-      setTimeout(bootstrap, 1000);
+      bootstrap();
+      watchForOverlayRemoval();
     }
 
-    if (document.body) {
-      var observer = new MutationObserver(checkAuthStatus);
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    setInterval(checkAuthStatus, 3000);
+    setInterval(function() {
+      ensureOverlay();
+      checkAuthStatus();
+    }, 2000);
   }
 
   init();
