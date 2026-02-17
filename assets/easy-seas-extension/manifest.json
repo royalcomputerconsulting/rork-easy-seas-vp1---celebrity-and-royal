@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Easy Seas™ - Royal Caribbean Sync",
+  "name": "Easy Seas™ — Sync Extension",
   "version": "1.0.0",
   "description": "Scrape Royal Caribbean and Celebrity cruise data and export to CSV for Easy Seas app import",
   "permissions": [
