@@ -1,4 +1,9 @@
 (function() {
+  if (window.__easySeasExtensionLoaded) {
+    console.log('[Easy Seas] Extension already loaded, skipping');
+    return;
+  }
+  window.__easySeasExtensionLoaded = true;
   console.log('[Easy Seas] Content script loaded');
 
   let overlayElement = null;
