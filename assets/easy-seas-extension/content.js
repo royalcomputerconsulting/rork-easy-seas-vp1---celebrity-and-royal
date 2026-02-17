@@ -3,7 +3,7 @@ void function() {
 
   if (window.__easySeasLoaded) return;
   window.__easySeasLoaded = true;
-  console.log('[Easy Seas] Content script v2 loaded on', window.location.href);
+  console.log('[Easy Seas] Content script v3 loaded on', window.location.href);
 
   var overlayElement = null;
   var authContext = null;
@@ -12,10 +12,8 @@ void function() {
     isLoggedIn: false,
     cruiseLine: window.location.hostname.includes('celebrity') ? 'celebrity' : 'royal'
   };
-  var syncState = { isRunning: false, currentStep: 0, totalSteps: 3 };
+  var syncState = { isRunning: false, currentStep: 0, totalSteps: 5 };
 
-  // ===== INJECT PAGE WORLD SCRIPT =====
-  // Loads page-script.js as an external file to avoid CSP inline script blocks
   function injectPageScript() {
     var s = document.createElement('script');
     s.src = chrome.runtime.getURL('page-script.js');
@@ -24,7 +22,6 @@ void function() {
     (document.head || document.documentElement).appendChild(s);
   }
 
-  // ===== MESSAGE HANDLER =====
   window.addEventListener('message', function(e) {
     if (!e.data || e.data.source !== 'easy-seas-page') return;
     if (e.data.type === 'auth_data') {
@@ -96,7 +93,6 @@ void function() {
     capturedData.isLoggedIn = hasLogout || hasProfile || (hasCookies && (isAccountPage || hasAccount));
   }
 
-  // ===== OVERLAY UI =====
   function createOverlay() {
     if (document.getElementById('easy-seas-overlay')) {
       overlayElement = document.getElementById('easy-seas-overlay');
@@ -118,6 +114,8 @@ void function() {
       '<div class="es-step" data-step="1"></div>' +
       '<div class="es-step" data-step="2"></div>' +
       '<div class="es-step" data-step="3"></div>' +
+      '<div class="es-step" data-step="4"></div>' +
+      '<div class="es-step" data-step="5"></div>' +
       '</div>' +
       '<div class="es-progress-text">Syncing Data...</div>' +
       '<div class="es-progress-bar"><div class="es-progress-fill" id="progress-fill"></div></div>' +
@@ -128,11 +126,13 @@ void function() {
       '<span class="es-status-value" id="offer-count">0</span></div>' +
       '<div class="es-status-row"><span class="es-status-label">Booked Cruises</span>' +
       '<span class="es-status-value" id="booking-count">0</span></div>' +
+      '<div class="es-status-row"><span class="es-status-label">Loyalty</span>' +
+      '<span class="es-status-value" id="loyalty-status">--</span></div>' +
       '<div class="es-status-row"><span class="es-status-label">Cruise Line</span>' +
       '<span class="es-status-value" id="cruise-line">Royal Caribbean</span></div>' +
       '<div id="easy-seas-buttons">' +
       '<button class="es-button es-button-primary" id="sync-btn" disabled><span>START SYNC</span></button>' +
-      '<button class="es-button es-button-secondary" id="download-btn" disabled><span>DOWNLOAD CSV</span></button>' +
+      '<button class="es-button es-button-secondary" id="download-btn" disabled><span>DOWNLOAD CSVs</span></button>' +
       '</div>' +
       '<div id="easy-seas-log"></div>' +
       '</div>';
@@ -141,7 +141,7 @@ void function() {
     overlayElement = overlay;
 
     document.getElementById('sync-btn').addEventListener('click', toggleSync);
-    document.getElementById('download-btn').addEventListener('click', downloadCSV);
+    document.getElementById('download-btn').addEventListener('click', downloadCSVs);
     updateUI();
   }
 
@@ -164,6 +164,9 @@ void function() {
 
     var bookEl = document.getElementById('booking-count');
     if (bookEl) bookEl.textContent = getBookingsCount();
+
+    var loyaltyEl = document.getElementById('loyalty-status');
+    if (loyaltyEl) loyaltyEl.textContent = capturedData.loyalty ? 'Captured' : '--';
 
     var lineEl = document.getElementById('cruise-line');
     if (lineEl) lineEl.textContent = capturedData.cruiseLine === 'celebrity' ? 'Celebrity Cruises' : 'Royal Caribbean';
@@ -220,7 +223,6 @@ void function() {
     }
   }
 
-  // ===== SYNC LOGIC =====
   function toggleSync() {
     if (syncState.isRunning) {
       syncState.isRunning = false;
@@ -235,15 +237,7 @@ void function() {
     runSync();
   }
 
-  async function runSync() {
-    syncState.isRunning = true;
-    syncState.currentStep = 0;
-    updateUI();
-    addLog('Starting automated sync (mirrors iOS flow)...', 'info');
-
-    var isCeleb = capturedData.cruiseLine === 'celebrity';
-    var baseUrl = isCeleb ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
-    var brand = isCeleb ? 'C' : 'R';
+  function buildHeaders() {
     var headers = {
       'accept': 'application/json',
       'content-type': 'application/json',
@@ -254,23 +248,71 @@ void function() {
       headers['appkey'] = authContext.appKey;
       headers['x-api-key'] = authContext.appKey;
     }
+    return headers;
+  }
+
+  async function navigateAndWait(url, waitMs) {
+    waitMs = waitMs || 5000;
+    addLog('Navigating to ' + url.replace(/https:\/\/www\.[^/]+/, ''), 'info');
+
+    return new Promise(function(resolve) {
+      var iframe = document.createElement('iframe');
+      iframe.style.cssText = 'width:1px;height:1px;position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none;';
+      iframe.src = url;
+      document.body.appendChild(iframe);
+
+      setTimeout(function() {
+        try { document.body.removeChild(iframe); } catch(e) {}
+        resolve();
+      }, waitMs);
+    });
+  }
+
+  async function fetchWithRetry(url, options, retries) {
+    retries = retries || 2;
+    for (var i = 0; i <= retries; i++) {
+      try {
+        var resp = await fetch(url, options);
+        if (resp.ok) return resp;
+        if (resp.status === 403 || resp.status === 401) {
+          addLog('Auth error (' + resp.status + ') on attempt ' + (i + 1), 'warning');
+          if (i < retries) await new Promise(function(r) { setTimeout(r, 1500); });
+        }
+      } catch(e) {
+        if (i < retries) await new Promise(function(r) { setTimeout(r, 1000); });
+      }
+    }
+    return null;
+  }
+
+  async function runSync() {
+    syncState.isRunning = true;
+    syncState.currentStep = 0;
+    syncState.totalSteps = 5;
+    updateUI();
+    addLog('Starting automated sync (mirrors iOS flow)...', 'info');
+
+    var isCeleb = capturedData.cruiseLine === 'celebrity';
+    var baseUrl = isCeleb ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
+    var brand = isCeleb ? 'C' : 'R';
+    var headers = buildHeaders();
 
     try {
-      // ===== STEP 1: CASINO OFFERS (direct API call, same as iOS) =====
+      // ===== STEP 1: CASINO OFFERS =====
       syncState.currentStep = 1;
-      updateProgress(1, 3, 'Step 1: Fetching casino offers...');
+      updateProgress(1, 5, 'Step 1/5: Fetching casino offers...');
       addLog('Step 1: Calling casino offers API...', 'info');
 
       try {
         var offersUrl = baseUrl + (brand === 'C' ? '/api/casino/casino-offers/v2' : '/api/casino/casino-offers/v1');
-        var offersResp = await fetch(offersUrl, {
+        var offersResp = await fetchWithRetry(offersUrl, {
           method: 'POST',
           headers: headers,
           credentials: 'omit',
           body: JSON.stringify({ cruiseLoyaltyId: authContext.loyaltyId, offerCode: '', brand: brand })
         });
 
-        if (offersResp.ok) {
+        if (offersResp) {
           var offersData = await offersResp.json();
           capturedData.offers = offersData;
           var offerCount = (offersData.offers && offersData.offers.length) || 0;
@@ -317,11 +359,8 @@ void function() {
             });
           }
         } else {
-          addLog('Offers API returned ' + offersResp.status, 'warning');
-          if (offersResp.status === 403) {
-            addLog('Session expired - please refresh and log in again', 'error');
-            syncState.isRunning = false; updateUI(); return;
-          }
+          addLog('Offers API failed after retries', 'warning');
+          if (capturedData.offers) addLog('Using passively captured offers', 'info');
         }
       } catch(oe) {
         addLog('Offers fetch error: ' + oe.message, 'warning');
@@ -330,48 +369,155 @@ void function() {
 
       if (!syncState.isRunning) { updateUI(); return; }
 
-      // ===== STEP 2: BOOKED CRUISES =====
+      // ===== STEP 2: NAVIGATE TO UPCOMING CRUISES PAGE (trigger booking APIs) =====
       syncState.currentStep = 2;
-      updateProgress(2, 3, 'Step 2: Fetching booked cruises...');
-      addLog('Step 2: Fetching booked cruises...', 'info');
+      updateProgress(2, 5, 'Step 2/5: Loading upcoming cruises page...');
+      addLog('Step 2: Navigating to upcoming cruises to trigger APIs...', 'info');
 
-      if (capturedData.upcomingCruises && extractBookings(capturedData.upcomingCruises).length > 0) {
-        addLog('Using captured bookings (' + extractBookings(capturedData.upcomingCruises).length + ' cruises)', 'success');
-      } else {
-        var bookingsFound = false;
+      await navigateAndWait(baseUrl + '/account/upcoming-cruises', 6000);
+      await new Promise(function(r) { setTimeout(r, 2000); });
+
+      if (extractBookings(capturedData.upcomingCruises).length === 0) {
         var bookingsUrls = [baseUrl + '/api/profile/bookings', baseUrl + '/api/account/upcoming-cruises'];
-        for (var bi = 0; bi < bookingsUrls.length && !bookingsFound; bi++) {
+        for (var bi = 0; bi < bookingsUrls.length; bi++) {
           try {
-            var bResp = await fetch(bookingsUrls[bi], { method: 'GET', headers: headers, credentials: 'include' });
-            if (bResp.ok) {
+            var bResp = await fetchWithRetry(bookingsUrls[bi], { method: 'GET', headers: headers, credentials: 'include' });
+            if (bResp) {
               var bData = await bResp.json();
               if (extractBookings(bData).length > 0) {
                 capturedData.upcomingCruises = bData;
-                bookingsFound = true;
                 addLog('Captured ' + extractBookings(bData).length + ' bookings via API', 'success');
+                break;
               }
             }
           } catch(be) {}
         }
-
-        if (!bookingsFound) {
-          addLog('Navigating to bookings page to capture data...', 'info');
-          await chrome.storage.local.set({
-            esSyncPending: true,
-            esOffers: capturedData.offers,
-            esLoyalty: capturedData.loyalty,
-            esAuth: authContext,
-            esCruiseLine: capturedData.cruiseLine
-          });
-          window.location.href = baseUrl + '/account/upcoming-cruises';
-          return;
-        }
+      } else {
+        addLog('Using passively captured bookings (' + extractBookings(capturedData.upcomingCruises).length + ')', 'success');
       }
 
       if (!syncState.isRunning) { updateUI(); return; }
 
-      // ===== STEP 3: LOYALTY =====
-      await fetchLoyalty(headers, isCeleb);
+      // ===== STEP 3: NAVIGATE TO COURTESY HOLDS =====
+      syncState.currentStep = 3;
+      updateProgress(3, 5, 'Step 3/5: Checking courtesy holds...');
+      addLog('Step 3: Checking courtesy holds...', 'info');
+
+      if (!capturedData.courtesyHolds) {
+        try {
+          var chResp = await fetchWithRetry(baseUrl + '/api/account/courtesy-holds', { method: 'GET', headers: headers, credentials: 'include' });
+          if (chResp) {
+            var chData = await chResp.json();
+            capturedData.courtesyHolds = chData;
+            var holdCount = 0;
+            if (chData.payload && chData.payload.sailingInfo) holdCount = chData.payload.sailingInfo.length;
+            else if (chData.sailingInfo) holdCount = chData.sailingInfo.length;
+            addLog('Captured ' + holdCount + ' courtesy holds', 'success');
+          }
+        } catch(che) {
+          addLog('Courtesy holds fetch: ' + che.message, 'warning');
+        }
+      } else {
+        addLog('Using passively captured courtesy holds', 'success');
+      }
+
+      if (!syncState.isRunning) { updateUI(); return; }
+
+      // ===== STEP 4: BOUNCE TO LOYALTY PAGE =====
+      syncState.currentStep = 4;
+      updateProgress(4, 5, 'Step 4/5: Loading loyalty data...');
+      addLog('Step 4: Navigating to loyalty page to trigger loyalty API...', 'info');
+
+      var loyaltyPageUrl = isCeleb
+        ? baseUrl + '/account/blue-chip'
+        : baseUrl + '/account/club-royale';
+
+      await navigateAndWait(loyaltyPageUrl, 6000);
+      await new Promise(function(r) { setTimeout(r, 2000); });
+
+      if (!capturedData.loyalty) {
+        addLog('Loyalty not captured passively, calling API directly...', 'info');
+        await fetchLoyaltyDirect(headers, isCeleb);
+      }
+
+      if (!capturedData.loyalty) {
+        addLog('Bouncing: upcoming cruises -> loyalty page to trigger loyalty API...', 'info');
+        await navigateAndWait(baseUrl + '/account/upcoming-cruises', 4000);
+        await new Promise(function(r) { setTimeout(r, 1500); });
+        await navigateAndWait(loyaltyPageUrl, 6000);
+        await new Promise(function(r) { setTimeout(r, 2000); });
+
+        if (!capturedData.loyalty) {
+          await fetchLoyaltyDirect(headers, isCeleb);
+        }
+      }
+
+      if (capturedData.loyalty) {
+        addLog('Loyalty data captured', 'success');
+      } else {
+        addLog('Loyalty data not available (may require specific page visit)', 'warning');
+      }
+
+      if (!syncState.isRunning) { updateUI(); return; }
+
+      // ===== STEP 5: VERIFY ALL SECTIONS — RETRY IF MISSING =====
+      syncState.currentStep = 5;
+      updateProgress(5, 5, 'Step 5/5: Verifying all data...');
+      addLog('Step 5: Verifying captured sections...', 'info');
+
+      var missingSections = getMissingSections();
+      if (missingSections.length > 0) {
+        addLog('Missing sections: ' + missingSections.join(', ') + ' — retrying bounce...', 'warning');
+
+        await navigateAndWait(baseUrl + '/account/upcoming-cruises', 5000);
+        await new Promise(function(r) { setTimeout(r, 2000); });
+
+        if (missingSections.indexOf('upcomingCruises') !== -1 && extractBookings(capturedData.upcomingCruises).length === 0) {
+          var bookingsUrls2 = [baseUrl + '/api/profile/bookings', baseUrl + '/api/account/upcoming-cruises'];
+          for (var bi2 = 0; bi2 < bookingsUrls2.length; bi2++) {
+            try {
+              var bResp2 = await fetchWithRetry(bookingsUrls2[bi2], { method: 'GET', headers: headers, credentials: 'include' });
+              if (bResp2) {
+                var bData2 = await bResp2.json();
+                if (extractBookings(bData2).length > 0) {
+                  capturedData.upcomingCruises = bData2;
+                  addLog('Retry: Captured ' + extractBookings(bData2).length + ' bookings', 'success');
+                  break;
+                }
+              }
+            } catch(be2) {}
+          }
+        }
+
+        if (missingSections.indexOf('courtesyHolds') !== -1 && !capturedData.courtesyHolds) {
+          try {
+            var chResp2 = await fetchWithRetry(baseUrl + '/api/account/courtesy-holds', { method: 'GET', headers: headers, credentials: 'include' });
+            if (chResp2) {
+              capturedData.courtesyHolds = await chResp2.json();
+              addLog('Retry: Captured courtesy holds', 'success');
+            }
+          } catch(che2) {}
+        }
+
+        await navigateAndWait(loyaltyPageUrl, 6000);
+        await new Promise(function(r) { setTimeout(r, 2000); });
+
+        if (missingSections.indexOf('loyalty') !== -1 && !capturedData.loyalty) {
+          await fetchLoyaltyDirect(headers, isCeleb);
+          if (capturedData.loyalty) {
+            addLog('Retry: Captured loyalty data', 'success');
+          }
+        }
+
+        var stillMissing = getMissingSections();
+        if (stillMissing.length > 0) {
+          addLog('Still missing after retry: ' + stillMissing.join(', '), 'warning');
+        } else {
+          addLog('All sections captured on retry!', 'success');
+        }
+      } else {
+        addLog('All sections captured successfully', 'success');
+      }
 
       finishSync();
     } catch(err) {
@@ -381,25 +527,25 @@ void function() {
     }
   }
 
-  async function fetchLoyalty(headers, isCeleb) {
-    syncState.currentStep = 3;
-    updateProgress(3, 3, 'Step 3: Fetching loyalty status...');
-    addLog('Step 3: Fetching loyalty status...', 'info');
+  function getMissingSections() {
+    var missing = [];
+    if (!capturedData.offers || !capturedData.offers.offers || capturedData.offers.offers.length === 0) missing.push('offers');
+    if (extractBookings(capturedData.upcomingCruises).length === 0) missing.push('upcomingCruises');
+    if (!capturedData.loyalty) missing.push('loyalty');
+    return missing;
+  }
 
-    if (capturedData.loyalty) {
-      addLog('Using captured loyalty data', 'success');
-      return;
-    }
+  async function fetchLoyaltyDirect(headers, isCeleb) {
     try {
       var loyaltyUrl = isCeleb
         ? 'https://aws-prd.api.rccl.com/en/celebrity/web/v3/guestAccounts/' + encodeURIComponent(authContext.accountId)
         : 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info';
-      var lResp = await fetch(loyaltyUrl, { method: 'GET', headers: headers, credentials: 'omit' });
-      if (lResp.ok) {
+      var lResp = await fetchWithRetry(loyaltyUrl, { method: 'GET', headers: headers, credentials: 'omit' });
+      if (lResp) {
         capturedData.loyalty = await lResp.json();
-        addLog('Captured loyalty data', 'success');
+        addLog('Captured loyalty data via direct API', 'success');
       } else {
-        addLog('Loyalty API returned ' + lResp.status + ' (may need appkey)', 'warning');
+        addLog('Loyalty API not reachable', 'warning');
       }
     } catch(le) {
       addLog('Loyalty fetch error: ' + le.message, 'warning');
@@ -411,7 +557,7 @@ void function() {
     var offers = capturedData.offers && capturedData.offers.offers ? capturedData.offers.offers.length : 0;
     var bookings = getBookingsCount();
     var hasLoyalty = !!capturedData.loyalty;
-    updateProgress(3, 3, 'Sync complete!');
+    updateProgress(5, 5, 'Sync complete!');
     addLog('Sync complete! ' + offers + ' offers, ' + bookings + ' bookings' + (hasLoyalty ? ', loyalty captured' : ''), 'success');
     try { chrome.storage.local.set({ esLastData: capturedData, esLastSync: Date.now(), esSyncPending: false }); } catch(e) {}
     updateUI();
@@ -431,7 +577,7 @@ void function() {
 
       syncState.isRunning = true;
       syncState.currentStep = 2;
-      updateProgress(2, 3, 'Waiting for bookings...');
+      updateProgress(2, 5, 'Waiting for bookings...');
       updateUI();
 
       var waited = 0;
@@ -445,17 +591,13 @@ void function() {
       if (extractBookings(capturedData.upcomingCruises).length > 0) {
         addLog('Captured ' + extractBookings(capturedData.upcomingCruises).length + ' bookings', 'success');
       } else {
-        addLog('No bookings captured after 15s. The page may still be loading.', 'warning');
+        addLog('No bookings captured after 15s.', 'warning');
       }
 
       var isCeleb = capturedData.cruiseLine === 'celebrity';
-      var headers = {
-        'accept': 'application/json', 'content-type': 'application/json',
-        'account-id': authContext.accountId, 'authorization': authContext.token
-      };
-      if (authContext.appKey) { headers['appkey'] = authContext.appKey; headers['x-api-key'] = authContext.appKey; }
+      var headers = buildHeaders();
 
-      await fetchLoyalty(headers, isCeleb);
+      await fetchLoyaltyDirect(headers, isCeleb);
       await chrome.storage.local.remove(['esSyncPending', 'esOffers', 'esLoyalty', 'esAuth', 'esCruiseLine']);
       finishSync();
     } catch(e) {
@@ -464,7 +606,7 @@ void function() {
     }
   }
 
-  // ===== CSV EXPORT =====
+  // ===== CSV EXPORT — SEPARATE FILES =====
   var SHIP_CODES = {
     'AL': 'Allure of the Seas', 'AN': 'Anthem of the Seas', 'AD': 'Adventure of the Seas',
     'BR': 'Brilliance of the Seas', 'EN': 'Enchantment of the Seas', 'EX': 'Explorer of the Seas',
@@ -474,7 +616,8 @@ void function() {
     'OA': 'Oasis of the Seas', 'OV': 'Ovation of the Seas', 'OY': 'Odyssey of the Seas',
     'QN': 'Quantum of the Seas', 'RD': 'Radiance of the Seas', 'SE': 'Serenade of the Seas',
     'SP': 'Spectrum of the Seas', 'SY': 'Symphony of the Seas', 'UT': 'Utopia of the Seas',
-    'VI': 'Vision of the Seas', 'VY': 'Voyager of the Seas', 'WN': 'Wonder of the Seas'
+    'VI': 'Vision of the Seas', 'VY': 'Voyager of the Seas', 'WN': 'Wonder of the Seas',
+    'SN': 'Star of the Seas'
   };
   var CABIN_TYPES = { 'I': 'Interior', 'O': 'Ocean View', 'B': 'Balcony', 'S': 'Suite' };
 
@@ -494,61 +637,133 @@ void function() {
     } catch(e) { return d; }
   }
 
-  function downloadCSV() {
-    addLog('Generating CSV...', 'info');
+  function buildOffersCSV() {
+    if (!capturedData.offers || !capturedData.offers.offers || capturedData.offers.offers.length === 0) return null;
     var rows = [];
+    rows.push(['Source Page','Offer Name','Offer Code','Offer Expiry','Offer Type','Ship Name','Sailing Date','Itinerary','Departure Port','Cabin Type','Guests','Perks','Loyalty Level','Loyalty Points'].map(esc).join(','));
 
-    if (capturedData.offers && capturedData.offers.offers) {
-      rows.push(['Source Page','Offer Name','Offer Code','Offer Expiry','Ship Name','Sailing Date','Itinerary','Departure Port','Cabin Type','Guests','Perks'].map(esc).join(','));
-      capturedData.offers.offers.forEach(function(offer) {
-        var co = offer.campaignOffer || offer;
-        var sailings = co.sailings || [];
-        sailings.forEach(function(s) {
-          rows.push([
-            esc('Club Royale Offers'), esc(co.name || ''), esc(co.offerCode || ''),
-            esc(fmtDate(co.reserveByDate)), esc(s.shipName || ''), esc(fmtDate(s.sailDate)),
-            esc(s.itineraryDescription || ''), esc(s.departurePort && s.departurePort.name ? s.departurePort.name : ''),
-            esc(s.roomType || ''), esc(s.isGOBO ? '1' : '2'), esc(co.tradeInValue ? '$' + co.tradeInValue : '')
-          ].join(','));
-        });
-      });
-    }
+    var loyaltyInfo = capturedData.loyalty && capturedData.loyalty.payload && capturedData.loyalty.payload.loyaltyInformation ? capturedData.loyalty.payload.loyaltyInformation : null;
+    var loyaltyLevel = loyaltyInfo ? (loyaltyInfo.crownAndAnchorLevel || '') : '';
+    var loyaltyPoints = loyaltyInfo ? (loyaltyInfo.crownAndAnchorPoints || '') : '';
 
-    var bookings = extractBookings(capturedData.upcomingCruises);
-    if (bookings.length > 0) {
-      if (rows.length > 0) rows.push('');
-      rows.push(['Source','Ship Name','Sail Date','Nights','Itinerary','Cabin Type','Cabin #','Booking ID','Status','Paid'].map(esc).join(','));
-      bookings.forEach(function(b) {
-        var shipCode = b.shipCode || '';
-        var shipName = SHIP_CODES[shipCode] || b.shipName || (shipCode ? shipCode + ' of the Seas' : '');
-        var cabinType = CABIN_TYPES[b.stateroomType || ''] || b.stateroomType || '';
-        var cabin = b.stateroomNumber === 'GTY' ? 'GTY' : (b.stateroomNumber || '');
-        var status = b.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming';
+    capturedData.offers.offers.forEach(function(offer) {
+      var co = offer.campaignOffer || offer;
+      var sailings = co.sailings || [];
+      sailings.forEach(function(s) {
         rows.push([
-          esc(status), esc(shipName), esc(fmtDate(b.sailDate)),
-          esc(b.numberOfNights || ''), esc(b.cruiseTitle || (b.numberOfNights ? b.numberOfNights + ' Night Cruise' : '')),
-          esc(cabinType), esc(cabin), esc(b.bookingId || ''), esc(status),
-          esc(b.paidInFull ? 'Yes' : 'No')
+          esc('Club Royale Offers'), esc(co.name || ''), esc(co.offerCode || ''),
+          esc(fmtDate(co.reserveByDate)), esc(co.offerType || co.type || 'Free Play'),
+          esc(s.shipName || ''), esc(fmtDate(s.sailDate)),
+          esc(s.itineraryDescription || ''), esc(s.departurePort && s.departurePort.name ? s.departurePort.name : ''),
+          esc(s.roomType || ''), esc(s.isGOBO ? '1' : '2'),
+          esc(co.tradeInValue ? '$' + co.tradeInValue : ''),
+          esc(loyaltyLevel), esc(loyaltyPoints)
         ].join(','));
       });
+    });
+
+    return rows.length > 1 ? rows.join('\n') : null;
+  }
+
+  function buildBookedCSV() {
+    var bookings = extractBookings(capturedData.upcomingCruises);
+    var courtesyBookings = [];
+    if (capturedData.courtesyHolds) {
+      if (capturedData.courtesyHolds.payload && capturedData.courtesyHolds.payload.sailingInfo)
+        courtesyBookings = capturedData.courtesyHolds.payload.sailingInfo;
+      else if (capturedData.courtesyHolds.sailingInfo)
+        courtesyBookings = capturedData.courtesyHolds.sailingInfo;
     }
 
-    if (rows.length === 0) { addLog('No data to export', 'error'); return; }
+    var allBookings = [];
+    bookings.forEach(function(b) { allBookings.push({ data: b, source: 'Upcoming' }); });
+    courtesyBookings.forEach(function(b) { allBookings.push({ data: b, source: 'Courtesy Hold' }); });
 
-    var csv = rows.join('\n');
-    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    if (allBookings.length === 0) return null;
+
+    var loyaltyInfo = capturedData.loyalty && capturedData.loyalty.payload && capturedData.loyalty.payload.loyaltyInformation ? capturedData.loyalty.payload.loyaltyInformation : null;
+    var loyaltyLevel = loyaltyInfo ? (loyaltyInfo.crownAndAnchorLevel || '') : '';
+    var loyaltyPoints = loyaltyInfo ? (loyaltyInfo.crownAndAnchorPoints || '') : '';
+
+    var rows = [];
+    rows.push(['Source','Ship Name','Sail Date','Return Date','Nights','Itinerary','Departure Port','Cabin Type','Cabin #','Booking ID','Status','Loyalty Level','Loyalty Points'].map(esc).join(','));
+
+    allBookings.forEach(function(entry) {
+      var b = entry.data;
+      var shipCode = b.shipCode || '';
+      var shipName = SHIP_CODES[shipCode] || b.shipName || (shipCode ? shipCode + ' of the Seas' : '');
+      var cabinType = CABIN_TYPES[b.stateroomType || ''] || b.stateroomType || '';
+      var cabin = b.stateroomNumber === 'GTY' ? 'GTY' : (b.stateroomNumber || '');
+      var status = entry.source;
+      if (b.bookingStatus === 'OF') status = 'Courtesy Hold';
+      var nights = b.numberOfNights || '';
+      var returnDate = b.returnDate || '';
+      if (!returnDate && b.sailDate && nights) {
+        try {
+          var sd = new Date(b.sailDate);
+          if (!isNaN(sd.getTime())) {
+            sd.setDate(sd.getDate() + parseInt(nights, 10));
+            returnDate = sd.toISOString().split('T')[0];
+          }
+        } catch(e) {}
+      }
+      rows.push([
+        esc(status), esc(shipName), esc(fmtDate(b.sailDate)), esc(fmtDate(returnDate)),
+        esc(nights), esc(b.cruiseTitle || b.itineraryDescription || (nights ? nights + ' Night Cruise' : '')),
+        esc(b.departurePort && b.departurePort.name ? b.departurePort.name : (b.departurePort || '')),
+        esc(cabinType), esc(cabin), esc(b.bookingId || b.masterBookingId || ''), esc(status),
+        esc(loyaltyLevel), esc(loyaltyPoints)
+      ].join(','));
+    });
+
+    return rows.length > 1 ? rows.join('\n') : null;
+  }
+
+  function triggerDownload(csvContent, filename) {
+    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     var url = URL.createObjectURL(blob);
-    var ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    var filename = 'easy-seas-' + capturedData.cruiseLine + '-' + ts + '.csv';
     var a = document.createElement('a');
     a.href = url; a.download = filename; a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
     setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
-    addLog('CSV exported: ' + filename, 'success');
   }
 
-  // ===== INIT =====
+  function downloadCSVs() {
+    addLog('Generating CSV files...', 'info');
+    var ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    var line = capturedData.cruiseLine || 'royal';
+    var downloaded = 0;
+
+    var offersCSV = buildOffersCSV();
+    if (offersCSV) {
+      var offersFilename = 'easy-seas-' + line + '-offers-' + ts + '.csv';
+      triggerDownload(offersCSV, offersFilename);
+      addLog('Exported offers: ' + offersFilename, 'success');
+      downloaded++;
+    } else {
+      addLog('No offers data to export', 'warning');
+    }
+
+    setTimeout(function() {
+      var bookedCSV = buildBookedCSV();
+      if (bookedCSV) {
+        var bookedFilename = 'easy-seas-' + line + '-booked-' + ts + '.csv';
+        triggerDownload(bookedCSV, bookedFilename);
+        addLog('Exported booked cruises: ' + bookedFilename, 'success');
+        downloaded++;
+      } else {
+        addLog('No booked cruise data to export', 'warning');
+      }
+
+      if (downloaded === 0) {
+        addLog('No data to export', 'error');
+      } else {
+        addLog('Downloaded ' + downloaded + ' CSV file(s)', 'success');
+      }
+    }, 500);
+  }
+
   function watchForOverlayRemoval() {
     if (!document.body) { setTimeout(watchForOverlayRemoval, 300); return; }
     var observer = new MutationObserver(function() { ensureOverlay(); });
