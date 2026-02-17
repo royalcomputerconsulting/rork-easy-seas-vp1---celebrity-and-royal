@@ -130,7 +130,7 @@ void function() {
 
   async function clearSyncState() {
     try {
-      await chrome.storage.local.remove(['es_syncStep', 'es_syncBounceCount', 'es_syncLogs']);
+      await chrome.storage.local.remove(['es_syncStep', 'es_syncBounceCount', 'es_syncLogs', 'es_navTarget']);
     } catch(ex) {}
   }
 
@@ -359,10 +359,20 @@ void function() {
     return null;
   }
 
-  function navigateTo(url) {
+  function navigateTo(url, callback) {
     addLog('Navigating to ' + url.replace(/https:\/\/www\.[^/]+/, ''), 'info');
-    console.log('[Easy Seas] Direct navigation to:', url);
-    window.location.href = url;
+    console.log('[Easy Seas] Navigating via background script to:', url);
+    chrome.storage.local.set({ es_navTarget: url });
+    chrome.runtime.sendMessage({ type: 'navigate', url: url }, function(resp) {
+      if (resp && resp.success) {
+        console.log('[Easy Seas] Background navigation initiated successfully');
+      } else {
+        console.warn('[Easy Seas] Background navigation failed, falling back to location.href');
+        addLog('Background nav failed, using fallback...', 'warning');
+        try { window.location.assign(url); } catch(e) { window.location.href = url; }
+      }
+      if (callback) callback();
+    });
   }
 
   async function startSync() {
@@ -544,6 +554,18 @@ void function() {
     return missing;
   }
 
+  function isOnExpectedPage(expectedPath) {
+    var currentUrl = window.location.href.toLowerCase();
+    var expectedLower = expectedPath.toLowerCase();
+    if (currentUrl.indexOf(expectedLower) !== -1) return true;
+    try {
+      var currentPath = new URL(currentUrl).pathname.toLowerCase();
+      var targetPath = new URL(expectedLower).pathname.toLowerCase();
+      return currentPath === targetPath || currentPath.indexOf(targetPath) !== -1;
+    } catch(e) {}
+    return false;
+  }
+
   async function resumeSync() {
     var state = await getSyncState();
     if (state.step === SYNC_STEPS.IDLE || state.step === SYNC_STEPS.DONE) return;
@@ -552,9 +574,31 @@ void function() {
     updateUI();
 
     var urls = getPageUrls();
-    addLog('Resuming sync step: ' + state.step, 'info');
+    var currentUrl = window.location.href;
+    addLog('Resuming sync step: ' + state.step + ' (on: ' + window.location.pathname + ')', 'info');
+
+    try {
+      var navTarget = (await chrome.storage.local.get(['es_navTarget'])).es_navTarget;
+      if (navTarget) {
+        await chrome.storage.local.remove(['es_navTarget']);
+        if (!isOnExpectedPage(navTarget)) {
+          addLog('Page did not navigate to expected URL, retrying...', 'warning');
+          addLog('Expected: ' + navTarget + ', Got: ' + currentUrl, 'warning');
+          navigateTo(navTarget);
+          return;
+        } else {
+          addLog('Confirmed on correct page: ' + window.location.pathname, 'success');
+        }
+      }
+    } catch(ex) { console.error('[Easy Seas] Nav target check error:', ex); }
 
     if (state.step === SYNC_STEPS.UPCOMING || state.step === SYNC_STEPS.BOUNCE_UPCOMING) {
+      if (!isOnExpectedPage(urls.upcoming)) {
+        addLog('Not on upcoming cruises page yet, navigating...', 'warning');
+        await setSyncState(state.step, state.bounceCount);
+        navigateTo(urls.upcoming);
+        return;
+      }
       updateProgress(2, 5, 'Step 2/5: Waiting for upcoming cruises data...');
       addLog('Waiting for upcoming cruises API to fire...', 'info');
 
@@ -584,6 +628,12 @@ void function() {
     }
 
     if (state.step === SYNC_STEPS.LOYALTY || state.step === SYNC_STEPS.BOUNCE_LOYALTY) {
+      if (!isOnExpectedPage(urls.loyalty)) {
+        addLog('Not on loyalty page yet, navigating...', 'warning');
+        await setSyncState(state.step, state.bounceCount);
+        navigateTo(urls.loyalty);
+        return;
+      }
       updateProgress(4, 5, 'Step 4/5: Waiting for loyalty data...');
       addLog('Waiting for loyalty API to fire...', 'info');
 
@@ -635,6 +685,12 @@ void function() {
     }
 
     if (state.step === SYNC_STEPS.BOUNCE_OFFERS) {
+      if (!isOnExpectedPage(urls.offers)) {
+        addLog('Not on offers page yet, navigating...', 'warning');
+        await setSyncState(state.step, state.bounceCount);
+        navigateTo(urls.offers);
+        return;
+      }
       updateProgress(2, 5, 'Bounce: Re-checking offers page...');
       addLog('On offers page, waiting for passive capture...', 'info');
       await waitForPassiveCapture('offers', 8000);
