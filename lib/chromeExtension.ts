@@ -4,6 +4,720 @@ import { Platform } from 'react-native';
 const SCRAPER_EXTENSION_VERSION = '1.0.0';
 const GRID_BUILDER_EXTENSION_VERSION = '2.0';
 
+function getEasySeasExtensionFiles(): Record<string, string> {
+  return {
+    'manifest.json': JSON.stringify({
+      "manifest_version": 3,
+      "name": "Easy Seas™ — Sync Extension",
+      "version": "1.0.0",
+      "description": "Syncs casino offers, booked cruises, and loyalty data from Royal Caribbean & Celebrity Cruises websites. Mirrors the in-app sync functionality.",
+      "permissions": [
+        "storage",
+        "downloads",
+        "tabs",
+        "scripting"
+      ],
+      "host_permissions": [
+        "https://*.royalcaribbean.com/*",
+        "https://*.celebritycruises.com/*"
+      ],
+      "background": {
+        "service_worker": "background.js"
+      },
+      "content_scripts": [
+        {
+          "matches": [
+            "https://*.royalcaribbean.com/*",
+            "https://*.celebritycruises.com/*"
+          ],
+          "js": ["content.js"],
+          "run_at": "document_start"
+        }
+      ],
+      "action": {
+        "default_popup": "popup.html"
+      }
+    }, null, 2),
+    
+    'background.js': getBackgroundJS(),
+    'content.js': getContentJS(),
+    'popup.html': getPopupHTML(),
+    'popup.js': getPopupJS(),
+    'csv-exporter.js': getCSVExporterJS()
+  };
+}
+
+function getBackgroundJS(): string {
+  return `let currentStatus = {
+  isLoggedIn: false,
+  hasOffers: false,
+  hasBookings: false,
+  offerCount: 0,
+  bookingCount: 0,
+  cruiseLine: 'royal',
+  lastUpdate: null,
+  syncProgress: null
+};
+
+let syncState = {
+  isRunning: false,
+  tabId: null,
+  step: 0,
+  totalSteps: 4,
+  capturedData: {
+    offers: null,
+    upcomingCruises: null,
+    courtesyHolds: null,
+    loyalty: null
+  },
+  errors: []
+};
+
+const SYNC_STEPS = [
+  {
+    name: 'Casino Offers',
+    url: '/account/club-royale/offers',
+    waitForEndpoint: '/api/casino/casino-offers',
+    dataKey: 'offers'
+  },
+  {
+    name: 'Upcoming Cruises',
+    url: '/account/upcoming-cruises',
+    waitForEndpoint: '/profileBookings/enriched',
+    dataKey: 'upcomingCruises'
+  },
+  {
+    name: 'Courtesy Holds',
+    url: '/account/courtesy-holds',
+    waitForEndpoint: '/api/account/courtesy-holds',
+    dataKey: 'courtesyHolds'
+  },
+  {
+    name: 'Loyalty Info',
+    url: '/account/loyalty-status',
+    waitForEndpoint: '/guestAccounts/loyalty/info',
+    dataKey: 'loyalty'
+  }
+];
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'status_update') {
+    currentStatus = { ...currentStatus, ...request.data };
+    chrome.storage.local.set({ status: currentStatus });
+    
+    chrome.action.setBadgeText({
+      text: currentStatus.hasOffers || currentStatus.hasBookings ? '✓' : ''
+    });
+    chrome.action.setBadgeBackgroundColor({ color: '#10b981' });
+  }
+  
+  if (request.type === 'data_captured') {
+    console.log(\`[Easy Seas] Data captured: \${request.endpoint}, count: \${request.count}\`);
+    
+    if (syncState.isRunning && request.data) {
+      syncState.capturedData[request.dataKey] = request.data;
+      
+      broadcastSyncProgress({
+        step: syncState.step,
+        stepName: SYNC_STEPS[syncState.step - 1]?.name || 'Unknown',
+        status: 'completed',
+        message: \`Captured \${request.count} items\`
+      });
+      
+      setTimeout(() => nextSyncStep(), 1500);
+    }
+  }
+  
+  if (request.type === 'start_sync') {
+    startSync(sender.tab?.id || request.tabId).then(result => {
+      sendResponse(result);
+    });
+    return true;
+  }
+  
+  if (request.type === 'stop_sync') {
+    stopSync();
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  if (request.type === 'get_sync_state') {
+    sendResponse({ 
+      success: true, 
+      isRunning: syncState.isRunning,
+      step: syncState.step,
+      totalSteps: syncState.totalSteps,
+      capturedData: syncState.capturedData
+    });
+    return true;
+  }
+});
+
+async function startSync(tabId) {
+  if (syncState.isRunning) {
+    return { success: false, error: 'Sync already running' };
+  }
+  
+  try {
+    let targetTabId = tabId;
+    
+    if (!targetTabId) {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tabs[0]) {
+        return { success: false, error: 'No active tab found' };
+      }
+      targetTabId = tabs[0].id;
+    }
+    
+    const tab = await chrome.tabs.get(targetTabId);
+    
+    if (!tab.url.includes('royalcaribbean.com') && !tab.url.includes('celebritycruises.com')) {
+      return { success: false, error: 'Please open Royal Caribbean or Celebrity Cruises website first' };
+    }
+    
+    syncState = {
+      isRunning: true,
+      tabId: targetTabId,
+      step: 0,
+      totalSteps: SYNC_STEPS.length,
+      capturedData: {
+        offers: null,
+        upcomingCruises: null,
+        courtesyHolds: null,
+        loyalty: null
+      },
+      errors: [],
+      cruiseLine: tab.url.includes('celebrity') ? 'celebrity' : 'royal',
+      baseUrl: tab.url.includes('celebrity') ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com'
+    };
+    
+    broadcastSyncProgress({
+      step: 0,
+      stepName: 'Starting',
+      status: 'started',
+      message: 'Initializing sync...'
+    });
+    
+    await chrome.storage.local.set({ syncState });
+    
+    nextSyncStep();
+    
+    return { success: true, message: 'Sync started' };
+  } catch (error) {
+    console.error('[Easy Seas] Start sync error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+function stopSync() {
+  syncState.isRunning = false;
+  broadcastSyncProgress({
+    step: syncState.step,
+    stepName: 'Stopped',
+    status: 'stopped',
+    message: 'Sync stopped by user'
+  });
+  chrome.storage.local.set({ syncState });
+}
+
+async function nextSyncStep() {
+  if (!syncState.isRunning) return;
+  
+  syncState.step++;
+  
+  if (syncState.step > syncState.totalSteps) {
+    await finishSync();
+    return;
+  }
+  
+  const step = SYNC_STEPS[syncState.step - 1];
+  
+  broadcastSyncProgress({
+    step: syncState.step,
+    stepName: step.name,
+    status: 'loading',
+    message: \`Navigating to \${step.name}...\`
+  });
+  
+  try {
+    const fullUrl = \`\${syncState.baseUrl}\${step.url}\`;
+    
+    await chrome.tabs.update(syncState.tabId, { url: fullUrl });
+    
+    await chrome.storage.local.set({ syncState });
+    
+    setTimeout(() => {
+      if (syncState.isRunning && syncState.step === SYNC_STEPS.indexOf(step) + 1) {
+        checkStepTimeout(step);
+      }
+    }, 30000);
+    
+  } catch (error) {
+    console.error(\`[Easy Seas] Error navigating to \${step.name}:\`, error);
+    syncState.errors.push(\`\${step.name}: \${error.message}\`);
+    
+    broadcastSyncProgress({
+      step: syncState.step,
+      stepName: step.name,
+      status: 'error',
+      message: \`Failed to load \${step.name}\`
+    });
+    
+    setTimeout(() => nextSyncStep(), 2000);
+  }
+}
+
+function checkStepTimeout(step) {
+  if (!syncState.capturedData[step.dataKey]) {
+    console.warn(\`[Easy Seas] Timeout waiting for \${step.name} data\`);
+    syncState.errors.push(\`\${step.name}: Timeout - no data captured\`);
+    
+    broadcastSyncProgress({
+      step: syncState.step,
+      stepName: step.name,
+      status: 'warning',
+      message: \`\${step.name} timed out, continuing...\`
+    });
+    
+    setTimeout(() => nextSyncStep(), 1000);
+  }
+}
+
+async function finishSync() {
+  syncState.isRunning = false;
+  
+  const totalCaptured = {
+    offers: syncState.capturedData.offers?.offers?.length || 0,
+    bookings: (syncState.capturedData.upcomingCruises?.profileBookings?.length || 0) + 
+              (syncState.capturedData.courtesyHolds?.payload?.sailingInfo?.length || 0),
+    hasLoyalty: !!syncState.capturedData.loyalty
+  };
+  
+  broadcastSyncProgress({
+    step: syncState.totalSteps,
+    stepName: 'Complete',
+    status: 'completed',
+    message: \`Sync complete! \${totalCaptured.offers} offers, \${totalCaptured.bookings} bookings\`,
+    capturedData: syncState.capturedData,
+    errors: syncState.errors
+  });
+  
+  currentStatus = {
+    ...currentStatus,
+    hasOffers: totalCaptured.offers > 0,
+    hasBookings: totalCaptured.bookings > 0,
+    offerCount: totalCaptured.offers,
+    bookingCount: totalCaptured.bookings,
+    lastUpdate: new Date().toISOString()
+  };
+  
+  await chrome.storage.local.set({ 
+    status: currentStatus, 
+    syncState,
+    lastCapturedData: syncState.capturedData
+  });
+}
+
+function broadcastSyncProgress(progress) {
+  chrome.runtime.sendMessage({
+    type: 'sync_progress',
+    progress: {
+      ...progress,
+      step: syncState.step,
+      totalSteps: syncState.totalSteps
+    }
+  }).catch(() => {});
+  
+  chrome.storage.local.set({ 
+    syncProgress: {
+      ...progress,
+      step: syncState.step,
+      totalSteps: syncState.totalSteps,
+      timestamp: Date.now()
+    }
+  });
+}
+
+chrome.storage.local.get(['status'], (result) => {
+  if (result.status) {
+    currentStatus = result.status;
+  }
+});`;
+}
+
+function getContentJS(): string {
+  return `(function() {
+  console.log('[Easy Seas] Content script loaded on:', window.location.href);
+
+  let capturedData = {
+    offers: null,
+    upcomingCruises: null,
+    courtesyHolds: null,
+    loyalty: null,
+    voyageEnrichment: null,
+    isLoggedIn: false,
+    lastUpdate: null,
+    cruiseLine: window.location.hostname.includes('celebrity') ? 'celebrity' : 'royal'
+  };
+
+  function sendStatusUpdate() {
+    chrome.runtime.sendMessage({
+      type: 'status_update',
+      data: {
+        isLoggedIn: capturedData.isLoggedIn,
+        hasOffers: !!capturedData.offers,
+        hasBookings: !!capturedData.upcomingCruises || !!capturedData.courtesyHolds,
+        offerCount: capturedData.offers?.offers?.length || 0,
+        bookingCount: (capturedData.upcomingCruises?.profileBookings?.length || 0) + 
+                      (capturedData.courtesyHolds?.payload?.sailingInfo?.length || 0),
+        cruiseLine: capturedData.cruiseLine,
+        lastUpdate: capturedData.lastUpdate
+      }
+    }).catch(() => {});
+  }
+
+  function interceptNetworkCalls() {
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+      return originalFetch.apply(this, args).then(response => {
+        const clonedResponse = response.clone();
+        const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
+        
+        if (typeof url === 'string' && url) {
+          if (url.includes('/api/casino/casino-offers')) {
+            if (response.ok && response.status === 200) {
+              clonedResponse.json().then(data => {
+                capturedData.offers = data;
+                capturedData.lastUpdate = new Date().toISOString();
+                console.log('[Easy Seas] Captured Casino Offers:', data?.offers?.length || 0, 'offers');
+                chrome.runtime.sendMessage({
+                  type: 'data_captured',
+                  endpoint: 'offers',
+                  count: data?.offers?.length || 0,
+                  dataKey: 'offers',
+                  data: data
+                }).catch(() => {});
+                sendStatusUpdate();
+              }).catch(() => {});
+            }
+          }
+          
+          if (url.includes('/profileBookings/enriched') || url.includes('/api/account/upcoming-cruises') || url.includes('/api/profile/bookings')) {
+            if (response.ok && response.status === 200) {
+              clonedResponse.json().then(data => {
+                capturedData.upcomingCruises = data;
+                capturedData.lastUpdate = new Date().toISOString();
+                const count = data?.profileBookings?.length || data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0;
+                console.log('[Easy Seas] Captured Bookings:', count);
+                chrome.runtime.sendMessage({
+                  type: 'data_captured',
+                  endpoint: 'bookings',
+                  count: count,
+                  dataKey: 'upcomingCruises',
+                  data: data
+                }).catch(() => {});
+                sendStatusUpdate();
+              }).catch(() => {});
+            }
+          }
+          
+          if (url.includes('/api/account/courtesy-holds')) {
+            if (response.ok && response.status === 200) {
+              clonedResponse.json().then(data => {
+                capturedData.courtesyHolds = data;
+                capturedData.lastUpdate = new Date().toISOString();
+                const count = data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0;
+                console.log('[Easy Seas] Captured Courtesy Holds:', count);
+                chrome.runtime.sendMessage({
+                  type: 'data_captured',
+                  endpoint: 'holds',
+                  count: count,
+                  dataKey: 'courtesyHolds',
+                  data: data
+                }).catch(() => {});
+                sendStatusUpdate();
+              }).catch(() => {});
+            }
+          }
+          
+          if (url.includes('/ships/voyages') && url.includes('/enriched')) {
+            if (response.ok && response.status === 200) {
+              clonedResponse.json().then(data => {
+                if (!capturedData.voyageEnrichment) {
+                  capturedData.voyageEnrichment = {};
+                }
+                Object.assign(capturedData.voyageEnrichment, data);
+                capturedData.lastUpdate = new Date().toISOString();
+                console.log('[Easy Seas] Captured Voyage Enrichment');
+                sendStatusUpdate();
+              }).catch(() => {});
+            }
+          }
+          
+          if (url.includes('/guestAccounts/loyalty/info') || url.includes('/en/celebrity/web/v3/guestAccounts/')) {
+            clonedResponse.text().then(text => {
+              let data = null;
+              try { data = JSON.parse(text); } catch (e) { data = { raw: text }; }
+              capturedData.loyalty = data;
+              capturedData.lastUpdate = new Date().toISOString();
+              console.log('[Easy Seas] Captured Loyalty Data');
+              chrome.runtime.sendMessage({
+                type: 'data_captured',
+                endpoint: 'loyalty',
+                count: 1,
+                dataKey: 'loyalty',
+                data: data
+              }).catch(() => {});
+              sendStatusUpdate();
+            }).catch(() => {});
+          }
+        }
+        
+        return response;
+      });
+    };
+
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    const originalXHRSend = XMLHttpRequest.prototype.send;
+    
+    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+      this._url = url;
+      return originalXHROpen.apply(this, [method, url, ...rest]);
+    };
+    
+    XMLHttpRequest.prototype.send = function(...args) {
+      this.addEventListener('load', function() {
+        if (this._url) {
+          try {
+            const data = JSON.parse(this.responseText);
+            
+            if (this._url.includes('/api/casino/casino-offers')) {
+              capturedData.offers = data;
+              capturedData.lastUpdate = new Date().toISOString();
+              console.log('[Easy Seas] [XHR] Captured Casino Offers');
+              chrome.runtime.sendMessage({
+                type: 'data_captured',
+                endpoint: 'offers',
+                count: data?.offers?.length || 0,
+                dataKey: 'offers',
+                data: data
+              }).catch(() => {});
+              sendStatusUpdate();
+            }
+            
+            if (this._url.includes('/profileBookings/enriched') || this._url.includes('/api/account/upcoming-cruises') || this._url.includes('/api/profile/bookings')) {
+              capturedData.upcomingCruises = data;
+              capturedData.lastUpdate = new Date().toISOString();
+              const count = data?.profileBookings?.length || data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0;
+              console.log('[Easy Seas] [XHR] Captured Bookings:', count);
+              chrome.runtime.sendMessage({
+                type: 'data_captured',
+                endpoint: 'bookings',
+                count: count,
+                dataKey: 'upcomingCruises',
+                data: data
+              }).catch(() => {});
+              sendStatusUpdate();
+            }
+            
+            if (this._url.includes('/api/account/courtesy-holds')) {
+              capturedData.courtesyHolds = data;
+              capturedData.lastUpdate = new Date().toISOString();
+              console.log('[Easy Seas] [XHR] Captured Courtesy Holds');
+              chrome.runtime.sendMessage({
+                type: 'data_captured',
+                endpoint: 'holds',
+                count: data?.payload?.sailingInfo?.length || 0,
+                dataKey: 'courtesyHolds',
+                data: data
+              }).catch(() => {});
+              sendStatusUpdate();
+            }
+            
+            if (this._url.includes('/guestAccounts/loyalty/info') || this._url.includes('/en/celebrity/web/v3/guestAccounts/')) {
+              capturedData.loyalty = data;
+              capturedData.lastUpdate = new Date().toISOString();
+              console.log('[Easy Seas] [XHR] Captured Loyalty Data');
+              chrome.runtime.sendMessage({
+                type: 'data_captured',
+                endpoint: 'loyalty',
+                count: 1,
+                dataKey: 'loyalty',
+                data: data
+              }).catch(() => {});
+              sendStatusUpdate();
+            }
+          } catch (e) {}
+        }
+      });
+      
+      return originalXHRSend.apply(this, args);
+    };
+    
+    console.log('[Easy Seas] Network monitoring active');
+  }
+
+  function checkAuthStatus() {
+    const pageText = document.body?.innerText || '';
+    const url = window.location.href;
+    
+    const cookies = document.cookie;
+    const hasCookies = cookies.includes('RCAUTH') || 
+                       cookies.includes('auth') || 
+                       cookies.includes('session') ||
+                       cookies.length > 100;
+    
+    const hasLogoutButton = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"]').length > 0;
+    const hasAccountLinks = document.querySelectorAll('a[href*="/account"]').length > 0;
+    const isOnAccountPage = url.includes('/account/') || url.includes('loyalty-status') || url.includes('club-royale') || url.includes('blue-chip');
+    
+    const wasLoggedIn = capturedData.isLoggedIn;
+    capturedData.isLoggedIn = hasLogoutButton || (hasCookies && hasAccountLinks) || (isOnAccountPage && !pageText.toLowerCase().includes('sign in to access'));
+    
+    if (wasLoggedIn !== capturedData.isLoggedIn) {
+      console.log('[Easy Seas] Auth status changed:', capturedData.isLoggedIn ? 'LOGGED IN' : 'NOT LOGGED IN');
+      sendStatusUpdate();
+    }
+  }
+
+  function initAuthDetection() {
+    interceptNetworkCalls();
+    
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(checkAuthStatus, 1500);
+      });
+    } else {
+      setTimeout(checkAuthStatus, 1500);
+    }
+
+    const observer = new MutationObserver(() => {
+      checkAuthStatus();
+    });
+
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    }
+    
+    setInterval(checkAuthStatus, 3000);
+    
+    setTimeout(sendStatusUpdate, 2000);
+  }
+
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.type === 'get_captured_data') {
+      sendResponse({ success: true, data: capturedData });
+      return true;
+    }
+    
+    if (request.type === 'clear_data') {
+      capturedData = {
+        offers: null,
+        upcomingCruises: null,
+        courtesyHolds: null,
+        loyalty: null,
+        voyageEnrichment: null,
+        isLoggedIn: capturedData.isLoggedIn,
+        lastUpdate: null,
+        cruiseLine: capturedData.cruiseLine
+      };
+      sendResponse({ success: true });
+      sendStatusUpdate();
+      return true;
+    }
+  });
+
+  initAuthDetection();
+})();`;
+}
+
+function getPopupHTML(): string {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Easy Seas™ Sync</title>
+  <style>body{width:420px;min-height:550px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:#e2e8f0;padding:0;margin:0}.header{background:linear-gradient(135deg,#3b82f6 0%,#2563eb 100%);padding:20px;text-align:center;border-bottom:2px solid #1e40af}.header h1{font-size:20px;font-weight:700;margin-bottom:4px;color:#fff}.header p{font-size:12px;color:#bfdbfe}.container{padding:20px}.sync-progress{background:#1e293b;border:2px solid #3b82f6;border-radius:12px;padding:16px;margin-bottom:16px;display:none}.sync-progress.active{display:block}.progress-bar{height:8px;background:#334155;border-radius:4px;overflow:hidden;margin-bottom:12px}.progress-fill{height:100%;background:linear-gradient(90deg,#3b82f6 0%,#60a5fa 100%);transition:width .3s ease;width:0}.status-card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px;margin-bottom:16px}.status-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #334155}.status-row:last-child{border-bottom:none}.status-label{font-size:13px;color:#94a3b8}.status-value{font-size:14px;font-weight:600;color:#e2e8f0}.status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase}.badge-success{background:#10b98120;color:#10b981}.badge-warning{background:#f59e0b20;color:#f59e0b}.button{width:100%;padding:16px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;margin-bottom:10px}.button:disabled{opacity:.5;cursor:not-allowed}.button-sync{background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;font-size:16px;padding:18px;box-shadow:0 4px 12px rgba(16,185,129,.3)}.button-sync:hover:not(:disabled){background:linear-gradient(135deg,#059669 0%,#047857 100%);transform:translateY(-2px)}.button-primary{background:linear-gradient(135deg,#3b82f6 0%,#2563eb 100%);color:#fff}.button-secondary{background:#334155;color:#e2e8f0}.instructions{background:#1e293b;border-left:3px solid #3b82f6;padding:12px;border-radius:8px;margin-top:16px}.instructions h3{font-size:13px;font-weight:600;color:#60a5fa;margin-bottom:8px}.instructions ol{margin-left:18px;font-size:12px;color:#cbd5e1;line-height:1.6}.alert{background:#ef444410;border:1px solid #ef4444;border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;color:#fca5a5;display:none}.alert.show{display:block}.alert.success{background:#10b98110;border-color:#10b981;color:#6ee7b7}.spinner{display:inline-block;width:16px;height:16px;border:2px solid #ffffff40;border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}</style>
+</head>
+<body>
+  <div class="header">
+    <h1>⚓ Easy Seas™</h1>
+    <p>Automated Cruise Data Sync</p>
+  </div>
+  
+  <div class="container">
+    <div id="alert" class="alert"></div>
+    
+    <div id="syncProgress" class="sync-progress">
+      <div style="display:flex;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:600;color:#60a5fa">🔄 Syncing Data</div>
+        <div style="font-size:12px;color:#94a3b8"><span id="currentStep">0</span>/<span id="totalSteps">4</span></div>
+      </div>
+      <div class="progress-bar">
+        <div id="progressFill" class="progress-fill"></div>
+      </div>
+      <div style="font-size:12px;color:#cbd5e1;display:flex;align-items:center;gap:8px">
+        <div class="spinner"></div>
+        <span id="progressMessage">Initializing...</span>
+      </div>
+    </div>
+    
+    <div class="status-card">
+      <div class="status-row">
+        <div class="status-label">Login Status</div>
+        <div class="status-value">
+          <span id="loginStatus" class="status-badge badge-warning">Not Logged In</span>
+        </div>
+      </div>
+      <div class="status-row">
+        <div class="status-label">Casino Offers</div>
+        <div class="status-value"><span id="offerCount">0</span></div>
+      </div>
+      <div class="status-row">
+        <div class="status-label">Booked Cruises</div>
+        <div class="status-value"><span id="bookingCount">0</span></div>
+      </div>
+      <div class="status-row">
+        <div class="status-label">Cruise Line</div>
+        <div class="status-value"><span id="cruiseLine">Royal Caribbean</span></div>
+      </div>
+    </div>
+    
+    <button id="syncBtn" class="button button-sync">START SYNC</button>
+    <button id="exportBtn" class="button button-primary" disabled>Download CSV</button>
+    <button id="clearBtn" class="button button-secondary">Clear Data</button>
+    
+    <div class="instructions">
+      <h3>📋 How to Use</h3>
+      <ol>
+        <li>Open <strong>royalcaribbean.com</strong> and log in</li>
+        <li>Click <strong>"START SYNC"</strong> button above</li>
+        <li>The extension will automatically navigate and capture all data</li>
+        <li>When complete, click <strong>"Download CSV"</strong></li>
+        <li>Import the CSV file into the Easy Seas app</li>
+      </ol>
+    </div>
+  </div>
+  
+  <script src="csv-exporter.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>`;
+  return html;
+}
+
+function getPopupJS(): string {
+  return `let currentStatus={isLoggedIn:!1,hasOffers:!1,hasBookings:!1,offerCount:0,bookingCount:0,cruiseLine:'royal',lastUpdate:null},isSyncing=!1,capturedData=null;function showAlert(e,t='error'){const n=document.getElementById('alert');n.textContent=e,n.className=\`alert show \${'success'===t?'success':''}\`,setTimeout(()=>{n.classList.remove('show')},5e3)}function updateUI(){const e=document.getElementById('loginStatus'),t=document.getElementById('offerCount'),n=document.getElementById('bookingCount'),o=document.getElementById('cruiseLine'),s=document.getElementById('exportBtn'),r=document.getElementById('syncBtn');currentStatus.isLoggedIn?(e.textContent='Logged In',e.className='status-badge badge-success'):(e.textContent='Not Logged In',e.className='status-badge badge-warning'),t.textContent=currentStatus.offerCount,n.textContent=currentStatus.bookingCount,o.textContent='celebrity'===currentStatus.cruiseLine?'Celebrity Cruises':'Royal Caribbean';const a=currentStatus.hasOffers||currentStatus.hasBookings;s.disabled=!a||isSyncing,isSyncing?(r.className='button button-stop',r.innerHTML='STOP SYNC'):(r.className='button button-sync',r.innerHTML='START SYNC',r.disabled=!1)}function updateSyncProgress(e){const t=document.getElementById('syncProgress'),n=document.getElementById('progressFill'),o=document.getElementById('progressMessage'),s=document.getElementById('currentStep'),r=document.getElementById('totalSteps');if(!e)return void t.classList.remove('active');t.classList.add('active');const a=e.step/e.totalSteps*100;n.style.width=\`\${a}%\`,s.textContent=e.step,r.textContent=e.totalSteps,o.textContent=e.message||'Processing...','completed'===e.status&&e.step===e.totalSteps&&setTimeout(()=>{t.classList.remove('active'),showAlert(e.message||'Sync completed!','success')},2e3)}async function loadStatus(){const e=await chrome.storage.local.get(['status','syncProgress','lastCapturedData']);e.status&&(currentStatus=e.status,updateUI()),e.syncProgress&&e.syncProgress.timestamp>Date.now()-6e4&&updateSyncProgress(e.syncProgress),e.lastCapturedData&&(capturedData=e.lastCapturedData)}async function toggleSync(){if(isSyncing)return chrome.runtime.sendMessage({type:'stop_sync'}),isSyncing=!1,updateUI(),void updateSyncProgress(null);const[e]=await chrome.tabs.query({active:!0,currentWindow:!0});if(!e||!e.url||!e.url.includes('royalcaribbean.com')&&!e.url.includes('celebritycruises.com'))return void showAlert('Please open Royal Caribbean or Celebrity Cruises website first');if(!currentStatus.isLoggedIn)return void showAlert('Please log in to Royal Caribbean website first');isSyncing=!0,updateUI();const t=await chrome.runtime.sendMessage({type:'start_sync',tabId:e.id});t.success||(showAlert(t.error||'Failed to start sync'),isSyncing=!1,updateUI())}async function clearData(){const e=document.getElementById('clearBtn'),t=e.innerHTML;e.disabled=!0,e.innerHTML='<div class="spinner"></div> Clearing...';try{const[t]=await chrome.tabs.query({active:!0,currentWindow:!0});t&&(t.url.includes('royalcaribbean.com')||t.url.includes('celebritycruises.com'))&&await chrome.tabs.sendMessage(t.id,{type:'clear_data'}),capturedData=null,currentStatus={isLoggedIn:currentStatus.isLoggedIn,hasOffers:!1,hasBookings:!1,offerCount:0,bookingCount:0,cruiseLine:currentStatus.cruiseLine,lastUpdate:null},await chrome.storage.local.set({status:currentStatus,lastCapturedData:null}),updateUI(),showAlert('Data cleared successfully','success')}catch(e){console.error('Clear error:',e),showAlert('Error clearing data')}finally{e.disabled=!1,e.innerHTML=t}}async function exportData(){const e=document.getElementById('exportBtn'),t=e.innerHTML;e.disabled=!0,e.innerHTML='<div class="spinner"></div> Exporting...';try{if(!capturedData){const e=await chrome.storage.local.get(['lastCapturedData']);capturedData=e.lastCapturedData}if(!capturedData)return showAlert('No data to export. Please run sync first.'),e.disabled=!1,void(e.innerHTML=t);const n=exportToCSV(capturedData,!0,!0);n.success?showAlert('CSV file downloaded successfully!','success'):showAlert(n.error||'Export failed')}catch(e){console.error('Export error:',e),showAlert('Error exporting data: '+e.message)}finally{setTimeout(()=>{e.disabled=!1,e.innerHTML=t},1e3)}}chrome.runtime.onMessage.addListener((e,t,n)=>{'sync_progress'===e.type&&(updateSyncProgress(e.progress),'completed'!==e.progress.status&&'stopped'!==e.progress.status||(isSyncing=!1,updateUI(),e.progress.capturedData&&(capturedData=e.progress.capturedData,currentStatus.hasOffers=!!capturedData.offers,currentStatus.hasBookings=!!capturedData.upcomingCruises||!!capturedData.courtesyHolds,currentStatus.offerCount=capturedData.offers?.offers?.length||0,currentStatus.bookingCount=(capturedData.upcomingCruises?.profileBookings?.length||0)+(capturedData.courtesyHolds?.payload?.sailingInfo?.length||0),currentStatus.lastUpdate=(new Date).toISOString(),updateUI())))}),document.addEventListener('DOMContentLoaded',()=>{loadStatus(),document.getElementById('syncBtn').addEventListener('click',toggleSync),document.getElementById('exportBtn').addEventListener('click',exportData),document.getElementById('clearBtn').addEventListener('click',clearData),chrome.storage.onChanged.addListener((e,t)=>{'local'===t&&(e.status&&(currentStatus=e.status.newValue,updateUI()),e.syncProgress&&updateSyncProgress(e.syncProgress.newValue),e.lastCapturedData&&(capturedData=e.lastCapturedData.newValue))}),setInterval(()=>{loadStatus()},5e3)});`;
+}
+
+function getCSVExporterJS(): string {
+  return `function escapeCSVField(e){if(null==e)return'';const t=String(e);return t.includes(',')||t.includes('"')||t.includes('\n')||t.includes('\r')?\`"\${t.replace(/"/g,'""')}"\`:t}function parseDate(e){if(!e)return'';const t=e.trim();try{const e=t.match(/^(\d{4})-(\d{2})-(\d{2})/);if(e){const t=e[1],n=e[2],r=e[3];return\`\${n}-\${r}-\${t}\`}const n=t.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);if(n){const e=n[1].padStart(2,'0'),t=n[2].padStart(2,'0'),r=n[3];return\`\${e}-\${t}-\${r}\`}const r=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);if(r){const e=r[1].padStart(2,'0'),t=r[2].padStart(2,'0'),n=2===r[3].length?'20'+r[3]:r[3];return\`\${e}-\${t}-\${n}\`}const a=new Date(t);if(!isNaN(a.getTime())){const e=String(a.getMonth()+1).padStart(2,'0'),t=String(a.getDate()).padStart(2,'0'),n=String(a.getFullYear());return\`\${e}-\${t}-\${n}\`}}catch(e){console.warn('[CSV Export] Failed to parse date:',e)}return e}function extractNightsFromText(e){if(!e)return null;const t=e.match(/(\d+)\s*[-]?\s*night/i);if(t){const e=parseInt(t[1],10);if(e>0&&e<=365)return e}return null}function transformOffersToCSV(e){const t=e.offers;if(!t||!t.offers||0===t.offers.length)return console.log('[CSV Export] No offers to export'),null;const n=t.offers,r=['Ship Name','Sailing Date','Itinerary','Offer Code','Real Offer Name','Room Type','Guests Info','Perks','Offer Value','Offer Expiry Date Alt','Offer Expiry Date','Price Interior','Price Ocean View','Price Balcony','Price Suite','Taxes & Fees','Ports & Times','Offer Type / Category','Nights','Departure Port'].join(','),a=[r];for(const e of n){const t=e.campaignOffer||e,n=t.sailings||[],r=t.offerCode||'',i=t.name||t.offerName||'',s=t.tradeInValue||0,o=t.reserveByDate||t.expiryDate||'';for(const e of n){const t=e.itineraryDescription||e.itinerary||'',n=extractNightsFromText(t)||e.numberOfNights||7,c=e.shipName||'',l=e.sailDate||e.sailingDate||'',d=e.roomType||e.cabinType||'Balcony',u=e.numberOfGuests||(e.isGOBO?'1 Guest':'2 Guests'),f=e.departurePort?.name||e.departurePort||'',m=e.portList||[],p=Array.isArray(m)?m.join(' → '):'',g=[escapeCSVField(c),parseDate(l),escapeCSVField(t),escapeCSVField(r),escapeCSVField(i),escapeCSVField(d),escapeCSVField(u),escapeCSVField('-'),escapeCSVField(s),'',parseDate(o),escapeCSVField(e.interiorPrice||0),escapeCSVField(e.oceanviewPrice||0),escapeCSVField(e.balconyPrice||0),escapeCSVField(e.suitePrice||0),escapeCSVField(e.taxesAndFees||0),escapeCSVField(p),escapeCSVField(u),escapeCSVField(n),escapeCSVField(f)];a.push(g.join(','))}}return console.log('[CSV Export] Generated',a.length-1,'offer rows'),a.join('\n')}function transformBookingsToCSV(e){const t=[];if(e.upcomingCruises?.profileBookings&&t.push(...e.upcomingCruises.profileBookings),e.courtesyHolds?.payload?.sailingInfo?t.push(...e.courtesyHolds.payload.sailingInfo):e.courtesyHolds?.sailingInfo&&t.push(...e.courtesyHolds.sailingInfo),0===t.length)return console.log('[CSV Export] No bookings to export'),null;const n=['id','ship','departureDate','returnDate','nights','itineraryName','departurePort','portsRoute','reservationNumber','guests','bookingId','isBooked','winningsBroughtHome','cruisePointsEarned'].join(','),r=[n];for(const e of t){const t=parseDate(e.sailDate||e.sailingStartDate||''),n=parseDate(e.returnDate||e.sailingEndDate||''),a=e.numberOfNights||e.nights||7,i=e.shipName||'',s=e.bookingId||e.masterBookingId||'',o=e.reservationNumber||e.confirmationNumber||'',c=e.itinerary||e.cruiseTitle||e.itineraryDescription||'',l=e.departurePort?.name||e.departurePort||'',d='Booked'===e.status||'Confirmed'===e.bookingStatus?'TRUE':'FALSE',u=e.portList||[],f=Array.isArray(u)?u.join(', '):'',m=[escapeCSVField(\`booked-\${i.replace(/\s+/g,'-').toLowerCase()}-\${Date.now()}\`),escapeCSVField(i),t,n,escapeCSVField(a),escapeCSVField(c),escapeCSVField(l),escapeCSVField(f),escapeCSVField(o),escapeCSVField(e.numberOfGuests||'2'),escapeCSVField(s),d,'',''];r.push(m.join(','))}return console.log('[CSV Export] Generated',r.length-1,'booking rows'),r.join('\n')}function exportToCSV(e,t,n){console.log('[CSV Export] Starting export with data:',{hasOffers:!!e.offers,hasUpcomingCruises:!!e.upcomingCruises,hasCourtesyHolds:!!e.courtesyHolds,includeOffers:t,includeBookings:n});let r='';if(t){const t=transformOffersToCSV(e);t&&(r+=t)}if(n){const t=transformBookingsToCSV(e);t&&(r&&(r+='\n\n'),r+=t)}if(!r)return console.error('[CSV Export] No data to export'),{success:!1,error:'No data to export'};const a=new Blob([r],{type:'text/csv;charset=utf-8;'}),i=URL.createObjectURL(a),s=(new Date).toISOString().replace(/[:.]/g,'-').slice(0,-5),o=\`easy-seas-\${e.cruiseLine||'royal'}-\${s}.csv\`;return console.log('[CSV Export] Initiating download:',o),chrome.downloads.download({url:i,filename:o,saveAs:!0},e=>{chrome.runtime.lastError?console.error('[CSV Export] Download failed:',chrome.runtime.lastError):(console.log('[CSV Export] Download started with ID:',e),setTimeout(()=>URL.revokeObjectURL(i),1e3))}),{success:!0,filename:o}}`;
+}
+
 export async function downloadScraperExtension(): Promise<{ success: boolean; error?: string; filesAdded?: number }> {
   if (Platform.OS !== 'web') {
     console.log('[ChromeExtension] Download only available on web');
@@ -11,31 +725,14 @@ export async function downloadScraperExtension(): Promise<{ success: boolean; er
   }
 
   try {
-    console.log('[ChromeExtension] Creating Scraper extension ZIP from assets...');
+    console.log('[ChromeExtension] Creating Scraper extension ZIP from embedded files...');
     const zip = new JSZip();
 
-    const extensionFiles = [
-      'manifest.json',
-      'background.js',
-      'content.js',
-      'popup.html',
-      'popup.js',
-      'csv-exporter.js'
-    ];
+    const extensionFiles = getEasySeasExtensionFiles();
 
-    for (const filename of extensionFiles) {
-      try {
-        const response = await fetch(`/assets/easy-seas-extension/${filename}`);
-        if (!response.ok) {
-          console.error(`[ChromeExtension] Failed to fetch ${filename}: ${response.status}`);
-          continue;
-        }
-        const content = await response.text();
-        zip.file(filename, content);
-        console.log(`[ChromeExtension] ✓ Added ${filename}`);
-      } catch (error) {
-        console.error(`[ChromeExtension] Error fetching ${filename}:`, error);
-      }
+    for (const [filename, content] of Object.entries(extensionFiles)) {
+      zip.file(filename, content);
+      console.log(`[ChromeExtension] ✓ Added ${filename}`);
     }
 
     const fileCount = Object.keys(zip.files).length;
