@@ -64,12 +64,14 @@ function extractNightsFromText(text) {
 }
 
 function transformOffersToCSV(capturedData) {
-  const offers = capturedData.offers?.offers || [];
+  const offersData = capturedData.offers;
   
-  if (offers.length === 0) {
+  if (!offersData || !offersData.offers || offersData.offers.length === 0) {
     console.log('[CSV Export] No offers to export');
     return null;
   }
+
+  const offers = offersData.offers;
 
   const headers = [
     'Ship Name',
@@ -97,47 +99,72 @@ function transformOffersToCSV(capturedData) {
   const rows = [headers.join(',')];
 
   for (const offer of offers) {
-    for (const sailing of offer.sailings || []) {
-      const nights = extractNightsFromText(sailing.itinerary) || 7;
-      const portsAndTimes = sailing.portList?.join(' → ') || '';
+    const campaignOffer = offer.campaignOffer || offer;
+    const sailings = campaignOffer.sailings || [];
+    
+    const offerCode = campaignOffer.offerCode || '';
+    const offerName = campaignOffer.name || campaignOffer.offerName || '';
+    const offerValue = campaignOffer.tradeInValue || 0;
+    const offerExpiryDate = campaignOffer.reserveByDate || campaignOffer.expiryDate || '';
+    
+    for (const sailing of sailings) {
+      const itinerary = sailing.itineraryDescription || sailing.itinerary || '';
+      const nights = extractNightsFromText(itinerary) || sailing.numberOfNights || 7;
+      
+      const shipName = sailing.shipName || '';
+      const sailingDate = sailing.sailDate || sailing.sailingDate || '';
+      const cabinType = sailing.roomType || sailing.cabinType || 'Balcony';
+      const numberOfGuests = sailing.numberOfGuests || (sailing.isGOBO ? '1 Guest' : '2 Guests');
+      const departurePort = sailing.departurePort?.name || sailing.departurePort || '';
+      
+      const portList = sailing.portList || [];
+      const portsAndTimes = Array.isArray(portList) ? portList.join(' → ') : '';
       
       const row = [
-        escapeCSVField(sailing.shipName || ''),
-        parseDate(sailing.sailingDate),
-        escapeCSVField(sailing.itinerary || ''),
-        escapeCSVField(offer.offerCode || ''),
-        escapeCSVField(offer.offerName || ''),
-        escapeCSVField(sailing.cabinType || 'Balcony'),
-        escapeCSVField(sailing.numberOfGuests || '2 Guests'),
-        escapeCSVField(offer.perks || '-'),
-        escapeCSVField(offer.offerValue || 0),
+        escapeCSVField(shipName),
+        parseDate(sailingDate),
+        escapeCSVField(itinerary),
+        escapeCSVField(offerCode),
+        escapeCSVField(offerName),
+        escapeCSVField(cabinType),
+        escapeCSVField(numberOfGuests),
+        escapeCSVField('-'),
+        escapeCSVField(offerValue),
         '',
-        parseDate(offer.offerExpirationDate),
+        parseDate(offerExpiryDate),
         escapeCSVField(sailing.interiorPrice || 0),
         escapeCSVField(sailing.oceanviewPrice || 0),
         escapeCSVField(sailing.balconyPrice || 0),
         escapeCSVField(sailing.suitePrice || 0),
         escapeCSVField(sailing.taxesAndFees || 0),
         escapeCSVField(portsAndTimes),
-        escapeCSVField(offer.offerType || '2 Guests'),
+        escapeCSVField(numberOfGuests),
         escapeCSVField(nights),
-        escapeCSVField(sailing.departurePort || ''),
+        escapeCSVField(departurePort),
       ];
 
       rows.push(row.join(','));
     }
   }
 
+  console.log('[CSV Export] Generated', rows.length - 1, 'offer rows');
   return rows.join('\n');
 }
 
 function transformBookingsToCSV(capturedData) {
-  const bookings = capturedData.upcomingCruises?.profileBookings || [];
-  const holds = capturedData.courtesyHolds?.payload?.sailingInfo || capturedData.courtesyHolds?.sailingInfo || [];
+  const bookings = [];
   
-  const allBookings = [...bookings, ...holds];
+  if (capturedData.upcomingCruises?.profileBookings) {
+    bookings.push(...capturedData.upcomingCruises.profileBookings);
+  }
   
-  if (allBookings.length === 0) {
+  if (capturedData.courtesyHolds?.payload?.sailingInfo) {
+    bookings.push(...capturedData.courtesyHolds.payload.sailingInfo);
+  } else if (capturedData.courtesyHolds?.sailingInfo) {
+    bookings.push(...capturedData.courtesyHolds.sailingInfo);
+  }
+  
+  if (bookings.length === 0) {
     console.log('[CSV Export] No bookings to export');
     return null;
   }
@@ -161,23 +188,30 @@ function transformBookingsToCSV(capturedData) {
 
   const rows = [headers.join(',')];
 
-  for (const booking of allBookings) {
-    const sailDate = parseDate(booking.sailDate || booking.sailingStartDate);
-    const returnDate = parseDate(booking.returnDate || booking.sailingEndDate);
+  for (const booking of bookings) {
+    const sailDate = parseDate(booking.sailDate || booking.sailingStartDate || '');
+    const returnDate = parseDate(booking.returnDate || booking.sailingEndDate || '');
     const nights = booking.numberOfNights || booking.nights || 7;
+    const shipName = booking.shipName || '';
     const bookingId = booking.bookingId || booking.masterBookingId || '';
+    const reservationNumber = booking.reservationNumber || booking.confirmationNumber || '';
+    const itinerary = booking.itinerary || booking.cruiseTitle || booking.itineraryDescription || '';
+    const departurePort = booking.departurePort?.name || booking.departurePort || '';
     const isBooked = booking.status === 'Booked' || booking.bookingStatus === 'Confirmed' ? 'TRUE' : 'FALSE';
     
+    const portList = booking.portList || [];
+    const portsRoute = Array.isArray(portList) ? portList.join(', ') : '';
+    
     const row = [
-      escapeCSVField(`booked-${booking.shipName?.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`),
-      escapeCSVField(booking.shipName || ''),
+      escapeCSVField(`booked-${shipName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`),
+      escapeCSVField(shipName),
       sailDate,
       returnDate,
       escapeCSVField(nights),
-      escapeCSVField(booking.itinerary || booking.cruiseTitle || ''),
-      escapeCSVField(booking.departurePort || ''),
-      escapeCSVField(booking.portList?.join(', ') || ''),
-      escapeCSVField(booking.reservationNumber || ''),
+      escapeCSVField(itinerary),
+      escapeCSVField(departurePort),
+      escapeCSVField(portsRoute),
+      escapeCSVField(reservationNumber),
       escapeCSVField(booking.numberOfGuests || '2'),
       escapeCSVField(bookingId),
       isBooked,
@@ -188,10 +222,19 @@ function transformBookingsToCSV(capturedData) {
     rows.push(row.join(','));
   }
 
+  console.log('[CSV Export] Generated', rows.length - 1, 'booking rows');
   return rows.join('\n');
 }
 
 function exportToCSV(capturedData, includeOffers, includeBookings) {
+  console.log('[CSV Export] Starting export with data:', {
+    hasOffers: !!capturedData.offers,
+    hasUpcomingCruises: !!capturedData.upcomingCruises,
+    hasCourtesyHolds: !!capturedData.courtesyHolds,
+    includeOffers,
+    includeBookings
+  });
+
   let csvContent = '';
   
   if (includeOffers) {
@@ -210,13 +253,17 @@ function exportToCSV(capturedData, includeOffers, includeBookings) {
   }
   
   if (!csvContent) {
+    console.error('[CSV Export] No data to export');
     return { success: false, error: 'No data to export' };
   }
   
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `easy-seas-${capturedData.cruiseLine}-${timestamp}.csv`;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+  const cruiseLine = capturedData.cruiseLine || 'royal';
+  const filename = `easy-seas-${cruiseLine}-${timestamp}.csv`;
+  
+  console.log('[CSV Export] Initiating download:', filename);
   
   chrome.downloads.download({
     url: url,
@@ -225,10 +272,10 @@ function exportToCSV(capturedData, includeOffers, includeBookings) {
   }, (downloadId) => {
     if (chrome.runtime.lastError) {
       console.error('[CSV Export] Download failed:', chrome.runtime.lastError);
-      return { success: false, error: chrome.runtime.lastError.message };
+      return;
     }
-    console.log('[CSV Export] Download started:', downloadId);
-    URL.revokeObjectURL(url);
+    console.log('[CSV Export] Download started with ID:', downloadId);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   
   return { success: true, filename };

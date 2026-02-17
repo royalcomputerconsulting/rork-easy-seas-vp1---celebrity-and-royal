@@ -1,107 +1,89 @@
-# Easy Seas™ Extension - Installation Guide
+# Easy Seas™ - Royal Caribbean Sync Extension
 
-## Quick Installation Steps
+## Installation Instructions
 
-### 1. Prepare the Extension Files
+### For Chrome/Edge/Brave
 
-First, make sure you have all the extension files in a folder. The folder should contain:
-- `manifest.json`
-- `content.js`
-- `background.js`
-- `popup.html`
-- `popup.js`
-- `csv-exporter.js`
-- `icons/` folder with icon files
-
-### 2. Add Extension Icons
-
-**IMPORTANT:** Before installing, you need to add icon files to the `icons/` folder.
-
-#### Option A: Create Simple Icons
-You can create simple placeholder icons using any image editor:
-- Create three PNG files: `icon16.png`, `icon48.png`, `icon128.png`
-- Use a simple anchor emoji ⚓ or ship 🚢 as the icon
-- Or download icons from [icons8.com](https://icons8.com) or [flaticon.com](https://flaticon.com)
-
-#### Option B: Use Existing Images
-Copy any PNG images and rename them to:
-- `icons/icon16.png` (16x16 pixels)
-- `icons/icon48.png` (48x48 pixels)
-- `icons/icon128.png` (128x128 pixels)
-
-### 3. Install in Chrome
-
-1. **Open Chrome Extensions Page**
-   ```
-   Type in address bar: chrome://extensions/
-   Or: Menu → More Tools → Extensions
-   ```
+1. **Download the Extension**
+   - Download the ZIP file from the Easy Seas app (Settings → Download Extension)
+   - Unzip the file to a permanent location on your computer
 
 2. **Enable Developer Mode**
-   - Look for the toggle in the top-right corner
-   - Turn it ON (it should turn blue)
+   - Open Chrome and go to `chrome://extensions`
+   - Toggle "Developer mode" ON (top right corner)
 
 3. **Load the Extension**
-   - Click the "Load unpacked" button (appears after enabling Developer mode)
-   - Browse to and select the `easy-seas-extension` folder
-   - Click "Select Folder"
+   - Click "Load unpacked"
+   - Select the unzipped extension folder
+   - The extension icon (⚓) should appear in your toolbar
 
-4. **Verify Installation**
-   - The extension should appear in your extensions list
-   - You should see the Easy Seas icon in your toolbar
-   - If you don't see it, click the puzzle piece icon and pin it
+4. **Pin the Extension** (Optional)
+   - Click the puzzle piece icon in your toolbar
+   - Find "Easy Seas™ - Royal Caribbean Sync"
+   - Click the pin icon to keep it visible
 
-### 4. Test the Extension
+### Usage
 
-1. Go to [royalcaribbean.com](https://www.royalcaribbean.com)
-2. Log in to your account
-3. Navigate to Club Royale → Offers
-4. Click the Easy Seas extension icon
-5. You should see data being captured
+1. **Log in to Royal Caribbean**
+   - Go to https://www.royalcaribbean.com
+   - Sign in to your account
+   - Navigate to Club Royale → Offers
 
-## Troubleshooting Installation
+2. **Wait for Data Capture**
+   - The extension automatically captures data as you browse
+   - Click the extension icon to see status
+   - Green checkmark = Data captured
 
-### "Manifest file is missing or unreadable"
-- Make sure all files are in the same folder
-- Check that `manifest.json` exists and is properly formatted
-- Don't modify the manifest.json file
+3. **Export Data**
+   - Click the extension icon
+   - Select which data to export (Offers/Bookings)
+   - Click "Export to CSV"
+   - Save the file
 
-### "Could not load icon"
-- Add the icon files to the `icons/` folder as described in Step 2
-- Make sure the files are named exactly: `icon16.png`, `icon48.png`, `icon128.png`
-- Icons must be PNG format
+4. **Import to Easy Seas App**
+   - Open Easy Seas app
+   - Go to Settings → Import Data
+   - Select "Import Offers CSV"
+   - Choose the downloaded file
 
-### Extension loads but doesn't work
-- Make sure you're on royalcaribbean.com or celebritycruises.com
+## Troubleshooting
+
+**Extension not capturing data?**
+- Make sure you're logged in to royalcaribbean.com
+- Navigate to the Club Royale Offers page
+- Refresh the page if needed
+- Check the browser console for errors (F12 → Console tab)
+
+**Export button disabled?**
+- Click "Refresh Data" button first
+- Make sure you have visited the offers page
 - Check that you're logged in
-- Open browser console (F12) and look for any error messages
-- Try refreshing the page
 
-### Extension icon doesn't appear in toolbar
-- Click the puzzle piece icon in Chrome toolbar
-- Find "Easy Seas™ - Royal Caribbean Sync"
-- Click the pin icon to keep it visible
+**Download fails?**
+- Check browser download permissions
+- Try clicking "Refresh Data" before export
+- Make sure the extension has downloads permission
 
-## Updating the Extension
+**Celebrity Cruises?**
+- The extension also works with celebritycruises.com
+- Same process: log in, visit Blue Chip Club offers, export
 
-When a new version is available:
+## Support
 
-1. Download the new extension files
-2. Go to `chrome://extensions/`
-3. Find the Easy Seas extension
-4. Click the "Reload" button (circular arrow icon)
+For issues or questions:
+- Check the Easy Seas app User Manual (Settings → User Manual)
+- Verify you're on the latest version of the extension
+- Try removing and re-installing the extension
 
-Or remove and reinstall:
-1. Click "Remove" on the old version
-2. Follow the installation steps above with new files
+## Version
 
-## Next Steps
+Current Version: 1.0.0
 
-Once installed, see the main README.md for:
-- How to use the extension
-- Exporting data to CSV
-- Importing into the Easy Seas app
+## Privacy
 
----
-
-Need help? Contact Easy Seas support.
+This extension:
+- Only runs on Royal Caribbean and Celebrity Cruises websites
+- Does NOT send your data to any servers
+- Captures data locally in your browser
+- Only exports data when you click the Export button
+- Does NOT track your browsing history
