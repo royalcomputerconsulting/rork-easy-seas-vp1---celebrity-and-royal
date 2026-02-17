@@ -1043,7 +1043,7 @@ export default function SettingsScreen() {
       if (result.success) {
         Alert.alert(
           'Download Started',
-          `Easy Seas™ Sync Extension is downloading.\n\nThis extension syncs casino offers, booked cruises, and loyalty data from Royal Caribbean & Celebrity Cruises websites.\n\nTo install:\n1. Unzip the downloaded file\n2. Open Chrome and go to chrome://extensions\n3. Enable "Developer mode"\n4. Click "Load unpacked"\n5. Select the unzipped folder\n\nAfter installation, log in to the cruise line website and the extension will automatically scrape and download your data.`
+          `Easy Seas™ Auto-Sync Extension is downloading.\n\nThis extension automatically syncs casino offers, booked cruises, and loyalty data from Royal Caribbean & Celebrity Cruises websites.\n\nTo install:\n1. Unzip the downloaded file\n2. Open Chrome and go to chrome://extensions\n3. Enable "Developer mode"\n4. Click "Load unpacked"\n5. Select the unzipped folder\n\nAfter installation, navigate to the cruise line website, log in, and use the floating overlay to start an automated sync.`
         );
       } else {
         console.error('[Settings] Download failed:', result.error);
@@ -2006,7 +2006,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                 isDownloadingExtension ? (
                   <ActivityIndicator size="small" color="#5a2ea6" />
                 ) : (
-                  <Text style={styles.countBadge}>v5.6.0</Text>
+                  <Text style={styles.countBadge}>v1.0.0</Text>
                 ),
                 handleDownloadExtension
               )}
@@ -2031,7 +2031,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
               Full backup includes all cruises, offers, events, casino sessions, certificates, user profile (name, C&A #, playing hours), Club Royale points, loyalty points, and settings.
             </Text>
             <Text style={styles.extensionHint}>
-              The Chrome extension scrapes offers from Royal Caribbean and Celebrity cruise websites.
+              The Chrome extension automatically syncs offers, bookings, and loyalty data from Royal Caribbean and Celebrity cruise websites.
             </Text>
           </View>
 

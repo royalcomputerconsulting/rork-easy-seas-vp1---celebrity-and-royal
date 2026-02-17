@@ -1,8 +1,7 @@
 import JSZip from 'jszip';
 import { Platform } from 'react-native';
 
-const SCRAPER_EXTENSION_VERSION = '1.0.0';
-const GRID_BUILDER_EXTENSION_VERSION = '2.0';
+const EASY_SEAS_EXTENSION_VERSION = '1.0.0';
 
 function getEasySeasExtensionFiles(): Record<string, string> {
   const manifestContent = `{
@@ -45,8 +44,18 @@ function getEasySeasExtensionFiles(): Record<string, string> {
       ]
     }
   ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
-    "default_title": "Easy Seas™ — Automated Cruise Data Sync"
+    "default_title": "Easy Seas™ — Automated Cruise Data Sync",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   }
 }`;
 
@@ -1436,7 +1445,7 @@ export async function downloadScraperExtension(): Promise<{ success: boolean; er
   }
 
   try {
-    console.log('[ChromeExtension] Creating Scraper extension ZIP from embedded files...');
+    console.log('[ChromeExtension] Creating Easy Seas Sync extension ZIP...');
     const zip = new JSZip();
 
     const extensionFiles = getEasySeasExtensionFiles();
@@ -1446,8 +1455,16 @@ export async function downloadScraperExtension(): Promise<{ success: boolean; er
       console.log(`[ChromeExtension] Added ${filename}`);
     }
 
+    const icon16 = createPlaceholderIcon('ES', '#1e3a8a', 16);
+    const icon48 = createPlaceholderIcon('ES', '#1e3a8a', 48);
+    const icon128 = createPlaceholderIcon('ES', '#1e3a8a', 128);
+    zip.file('icons/icon16.png', icon16);
+    zip.file('icons/icon48.png', icon48);
+    zip.file('icons/icon128.png', icon128);
+    console.log('[ChromeExtension] Added extension icons');
+
     const fileCount = Object.keys(zip.files).length;
-    console.log(`[ChromeExtension] Generating Scraper ZIP blob with ${fileCount} files...`);
+    console.log(`[ChromeExtension] Generating Easy Seas Sync ZIP with ${fileCount} files...`);
     const blob = await zip.generateAsync({ type: 'blob' });
 
     const url = URL.createObjectURL(blob);
@@ -1459,10 +1476,10 @@ export async function downloadScraperExtension(): Promise<{ success: boolean; er
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    console.log('[ChromeExtension] Scraper extension download initiated successfully');
+    console.log('[ChromeExtension] Easy Seas Sync extension download initiated successfully');
     return { success: true, filesAdded: fileCount };
   } catch (error) {
-    console.error('[ChromeExtension] Error creating Scraper ZIP:', error);
+    console.error('[ChromeExtension] Error creating extension ZIP:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -1470,28 +1487,38 @@ export async function downloadScraperExtension(): Promise<{ success: boolean; er
   }
 }
 
-export async function downloadGridBuilderExtension(): Promise<{ success: boolean; error?: string; filesAdded?: number }> {
-  return { success: false, error: 'Grid Builder extension download not implemented' };
-}
-
 export async function downloadChromeExtension(): Promise<{ success: boolean; error?: string; filesAdded?: number }> {
   return downloadScraperExtension();
 }
 
-function createPlaceholderIcon(text: string = 'ES', bgColor: string = '#5a2ea6'): Uint8Array {
+function createPlaceholderIcon(text: string = 'ES', bgColor: string = '#1e3a8a', size: number = 128): Uint8Array {
   const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
+  canvas.width = size;
+  canvas.height = size;
   const ctx = canvas.getContext('2d');
 
   if (ctx) {
+    const radius = size * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(radius, 0);
+    ctx.lineTo(size - radius, 0);
+    ctx.quadraticCurveTo(size, 0, size, radius);
+    ctx.lineTo(size, size - radius);
+    ctx.quadraticCurveTo(size, size, size - radius, size);
+    ctx.lineTo(radius, size);
+    ctx.quadraticCurveTo(0, size, 0, size - radius);
+    ctx.lineTo(0, radius);
+    ctx.quadraticCurveTo(0, 0, radius, 0);
+    ctx.closePath();
     ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, 128, 128);
+    ctx.fill();
+
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 48px Arial';
+    const fontSize = Math.round(size * 0.375);
+    ctx.font = `bold ${fontSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, 64, 64);
+    ctx.fillText(text, size / 2, size / 2);
   }
 
   const dataUrl = canvas.toDataURL('image/png');
