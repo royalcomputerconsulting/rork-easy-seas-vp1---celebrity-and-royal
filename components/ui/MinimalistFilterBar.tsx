@@ -172,7 +172,7 @@ export function MinimalistFilterBar({
 
       {(showingCount !== undefined || totalCount !== undefined) && (
         <View style={styles.statsRow}>
-          <Text style={styles.statsText}>
+          <View style={styles.statsTextContainer}>
             <Text style={styles.statsHighlight}>{showingCount}</Text>
             <Text style={styles.statsLabel}> of </Text>
             <Text style={styles.statsHighlight}>{totalCount}</Text>
@@ -182,7 +182,7 @@ export function MinimalistFilterBar({
                 <Text style={styles.statsBooked}>{bookedCount} booked</Text>
               </>
             )}
-          </Text>
+          </View>
         </View>
       )}
     </View>
@@ -365,6 +365,11 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     marginTop: SPACING.xs,
+  },
+  statsTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
   },
   statsText: {
     fontSize: 12,
