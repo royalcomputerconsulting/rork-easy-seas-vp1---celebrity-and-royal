@@ -7,7 +7,8 @@
     "storage",
     "downloads",
     "tabs",
-    "scripting"
+    "scripting",
+    "alarms"
   ],
   "host_permissions": [
     "https://*.royalcaribbean.com/*",

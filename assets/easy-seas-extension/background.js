@@ -58,7 +58,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         status: 'completed'
       }).catch(err => console.error('[Easy Seas BG] Broadcast error:', err));
       
-      setTimeout(() => nextStep(), 1500);
+      chrome.alarms.create('next_step_success', { delayInMinutes: 0.025 });
     }
     sendResponse({ success: true });
     return true;
@@ -146,7 +146,7 @@ async function nextStep() {
   const url = syncState.cruiseLine === 'celebrity' ? step.celebrity : step.royal;
   const fullUrl = `${syncState.baseUrl}${url}`;
 
-  broadcastProgress({
+  await broadcastProgress({
     step: syncState.step,
     totalSteps: syncState.totalSteps,
     message: `Loading ${step.name}...`,
@@ -157,29 +157,16 @@ async function nextStep() {
     await chrome.tabs.update(syncState.tabId, { url: fullUrl });
     await chrome.storage.local.set({ syncState });
 
-    setTimeout(() => {
-      if (syncState.isRunning && syncState.step === SYNC_STEPS.indexOf(step) + 1) {
-        if (!syncState.capturedData[step.dataKey]) {
-          console.warn(`[Easy Seas BG] Timeout for ${step.name}`);
-          broadcastProgress({
-            step: syncState.step,
-            totalSteps: syncState.totalSteps,
-            message: `⚠️ ${step.name} timed out, continuing...`,
-            status: 'warning'
-          });
-          setTimeout(() => nextStep(), 1000);
-        }
-      }
-    }, 30000);
+    await chrome.alarms.create(`timeout_step_${syncState.step}`, { delayInMinutes: 0.5 });
   } catch (error) {
     console.error(`[Easy Seas BG] Error at step ${step.name}:`, error);
-    broadcastProgress({
+    await broadcastProgress({
       step: syncState.step,
       totalSteps: syncState.totalSteps,
       message: `❌ Failed to load ${step.name}`,
       status: 'error'
     });
-    setTimeout(() => nextStep(), 2000);
+    await chrome.alarms.create('next_step_error', { delayInMinutes: 0.03 });
   }
 }
 
@@ -231,13 +218,44 @@ async function broadcastProgress(progress) {
   }
 }
 
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  const result = await chrome.storage.local.get(['syncState']);
+  if (result.syncState) {
+    syncState = { ...syncState, ...result.syncState };
+  }
+
+  if (alarm.name.startsWith('timeout_step_')) {
+    const stepNum = parseInt(alarm.name.split('_')[2]);
+    if (syncState.isRunning && syncState.step === stepNum) {
+      const step = SYNC_STEPS[stepNum - 1];
+      if (step && !syncState.capturedData[step.dataKey]) {
+        console.warn(`[Easy Seas BG] Timeout for ${step.name}`);
+        await broadcastProgress({
+          step: syncState.step,
+          totalSteps: syncState.totalSteps,
+          message: `⚠️ ${step.name} timed out, continuing...`,
+          status: 'warning'
+        });
+        await chrome.alarms.create('next_step_timeout', { delayInMinutes: 0.017 });
+      }
+    }
+  }
+
+  if (alarm.name === 'next_step_success' || alarm.name === 'next_step_error' || alarm.name === 'next_step_timeout') {
+    if (syncState.isRunning) {
+      await nextStep();
+    }
+  }
+});
+
 (async () => {
   try {
     const result = await chrome.storage.local.get(['syncState']);
     if (result.syncState) {
       syncState = { ...syncState, ...result.syncState, isRunning: false };
-      console.log('[Easy Seas BG] Service worker initialized');
+      console.log('[Easy Seas BG] Service worker initialized, restored state');
     }
+    await chrome.alarms.clearAll();
   } catch (err) {
     console.error('[Easy Seas BG] Init error:', err);
   }
@@ -245,8 +263,10 @@ async function broadcastProgress(progress) {
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[Easy Seas BG] Extension installed/updated');
+  chrome.alarms.clearAll();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   console.log('[Easy Seas BG] Browser startup');
+  chrome.alarms.clearAll();
 });
