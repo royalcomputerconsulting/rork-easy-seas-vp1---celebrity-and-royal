@@ -56,22 +56,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         totalSteps: syncState.totalSteps,
         message: `✅ ${SYNC_STEPS[syncState.step - 1]?.name || 'Step'} completed`,
         status: 'completed'
-      });
+      }).catch(err => console.error('[Easy Seas BG] Broadcast error:', err));
       
       setTimeout(() => nextStep(), 1500);
     }
+    sendResponse({ success: true });
+    return true;
   }
 
   if (request.type === 'start_sync') {
-    startSync(sender.tab?.id, request.cruiseLine).then(result => {
-      sendResponse(result);
-    });
+    startSync(sender.tab?.id, request.cruiseLine)
+      .then(result => sendResponse(result))
+      .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
 
   if (request.type === 'stop_sync') {
     stopSync();
     sendResponse({ success: true });
+    return true;
   }
 });
 
@@ -204,19 +207,46 @@ async function finishSync() {
   });
 }
 
-function broadcastProgress(progress) {
-  chrome.tabs.sendMessage(syncState.tabId, {
-    type: 'sync_progress',
-    ...progress
-  }).catch(() => {});
+async function broadcastProgress(progress) {
+  if (syncState.tabId) {
+    try {
+      const tab = await chrome.tabs.get(syncState.tabId);
+      if (tab) {
+        await chrome.tabs.sendMessage(syncState.tabId, {
+          type: 'sync_progress',
+          ...progress
+        });
+      }
+    } catch (err) {
+      console.log('[Easy Seas BG] Tab not available for message:', err.message);
+    }
+  }
 
-  chrome.storage.local.set({
-    syncProgress: { ...progress, timestamp: Date.now() }
-  });
+  try {
+    await chrome.storage.local.set({
+      syncProgress: { ...progress, timestamp: Date.now() }
+    });
+  } catch (err) {
+    console.error('[Easy Seas BG] Storage error:', err);
+  }
 }
 
-chrome.storage.local.get(['syncState'], (result) => {
-  if (result.syncState) {
-    syncState = { ...syncState, ...result.syncState, isRunning: false };
+(async () => {
+  try {
+    const result = await chrome.storage.local.get(['syncState']);
+    if (result.syncState) {
+      syncState = { ...syncState, ...result.syncState, isRunning: false };
+      console.log('[Easy Seas BG] Service worker initialized');
+    }
+  } catch (err) {
+    console.error('[Easy Seas BG] Init error:', err);
   }
+})();
+
+chrome.runtime.onInstalled.addListener(() => {
+  console.log('[Easy Seas BG] Extension installed/updated');
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  console.log('[Easy Seas BG] Browser startup');
 });
