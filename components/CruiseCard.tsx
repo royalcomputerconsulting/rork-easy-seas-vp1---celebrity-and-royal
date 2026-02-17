@@ -253,7 +253,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             {bookedCruise.cabinType && (
               <View style={styles.miniCabinRow}>
                 <Text style={styles.miniCabin}>{bookedCruise.cabinType}</Text>
-                {cruise.nights && (
+                {cruise.nights != null && cruise.nights > 0 && (
                   <Text style={styles.miniExpectedPoints}>• {cruise.nights * 2} pts</Text>
                 )}
               </View>
@@ -291,27 +291,27 @@ export const CruiseCard = React.memo(function CruiseCard({
               </View>
             )
           )}
-          {(cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice) && (
+          {((cruise.interiorPrice && cruise.interiorPrice > 0) || (cruise.oceanviewPrice && cruise.oceanviewPrice > 0) || (cruise.balconyPrice && cruise.balconyPrice > 0) || (cruise.suitePrice && cruise.suitePrice > 0)) && (
             <View style={styles.miniPricingRow}>
-              {cruise.interiorPrice && cruise.interiorPrice > 0 && (
+              {cruise.interiorPrice != null && cruise.interiorPrice > 0 && (
                 <View style={styles.miniPricingItem}>
                   <Text style={styles.miniPricingLabel}>Int:</Text>
                   <Text style={styles.miniPricingValue}>${Math.round(cruise.interiorPrice).toLocaleString()}</Text>
                 </View>
               )}
-              {cruise.oceanviewPrice && cruise.oceanviewPrice > 0 && (
+              {cruise.oceanviewPrice != null && cruise.oceanviewPrice > 0 && (
                 <View style={styles.miniPricingItem}>
                   <Text style={styles.miniPricingLabel}>OV:</Text>
                   <Text style={styles.miniPricingValue}>${Math.round(cruise.oceanviewPrice).toLocaleString()}</Text>
                 </View>
               )}
-              {cruise.balconyPrice && cruise.balconyPrice > 0 && (
+              {cruise.balconyPrice != null && cruise.balconyPrice > 0 && (
                 <View style={styles.miniPricingItem}>
                   <Text style={styles.miniPricingLabel}>Bal:</Text>
                   <Text style={styles.miniPricingValue}>${Math.round(cruise.balconyPrice).toLocaleString()}</Text>
                 </View>
               )}
-              {cruise.suitePrice && cruise.suitePrice > 0 && (
+              {cruise.suitePrice != null && cruise.suitePrice > 0 && (
                 <View style={styles.miniPricingItem}>
                   <Text style={styles.miniPricingLabel}>Suite:</Text>
                   <Text style={styles.miniPricingValue}>${Math.round(cruise.suitePrice).toLocaleString()}</Text>
