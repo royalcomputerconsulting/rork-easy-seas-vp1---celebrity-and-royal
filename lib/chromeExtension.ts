@@ -113,7 +113,7 @@ export async function downloadScraperExtension(): Promise<{ success: boolean; er
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `EasySeas_Scraper_Extension_v${SCRAPER_EXTENSION_VERSION}.zip`;
+    a.download = `Easy Seas Sync.zip`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
