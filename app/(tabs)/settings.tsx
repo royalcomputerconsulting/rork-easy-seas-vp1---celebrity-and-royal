@@ -75,7 +75,7 @@ import {
   exportAllDataToFile,
   importAllDataFromFile,
 } from '@/lib/dataManager';
-import { downloadChromeExtension } from '@/lib/chromeExtension';
+import { downloadScraperExtension } from '@/lib/chromeExtension';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
 import { RENDER_BACKEND_URL } from '@/lib/trpc';
 
@@ -1036,27 +1036,27 @@ export default function SettingsScreen() {
   const handleDownloadExtension = useCallback(async () => {
     try {
       setIsDownloadingExtension(true);
-      console.log('[Settings] Starting Chrome extensions download (both extensions)...');
+      console.log('[Settings] Starting Sync Extension download...');
       
-      const result = await downloadChromeExtension();
+      const result = await downloadScraperExtension();
       
       if (result.success) {
         Alert.alert(
-          'Downloads Started',
-          `TWO Chrome extensions are downloading:\n\n1. Grid Builder Extension ("Show All Offers" button)\n2. Scraper Extension ("Scrape Website" button)\n\nTotal files: ${result.filesAdded}\n\nTo install EACH extension:\n1. Unzip the downloaded file\n2. Open Chrome and go to chrome://extensions\n3. Enable "Developer mode"\n4. Click "Load unpacked"\n5. Select the unzipped folder\n\nRepeat for both extensions.`
+          'Download Started',
+          `Easy Seas™ Sync Extension is downloading.\n\nThis extension syncs casino offers, booked cruises, and loyalty data from Royal Caribbean & Celebrity Cruises websites.\n\nTo install:\n1. Unzip the downloaded file\n2. Open Chrome and go to chrome://extensions\n3. Enable "Developer mode"\n4. Click "Load unpacked"\n5. Select the unzipped folder\n\nAfter installation, log in to the cruise line website and the extension will automatically scrape and download your data.`
         );
       } else {
         console.error('[Settings] Download failed:', result.error);
         Alert.alert(
           'Download Failed', 
-          result.error || 'Unable to download Chrome extensions. Please make sure you are using a desktop web browser.\n\nTip: Check the browser console for detailed error logs.'
+          result.error || 'Unable to download the extension. Please make sure you are using a desktop web browser.\n\nTip: Check the browser console for detailed error logs.'
         );
       }
     } catch (error) {
       console.error('[Settings] Extension download error:', error);
       Alert.alert(
         'Download Error', 
-        `Failed to download extensions: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or check the browser console for details.`
+        `Failed to download extension: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or check the browser console for details.`
       );
     } finally {
       setIsDownloadingExtension(false);
