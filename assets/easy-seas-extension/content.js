@@ -1,9 +1,10 @@
-(function() {
-  if (window.__easySeasExtensionLoaded) {
-    console.log('[Easy Seas] Extension already loaded, skipping');
-    return;
-  }
+if (window.__easySeasExtensionLoaded) {
+  console.log('[Easy Seas] Extension already loaded, skipping');
+} else {
   window.__easySeasExtensionLoaded = true;
+  
+(function() {
+  'use strict';
   console.log('[Easy Seas] Content script loaded');
 
   let overlayElement = null;
@@ -382,3 +383,5 @@
 
   init();
 })();
+
+}
