@@ -4,11 +4,12 @@ import { WebView } from 'react-native-webview';
 import { useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, ArrowLeft, Download, FileDown } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, ArrowLeft, Download, FileDown, Cookie } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
+import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
 import { trpc, isWebSyncAvailable, RENDER_BACKEND_URL } from '@/lib/trpc';
 import { syncCruisePricing } from '@/lib/cruisePricingSync';
 import { useEntitlement } from '@/state/EntitlementProvider';
@@ -39,11 +40,14 @@ function RoyalCaribbeanSyncScreen() {
   
   const [webViewVisible, setWebViewVisible] = useState(true);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [showCookieModal, setShowCookieModal] = useState(false);
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
+  const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [syncingPricing, setSyncingPricing] = useState(false);
   const [pricingSyncResults, setPricingSyncResults] = useState<{ updated: number; total: number } | null>(null);
   
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
+  const cookieSyncMutation = trpc.royalCaribbeanSync.cookieSync.useMutation();
   
   const isCelebrity = cruiseLine === 'celebrity';
   const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
@@ -61,6 +65,59 @@ function RoyalCaribbeanSyncScreen() {
     return null;
   }
   
+  const handleCookieSync = async (cookies: string) => {
+    console.log('[CookieSync] Starting cookie-based sync...');
+    console.log('[CookieSync] Backend URL:', RENDER_BACKEND_URL);
+    setCookieSyncError(null);
+    
+    if (!isBackendAvailable) {
+      const noBackendMsg = 'This deployment does not have a backend server. Cookie-based sync requires a backend to process the requests.';
+      setCookieSyncError(noBackendMsg);
+      addLog('Backend not available for cookie sync', 'warning');
+      return;
+    }
+    
+    addLog('Starting cookie-based sync...', 'info');
+    
+    try {
+      const result = await cookieSyncMutation.mutateAsync({
+        cookies,
+        cruiseLine,
+      });
+      
+      console.log('[CookieSync] Result received:', result);
+      
+      if (!result.success) {
+        console.log('[CookieSync] Sync failed:', result.error);
+        const errorMsg = result.error || 'Cookie sync failed';
+        setCookieSyncError(errorMsg);
+        addLog('Cookie sync failed', 'error');
+        return;
+      }
+      
+      addLog(`Cookie sync successful`, 'success');
+      addLog(`Retrieved ${result.offers.length} offers and ${result.bookedCruises.length} cruises`, 'info');
+      
+      if (result.offers.length === 0 && result.bookedCruises.length === 0) {
+        setCookieSyncError('No data was retrieved. Please verify your cookies are valid and you\'re logged in.');
+        addLog('No data retrieved from cookie sync', 'warning');
+        return;
+      }
+      
+      setShowCookieModal(false);
+      addLog('Cookie sync completed! Data ready for review.', 'success');
+      
+    } catch (error) {
+      console.error('[CookieSync] Error:', error);
+      let errorMessage = 'Unable to connect to sync service';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      setCookieSyncError(errorMessage);
+      addLog(`Cookie sync error: ${errorMessage}`, 'error');
+    }
+  };
+
   const handleWebSync = async (username: string, password: string) => {
     console.log('[WebSync] Starting web-based sync...');
     console.log('[WebSync] Backend URL:', RENDER_BACKEND_URL);
@@ -412,6 +469,25 @@ function RoyalCaribbeanSyncScreen() {
               </View>
 
               <View style={styles.webSyncOptionsContainer}>
+                <View style={styles.webSyncOptionCard}>
+                  <View style={[styles.webSyncOptionIconContainer, { backgroundColor: '#8b5cf620' }]}>
+                    <Cookie size={24} color="#8b5cf6" />
+                  </View>
+                  <View style={styles.webSyncOptionContent}>
+                    <Text style={styles.webSyncOptionTitle}>Cookie-Based Sync (Beta)</Text>
+                    <Text style={styles.webSyncOptionDesc}>
+                      Log in to {isCelebrity ? 'Celebrity' : 'Royal Caribbean'}, copy your browser cookies, and paste them here to sync.
+                    </Text>
+                    <Pressable
+                      style={[styles.webSyncButton, { marginTop: 12, backgroundColor: '#8b5cf6' }]}
+                      onPress={() => setShowCookieModal(true)}
+                    >
+                      <Cookie size={18} color="#fff" />
+                      <Text style={styles.webSyncButtonText}>Sync with Cookies</Text>
+                    </Pressable>
+                  </View>
+                </View>
+
                 <View style={styles.webSyncOptionCard}>
                   <View style={styles.webSyncOptionIconContainer}>
                     <Download size={24} color="#3b82f6" />
@@ -865,6 +941,18 @@ function RoyalCaribbeanSyncScreen() {
           cruiseLine={cruiseLine}
           isLoading={webLoginMutation.isPending}
           error={webSyncError}
+        />
+        
+        <WebCookieSyncModal
+          visible={showCookieModal}
+          onClose={() => {
+            setShowCookieModal(false);
+            setCookieSyncError(null);
+          }}
+          onSubmit={handleCookieSync}
+          cruiseLine={cruiseLine}
+          isLoading={cookieSyncMutation.isPending}
+          error={cookieSyncError}
         />
         </ScrollView>
       </View>

@@ -51,6 +51,43 @@ interface WebSyncResponse {
 }
 
 export const royalCaribbeanSyncRouter = createTRPCRouter({
+  cookieSync: publicProcedure
+    .input(
+      z.object({
+        cookies: z.string().min(1),
+        cruiseLine: z.enum(["royal_caribbean", "celebrity"]),
+      })
+    )
+    .mutation(async ({ input }): Promise<WebSyncResponse> => {
+      console.log(`[CookieSync] Starting cookie-based sync for ${input.cruiseLine}`);
+      console.log(`[CookieSync] Cookies length: ${input.cookies.length}`);
+      
+      const response: WebSyncResponse = {
+        success: false,
+        error: `Cookie-based sync for ${input.cruiseLine === 'celebrity' ? 'Celebrity Cruises' : 'Royal Caribbean'} is in development. ` +
+               `The backend needs to be configured to make authenticated requests using your cookies. ` +
+               `This requires:
+
+` +
+               `• Parsing and validating cookies
+` +
+               `• Making authenticated requests to ${input.cruiseLine === 'celebrity' ? 'Celebrity' : 'Royal Caribbean'} APIs
+` +
+               `• Handling CSRF tokens and session management
+` +
+               `• Scraping and parsing the offer and booking pages
+
+` +
+               `Please use the mobile app or browser extension for now.`,
+        offers: [],
+        bookedCruises: [],
+        loyaltyData: null,
+        message: null,
+      };
+      
+      return response;
+    }),
+
   webLogin: publicProcedure
     .input(
       z.object({
