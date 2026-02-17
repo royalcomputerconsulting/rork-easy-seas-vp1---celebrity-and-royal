@@ -14,7 +14,8 @@ function getEasySeasExtensionFiles(): Record<string, string> {
     "storage",
     "downloads",
     "tabs",
-    "scripting"
+    "scripting",
+    "alarms"
   ],
   "host_permissions": [
     "https://*.royalcaribbean.com/*",
@@ -59,7 +60,7 @@ function getEasySeasExtensionFiles(): Record<string, string> {
 }
 
 function getBackgroundJS(): string {
-  return `let syncState = {
+  return `let currentStatus = {
   isLoggedIn: false,
   hasOffers: false,
   hasBookings: false,
