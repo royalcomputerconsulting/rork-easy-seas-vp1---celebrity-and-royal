@@ -1,4 +1,4 @@
-let syncState = {
+var syncState = {
   isRunning: false,
   tabId: null,
   step: 0,
@@ -13,7 +13,7 @@ let syncState = {
   baseUrl: ''
 };
 
-const SYNC_STEPS = [
+var SYNC_STEPS = [
   {
     name: 'Casino Offers',
     royal: '/club-royale/offers',
