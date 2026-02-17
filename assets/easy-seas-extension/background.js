@@ -1,4 +1,4 @@
-console.log('[Easy Seas BG] Service worker v2 initialized');
+console.log('[Easy Seas BG] Service worker v3 initialized');
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   if (request.type === 'store_data') {
@@ -16,6 +16,22 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     }).catch(function(err) {
       sendResponse({ success: false, error: err.message });
     });
+    return true;
+  }
+
+  if (request.type === 'navigate') {
+    var tabId = sender && sender.tab ? sender.tab.id : null;
+    if (tabId && request.url) {
+      console.log('[Easy Seas BG] Navigating tab', tabId, 'to', request.url);
+      chrome.tabs.update(tabId, { url: request.url }).then(function() {
+        sendResponse({ success: true });
+      }).catch(function(err) {
+        console.error('[Easy Seas BG] Navigate error:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+    } else {
+      sendResponse({ success: false, error: 'No tab or url' });
+    }
     return true;
   }
 });

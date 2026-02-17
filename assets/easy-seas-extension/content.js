@@ -361,7 +361,17 @@ void function() {
 
   function navigateTo(url) {
     addLog('Navigating to ' + url.replace(/https:\/\/www\.[^/]+/, ''), 'info');
-    window.location.href = url;
+    try {
+      chrome.runtime.sendMessage({ type: 'navigate', url: url }, function(resp) {
+        if (chrome.runtime.lastError || !resp || !resp.success) {
+          console.log('[Easy Seas] Background navigate failed, using fallback');
+          window.location.assign(url);
+        }
+      });
+    } catch(e) {
+      console.log('[Easy Seas] Navigate error, using fallback:', e);
+      window.location.assign(url);
+    }
   }
 
   async function startSync() {
