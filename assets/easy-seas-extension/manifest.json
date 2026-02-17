@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Easy Seas™ - Royal Caribbean Sync",
+  "version": "1.0.0",
+  "description": "Scrape Royal Caribbean and Celebrity cruise data and export to CSV for Easy Seas app import",
+  "permissions": [
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://*.royalcaribbean.com/*",
+    "https://*.celebritycruises.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.royalcaribbean.com/*",
+        "https://*.celebritycruises.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
