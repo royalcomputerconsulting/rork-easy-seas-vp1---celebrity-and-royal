@@ -360,19 +360,37 @@ void function() {
   }
 
   function navigateTo(url, callback) {
-    addLog('Navigating to ' + url.replace(/https:\/\/www\.[^/]+/, ''), 'info');
-    console.log('[Easy Seas] Navigating via background script to:', url);
+    var shortUrl = url.replace(/https:\/\/www\.[^/]+/, '');
+    addLog('Navigating to ' + shortUrl, 'info');
+    console.log('[Easy Seas] Navigating directly to:', url);
     chrome.storage.local.set({ es_navTarget: url });
-    chrome.runtime.sendMessage({ type: 'navigate', url: url }, function(resp) {
-      if (resp && resp.success) {
-        console.log('[Easy Seas] Background navigation initiated successfully');
-      } else {
-        console.warn('[Easy Seas] Background navigation failed, falling back to location.href');
-        addLog('Background nav failed, using fallback...', 'warning');
-        try { window.location.assign(url); } catch(e) { window.location.href = url; }
+    var beforeUrl = window.location.href;
+    try {
+      window.location.href = url;
+    } catch(e1) {
+      console.warn('[Easy Seas] location.href failed, trying assign:', e1);
+      try { window.location.assign(url); } catch(e2) {
+        console.warn('[Easy Seas] assign failed, trying replace:', e2);
+        window.location.replace(url);
       }
-      if (callback) callback();
-    });
+    }
+    setTimeout(function() {
+      if (window.location.href === beforeUrl) {
+        console.warn('[Easy Seas] Still on same page after 3s, forcing via background script');
+        addLog('Direct nav did not work, trying background...', 'warning');
+        try {
+          chrome.runtime.sendMessage({ type: 'navigate', url: url }, function(resp) {
+            if (!resp || !resp.success) {
+              addLog('Background nav also failed, forcing replace...', 'warning');
+              window.location.replace(url);
+            }
+          });
+        } catch(e) {
+          window.location.replace(url);
+        }
+      }
+    }, 3000);
+    if (callback) callback();
   }
 
   async function startSync() {
