@@ -14,6 +14,9 @@ export const AUTH_DETECTION_SCRIPT = `
   }
 
   function interceptNetworkCalls() {
+    if (window.__easySeasNetworkIntercepted) return;
+    window.__easySeasNetworkIntercepted = true;
+
     const originalFetch = window.fetch;
     window.fetch = function(...args) {
       return originalFetch.apply(this, args).then(response => {
@@ -261,68 +264,125 @@ export const AUTH_DETECTION_SCRIPT = `
       logType: 'info'
     }));
   }
+
+  function hasSessionToken() {
+    try {
+      var sessionRaw = localStorage.getItem('persist:session');
+      if (!sessionRaw) return false;
+      var session = JSON.parse(sessionRaw);
+      if (!session) return false;
+      var token = session.token ? JSON.parse(session.token) : null;
+      var user = session.user ? JSON.parse(session.user) : null;
+      if (token && user && user.accountId) return true;
+    } catch (e) {}
+    try {
+      var keys = Object.keys(localStorage || {});
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (/token/i.test(k) || /auth/i.test(k) || /session/i.test(k)) {
+          var v = localStorage.getItem(k);
+          if (v && v.length > 20) {
+            try {
+              var parsed = JSON.parse(v);
+              if (parsed && (parsed.token || parsed.accessToken || parsed.access_token || parsed.idToken)) return true;
+            } catch (e2) {
+              if (/^ey[A-Za-z0-9]/.test(v)) return true;
+            }
+          }
+        }
+      }
+    } catch (e) {}
+    return false;
+  }
   
   function checkAuthStatus() {
     checkCount++;
-    const pageText = document.body.innerText || '';
-    const pageHTML = document.body.innerHTML || '';
-    const url = window.location.href;
-    
-    const cookies = document.cookie;
-    const hasCookies = cookies.includes('RCAUTH') || 
-                       cookies.includes('auth') || 
-                       cookies.includes('session') ||
-                       cookies.length > 100;
-    
-    const indicators = {
-      accountLinks: document.querySelectorAll('a[href*="/account"]'),
-      logoutLinks: document.querySelectorAll('a[href*="logout"], button[onclick*="logout"], a[href*="sign-out"]'),
-      signInButtons: document.querySelectorAll('button:not([type="submit"]):not([type="button"])')?.length,
-      upcomingCruisesLink: document.querySelector('a[href*="upcoming-cruises"]'),
-      courtesyHoldsLink: document.querySelector('a[href*="courtesy-holds"]'),
-      loyaltyStatusLink: document.querySelector('a[href*="loyalty-status"]'),
-      myAccountLink: document.querySelector('a[href*="/account"]'),
-      myProfileText: pageText.toLowerCase().includes('my profile'),
-      welcomeText: pageText.toLowerCase().includes('welcome'),
-      memberText: pageHTML.toLowerCase().includes('member'),
-      pointsText: pageHTML.toLowerCase().includes('points'),
-      crownAnchorText: pageHTML.toLowerCase().includes('crown') || pageHTML.toLowerCase().includes('anchor'),
-      clubRoyaleText: pageHTML.toLowerCase().includes('club royale'),
-      tierText: pageHTML.toLowerCase().includes('tier') || pageHTML.toLowerCase().includes('level'),
-      hasLogoutButton: document.querySelectorAll('a[href*="logout"], a[href*="sign-out"]').length > 0
-    };
+    var url = window.location.href;
 
-    const strongAuthSignals = 
-      indicators.upcomingCruisesLink || 
-      indicators.courtesyHoldsLink || 
-      indicators.loyaltyStatusLink ||
-      indicators.hasLogoutButton;
+    var hasToken = hasSessionToken();
+    if (hasToken) {
+      if (lastAuthState !== true) {
+        lastAuthState = true;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'auth_status',
+          loggedIn: true
+        }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'Authentication detected via session token - logged in',
+          logType: 'info'
+        }));
+      }
+      return;
+    }
+
+    var cookies = document.cookie;
+    var hasCookies = cookies.includes('RCAUTH') || 
+                     cookies.includes('auth') || 
+                     cookies.includes('session') ||
+                     cookies.length > 100;
+
+    var pageText = '';
+    var pageHTML = '';
+    try {
+      pageText = document.body ? (document.body.innerText || '') : '';
+      pageHTML = document.body ? (document.body.innerHTML || '') : '';
+    } catch (e) {}
     
-    const accountFeatureCount = 
-      (indicators.accountLinks.length > 0 ? 1 : 0) +
-      (indicators.upcomingCruisesLink ? 1 : 0) +
-      (indicators.courtesyHoldsLink ? 1 : 0) +
-      (indicators.loyaltyStatusLink ? 1 : 0) +
-      (indicators.myAccountLink ? 1 : 0) +
-      (indicators.hasLogoutButton ? 1 : 0);
+    var accountLinks = document.querySelectorAll('a[href*="/account"]');
+    var hasLogoutButton = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"], button[aria-label*="sign out"], button[aria-label*="log out"]').length > 0;
+    var upcomingCruisesLink = document.querySelector('a[href*="upcoming-cruises"]');
+    var courtesyHoldsLink = document.querySelector('a[href*="courtesy-holds"]');
+    var loyaltyStatusLink = document.querySelector('a[href*="loyalty-status"], a[href*="loyalty-programs"]');
+    var myAccountLink = document.querySelector('a[href*="/account"]');
+    var hasUserAvatar = document.querySelector('[data-testid*="avatar"], [class*="avatar"], [class*="user-icon"], [class*="profile-icon"], .user-menu, .account-menu') !== null;
+    var hasSignInForm = document.querySelector('input[type="password"], form[action*="login"], form[action*="sign-in"], #login-form') !== null;
+    var hasSignInText = pageText.toLowerCase().includes('sign in') && pageText.toLowerCase().includes('password');
     
-    const contentSignals = 
-      (indicators.memberText ? 1 : 0) +
-      (indicators.pointsText ? 1 : 0) +
-      (indicators.crownAnchorText ? 1 : 0) +
-      (indicators.tierText ? 1 : 0);
+    var lowerText = pageText.toLowerCase();
+    var lowerHTML = pageHTML.toLowerCase();
+
+    var strongAuthSignals = 
+      upcomingCruisesLink || 
+      courtesyHoldsLink || 
+      loyaltyStatusLink ||
+      hasLogoutButton ||
+      hasUserAvatar;
     
-    const isOnAccountPage = url.includes('/account/') || url.includes('loyalty-status');
+    var accountFeatureCount = 
+      (accountLinks.length > 0 ? 1 : 0) +
+      (upcomingCruisesLink ? 1 : 0) +
+      (courtesyHoldsLink ? 1 : 0) +
+      (loyaltyStatusLink ? 1 : 0) +
+      (myAccountLink ? 1 : 0) +
+      (hasLogoutButton ? 1 : 0) +
+      (hasUserAvatar ? 1 : 0);
     
-    let isLoggedIn = false;
+    var contentSignals = 
+      (lowerHTML.includes('member') ? 1 : 0) +
+      (lowerHTML.includes('points') ? 1 : 0) +
+      ((lowerHTML.includes('crown') || lowerHTML.includes('anchor')) ? 1 : 0) +
+      (lowerHTML.includes('club royale') ? 1 : 0) +
+      ((lowerHTML.includes('tier') || lowerHTML.includes('level')) ? 1 : 0) +
+      (lowerText.includes('my cruises') ? 1 : 0) +
+      (lowerText.includes('welcome') ? 1 : 0);
     
-    if (strongAuthSignals) {
+    var isOnAccountPage = url.includes('/account/') || url.includes('loyalty-status') || url.includes('/club-royale') || url.includes('/blue-chip-club');
+    var isOnLoginPage = url.includes('/login') || url.includes('/sign-in') || url.includes('/signin');
+    
+    var isLoggedIn = false;
+    
+    if (isOnLoginPage && hasSignInForm) {
+      isLoggedIn = false;
+    } else if (strongAuthSignals) {
       isLoggedIn = true;
     } else if (accountFeatureCount >= 2) {
       isLoggedIn = true;
     } else if (hasCookies && (accountFeatureCount >= 1 || contentSignals >= 2)) {
       isLoggedIn = true;
-    } else if (isOnAccountPage && !pageText.toLowerCase().includes('sign in to access')) {
+    } else if (isOnAccountPage && !hasSignInForm && !hasSignInText) {
+      isLoggedIn = true;
+    } else if (hasCookies && contentSignals >= 3) {
       isLoggedIn = true;
     }
     
@@ -343,11 +403,11 @@ export const AUTH_DETECTION_SCRIPT = `
       }));
     }
     
-    if (checkCount % 5 === 0) {
+    if (checkCount % 10 === 0) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
-        message: 'Auth check: ' + (isLoggedIn ? 'LOGGED IN' : 'NOT LOGGED IN') + 
-                 ' (signals: ' + accountFeatureCount + ' account features, ' + contentSignals + ' content signals)',
+        message: 'Auth check #' + checkCount + ': ' + (isLoggedIn ? 'LOGGED IN' : 'NOT LOGGED IN') + 
+                 ' (token: ' + hasToken + ', signals: ' + accountFeatureCount + ' account, ' + contentSignals + ' content, cookies: ' + hasCookies + ')',
         logType: 'info'
       }));
     }
@@ -356,31 +416,39 @@ export const AUTH_DETECTION_SCRIPT = `
   function initAuthDetection() {
     interceptNetworkCalls();
     
+    setTimeout(checkAuthStatus, 500);
+    
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(checkAuthStatus, 1500);
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(checkAuthStatus, 800);
       });
     } else {
-      setTimeout(checkAuthStatus, 1500);
+      setTimeout(checkAuthStatus, 800);
     }
 
-    const observer = new MutationObserver(() => {
-      checkAuthStatus();
-    });
-
+    var observer = null;
+    var mutationThrottle = null;
     if (document.body) {
+      observer = new MutationObserver(function() {
+        if (mutationThrottle) return;
+        mutationThrottle = setTimeout(function() {
+          mutationThrottle = null;
+          checkAuthStatus();
+        }, 500);
+      });
       observer.observe(document.body, {
         childList: true,
         subtree: true
       });
     }
     
-    const intervalId = setInterval(checkAuthStatus, 3000);
+    var intervalId = setInterval(checkAuthStatus, 3000);
 
-    setTimeout(() => {
-      observer.disconnect();
+    setTimeout(function() {
+      if (observer) observer.disconnect();
       clearInterval(intervalId);
-    }, 30000);
+      setInterval(checkAuthStatus, 5000);
+    }, 60000);
   }
   
   initAuthDetection();
