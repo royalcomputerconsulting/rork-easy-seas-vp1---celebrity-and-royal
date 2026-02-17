@@ -266,8 +266,12 @@ export default function BookedScreen() {
   }, [handleCruisePress]);
 
   const renderTimelineView = () => {
-    const upcomingCruises = filteredCruises.filter(c => !isDateInPast(c.returnDate));
-    const completedCruises = filteredCruises.filter(c => isDateInPast(c.returnDate));
+    const upcomingCruises = filteredCruises
+      .filter(c => !isDateInPast(c.returnDate))
+      .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
+    const completedCruises = filteredCruises
+      .filter(c => isDateInPast(c.returnDate))
+      .sort((a, b) => createDateFromString(b.returnDate || b.sailDate).getTime() - createDateFromString(a.returnDate || a.sailDate).getTime());
     
     return (
       <View style={styles.timelineContainer}>
