@@ -38,6 +38,16 @@ function extractValueFromPerk(perk: RCApiMarketingTargetedOffer): number | undef
   return undefined;
 }
 
+function calcNightsFromDates(sailDate: string, endDate: string): number | null {
+  try {
+    const start = new Date(sailDate);
+    const end = new Date(endDate);
+    const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff > 0 && diff <= 365) return diff;
+  } catch {}
+  return null;
+}
+
 export function transformApiBookingToBookedCruiseRow(
   booking: RCApiProfileBooking,
   sailingInfo?: RCApiSailingInfo
@@ -45,10 +55,14 @@ export function transformApiBookingToBookedCruiseRow(
   const shipName = sailingInfo?.shipName || getShipNameFromCode(booking.shipCode);
   const sailDate = parseRCDate(booking.sailDate);
   
-  // CRITICAL: Ensure numberOfNights is always a valid number
-  const nights = typeof booking.numberOfNights === 'number' && booking.numberOfNights > 0 && booking.numberOfNights <= 365
+  // Use numberOfNights from API, then calculate from dates, then fallback to 7
+  const nightsFromApi = typeof booking.numberOfNights === 'number' && booking.numberOfNights > 0 && booking.numberOfNights <= 365
     ? booking.numberOfNights
-    : 7;
+    : null;
+  const nightsFromDates = sailingInfo?.sailingEndDate
+    ? calcNightsFromDates(sailDate, parseRCDate(sailingInfo.sailingEndDate))
+    : null;
+  const nights = nightsFromApi ?? nightsFromDates ?? 7;
   
   let sailingEndDate = '';
   let itinerary = '';
@@ -148,10 +162,14 @@ export function transformApiBookingToBookedCruise(
   const shipName = sailingInfo?.shipName || getShipNameFromCode(booking.shipCode);
   const sailDate = parseRCDate(booking.sailDate);
   
-  // CRITICAL: Ensure numberOfNights is always a valid number
-  const nights = typeof booking.numberOfNights === 'number' && booking.numberOfNights > 0 && booking.numberOfNights <= 365
+  // Use numberOfNights from API, then calculate from dates, then fallback to 7
+  const nightsFromApi = typeof booking.numberOfNights === 'number' && booking.numberOfNights > 0 && booking.numberOfNights <= 365
     ? booking.numberOfNights
-    : 7;
+    : null;
+  const nightsFromDates = sailingInfo?.sailingEndDate
+    ? calcNightsFromDates(sailDate, parseRCDate(sailingInfo.sailingEndDate))
+    : null;
+  const nights = nightsFromApi ?? nightsFromDates ?? 7;
   
   let sailingEndDate = '';
   let itinerary = '';
