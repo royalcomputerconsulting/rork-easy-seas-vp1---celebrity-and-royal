@@ -758,39 +758,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         
         pageLoadResolver.current = () => {
           clearTimeout(timeout);
-          setTimeout(resolve, 4000);
+          setTimeout(resolve, 3000);
         };
         
-        if (webViewRef.current) {
-          addLog(`🌐 Forcing navigation to: ${url}`, 'info');
-          webViewRef.current.injectJavaScript(`
-            (function() {
-              try {
-                var currentUrl = window.location.href;
-                var targetUrl = '${url}';
-                if (window.ReactNativeWebView) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log',
-                    message: '🧭 Browser navigating from ' + currentUrl + ' to ' + targetUrl,
-                    logType: 'info'
-                  }));
-                }
-                window.location.href = targetUrl;
-              } catch(e) {
-                if (window.ReactNativeWebView) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log',
-                    message: '❌ Navigation error: ' + e.message,
-                    logType: 'error'
-                  }));
-                }
-              }
-            })();
-            true;
-          `);
-        } else {
-          setWebViewUrl(url);
-        }
+        addLog(`🌐 Navigating to: ${url}`, 'info');
+        // Force navigation by changing the WebView source prop directly from React Native.
+        // JS injection (window.location.href) is absorbed/ignored by Royal Caribbean's SPA router.
+        setWebViewUrl(url);
       });
     };
 
