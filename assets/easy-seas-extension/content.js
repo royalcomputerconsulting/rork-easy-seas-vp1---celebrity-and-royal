@@ -362,6 +362,7 @@ void function() {
   function navigateTo(url, callback) {
     var shortUrl = url.replace(/https:\/\/www\.[^/]+/, '');
     addLog('Navigating to ' + shortUrl, 'info');
+    addLog('Nav debug: from=' + window.location.href + ' | readyState=' + document.readyState + ' | visibility=' + document.visibilityState, 'info');
     console.log('[Easy Seas] Navigating directly to:', url, 'from', window.location.href);
     chrome.storage.local.set({ es_navTarget: url, es_navFrom: window.location.href, es_navAttemptTs: Date.now() });
     var beforeUrl = window.location.href;
@@ -384,6 +385,7 @@ void function() {
       if (window.location.href === beforeUrl) {
         console.warn('[Easy Seas] Still on same page after 1.5s, trying anchor click');
         addLog('Direct nav did not work, trying anchor click...', 'warning');
+        addLog('Nav debug 1.5s: current=' + window.location.href + ' | expected=' + url, 'warning');
         try {
           var a = document.createElement('a');
           a.href = url;
@@ -393,6 +395,8 @@ void function() {
           a.click();
           a.remove();
         } catch(e) {}
+      } else {
+        addLog('Nav success after 1.5s: ' + window.location.href, 'success');
       }
     }, 1500);
 
@@ -400,16 +404,21 @@ void function() {
       if (window.location.href === beforeUrl) {
         console.warn('[Easy Seas] Still on same page after 3.5s, forcing via background script');
         addLog('Direct nav did not work, trying background...', 'warning');
+        addLog('Nav debug 3.5s: current=' + window.location.href + ' | expected=' + url, 'warning');
         try {
           chrome.runtime.sendMessage({ type: 'navigate', url: url }, function(resp) {
             if (!resp || !resp.success) {
               addLog('Background nav failed, forcing replace...', 'warning');
               try { window.location.replace(url); } catch(e) {}
+            } else {
+              addLog('Background nav acknowledged', 'info');
             }
           });
         } catch(e) {
           try { window.location.replace(url); } catch(e2) {}
         }
+      } else {
+        addLog('Nav success after 3.5s: ' + window.location.href, 'success');
       }
     }, 3500);
 
@@ -418,9 +427,12 @@ void function() {
         var cacheBust = url + (url.indexOf('?') === -1 ? '?' : '&') + 'es_nav=' + Date.now();
         console.warn('[Easy Seas] Still on same page after 6s, forcing cache-bust nav', cacheBust);
         addLog('Navigation still stuck, forcing cache-bust...', 'warning');
+        addLog('Nav debug 6s: current=' + window.location.href + ' | expected=' + url, 'warning');
         try { window.location.assign(cacheBust); } catch(e) {
           try { window.location.replace(cacheBust); } catch(e2) {}
         }
+      } else {
+        addLog('Nav success after 6s: ' + window.location.href, 'success');
       }
     }, 6000);
 
@@ -609,13 +621,15 @@ void function() {
   function isOnExpectedPage(expectedPath) {
     var currentUrl = window.location.href.toLowerCase();
     var expectedLower = expectedPath.toLowerCase();
-    if (currentUrl.indexOf(expectedLower) !== -1) return true;
+    var currentPath = '';
+    var targetPath = '';
     try {
-      var currentPath = new URL(currentUrl).pathname.toLowerCase();
-      var targetPath = new URL(expectedLower).pathname.toLowerCase();
-      return currentPath === targetPath || currentPath.indexOf(targetPath) !== -1;
+      currentPath = new URL(currentUrl).pathname.toLowerCase();
+      targetPath = new URL(expectedLower).pathname.toLowerCase();
     } catch(e) {}
-    return false;
+    var match = currentUrl.indexOf(expectedLower) !== -1 || (currentPath && targetPath && (currentPath === targetPath || currentPath.indexOf(targetPath) !== -1));
+    addLog('Nav check: current=' + window.location.href + ' | expected=' + expectedPath + ' | match=' + (match ? 'yes' : 'no') + ' | path=' + currentPath, match ? 'success' : 'warning');
+    return match;
   }
 
   async function resumeSync() {
@@ -628,6 +642,7 @@ void function() {
     var urls = getPageUrls();
     var currentUrl = window.location.href;
     addLog('Resuming sync step: ' + state.step + ' (on: ' + window.location.pathname + ')', 'info');
+    addLog('Resume debug: href=' + window.location.href + ' | referrer=' + document.referrer + ' | readyState=' + document.readyState, 'info');
 
     try {
       var navTarget = (await chrome.storage.local.get(['es_navTarget'])).es_navTarget;
