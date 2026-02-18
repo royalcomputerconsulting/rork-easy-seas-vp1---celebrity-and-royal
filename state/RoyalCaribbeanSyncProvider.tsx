@@ -43,7 +43,7 @@ export const CRUISE_LINE_CONFIG = {
   },
   carnival: {
     name: 'Carnival Cruise Line',
-    loginUrl: 'https://www.carnival.com/account',
+    loginUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     offersUrl: 'https://www.carnival.com/cruise-deals',
     upcomingUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     holdsUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',

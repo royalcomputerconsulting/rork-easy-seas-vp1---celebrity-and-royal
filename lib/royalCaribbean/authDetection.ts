@@ -351,7 +351,10 @@ export const AUTH_DETECTION_SCRIPT = `
     var carnivalVifpText = lowerHTML.includes('vifp') || lowerText.includes('vifp club');
     var carnivalMemberNum = /vifp\s*club[\s\S]{0,200}\d{7,}/i.test(pageHTML) || /club#[:\s]*\d{7,}/i.test(pageHTML);
     var carnivalManageBookings = document.querySelector('a[href*="manage-booking"], a[href*="managebooking"], a[href*="my-cruises"]') !== null;
-    var carnivalSignedInHeader = lowerHTML.includes('sign out') || lowerHTML.includes('signout') || (isCarnival && (lowerHTML.includes('my profile') || lowerHTML.includes('manage bookings')));
+    var carnivalSignedInHeader = lowerHTML.includes('sign out') || lowerHTML.includes('signout') || (isCarnival && (lowerHTML.includes('my profile') || lowerHTML.includes('manage bookings') || lowerHTML.includes('my account') || lowerHTML.includes('hello,')));
+    var carnivalAccountPageUrl = isCarnival && (url.includes('/account') || url.includes('/profilemanagement') || url.includes('/cruise-deals'));
+    var carnivalHasCookies = isCarnival && document.cookie.length > 50;
+    var carnivalNoSignInForm = !hasSignInForm && !hasSignInText;
 
     var strongAuthSignals = 
       upcomingCruisesLink || 
@@ -359,7 +362,8 @@ export const AUTH_DETECTION_SCRIPT = `
       loyaltyStatusLink ||
       hasLogoutButton ||
       hasUserAvatar ||
-      (isCarnival && (carnivalWelcomeBack || carnivalVifpEl || carnivalMemberNum || carnivalProfileLink));
+      (isCarnival && (carnivalWelcomeBack || carnivalVifpEl || carnivalMemberNum || carnivalProfileLink || carnivalSignedInHeader)) ||
+      (isCarnival && carnivalAccountPageUrl && carnivalHasCookies && carnivalNoSignInForm);
     
     var accountFeatureCount = 
       (accountLinks.length > 0 ? 1 : 0) +
@@ -385,7 +389,7 @@ export const AUTH_DETECTION_SCRIPT = `
       (isCarnival && carnivalWelcomeBack ? 2 : 0) +
       (isCarnival && carnivalMemberNum ? 3 : 0);
     
-    var isOnAccountPage = url.includes('/account/') || url.includes('loyalty-status') || url.includes('/club-royale') || url.includes('/blue-chip-club') || url.includes('/profilemanagement') || (isCarnival && (url.includes('/cruise-deals') || url.includes('/loyaltyInformation')));
+    var isOnAccountPage = url.includes('/account/') || url.includes('/account?') || url.includes('loyalty-status') || url.includes('/club-royale') || url.includes('/blue-chip-club') || url.includes('/profilemanagement') || (isCarnival && (url.includes('/cruise-deals') || url.includes('/loyaltyInformation') || url.endsWith('/account')));
     var isOnLoginPage = url.includes('/login') || url.includes('/sign-in') || url.includes('/signin');
     
     var isLoggedIn = false;
@@ -425,7 +429,7 @@ export const AUTH_DETECTION_SCRIPT = `
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'log',
         message: 'Auth check #' + checkCount + ': ' + (isLoggedIn ? 'LOGGED IN' : 'NOT LOGGED IN') + 
-                 ' (token: ' + hasToken + ', signals: ' + accountFeatureCount + ' account, ' + contentSignals + ' content, cookies: ' + hasCookies + ')',
+                 ' (token: ' + hasToken + ', signals: ' + accountFeatureCount + ' account, ' + contentSignals + ' content, cookies: ' + hasCookies + (isCarnival ? ', carnival-strong: ' + !!strongAuthSignals : '') + ')',
         logType: 'info'
       }));
     }
