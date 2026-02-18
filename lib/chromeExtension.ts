@@ -735,12 +735,15 @@ function getContentJS(): string {
         chrome.storage.local.set({ esSyncActive: true, esSyncTimestamp: Date.now() });
       } catch(e) {}
 
-      var loyaltyPagePath = isCeleb ? '/account/blue-chip' : '/account/club-royale';
-      var pagesToOpen = [
+      var pagesToOpen = isCeleb ? [
+        baseUrl + '/account/upcoming-cruises',
+        baseUrl + '/account/courtesy-holds',
+        baseUrl + '/account/loyalty-programs'
+      ] : [
         baseUrl + '/account',
         baseUrl + '/account/upcoming-cruises',
         baseUrl + '/account/courtesy-holds',
-        baseUrl + loyaltyPagePath,
+        baseUrl + '/account/club-royale',
         baseUrl + '/account/loyalty-programs'
       ];
 

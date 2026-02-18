@@ -10,8 +10,12 @@
 */
 
 (function () {
-  const URL_MATCH = /\/account\/upcoming-cruises/i;
-  if (!URL_MATCH.test(location.pathname)) return;
+  const URL_UPCOMING = /\/account\/upcoming-cruises/i;
+  const URL_HOLDS = /\/account\/courtesy-holds/i;
+  const IS_CELEBRITY = (location.hostname || '').includes('celebritycruises.com');
+  const IS_UPCOMING = URL_UPCOMING.test(location.pathname);
+  const IS_HOLDS = URL_HOLDS.test(location.pathname);
+  if (!IS_UPCOMING && !IS_HOLDS) return;
 
   const LOG_PREFIX = '[EasySeas UpcomingCruises]';
   const log = (...a) => console.debug(LOG_PREFIX, ...a);
@@ -58,7 +62,7 @@
 
   // ---------- DOM discovery ----------
   // The page is SPA-ish; content can appear after initial load.
-  async function waitForCruiseCards(maxMs = 20000) {
+  async function waitForCruiseCards(maxMs = 25000) {
     const start = Date.now();
     while (Date.now() - start < maxMs) {
       const cards = getCruiseCardRoots();
@@ -71,32 +75,52 @@
   function getCruiseCardRoots() {
     // Heuristic: cruise cards have big banner image + reservation block.
     // We search for elements containing the label "RESERVATION" and walk upward.
-    const reservationEls = findByText(document.body, /^reservation$/i);
+    // Celebrity uses "Booking" or "Reservation" labels.
+    const reservationPattern = IS_CELEBRITY
+      ? /^(?:reservation|booking(?:\s*number)?)$/i
+      : /^reservation$/i;
+    const reservationEls = findByText(document.body, reservationPattern);
     const roots = new Set();
 
     for (const el of reservationEls) {
       let p = el;
       // climb to a reasonable container
-      for (let i = 0; i < 10 && p; i++) {
+      for (let i = 0; i < 12 && p; i++) {
         p = p.parentElement;
         if (!p) break;
         const txt = safeText(p);
-        if (txt && /reservation\s*\d{4,}/i.test(txt)) {
+        if (txt && /(?:reservation|booking)\s*\d{4,}/i.test(txt)) {
           roots.add(p);
           break;
         }
       }
     }
 
-    // Fallback: locate by the "You have X upcoming cruises" section and pick prominent cards.
+    // Celebrity: also try finding cards by booking number pattern directly
+    if (IS_CELEBRITY && !roots.size) {
+      const allEls = Array.from(document.querySelectorAll('div, section, article, li'));
+      for (const el of allEls) {
+        const txt = safeText(el);
+        if (txt && /\b\d{7,8}\b/.test(txt) && /(?:night|cruise|sail|depart)/i.test(txt)) {
+          // Make sure it's a reasonable card size (not full body)
+          const children = el.children ? el.children.length : 0;
+          if (children > 1 && children < 50) roots.add(el);
+        }
+      }
+    }
+
+    // Fallback: locate by the "You have X upcoming cruises" / courtesy holds section
     if (!roots.size) {
-      const section = findByText(document.body, /you have\s+\d+\s+upcoming cruises/i)[0];
+      const sectionPattern = IS_HOLDS
+        ? /courtesy\s*hold/i
+        : /you have\s+\d+\s+upcoming cruises/i;
+      const section = findByText(document.body, sectionPattern)[0];
       const container = section ? section.closest('main, section, div') : null;
       if (container) {
         // cards are often direct children with large images; take those that have a reservation number somewhere.
         const candidates = Array.from(container.querySelectorAll('div, section')).filter((d) => {
           const t = safeText(d);
-          return t && /reservation\s*\d{4,}/i.test(t) && /guests/i.test(t);
+          return t && /(?:reservation|booking)\s*\d{4,}/i.test(t) && /guests/i.test(t);
         });
         for (const c of candidates) roots.add(c);
       }
@@ -166,6 +190,19 @@
       reservation = m ? m[1] : '';
     }
 
+    // Reservation number — Celebrity sometimes labels it "Booking" or "Booking Number"
+    if (!reservation) {
+      const bookingLabel = findByText(card, /^booking(?:\s+number)?$/i)[0];
+      if (bookingLabel) {
+        const block = bookingLabel.parentElement || card;
+        reservation = pickDigits(safeText(block));
+      }
+    }
+    if (!reservation) {
+      const m2 = text.match(/booking(?:\s+number)?[:\s]*?(\d{4,})/i);
+      reservation = m2 ? m2[1] : reservation;
+    }
+
     // Category + stateroom
     // Examples:
     //  Interior  #9539
@@ -174,7 +211,8 @@
     let stateroom = '';
 
     // Try find a line that looks like category (Interior/Oceanview/Balcony/Suite/GTY)
-    const catRegex = /\b(Interior|Ocean\s*View|Oceanview|Balcony|Suite|GTY)\b/i;
+    // Celebrity also uses "Veranda" for balcony
+    const catRegex = /\b(Interior|Ocean\s*View|Oceanview|Balcony|Veranda|Suite|GTY|AquaClass|Aqua Class)\b/i;
     const lines = text.split('\n').map((l) => normalizeSpaces(l)).filter(Boolean);
     const catLine = lines.find((l) => catRegex.test(l) && !/guests/i.test(l) && !/reservation/i.test(l));
     if (catLine) {
@@ -211,6 +249,8 @@
       .replace(/^gty$/i, 'GTY')
       .replace(/^interior$/i, 'Interior')
       .replace(/^balcony$/i, 'Balcony')
+      .replace(/^veranda$/i, 'Balcony')
+      .replace(/^aqua\s*class$/i, 'AquaClass')
       .replace(/^suite$/i, 'Suite');
 
     return {
@@ -275,7 +315,8 @@
 
     const header = document.createElement('div');
     header.className = 'es-title';
-    header.innerHTML = `<div>Upcoming Cruises Export</div>`;
+    const pageLabel = IS_HOLDS ? 'Courtesy Holds Export' : (IS_CELEBRITY ? 'Celebrity Upcoming Cruises Export' : 'Upcoming Cruises Export');
+    header.innerHTML = `<div>${pageLabel}</div>`;
 
     const actions = document.createElement('div');
     actions.className = 'es-actions';
@@ -289,7 +330,9 @@
 
     const sub = document.createElement('div');
     sub.className = 'es-sub';
-    sub.textContent = 'Builds a grid from this page and exports a CSV. No scraping of pricing; this is your upcoming reservations list.';
+    sub.textContent = IS_HOLDS
+      ? 'Builds a grid of courtesy holds on this page and exports a booked.csv. No pricing scraped.'
+      : 'Builds a grid from this page and exports a CSV. No scraping of pricing; this is your upcoming reservations list.';
 
     const tableWrap = document.createElement('div');
     tableWrap.className = 'es-tablewrap';
