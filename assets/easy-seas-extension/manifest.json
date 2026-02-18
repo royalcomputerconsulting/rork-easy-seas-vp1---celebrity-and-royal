@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Easy Seas\u2122 \u2014 Sync Extension",
   "version": "2.0.0",
-  "description": "Syncs casino offers, booked cruises, and loyalty data from Royal Caribbean & Celebrity Cruises websites via direct API calls.",
+  "description": "Syncs casino offers, booked cruises, and loyalty data from Royal Caribbean, Celebrity Cruises & Carnival websites via direct API calls.",
   "permissions": [
     "storage",
     "downloads",
@@ -11,6 +11,7 @@
   "host_permissions": [
     "https://*.royalcaribbean.com/*",
     "https://*.celebritycruises.com/*",
+    "https://*.carnival.com/*",
     "https://aws-prd.api.rccl.com/*"
   ],
   "background": {
@@ -20,7 +21,8 @@
     {
       "matches": [
         "https://*.royalcaribbean.com/*",
-        "https://*.celebritycruises.com/*"
+        "https://*.celebritycruises.com/*",
+        "https://*.carnival.com/*"
       ],
       "js": ["content.js"],
       "css": ["overlay.css"],
@@ -38,7 +40,8 @@
       "resources": ["page-script.js"],
       "matches": [
         "https://*.royalcaribbean.com/*",
-        "https://*.celebritycruises.com/*"
+        "https://*.celebritycruises.com/*",
+        "https://*.carnival.com/*"
       ]
     }
   ],

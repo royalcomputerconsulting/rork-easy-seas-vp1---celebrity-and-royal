@@ -11,7 +11,7 @@ void function() {
   var capturedData = {
     offers: null, upcomingCruises: null, courtesyHolds: null, loyalty: null,
     isLoggedIn: false,
-    cruiseLine: window.location.hostname.includes('celebrity') ? 'celebrity' : 'royal'
+    cruiseLine: window.location.hostname.includes('carnival') ? 'carnival' : window.location.hostname.includes('celebrity') ? 'celebrity' : 'royal'
   };
 
   var SYNC_STEPS = {
@@ -29,13 +29,21 @@ void function() {
   };
 
   function getBaseUrl() {
-    return capturedData.cruiseLine === 'celebrity'
-      ? 'https://www.celebritycruises.com'
-      : 'https://www.royalcaribbean.com';
+    if (capturedData.cruiseLine === 'celebrity') return 'https://www.celebritycruises.com';
+    if (capturedData.cruiseLine === 'carnival') return 'https://www.carnival.com';
+    return 'https://www.royalcaribbean.com';
   }
 
   function getPageUrls() {
     var base = getBaseUrl();
+    if (capturedData.cruiseLine === 'carnival') {
+      return {
+        offers: base + '/cruise-deals',
+        upcoming: base + '/profilemanagement/profiles/cruises',
+        courtesy: base + '/profilemanagement/profiles/cruises',
+        loyalty: base + '/profilemanagement/profiles/cruises'
+      };
+    }
     var isCeleb = capturedData.cruiseLine === 'celebrity';
     return {
       offers: base + (isCeleb ? '/blue-chip/offers' : '/club-royale/offers'),
@@ -173,6 +181,16 @@ void function() {
   }
 
   function checkAuthFromDOM() {
+    if (capturedData.cruiseLine === 'carnival') {
+      var bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
+      var hasWelcome = bodyText.toUpperCase().indexOf('WELCOME BACK') !== -1;
+      var hasVIFP = bodyText.indexOf('VIFP') !== -1 || bodyText.indexOf('VIFP Club') !== -1;
+      var hasVIFPEl = document.querySelectorAll('[class*="vifp"], [class*="VIFP"], [class*="loyalty-number"], [class*="member-name"], [class*="guest-name"]').length > 0;
+      var hasLogout = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"], a[href*="signout"]').length > 0;
+      var isProfilePage = window.location.href.indexOf('/profilemanagement') !== -1;
+      capturedData.isLoggedIn = hasWelcome || hasVIFP || hasVIFPEl || hasLogout || isProfilePage;
+      return;
+    }
     var c = document.cookie;
     var hasCookies = c.indexOf('RCAUTH') !== -1 || c.indexOf('auth') !== -1 || c.length > 100;
     var hasLogout = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"], [class*="logout"]').length > 0;
@@ -267,7 +285,11 @@ void function() {
     if (loyaltyEl) loyaltyEl.textContent = capturedData.loyalty ? 'Captured' : '--';
 
     var lineEl = document.getElementById('cruise-line');
-    if (lineEl) lineEl.textContent = capturedData.cruiseLine === 'celebrity' ? 'Celebrity Cruises' : 'Royal Caribbean';
+    if (lineEl) {
+      if (capturedData.cruiseLine === 'celebrity') lineEl.textContent = 'Celebrity Cruises';
+      else if (capturedData.cruiseLine === 'carnival') lineEl.textContent = 'Carnival Cruise Line';
+      else lineEl.textContent = 'Royal Caribbean';
+    }
 
     getSyncState().then(function(state) {
       var isRunning = state.step !== SYNC_STEPS.IDLE && state.step !== SYNC_STEPS.DONE;
@@ -333,7 +355,11 @@ void function() {
         updateUI();
         return;
       }
-      if (!capturedData.isLoggedIn || !authContext) {
+      if (!capturedData.isLoggedIn) {
+        addLog('Please log in to the website first', 'error');
+        return;
+      }
+      if (capturedData.cruiseLine !== 'carnival' && !authContext) {
         addLog('Please log in to the website first', 'error');
         return;
       }
@@ -619,7 +645,32 @@ void function() {
     updateUI();
   }
 
+  async function startCarnivalSync() {
+    addLog('Starting Carnival sync...', 'info');
+
+    await chrome.storage.local.remove([
+      'es_offers', 'es_upcomingCruises', 'es_courtesyHolds', 'es_loyalty', 'es_pricingCache'
+    ]);
+    capturedData.offers = null;
+    capturedData.upcomingCruises = null;
+    capturedData.courtesyHolds = null;
+    capturedData.loyalty = null;
+    pricingCache = {};
+
+    saveCapturedToStorage();
+
+    var urls = getPageUrls();
+    updateProgress(1, 3, 'Step 1/3: Navigating to cruise deals...');
+    addLog('Step 1: Navigating to Carnival cruise deals page to capture offers...', 'info');
+    await setSyncState(SYNC_STEPS.OFFERS, 0);
+    navigateTo(urls.offers);
+  }
+
   async function startSync() {
+    if (capturedData.cruiseLine === 'carnival') {
+      return startCarnivalSync();
+    }
+
     addLog('Starting automated sync (mirrors iOS flow)...', 'info');
 
     await chrome.storage.local.remove([
@@ -823,6 +874,69 @@ void function() {
     return match;
   }
 
+  async function resumeCarnivalSync(state, urls) {
+    addLog('Resuming Carnival sync step: ' + state.step, 'info');
+
+    if (state.step === SYNC_STEPS.OFFERS) {
+      if (!isOnExpectedPage(urls.offers)) {
+        addLog('Not on cruise deals page yet, navigating...', 'warning');
+        navigateTo(urls.offers);
+        return;
+      }
+      updateProgress(1, 3, 'Step 1/3: Waiting for offers data...');
+      addLog('On cruise deals page, waiting for offers to load...', 'info');
+
+      var gotOffers = await waitForPassiveCapture('offers', 12000);
+      if (gotOffers) {
+        var offerCount = (capturedData.offers && capturedData.offers.offers && capturedData.offers.offers.length) || 0;
+        addLog('Captured ' + offerCount + ' Carnival offers', 'success');
+      } else {
+        addLog('No offers captured passively on deals page', 'warning');
+      }
+
+      updateUI();
+      await setSyncState(SYNC_STEPS.UPCOMING, state.bounceCount);
+      updateProgress(2, 3, 'Step 2/3: Navigating to your cruises...');
+      addLog('Step 2: Navigating to Carnival profile/cruises page...', 'info');
+      navigateTo(urls.upcoming);
+      return;
+    }
+
+    if (state.step === SYNC_STEPS.UPCOMING || state.step === SYNC_STEPS.LOYALTY) {
+      if (!isOnExpectedPage(urls.upcoming)) {
+        addLog('Not on profile/cruises page yet, navigating...', 'warning');
+        navigateTo(urls.upcoming);
+        return;
+      }
+      updateProgress(2, 3, 'Step 2/3: Waiting for cruise bookings data...');
+      addLog('On profile/cruises page, waiting for bookings to load...', 'info');
+
+      var gotBookings = await waitForPassiveCapture('upcomingCruises', 12000);
+      if (gotBookings) {
+        addLog('Captured ' + extractBookings(capturedData.upcomingCruises).length + ' Carnival bookings', 'success');
+      } else {
+        addLog('No bookings captured (you may have no upcoming cruises)', 'warning');
+      }
+
+      var gotLoyalty = await waitForPassiveCapture('loyalty', 5000);
+      if (gotLoyalty) {
+        addLog('Captured Carnival loyalty data', 'success');
+      }
+
+      updateUI();
+      updateProgress(3, 3, 'Step 3/3: Carnival sync complete!');
+      var offers = (capturedData.offers && capturedData.offers.offers) ? capturedData.offers.offers.length : 0;
+      var bookings = extractBookings(capturedData.upcomingCruises).length;
+      addLog('Carnival sync complete! ' + offers + ' offers, ' + bookings + ' bookings', 'success');
+      await setSyncState(SYNC_STEPS.DONE);
+      updateUI();
+      return;
+    }
+
+    await setSyncState(SYNC_STEPS.DONE);
+    updateUI();
+  }
+
   async function resumeSync() {
     var state = await getSyncState();
     if (state.step === SYNC_STEPS.IDLE || state.step === SYNC_STEPS.DONE) return;
@@ -847,6 +961,11 @@ void function() {
         }
       }
     } catch(ex) { console.error('[Easy Seas] Nav target check error:', ex); }
+
+    if (capturedData.cruiseLine === 'carnival') {
+      await resumeCarnivalSync(state, urls);
+      return;
+    }
 
     if (state.step === SYNC_STEPS.UPCOMING || state.step === SYNC_STEPS.BOUNCE_UPCOMING) {
       if (!isOnExpectedPage(urls.upcoming)) {
