@@ -50,7 +50,7 @@ import { formatCurrency, formatNumber as formatNum } from '@/lib/format';
 import { calculatePortfolioValue } from '@/lib/valueCalculator';
 
 type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
-type SortType = 'newest' | 'oldest' | 'ship' | 'nights';
+type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
 type ViewMode = 'list' | 'timeline';
 
 const FILTER_OPTIONS: { label: string; value: FilterType }[] = [
@@ -61,6 +61,7 @@ const FILTER_OPTIONS: { label: string; value: FilterType }[] = [
 ];
 
 const SORT_OPTIONS: { label: string; value: SortType }[] = [
+  { label: 'Next Sailing First', value: 'next' },
   { label: 'Newest First', value: 'newest' },
   { label: 'Oldest First', value: 'oldest' },
   { label: 'By Ship', value: 'ship' },
@@ -82,7 +83,7 @@ export default function BookedScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterType>('all');
-  const [sortBy, setSortBy] = useState<SortType>('newest');
+  const [sortBy, setSortBy] = useState<SortType>('next');
   const [searchQuery, setSearchQuery] = useState('');
   const [hideCompleted, setHideCompleted] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -126,6 +127,19 @@ export default function BookedScreen() {
     }
 
     switch (sortBy) {
+      case 'next': {
+        const now = new Date();
+        result.sort((a, b) => {
+          const aDate = createDateFromString(a.sailDate);
+          const bDate = createDateFromString(b.sailDate);
+          const aUpcoming = aDate >= now;
+          const bUpcoming = bDate >= now;
+          if (aUpcoming && bUpcoming) return aDate.getTime() - bDate.getTime();
+          if (!aUpcoming && !bUpcoming) return bDate.getTime() - aDate.getTime();
+          return aUpcoming ? -1 : 1;
+        });
+        break;
+      }
       case 'newest':
         result.sort((a, b) => createDateFromString(b.sailDate).getTime() - createDateFromString(a.sailDate).getTime());
         break;

@@ -579,6 +579,41 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       let parsedEvents: CalendarEvent[] = eventsData ? JSON.parse(eventsData) : [];
       
+      const bookedCruisesForEvents = bookedCruises || [];
+      if (parsedEvents.length === 0 && finalBookedCount > 0) {
+        console.log('[CoreData] No calendar events found but', finalBookedCount, 'booked cruises exist - auto-generating events');
+        const currentBookedState = (() => {
+          if (bookedData && parsedBookedData.length > 0) {
+            return parsedBookedData.filter((c: any) =>
+              !c.id?.includes('demo-') &&
+              !c.id?.includes('booked-virtual') &&
+              c.reservationNumber !== 'DEMO123' &&
+              c.reservationNumber !== 'DEMO456' &&
+              c.shipName !== 'Virtually a Ship of the Seas'
+            );
+          }
+          return [];
+        })();
+        parsedEvents = currentBookedState
+          .filter((cruise: BookedCruise) => cruise.sailDate && cruise.returnDate)
+          .map((cruise: BookedCruise): CalendarEvent => ({
+            id: `cruise-${cruise.id}`,
+            title: cruise.shipName,
+            description: cruise.itineraryName || `${cruise.nights} Night Cruise`,
+            startDate: cruise.sailDate,
+            endDate: cruise.returnDate,
+            type: 'cruise',
+            allDay: true,
+            location: cruise.departurePort,
+            cruiseId: cruise.id,
+
+          }));
+        console.log('[CoreData] Auto-generated', parsedEvents.length, 'calendar events from booked cruises');
+        if (parsedEvents.length > 0) {
+          await persistData(STORAGE_KEYS.CALENDAR_EVENTS, parsedEvents);
+        }
+      }
+      
       console.log('[CoreData] Parsed events:', parsedEvents.length);
       setCalendarEventsState(parsedEvents);
       if (lastSync) setLastSyncDate(lastSync);
