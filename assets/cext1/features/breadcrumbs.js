@@ -317,9 +317,9 @@ const Breadcrumbs = {
                                 if (brand) {
                                     const b = String(brand || '').toUpperCase();
                                     const brandBadge = document.createElement('span');
-                                    brandBadge.className = `profile-brand-badge profile-brand-badge--${b === 'R' ? 'royal' : (b === 'C' ? 'celebrity' : b.toLowerCase())}`;
+                                    brandBadge.className = `profile-brand-badge profile-brand-badge--${b === 'R' ? 'royal' : (b === 'C' ? 'celebrity' : (b === 'N' ? 'carnival' : b.toLowerCase()))}`;
                                     brandBadge.style.marginRight = '6px';
-                                    brandBadge.title = `Brand: ${b}`;
+                                    brandBadge.title = `Brand: ${b === 'N' ? 'Carnival' : (b === 'R' ? 'Royal Caribbean' : (b === 'C' ? 'Celebrity' : b))}`;
                                     try {
                                         if (b === 'R') {
                                             const img = document.createElement('img');
@@ -335,6 +335,13 @@ const Breadcrumbs = {
                                             xSpan.textContent = 'X';
                                             brandBadge.appendChild(xSpan);
                                             brandBadge.setAttribute('aria-label', 'Celebrity');
+                                        } else if (b === 'N') {
+                                            // Carnival: Fun Ship styling
+                                            const cSpan = document.createElement('span');
+                                            cSpan.className = 'carnival-text';
+                                            cSpan.textContent = 'CCL';
+                                            brandBadge.appendChild(cSpan);
+                                            brandBadge.setAttribute('aria-label', 'Carnival');
                                         } else {
                                             brandBadge.textContent = b;
                                         }

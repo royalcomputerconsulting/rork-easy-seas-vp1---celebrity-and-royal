@@ -107,16 +107,19 @@ const ApiClient = {
             console.debug('[apiClient] Request headers built (authorization redacted)');
             // Centralized brand detection
             const host = (location && location.hostname) ? location.hostname : '';
-            const brandCode = (typeof App !== 'undefined' && App.Utils && typeof App.Utils.detectBrand === 'function') ? App.Utils.detectBrand() : (host.includes('celebritycruises.com') ? 'C' : 'R');
+            const brandCode = (typeof App !== 'undefined' && App.Utils && typeof App.Utils.detectBrand === 'function') ? App.Utils.detectBrand() : (host.includes('celebritycruises.com') ? 'C' : (host.includes('carnival.com') ? 'N' : 'R'));
             const relativePath = '/api/casino/casino-offers/v1';
-            const onSupportedDomain = host.includes('royalcaribbean.com') || host.includes('celebritycruises.com');
-            const defaultDomain = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
+            const onSupportedDomain = host.includes('royalcaribbean.com') || host.includes('celebritycruises.com') || host.includes('carnival.com');
+            const defaultDomain = brandCode === 'C' ? 'https://www.celebritycruises.com' : (brandCode === 'N' ? 'https://www.carnival.com' : 'https://www.royalcaribbean.com');
             const endpoint = onSupportedDomain ? relativePath : `${defaultDomain}${relativePath}`;
+            console.debug('[apiClient] Brand detected:', brandCode, '| Domain:', defaultDomain);
             console.debug('[apiClient] Endpoint resolved:', endpoint, 'brand:', brandCode);
+            // For Carnival, use their brand code 'CCL' in API requests; for RC/Celebrity use R/C
+            const apiBrandCode = brandCode === 'N' ? 'CCL' : brandCode;
             const baseRequestBody = {
                 cruiseLoyaltyId: loyaltyId,
                 offerCode: '',
-                brand: brandCode,
+                brand: apiBrandCode,
                 // returnExcludedSailings: true
             };
             // Helper to remove excluded sailings from an offer in-place
@@ -319,8 +322,7 @@ const ApiClient = {
                 console.debug('[apiClient] Persisting normalized offers to storage (brand aware)');
                 const rawKey = (user && (user.username || user.userName || user.email || user.name || user.accountId)) ? String(user.username || user.userName || user.email || user.name || user.accountId) : 'unknown';
                 const usernameKey = rawKey.replace(/[^a-zA-Z0-9-_.]/g, '_');
-                // brandCode already resolved earlier
-                const brandCode = (typeof App !== 'undefined' && App.Utils && typeof App.Utils.detectBrand === 'function') ? App.Utils.detectBrand() : 'R';
+                // brandCode already resolved earlier in outer scope
                 const legacyKey = `gobo-${usernameKey}`; // backward-compatible
                 const brandedKey = `gobo-${brandCode}-${usernameKey}`;
                 const payload = { savedAt: Date.now(), data: normalizedData, brand: brandCode };

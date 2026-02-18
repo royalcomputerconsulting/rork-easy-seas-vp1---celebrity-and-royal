@@ -89,6 +89,25 @@
 	line-height: 1;
 }
 
+/* Carnival Cruise Line: red background with white CCL text */
+.profile-brand-badge--carnival {
+  background: #c8102e;
+  color: #ffffff;
+  font-weight: 700;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  width: 26px;
+}
+
+.profile-brand-badge--carnival .carnival-text {
+  display: inline-block;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
 /* --- Horizontal tab scrolling overrides (final refined) --- */
 .profile-tabs-scroll { width:100%; overflow-x: visible; overflow-y:hidden; -webkit-overflow-scrolling:touch; position:relative; padding-bottom:4px; scrollbar-gutter:stable; }
 .profile-tabs-scroll::-webkit-scrollbar { height:10px; }

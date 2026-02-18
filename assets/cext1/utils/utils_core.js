@@ -54,20 +54,25 @@ function _logOfferValueSummary(tag='OfferValueSummary') {
 }
 
 const Utils = {
-    // Centralized brand detection (R = Royal, C = Celebrity)
+    // Centralized brand detection (R = Royal, C = Celebrity, N = Carnival)
     detectBrand() {
         const host = (location && location.hostname) ? location.hostname : '';
+        if (host.includes('carnival.com')) return 'N';
         let brand = (host.includes('celebritycruises.com') || host.includes('bluechipcluboffers.com')) ? 'C' : 'R';
         try {
             const override = localStorage.getItem('casinoBrand');
-            if (override === 'R' || override === 'C') brand = override;
+            if (override === 'R' || override === 'C' || override === 'N') brand = override;
             if (override === 'X') brand = 'C';
         } catch(e) {}
         return brand;
     },
     isCelebrity() { return this.detectBrand() === 'C'; },
+    isCarnival() { return this.detectBrand() === 'N'; },
     getRedemptionBase() {
-        return this.isCelebrity() ? 'https://www.celebritycruises.com/blue-chip-club/redemptions/' : 'https://www.royalcaribbean.com/club-royale/redemptions/';
+        const brand = this.detectBrand();
+        if (brand === 'C') return 'https://www.celebritycruises.com/blue-chip-club/redemptions/';
+        if (brand === 'N') return 'https://www.carnival.com/cruise-deals';
+        return 'https://www.royalcaribbean.com/club-royale/redemptions/';
     },
     computePerks(offer, sailing) {
         const names = new Set();
@@ -438,6 +443,34 @@ const Utils = {
             'infinity': 'Millennium',
             'millennium': 'Millennium',
             'flora': 'Expedition',
+            // Carnival Cruise Line
+            'carnival adventure': 'Excel',
+            'carnival breeze': 'Dream',
+            'carnival celebration': 'Excel',
+            'carnival conquest': 'Conquest',
+            'carnival dream': 'Dream',
+            'carnival elation': 'Fantasy',
+            'carnival firenze': 'Excel',
+            'carnival freedom': 'Conquest',
+            'carnival glory': 'Conquest',
+            'carnival horizon': 'Vista',
+            'carnival jubilee': 'Excel',
+            'carnival legend': 'Spirit',
+            'carnival liberty': 'Conquest',
+            'carnival luminosa': 'Spirit',
+            'carnival magic': 'Dream',
+            'carnival miracle': 'Spirit',
+            'carnival panorama': 'Vista',
+            'carnival paradise': 'Fantasy',
+            'carnival pride': 'Spirit',
+            'carnival radiance': 'Spirit',
+            'carnival spirit': 'Spirit',
+            'carnival sunrise': 'Fantasy',
+            'carnival sunshine': 'Fantasy',
+            'carnival valor': 'Conquest',
+            'carnival venezia': 'Excel',
+            'carnival vista': 'Vista',
+            'mardi gras': 'Excel',
         };
         return map[key] || '-';
     }

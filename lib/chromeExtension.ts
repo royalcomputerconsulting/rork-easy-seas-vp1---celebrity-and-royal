@@ -8,7 +8,7 @@ function getEasySeasExtensionFiles(): Record<string, string> {
   "manifest_version": 3,
   "name": "Easy Seas\u2122 \u2014 Sync Extension",
   "version": "3.1.0",
-  "description": "Syncs casino offers, booked cruises, and loyalty data from Royal Caribbean & Celebrity Cruises websites via direct API calls.",
+  "description": "Syncs casino offers, booked cruises, and loyalty data from Royal Caribbean, Celebrity & Carnival Cruises websites via direct API calls.",
   "permissions": [
     "storage",
     "downloads",
@@ -17,7 +17,8 @@ function getEasySeasExtensionFiles(): Record<string, string> {
   "host_permissions": [
     "https://*.royalcaribbean.com/*",
     "https://*.celebritycruises.com/*",
-    "https://aws-prd.api.rccl.com/*"
+    "https://aws-prd.api.rccl.com/*",
+    "https://*.carnival.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -26,7 +27,8 @@ function getEasySeasExtensionFiles(): Record<string, string> {
     {
       "matches": [
         "https://*.royalcaribbean.com/*",
-        "https://*.celebritycruises.com/*"
+        "https://*.celebritycruises.com/*",
+        "https://*.carnival.com/*"
       ],
       "js": ["content.js"],
       "css": ["overlay.css"],
@@ -44,7 +46,8 @@ function getEasySeasExtensionFiles(): Record<string, string> {
       "resources": ["page-script.js"],
       "matches": [
         "https://*.royalcaribbean.com/*",
-        "https://*.celebritycruises.com/*"
+        "https://*.celebritycruises.com/*",
+        "https://*.carnival.com/*"
       ]
     }
   ],
@@ -130,21 +133,50 @@ function getPageScriptJS(): string {
     try { window.postMessage(Object.assign({ source: SRC, type: type }, payload || {}), '*'); } catch(e) {}
   }
   function getAuth() {
+    // Try multiple session keys - persist:session works for RC/Celebrity/Carnival
+    var keysToTry = ['persist:session', 'persist:auth', 'ccl-session', 'ccl_session'];
+    for (var ki = 0; ki < keysToTry.length; ki++) {
+      try {
+        var raw = localStorage.getItem(keysToTry[ki]);
+        if (!raw) continue;
+        var session = JSON.parse(raw);
+        var token = session.token ? (typeof session.token === 'string' ? JSON.parse(session.token) : session.token) : null;
+        var user = session.user ? (typeof session.user === 'string' ? JSON.parse(session.user) : session.user) : null;
+        if (!token || !user || !user.accountId) continue;
+        var t = typeof token === 'string' ? token : (token && token.toString ? token.toString() : '');
+        return {
+          token: t.indexOf('Bearer ') === 0 ? t : 'Bearer ' + t,
+          accountId: String(user.accountId),
+          loyaltyId: user.cruiseLoyaltyId || user.vifpClubNumber || '',
+          firstName: user.firstName || ''
+        };
+      } catch(e) { continue; }
+    }
+    // Fallback: scan localStorage for any key containing a parseable session with accountId
     try {
-      var raw = localStorage.getItem('persist:session');
-      if (!raw) return null;
-      var session = JSON.parse(raw);
-      var token = session.token ? JSON.parse(session.token) : null;
-      var user = session.user ? JSON.parse(session.user) : null;
-      if (!token || !user || !user.accountId) return null;
-      var t = typeof token === 'string' ? token : (token && token.toString ? token.toString() : '');
-      return {
-        token: t.indexOf('Bearer ') === 0 ? t : 'Bearer ' + t,
-        accountId: String(user.accountId),
-        loyaltyId: user.cruiseLoyaltyId || '',
-        firstName: user.firstName || ''
-      };
-    } catch(e) { return null; }
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.length > 60) continue;
+        try {
+          var v = localStorage.getItem(k);
+          if (!v || v.length < 20) continue;
+          var p = JSON.parse(v);
+          if (!p || typeof p !== 'object') continue;
+          var tryToken = p.token ? (typeof p.token === 'string' ? JSON.parse(p.token) : p.token) : null;
+          var tryUser = p.user ? (typeof p.user === 'string' ? JSON.parse(p.user) : p.user) : null;
+          if (tryToken && tryUser && tryUser.accountId) {
+            var t2 = typeof tryToken === 'string' ? tryToken : (tryToken.toString ? tryToken.toString() : '');
+            return {
+              token: t2.indexOf('Bearer ') === 0 ? t2 : 'Bearer ' + t2,
+              accountId: String(tryUser.accountId),
+              loyaltyId: tryUser.cruiseLoyaltyId || tryUser.vifpClubNumber || '',
+              firstName: tryUser.firstName || ''
+            };
+          }
+        } catch(e2) { continue; }
+      }
+    } catch(e3) {}
+    return null;
   }
   function findAppKey() {
     try {
@@ -178,13 +210,13 @@ function getPageScriptJS(): string {
         var url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url ? args[0].url : '');
         if (typeof url !== 'string' || !url || !r.ok) return r;
         var c = r.clone();
-        if (url.indexOf('/api/casino/casino-offers') !== -1)
+        if (url.indexOf('/api/casino/casino-offers') !== -1 || url.indexOf('/players-club/offers') !== -1)
           c.json().then(function(d) { post('api_captured', { key: 'offers', data: d, url: url }); }).catch(function(){});
-        if (url.indexOf('/profileBookings/enriched') !== -1 || url.indexOf('/api/account/upcoming-cruises') !== -1 || url.indexOf('/api/profile/bookings') !== -1 || url.indexOf('/upcomingCruises') !== -1)
+        if (url.indexOf('/profileBookings/enriched') !== -1 || url.indexOf('/api/account/upcoming-cruises') !== -1 || url.indexOf('/api/profile/bookings') !== -1 || url.indexOf('/upcomingCruises') !== -1 || url.indexOf('/profilemanagement/profiles/cruises') !== -1 || url.indexOf('/api/booking/cruises') !== -1)
           c.json().then(function(d) { post('api_captured', { key: 'upcomingCruises', data: d, url: url }); }).catch(function(){});
         if (url.indexOf('/api/account/courtesy-holds') !== -1 || url.indexOf('/courtesyHolds') !== -1)
           c.json().then(function(d) { post('api_captured', { key: 'courtesyHolds', data: d, url: url }); }).catch(function(){});
-        if (url.indexOf('/guestAccounts/loyalty') !== -1 || url.indexOf('/loyalty/info') !== -1 || url.indexOf('/loyalty-programs') !== -1 || url.indexOf('/account/loyalty') !== -1)
+        if (url.indexOf('/guestAccounts/loyalty') !== -1 || url.indexOf('/loyalty/info') !== -1 || url.indexOf('/loyalty-programs') !== -1 || url.indexOf('/account/loyalty') !== -1 || url.indexOf('/profilemanagement/profiles/loyalty') !== -1 || url.indexOf('/api/profile/loyalty') !== -1)
           c.json().then(function(d) { post('api_captured', { key: 'loyalty', data: d, url: url }); }).catch(function(){});
       } catch(e) {}
       return r;
@@ -200,10 +232,10 @@ function getPageScriptJS(): string {
         var u = x.__esUrl || x.responseURL || '';
         if (!u || x.status < 200 || x.status >= 300) return;
         var d = JSON.parse(x.responseText);
-        if (u.indexOf('/api/casino/casino-offers') !== -1) post('api_captured', { key: 'offers', data: d, url: u });
-        if (u.indexOf('/profileBookings/enriched') !== -1 || u.indexOf('/api/account/upcoming-cruises') !== -1 || u.indexOf('/api/profile/bookings') !== -1 || u.indexOf('/upcomingCruises') !== -1) post('api_captured', { key: 'upcomingCruises', data: d, url: u });
+        if (u.indexOf('/api/casino/casino-offers') !== -1 || u.indexOf('/players-club/offers') !== -1) post('api_captured', { key: 'offers', data: d, url: u });
+        if (u.indexOf('/profileBookings/enriched') !== -1 || u.indexOf('/api/account/upcoming-cruises') !== -1 || u.indexOf('/api/profile/bookings') !== -1 || u.indexOf('/upcomingCruises') !== -1 || u.indexOf('/profilemanagement/profiles/cruises') !== -1 || u.indexOf('/api/booking/cruises') !== -1) post('api_captured', { key: 'upcomingCruises', data: d, url: u });
         if (u.indexOf('/api/account/courtesy-holds') !== -1 || u.indexOf('/courtesyHolds') !== -1) post('api_captured', { key: 'courtesyHolds', data: d, url: u });
-        if (u.indexOf('/guestAccounts/loyalty') !== -1 || u.indexOf('/loyalty/info') !== -1 || u.indexOf('/loyalty-programs') !== -1 || u.indexOf('/account/loyalty') !== -1) post('api_captured', { key: 'loyalty', data: d, url: u });
+        if (u.indexOf('/guestAccounts/loyalty') !== -1 || u.indexOf('/loyalty/info') !== -1 || u.indexOf('/loyalty-programs') !== -1 || u.indexOf('/account/loyalty') !== -1 || u.indexOf('/profilemanagement/profiles/loyalty') !== -1 || u.indexOf('/api/profile/loyalty') !== -1) post('api_captured', { key: 'loyalty', data: d, url: u });
       } catch(e) {}
     });
     return oS.apply(this, arguments);
@@ -229,11 +261,13 @@ function getContentJS(): string {
   // Determine if this is the main overlay page or a helper capture page
   var IS_MAIN_PAGE = (
     path.indexOf('/club-royale') !== -1 ||
-    path.indexOf('/blue-chip-club') !== -1
+    path.indexOf('/blue-chip-club') !== -1 ||
+    path.indexOf('/cruise-deals') !== -1
   );
   var IS_HELPER_PAGE = !IS_MAIN_PAGE && (
     path.indexOf('/account') !== -1 ||
-    path.indexOf('/loyalty') !== -1
+    path.indexOf('/loyalty') !== -1 ||
+    path.indexOf('/profilemanagement') !== -1
   );
 
   console.log('[Easy Seas v3.1] Loaded on', path, '| main:', IS_MAIN_PAGE, '| helper:', IS_HELPER_PAGE);
@@ -242,7 +276,7 @@ function getContentJS(): string {
   var capturedData = {
     offers: null, upcomingCruises: null, courtesyHolds: null, loyalty: null,
     isLoggedIn: false,
-    cruiseLine: hostname.includes('celebrity') ? 'celebrity' : 'royal'
+    cruiseLine: hostname.includes('celebrity') ? 'celebrity' : (hostname.includes('carnival') ? 'carnival' : 'royal')
   };
   var syncState = { isRunning: false, currentStep: 0, totalSteps: 5 };
   var overlayElement = null;
@@ -435,7 +469,11 @@ function getContentJS(): string {
     var loyaltyEl = document.getElementById('loyalty-status');
     if (loyaltyEl) loyaltyEl.textContent = capturedData.loyalty ? 'Captured' : '--';
     var lineEl = document.getElementById('cruise-line');
-    if (lineEl) lineEl.textContent = capturedData.cruiseLine === 'celebrity' ? 'Celebrity Cruises' : 'Royal Caribbean';
+    if (lineEl) {
+      if (capturedData.cruiseLine === 'celebrity') lineEl.textContent = 'Celebrity Cruises';
+      else if (capturedData.cruiseLine === 'carnival') lineEl.textContent = 'Carnival Cruise Line';
+      else lineEl.textContent = 'Royal Caribbean';
+    }
     var syncBtn = document.getElementById('sync-btn');
     if (syncBtn) {
       if (syncState.isRunning) {
@@ -601,11 +639,13 @@ function getContentJS(): string {
     return null;
   }
 
-  async function fetchLoyaltyDirect(headers, isCeleb) {
+  async function fetchLoyaltyDirect(headers, isCeleb, isCarnival) {
     try {
       var loyaltyUrl = isCeleb
         ? 'https://aws-prd.api.rccl.com/en/celebrity/web/v3/guestAccounts/' + encodeURIComponent(authContext.accountId)
-        : 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info';
+        : (isCarnival
+          ? 'https://www.carnival.com/api/profile/loyalty'
+          : 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info');
       addLog('Calling loyalty API directly: ' + loyaltyUrl.replace(/https:\\/\\/[^/]+/, ''), 'info');
       var lResp = await fetchWithRetry(loyaltyUrl, {
         method: 'GET',
@@ -648,8 +688,9 @@ function getContentJS(): string {
 
     addLog('Starting automated sync v3.1 (multi-tab mode)...', 'info');
     var isCeleb = capturedData.cruiseLine === 'celebrity';
-    var baseUrl = isCeleb ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
-    var brand = isCeleb ? 'C' : 'R';
+    var isCarnival = capturedData.cruiseLine === 'carnival';
+    var baseUrl = isCeleb ? 'https://www.celebritycruises.com' : (isCarnival ? 'https://www.carnival.com' : 'https://www.royalcaribbean.com');
+    var brand = isCeleb ? 'C' : (isCarnival ? 'CCL' : 'R');
     var headers = buildHeaders();
 
     try {
@@ -659,7 +700,7 @@ function getContentJS(): string {
       addLog('Step 1: Calling casino offers API...', 'info');
 
       try {
-        var offersUrl = baseUrl + (brand === 'C' ? '/api/casino/casino-offers/v2' : '/api/casino/casino-offers/v1');
+        var offersUrl = baseUrl + (brand === 'C' ? '/api/casino/casino-offers/v2' : (isCarnival ? '/api/casino/casino-offers/v1' : '/api/casino/casino-offers/v1'));
         var offersResp = await fetchWithRetry(offersUrl, {
           method: 'POST',
           headers: headers,
@@ -739,6 +780,9 @@ function getContentJS(): string {
         baseUrl + '/account/upcoming-cruises',
         baseUrl + '/account/courtesy-holds',
         baseUrl + '/account/loyalty-programs'
+      ] : isCarnival ? [
+        baseUrl + '/profilemanagement/profiles/cruises',
+        baseUrl + '/profilemanagement/profiles/loyalty'
       ] : [
         baseUrl + '/account',
         baseUrl + '/account/upcoming-cruises',
@@ -802,7 +846,7 @@ function getContentJS(): string {
 
       if (!capturedData.loyalty) {
         addLog('Loyalty not captured by helper tabs - trying direct API...', 'info');
-        await fetchLoyaltyDirect(headers, isCeleb);
+        await fetchLoyaltyDirect(headers, isCeleb, isCarnival);
       } else {
         addLog('\\u2705 Loyalty data available from helper tabs', 'success');
       }
@@ -1075,7 +1119,7 @@ function getContentJS(): string {
         if (!perks && co.tradeInValue) perks = '$' + co.tradeInValue + ' trade-in';
         var deptPort = s.departurePort && typeof s.departurePort === 'object' ? (s.departurePort.name || '') : (s.departurePort || '');
         rows.push([
-          esc('Club Royale Offers'), esc(co.name || co.offerName || ''), esc(co.offerCode || ''),
+          esc(isCarnival ? 'Carnival Players Club' : (isCeleb ? 'Blue Chip Club' : 'Club Royale Offers')), esc(co.name || co.offerName || ''), esc(co.offerCode || ''),
           esc(fmtDate(co.reserveByDate || co.expirationDate || '')), esc(offerType),
           esc(s.shipName || SHIP_CODES[shipCode] || shipCode || ''), esc(fmtDate(sailDateISO || s.sailDate || '')),
           esc(nights), esc(itinerary), esc(deptPort), esc(s.roomType || s.cabinType || ''),
