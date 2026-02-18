@@ -30,6 +30,7 @@ import {
   Coins,
   Target,
   DollarSign,
+  Crown,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
@@ -48,10 +49,11 @@ import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { formatCurrency, formatNumber as formatNum } from '@/lib/format';
 import { calculatePortfolioValue } from '@/lib/valueCalculator';
+import { CrownAnchorTimeline } from '@/components/CrownAnchorTimeline';
 
 type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
-type ViewMode = 'list' | 'timeline';
+type ViewMode = 'list' | 'timeline' | 'points';
 
 const FILTER_OPTIONS: { label: string; value: FilterType }[] = [
   { label: 'All', value: 'all' },
@@ -554,6 +556,14 @@ export default function BookedScreen() {
             <Clock size={16} color={viewMode === 'timeline' ? COLORS.navyDeep : COLORS.textSecondary} />
             <Text style={[styles.viewModeText, viewMode === 'timeline' && styles.viewModeTextActive]}>Timeline</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewModeButton, viewMode === 'points' && styles.viewModeButtonActive]}
+            onPress={() => setViewMode('points')}
+            activeOpacity={0.7}
+          >
+            <Crown size={16} color={viewMode === 'points' ? COLORS.navyDeep : COLORS.textSecondary} />
+            <Text style={[styles.viewModeText, viewMode === 'points' && styles.viewModeTextActive]}>C&A Pts</Text>
+          </TouchableOpacity>
         </View>
         <TouchableOpacity
           style={styles.addCruiseButton}
@@ -566,6 +576,13 @@ export default function BookedScreen() {
       </View>
 
       {viewMode === 'timeline' && renderTimelineView()}
+
+      {viewMode === 'points' && (
+        <CrownAnchorTimeline
+          currentPoints={crownAnchorPoints}
+          bookedCruises={bookedCruises}
+        />
+      )}
 
       {viewMode === 'list' && (
         <>
@@ -664,12 +681,12 @@ export default function BookedScreen() {
       
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <FlatList
-          data={viewMode === 'list' ? filteredCruises : []}
+          data={viewMode === 'list' ? filteredCruises : ([] as BookedCruise[])}
           renderItem={renderCruiseCard}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={renderHeader}
-          ListEmptyComponent={viewMode === 'list' ? renderEmpty : null}
+          ListEmptyComponent={viewMode === 'list' ? renderEmpty : undefined}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
