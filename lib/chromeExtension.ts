@@ -500,6 +500,9 @@ function getContentJS(): string {
 
       syncState.currentStep = 2;
       updateProgress(2, 5, 'Step 2/5: Loading upcoming cruises page...');
+      addLog('Step 2: Navigating to account home to trigger APIs...', 'info');
+      await navigateAndWait(baseUrl + '/account', 6000);
+      await new Promise(function(r) { setTimeout(r, 3000); });
       addLog('Step 2: Navigating to upcoming cruises to trigger APIs...', 'info');
       await navigateAndWait(baseUrl + '/account/upcoming-cruises', 6000);
       await new Promise(function(r) { setTimeout(r, 2000); });
