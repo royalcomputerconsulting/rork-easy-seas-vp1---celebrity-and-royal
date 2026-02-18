@@ -10,7 +10,7 @@ import {
 } from "lucide-react-native";
 import React, { useCallback } from "react";
 import { Platform, View, StyleSheet } from "react-native";
-import { COLORS } from '../../constants/theme';
+import { COLORS } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
 import { useEntitlement } from '@/state/EntitlementProvider';
 
