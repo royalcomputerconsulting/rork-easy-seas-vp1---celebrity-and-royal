@@ -389,18 +389,24 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
         
         // Calculate Crown & Anchor points for booked cruises
         // Base: 1 point per night
-        // Single occupancy bonus: +1 point per night (assumed for all)
+        // Single occupancy bonus: +1 point per night (solo sailing)
         // Suite bonus: +1 point per night if in suite category
-        let crownAnchorPointsForThisCruise = nights * 2; // Base + single occupancy
-        
-        // Check if cruise is in a suite category
+        // singleOccupancy defaults to true unless explicitly set to false
+        const isSolo = cruise.singleOccupancy !== false;
         const cabinType = cruise.cabinType || cruise.cabinCategory || '';
         const isSuite = cabinType.toLowerCase().includes('suite');
         
-        if (isSuite) {
+        let crownAnchorPointsForThisCruise = isSolo ? nights * 2 : nights * 1; // solo = 2x, shared = 1x
+        
+        if (isSuite && isSolo) {
           crownAnchorPointsForThisCruise = nights * 3; // Base + single + suite
           console.log('[LoyaltyProvider] Suite bonus applied for', cruise.shipName, 'cabin:', cabinType);
+        } else if (isSuite && !isSolo) {
+          crownAnchorPointsForThisCruise = nights * 2; // Suite but not solo — no single bonus
+          console.log('[LoyaltyProvider] Suite (shared occupancy) for', cruise.shipName, 'cabin:', cabinType);
         }
+        
+        console.log('[LoyaltyProvider] C&A points for', cruise.shipName, ':', nights, 'nights x', isSolo ? (isSuite ? 3 : 2) : (isSuite ? 2 : 1), '=', crownAnchorPointsForThisCruise, isSolo ? '(solo)' : '(shared)');
         
         projectedBookedPoints += crownAnchorPointsForThisCruise;
         upcomingBookedCruises.push({

@@ -51,6 +51,7 @@ interface EditFormData {
   freeDrinkPackage: boolean;
   freeWifi: boolean;
   freeSpecialtyDining: boolean;
+  singleOccupancy: boolean;
   winnings: string;
   earnedPoints: string;
   amountPaid: string;
@@ -88,6 +89,7 @@ export default function CruiseDetailsScreen() {
     freeDrinkPackage: false,
     freeWifi: false,
     freeSpecialtyDining: false,
+    singleOccupancy: true,
     winnings: '',
     earnedPoints: '',
     amountPaid: '',
@@ -496,6 +498,7 @@ export default function CruiseDetailsScreen() {
       freeDrinkPackage: cruise.freeDrinkPackage || false,
       freeWifi: cruise.freeWifi || false,
       freeSpecialtyDining: cruise.freeSpecialtyDining || false,
+      singleOccupancy: (cruise as BookedCruise).singleOccupancy !== false,
       winnings: String((cruise as any).winnings || ''),
       earnedPoints: String((cruise as any).earnedPoints || (cruise as any).casinoPoints || ''),
       amountPaid: String(cruise.totalPrice || cruise.price || ''),
@@ -529,6 +532,7 @@ export default function CruiseDetailsScreen() {
       freeDrinkPackage: editForm.freeDrinkPackage,
       freeWifi: editForm.freeWifi,
       freeSpecialtyDining: editForm.freeSpecialtyDining,
+      singleOccupancy: editForm.singleOccupancy,
       freePlay: parseFloat(editForm.freePlay) || 0,
       winnings: parseFloat(editForm.winnings) || 0,
       earnedPoints: parseFloat(editForm.earnedPoints) || 0,
@@ -1571,6 +1575,21 @@ export default function CruiseDetailsScreen() {
                   keyboardType="numeric"
                   placeholder="0"
                   placeholderTextColor={COLORS.textSecondary}
+                />
+              </View>
+
+              <View style={[styles.switchRow, { backgroundColor: 'rgba(59,130,246,0.10)', borderRadius: 10, marginBottom: 6 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.switchLabel}>Solo Sailing (Single Occupancy)</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 11, marginTop: 2 }}>
+                    {editForm.singleOccupancy ? 'Earns +1 bonus C&A point/night' : 'Base 1 C&A point/night (shared cabin)'}
+                  </Text>
+                </View>
+                <Switch
+                  value={editForm.singleOccupancy}
+                  onValueChange={(val) => setEditForm(prev => ({ ...prev, singleOccupancy: val }))}
+                  trackColor={{ false: 'rgba(255,255,255,0.2)', true: '#3B82F6' }}
+                  thumbColor={COLORS.white}
                 />
               </View>
 

@@ -176,6 +176,7 @@ export interface BookedCruise extends Cruise {
   usedNextCruiseCertificate?: boolean;
   nextCruiseCertificateValue?: number;
   nextCruiseCertificateId?: string;
+  singleOccupancy?: boolean;
 }
 
 export type OfferClassification = 
