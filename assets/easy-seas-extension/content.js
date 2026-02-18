@@ -3,10 +3,11 @@ void function() {
 
   if (window.__easySeasLoaded) return;
   window.__easySeasLoaded = true;
-  console.log('[Easy Seas] Content script v4 loaded on', window.location.href);
+  console.log('[Easy Seas] Content script v5 loaded on', window.location.href);
 
   var overlayElement = null;
   var authContext = null;
+  var pricingCache = {};
   var capturedData = {
     offers: null, upcomingCruises: null, courtesyHolds: null, loyalty: null,
     isLoggedIn: false,
@@ -16,6 +17,7 @@ void function() {
   var SYNC_STEPS = {
     IDLE: 'idle',
     OFFERS: 'offers',
+    PRICING: 'pricing',
     UPCOMING: 'upcoming',
     COURTESY: 'courtesy',
     LOYALTY: 'loyalty',
@@ -87,6 +89,7 @@ void function() {
       if (capturedData.courtesyHolds) toSave.es_courtesyHolds = capturedData.courtesyHolds;
       if (capturedData.loyalty) toSave.es_loyalty = capturedData.loyalty;
       if (authContext) toSave.es_auth = authContext;
+      if (Object.keys(pricingCache).length) toSave.es_pricingCache = pricingCache;
       toSave.es_cruiseLine = capturedData.cruiseLine;
       toSave.es_isLoggedIn = capturedData.isLoggedIn;
       chrome.storage.local.set(toSave);
@@ -97,7 +100,7 @@ void function() {
     try {
       var r = await chrome.storage.local.get([
         'es_offers', 'es_upcomingCruises', 'es_courtesyHolds', 'es_loyalty',
-        'es_auth', 'es_cruiseLine', 'es_isLoggedIn'
+        'es_auth', 'es_cruiseLine', 'es_isLoggedIn', 'es_pricingCache'
       ]);
       if (r.es_offers) capturedData.offers = r.es_offers;
       if (r.es_upcomingCruises) capturedData.upcomingCruises = r.es_upcomingCruises;
@@ -106,6 +109,7 @@ void function() {
       if (r.es_auth) { authContext = r.es_auth; capturedData.isLoggedIn = true; }
       if (r.es_cruiseLine) capturedData.cruiseLine = r.es_cruiseLine;
       if (r.es_isLoggedIn) capturedData.isLoggedIn = r.es_isLoggedIn;
+      if (r.es_pricingCache) pricingCache = r.es_pricingCache;
     } catch(ex) { console.error('[Easy Seas] Storage load error:', ex); }
   }
 
@@ -201,6 +205,7 @@ void function() {
       '<div class="es-step" data-step="3"></div>' +
       '<div class="es-step" data-step="4"></div>' +
       '<div class="es-step" data-step="5"></div>' +
+      '<div class="es-step" data-step="6"></div>' +
       '</div>' +
       '<div class="es-progress-text">Syncing Data...</div>' +
       '<div class="es-progress-bar"><div class="es-progress-fill" id="progress-fill"></div></div>' +
@@ -209,6 +214,8 @@ void function() {
       '<span class="es-badge es-badge-warning" id="login-status">CHECKING...</span></div>' +
       '<div class="es-status-row"><span class="es-status-label">Casino Offers</span>' +
       '<span class="es-status-value" id="offer-count">0</span></div>' +
+      '<div class="es-status-row"><span class="es-status-label">Pricing Data</span>' +
+      '<span class="es-status-value" id="pricing-count">0 sailings</span></div>' +
       '<div class="es-status-row"><span class="es-status-label">Booked Cruises</span>' +
       '<span class="es-status-value" id="booking-count">0</span></div>' +
       '<div class="es-status-row"><span class="es-status-label">Loyalty</span>' +
@@ -246,6 +253,12 @@ void function() {
     }
     var offerEl = document.getElementById('offer-count');
     if (offerEl) offerEl.textContent = (capturedData.offers && capturedData.offers.offers && capturedData.offers.offers.length) || 0;
+
+    var pricingEl = document.getElementById('pricing-count');
+    if (pricingEl) {
+      var pCount = Object.keys(pricingCache).length;
+      pricingEl.textContent = pCount + ' sailing' + (pCount !== 1 ? 's' : '');
+    }
 
     var bookEl = document.getElementById('booking-count');
     if (bookEl) bookEl.textContent = getBookingsCount();
@@ -307,7 +320,7 @@ void function() {
       entry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
       logEl.appendChild(entry);
       logEl.scrollTop = logEl.scrollHeight;
-      if (logEl.children.length > 50) logEl.removeChild(logEl.firstChild);
+      if (logEl.children.length > 80) logEl.removeChild(logEl.firstChild);
     }
   }
 
@@ -366,7 +379,6 @@ void function() {
     chrome.storage.local.set({ es_navTarget: url, es_navFrom: window.location.href, es_navAttemptTs: Date.now() });
     var beforeUrl = window.location.href;
 
-    // Primary: use background script chrome.tabs.update (most reliable, bypasses SPA router)
     var bgNavSent = false;
     try {
       chrome.runtime.sendMessage({ type: 'navigate', url: url }, function(resp) {
@@ -375,13 +387,11 @@ void function() {
           bgNavSent = true;
         } else {
           var errMsg = (resp && resp.error) ? resp.error : 'no response';
-          addLog('Background nav failed (' + errMsg + '), falling back to window.location...', 'warning');
-          console.warn('[Easy Seas] Background nav failed:', errMsg);
+          addLog('Background nav failed (' + errMsg + '), falling back...', 'warning');
           tryWindowNav();
         }
       });
     } catch(e) {
-      console.warn('[Easy Seas] Could not send background nav message:', e);
       addLog('Background nav error, falling back...', 'warning');
       tryWindowNav();
     }
@@ -396,10 +406,8 @@ void function() {
       }
     }
 
-    // Fallback: if still on same page after 2s, try window.location directly
     setTimeout(function() {
       if (window.location.href === beforeUrl) {
-        console.warn('[Easy Seas] Still on same page after 2s, trying window.location fallback');
         addLog('Still on same page after 2s, trying window.location...', 'warning');
         tryWindowNav();
       } else {
@@ -407,10 +415,8 @@ void function() {
       }
     }, 2000);
 
-    // Final fallback: anchor click after 5s
     setTimeout(function() {
       if (window.location.href === beforeUrl) {
-        console.warn('[Easy Seas] Still stuck after 5s, trying anchor click');
         addLog('Still stuck after 5s, trying anchor click...', 'warning');
         try {
           var a = document.createElement('a');
@@ -426,16 +432,204 @@ void function() {
     if (callback) callback();
   }
 
+  // ===== PRICING FETCH (mirrors iOS sync flow) =====
+
+  function resolveStateroomCategory(code) {
+    var up = String(code || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    var INTERIOR = ['I', 'IN', 'INT', 'INSIDE', 'INTERIOR'];
+    var OCEANVIEW = ['O', 'OV', 'OB', 'E', 'OCEAN', 'OCEANVIEW', 'OCEAN VIEW', 'OUTSIDE'];
+    var BALCONY = ['B', 'BAL', 'BK', 'BALCONY'];
+    var SUITE = ['D', 'DLX', 'DELUXE', 'JS', 'SU', 'SUITE', 'JUNIOR SUITE', 'JR SUITE', 'JRSUITE'];
+    if (INTERIOR.indexOf(up) !== -1) return 'INTERIOR';
+    if (OCEANVIEW.indexOf(up) !== -1) return 'OCEANVIEW';
+    if (BALCONY.indexOf(up) !== -1) return 'BALCONY';
+    if (SUITE.indexOf(up) !== -1) return 'SUITE';
+    return null;
+  }
+
+  function formatPortsAndTimes(days) {
+    if (!Array.isArray(days) || !days.length) return '';
+    return days.map(function(day) {
+      var dayNum = day.number || '';
+      var type = (day.type || '').toUpperCase();
+      var ports = Array.isArray(day.ports) ? day.ports : [];
+      if (!ports.length) {
+        return 'Day ' + dayNum + ': ' + (type === 'AT_SEA' ? 'At Sea' : (type || 'At Sea'));
+      }
+      var portStrs = ports.map(function(pp) {
+        var portName = (pp.port && pp.port.name) || '';
+        var arrival = (pp.arrivalTime || '').replace(':00:00', '').replace(':00', '');
+        var depart = (pp.departureTime || '').replace(':00:00', '').replace(':00', '');
+        var times = '';
+        if (arrival && depart) times = ' (' + arrival + '-' + depart + ')';
+        else if (arrival) times = ' (Arr ' + arrival + ')';
+        else if (depart) times = ' (Dep ' + depart + ')';
+        return portName + times;
+      }).filter(Boolean).join(' & ');
+      return 'Day ' + dayNum + ': ' + (portStrs || 'At Sea');
+    }).join(' | ');
+  }
+
+  async function fetchOfferPricing(offers) {
+    if (!offers || !offers.length) return;
+
+    addLog('Step 2: Fetching pricing & itinerary data for all sailings...', 'info');
+
+    // Collect unique ship+date combos grouped by ship code
+    var shipGroups = {};
+    var totalSailings = 0;
+    offers.forEach(function(offer) {
+      var co = offer.campaignOffer || offer;
+      var sailings = co.sailings || [];
+      sailings.forEach(function(s) {
+        var shipCode = (s.shipCode || '').toString().trim();
+        var sailDate = (s.sailDate || '').toString().trim().slice(0, 10);
+        if (!shipCode || !sailDate || sailDate.length < 10) return;
+        if (!shipGroups[shipCode]) {
+          shipGroups[shipCode] = { minDate: sailDate, maxDate: sailDate, count: 0 };
+        }
+        if (sailDate < shipGroups[shipCode].minDate) shipGroups[shipCode].minDate = sailDate;
+        if (sailDate > shipGroups[shipCode].maxDate) shipGroups[shipCode].maxDate = sailDate;
+        shipGroups[shipCode].count++;
+        totalSailings++;
+      });
+    });
+
+    var shipList = Object.keys(shipGroups);
+    if (!shipList.length) {
+      addLog('No ship codes found in offers — pricing will be empty. Sailings may be missing shipCode.', 'warning');
+      return;
+    }
+
+    addLog('Fetching pricing for ' + shipList.length + ' ship(s), ' + totalSailings + ' total sailings...', 'info');
+
+    var isCeleb = capturedData.cruiseLine === 'celebrity';
+    var graphEndpoint = isCeleb
+      ? 'https://www.celebritycruises.com/graph'
+      : 'https://www.royalcaribbean.com/graph';
+
+    var GQL_QUERY = 'query cruiseSearch_Cruises($filters:String,$qualifiers:String,$sort:CruiseSearchSort,$pagination:CruiseSearchPagination,$nlSearch:String){cruiseSearch(filters:$filters,qualifiers:$qualifiers,sort:$sort,pagination:$pagination,nlSearch:$nlSearch){results{cruises{masterSailing{itinerary{name code days{number type ports{activity arrivalTime departureTime port{code name region}}}departurePort{code name}destination{code name}sailingNights totalNights ship{code name}}}sailings{id sailDate taxesAndFees{value}taxesAndFeesIncluded stateroomClassPricing{price{value currency{code}}stateroomClass{id content{code}}}}}}}}';
+
+    var fetchedCount = 0;
+
+    for (var si = 0; si < shipList.length; si++) {
+      var shipCode = shipList[si];
+      var group = shipGroups[shipCode];
+      var filtersValue = 'startDate:' + group.minDate + '~' + group.maxDate + '|ship:' + shipCode;
+      var paginationCount = Math.min(group.count * 4, 200);
+
+      addLog('  Pricing fetch: ship ' + shipCode + ' (' + group.minDate + ' to ' + group.maxDate + ')...', 'info');
+
+      try {
+        var resp = await fetch(graphEndpoint, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'accept': 'application/json',
+            'apollographql-client-name': 'rci-NextGen-Cruise-Search',
+            'apollographql-query-name': 'cruiseSearch_Cruises',
+            'skip_authentication': 'true'
+          },
+          body: JSON.stringify({
+            query: GQL_QUERY,
+            variables: { filters: filtersValue, pagination: { count: paginationCount, skip: 0 } }
+          })
+        });
+
+        if (resp && resp.ok) {
+          var data = await resp.json();
+          var cruises = (data && data.data && data.data.cruiseSearch && data.data.cruiseSearch.results && data.data.cruiseSearch.results.cruises) || [];
+          var shipFetched = 0;
+
+          cruises.forEach(function(cruise) {
+            var itin = (cruise.masterSailing && cruise.masterSailing.itinerary) || {};
+            var itinShipCode = (itin.ship && itin.ship.code) || '';
+            var days = Array.isArray(itin.days) ? itin.days : [];
+            var portsAndTimes = formatPortsAndTimes(days);
+            var totalNights = itin.totalNights || itin.sailingNights || null;
+
+            var sailings = Array.isArray(cruise.sailings) ? cruise.sailings : [];
+            sailings.forEach(function(s) {
+              var sDate = (s.sailDate || '').toString().trim().slice(0, 10);
+              var sShip = (s.shipCode || itinShipCode || shipCode).toString().trim();
+              if (!sDate) return;
+
+              var cacheKey = sShip + '_' + sDate;
+
+              // Parse stateroom pricing — per-person * 2 = dual occupancy cabin price
+              var pricing = { interior: null, oceanview: null, balcony: null, suite: null, taxes: null, nights: totalNights, portsAndTimes: portsAndTimes };
+              var spArr = Array.isArray(s.stateroomClassPricing) ? s.stateroomClassPricing : [];
+              spArr.forEach(function(p) {
+                var code = (p.stateroomClass && ((p.stateroomClass.content && p.stateroomClass.content.code) || p.stateroomClass.id)) || '';
+                var cat = resolveStateroomCategory(code);
+                var priceVal = (p.price && p.price.value != null) ? Number(p.price.value) : null;
+                if (!cat || priceVal == null || !isFinite(priceVal) || priceVal <= 0) return;
+                var dualPrice = Math.round(priceVal * 2);
+                if (cat === 'INTERIOR' && (pricing.interior == null || dualPrice < pricing.interior)) pricing.interior = dualPrice;
+                if (cat === 'OCEANVIEW' && (pricing.oceanview == null || dualPrice < pricing.oceanview)) pricing.oceanview = dualPrice;
+                if (cat === 'BALCONY' && (pricing.balcony == null || dualPrice < pricing.balcony)) pricing.balcony = dualPrice;
+                if (cat === 'SUITE' && (pricing.suite == null || dualPrice < pricing.suite)) pricing.suite = dualPrice;
+              });
+
+              // Taxes & fees — per person * 2 = dual occupancy total
+              if (s.taxesAndFees && s.taxesAndFees.value != null) {
+                var taxVal = Number(s.taxesAndFees.value);
+                if (isFinite(taxVal) && taxVal > 0) pricing.taxes = Math.round(taxVal * 2);
+              }
+
+              if (!pricingCache[cacheKey]) {
+                pricingCache[cacheKey] = pricing;
+                fetchedCount++;
+                shipFetched++;
+              } else {
+                // Merge: fill in any missing values
+                var existing = pricingCache[cacheKey];
+                if (existing.interior == null && pricing.interior != null) existing.interior = pricing.interior;
+                if (existing.oceanview == null && pricing.oceanview != null) existing.oceanview = pricing.oceanview;
+                if (existing.balcony == null && pricing.balcony != null) existing.balcony = pricing.balcony;
+                if (existing.suite == null && pricing.suite != null) existing.suite = pricing.suite;
+                if (existing.taxes == null && pricing.taxes != null) existing.taxes = pricing.taxes;
+                if (!existing.portsAndTimes && pricing.portsAndTimes) existing.portsAndTimes = pricing.portsAndTimes;
+                if (!existing.nights && pricing.nights) existing.nights = pricing.nights;
+              }
+            });
+          });
+
+          addLog('  Ship ' + shipCode + ': ' + shipFetched + ' sailings priced (' + cruises.length + ' cruise results)', 'success');
+        } else {
+          addLog('  Pricing API returned error for ship ' + shipCode, 'warning');
+        }
+      } catch(e) {
+        addLog('  Pricing fetch error for ship ' + shipCode + ': ' + e.message, 'warning');
+      }
+
+      // Small delay between ship requests
+      if (si < shipList.length - 1) {
+        await new Promise(function(r) { setTimeout(r, 300); });
+      }
+    }
+
+    addLog('Pricing fetch complete: ' + fetchedCount + ' sailings with data (cache: ' + Object.keys(pricingCache).length + ' total)', 'success');
+
+    // Persist pricing cache
+    try {
+      await chrome.storage.local.set({ es_pricingCache: pricingCache });
+    } catch(ex) { console.warn('[Easy Seas] Could not persist pricing cache:', ex); }
+
+    updateUI();
+  }
+
   async function startSync() {
-    addLog('Starting automated sync...', 'info');
+    addLog('Starting automated sync (mirrors iOS flow)...', 'info');
 
     await chrome.storage.local.remove([
-      'es_offers', 'es_upcomingCruises', 'es_courtesyHolds', 'es_loyalty'
+      'es_offers', 'es_upcomingCruises', 'es_courtesyHolds', 'es_loyalty', 'es_pricingCache'
     ]);
     capturedData.offers = null;
     capturedData.upcomingCruises = null;
     capturedData.courtesyHolds = null;
     capturedData.loyalty = null;
+    pricingCache = {};
 
     saveCapturedToStorage();
 
@@ -444,7 +638,7 @@ void function() {
     var brand = isCeleb ? 'C' : 'R';
     var headers = buildHeaders();
 
-    updateProgress(1, 5, 'Step 1/5: Fetching casino offers...');
+    updateProgress(1, 6, 'Step 1/6: Fetching casino offers...');
     addLog('Step 1: Calling casino offers API...', 'info');
 
     try {
@@ -508,10 +702,20 @@ void function() {
     }
 
     saveCapturedToStorage();
+
+    // Step 2: Fetch pricing & itinerary for all offer sailings (public GraphQL, no auth needed)
+    updateProgress(2, 6, 'Step 2/6: Fetching pricing & itinerary data...');
+    if (capturedData.offers && capturedData.offers.offers && capturedData.offers.offers.length > 0) {
+      await fetchOfferPricing(capturedData.offers.offers);
+    } else {
+      addLog('Step 2: Skipped pricing fetch (no offers captured)', 'warning');
+    }
+
+    saveCapturedToStorage();
     await setSyncState(SYNC_STEPS.UPCOMING, 0);
 
     var urls = getPageUrls();
-    addLog('Step 2: Navigating to upcoming cruises...', 'info');
+    addLog('Step 3: Navigating to upcoming cruises...', 'info');
     navigateTo(urls.upcoming);
   }
 
@@ -615,7 +819,7 @@ void function() {
       targetPath = new URL(expectedLower).pathname.toLowerCase();
     } catch(e) {}
     var match = currentUrl.indexOf(expectedLower) !== -1 || (currentPath && targetPath && (currentPath === targetPath || currentPath.indexOf(targetPath) !== -1));
-    addLog('Nav check: current=' + window.location.href + ' | expected=' + expectedPath + ' | match=' + (match ? 'yes' : 'no') + ' | path=' + currentPath, match ? 'success' : 'warning');
+    addLog('Nav check: current=' + window.location.href + ' | expected=' + expectedPath + ' | match=' + (match ? 'yes' : 'no'), match ? 'success' : 'warning');
     return match;
   }
 
@@ -629,7 +833,6 @@ void function() {
     var urls = getPageUrls();
     var currentUrl = window.location.href;
     addLog('Resuming sync step: ' + state.step + ' (on: ' + window.location.pathname + ')', 'info');
-    addLog('Resume debug: href=' + window.location.href + ' | referrer=' + document.referrer + ' | readyState=' + document.readyState, 'info');
 
     try {
       var navTarget = (await chrome.storage.local.get(['es_navTarget'])).es_navTarget;
@@ -637,7 +840,6 @@ void function() {
         await chrome.storage.local.remove(['es_navTarget']);
         if (!isOnExpectedPage(navTarget)) {
           addLog('Page did not navigate to expected URL, retrying...', 'warning');
-          addLog('Expected: ' + navTarget + ', Got: ' + currentUrl, 'warning');
           navigateTo(navTarget);
           return;
         } else {
@@ -653,7 +855,7 @@ void function() {
         navigateTo(urls.upcoming);
         return;
       }
-      updateProgress(2, 5, 'Step 2/5: Waiting for upcoming cruises data...');
+      updateProgress(3, 6, 'Step 3/6: Waiting for upcoming cruises data...');
       addLog('Waiting for upcoming cruises API to fire...', 'info');
 
       var gotBookings = await waitForPassiveCapture('upcomingCruises', 10000);
@@ -669,14 +871,14 @@ void function() {
 
       updateUI();
       await setSyncState(SYNC_STEPS.COURTESY, state.bounceCount);
-      updateProgress(3, 5, 'Step 3/5: Checking courtesy holds...');
-      addLog('Step 3: Fetching courtesy holds...', 'info');
+      updateProgress(4, 6, 'Step 4/6: Checking courtesy holds...');
+      addLog('Step 4: Fetching courtesy holds...', 'info');
 
       await tryDirectCourtesyAPI();
       updateUI();
 
       await setSyncState(SYNC_STEPS.LOYALTY, state.bounceCount);
-      addLog('Step 4: Navigating to loyalty page...', 'info');
+      addLog('Step 5: Navigating to loyalty page...', 'info');
       navigateTo(urls.loyalty);
       return;
     }
@@ -688,7 +890,7 @@ void function() {
         navigateTo(urls.loyalty);
         return;
       }
-      updateProgress(4, 5, 'Step 4/5: Waiting for loyalty data...');
+      updateProgress(5, 6, 'Step 5/6: Waiting for loyalty data...');
       addLog('Waiting for loyalty API to fire...', 'info');
 
       var gotLoyalty = await waitForPassiveCapture('loyalty', 10000);
@@ -712,11 +914,12 @@ void function() {
         return;
       }
 
-      updateProgress(5, 5, 'Step 5/5: Sync complete!');
+      updateProgress(6, 6, 'Step 6/6: Sync complete!');
       var offers = capturedData.offers && capturedData.offers.offers ? capturedData.offers.offers.length : 0;
       var bookings = getBookingsCount();
+      var pricedCount = Object.keys(pricingCache).length;
       var hasLoyalty = !!capturedData.loyalty;
-      addLog('Sync complete! ' + offers + ' offers, ' + bookings + ' bookings' + (hasLoyalty ? ', loyalty captured' : ''), 'success');
+      addLog('Sync complete! ' + offers + ' offers, ' + pricedCount + ' sailings priced, ' + bookings + ' bookings' + (hasLoyalty ? ', loyalty captured' : ''), 'success');
 
       if (missing.length > 0) {
         addLog('Could not capture: ' + missing.join(', '), 'warning');
@@ -728,12 +931,12 @@ void function() {
     }
 
     if (state.step === SYNC_STEPS.COURTESY || state.step === SYNC_STEPS.BOUNCE_COURTESY) {
-      updateProgress(3, 5, 'Step 3/5: Checking courtesy holds...');
+      updateProgress(4, 6, 'Step 4/6: Checking courtesy holds...');
       await tryDirectCourtesyAPI();
       updateUI();
 
       await setSyncState(SYNC_STEPS.LOYALTY, state.bounceCount);
-      addLog('Step 4: Navigating to loyalty page...', 'info');
+      addLog('Step 5: Navigating to loyalty page...', 'info');
       navigateTo(urls.loyalty);
       return;
     }
@@ -745,7 +948,7 @@ void function() {
         navigateTo(urls.offers);
         return;
       }
-      updateProgress(2, 5, 'Bounce: Re-checking offers page...');
+      updateProgress(2, 6, 'Bounce: Re-checking offers page...');
       addLog('On offers page, waiting for passive capture...', 'info');
       await waitForPassiveCapture('offers', 8000);
       updateUI();
@@ -756,7 +959,8 @@ void function() {
     }
   }
 
-  // ===== CSV EXPORT — SEPARATE FILES =====
+  // ===== CSV EXPORT =====
+
   var SHIP_CODES = {
     'AL': 'Allure of the Seas', 'AN': 'Anthem of the Seas', 'AD': 'Adventure of the Seas',
     'BR': 'Brilliance of the Seas', 'EN': 'Enchantment of the Seas', 'EX': 'Explorer of the Seas',
@@ -787,32 +991,122 @@ void function() {
     } catch(e) { return d; }
   }
 
+  function fmtPrice(val) {
+    if (val == null || val === '') return '';
+    var n = Number(val);
+    if (!isFinite(n) || n <= 0) return '';
+    return '$' + n.toLocaleString();
+  }
+
+  // Extract a plain string from offerType regardless of whether it's a string or object
+  function getOfferTypeStr(co) {
+    var t = co.offerType || co.type;
+    if (!t) return 'Free Play';
+    if (typeof t === 'string') return t;
+    if (typeof t === 'object') {
+      // Handle common API shapes: { name, label, code, description }
+      return t.name || t.label || t.description || t.code || 'Free Play';
+    }
+    return String(t);
+  }
+
+  // Extract nights count from itinerary description string (e.g. "7 Night Caribbean")
+  function getNightsFromItinerary(itinerary) {
+    if (!itinerary) return '';
+    var m = itinerary.match(/^\s*(\d+)\s*N(?:IGHT|T)?S?\b/i);
+    return m ? m[1] : '';
+  }
+
   function buildOffersCSV() {
     if (!capturedData.offers || !capturedData.offers.offers || capturedData.offers.offers.length === 0) return null;
-    var rows = [];
-    rows.push(['Source Page','Offer Name','Offer Code','Offer Expiry','Offer Type','Ship Name','Sailing Date','Itinerary','Departure Port','Cabin Type','Guests','Perks','Loyalty Level','Loyalty Points'].map(esc).join(','));
 
-    var loyaltyInfo = capturedData.loyalty && capturedData.loyalty.payload && capturedData.loyalty.payload.loyaltyInformation ? capturedData.loyalty.payload.loyaltyInformation : null;
+    var loyaltyInfo = capturedData.loyalty && capturedData.loyalty.payload && capturedData.loyalty.payload.loyaltyInformation
+      ? capturedData.loyalty.payload.loyaltyInformation : null;
     var loyaltyLevel = loyaltyInfo ? (loyaltyInfo.crownAndAnchorLevel || '') : '';
     var loyaltyPoints = loyaltyInfo ? (loyaltyInfo.crownAndAnchorPoints || '') : '';
+
+    // Column names exactly matching what the Easy Seas app CSV import expects
+    var rows = [];
+    rows.push([
+      'Source Page', 'Offer Name', 'Offer Code', 'Offer Expiration Date', 'Offer Type',
+      'Ship Name', 'Sailing Date', 'Nights', 'Itinerary', 'Departure Port',
+      'Room Type', 'Guests Info', 'Perks', 'Loyalty Level', 'Loyalty Points',
+      'Interior Price', 'Oceanview Price', 'Balcony Price', 'Suite Price',
+      'Port Taxes & Fees', 'Ports & Times'
+    ].map(esc).join(','));
+
+    var totalRows = 0;
 
     capturedData.offers.offers.forEach(function(offer) {
       var co = offer.campaignOffer || offer;
       var sailings = co.sailings || [];
+      var offerType = getOfferTypeStr(co);
+
       sailings.forEach(function(s) {
+        var shipCode = (s.shipCode || '').toString().trim();
+        var sailDateISO = (s.sailDate || '').toString().trim().slice(0, 10);
+        var cacheKey = shipCode + '_' + sailDateISO;
+        var pc = pricingCache[cacheKey] || {};
+
+        var itinerary = s.itineraryDescription || '';
+        var nightsFromItin = getNightsFromItinerary(itinerary);
+        var nights = pc.nights || nightsFromItin || '';
+
+        var perks = '';
+        var perkCodes = co.perkCodes || (co.campaignOffer && co.campaignOffer.perkCodes);
+        if (Array.isArray(perkCodes) && perkCodes.length) {
+          perks = perkCodes.map(function(p) { return p.perkName || p.perkCode || ''; }).filter(Boolean).join(' | ');
+        }
+        if (!perks && co.tradeInValue) {
+          perks = '$' + co.tradeInValue + ' trade-in';
+        }
+
+        var deptPort = s.departurePort && typeof s.departurePort === 'object'
+          ? (s.departurePort.name || '')
+          : (s.departurePort || '');
+
         rows.push([
-          esc('Club Royale Offers'), esc(co.name || ''), esc(co.offerCode || ''),
-          esc(fmtDate(co.reserveByDate)), esc(co.offerType || co.type || 'Free Play'),
-          esc(s.shipName || ''), esc(fmtDate(s.sailDate)),
-          esc(s.itineraryDescription || ''), esc(s.departurePort && s.departurePort.name ? s.departurePort.name : ''),
-          esc(s.roomType || ''), esc(s.isGOBO ? '1' : '2'),
-          esc(co.tradeInValue ? '$' + co.tradeInValue : ''),
-          esc(loyaltyLevel), esc(loyaltyPoints)
+          esc('Club Royale Offers'),
+          esc(co.name || co.offerName || ''),
+          esc(co.offerCode || ''),
+          esc(fmtDate(co.reserveByDate || co.expirationDate || '')),
+          esc(offerType),
+          esc(s.shipName || SHIP_CODES[shipCode] || shipCode || ''),
+          esc(fmtDate(sailDateISO || s.sailDate || '')),
+          esc(nights),
+          esc(itinerary),
+          esc(deptPort),
+          esc(s.roomType || s.cabinType || ''),
+          esc(s.isGOBO ? '1 Guest' : '2 Guests'),
+          esc(perks || '-'),
+          esc(loyaltyLevel),
+          esc(loyaltyPoints),
+          esc(fmtPrice(pc.interior)),
+          esc(fmtPrice(pc.oceanview)),
+          esc(fmtPrice(pc.balcony)),
+          esc(fmtPrice(pc.suite)),
+          esc(fmtPrice(pc.taxes)),
+          esc(pc.portsAndTimes || '')
         ].join(','));
+
+        totalRows++;
       });
     });
 
-    return rows.length > 1 ? rows.join('\n') : null;
+    if (rows.length <= 1) return null;
+    addLog('Built offers CSV: ' + totalRows + ' rows (' + capturedData.offers.offers.length + ' offers)', 'info');
+
+    var pricedRows = 0;
+    capturedData.offers.offers.forEach(function(offer) {
+      var co = offer.campaignOffer || offer;
+      (co.sailings || []).forEach(function(s) {
+        var key = (s.shipCode || '').trim() + '_' + (s.sailDate || '').toString().trim().slice(0, 10);
+        if (pricingCache[key] && (pricingCache[key].interior || pricingCache[key].balcony)) pricedRows++;
+      });
+    });
+    addLog('  Sailings with pricing data: ' + pricedRows + ' of ' + totalRows, pricedRows > 0 ? 'success' : 'warning');
+
+    return rows.join('\n');
   }
 
   function buildBookedCSV() {
@@ -831,12 +1125,13 @@ void function() {
 
     if (allBookings.length === 0) return null;
 
-    var loyaltyInfo = capturedData.loyalty && capturedData.loyalty.payload && capturedData.loyalty.payload.loyaltyInformation ? capturedData.loyalty.payload.loyaltyInformation : null;
+    var loyaltyInfo = capturedData.loyalty && capturedData.loyalty.payload && capturedData.loyalty.payload.loyaltyInformation
+      ? capturedData.loyalty.payload.loyaltyInformation : null;
     var loyaltyLevel = loyaltyInfo ? (loyaltyInfo.crownAndAnchorLevel || '') : '';
     var loyaltyPoints = loyaltyInfo ? (loyaltyInfo.crownAndAnchorPoints || '') : '';
 
     var rows = [];
-    rows.push(['Source','Ship Name','Sail Date','Return Date','Nights','Itinerary','Departure Port','Cabin Type','Cabin #','Booking ID','Status','Loyalty Level','Loyalty Points'].map(esc).join(','));
+    rows.push(['Source', 'Ship Name', 'Sail Date', 'Return Date', 'Nights', 'Itinerary', 'Departure Port', 'Cabin Type', 'Cabin #', 'Booking ID', 'Status', 'Loyalty Level', 'Loyalty Points'].map(esc).join(','));
 
     allBookings.forEach(function(entry) {
       var b = entry.data;
@@ -857,11 +1152,14 @@ void function() {
           }
         } catch(e) {}
       }
+      var deptPort = b.departurePort && typeof b.departurePort === 'object'
+        ? (b.departurePort.name || '')
+        : (b.departurePort || '');
       rows.push([
         esc(status), esc(shipName), esc(fmtDate(b.sailDate)), esc(fmtDate(returnDate)),
         esc(nights), esc(b.cruiseTitle || b.itineraryDescription || (nights ? nights + ' Night Cruise' : '')),
-        esc(b.departurePort && b.departurePort.name ? b.departurePort.name : (b.departurePort || '')),
-        esc(cabinType), esc(cabin), esc(b.bookingId || b.masterBookingId || ''), esc(status),
+        esc(deptPort), esc(cabinType), esc(cabin),
+        esc(b.bookingId || b.masterBookingId || ''), esc(status),
         esc(loyaltyLevel), esc(loyaltyPoints)
       ].join(','));
     });
@@ -881,6 +1179,9 @@ void function() {
 
   function downloadCSVs() {
     addLog('Generating CSV files...', 'info');
+    var pricedCount = Object.keys(pricingCache).length;
+    addLog('Pricing cache has ' + pricedCount + ' sailings. Run SYNC first if pricing is empty.', pricedCount > 0 ? 'info' : 'warning');
+
     var ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     var line = capturedData.cruiseLine || 'royal';
     var downloaded = 0;
