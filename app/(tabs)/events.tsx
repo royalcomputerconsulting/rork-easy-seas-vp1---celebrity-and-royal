@@ -122,40 +122,35 @@ export default function EventsScreen() {
     let cruise = 0;
     let travel = 0;
     let personal = 0;
-    const dateStr = date.toISOString().split('T')[0];
-    const countedCruiseIds = new Set<string>();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
 
     calendarEvents.forEach(event => {
       const eventStart = event.startDate || event.start || '';
       const eventEnd = event.endDate || event.end || eventStart;
-      
-      if (eventStart) {
-        const startDate = eventStart.split('T')[0];
-        const endDate = eventEnd.split('T')[0];
-        
-        if (dateStr >= startDate && dateStr <= endDate) {
-          if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
-            cruise++;
-            if ((event as any).cruiseId) countedCruiseIds.add((event as any).cruiseId);
-          } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
-            travel++;
-          } else {
-            personal++;
-          }
-        }
-      }
-    });
 
-    bookedCruises.forEach((bc: BookedCruise) => {
-      if (bc.sailDate && bc.returnDate && !countedCruiseIds.has(bc.id)) {
-        if (isDateInRange(date, bc.sailDate, bc.returnDate)) {
+      if (!eventStart) return;
+
+      const startDate = eventStart.split('T')[0];
+      const endDate = eventEnd ? eventEnd.split('T')[0] : startDate;
+
+      if (!startDate || !endDate) return;
+
+      if (dateStr >= startDate && dateStr <= endDate) {
+        if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
           cruise++;
+        } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
+          travel++;
+        } else {
+          personal++;
         }
       }
     });
 
     return { cruise, travel, personal };
-  }, [calendarEvents, bookedCruises, isDateInRange]);
+  }, [calendarEvents]);
 
   const calendarDays = useMemo((): DayData[][] => {
     console.log('[Events] Recalculating calendar days, refreshKey:', refreshKey);
