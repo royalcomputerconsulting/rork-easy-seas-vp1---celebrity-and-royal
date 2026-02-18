@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { WebView } from 'react-native-webview';
+
 import { useState, useEffect } from 'react';
 import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -285,48 +285,20 @@ function CarnivalSyncScreen() {
 
           {webViewVisible && (
             <View style={styles.webViewContainer}>
-              {Platform.OS === 'web' ? (
-                <View style={styles.webNotSupported}>
-                  <Ship size={48} color={CARNIVAL_RED} />
-                  <Text style={styles.webNotSupportedTitle}>Web Browser Detected</Text>
-                  <Text style={styles.webNotSupportedText}>
-                    Use the Easy Seas™ Browser Extension or the mobile app to sync Carnival data directly from carnival.com.
-                  </Text>
-                  <Pressable
-                    style={styles.webOpenButton}
-                    onPress={() => Linking.openURL('https://www.carnival.com/cruise-deals')}
-                  >
-                    <ExternalLink size={18} color="#fff" />
-                    <Text style={styles.webOpenButtonText}>Open Carnival Website</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <WebView
-                  ref={(ref) => {
-                    if (ref) webViewRef.current = ref;
-                  }}
-                  source={{ uri: webViewUrl }}
-                  style={styles.webView}
-                  onMessage={onMessage}
-                  onLoadEnd={onPageLoaded}
-                  javaScriptEnabled={true}
-                  domStorageEnabled={true}
-                  sharedCookiesEnabled={true}
-                  thirdPartyCookiesEnabled={true}
-                  injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
-                  keyboardDisplayRequiresUserAction={false}
-                  allowsInlineMediaPlayback={true}
-                  mediaPlaybackRequiresUserAction={false}
-                  bounces={false}
-                  scrollEnabled={true}
-                  automaticallyAdjustContentInsets={false}
-                  contentInsetAdjustmentBehavior="never"
-                  onError={(e) => console.warn('[CarnivalSync] WebView error:', e.nativeEvent)}
-                  onContentProcessDidTerminate={() => {
-                    if (webViewRef.current) webViewRef.current.reload();
-                  }}
-                />
-              )}
+              <View style={styles.webNotSupported}>
+                <Ship size={48} color={CARNIVAL_RED} />
+                <Text style={styles.webNotSupportedTitle}>Open Carnival Website</Text>
+                <Text style={styles.webNotSupportedText}>
+                  Log in to your Carnival account, then return here and press &ldquo;I&apos;m Logged In&rdquo; to start syncing.
+                </Text>
+                <Pressable
+                  style={styles.webOpenButton}
+                  onPress={() => Linking.openURL(webViewUrl || 'https://www.carnival.com/cruise-deals')}
+                >
+                  <ExternalLink size={18} color="#fff" />
+                  <Text style={styles.webOpenButtonText}>Open Carnival Website</Text>
+                </Pressable>
+              </View>
             </View>
           )}
 
