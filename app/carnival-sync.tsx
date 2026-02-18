@@ -184,6 +184,24 @@ function CarnivalSyncScreen() {
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
 
+  const forceMarkLoggedIn = () => {
+    console.log('[CarnivalSync] User manually confirmed login');
+    addLog('User manually confirmed login', 'success');
+    if (Platform.OS !== 'web' && webViewRef.current) {
+      webViewRef.current.injectJavaScript(`
+        (function() {
+          window.__easySeasForceLoggedIn = true;
+          try {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'auth_status', loggedIn: true }));
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: 'Manual login confirmation applied', logType: 'success' }));
+          } catch(e) {}
+        })();
+        true;
+      `);
+    }
+    handleWebViewMessage({ type: 'auth_status', loggedIn: true } as any);
+  };
+
   return (
     <>
       <Stack.Screen
@@ -378,33 +396,55 @@ function CarnivalSyncScreen() {
                 </View>
               </View>
             ) : (
-              <View style={styles.quickActionsGrid}>
-                <Pressable
-                  style={styles.quickActionButton}
-                  onPress={openLogin}
-                >
-                  <ExternalLink size={20} color={CARNIVAL_GOLD} />
-                  <Text style={styles.quickActionLabel}>LOGIN</Text>
-                </Pressable>
+              <View style={styles.mobileActionsContainer}>
+                {state.status === 'not_logged_in' && (
+                  <View style={styles.loginHintBox}>
+                    <Text style={styles.loginHintTitle}>How to sync Carnival:</Text>
+                    <Text style={styles.loginHintStep}>1. Press LOGIN below to open Carnival in the browser above</Text>
+                    <Text style={styles.loginHintStep}>2. Sign in to your Carnival account</Text>
+                    <Text style={styles.loginHintStep}>3. Once logged in, press "I'm Logged In" to confirm</Text>
+                    <Text style={styles.loginHintStep}>4. Press SYNC NOW to start syncing your data</Text>
+                  </View>
+                )}
 
-                <Pressable
-                  style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled]}
-                  onPress={runIngestion}
-                  disabled={!canRunIngestion || isRunning}
-                >
-                  <RefreshCcw size={20} color="#34d399" />
-                  <Text style={styles.quickActionLabel}>SYNC NOW</Text>
-                </Pressable>
+                <View style={styles.quickActionsGrid}>
+                  <Pressable
+                    style={styles.quickActionButton}
+                    onPress={openLogin}
+                  >
+                    <ExternalLink size={20} color={CARNIVAL_GOLD} />
+                    <Text style={styles.quickActionLabel}>LOGIN</Text>
+                  </Pressable>
 
-                <Pressable
-                  style={styles.quickActionButton}
-                  onPress={() => {
-                    Linking.openURL('https://www.carnival.com/profilemanagement/profiles/cruises');
-                  }}
-                >
-                  <FileDown size={20} color={CARNIVAL_RED} />
-                  <Text style={styles.quickActionLabel}>BOOKINGS</Text>
-                </Pressable>
+                  <Pressable
+                    style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled]}
+                    onPress={runIngestion}
+                    disabled={!canRunIngestion || isRunning}
+                  >
+                    <RefreshCcw size={20} color="#34d399" />
+                    <Text style={styles.quickActionLabel}>SYNC NOW</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.quickActionButton}
+                    onPress={() => {
+                      Linking.openURL('https://www.carnival.com/profilemanagement/profiles/cruises');
+                    }}
+                  >
+                    <FileDown size={20} color={CARNIVAL_RED} />
+                    <Text style={styles.quickActionLabel}>BOOKINGS</Text>
+                  </Pressable>
+                </View>
+
+                {(state.status === 'not_logged_in' || state.status === 'login_expired') && (
+                  <Pressable
+                    style={styles.forceLoginButton}
+                    onPress={forceMarkLoggedIn}
+                  >
+                    <CheckCircle size={18} color="#fff" />
+                    <Text style={styles.forceLoginButtonText}>I'm Logged In to Carnival — Start Sync</Text>
+                  </Pressable>
+                )}
               </View>
             )}
           </View>
@@ -1012,6 +1052,43 @@ const styles = StyleSheet.create({
     color: '#6ee7b7',
     fontSize: 13,
     lineHeight: 18,
+  },
+  mobileActionsContainer: {
+    gap: 12,
+  },
+  loginHintBox: {
+    backgroundColor: CARNIVAL_CARD,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: `${CARNIVAL_GOLD}40`,
+    gap: 6,
+  },
+  loginHintTitle: {
+    color: CARNIVAL_GOLD,
+    fontSize: 13,
+    fontWeight: '700' as const,
+    marginBottom: 4,
+  },
+  loginHintStep: {
+    color: '#94a3b8',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  forceLoginButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 10,
+    backgroundColor: '#10b981',
+    borderRadius: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+  },
+  forceLoginButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700' as const,
   },
   webCredentialsContainer: {
     backgroundColor: CARNIVAL_CARD,

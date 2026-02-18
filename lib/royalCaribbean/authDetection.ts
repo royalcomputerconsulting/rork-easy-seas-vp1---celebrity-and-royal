@@ -268,6 +268,32 @@ export const AUTH_DETECTION_SCRIPT = `
   function hasSessionToken() {
     try {
       var isCarnivalPage = !!(window.location && String(window.location.hostname || '').includes('carnival.com'));
+      
+      // Carnival-specific: check for their localStorage keys
+      if (isCarnivalPage) {
+        try {
+          var allLsKeys = Object.keys(localStorage || {});
+          for (var ci2 = 0; ci2 < allLsKeys.length; ci2++) {
+            var ck = allLsKeys[ci2];
+            var cv2 = localStorage.getItem(ck);
+            if (!cv2) continue;
+            // Carnival stores auth in various keys
+            if (/oidc|okta|auth0|carnival.*token|token.*carnival|ccl.*auth|auth.*ccl/i.test(ck)) {
+              if (cv2.length > 20) return true;
+            }
+            // JWT token stored directly
+            if (cv2.length > 100 && /^ey[A-Za-z0-9]/.test(cv2)) return true;
+            // JSON with access token
+            if (cv2.length > 50) {
+              try {
+                var cParsed = JSON.parse(cv2);
+                if (cParsed && (cParsed.access_token || cParsed.accessToken || cParsed.id_token || cParsed.idToken)) return true;
+              } catch(e3) {}
+            }
+          }
+        } catch(ce) {}
+      }
+      
       var sessionRaw = localStorage.getItem('persist:session');
       if (!sessionRaw && isCarnivalPage) {
         var carnivalKeys = ['persist:auth', 'persist:root', 'carnival-session', 'persist:user'];
@@ -276,9 +302,9 @@ export const AUTH_DETECTION_SCRIPT = `
           if (cv && cv.length > 30) { sessionRaw = cv; break; }
         }
         if (!sessionRaw) {
-          var allKeys = Object.keys(localStorage || {});
-          for (var ai = 0; ai < allKeys.length; ai++) {
-            var ak = allKeys[ai];
+          var allKeys2 = Object.keys(localStorage || {});
+          for (var ai = 0; ai < allKeys2.length; ai++) {
+            var ak = allKeys2[ai];
             if (/persist:|session|auth|token/i.test(ak)) {
               var av = localStorage.getItem(ak);
               if (av && av.length > 30) { sessionRaw = av; break; }
@@ -296,9 +322,9 @@ export const AUTH_DETECTION_SCRIPT = `
       if (session.user && typeof session.user === 'object' && (session.user.accountId || session.user.userId)) return true;
     } catch (e) {}
     try {
-      var keys = Object.keys(localStorage || {});
-      for (var i = 0; i < keys.length; i++) {
-        var k = keys[i];
+      var allKeys = Object.keys(localStorage || {});
+      for (var i = 0; i < allKeys.length; i++) {
+        var k = allKeys[i];
         if (/token/i.test(k) || /auth/i.test(k) || /session/i.test(k)) {
           var v = localStorage.getItem(k);
           if (v && v.length > 20) {
@@ -366,29 +392,45 @@ export const AUTH_DETECTION_SCRIPT = `
 
     // Carnival-specific login signals
     var carnivalProfileLink = document.querySelector('a[href*="profilemanagement"]');
-    var carnivalVifpEl = document.querySelector('[class*="vifp"], [id*="vifp"], [class*="loyalty"]');
+    var carnivalVifpEl = document.querySelector('[class*="vifp"], [id*="vifp"], [class*="loyalty"], [data-testid*="loyalty"], [data-testid*="vifp"]');
     var carnivalWelcomeBack = lowerText.includes('welcome back') || lowerHTML.includes('welcome back');
-    var carnivalVifpText = lowerHTML.includes('vifp') || lowerText.includes('vifp club');
-    var carnivalMemberNum = /vifp\s*club[\s\S]{0,200}\d{7,}/i.test(pageHTML) || /club#[:\s]*\d{7,}/i.test(pageHTML);
+    var carnivalVifpText = lowerHTML.includes('vifp') || lowerText.includes('vifp club') || lowerHTML.includes('players club') || lowerHTML.includes('vifp#');
+    var carnivalMemberNum = /vifp\s*club[\s\S]{0,200}\d{7,}/i.test(pageHTML) || /club#[:\s]*\d{7,}/i.test(pageHTML) || /vifp#[\s]*\d{4,}/i.test(pageHTML);
     var carnivalManageBookings = document.querySelector('a[href*="manage-booking"], a[href*="managebooking"], a[href*="my-cruises"]') !== null;
-    var carnivalSignedInHeader = lowerHTML.includes('sign out') || lowerHTML.includes('signout') || (isCarnival && (lowerHTML.includes('my profile') || lowerHTML.includes('manage bookings') || lowerHTML.includes('my account') || lowerHTML.includes('hello,')));
+    var carnivalSignedInHeader = lowerHTML.includes('sign out') || lowerHTML.includes('signout') || (isCarnival && (lowerHTML.includes('my profile') || lowerHTML.includes('manage bookings') || lowerHTML.includes('my account') || lowerHTML.includes('hello,') || lowerHTML.includes('my bookings') || lowerHTML.includes('view bookings')));
     var carnivalAccountPageUrl = isCarnival && (url.includes('/account') || url.includes('/profilemanagement') || url.includes('/cruise-deals'));
-    var carnivalHasCookies = isCarnival && document.cookie.length > 50;
+    // Carnival uses httpOnly cookies — document.cookie is USUALLY empty even when logged in
+    // So we check any cookies OR any localStorage signals
+    var carnivalHasCookies = isCarnival && (document.cookie.length > 0);
     var carnivalNoSignInForm = !hasSignInForm;
+    
+    // Check for Carnival's user-name element in header (rendered after login)
+    var carnivalUserNameEl = document.querySelector('[data-testid*="user"], [class*="user-name"], [class*="username"], [class*="firstName"], [aria-label*="account"], [aria-label*="profile"], nav [class*="logged"], header [class*="logged"]');
+    var carnivalHasUserEl = carnivalUserNameEl !== null;
+    
+    // If window.__easySeasForceLoggedIn is set (by manual button), trust it
+    var forceLoggedIn = !!(window.__easySeasForceLoggedIn);
 
     // Carnival ALWAYS redirects unauthenticated users away from /profilemanagement
     // So if we are ON that page, the user is definitively logged in
     var carnivalOnProfilePage = isCarnival && (url.includes('/profilemanagement') || url.includes('/profiles/cruises'));
+    
+    // Carnival cruise-deals page: if loaded without a sign-in form, user is logged in
+    // (Carnival renders a generic offers page for non-auth, but the DOM will differ)
+    var carnivalOnCruiseDeals = isCarnival && url.includes('/cruise-deals') && carnivalNoSignInForm && document.readyState === 'complete';
 
     var strongAuthSignals = 
+      forceLoggedIn ||
       upcomingCruisesLink || 
       courtesyHoldsLink || 
       loyaltyStatusLink ||
       hasLogoutButton ||
       hasUserAvatar ||
       carnivalOnProfilePage ||
-      (isCarnival && (carnivalWelcomeBack || carnivalVifpEl || carnivalMemberNum || carnivalProfileLink || carnivalSignedInHeader)) ||
-      (isCarnival && carnivalAccountPageUrl && carnivalHasCookies && carnivalNoSignInForm);
+      (isCarnival && carnivalHasUserEl) ||
+      (isCarnival && (carnivalWelcomeBack || carnivalVifpEl || carnivalMemberNum || carnivalProfileLink || carnivalSignedInHeader || carnivalVifpText)) ||
+      (isCarnival && carnivalAccountPageUrl && carnivalNoSignInForm && document.readyState === 'complete') ||
+      (isCarnival && carnivalHasCookies && carnivalAccountPageUrl);
     
     var accountFeatureCount = 
       (accountLinks.length > 0 ? 1 : 0) +
@@ -460,22 +502,11 @@ export const AUTH_DETECTION_SCRIPT = `
     }
   }
 
-  function initAuthDetection() {
-    interceptNetworkCalls();
-    
-    setTimeout(checkAuthStatus, 500);
-    
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(checkAuthStatus, 800);
-      });
-    } else {
-      setTimeout(checkAuthStatus, 800);
-    }
-
+  function setupMutationObserver() {
     var observer = null;
     var mutationThrottle = null;
-    if (document.body) {
+    var target = document.body || document.documentElement;
+    if (target) {
       observer = new MutationObserver(function() {
         if (mutationThrottle) return;
         mutationThrottle = setTimeout(function() {
@@ -483,11 +514,45 @@ export const AUTH_DETECTION_SCRIPT = `
           checkAuthStatus();
         }, 500);
       });
-      observer.observe(document.body, {
+      observer.observe(target, {
         childList: true,
         subtree: true
       });
     }
+    return observer;
+  }
+  
+  function initAuthDetection() {
+    interceptNetworkCalls();
+    
+    setTimeout(checkAuthStatus, 500);
+    setTimeout(checkAuthStatus, 1500);
+    setTimeout(checkAuthStatus, 3000);
+    
+    var observer = null;
+    
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(checkAuthStatus, 300);
+        setTimeout(checkAuthStatus, 1000);
+        setTimeout(checkAuthStatus, 2500);
+        observer = setupMutationObserver();
+      });
+    } else {
+      setTimeout(checkAuthStatus, 800);
+      observer = setupMutationObserver();
+      if (!observer) {
+        // body not yet available, try again shortly
+        setTimeout(function() { observer = setupMutationObserver(); }, 500);
+      }
+    }
+    
+    // Also fire on page load/navigation events
+    window.addEventListener('load', function() {
+      setTimeout(checkAuthStatus, 500);
+      setTimeout(checkAuthStatus, 1500);
+      if (!observer) observer = setupMutationObserver();
+    });
     
     var intervalId = setInterval(checkAuthStatus, 3000);
 
