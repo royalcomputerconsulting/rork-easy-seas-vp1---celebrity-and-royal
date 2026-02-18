@@ -1680,6 +1680,17 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
+              onPress={() => router.push('/carnival-sync' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(204, 34, 50, 0.1)' }]}>
+                <Anchor size={16} color="#CC2232" />
+              </View>
+              <Text style={styles.quickActionLabelInline}>Sync Carnival Cruises</Text>
+              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.quickActionFullWidth} 
               onPress={() => router.push('/pricing-summary' as any)}
               activeOpacity={0.7}
             >

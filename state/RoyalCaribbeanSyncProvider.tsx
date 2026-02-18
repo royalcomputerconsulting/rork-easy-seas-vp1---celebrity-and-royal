@@ -20,7 +20,7 @@ import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { healImportedData } from '@/lib/dataHealing';
 
-export type CruiseLine = 'royal_caribbean' | 'celebrity';
+export type CruiseLine = 'royal_caribbean' | 'celebrity' | 'carnival';
 
 export const CRUISE_LINE_CONFIG = {
   royal_caribbean: {
@@ -40,7 +40,16 @@ export const CRUISE_LINE_CONFIG = {
     holdsUrl: 'https://www.celebritycruises.com/account/courtesy-holds',
     loyaltyClubName: 'Blue Chip Club',
     loyaltyPageUrl: 'https://www.celebritycruises.com/account/loyalty',
-  }
+  },
+  carnival: {
+    name: 'Carnival Cruise Line',
+    loginUrl: 'https://www.carnival.com/account',
+    offersUrl: 'https://www.carnival.com/cruise-deals',
+    upcomingUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
+    holdsUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
+    loyaltyClubName: 'VIFP Club',
+    loyaltyPageUrl: 'https://www.carnival.com/profilemanagement/profiles',
+  },
 } as const;
 
 const INITIAL_STATE: RoyalCaribbeanSyncState = {

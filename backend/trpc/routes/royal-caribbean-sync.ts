@@ -55,7 +55,7 @@ export const royalCaribbeanSyncRouter = createTRPCRouter({
     .input(
       z.object({
         cookies: z.string().min(1),
-        cruiseLine: z.enum(["royal_caribbean", "celebrity"]),
+        cruiseLine: z.enum(["royal_caribbean", "celebrity", "carnival"]),
       })
     )
     .mutation(async ({ input }): Promise<WebSyncResponse> => {
@@ -93,7 +93,7 @@ export const royalCaribbeanSyncRouter = createTRPCRouter({
       z.object({
         username: z.string().min(1),
         password: z.string().min(1),
-        cruiseLine: z.enum(["royal_caribbean", "celebrity"]),
+        cruiseLine: z.enum(["royal_caribbean", "celebrity", "carnival"]),
       })
     )
     .mutation(async ({ input }): Promise<WebSyncResponse> => {

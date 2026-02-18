@@ -305,6 +305,12 @@ function RootLayoutNav() {
           headerShown: true,
         }} 
       />
+      <Stack.Screen 
+        name="carnival-sync" 
+        options={{ 
+          headerShown: true,
+        }} 
+      />
     </Stack>
   );
 }

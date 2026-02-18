@@ -6,7 +6,7 @@ interface WebCookieSyncModalProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (cookies: string) => Promise<void>;
-  cruiseLine: 'royal_caribbean' | 'celebrity';
+  cruiseLine: 'royal_caribbean' | 'celebrity' | 'carnival';
   isLoading: boolean;
   error: string | null;
 }
@@ -23,9 +23,12 @@ export function WebCookieSyncModal({
   const [showInstructions, setShowInstructions] = useState(false);
 
   const isCelebrity = cruiseLine === 'celebrity';
-  const brandName = isCelebrity ? 'Celebrity Cruises' : 'Royal Caribbean';
+  const isCarnival = cruiseLine === 'carnival';
+  const brandName = isCelebrity ? 'Celebrity Cruises' : isCarnival ? 'Carnival Cruise Line' : 'Royal Caribbean';
   const websiteUrl = isCelebrity 
     ? 'https://www.celebritycruises.com/blue-chip-club/offers'
+    : isCarnival
+    ? 'https://www.carnival.com/cruise-deals'
     : 'https://www.royalcaribbean.com/club-royale/offers';
 
   const handleSubmit = async () => {
@@ -58,8 +61,8 @@ export function WebCookieSyncModal({
             showsVerticalScrollIndicator={true}
           >
             <View style={styles.header}>
-              <View style={[styles.iconContainer, isCelebrity && styles.iconContainerCelebrity]}>
-                <Cookie size={32} color={isCelebrity ? '#10b981' : '#3b82f6'} />
+              <View style={[styles.iconContainer, isCelebrity && styles.iconContainerCelebrity, isCarnival && styles.iconContainerCarnival]}>
+                <Cookie size={32} color={isCelebrity ? '#10b981' : isCarnival ? '#CC2232' : '#3b82f6'} />
               </View>
               <Text style={styles.title}>Cookie-Based Sync</Text>
               <Text style={styles.subtitle}>
@@ -85,7 +88,7 @@ export function WebCookieSyncModal({
                   <Text style={styles.instructionStep}>2. Log in to your account</Text>
                   <Text style={styles.instructionStep}>3. Open Developer Tools (F12 or Right-click → Inspect)</Text>
                   <Text style={styles.instructionStep}>4. Go to the "Application" or "Storage" tab</Text>
-                  <Text style={styles.instructionStep}>5. Click "Cookies" → "{isCelebrity ? 'celebritycruises.com' : 'royalcaribbean.com'}"</Text>
+                  <Text style={styles.instructionStep}>5. Click &quot;Cookies&quot; → &quot;{isCelebrity ? 'celebritycruises.com' : isCarnival ? 'carnival.com' : 'royalcaribbean.com'}&quot;</Text>
                   <Text style={styles.instructionStep}>6. Copy ALL cookies (Name: Value pairs)</Text>
                   <Text style={styles.instructionStep}>7. Paste them below in this format:</Text>
                   <Text style={styles.instructionExample}>
@@ -146,6 +149,7 @@ export function WebCookieSyncModal({
                 style={[
                   styles.submitButton,
                   isCelebrity && styles.submitButtonCelebrity,
+                  isCarnival && styles.submitButtonCarnival,
                   (!cookies.trim() || isLoading) && styles.submitButtonDisabled
                 ]}
                 onPress={handleSubmit}
@@ -210,6 +214,12 @@ const styles = StyleSheet.create({
   },
   iconContainerCelebrity: {
     backgroundColor: '#05966920'
+  },
+  iconContainerCarnival: {
+    backgroundColor: '#CC223220'
+  },
+  submitButtonCarnival: {
+    backgroundColor: '#CC2232'
   },
   title: {
     color: '#fff',
