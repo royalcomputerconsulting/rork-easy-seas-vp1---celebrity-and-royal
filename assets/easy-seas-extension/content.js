@@ -1002,12 +1002,26 @@ void function() {
   function getOfferTypeStr(co) {
     var t = co.offerType || co.type;
     if (!t) return 'Free Play';
-    if (typeof t === 'string') return t;
+    if (typeof t === 'string' && t.trim()) return t.trim();
     if (typeof t === 'object') {
-      // Handle common API shapes: { name, label, code, description }
-      return t.name || t.label || t.description || t.code || 'Free Play';
+      // Handle common API shapes from Royal Caribbean
+      var str = t.name || t.label || t.description || t.code || t.value || t.typeName || t.text || t.displayName || t.title;
+      if (str && typeof str === 'string') return str;
+      // Last resort: try to JSON-stringify to something readable, or fallback
+      try {
+        var j = JSON.stringify(t);
+        // If it's just {} or has no useful text, return fallback
+        if (j === '{}' || j === 'null') return 'Free Play';
+        // Try to find a string value inside the object
+        var vals = Object.values(t);
+        for (var vi = 0; vi < vals.length; vi++) {
+          if (typeof vals[vi] === 'string' && vals[vi].trim()) return vals[vi].trim();
+        }
+      } catch(e) {}
+      return 'Free Play';
     }
-    return String(t);
+    var s = String(t);
+    return (s && s !== '[object Object]') ? s : 'Free Play';
   }
 
   // Extract nights count from itinerary description string (e.g. "7 Night Caribbean")
@@ -1188,7 +1202,7 @@ void function() {
 
     var offersCSV = buildOffersCSV();
     if (offersCSV) {
-      triggerDownload(offersCSV, 'easy-seas-' + line + '-offers-' + ts + '.csv');
+      triggerDownload(offersCSV, 'offers.csv');
       addLog('Exported offers CSV', 'success');
       downloaded++;
     } else {
@@ -1198,7 +1212,7 @@ void function() {
     setTimeout(function() {
       var bookedCSV = buildBookedCSV();
       if (bookedCSV) {
-        triggerDownload(bookedCSV, 'easy-seas-' + line + '-booked-' + ts + '.csv');
+        triggerDownload(bookedCSV, 'booked.csv');
         addLog('Exported booked cruises CSV', 'success');
         downloaded++;
       } else {
