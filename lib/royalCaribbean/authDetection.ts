@@ -374,7 +374,11 @@ export const AUTH_DETECTION_SCRIPT = `
     var carnivalSignedInHeader = lowerHTML.includes('sign out') || lowerHTML.includes('signout') || (isCarnival && (lowerHTML.includes('my profile') || lowerHTML.includes('manage bookings') || lowerHTML.includes('my account') || lowerHTML.includes('hello,')));
     var carnivalAccountPageUrl = isCarnival && (url.includes('/account') || url.includes('/profilemanagement') || url.includes('/cruise-deals'));
     var carnivalHasCookies = isCarnival && document.cookie.length > 50;
-    var carnivalNoSignInForm = !hasSignInForm && !hasSignInText;
+    var carnivalNoSignInForm = !hasSignInForm;
+
+    // Carnival ALWAYS redirects unauthenticated users away from /profilemanagement
+    // So if we are ON that page, the user is definitively logged in
+    var carnivalOnProfilePage = isCarnival && (url.includes('/profilemanagement') || url.includes('/profiles/cruises'));
 
     var strongAuthSignals = 
       upcomingCruisesLink || 
@@ -382,6 +386,7 @@ export const AUTH_DETECTION_SCRIPT = `
       loyaltyStatusLink ||
       hasLogoutButton ||
       hasUserAvatar ||
+      carnivalOnProfilePage ||
       (isCarnival && (carnivalWelcomeBack || carnivalVifpEl || carnivalMemberNum || carnivalProfileLink || carnivalSignedInHeader)) ||
       (isCarnival && carnivalAccountPageUrl && carnivalHasCookies && carnivalNoSignInForm);
     
@@ -410,7 +415,7 @@ export const AUTH_DETECTION_SCRIPT = `
       (isCarnival && carnivalMemberNum ? 3 : 0);
     
     var isOnAccountPage = url.includes('/account/') || url.includes('/account?') || url.includes('loyalty-status') || url.includes('/club-royale') || url.includes('/blue-chip-club') || url.includes('/profilemanagement') || (isCarnival && (url.includes('/cruise-deals') || url.includes('/loyaltyInformation') || url.endsWith('/account')));
-    var isOnLoginPage = url.includes('/login') || url.includes('/sign-in') || url.includes('/signin');
+    var isOnLoginPage = (url.includes('/login') || url.includes('/sign-in') || url.includes('/signin')) && !carnivalOnProfilePage;
     
     var isLoggedIn = false;
     
