@@ -73,7 +73,12 @@ export function CrownAnchorTimeline({ currentPoints, bookedCruises }: CrownAncho
     const today = new Date();
 
     const rciCruises = bookedCruises
-      .filter(c => isRoyalCaribbeanShip(c.shipName))
+      .filter(c => {
+        if (!isRoyalCaribbeanShip(c.shipName)) return false;
+        const returnDate = c.returnDate ? createDateFromString(c.returnDate) : null;
+        const isCompleted = returnDate ? returnDate < today : c.completionState === 'completed';
+        return !isCompleted;
+      })
       .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
 
     const entries: TimelineEntry[] = [];
