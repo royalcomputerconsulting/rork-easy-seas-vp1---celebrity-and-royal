@@ -13,9 +13,11 @@
   const URL_UPCOMING = /\/account\/upcoming-cruises/i;
   const URL_HOLDS = /\/account\/courtesy-holds/i;
   const IS_CELEBRITY = (location.hostname || '').includes('celebritycruises.com');
+  const IS_CARNIVAL = (location.hostname || '').includes('carnival.com');
+  const IS_CARNIVAL_PROFILE = IS_CARNIVAL && /\/profilemanagement/.test(location.pathname);
   const IS_UPCOMING = URL_UPCOMING.test(location.pathname);
   const IS_HOLDS = URL_HOLDS.test(location.pathname);
-  if (!IS_UPCOMING && !IS_HOLDS) return;
+  if (!IS_UPCOMING && !IS_HOLDS && !IS_CARNIVAL_PROFILE) return;
 
   const LOG_PREFIX = '[EasySeas UpcomingCruises]';
   const log = (...a) => console.debug(LOG_PREFIX, ...a);
@@ -78,6 +80,8 @@
     // Celebrity uses "Booking" or "Reservation" labels.
     const reservationPattern = IS_CELEBRITY
       ? /^(?:reservation|booking(?:\s*number)?)$/i
+      : IS_CARNIVAL
+      ? /^(?:reservation|booking(?:\s*number)?|confirmation)$/i
       : /^reservation$/i;
     const reservationEls = findByText(document.body, reservationPattern);
     const roots = new Set();
@@ -92,6 +96,18 @@
         if (txt && /(?:reservation|booking)\s*\d{4,}/i.test(txt)) {
           roots.add(p);
           break;
+        }
+      }
+    }
+
+    // Carnival: find booking cards on profilemanagement page
+    if (IS_CARNIVAL && !roots.size) {
+      const allEls = Array.from(document.querySelectorAll('div, section, article, li'));
+      for (const el of allEls) {
+        const txt = safeText(el);
+        if (txt && /\b\d{6,9}\b/.test(txt) && /(?:night|cruise|sail|depart|carnival)/i.test(txt)) {
+          const children = el.children ? el.children.length : 0;
+          if (children > 1 && children < 60) roots.add(el);
         }
       }
     }
@@ -154,9 +170,10 @@
     // Header line: "Ship Name | Jan 7 — Jan 13, 2026"
     let ship = '';
     let dateRange = '';
+    // Carnival uses different ship/date formatting — try both pipe and dash separators
     const headerCandidate = Array.from(card.querySelectorAll('h1,h2,h3,h4,div,span'))
       .map((e) => safeText(e))
-      .find((t) => t.includes('|') && /\d{4}/.test(t));
+      .find((t) => (t.includes('|') || (IS_CARNIVAL && t.includes('-'))) && /\d{4}/.test(t));
 
     if (headerCandidate) {
       const parts = headerCandidate.split('|').map((p) => normalizeSpaces(p));
@@ -179,7 +196,7 @@
 
     // Reservation number
     let reservation = '';
-    const resLabel = findByText(card, /^reservation$/i)[0];
+    const resLabel = findByText(card, IS_CARNIVAL ? /^(?:reservation|booking(?:\s*number)?|confirmation)$/i : /^reservation$/i)[0];
     if (resLabel) {
       // often in next sibling / same block
       const block = resLabel.parentElement || card;
@@ -188,6 +205,16 @@
     if (!reservation) {
       const m = text.match(/reservation\s*(\d{4,})/i);
       reservation = m ? m[1] : '';
+    }
+
+    // Carnival-specific: booking/confirmation number
+    if (!reservation && IS_CARNIVAL) {
+      const carnivalM = text.match(/(?:booking|confirmation|booking\s*number)[:\s#]*([A-Z0-9]{5,10})/i);
+      if (carnivalM) reservation = carnivalM[1];
+    }
+    if (!reservation && IS_CARNIVAL) {
+      const numM = text.match(/\b([A-Z]{1,2}\d{5,8})\b/);
+      if (numM) reservation = numM[1];
     }
 
     // Reservation number — Celebrity sometimes labels it "Booking" or "Booking Number"
@@ -212,7 +239,9 @@
 
     // Try find a line that looks like category (Interior/Oceanview/Balcony/Suite/GTY)
     // Celebrity also uses "Veranda" for balcony
-    const catRegex = /\b(Interior|Ocean\s*View|Oceanview|Balcony|Veranda|Suite|GTY|AquaClass|Aqua Class)\b/i;
+    const catRegex = IS_CARNIVAL
+      ? /\b(Interior|Ocean\s*View|Oceanview|Balcony|Suite|GTY|Cove|Havana|Cloud 9|Spa)\b/i
+      : /\b(Interior|Ocean\s*View|Oceanview|Balcony|Veranda|Suite|GTY|AquaClass|Aqua Class)\b/i;
     const lines = text.split('\n').map((l) => normalizeSpaces(l)).filter(Boolean);
     const catLine = lines.find((l) => catRegex.test(l) && !/guests/i.test(l) && !/reservation/i.test(l));
     if (catLine) {
@@ -251,7 +280,10 @@
       .replace(/^balcony$/i, 'Balcony')
       .replace(/^veranda$/i, 'Balcony')
       .replace(/^aqua\s*class$/i, 'AquaClass')
-      .replace(/^suite$/i, 'Suite');
+      .replace(/^suite$/i, 'Suite')
+      .replace(/^cove$/i, 'Cove Balcony')
+      .replace(/^havana$/i, 'Havana')
+      .replace(/^cloud\s*9$/i, 'Cloud 9 Spa');
 
     return {
       ship,
@@ -315,7 +347,7 @@
 
     const header = document.createElement('div');
     header.className = 'es-title';
-    const pageLabel = IS_HOLDS ? 'Courtesy Holds Export' : (IS_CELEBRITY ? 'Celebrity Upcoming Cruises Export' : 'Upcoming Cruises Export');
+    const pageLabel = IS_HOLDS ? 'Courtesy Holds Export' : IS_CELEBRITY ? 'Celebrity Upcoming Cruises Export' : IS_CARNIVAL ? 'Carnival Bookings Export' : 'Upcoming Cruises Export';
     header.innerHTML = `<div>${pageLabel}</div>`;
 
     const actions = document.createElement('div');
@@ -332,6 +364,8 @@
     sub.className = 'es-sub';
     sub.textContent = IS_HOLDS
       ? 'Builds a grid of courtesy holds on this page and exports a booked.csv. No pricing scraped.'
+      : IS_CARNIVAL
+      ? 'Builds a grid of your Carnival bookings from this page and exports a booked.csv. Log in first at carnival.com if needed.'
       : 'Builds a grid from this page and exports a CSV. No scraping of pricing; this is your upcoming reservations list.';
 
     const tableWrap = document.createElement('div');
