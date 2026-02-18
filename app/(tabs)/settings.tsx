@@ -1069,16 +1069,16 @@ export default function SettingsScreen() {
       console.log('[Settings] Starting CSV template download...');
       
       const csvTemplateContent = `id,ship,departureDate,returnDate,nights,itineraryName,departurePort,portsRoute,reservationNumber,guests,bookingId,isBooked,winningsBroughtHome,cruisePointsEarned
-booked-radiance-1,Radiance of the Seas,9/26/25,10/4/25,8,8 Night Pacific Coastal Cruise,"Vancouver, British Columbia","Vancouver, British Columbia",123123,2,2623545,TRUE,,
-booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New England Cruise,"Cape Liberty, NJ (NYC)","Cape Liberty, NJ (NYC)",324123,2,7676777,TRUE,,`;
+booked-radiance-1,Radiance of the Seas,09-26-2025,10-04-2025,8,8 Night Pacific Coastal Cruise,"Vancouver, British Columbia","Vancouver, British Columbia",123123,2,2623545,TRUE,,
+booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & New England Cruise,"Cape Liberty, NJ (NYC)","Cape Liberty, NJ (NYC)",324123,2,7676777,TRUE,,`;
       
-      const fileName = 'bookingCSV_TEMPLATE.csv';
+      const fileName = 'booked_template.csv';
       const success = await exportFile(csvTemplateContent, fileName);
       
       if (success) {
         Alert.alert(
           'Download Successful',
-          'The booking CSV template has been downloaded. Fill in your cruise bookings following the template format, then import using "Booked Cruises CSV" option.'
+          'The Booked CSV template has been downloaded. Fill in your cruise bookings following the template format, then import using "Booked Cruises CSV" option.'
         );
       } else {
         Alert.alert('Download Info', 'File saved but sharing may not be available on this device.');
@@ -2012,7 +2012,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
               )}
               {renderSettingRow(
                 <FileSpreadsheet size={18} color={COLORS.success} />,
-                'Download Booking CSV Template',
+                'Download Booked CSV Template',
                 isDownloadingTemplate ? (
                   <ActivityIndicator size="small" color={COLORS.success} />
                 ) : (
@@ -2020,12 +2020,7 @@ booked-liberty-1,Liberty of the Seas,10/16/25,10/25/25,9,9 Night Canada & New En
                 ),
                 handleDownloadCSVTemplate
               )}
-              {renderSettingRow(
-                <ExternalLink size={18} color="#5a2ea6" />,
-                'Download CR Link',
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
-                () => handleOpenLink('https://chromewebstore.google.com/detail/club-royale-and-blue-chip/aggjibokgkckjppkalkgnegheoldlimd')
-              )}
+
             </View>
             <Text style={styles.backupHint}>
               Full backup includes all cruises, offers, events, casino sessions, certificates, user profile (name, C&A #, playing hours), Club Royale points, loyalty points, and settings.
