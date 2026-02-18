@@ -362,79 +362,66 @@ void function() {
   function navigateTo(url, callback) {
     var shortUrl = url.replace(/https:\/\/www\.[^/]+/, '');
     addLog('Navigating to ' + shortUrl, 'info');
-    addLog('Nav debug: from=' + window.location.href + ' | readyState=' + document.readyState + ' | visibility=' + document.visibilityState, 'info');
-    console.log('[Easy Seas] Navigating directly to:', url, 'from', window.location.href);
+    console.log('[Easy Seas] navigateTo:', url, '| from:', window.location.href);
     chrome.storage.local.set({ es_navTarget: url, es_navFrom: window.location.href, es_navAttemptTs: Date.now() });
     var beforeUrl = window.location.href;
 
+    // Primary: use background script chrome.tabs.update (most reliable, bypasses SPA router)
+    var bgNavSent = false;
     try {
-      if (window.top && window.top.location) {
-        window.top.location.href = url;
-      } else {
+      chrome.runtime.sendMessage({ type: 'navigate', url: url }, function(resp) {
+        if (resp && resp.success) {
+          addLog('Background nav sent for ' + shortUrl, 'info');
+          bgNavSent = true;
+        } else {
+          var errMsg = (resp && resp.error) ? resp.error : 'no response';
+          addLog('Background nav failed (' + errMsg + '), falling back to window.location...', 'warning');
+          console.warn('[Easy Seas] Background nav failed:', errMsg);
+          tryWindowNav();
+        }
+      });
+    } catch(e) {
+      console.warn('[Easy Seas] Could not send background nav message:', e);
+      addLog('Background nav error, falling back...', 'warning');
+      tryWindowNav();
+    }
+
+    function tryWindowNav() {
+      try {
         window.location.href = url;
-      }
-    } catch(e1) {
-      console.warn('[Easy Seas] location.href failed, trying assign:', e1);
-      try { window.location.assign(url); } catch(e2) {
-        console.warn('[Easy Seas] assign failed, trying replace:', e2);
-        try { window.location.replace(url); } catch(e3) {}
+      } catch(e1) {
+        try { window.location.assign(url); } catch(e2) {
+          try { window.location.replace(url); } catch(e3) {}
+        }
       }
     }
 
+    // Fallback: if still on same page after 2s, try window.location directly
     setTimeout(function() {
       if (window.location.href === beforeUrl) {
-        console.warn('[Easy Seas] Still on same page after 1.5s, trying anchor click');
-        addLog('Direct nav did not work, trying anchor click...', 'warning');
-        addLog('Nav debug 1.5s: current=' + window.location.href + ' | expected=' + url, 'warning');
+        console.warn('[Easy Seas] Still on same page after 2s, trying window.location fallback');
+        addLog('Still on same page after 2s, trying window.location...', 'warning');
+        tryWindowNav();
+      } else {
+        addLog('Nav confirmed: ' + window.location.href, 'success');
+      }
+    }, 2000);
+
+    // Final fallback: anchor click after 5s
+    setTimeout(function() {
+      if (window.location.href === beforeUrl) {
+        console.warn('[Easy Seas] Still stuck after 5s, trying anchor click');
+        addLog('Still stuck after 5s, trying anchor click...', 'warning');
         try {
           var a = document.createElement('a');
           a.href = url;
           a.target = '_self';
-          a.rel = 'noopener';
           (document.body || document.documentElement).appendChild(a);
           a.click();
           a.remove();
         } catch(e) {}
-      } else {
-        addLog('Nav success after 1.5s: ' + window.location.href, 'success');
       }
-    }, 1500);
-
-    setTimeout(function() {
-      if (window.location.href === beforeUrl) {
-        console.warn('[Easy Seas] Still on same page after 3.5s, forcing via background script');
-        addLog('Direct nav did not work, trying background...', 'warning');
-        addLog('Nav debug 3.5s: current=' + window.location.href + ' | expected=' + url, 'warning');
-        try {
-          chrome.runtime.sendMessage({ type: 'navigate', url: url }, function(resp) {
-            if (!resp || !resp.success) {
-              addLog('Background nav failed, forcing replace...', 'warning');
-              try { window.location.replace(url); } catch(e) {}
-            } else {
-              addLog('Background nav acknowledged', 'info');
-            }
-          });
-        } catch(e) {
-          try { window.location.replace(url); } catch(e2) {}
-        }
-      } else {
-        addLog('Nav success after 3.5s: ' + window.location.href, 'success');
-      }
-    }, 3500);
-
-    setTimeout(function() {
-      if (window.location.href === beforeUrl) {
-        var cacheBust = url + (url.indexOf('?') === -1 ? '?' : '&') + 'es_nav=' + Date.now();
-        console.warn('[Easy Seas] Still on same page after 6s, forcing cache-bust nav', cacheBust);
-        addLog('Navigation still stuck, forcing cache-bust...', 'warning');
-        addLog('Nav debug 6s: current=' + window.location.href + ' | expected=' + url, 'warning');
-        try { window.location.assign(cacheBust); } catch(e) {
-          try { window.location.replace(cacheBust); } catch(e2) {}
-        }
-      } else {
-        addLog('Nav success after 6s: ' + window.location.href, 'success');
-      }
-    }, 6000);
+    }, 5000);
 
     if (callback) callback();
   }
