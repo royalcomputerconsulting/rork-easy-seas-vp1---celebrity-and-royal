@@ -37,6 +37,15 @@ export const STEP1_OFFERS_SCRIPT = `
     }));
   }
 
+  function safeStr(val) {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') {
+      return val.name || val.description || val.code || val.text || '';
+    }
+    return String(val);
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return '';
     try {
@@ -568,9 +577,9 @@ export const STEP1_OFFERS_SCRIPT = `
         const shipName = sailing.shipName || '';
         const shipCode = sailing.shipCode || '';
         const sailDate = formatSailDate(sailing.sailDate);
-        const departurePort = sailing.departurePort?.name || sailing.departurePortName || '';
-        const itinerary = sailing.itineraryDescription || sailing.sailingType?.name || '';
-        const cabinType = sailing.roomType || sailing.stateroomType || '';
+        const departurePort = safeStr(sailing.departurePort?.name || sailing.departurePortName || sailing.departurePort || '');
+        const itinerary = safeStr(sailing.itineraryDescription || sailing.sailingType?.name || sailing.sailingType || '');
+        const cabinType = safeStr(sailing.roomType || sailing.stateroomType || '');
         
         const isGOBO = sailing.isGOBO || co.isGOBO || false;
         const numberOfGuests = isGOBO ? '1' : '2';

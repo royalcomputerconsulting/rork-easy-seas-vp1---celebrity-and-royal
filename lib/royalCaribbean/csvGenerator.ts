@@ -1,9 +1,22 @@
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
 
-function escapeCSVField(field: string | undefined): string {
-  if (!field) return '';
+function escapeCSVField(field: unknown): string {
+  if (field === null || field === undefined) return '';
   
-  const value = String(field);
+  let value: string;
+  if (typeof field === 'string') {
+    value = field;
+  } else if (typeof field === 'object') {
+    const obj = field as Record<string, unknown>;
+    value = (typeof obj.name === 'string' ? obj.name :
+             typeof obj.code === 'string' ? obj.code :
+             typeof obj.description === 'string' ? obj.description :
+             JSON.stringify(field)) || '';
+  } else {
+    value = String(field);
+  }
+  
+  if (!value) return '';
   if (value.includes(',') || value.includes('"') || value.includes('\n')) {
     return `"${value.replace(/"/g, '""')}"`;
   }
