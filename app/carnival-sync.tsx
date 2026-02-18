@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, Sc
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState, useEffect } from 'react';
-import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
+import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, Download, FileDown } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
@@ -52,11 +52,6 @@ function CarnivalSyncScreen() {
   const cookieSyncMutation = trpc.royalCaribbeanSync.cookieSync.useMutation();
 
   const isBackendAvailable = isWebSyncAvailable();
-
-  useEffect(() => {
-    setCruiseLine('carnival');
-    console.log('[CarnivalSync] Set cruise line to carnival');
-  }, [setCruiseLine]);
 
   useEffect(() => {
     if (entitlement.tier === 'view') {
@@ -1101,8 +1096,8 @@ const styles = StyleSheet.create({
 
 export default function CarnivalSyncScreenWrapper() {
   return (
-    <RoyalCaribbeanSyncProvider>
+    <CarnivalSyncProvider>
       <CarnivalSyncScreen />
-    </RoyalCaribbeanSyncProvider>
+    </CarnivalSyncProvider>
   );
 }

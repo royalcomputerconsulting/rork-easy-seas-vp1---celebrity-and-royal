@@ -56,7 +56,26 @@ const ApiClient = {
         let authToken, accountId, loyaltyId, user;
         try {
             console.debug('[apiClient] Parsing session data from localStorage');
-            const sessionData = localStorage.getItem('persist:session');
+            let sessionData = localStorage.getItem('persist:session');
+            if (!sessionData) {
+                const isCarnival = (location && location.hostname ? location.hostname : '').includes('carnival.com');
+                if (isCarnival) {
+                    const carnivalFallbackKeys = ['persist:auth', 'persist:root', 'carnival-session', 'persist:user'];
+                    for (const ck of carnivalFallbackKeys) {
+                        const cv = localStorage.getItem(ck);
+                        if (cv && cv.length > 30) { sessionData = cv; break; }
+                    }
+                    if (!sessionData) {
+                        const lsKeys = Object.keys(localStorage || {});
+                        for (const k of lsKeys) {
+                            if (/persist:|session|auth/i.test(k)) {
+                                const v = localStorage.getItem(k);
+                                if (v && v.length > 30) { sessionData = v; break; }
+                            }
+                        }
+                    }
+                }
+            }
             if (!sessionData) {
                 console.debug('[apiClient] No session data found');
                 App.ErrorHandler.showError('Failed to load offers: No session data. Please log in again.');

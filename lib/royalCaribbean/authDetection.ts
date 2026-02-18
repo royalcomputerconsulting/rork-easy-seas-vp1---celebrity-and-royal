@@ -267,13 +267,33 @@ export const AUTH_DETECTION_SCRIPT = `
 
   function hasSessionToken() {
     try {
+      var isCarnivalPage = !!(window.location && String(window.location.hostname || '').includes('carnival.com'));
       var sessionRaw = localStorage.getItem('persist:session');
+      if (!sessionRaw && isCarnivalPage) {
+        var carnivalKeys = ['persist:auth', 'persist:root', 'carnival-session', 'persist:user'];
+        for (var ci = 0; ci < carnivalKeys.length; ci++) {
+          var cv = localStorage.getItem(carnivalKeys[ci]);
+          if (cv && cv.length > 30) { sessionRaw = cv; break; }
+        }
+        if (!sessionRaw) {
+          var allKeys = Object.keys(localStorage || {});
+          for (var ai = 0; ai < allKeys.length; ai++) {
+            var ak = allKeys[ai];
+            if (/persist:|session|auth|token/i.test(ak)) {
+              var av = localStorage.getItem(ak);
+              if (av && av.length > 30) { sessionRaw = av; break; }
+            }
+          }
+        }
+      }
       if (!sessionRaw) return false;
       var session = JSON.parse(sessionRaw);
       if (!session) return false;
       var token = session.token ? JSON.parse(session.token) : null;
       var user = session.user ? JSON.parse(session.user) : null;
       if (token && user && user.accountId) return true;
+      if (session.accessToken || session.id_token || session.authToken || session.access_token) return true;
+      if (session.user && typeof session.user === 'object' && (session.user.accountId || session.user.userId)) return true;
     } catch (e) {}
     try {
       var keys = Object.keys(localStorage || {});

@@ -97,7 +97,28 @@ export const STEP1_OFFERS_SCRIPT = `
   async function getAuthContext() {
     try {
       log('Parsing session data from localStorage...');
-      const sessionData = localStorage.getItem('persist:session');
+      const host = location && location.hostname ? location.hostname : '';
+      const isCarnivalHost = host.includes('carnival.com');
+      let sessionData = localStorage.getItem('persist:session');
+      if (!sessionData && isCarnivalHost) {
+        const carnivalFallbackKeys = ['persist:auth', 'persist:root', 'carnival-session', 'persist:user'];
+        for (const ck of carnivalFallbackKeys) {
+          const cv = localStorage.getItem(ck);
+          if (cv && cv.length > 30) { sessionData = cv; break; }
+        }
+        if (!sessionData) {
+          const lsKeys = Object.keys(localStorage || {});
+          for (const k of lsKeys) {
+            if (/persist:|session|auth/i.test(k)) {
+              const v = localStorage.getItem(k);
+              if (v && v.length > 30) { sessionData = v; break; }
+            }
+          }
+        }
+        if (sessionData) {
+          log('Found Carnival session data in localStorage', 'success');
+        }
+      }
       
       if (!sessionData) {
         throw new Error('No session data found. Please log in again.');
@@ -132,9 +153,9 @@ export const STEP1_OFFERS_SCRIPT = `
         'content-type': 'application/json',
       };
       
-      const host = location && location.hostname ? location.hostname : '';
-      const brandCode = host.includes('celebritycruises.com') ? 'C' : 'R';
-      const baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : 'https://www.royalcaribbean.com';
+      const host2 = location && location.hostname ? location.hostname : '';
+      const brandCode = host2.includes('celebritycruises.com') ? 'C' : (host2.includes('carnival.com') ? 'N' : 'R');
+      const baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : (brandCode === 'N' ? 'https://www.carnival.com' : 'https://www.royalcaribbean.com');
       
       return { headers, accountId, loyaltyId, brandCode, baseUrl, user };
     } catch (error) {
@@ -278,14 +299,16 @@ export const STEP1_OFFERS_SCRIPT = `
       const { headers, loyaltyId, brandCode, baseUrl } = authContext;
       
       const endpoint = baseUrl + (brandCode === 'C' ? '/api/casino/casino-offers/v2' : '/api/casino/casino-offers/v1');
+      const apiBrandCode = brandCode === 'N' ? 'CCL' : brandCode;
+      const brandLabel = brandCode === 'C' ? 'Celebrity' : (brandCode === 'N' ? 'Carnival' : 'Royal Caribbean');
       
-      log('📡 Calling ' + (brandCode === 'C' ? 'Celebrity' : 'Royal Caribbean') + ' Casino Offers API...');
+      log('📡 Calling ' + brandLabel + ' Casino Offers API...');
       log('Endpoint: ' + endpoint);
       
       const requestBody = {
         cruiseLoyaltyId: loyaltyId,
         offerCode: '',
-        brand: brandCode
+        brand: apiBrandCode
       };
       
       window.ReactNativeWebView.postMessage(JSON.stringify({

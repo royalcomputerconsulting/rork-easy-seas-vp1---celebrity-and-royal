@@ -1,5 +1,5 @@
 import createContextHook from '@nkzw/create-context-hook';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useContext, createContext, ReactNode } from 'react';
 import { WebView } from 'react-native-webview';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -74,10 +74,13 @@ let hasReceivedApiLoyaltyData = false;
 
 const DEFAULT_CRUISE_LINE: CruiseLine = 'royal_caribbean';
 
+const InitialCruiseLineContext = createContext<CruiseLine>('royal_caribbean');
+
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
   console.log('[RoyalCaribbeanSync] Provider initializing...');
+  const initialCruiseLine = useContext(InitialCruiseLineContext);
   const [state, setState] = useState<RoyalCaribbeanSyncState>(INITIAL_STATE);
-  const [cruiseLine, setCruiseLine] = useState<CruiseLine>(DEFAULT_CRUISE_LINE);
+  const [cruiseLine, setCruiseLine] = useState<CruiseLine>(initialCruiseLine);
   const [extendedLoyaltyData, setExtendedLoyaltyData] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
   const [staySignedIn, setStaySignedIn] = useState(true);
   const webViewRef = useRef<WebView | null>(null);
@@ -88,7 +91,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const pageLoadResolver = useRef<(() => void) | null>(null);
   
   const config = CRUISE_LINE_CONFIG[cruiseLine];
-  const [webViewUrl, setWebViewUrl] = useState<string>(config.loginUrl);
+  const [webViewUrl, setWebViewUrl] = useState<string>(CRUISE_LINE_CONFIG[initialCruiseLine].loginUrl);
 
   useEffect(() => {
     const ensureStaySignedInDefault = async () => {
@@ -815,11 +818,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       try {
         const isCelebrityMode = cruiseLine === 'celebrity';
+        const isCarnivalMode = cruiseLine === 'carnival';
+        const accountHomeUrl = isCelebrityMode
+          ? 'https://www.celebritycruises.com/account'
+          : isCarnivalMode
+          ? 'https://www.carnival.com/profilemanagement/profiles'
+          : 'https://www.royalcaribbean.com/account';
         const CAPTURE_PAGES: Array<{ url: string; section: 'bookings' | 'loyalty'; name: string }> = [
           { url: config.upcomingUrl, section: 'bookings', name: 'Upcoming Cruises' },
           { url: config.holdsUrl, section: 'bookings', name: 'Courtesy Holds' },
           { url: config.loyaltyPageUrl, section: 'loyalty', name: 'Loyalty Programs' },
-          { url: isCelebrityMode ? 'https://www.celebritycruises.com/account' : 'https://www.royalcaribbean.com/account', section: 'loyalty', name: 'Account Home' },
+          { url: accountHomeUrl, section: 'loyalty', name: 'Account Home' },
         ];
         
         const MAX_CYCLES = 3;
@@ -882,6 +891,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       if (capturedSections.current.loyalty) {
         addLog('✅ Loyalty data already captured - skipping direct fetch', 'success');
+      } else if (cruiseLine === 'carnival') {
+        addLog('ℹ️ Carnival: loyalty data captured via page monitoring (VIFP/Players Club)', 'info');
+        if (!capturedSections.current.loyalty) {
+          addLog('⚠️ No Carnival loyalty data captured - VIFP info may not be available', 'warning');
+        }
       } else {
       addLog('🚀 ====== STEP 3: LOYALTY DIRECT FETCH ======', 'info');
       addLog('📡 Attempting direct loyalty API call as fallback...', 'info');
@@ -1558,3 +1572,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     onPageLoaded
   };
 });
+
+export function CarnivalSyncProvider({ children }: { children: ReactNode }) {
+  return (
+    <InitialCruiseLineContext.Provider value="carnival">
+      <RoyalCaribbeanSyncProvider>{children}</RoyalCaribbeanSyncProvider>
+    </InitialCruiseLineContext.Provider>
+  );
+}
