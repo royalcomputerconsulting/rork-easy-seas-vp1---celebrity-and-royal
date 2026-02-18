@@ -183,12 +183,54 @@ void function() {
   function checkAuthFromDOM() {
     if (capturedData.cruiseLine === 'carnival') {
       var bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
+      var bodyHTML = (document.body && document.body.innerHTML) ? document.body.innerHTML : '';
       var hasWelcome = bodyText.toUpperCase().indexOf('WELCOME BACK') !== -1;
-      var hasVIFP = bodyText.indexOf('VIFP') !== -1 || bodyText.indexOf('VIFP Club') !== -1;
-      var hasVIFPEl = document.querySelectorAll('[class*="vifp"], [class*="VIFP"], [class*="loyalty-number"], [class*="member-name"], [class*="guest-name"]').length > 0;
-      var hasLogout = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"], a[href*="signout"]').length > 0;
+      var hasVIFP = bodyText.indexOf('VIFP') !== -1 || bodyText.indexOf('VIFP Club') !== -1 || bodyHTML.indexOf('VIFP') !== -1;
+      var hasVIFPEl = document.querySelectorAll('[class*="vifp"], [class*="VIFP"], [class*="loyalty-number"], [class*="member-name"], [class*="guest-name"], [class*="welcomeBack"], [class*="welcome-back"], [class*="loyaltyNumber"], [class*="loyalty-info"]').length > 0;
+      var hasLogout = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"], a[href*="signout"], a[href*="sign_out"]').length > 0;
       var isProfilePage = window.location.href.indexOf('/profilemanagement') !== -1;
-      capturedData.isLoggedIn = hasWelcome || hasVIFP || hasVIFPEl || hasLogout || isProfilePage;
+      // Check cookies for Carnival session indicators
+      var cookieStr = document.cookie || '';
+      var hasCookie = cookieStr.indexOf('CCL') !== -1 || cookieStr.indexOf('carnival') !== -1 ||
+        cookieStr.indexOf('VIFP') !== -1 || cookieStr.indexOf('vifp') !== -1 ||
+        cookieStr.indexOf('sess') !== -1 || cookieStr.indexOf('auth') !== -1 ||
+        cookieStr.length > 200;
+      // Check localStorage for Carnival auth indicators
+      var hasLocalStorage = false;
+      try {
+        var keys = Object.keys(localStorage || {});
+        for (var li = 0; li < keys.length; li++) {
+          if (/token|auth|session|user|vifp|loyalty|profile/i.test(keys[li])) {
+            var lsVal = localStorage.getItem(keys[li]);
+            if (lsVal && lsVal.length > 10) { hasLocalStorage = true; break; }
+          }
+        }
+      } catch(lse) {}
+      // Check for Manage Bookings link (only shown when logged in on Carnival)
+      var hasManageBookings = document.querySelectorAll('a[href*="/booked"], a[href*="/profilemanagement"], a[href*="manage-booking"], [data-testid*="manage"]').length > 0;
+      var wasLoggedIn = capturedData.isLoggedIn;
+      capturedData.isLoggedIn = hasWelcome || hasVIFP || hasVIFPEl || hasLogout || isProfilePage || hasManageBookings || (hasCookie && hasLocalStorage);
+      // If we detected login and it changed, persist it and set authContext
+      if (capturedData.isLoggedIn && !wasLoggedIn) {
+        // Extract VIFP number from DOM for authContext
+        var vifpNum = '';
+        var vifpM = bodyText.match(/(?:VIFP\s*Club[#:\s]+|Club#[:\s]+)(\d{6,12})/i) ||
+                    bodyText.match(/(\d{9,12})/);
+        if (vifpM) vifpNum = vifpM[1];
+        var firstName = '';
+        var nameM = bodyText.match(/WELCOME\s+BACK[,\s]+([A-Z]+)/i);
+        if (nameM) firstName = nameM[1];
+        if (!authContext) {
+          authContext = {
+            token: 'carnival_dom_auth',
+            accountId: vifpNum || 'carnival_user',
+            loyaltyId: vifpNum || '',
+            firstName: firstName || ''
+          };
+        }
+        saveCapturedToStorage();
+        addLog('Carnival login detected' + (firstName ? ' - Welcome ' + firstName : '') + (vifpNum ? ' (VIFP: ' + vifpNum + ')' : ''), 'success');
+      }
       return;
     }
     var c = document.cookie;
@@ -1358,11 +1400,19 @@ void function() {
       createOverlay();
       watchForOverlayRemoval();
       addLog('Extension ready on ' + capturedData.cruiseLine + ' (' + window.location.pathname + ')', 'info');
+      // Run auth check immediately for Carnival (DOM-based login detection)
+      if (capturedData.cruiseLine === 'carnival') {
+        checkAuthFromDOM();
+      }
       updateUI();
 
       await new Promise(function(r) { setTimeout(r, 2000); });
 
       await loadCapturedFromStorage();
+      // Re-run auth check after DOM has had time to render
+      if (capturedData.cruiseLine === 'carnival' && !capturedData.isLoggedIn) {
+        checkAuthFromDOM();
+      }
       updateUI();
 
       var state = await getSyncState();
@@ -1381,12 +1431,12 @@ void function() {
 
     setInterval(function() {
       ensureOverlay();
-      if (!authContext) {
+      if (!authContext || !capturedData.isLoggedIn) {
         checkAuthFromDOM();
         window.postMessage({ source: 'easy-seas-ext', type: 'get_auth' }, '*');
         updateUI();
       }
-    }, 5000);
+    }, 3000);
   }
 
   init();
