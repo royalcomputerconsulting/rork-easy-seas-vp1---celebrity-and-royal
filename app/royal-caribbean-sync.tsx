@@ -35,7 +35,9 @@ function RoyalCaribbeanSyncScreen() {
     addLog,
     extendedLoyaltyData,
     staySignedIn,
-    toggleStaySignedIn
+    toggleStaySignedIn,
+    webViewUrl,
+    onPageLoaded
   } = useRoyalCaribbeanSync();
   
   const [webViewVisible, setWebViewVisible] = useState(true);
@@ -422,9 +424,10 @@ function RoyalCaribbeanSyncScreen() {
                     webViewRef.current = ref;
                   }
                 }}
-                source={{ uri: config.loginUrl }}
+                source={{ uri: webViewUrl }}
                 style={styles.webView}
                 onMessage={onMessage}
+                onLoadEnd={onPageLoaded}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
                 sharedCookiesEnabled={true}
