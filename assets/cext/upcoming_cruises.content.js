@@ -458,7 +458,7 @@
       if (!currentRows.length) return;
       const csv = rowsToCSV(currentRows);
       const stamp = new Date().toISOString().slice(0, 10);
-      download(`Upcoming_Cruises_${stamp}.csv`, csv);
+      download('booked.csv', csv);
       log('Exported CSV', currentRows.length);
     }
 

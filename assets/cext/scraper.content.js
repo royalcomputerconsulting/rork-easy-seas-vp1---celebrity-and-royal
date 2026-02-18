@@ -20,7 +20,7 @@ function findItinTrigger(tr){
     if (typeof window.downloadCSV === 'function'){
       const orig = window.downloadCSV;
       window.downloadCSV = function(filename, rows, headers){
-        const newFile = IS_CELEBRITY ? 'Celebrity_offers.csv' : filename;
+        const newFile = 'offers.csv';
         console.log('[EasySeas] DualDomainPatch →', newFile);
         return orig(newFile, rows, headers);
       };
