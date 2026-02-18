@@ -342,12 +342,24 @@ export const AUTH_DETECTION_SCRIPT = `
     var lowerText = pageText.toLowerCase();
     var lowerHTML = pageHTML.toLowerCase();
 
+    var isCarnival = url.includes('carnival.com');
+
+    // Carnival-specific login signals
+    var carnivalProfileLink = document.querySelector('a[href*="profilemanagement"]');
+    var carnivalVifpEl = document.querySelector('[class*="vifp"], [id*="vifp"], [class*="loyalty"]');
+    var carnivalWelcomeBack = lowerText.includes('welcome back') || lowerHTML.includes('welcome back');
+    var carnivalVifpText = lowerHTML.includes('vifp') || lowerText.includes('vifp club');
+    var carnivalMemberNum = /vifp\s*club[\s\S]{0,200}\d{7,}/i.test(pageHTML) || /club#[:\s]*\d{7,}/i.test(pageHTML);
+    var carnivalManageBookings = document.querySelector('a[href*="manage-booking"], a[href*="managebooking"], a[href*="my-cruises"]') !== null;
+    var carnivalSignedInHeader = lowerHTML.includes('sign out') || lowerHTML.includes('signout') || (isCarnival && (lowerHTML.includes('my profile') || lowerHTML.includes('manage bookings')));
+
     var strongAuthSignals = 
       upcomingCruisesLink || 
       courtesyHoldsLink || 
       loyaltyStatusLink ||
       hasLogoutButton ||
-      hasUserAvatar;
+      hasUserAvatar ||
+      (isCarnival && (carnivalWelcomeBack || carnivalVifpEl || carnivalMemberNum || carnivalProfileLink));
     
     var accountFeatureCount = 
       (accountLinks.length > 0 ? 1 : 0) +
@@ -356,7 +368,10 @@ export const AUTH_DETECTION_SCRIPT = `
       (loyaltyStatusLink ? 1 : 0) +
       (myAccountLink ? 1 : 0) +
       (hasLogoutButton ? 1 : 0) +
-      (hasUserAvatar ? 1 : 0);
+      (hasUserAvatar ? 1 : 0) +
+      (isCarnival && carnivalProfileLink ? 1 : 0) +
+      (isCarnival && carnivalManageBookings ? 1 : 0) +
+      (isCarnival && carnivalSignedInHeader ? 1 : 0);
     
     var contentSignals = 
       (lowerHTML.includes('member') ? 1 : 0) +
@@ -365,9 +380,12 @@ export const AUTH_DETECTION_SCRIPT = `
       (lowerHTML.includes('club royale') ? 1 : 0) +
       ((lowerHTML.includes('tier') || lowerHTML.includes('level')) ? 1 : 0) +
       (lowerText.includes('my cruises') ? 1 : 0) +
-      (lowerText.includes('welcome') ? 1 : 0);
+      (lowerText.includes('welcome') ? 1 : 0) +
+      (isCarnival && carnivalVifpText ? 2 : 0) +
+      (isCarnival && carnivalWelcomeBack ? 2 : 0) +
+      (isCarnival && carnivalMemberNum ? 3 : 0);
     
-    var isOnAccountPage = url.includes('/account/') || url.includes('loyalty-status') || url.includes('/club-royale') || url.includes('/blue-chip-club');
+    var isOnAccountPage = url.includes('/account/') || url.includes('loyalty-status') || url.includes('/club-royale') || url.includes('/blue-chip-club') || url.includes('/profilemanagement') || (isCarnival && (url.includes('/cruise-deals') || url.includes('/loyaltyInformation')));
     var isOnLoginPage = url.includes('/login') || url.includes('/sign-in') || url.includes('/signin');
     
     var isLoggedIn = false;
