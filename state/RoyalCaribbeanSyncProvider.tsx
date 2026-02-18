@@ -751,6 +751,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     const navigateToPage = (url: string, maxWaitMs: number = 15000): Promise<void> => {
       return new Promise((resolve) => {
         const timeout = setTimeout(() => {
+          addLog(`⚠️ Page load timeout for ${url} - continuing`, 'warning');
           pageLoadResolver.current = null;
           resolve();
         }, maxWaitMs);
@@ -760,7 +761,36 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           setTimeout(resolve, 4000);
         };
         
-        setWebViewUrl(url);
+        if (webViewRef.current) {
+          addLog(`🌐 Forcing navigation to: ${url}`, 'info');
+          webViewRef.current.injectJavaScript(`
+            (function() {
+              try {
+                var currentUrl = window.location.href;
+                var targetUrl = '${url}';
+                if (window.ReactNativeWebView) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log',
+                    message: '🧭 Browser navigating from ' + currentUrl + ' to ' + targetUrl,
+                    logType: 'info'
+                  }));
+                }
+                window.location.href = targetUrl;
+              } catch(e) {
+                if (window.ReactNativeWebView) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log',
+                    message: '❌ Navigation error: ' + e.message,
+                    logType: 'error'
+                  }));
+                }
+              }
+            })();
+            true;
+          `);
+        } else {
+          setWebViewUrl(url);
+        }
       });
     };
 
