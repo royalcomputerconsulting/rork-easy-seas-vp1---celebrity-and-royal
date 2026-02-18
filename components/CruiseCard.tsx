@@ -258,14 +258,14 @@ export const CruiseCard = React.memo(function CruiseCard({
                 )}
               </View>
             )}
-            {(bookedCruise.offerCode || cruise.offerCode) && (
+            {!!(bookedCruise.offerCode || cruise.offerCode) && (
               <View style={styles.miniOfferBadge}>
                 <Sparkles size={10} color={COLORS.goldDark} />
                 <Text style={styles.miniOfferCode}>{bookedCruise.offerCode || cruise.offerCode}</Text>
               </View>
             )}
           </View>
-          {(isBooked || bookedCruise.offerCode || cruise.offerCode) && (
+          {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
             (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
              bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined || 
              bookedCruise.usedNextCruiseCertificate) && (
@@ -291,7 +291,7 @@ export const CruiseCard = React.memo(function CruiseCard({
               </View>
             )
           )}
-          {((cruise.interiorPrice && cruise.interiorPrice > 0) || (cruise.oceanviewPrice && cruise.oceanviewPrice > 0) || (cruise.balconyPrice && cruise.balconyPrice > 0) || (cruise.suitePrice && cruise.suitePrice > 0)) && (
+          {!!((cruise.interiorPrice && cruise.interiorPrice > 0) || (cruise.oceanviewPrice && cruise.oceanviewPrice > 0) || (cruise.balconyPrice && cruise.balconyPrice > 0) || (cruise.suitePrice && cruise.suitePrice > 0)) && (
             <View style={styles.miniPricingRow}>
               {cruise.interiorPrice != null && cruise.interiorPrice > 0 && (
                 <View style={styles.miniPricingItem}>
@@ -557,19 +557,19 @@ export const CruiseCard = React.memo(function CruiseCard({
           </TouchableOpacity>
         </View>
 
-        {(bookedCruise.offerName || cruise.offerName || cruise.offerCode) && (
+        {!!(bookedCruise.offerName || cruise.offerName || cruise.offerCode) && (
           <View style={styles.offerSection}>
             <Sparkles size={14} color={COLORS.goldDark} />
             <Text style={styles.offerText}>
               {bookedCruise.offerName || cruise.offerName || `Offer ${cruise.offerCode}`}
             </Text>
-            {(bookedCruise.offerCode || cruise.offerCode) && (
+            {!!(bookedCruise.offerCode || cruise.offerCode) && (
               <View style={styles.offerCodeBadge}>
                 <Anchor size={10} color={COLORS.loyalty} />
                 <Text style={styles.offerCodeText}>{bookedCruise.offerCode || cruise.offerCode}</Text>
               </View>
             )}
-            {(cruise.offerValue && cruise.offerValue > 0) && (
+            {!!(cruise.offerValue && cruise.offerValue > 0) && (
               <View style={styles.offerValueBadge}>
                 <Text style={styles.offerValueText}>${cruise.offerValue.toLocaleString()}</Text>
               </View>
@@ -577,7 +577,7 @@ export const CruiseCard = React.memo(function CruiseCard({
           </View>
         )}
 
-        {(isBooked || bookedCruise.offerCode || cruise.offerCode) && (
+        {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
           (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
            bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined) && (
             <View style={styles.fpObcSection}>
