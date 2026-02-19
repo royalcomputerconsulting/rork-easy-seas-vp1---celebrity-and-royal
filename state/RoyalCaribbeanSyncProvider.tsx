@@ -17,6 +17,7 @@ import { convertLoyaltyInfoToExtended } from '@/lib/royalCaribbean/loyaltyConver
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
+import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { healImportedData } from '@/lib/dataHealing';
 
@@ -616,23 +617,75 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           addLog(`✅ Voyage enrichment data stored for merging with bookings`, 'success');
         }
         
+        if (endpoint === 'carnival_vifp_offers' && data) {
+          console.log('[CarnivalSync] VIFP offers captured:', data.Items?.length || 0);
+          addLog('Processing Carnival VIFP offers...', 'info');
+          if (data.Items && Array.isArray(data.Items)) {
+            const dollarSign = String.fromCharCode(36);
+            const offerRows: OfferRow[] = data.Items.map((item: any) => {
+              let rateCode = '';
+              try { const m = (item.CtaUrl || '').match(/rateCodes=([A-Z0-9]+)/i); if (m) rateCode = m[1]; } catch(e) {}
+              let expiry = '';
+              try { const m2 = (item.Subtitle || '').match(/Book by (.+)/i); if (m2) expiry = m2[1].trim(); } catch(e) {}
+              const desc = (item.Description || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+              const priceNum = item.Price ? Number(item.Price) : 0;
+              const priceStr = priceNum > 0 ? (dollarSign + priceNum.toFixed(2)) : '';
+              return {
+                sourcePage: 'Offers' as const,
+                offerName: item.Title || 'Carnival VIFP Offer',
+                offerCode: rateCode,
+                offerExpirationDate: expiry,
+                offerType: 'VIFP Club',
+                shipName: '',
+                shipCode: '',
+                sailingDate: '',
+                itinerary: '',
+                departurePort: '',
+                cabinType: '',
+                numberOfGuests: '2',
+                perks: desc.substring(0, 200),
+                loyaltyLevel: '',
+                loyaltyPoints: '',
+                interiorPrice: priceStr,
+                oceanviewPrice: '',
+                balconyPrice: '',
+                suitePrice: '',
+                taxesAndFees: '',
+                portList: '',
+                dayByDayItinerary: [] as any[],
+                destinationName: '',
+                totalNights: undefined,
+                bookingLink: item.CtaUrl || ''
+              } as unknown as OfferRow;
+            });
+            setState(prev => ({ ...prev, extractedOffers: [...prev.extractedOffers, ...offerRows] }));
+            capturedSections.current.offers = true;
+            addLog('Captured ' + String(offerRows.length) + ' Carnival VIFP offer(s)', 'success');
+            offerRows.forEach((o: OfferRow) => {
+              addLog('  ' + o.offerName + ' (' + o.offerCode + ')' + (o.interiorPrice ? ' - from ' + o.interiorPrice : ''), 'success');
+            });
+            if (stepCompleteResolvers.current[1]) {
+              stepCompleteResolvers.current[1]();
+              delete stepCompleteResolvers.current[1];
+            }
+          }
+        }
+        
         if (endpoint === 'loyalty' && data) {
-          addLog(`📦 Processing captured Loyalty API payload...`, 'info');
-          console.log(`[RoyalCaribbeanSync] Loyalty data structure:`, JSON.stringify(data).substring(0, 500));
+          addLog('Processing captured Loyalty API payload...', 'info');
+          console.log('[RoyalCaribbeanSync] Loyalty data structure:', JSON.stringify(data).substring(0, 500));
           
-          // Extract from payload if present
           const loyaltyPayload = data.payload || data;
           const loyaltyInfo = loyaltyPayload.loyaltyInformation || loyaltyPayload;
           const accountId = loyaltyPayload.accountId || '';
 
-          // Helpful signal: confirm the endpoint we captured from
           if (typeof url === 'string' && url.includes('/guestAccounts/loyalty/info')) {
-            addLog('✅ Captured loyalty from /guestAccounts/loyalty/info (correct endpoint)', 'success');
+            addLog('Captured loyalty from /guestAccounts/loyalty/info (correct endpoint)', 'success');
           } else if (typeof url === 'string' && url.length > 0) {
-            addLog(`ℹ️ Loyalty captured from: ${url}`, 'info');
+            addLog('Loyalty captured from: ' + String(url), 'info');
           }
           
-          addLog(`📦 Loyalty payload keys: ${Object.keys(loyaltyPayload).join(', ')}`, 'info');
+          addLog('Loyalty payload keys: ' + Object.keys(loyaltyPayload).join(', '), 'info');
           
           const convertedLoyalty = convertLoyaltyInfoToExtended(loyaltyInfo, accountId);
           setExtendedLoyaltyData(convertedLoyalty);
@@ -675,6 +728,31 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           });
         }
         break;
+
+      default: {
+        const msgType = (message as any).type;
+        if (msgType === 'carnival_user_data') {
+        const userData = (message as any).data;
+        if (userData) {
+          const tierMap: Record<string, string> = { '01': 'Red', '02': 'Gold', '03': 'Platinum', '04': 'Diamond' };
+          const tierName = tierMap[userData.TierCode] || userData.TierCode || 'Unknown';
+          console.log('[CarnivalSync] User data captured:', userData.FirstName, userData.LastName, 'VIFP#', userData.PastGuestNumber, 'Tier:', tierName);
+          capturedSections.current.loyalty = true;
+          setState(prev => ({
+            ...prev,
+            loyaltyData: {
+              ...(prev.loyaltyData ?? {}),
+              crownAndAnchorLevel: tierName,
+              crownAndAnchorPoints: userData.PastGuestNumber || '',
+              clubRoyaleTier: tierName,
+              clubRoyalePoints: '',
+            }
+          }));
+          addLog(`✅ Carnival VIFP: ${tierName} tier (VIFP# ${userData.PastGuestNumber || 'N/A'})`, 'success');
+        }
+        }
+        break;
+      }
 
       case 'error':
         setState(prev => ({ ...prev, error: message.message, status: 'error' }));
@@ -782,19 +860,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
     
+    const isCarnivalMode = cruiseLine === 'carnival';
+    
     try {
       addLog(`🚀 ====== STEP 1: ${config.loyaltyClubName.toUpperCase()} OFFERS ======`, 'info');
       addLog(`📍 Loading ${config.loyaltyClubName} offers page...`, 'info');
-      addLog('⏱️ This may take several minutes - extracting all casino offers and sailings...', 'info');
+      addLog('⏱️ This may take several minutes - extracting all offers and sailings...', 'info');
       
       addLog('📍 Navigating to offers page...', 'info');
       await navigateToPage(config.offersUrl, 15000);
       
       if (webViewRef.current) {
-        webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
+        if (isCarnivalMode) {
+          addLog('🎪 Using Carnival-specific extraction (cookie auth + VIFP offers)...', 'info');
+          webViewRef.current.injectJavaScript(injectCarnivalOffersExtraction() + '; true;');
+        } else {
+          webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
+        }
       }
       
-      await waitForStepComplete(1, 900000);
+      await waitForStepComplete(1, isCarnivalMode ? 120000 : 900000);
       capturedSections.current.offers = true;
       
       setState(prev => {
@@ -818,7 +903,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       try {
         const isCelebrityMode = cruiseLine === 'celebrity';
-        const isCarnivalMode = cruiseLine === 'carnival';
         const accountHomeUrl = isCelebrityMode
           ? 'https://www.celebritycruises.com/account'
           : isCarnivalMode
@@ -855,11 +939,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`📍 Visiting ${page.name}...`, 'info');
             await navigateToPage(page.url, 15000);
             
+            if (isCarnivalMode && page.section === 'bookings' && webViewRef.current) {
+              addLog('🎪 Injecting Carnival bookings scraper...', 'info');
+              webViewRef.current.injectJavaScript(injectCarnivalBookingsScrape() + '; true;');
+            }
+            
             if (capturedSections.current[page.section]) {
               addLog(`✅ ${page.name} data captured!`, 'success');
             } else {
               addLog(`⏳ Waiting for ${page.name} API response...`, 'info');
-              await delay(6000);
+              await delay(isCarnivalMode ? 8000 : 6000);
               
               if (capturedSections.current[page.section]) {
                 addLog(`✅ ${page.name} data captured after wait!`, 'success');
