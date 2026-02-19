@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import { generateText } from '@rork-ai/toolkit-sdk';
-import { useCruiseStore } from './CruiseStore';
+import { useCoreData } from './CoreDataProvider';
 import { useLoyalty } from './LoyaltyProvider';
 import type { ChatMessage } from '@/components/AgentXChat';
 import {
@@ -232,7 +232,7 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
 
 export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => {
   const { tier } = useEntitlement();
-  const { cruises, bookedCruises, casinoOffers } = useCruiseStore();
+  const { cruises, bookedCruises, casinoOffers } = useCoreData();
   const { clubRoyalePoints, clubRoyaleTier } = useLoyalty();
   const { allMachines } = useSlotMachines();
   const { myAtlasMachines, globalLibrary, encyclopedia } = useSlotMachineLibrary();

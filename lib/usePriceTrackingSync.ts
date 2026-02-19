@@ -1,10 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { useCruiseStore } from '@/state/CruiseStore';
+import { useCoreData } from '@/state/CoreDataProvider';
 import { usePriceHistory } from '@/state/PriceHistoryProvider';
 import type { CasinoOffer } from '@/types/models';
 
 export function usePriceTrackingSync() {
-  const { casinoOffers } = useCruiseStore();
+  const { casinoOffers } = useCoreData();
   const { bulkRecordFromOffers, priceDropAlerts } = usePriceHistory();
   const lastProcessedRef = useRef<string>('');
   const isInitialMount = useRef(true);

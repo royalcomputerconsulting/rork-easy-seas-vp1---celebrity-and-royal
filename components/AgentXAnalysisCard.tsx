@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ImageBackg
 import { LinearGradient } from 'expo-linear-gradient';
 import { Bot, TrendingUp, Award, DollarSign, RefreshCw, MessageSquare } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
-import { useCruiseStore } from '@/state/CruiseStore';
+import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 
 import type { BookedCruise } from '@/types/models';
@@ -14,7 +14,7 @@ interface AgentXAnalysisCardProps {
 }
 
 export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisCardProps) {
-  const { bookedCruises: storedCruises, syncFromStorage } = useCruiseStore();
+  const { bookedCruises: storedCruises, refreshData: syncFromStorage } = useCoreData();
   const { clubRoyalePoints } = useLoyalty();
   const [isRefreshing, setIsRefreshing] = useState(false);
 

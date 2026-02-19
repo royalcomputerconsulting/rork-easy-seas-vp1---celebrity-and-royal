@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import type { BookedCruise } from '@/types/models';
-import { useCruiseStore } from './CruiseStore';
+import { useCoreData } from './CoreDataProvider';
 import {
   calculateHistoricalPerformance,
   projectROIForUpcomingCruise,
@@ -26,7 +26,7 @@ interface HistoricalPerformanceState {
 
 export const [HistoricalPerformanceProvider, useHistoricalPerformance] = createContextHook(
   (): HistoricalPerformanceState => {
-    const { completedCruises } = useCruiseStore();
+    const { completedCruises } = useCoreData();
 
     const metrics = useMemo(() => {
       console.log('[HistoricalPerformanceProvider] Calculating historical metrics');

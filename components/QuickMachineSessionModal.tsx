@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useCasinoSessions, type Denomination } from '@/state/CasinoSessionProvider';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
-import { useCruiseStore } from '@/state/CruiseStore';
+import { useCoreData } from '@/state/CoreDataProvider';
 import type { MachineEncyclopediaEntry, BookedCruise } from '@/types/models';
 import { Play, Square, X, Check, Clock, DollarSign } from 'lucide-react-native';
 
@@ -30,7 +30,7 @@ export default function QuickMachineSessionModal({
 }: QuickMachineSessionModalProps) {
   const { addSession } = useCasinoSessions();
   const { myAtlasMachines, getMachinesForShip } = useSlotMachineLibrary();
-  const { bookedCruises } = useCruiseStore();
+  const { bookedCruises } = useCoreData();
 
   const [isRecording, setIsRecording] = useState(false);
   const [startTime, setStartTime] = useState<Date | null>(null);

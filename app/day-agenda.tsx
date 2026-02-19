@@ -19,7 +19,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
-import { useCruiseStore } from '@/state/CruiseStore';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
@@ -92,9 +91,9 @@ export default function DayAgendaScreen() {
   const router = useRouter();
   const { date } = useLocalSearchParams<{ date: string }>();
   const { localData } = useAppState();
-  const { bookedCruises } = useCruiseStore();
   const { currentUser } = useUser();
   const coreData = useCoreData();
+  const { bookedCruises } = coreData;
 
   const playingHours: PlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
   const { getSessionsForDate, getDailySummary, addSession, removeSession } = useCasinoSessions();

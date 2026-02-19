@@ -9,7 +9,7 @@ import { formatCurrency, formatNights } from '@/lib/format';
 import { formatDate, getDaysUntil, createDateFromString } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
-import { useCruiseStore } from '@/state/CruiseStore';
+import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 
 import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
@@ -97,7 +97,7 @@ export default function CruiseDetailsScreen() {
     nextCruiseCertificate: '',
   });
 
-  const { bookedCruises: storeBookedCruises, cruises: storeCruises, casinoOffers: storeOffers, updateBookedCruise: updateCruiseInStore, removeBookedCruise, addBookedCruise } = useCruiseStore();
+  const { bookedCruises: storeBookedCruises, cruises: storeCruises, casinoOffers: storeOffers, updateBookedCruise: updateCruiseInStore, removeBookedCruise, addBookedCruise } = useCoreData();
   const { currentUser } = useUser();
   
   const [heroImageUri, setHeroImageUri] = useState<string>(DEFAULT_CRUISE_IMAGE);

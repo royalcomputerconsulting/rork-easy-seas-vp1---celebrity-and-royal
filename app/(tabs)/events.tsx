@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle, Ban } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
-import { useCruiseStore } from '@/state/CruiseStore';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
@@ -38,9 +37,9 @@ const EVENT_COLORS = {
 export default function EventsScreen() {
   const router = useRouter();
   const { localData } = useAppState();
-  const { bookedCruises } = useCruiseStore();
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
   const coreData = useCoreData();
+  const { bookedCruises } = coreData;
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);

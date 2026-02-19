@@ -38,7 +38,7 @@ import {
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useAppState } from '@/state/AppStateProvider';
-import { useCruiseStore } from '@/state/CruiseStore';
+import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { calculateCruiseValue, calculatePortfolioValue } from '@/lib/valueCalculator';
@@ -125,7 +125,7 @@ export default function AnalyticsScreen() {
     runDetection,
   } = useAlerts();
   const { clubRoyaleProfile, localData } = useAppState();
-  const { bookedCruises: storedBookedCruises, isLoading: storeLoading } = useCruiseStore();
+  const { bookedCruises: storedBookedCruises, isLoading: storeLoading } = useCoreData();
   const {
     clubRoyalePoints: loyaltyClubRoyalePoints,
     clubRoyaleTier: loyaltyClubRoyaleTier,

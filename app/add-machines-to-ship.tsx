@@ -15,7 +15,7 @@ import { ChevronLeft, Search, X, Check, Ship, Filter } from 'lucide-react-native
 import { COLORS } from '@/constants/theme';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useDeckPlan } from '@/state/DeckPlanProvider';
-import { useCruiseStore } from '@/state/CruiseStore';
+import { useCoreData } from '@/state/CoreDataProvider';
 import { SlotManufacturer } from '@/types/models';
 
 type FilterModalType = 'manufacturer' | 'ship' | null;
@@ -24,7 +24,7 @@ export default function AddMachinesToShipScreen() {
   const router = useRouter();
   const { filteredGlobalLibrary, searchQuery, setSearchQuery, filterManufacturers, setFilterManufacturers, sortBy, setSortBy } = useSlotMachineLibrary();
   const { addMapping, getMappingsByShip } = useDeckPlan();
-  const { bookedCruises } = useCruiseStore();
+  const { bookedCruises } = useCoreData();
 
   const [selectedShip, setSelectedShip] = useState<string>('');
   const [selectedMachines, setSelectedMachines] = useState<Set<string>>(new Set());

@@ -10,7 +10,7 @@ import type {
   AnomalyDetectionConfig,
 } from '@/types/models';
 import { DEFAULT_ANOMALY_CONFIG } from '@/types/models';
-import { useCruiseStore } from './CruiseStore';
+import { useCoreData } from './CoreDataProvider';
 import { useAppState } from './AppStateProvider';
 import { usePriceHistory } from './PriceHistoryProvider';
 import { 
@@ -62,7 +62,7 @@ interface AlertsState {
 
 export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => {
   const { tier } = useEntitlement();
-  const { bookedCruises, casinoOffers } = useCruiseStore();
+  const { bookedCruises, casinoOffers } = useCoreData();
   const { clubRoyaleProfile } = useAppState();
   const priceHistoryState = usePriceHistory();
   const priceDropAlerts = priceHistoryState?.priceDropAlerts ?? [];

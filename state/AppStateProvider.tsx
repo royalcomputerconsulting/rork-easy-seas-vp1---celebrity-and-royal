@@ -1,5 +1,4 @@
 import { useCoreData } from "./CoreDataProvider";
-import React from "react";
 
 export const useAppState = () => {
   const coreData = useCoreData();
@@ -12,7 +11,7 @@ export const useAppState = () => {
       booked: coreData.bookedCruises,
       offers: coreData.casinoOffers,
       calendar: coreData.calendarEvents,
-      tripit: [],
+      tripit: [] as never[],
       lastImport: coreData.lastSyncDate,
       clubRoyaleProfile: coreData.clubRoyaleProfile,
     },
@@ -32,8 +31,4 @@ export const useAppState = () => {
     setClubRoyaleProfile: coreData.setClubRoyaleProfile,
     refreshData: coreData.refreshData,
   };
-};
-
-export const AppStateProvider = ({ children }: { children: React.ReactNode }) => {
-  return <>{children}</>;
 };

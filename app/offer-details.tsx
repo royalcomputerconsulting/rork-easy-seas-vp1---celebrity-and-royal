@@ -26,7 +26,7 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/
 import { IMAGES } from '@/constants/images';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { useAppState } from '@/state/AppStateProvider';
-import { useCruiseStore } from '@/state/CruiseStore';
+import { useCoreData } from '@/state/CoreDataProvider';
 import { calculateCasinoAvailabilityForCruise, calculatePersonalizedPlayEstimate, getCasinoStatusBadge } from '@/lib/casinoAvailability';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { createDateFromString, getDaysUntil, formatDate } from '@/lib/date';
@@ -38,7 +38,7 @@ export default function OfferDetailsScreen() {
   const router = useRouter();
   const { offerCode } = useLocalSearchParams<{ offerCode: string }>();
   const { localData } = useAppState();
-  const { cruises: storeCruises, bookedCruises: storeBookedCruises, casinoOffers: storeOffers, updateCasinoOffer, removeCasinoOffer } = useCruiseStore();
+  const { cruises: storeCruises, bookedCruises: storeBookedCruises, casinoOffers: storeOffers, updateCasinoOffer, removeCasinoOffer } = useCoreData();
   const { currentUser } = useUser();
   const [sortBy, setSortBy] = useState<SortOption>('soonest');
 

@@ -36,7 +36,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { useCruiseStore } from '@/state/CruiseStore';
 import { useUser } from '@/state/UserProvider';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
 import { isDateInPast, createDateFromString } from '@/lib/date';
@@ -73,8 +72,7 @@ const SORT_OPTIONS: { label: string; value: SortType }[] = [
 export default function BookedScreen() {
   const router = useRouter();
   const { localData, clubRoyaleProfile, isLoading: appLoading, refreshData } = useAppState();
-  const { bookedCruises: storedBooked } = useCruiseStore();
-  const { addBookedCruise } = useCoreData();
+  const { addBookedCruise, bookedCruises: storedBooked } = useCoreData();
   useUser();
   const { casinoAnalytics } = useSimpleAnalytics();
   const {

@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from "react";
 import createContextHook from "@nkzw/create-context-hook";
 import type { AnalyticsData, BookedCruise, Cruise, CasinoOffer } from "@/types/models";
-import { useCruiseStore } from "./CruiseStore";
+import { useCoreData } from "./CoreDataProvider";
 import { useLoyalty } from "./LoyaltyProvider";
 import { 
   calculateCruiseValue, 
@@ -96,7 +96,7 @@ const DEFAULT_PORTFOLIO_METRICS: PortfolioValueMetrics = {
 const DOLLARS_PER_POINT = 5;
 
 export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((): SimpleAnalyticsState => {
-  const { bookedCruises: storedBookedCruises, cruises, casinoOffers, isLoading } = useCruiseStore();
+  const { bookedCruises: storedBookedCruises, cruises, casinoOffers, isLoading } = useCoreData();
   const { clubRoyalePoints: loyaltyClubRoyalePoints } = useLoyalty();
 
   const bookedCruises = useMemo((): BookedCruise[] => {

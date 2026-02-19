@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import type { BookedCruise, ClubRoyaleTier, CrownAnchorLevel } from "@/types/models";
-import { useCruiseStore } from "./CruiseStore";
+import { useCoreData } from "./CoreDataProvider";
 import { 
   CLUB_ROYALE_TIERS, 
   getTierByPoints, 
@@ -102,7 +102,7 @@ const DEFAULT_TIER = 'Choice' as ClubRoyaleTier;
 const DEFAULT_LEVEL = 'Gold' as CrownAnchorLevel;
 
 export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState => {
-  const { bookedCruises: storedBookedCruises, isLoading: cruisesLoading } = useCruiseStore();
+  const { bookedCruises: storedBookedCruises, isLoading: cruisesLoading } = useCoreData();
   
   const [manualClubRoyalePoints, setManualClubRoyalePointsState] = useState<number | null>(null);
   const [manualCrownAnchorPoints, setManualCrownAnchorPointsState] = useState<number | null>(null);

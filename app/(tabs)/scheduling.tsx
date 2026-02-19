@@ -26,7 +26,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
-import { useCruiseStore } from '@/state/CruiseStore';
+import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
@@ -71,7 +71,7 @@ const CABIN_FILTERS: { key: CabinFilter; label: string }[] = [
 export default function SchedulingScreen() {
   const router = useRouter();
   const { localData, clubRoyaleProfile, isLoading: appLoading } = useAppState();
-  const { bookedCruises } = useCruiseStore();
+  const { bookedCruises } = useCoreData();
   const { currentUser } = useUser();
   const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, isExpanded, toggleExpanded } = useAgentX();
 

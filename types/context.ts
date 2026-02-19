@@ -7,7 +7,6 @@ import type {
   FinancialsRecord,
   AnalyticsData,
   FinancialSummary,
-  CruiseFilter,
   TierProgress,
   CasinoPerformance,
   PortfolioMetrics,
@@ -63,32 +62,6 @@ export interface AppStateContextValue {
   autoCompletePaidCruises: () => void;
 }
 
-export interface CruiseStoreContextValue {
-  allCruises: Cruise[];
-  bookedCruises: BookedCruise[];
-  availableCruises: Cruise[];
-  isLoading: boolean;
-  
-  getCruiseById: (id: string) => Cruise | undefined;
-  getCruisesByShip: (shipName: string) => Cruise[];
-  getCruisesByDate: (startDate: string, endDate: string) => Cruise[];
-  getCruisesByOffer: (offerCode: string) => Cruise[];
-  markAsBooked: (cruiseId: string, bookingDetails: Partial<BookedCruise>) => void;
-  updateCruise: (cruiseId: string, updates: Partial<Cruise>) => void;
-}
-
-export interface FiltersContextValue {
-  filters: CruiseFilter;
-  hasActiveFilters: boolean;
-  activeFilterCount: number;
-  
-  setFilters: (filters: Partial<CruiseFilter>) => void;
-  clearFilters: () => void;
-  toggleShipFilter: (shipName: string) => void;
-  toggleCabinFilter: (cabinType: string) => void;
-  setDateRange: (start: string, end: string) => void;
-  clearDateRange: () => void;
-}
 
 export interface AnalyticsContextValue {
   analytics: AnalyticsData;

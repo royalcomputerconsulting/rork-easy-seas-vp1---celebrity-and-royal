@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import createContextHook from "@nkzw/create-context-hook";
 import type { FinancialSummary, BookedCruise } from "@/types/models";
-import { useCruiseStore } from "./CruiseStore";
+import { useCoreData } from "./CoreDataProvider";
 
 interface FinancialsState {
   summary: FinancialSummary;
@@ -27,7 +27,7 @@ const DEFAULT_SUMMARY: FinancialSummary = {
 };
 
 export const [FinancialsProvider, useFinancials] = createContextHook((): FinancialsState => {
-  const { bookedCruises } = useCruiseStore();
+  const { bookedCruises } = useCoreData();
   const [isCalculating, setIsCalculating] = useState(false);
 
   const calculateSummary = useCallback((cruises: BookedCruise[]): FinancialSummary => {
