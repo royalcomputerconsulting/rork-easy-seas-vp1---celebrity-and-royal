@@ -3,7 +3,7 @@ import { InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { SlotMachine, SlotMachineFilter, DeckPlanLocation } from '@/types/models';
-import { searchSlotMachines, filterSlotMachines } from '@/constants/globalSlotMachines';
+import { GLOBAL_SLOT_MACHINES, searchSlotMachines, filterSlotMachines } from '@/constants/globalSlotMachines';
 
 const STORAGE_KEYS = {
   USER_MACHINES: '@easyseas/user_slot_machines',
@@ -74,7 +74,6 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
       setIsLoading(true);
       console.log('[SlotMachine] Loading data from storage...');
       
-      const { GLOBAL_SLOT_MACHINES } = await import('@/constants/globalSlotMachines');
       setGlobalMachines(GLOBAL_SLOT_MACHINES);
       
       const [userMachinesData, deckLocationsData] = await Promise.all([
