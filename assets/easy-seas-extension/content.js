@@ -182,6 +182,58 @@ void function() {
 
   function checkAuthFromDOM() {
     if (capturedData.cruiseLine === 'carnival') {
+      var wasLoggedIn = capturedData.isLoggedIn;
+      var cookieVifp = '';
+      var cookieFirstName = '';
+      var hasCookieAuth = false;
+      try {
+        var rawCookies = (document.cookie || '').split(';');
+        for (var ci = 0; ci < rawCookies.length; ci++) {
+          var ck = rawCookies[ci].trim();
+          var eqIdx = ck.indexOf('=');
+          if (eqIdx === -1) continue;
+          var ckVal = ck.substring(eqIdx + 1);
+          try {
+            var decoded = decodeURIComponent(ckVal);
+            try {
+              var parsed = JSON.parse(decoded);
+              if (parsed && parsed.PastGuestNumber) {
+                hasCookieAuth = true;
+                cookieVifp = String(parsed.PastGuestNumber);
+                cookieFirstName = parsed.FirstName || '';
+                break;
+              }
+            } catch(jsonErr) {}
+            if (decoded.indexOf('PastGuestNumber=') !== -1) {
+              var pgMatch = decoded.match(/PastGuestNumber=(\d+)/);
+              if (pgMatch) {
+                hasCookieAuth = true;
+                cookieVifp = pgMatch[1];
+                break;
+              }
+            }
+          } catch(decErr) {}
+        }
+      } catch(cookieErr) {}
+
+      if (hasCookieAuth) {
+        capturedData.isLoggedIn = true;
+        if (!authContext) {
+          authContext = {
+            token: 'carnival_cookie_auth',
+            accountId: cookieVifp || 'carnival_user',
+            loyaltyId: cookieVifp || '',
+            firstName: cookieFirstName || ''
+          };
+        }
+        if (!wasLoggedIn) {
+          saveCapturedToStorage();
+          addLog('Carnival login detected from cookies' + (cookieFirstName ? ' - Welcome ' + cookieFirstName : '') + (cookieVifp ? ' (VIFP: ' + cookieVifp + ')' : ''), 'success');
+        }
+        console.log('[Easy Seas] Carnival cookie auth found: VIFP=' + cookieVifp + ' name=' + cookieFirstName);
+        return;
+      }
+
       var bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
       var bodyHTML = (document.body && document.body.innerHTML) ? document.body.innerHTML : '';
       var bodyTextUpper = bodyText.toUpperCase();
@@ -195,17 +247,7 @@ void function() {
       var hasCookie = cookieStr.indexOf('CCL') !== -1 || cookieStr.indexOf('carnival') !== -1 ||
         cookieStr.indexOf('VIFP') !== -1 || cookieStr.indexOf('vifp') !== -1 ||
         cookieStr.indexOf('sess') !== -1 || cookieStr.indexOf('auth') !== -1 ||
-        cookieStr.length > 200;
-      var hasLocalStorage = false;
-      try {
-        var keys = Object.keys(localStorage || {});
-        for (var li = 0; li < keys.length; li++) {
-          if (/token|auth|session|user|vifp|loyalty|profile|member|account/i.test(keys[li])) {
-            var lsVal = localStorage.getItem(keys[li]);
-            if (lsVal && lsVal.length > 10) { hasLocalStorage = true; break; }
-          }
-        }
-      } catch(lse) {}
+        cookieStr.indexOf('PastGuestNumber') !== -1 || cookieStr.length > 200;
       var hasManageBookings = document.querySelectorAll('a[href*="/booked"], a[href*="/profilemanagement"], a[href*="manage-booking"], a[href*="Manage-Bookings"], a[href*="manage-bookings"], a[href*="/myprofile"], a[href*="my-cruise"], a[href*="/booking"], a[href*="/reservations"], [data-testid*="manage"], [data-testid*="profile"], [data-testid*="booking"]').length > 0;
       var allElements = Array.from(document.querySelectorAll('a, button, nav *, header *, div[role="navigation"] *, [class*="nav"] *, [class*="header"] *, span, li'));
       var hasManageBookingsText = allElements.some(function(el) {
@@ -223,13 +265,12 @@ void function() {
         bodyTextUpper.indexOf('TIER DIAMOND') !== -1 || bodyHTMLUpper.indexOf('TIER RED') !== -1 ||
         bodyHTMLUpper.indexOf('TIER BLUE') !== -1 || bodyHTMLUpper.indexOf('TIER GOLD') !== -1 ||
         bodyHTMLUpper.indexOf('TIER PLATINUM') !== -1 || bodyHTMLUpper.indexOf('TIER DIAMOND') !== -1;
-      var wasLoggedIn = capturedData.isLoggedIn;
-      capturedData.isLoggedIn = hasWelcome || hasVIFP || hasVIFPEl || hasLogout || isProfilePage || hasManageBookings || hasManageBookingsText || hasVIFPNumber || hasVIFPInHTML || hasTierText || (hasCookie && hasLocalStorage);
+      capturedData.isLoggedIn = hasWelcome || hasVIFP || hasVIFPEl || hasLogout || isProfilePage || hasCookie || hasManageBookings || hasManageBookingsText || hasVIFPNumber || hasVIFPInHTML || hasTierText;
       console.log('[Easy Seas] Carnival login check:', JSON.stringify({
         hasWelcome: hasWelcome, hasVIFP: hasVIFP, hasVIFPEl: hasVIFPEl, hasLogout: hasLogout,
         isProfilePage: isProfilePage, hasManageBookings: hasManageBookings, hasManageBookingsText: hasManageBookingsText,
         hasVIFPNumber: hasVIFPNumber, hasVIFPInHTML: hasVIFPInHTML, hasTierText: hasTierText,
-        hasCookie: hasCookie, hasLocalStorage: hasLocalStorage, result: capturedData.isLoggedIn,
+        hasCookie: hasCookie, result: capturedData.isLoggedIn,
         bodyTextLen: bodyText.length, bodyHTMLLen: bodyHTML.length
       }));
       if (capturedData.isLoggedIn && !wasLoggedIn) {

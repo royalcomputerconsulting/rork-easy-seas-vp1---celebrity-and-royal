@@ -30,8 +30,47 @@
 
   function getCarnivalAuth() {
     try {
-      var keys = Object.keys(localStorage || {});
       var authData = null;
+
+      try {
+        var cookieStr = document.cookie || '';
+        var cookies = cookieStr.split(';');
+        for (var ci = 0; ci < cookies.length; ci++) {
+          var cookie = cookies[ci].trim();
+          var eqIdx = cookie.indexOf('=');
+          if (eqIdx === -1) continue;
+          var cookieVal = cookie.substring(eqIdx + 1);
+          try {
+            var decoded = decodeURIComponent(cookieVal);
+            try {
+              var parsed = JSON.parse(decoded);
+              if (parsed && parsed.PastGuestNumber) {
+                console.log('[Easy Seas Page] Found auth from cookie (PastGuestNumber:', parsed.PastGuestNumber + ')');
+                return {
+                  token: 'carnival_cookie_auth',
+                  accountId: String(parsed.PastGuestNumber),
+                  loyaltyId: String(parsed.PastGuestNumber),
+                  firstName: parsed.FirstName || ''
+                };
+              }
+            } catch(jsonErr) {}
+            if (decoded.indexOf('PastGuestNumber=') !== -1) {
+              var pgMatch = decoded.match(/PastGuestNumber=(\d+)/);
+              if (pgMatch) {
+                console.log('[Easy Seas Page] Found auth from TGO cookie (PastGuestNumber:', pgMatch[1] + ')');
+                return {
+                  token: 'carnival_cookie_auth',
+                  accountId: pgMatch[1],
+                  loyaltyId: pgMatch[1],
+                  firstName: ''
+                };
+              }
+            }
+          } catch(decErr) {}
+        }
+      } catch(cookieErr) { console.warn('[Easy Seas Page] Cookie check error:', cookieErr); }
+
+      var keys = Object.keys(localStorage || {});
 
       var carnivalPatterns = ['carnival_session', 'carnival_auth', 'cc_session', 'vifp_session', 'user_session', 'persist:auth', 'persist:user', 'persist:root'];
       for (var pi = 0; pi < carnivalPatterns.length; pi++) {
