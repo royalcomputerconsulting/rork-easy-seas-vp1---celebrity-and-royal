@@ -1,14 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  FlatList,
   ScrollView,
   TouchableOpacity,
   TextInput,
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import type { ListRenderItemInfo } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Search, X, Check, Ship, Filter } from 'lucide-react-native';
@@ -16,9 +18,38 @@ import { COLORS } from '@/constants/theme';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useDeckPlan } from '@/state/DeckPlanProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { SlotManufacturer } from '@/types/models';
+import { SlotManufacturer, MachineEncyclopediaEntry } from '@/types/models';
 
 type FilterModalType = 'manufacturer' | 'ship' | null;
+
+interface MachineRowProps {
+  machine: MachineEncyclopediaEntry;
+  isSelected: boolean;
+  onToggle: (id: string) => void;
+}
+
+const MachineRow = React.memo(function MachineRow({ machine, isSelected, onToggle }: MachineRowProps) {
+  return (
+    <TouchableOpacity
+      style={[styles.machineRow, isSelected && styles.machineRowSelected]}
+      onPress={() => onToggle(machine.id)}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+        {isSelected && <Check color={COLORS.white} size={18} strokeWidth={3} />}
+      </View>
+      <View style={styles.machineInfo}>
+        <Text style={styles.machineName} numberOfLines={1}>{machine.machineName}</Text>
+        <Text style={styles.manufacturerText} numberOfLines={1}>{machine.manufacturer}</Text>
+      </View>
+      {machine.apMetadata?.persistenceType && machine.apMetadata.persistenceType !== 'None' && (
+        <View style={styles.apIndicator}>
+          <Text style={styles.apIndicatorText}>AP</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+});
 
 export default function AddMachinesToShipScreen() {
   const router = useRouter();
@@ -56,15 +87,31 @@ export default function AddMachinesToShipScreen() {
     setSelectedMachines(new Set());
   };
 
-  const toggleMachine = (machineId: string) => {
-    const newSelected = new Set(selectedMachines);
-    if (newSelected.has(machineId)) {
-      newSelected.delete(machineId);
-    } else {
-      newSelected.add(machineId);
-    }
-    setSelectedMachines(newSelected);
-  };
+  const toggleMachine = useCallback((machineId: string) => {
+    setSelectedMachines(prev => {
+      const newSelected = new Set(prev);
+      if (newSelected.has(machineId)) {
+        newSelected.delete(machineId);
+      } else {
+        newSelected.add(machineId);
+      }
+      return newSelected;
+    });
+  }, []);
+
+  const keyExtractor = useCallback((item: MachineEncyclopediaEntry) => item.id, []);
+
+  const renderMachineRow = useCallback(({ item }: ListRenderItemInfo<MachineEncyclopediaEntry>) => (
+    <MachineRow machine={item} isSelected={selectedMachines.has(item.id)} onToggle={toggleMachine} />
+  ), [selectedMachines, toggleMachine]);
+
+  const ListEmpty = useMemo(() => (
+    <View style={styles.emptyState}>
+      <Search color={COLORS.textDarkGrey} size={48} strokeWidth={1.5} />
+      <Text style={styles.emptyStateText}>No machines found</Text>
+      <Text style={styles.emptyStateSubtext}>Try adjusting your search or filters</Text>
+    </View>
+  ), []);
 
   const toggleManufacturer = (manufacturer: SlotManufacturer) => {
     const current = [...filterManufacturers];
@@ -221,44 +268,20 @@ export default function AddMachinesToShipScreen() {
           )}
         </View>
 
-        <ScrollView
+        <FlatList
+          data={displayedMachines}
+          renderItem={renderMachineRow}
+          keyExtractor={keyExtractor}
           style={styles.scrollView}
           contentContainerStyle={styles.machinesList}
           showsVerticalScrollIndicator={false}
-        >
-          {displayedMachines.map((machine) => {
-            const isSelected = selectedMachines.has(machine.id);
-            return (
-              <TouchableOpacity
-                key={machine.id}
-                style={[styles.machineRow, isSelected && styles.machineRowSelected]}
-                onPress={() => toggleMachine(machine.id)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                  {isSelected && <Check color={COLORS.white} size={18} strokeWidth={3} />}
-                </View>
-                <View style={styles.machineInfo}>
-                  <Text style={styles.machineName} numberOfLines={1}>{machine.machineName}</Text>
-                  <Text style={styles.manufacturerText} numberOfLines={1}>{machine.manufacturer}</Text>
-                </View>
-                {machine.apMetadata?.persistenceType && machine.apMetadata.persistenceType !== 'None' && (
-                  <View style={styles.apIndicator}>
-                    <Text style={styles.apIndicatorText}>AP</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-
-          {displayedMachines.length === 0 && (
-            <View style={styles.emptyState}>
-              <Search color={COLORS.textDarkGrey} size={48} strokeWidth={1.5} />
-              <Text style={styles.emptyStateText}>No machines found</Text>
-              <Text style={styles.emptyStateSubtext}>Try adjusting your search or filters</Text>
-            </View>
-          )}
-        </ScrollView>
+          ListEmptyComponent={ListEmpty}
+          extraData={selectedMachines}
+          initialNumToRender={15}
+          maxToRenderPerBatch={15}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS !== 'web'}
+        />
 
         {selectedShip && selectedMachines.size > 0 && (
           <View style={styles.footer}>

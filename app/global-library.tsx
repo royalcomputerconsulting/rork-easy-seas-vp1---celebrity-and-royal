@@ -1,11 +1,78 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Modal } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Platform, Modal, ScrollView } from 'react-native';
+import type { ListRenderItemInfo } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, Filter, X, Plus, ChevronDown, Ship } from 'lucide-react-native';
 import { COLORS } from '@/constants/theme';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
-import type { SlotManufacturer, MachineVolatility, PersistenceType } from '@/types/models';
+import type { SlotManufacturer, MachineVolatility, PersistenceType, MachineEncyclopediaEntry } from '@/types/models';
+
+interface MachineCardProps {
+  machine: MachineEncyclopediaEntry;
+  onPress: (id: string) => void;
+  onAdd: (id: string) => void;
+}
+
+const MachineCard = React.memo(function MachineCard({ machine, onPress, onAdd }: MachineCardProps) {
+  return (
+    <View style={styles.machineCard}>
+      <TouchableOpacity
+        style={styles.machineContent}
+        onPress={() => onPress(machine.id)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.machineHeader}>
+          <View style={styles.machineTitleRow}>
+            <Text style={styles.machineName} numberOfLines={2}>
+              {machine.machineName}
+            </Text>
+            {machine.isInMyAtlas && (
+              <View style={styles.addedBadge}>
+                <Text style={styles.addedBadgeText}>Added</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.machineManufacturer}>{machine.manufacturer}</Text>
+        </View>
+
+        <View style={styles.machineDetails}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Series:</Text>
+            <Text style={styles.detailValue}>{machine.gameSeries || 'N/A'}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Volatility:</Text>
+            <Text style={styles.detailValue}>{machine.volatility}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Year:</Text>
+            <Text style={styles.detailValue}>{machine.releaseYear}</Text>
+          </View>
+          {machine.apMetadata && machine.apMetadata.persistenceType !== 'None' && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>AP Type:</Text>
+              <View style={styles.apTypeBadge}>
+                <Text style={styles.apTypeText}>{machine.apMetadata.persistenceType}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+
+      {!machine.isInMyAtlas && (
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => onAdd(machine.id)}
+          activeOpacity={0.7}
+        >
+          <Plus color={COLORS.white} size={18} strokeWidth={2.5} />
+          <Text style={styles.addButtonText}>Add to Atlas</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+});
 
 export default function GlobalLibraryScreen() {
   const router = useRouter();
@@ -30,10 +97,33 @@ export default function GlobalLibraryScreen() {
   const [filterModalVisible, setFilterModalVisible] = useState<boolean>(false);
   const [sortModalVisible, setSortModalVisible] = useState<boolean>(false);
 
-  const handleAddMachine = async (globalMachineId: string) => {
+  const handleAddMachine = useCallback(async (globalMachineId: string) => {
     const id = await addMachineFromGlobal(globalMachineId);
     console.log(`[GlobalLibrary] Added machine: ${id}`);
-  };
+  }, [addMachineFromGlobal]);
+
+  const handleMachinePress = useCallback((machineId: string) => {
+    router.push(`/machine-detail/${machineId}` as any);
+  }, [router]);
+
+  const keyExtractor = useCallback((item: MachineEncyclopediaEntry) => item.id, []);
+
+  const renderMachineCard = useCallback(({ item }: ListRenderItemInfo<MachineEncyclopediaEntry>) => (
+    <MachineCard machine={item} onPress={handleMachinePress} onAdd={handleAddMachine} />
+  ), [handleMachinePress, handleAddMachine]);
+
+  const ListHeader = useMemo(() => (
+    <Text style={styles.resultCount}>
+      {filteredGlobalLibrary.length} machines found
+    </Text>
+  ), [filteredGlobalLibrary.length]);
+
+  const ListEmpty = useMemo(() => (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyText}>No machines found</Text>
+      <Text style={styles.emptySubtext}>Try adjusting your search or filters</Text>
+    </View>
+  ), []);
 
   const activeFilterCount = 
     filterManufacturers.length + 
@@ -107,80 +197,20 @@ export default function GlobalLibraryScreen() {
           </View>
         </View>
 
-        <ScrollView 
+        <FlatList
+          data={filteredGlobalLibrary}
+          renderItem={renderMachineCard}
+          keyExtractor={keyExtractor}
           style={styles.scrollView}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.resultCount}>
-            {filteredGlobalLibrary.length} machines found
-          </Text>
-
-          {filteredGlobalLibrary.map((machine) => (
-            <View key={machine.id} style={styles.machineCard}>
-              <TouchableOpacity
-                style={styles.machineContent}
-                onPress={() => router.push(`/machine-detail/${machine.id}` as any)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.machineHeader}>
-                  <View style={styles.machineTitleRow}>
-                    <Text style={styles.machineName} numberOfLines={2}>
-                      {machine.machineName}
-                    </Text>
-                    {machine.isInMyAtlas && (
-                      <View style={styles.addedBadge}>
-                        <Text style={styles.addedBadgeText}>Added</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.machineManufacturer}>{machine.manufacturer}</Text>
-                </View>
-
-                <View style={styles.machineDetails}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Series:</Text>
-                    <Text style={styles.detailValue}>{machine.gameSeries || 'N/A'}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Volatility:</Text>
-                    <Text style={styles.detailValue}>{machine.volatility}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Year:</Text>
-                    <Text style={styles.detailValue}>{machine.releaseYear}</Text>
-                  </View>
-                  {machine.apMetadata && machine.apMetadata.persistenceType !== 'None' && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>AP Type:</Text>
-                      <View style={styles.apTypeBadge}>
-                        <Text style={styles.apTypeText}>{machine.apMetadata.persistenceType}</Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-
-              {!machine.isInMyAtlas && (
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() => handleAddMachine(machine.id)}
-                  activeOpacity={0.7}
-                >
-                  <Plus color={COLORS.white} size={18} strokeWidth={2.5} />
-                  <Text style={styles.addButtonText}>Add to Atlas</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
-
-          {filteredGlobalLibrary.length === 0 && (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No machines found</Text>
-              <Text style={styles.emptySubtext}>Try adjusting your search or filters</Text>
-            </View>
-          )}
-        </ScrollView>
+          ListHeaderComponent={ListHeader}
+          ListEmptyComponent={ListEmpty}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS !== 'web'}
+        />
 
         <TouchableOpacity
           style={styles.bulkAddButton}

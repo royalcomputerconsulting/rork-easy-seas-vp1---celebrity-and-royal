@@ -1,11 +1,34 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, TextInput, Platform } from 'react-native';
+import type { ListRenderItemInfo } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react-native';
 import { COLORS } from '@/constants/theme';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
-import type { SlotManufacturer, MachineVolatility, CabinetType, PersistenceType } from '@/types/models';
+import type { SlotManufacturer, MachineVolatility, CabinetType, PersistenceType, MachineEncyclopediaEntry } from '@/types/models';
+
+interface WizardMachineRowProps {
+  machine: MachineEncyclopediaEntry;
+  onSelect: (id: string) => void;
+}
+
+const WizardMachineRow = React.memo(function WizardMachineRow({ machine, onSelect }: WizardMachineRowProps) {
+  return (
+    <TouchableOpacity
+      style={styles.machineRow}
+      onPress={() => onSelect(machine.id)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.machineInfo}>
+        <Text style={styles.machineName}>{machine.machineName}</Text>
+        <Text style={styles.machineDetails}>
+          {machine.manufacturer} • {machine.volatility} • {machine.releaseYear}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 type WizardStep = 1 | 2 | 3;
 
@@ -23,24 +46,19 @@ export default function AddMachineWizardScreen() {
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const filteredMachines = globalLibrary.filter(machine =>
-    machine.machineName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    machine.manufacturer.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (currentStep < 3) {
       nextWizardStep();
-      setCurrentStep((currentStep + 1) as WizardStep);
+      setCurrentStep((prev) => (prev < 3 ? (prev + 1) as WizardStep : prev));
     }
-  };
+  }, [currentStep, nextWizardStep]);
 
-  const handlePrev = () => {
+  const handlePrev = useCallback(() => {
     if (currentStep > 1) {
       prevWizardStep();
-      setCurrentStep((currentStep - 1) as WizardStep);
+      setCurrentStep((prev) => (prev > 1 ? (prev - 1) as WizardStep : prev));
     }
-  };
+  }, [currentStep, prevWizardStep]);
 
   const handleComplete = async () => {
     const machineId = await completeWizard();
@@ -54,10 +72,26 @@ export default function AddMachineWizardScreen() {
     handleNext();
   };
 
-  const selectGlobalMachine = (globalMachineId: string) => {
+  const selectGlobalMachine = useCallback((globalMachineId: string) => {
     updateWizardData({ source: 'global', globalMachineId });
     handleNext();
-  };
+  }, [updateWizardData, handleNext]);
+
+  const filteredMachines = useMemo(() => 
+    globalLibrary.filter(machine =>
+      machine.machineName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      machine.manufacturer.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+    [globalLibrary, searchQuery]
+  );
+
+  const keyExtractor = useCallback((item: MachineEncyclopediaEntry) => item.id, []);
+
+  const renderWizardMachineRow = useCallback(({ item }: ListRenderItemInfo<MachineEncyclopediaEntry>) => (
+    <WizardMachineRow machine={item} onSelect={selectGlobalMachine} />
+  ), [selectGlobalMachine]);
+
+  const isGlobalStep2 = currentStep === 2 && wizardData.source === 'global';
 
   return (
     <>
@@ -86,9 +120,10 @@ export default function AddMachineWizardScreen() {
         </View>
 
         <ScrollView 
-          style={styles.scrollView}
+          style={isGlobalStep2 ? undefined : styles.scrollView}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
+          scrollEnabled={!isGlobalStep2}
         >
           {currentStep === 1 && (
             <View>
@@ -133,8 +168,8 @@ export default function AddMachineWizardScreen() {
             </View>
           )}
 
-          {currentStep === 2 && wizardData.source === 'global' && (
-            <View>
+          {isGlobalStep2 && (
+            <View style={styles.globalSearchContainer}>
               <Text style={styles.stepTitle}>Step 2: Select Machine</Text>
               <Text style={styles.stepDescription}>
                 Choose from the global database
@@ -150,22 +185,6 @@ export default function AddMachineWizardScreen() {
                   onChangeText={setSearchQuery}
                 />
               </View>
-
-              {filteredMachines.map((machine) => (
-                <TouchableOpacity
-                  key={machine.id}
-                  style={styles.machineRow}
-                  onPress={() => selectGlobalMachine(machine.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.machineInfo}>
-                    <Text style={styles.machineName}>{machine.machineName}</Text>
-                    <Text style={styles.machineDetails}>
-                      {machine.manufacturer} • {machine.volatility} • {machine.releaseYear}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
             </View>
           )}
 
@@ -400,6 +419,21 @@ export default function AddMachineWizardScreen() {
           )}
         </ScrollView>
 
+        {isGlobalStep2 && (
+          <FlatList
+            data={filteredMachines}
+            renderItem={renderWizardMachineRow}
+            keyExtractor={keyExtractor}
+            style={styles.machineListContainer}
+            contentContainerStyle={styles.machineListContent}
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            removeClippedSubviews={Platform.OS !== 'web'}
+          />
+        )}
+
         <View style={styles.actionBar}>
           {currentStep > 1 && (
             <TouchableOpacity
@@ -463,6 +497,16 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  globalSearchContainer: {
+    marginBottom: 0,
+  },
+  machineListContainer: {
+    flex: 1,
+  },
+  machineListContent: {
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 120 : 110,
   },
   content: {
     paddingHorizontal: 20,
