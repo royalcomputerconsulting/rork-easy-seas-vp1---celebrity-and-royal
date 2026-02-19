@@ -13,7 +13,14 @@ import {
   applyFreeplayOBCData,
 } from "./coreData/dataEnrichment";
 import { DEFAULT_FILTERS } from "./coreData/filterLogic";
-import { STORAGE_KEYS, DEFAULT_SETTINGS, CURRENT_CRUISE_DATA_VERSION, type AppSettings } from "./coreData/storageConfig";
+import { STORAGE_KEYS, DEFAULT_SETTINGS, type AppSettings } from "./coreData/storageConfig";
+import {
+  readAllStorageKeys,
+  determineUserStatus,
+  processBookedCruises,
+  processCalendarEvents,
+  processMetadata,
+} from "./coreData/storageLoaders";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -424,236 +431,74 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
     
     try {
-      // Try to load from backend first if authenticated
       if (authenticatedEmail) {
         const hasBackendData = await loadFromBackend();
         if (hasBackendData) {
           console.log('[CoreData] Loaded user data from backend, will refresh from storage');
         }
       }
-      
-      console.log('[CoreData] Loading from storage...');
 
-      const storagePromises = [
-        AsyncStorage.getItem(STORAGE_KEYS.CRUISES).catch(e => { console.error('[CoreData] Error loading cruises:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.BOOKED_CRUISES).catch(e => { console.error('[CoreData] Error loading booked:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.CASINO_OFFERS).catch(e => { console.error('[CoreData] Error loading offers:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.CALENDAR_EVENTS).catch(e => { console.error('[CoreData] Error loading events:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.LAST_SYNC).catch(e => { console.error('[CoreData] Error loading lastSync:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.SETTINGS).catch(e => { console.error('[CoreData] Error loading settings:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.USER_POINTS).catch(e => { console.error('[CoreData] Error loading points:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.CLUB_PROFILE).catch(e => { console.error('[CoreData] Error loading profile:', e); return null; }),
-        AsyncStorage.getItem(STORAGE_KEYS.HAS_IMPORTED_DATA).catch(e => { console.error('[CoreData] Error loading import flag:', e); return null; }),
-      ];
+      const snapshot = await readAllStorageKeys();
+      const status = determineUserStatus(snapshot, initialCheckComplete, hasCloudData);
 
-      const [cruisesData, bookedData, offersData, eventsData, lastSync, settingsData, pointsData, profileData, hasImportedData] = await Promise.all(storagePromises);
-      console.log('[CoreData] Storage promises resolved');
+      console.log('[CoreData] Parsed offers:', status.parsedOffersData.length);
+      setCasinoOffersState(status.parsedOffersData);
 
-      const hasImported = hasImportedData === 'true';
-      const hasAnyExistingData = !!(bookedData || offersData || profileData || pointsData || cruisesData);
-      
-      // Parse existing data to check if there's any real (non-mock) data
-      const parsedBookedData = bookedData ? JSON.parse(bookedData) : [];
-      const parsedOffersData = offersData ? JSON.parse(offersData) : [];
-      const hasRealData = parsedBookedData.length > 0 || parsedOffersData.length > 0;
-      
-      // Don't treat as first time user if:
-      // 1. Cloud sync hasn't completed yet or cloud has data
-      // 2. There's ANY existing data (prevents showing sample data to returning users)
-      const isFirstTimeUser = hasImportedData === null && !hasAnyExistingData && initialCheckComplete && !hasCloudData;
-      console.log('[CoreData] Data status:', { 
-        hasImported, 
-        isFirstTimeUser, 
-        hasAnyExistingData, 
-        hasRealData,
-        bookedCount: parsedBookedData.length,
-        offersCount: parsedOffersData.length,
-        initialCheckComplete, 
-        hasCloudData 
-      });
-
-      // Only show offers if they exist (no mock offers)
-      console.log('[CoreData] Parsed offers:', parsedOffersData.length);
-      setCasinoOffersState(parsedOffersData);
-
-      if (cruisesData) {
-        const parsedCruises = JSON.parse(cruisesData) as Cruise[];
+      if (snapshot.cruisesData) {
+        const parsedCruises = JSON.parse(snapshot.cruisesData) as Cruise[];
         setCruisesState(parsedCruises);
       }
-      
-      const today = new Date();
-      const transitionCruisesToCompleted = (cruises: BookedCruise[]): BookedCruise[] => {
-        return cruises.map((cruise: BookedCruise) => {
-          if (cruise.returnDate) {
-            const returnDate = new Date(cruise.returnDate);
-            if (returnDate < today && cruise.completionState !== 'completed') {
-              console.log('[CoreData] Auto-transitioning cruise to completed:', cruise.id, cruise.shipName, cruise.returnDate);
-              return {
-                ...cruise,
-                status: 'completed',
-                completionState: 'completed',
-              };
-            }
-          }
-          return cruise;
-        });
-      };
 
-      let finalBookedCount = 0;
-      
-      if (bookedData && parsedBookedData.length > 0) {
-        console.log('[CoreData] Found existing booked data, processing...');
-        
-        const nonMockCruises = parsedBookedData.filter((cruise: any) => 
-          !cruise.id?.includes('demo-') && 
-          !cruise.id?.includes('booked-virtual') &&
-          cruise.reservationNumber !== 'DEMO123' &&
-          cruise.reservationNumber !== 'DEMO456' &&
-          cruise.shipName !== 'Virtually a Ship of the Seas'
-        );
-        
-        const storedVersion = await AsyncStorage.getItem(STORAGE_KEYS.CRUISE_DATA_VERSION).catch(() => null);
-        let mergedCruises = nonMockCruises;
-        
-        if (storedVersion !== CURRENT_CRUISE_DATA_VERSION) {
-          console.log('[CoreData] Cruise data version changed:', storedVersion, '->', CURRENT_CRUISE_DATA_VERSION, '- merging missing cruises');
-          const { BOOKED_CRUISES_DATA } = getMockCruises();
-          const realMockCruises = BOOKED_CRUISES_DATA.filter((mc: BookedCruise) =>
-            !mc.id?.includes('demo-') &&
-            !mc.id?.includes('booked-virtual') &&
-            mc.reservationNumber !== 'DEMO123' &&
-            mc.reservationNumber !== 'DEMO456' &&
-            mc.shipName !== 'Virtually a Ship of the Seas'
-          );
-          
-          const existingResNums = new Set(mergedCruises.map((c: any) => c.reservationNumber));
-          const missingCruises = realMockCruises.filter((mc: BookedCruise) => !existingResNums.has(mc.reservationNumber));
-          
-          if (missingCruises.length > 0) {
-            console.log('[CoreData] Adding', missingCruises.length, 'missing cruises:', missingCruises.map((c: BookedCruise) => c.reservationNumber));
-            mergedCruises = [...mergedCruises, ...missingCruises];
-          } else {
-            console.log('[CoreData] No missing cruises to add');
-          }
-          
-          await AsyncStorage.setItem(STORAGE_KEYS.CRUISE_DATA_VERSION, CURRENT_CRUISE_DATA_VERSION).catch(console.error);
+      const bookedResult = await processBookedCruises(status, snapshot, getMockCruises, getFirstTimeUserSampleData);
+      setBookedCruisesState(bookedResult.bookedCruises);
+
+      if (bookedResult.offersOverride) {
+        setCasinoOffersState(bookedResult.offersOverride);
+      }
+
+      if (bookedResult.shouldPersistMergedCruises) {
+        await persistData(STORAGE_KEYS.BOOKED_CRUISES, bookedResult.bookedCruises);
+        console.log('[CoreData] Persisted merged cruise data with', bookedResult.bookedCruises.length, 'cruises');
+      }
+
+      if (bookedResult.shouldPersistFirstTimeData) {
+        await AsyncStorage.setItem(STORAGE_KEYS.BOOKED_CRUISES, JSON.stringify(bookedResult.bookedCruises));
+        if (bookedResult.offersOverride) {
+          await AsyncStorage.setItem(STORAGE_KEYS.CASINO_OFFERS, JSON.stringify(bookedResult.offersOverride));
         }
-        
-        console.log('[CoreData] Filtered cruises:', { 
-          original: parsedBookedData.length, 
-          afterFilter: nonMockCruises.length,
-          afterMerge: mergedCruises.length,
-        });
-        
-        const withTransition = transitionCruisesToCompleted(mergedCruises);
-        const withItineraries = enrichCruisesWithMockItineraries(withTransition);
-        const withKnownRetail = applyKnownRetailValues(withItineraries);
-        const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
-        const enrichedBooked = enrichCruisesWithReceiptData(withFreeplayOBC);
-        finalBookedCount = enrichedBooked.length;
-        setBookedCruisesState(enrichedBooked);
-        
-        if (mergedCruises.length > nonMockCruises.length) {
-          await persistData(STORAGE_KEYS.BOOKED_CRUISES, enrichedBooked);
-          console.log('[CoreData] Persisted merged cruise data with', enrichedBooked.length, 'cruises');
-        }
-      } else if (isFirstTimeUser && !hasRealData) {
-        console.log('[CoreData] First time user with no real data - loading sample demo data');
-        const { sampleCruises, sampleOffers } = getFirstTimeUserSampleData();
-        const withItineraries = enrichCruisesWithMockItineraries(sampleCruises);
-        const withKnownRetail = applyKnownRetailValues(withItineraries);
-        const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
-        const enrichedSample = enrichCruisesWithReceiptData(withFreeplayOBC);
-        finalBookedCount = enrichedSample.length;
-        setBookedCruisesState(enrichedSample);
-        setCasinoOffersState(sampleOffers);
-        await AsyncStorage.setItem(STORAGE_KEYS.BOOKED_CRUISES, JSON.stringify(enrichedSample));
-        await AsyncStorage.setItem(STORAGE_KEYS.CASINO_OFFERS, JSON.stringify(sampleOffers));
         await AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, 'true');
-        console.log('[CoreData] Sample demo data loaded:', enrichedSample.length, 'cruises,', sampleOffers.length, 'offers');
-      } else {
-        console.log('[CoreData] No booked cruises or real data exists - keeping empty state');
-        finalBookedCount = 0;
-        setBookedCruisesState([]);
+        console.log('[CoreData] First-time user data persisted');
       }
-      
-      let parsedEvents: CalendarEvent[] = eventsData ? JSON.parse(eventsData) : [];
-      
-      const bookedCruisesForEvents = bookedCruises || [];
-      if (parsedEvents.length === 0 && finalBookedCount > 0) {
-        console.log('[CoreData] No calendar events found but', finalBookedCount, 'booked cruises exist - auto-generating events');
-        const currentBookedState = (() => {
-          if (bookedData && parsedBookedData.length > 0) {
-            return parsedBookedData.filter((c: any) =>
-              !c.id?.includes('demo-') &&
-              !c.id?.includes('booked-virtual') &&
-              c.reservationNumber !== 'DEMO123' &&
-              c.reservationNumber !== 'DEMO456' &&
-              c.shipName !== 'Virtually a Ship of the Seas'
-            );
-          }
-          return [];
-        })();
-        parsedEvents = currentBookedState
-          .filter((cruise: BookedCruise) => cruise.sailDate && cruise.returnDate)
-          .map((cruise: BookedCruise): CalendarEvent => ({
-            id: `cruise-${cruise.id}`,
-            title: cruise.shipName,
-            description: cruise.itineraryName || `${cruise.nights} Night Cruise`,
-            startDate: cruise.sailDate,
-            endDate: cruise.returnDate,
-            type: 'cruise',
-            allDay: true,
-            location: cruise.departurePort,
-            cruiseId: cruise.id,
 
-          }));
-        console.log('[CoreData] Auto-generated', parsedEvents.length, 'calendar events from booked cruises');
-        if (parsedEvents.length > 0) {
-          await persistData(STORAGE_KEYS.CALENDAR_EVENTS, parsedEvents);
-        }
+      const eventsResult = processCalendarEvents(snapshot, status, bookedResult.finalBookedCount);
+      if (eventsResult.shouldPersist) {
+        await persistData(STORAGE_KEYS.CALENDAR_EVENTS, eventsResult.events);
       }
-      
-      console.log('[CoreData] Parsed events:', parsedEvents.length);
-      setCalendarEventsState(parsedEvents);
-      if (lastSync) setLastSyncDate(lastSync);
-      
-      if (settingsData) {
-        setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(settingsData) });
-      }
-      
-      if (pointsData) {
-        setUserPointsState(parseInt(pointsData, 10));
-      }
-      
-      if (profileData) {
-        setClubRoyaleProfileState(JSON.parse(profileData));
-        console.log('[CoreData] Loaded existing loyalty profile');
-      } else if (isFirstTimeUser) {
-        console.log('[CoreData] First time user - initializing with default loyalty profile');
-        setClubRoyaleProfileState(SAMPLE_CLUB_ROYALE_PROFILE);
-      } else {
-        console.log('[CoreData] No profile data, but not first time user - keeping current state');
-      }
+      setCalendarEventsState(eventsResult.events);
+
+      if (snapshot.lastSync) setLastSyncDate(snapshot.lastSync);
+
+      const metadata = processMetadata(snapshot, status.isFirstTimeUser);
+      if (metadata.settings) setSettings(metadata.settings);
+      if (metadata.userPoints !== null) setUserPointsState(metadata.userPoints);
+      if (metadata.clubRoyaleProfile) setClubRoyaleProfileState(metadata.clubRoyaleProfile);
 
       console.log('[CoreData] === LOAD COMPLETE ===');
       console.log('[CoreData] Loaded data summary:', {
-        cruises: cruisesData ? JSON.parse(cruisesData).length : 0,
-        booked: finalBookedCount,
-        offers: parsedOffersData.length,
-        events: parsedEvents.length,
-        hasImportedData: hasImported,
+        cruises: snapshot.cruisesData ? JSON.parse(snapshot.cruisesData).length : 0,
+        booked: bookedResult.finalBookedCount,
+        offers: status.parsedOffersData.length,
+        events: eventsResult.events.length,
+        hasImportedData: status.hasImported,
       });
-      
-      // Auto-sync to backend after load if authenticated
+
       if (authenticatedEmail && !isSyncingRef.current) {
         isSyncingRef.current = true;
         syncToBackend().finally(() => {
           isSyncingRef.current = false;
         });
       }
-      
-      // Mark initial load as complete
+
       isInitialLoadRef.current = false;
     } catch (error) {
       console.error('[CoreData] === LOAD FAILED ===');
@@ -671,7 +516,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setIsLoading(false);
       console.log('[CoreData] === isLoading set to FALSE ===');
     }, 0);
-  }, [loadFromBackend, initialCheckComplete, hasCloudData, authenticatedEmail, syncToBackend]);
+  }, [loadFromBackend, initialCheckComplete, hasCloudData, authenticatedEmail, syncToBackend, persistData]);
 
   useEffect(() => {
     if (!isAuthenticated) {
