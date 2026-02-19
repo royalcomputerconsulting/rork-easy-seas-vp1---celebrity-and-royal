@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-
+import { WebView } from 'react-native-webview';
 import { useState, useEffect } from 'react';
 import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -285,20 +285,57 @@ function CarnivalSyncScreen() {
 
           {webViewVisible && (
             <View style={styles.webViewContainer}>
-              <View style={styles.webNotSupported}>
-                <Ship size={48} color={CARNIVAL_RED} />
-                <Text style={styles.webNotSupportedTitle}>Open Carnival Website</Text>
-                <Text style={styles.webNotSupportedText}>
-                  Log in to your Carnival account, then return here and press &ldquo;I&apos;m Logged In&rdquo; to start syncing.
-                </Text>
-                <Pressable
-                  style={styles.webOpenButton}
-                  onPress={() => Linking.openURL(webViewUrl || 'https://www.carnival.com/cruise-deals')}
-                >
-                  <ExternalLink size={18} color="#fff" />
-                  <Text style={styles.webOpenButtonText}>Open Carnival Website</Text>
-                </Pressable>
-              </View>
+              {Platform.OS === 'web' ? (
+                <View style={styles.webNotSupported}>
+                  <Ship size={48} color={CARNIVAL_RED} />
+                  <Text style={styles.webNotSupportedTitle}>Open Carnival Website</Text>
+                  <Text style={styles.webNotSupportedText}>
+                    Log in to your Carnival account, then return here and press &ldquo;I&apos;m Logged In&rdquo; to start syncing.
+                  </Text>
+                  <Pressable
+                    style={styles.webOpenButton}
+                    onPress={() => Linking.openURL(webViewUrl || 'https://www.carnival.com/cruise-deals')}
+                  >
+                    <ExternalLink size={18} color="#fff" />
+                    <Text style={styles.webOpenButtonText}>Open Carnival Website</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <WebView
+                  ref={(ref) => {
+                    if (ref) {
+                      webViewRef.current = ref;
+                    }
+                  }}
+                  source={{ uri: webViewUrl || 'https://www.carnival.com/profilemanagement/profiles/cruises' }}
+                  style={styles.webView}
+                  onMessage={onMessage}
+                  onLoadEnd={onPageLoaded}
+                  javaScriptEnabled={true}
+                  domStorageEnabled={true}
+                  sharedCookiesEnabled={true}
+                  thirdPartyCookiesEnabled={true}
+                  injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
+                  keyboardDisplayRequiresUserAction={false}
+                  allowsInlineMediaPlayback={true}
+                  mediaPlaybackRequiresUserAction={false}
+                  allowsLinkPreview={false}
+                  bounces={false}
+                  scrollEnabled={true}
+                  automaticallyAdjustContentInsets={false}
+                  contentInsetAdjustmentBehavior="never"
+                  onError={(syntheticEvent) => {
+                    const { nativeEvent } = syntheticEvent;
+                    console.warn('[CarnivalSync] WebView error:', nativeEvent);
+                  }}
+                  onContentProcessDidTerminate={() => {
+                    console.error('[CarnivalSync] WebView content process terminated, reloading...');
+                    if (webViewRef.current) {
+                      webViewRef.current.reload();
+                    }
+                  }}
+                />
+              )}
             </View>
           )}
 
