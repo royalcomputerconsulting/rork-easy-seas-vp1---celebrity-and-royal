@@ -204,6 +204,7 @@ export default function AnalyticsScreen() {
   const crownAnchorLevel = loyaltyCrownAnchorLevel || clubRoyaleProfile?.crownAnchorLevel || 'Gold';
 
   const cruisesWithROI = useMemo(() => {
+    if (activeTab !== 'intelligence') return [] as (BookedCruise & { calculatedROI: number; valuePerDollar: number; roiLevel: 'high' | 'medium' | 'low' })[];
     const today = new Date();
     return bookedCruises
       .filter(cruise => {
@@ -228,7 +229,7 @@ export default function AnalyticsScreen() {
       .sort((a, b) => {
         return b.valuePerDollar - a.valuePerDollar;
       });
-  }, [bookedCruises]);
+  }, [activeTab, bookedCruises]);
 
   const filteredCruises = useMemo(() => {
     if (roiFilter === 'all') return cruisesWithROI;
@@ -249,6 +250,17 @@ export default function AnalyticsScreen() {
   }, [cruisesWithROI]);
 
   const playerContext: PlayerContext = useMemo(() => {
+    if (activeTab !== 'charts') {
+      return {
+        currentPoints: 0,
+        currentNights: 0,
+        currentTier: 'Choice',
+        currentLevel: 'Gold',
+        averagePointsPerNight: 0,
+        averageNightsPerMonth: 0,
+        averageSpendPerCruise: 0,
+      };
+    }
     const avgPointsPerNight = bookedCruises.length > 0
       ? bookedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0) / 
         Math.max(1, bookedCruises.reduce((sum, c) => sum + (c.nights || 0), 0))
@@ -267,7 +279,7 @@ export default function AnalyticsScreen() {
       averageNightsPerMonth: 7,
       averageSpendPerCruise: avgSpend || 2000,
     };
-  }, [currentPoints, totalNights, clubRoyaleTier, crownAnchorLevel, bookedCruises]);
+  }, [activeTab, currentPoints, totalNights, clubRoyaleTier, crownAnchorLevel, bookedCruises]);
 
   const baselineSimulation = useMemo(() => {
     return runSimulation(playerContext, bookedCruises, { type: 'custom', customPoints: 0, customNights: 0 });
@@ -490,12 +502,15 @@ export default function AnalyticsScreen() {
     };
   }, [bookedCruises]);
 
-  const stats = useMemo(() => [
-    { label: 'Cruises', value: realAnalytics.totalCruises.toString(), icon: Ship },
-    { label: 'Value/$1', value: realAnalytics.valuePerDollar >= 9999 ? '∞' : realAnalytics.valuePerDollar.toFixed(2), icon: DollarSign },
-    { label: 'Profit', value: formatCurrency(realAnalytics.totalProfit), color: realAnalytics.totalProfit >= 0 ? COLORS.success : COLORS.error, icon: TrendingUp },
-    { label: 'Points', value: formatNumber(currentPoints), icon: Award },
-  ], [realAnalytics, currentPoints]);
+  const stats = useMemo(() => {
+    if (activeTab !== 'intelligence') return [] as { label: string; value: string; icon: any; color?: string }[];
+    return [
+      { label: 'Cruises', value: realAnalytics.totalCruises.toString(), icon: Ship },
+      { label: 'Value/$1', value: realAnalytics.valuePerDollar >= 9999 ? '∞' : realAnalytics.valuePerDollar.toFixed(2), icon: DollarSign },
+      { label: 'Profit', value: formatCurrency(realAnalytics.totalProfit), color: realAnalytics.totalProfit >= 0 ? COLORS.success : COLORS.error, icon: TrendingUp },
+      { label: 'Points', value: formatNumber(currentPoints), icon: Award },
+    ];
+  }, [activeTab, realAnalytics, currentPoints]);
 
   const buildCasinoCruisesCsv = useCallback((cruises: BookedCruise[]): string => {
     console.log('[CasinoCruiseExport] Building CSV...', { cruiseCount: cruises.length });
@@ -634,7 +649,7 @@ export default function AnalyticsScreen() {
     }
   }, [bookedCruises, buildCasinoCruisesCsv]);
 
-  const ROIFilterTabs = () => (
+  const renderROIFilterTabs = () => (
     <View style={styles.filterTabsRow}>
       <View style={styles.filterTabs}>
         {(['all', 'high', 'medium', 'low'] as ROIFilter[]).map((filter) => {
@@ -677,7 +692,7 @@ export default function AnalyticsScreen() {
     </View>
   );
 
-  const CruisePortfolioCard = ({ cruise }: { cruise: typeof cruisesWithROI[0] }) => {
+  const renderPortfolioCard = (cruise: typeof cruisesWithROI[0]) => {
     const breakdown = calculateCruiseValue(cruise);
     const winnings = cruise.winnings || 0;
     const earnedPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
@@ -740,6 +755,7 @@ export default function AnalyticsScreen() {
 
     return (
       <TouchableOpacity
+        key={cruise.id}
         style={styles.portfolioCard}
         onPress={() => handleCruisePress(cruise.id)}
         activeOpacity={0.85}
@@ -934,13 +950,11 @@ export default function AnalyticsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.portfolioTitle}>Cruise Portfolio</Text>
-        <ROIFilterTabs />
+        {renderROIFilterTabs()}
         
         {filteredCruises.length > 0 ? (
           <View style={styles.portfolioList}>
-            {(showAllCruises ? filteredCruises.slice(0, 25) : filteredCruises.slice(0, 5)).map((cruise) => (
-              <CruisePortfolioCard key={cruise.id} cruise={cruise} />
-            ))}
+            {(showAllCruises ? filteredCruises.slice(0, 25) : filteredCruises.slice(0, 5)).map(renderPortfolioCard)}
             {showAllCruises && filteredCruises.length > 25 && (
               <View style={styles.portfolioLimitNotice}>
                 <Text style={styles.portfolioLimitText}>
@@ -1374,6 +1388,7 @@ export default function AnalyticsScreen() {
   };
 
   const highValueCalculations = useMemo(() => {
+    if (activeTab !== 'calcs') return [] as { id: number; label: string; value: string; description: string; color: string; icon: any }[];
     const totalCoinIn = casinoAnalytics.totalCoinIn;
     const totalSessions = sessions.length;
     const totalProfit = realAnalytics.completedProfit;
@@ -1525,7 +1540,7 @@ export default function AnalyticsScreen() {
         icon: BarChart3,
       },
     ];
-  }, [casinoAnalytics, sessions, realAnalytics, sessionAnalytics]);
+  }, [activeTab, casinoAnalytics, sessions, realAnalytics, sessionAnalytics]);
 
   const renderCalcsTab = () => (
     <View style={styles.tabContent}>
