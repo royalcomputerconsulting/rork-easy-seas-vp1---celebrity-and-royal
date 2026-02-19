@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { GlobalSlotMachine, GLOBAL_SLOT_MACHINES_2020_2025 } from '@/constants/globalSlotMachinesDatabase';
-import { QUANTUM_OF_THE_SEAS_MACHINES } from '@/constants/quantumMachines';
+import type { GlobalSlotMachine } from '@/constants/globalSlotMachinesDatabase';
 
 const PERMANENT_DB_KEY = '@easyseas/PERMANENT_GLOBAL_MACHINE_DATABASE';
 const DB_VERSION_KEY = '@easyseas/PERMANENT_DB_VERSION';
@@ -96,8 +95,9 @@ export class PermanentMachineDatabase {
         console.log('[PermanentDB] No existing database or version mismatch, starting fresh');
       }
 
+      const { GLOBAL_SLOT_MACHINES_2020_2025 } = await import('@/constants/globalSlotMachinesDatabase');
       console.log(`[PermanentDB] Merging ${GLOBAL_SLOT_MACHINES_2020_2025.length} hardcoded machines...`);
-      const addedCount = await this.addMachinesFromHardcoded();
+      const addedCount = await this.addMachinesFromHardcoded(GLOBAL_SLOT_MACHINES_2020_2025);
       console.log(`[PermanentDB] Added ${addedCount} new machines from hardcoded list`);
 
       await this.persist();
@@ -110,10 +110,10 @@ export class PermanentMachineDatabase {
     }
   }
 
-  private async addMachinesFromHardcoded(): Promise<number> {
+  private async addMachinesFromHardcoded(machines: GlobalSlotMachine[]): Promise<number> {
     let addedCount = 0;
 
-    for (const machine of GLOBAL_SLOT_MACHINES_2020_2025) {
+    for (const machine of machines) {
       const added = await this.addOrUpdateMachine(machine, 'hardcoded');
       if (added) addedCount++;
     }
@@ -342,6 +342,7 @@ export async function addCelestialFortune(): Promise<void> {
 }
 
 export async function addQuantumMachines(): Promise<{ added: number; updated: number }> {
+  const { QUANTUM_OF_THE_SEAS_MACHINES } = await import('@/constants/quantumMachines');
   console.log(`[PermanentDB] Adding ${QUANTUM_OF_THE_SEAS_MACHINES.length} Quantum of the Seas machines...`);
   
   let added = 0;

@@ -1,11 +1,37 @@
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, PageBreak } from 'docx';
 import { Platform } from 'react-native';
 import type { MachineEncyclopediaEntry } from '@/types/models';
-import * as Sharing from 'expo-sharing';
 import { machineIndexHelper } from '@/lib/machineIndexHelper';
 
-function parseVerboseText(text: string): Paragraph[] {
-  const paragraphs: Paragraph[] = [];
+let Document: any;
+let Packer: any;
+let Paragraph: any;
+let TextRun: any;
+let HeadingLevel: any;
+let AlignmentType: any;
+let BorderStyle: any;
+let PageBreak: any;
+let _docxLoaded = false;
+
+async function ensureDocxLoaded(): Promise<void> {
+  if (_docxLoaded) return;
+  const docx = await import('docx');
+  Document = docx.Document;
+  Packer = docx.Packer;
+  Paragraph = docx.Paragraph;
+  TextRun = docx.TextRun;
+  HeadingLevel = docx.HeadingLevel;
+  AlignmentType = docx.AlignmentType;
+  BorderStyle = docx.BorderStyle;
+  PageBreak = docx.PageBreak;
+  _docxLoaded = true;
+}
+
+async function getSharing() {
+  return await import('expo-sharing');
+}
+
+function parseVerboseText(text: string): any[] {
+  const paragraphs: any[] = [];
   const lines = text.split('\n');
   
   let i = 0;
@@ -97,6 +123,7 @@ export async function exportAllMachinesToTxt(machines: MachineEncyclopediaEntry[
   if (machines.length === 0) {
     throw new Error('No machines to export');
   }
+  const Sharing = await getSharing();
 
   console.log(`[ExportTxt] Exporting ${machines.length} machines to TXT...`);
 
@@ -428,7 +455,7 @@ export async function exportAllMachinesToTxt(machines: MachineEncyclopediaEntry[
     const blob = new Blob([textContent], { type: 'text/plain' });
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
-      await Sharing.shareAsync(blob as any, {
+      await (Sharing as any).shareAsync(blob as any, {
         mimeType: 'text/plain',
         dialogTitle: 'Export All Slot Machines',
         UTI: 'public.plain-text',
@@ -441,6 +468,7 @@ export async function exportAllMachinesToTxt(machines: MachineEncyclopediaEntry[
 }
 
 export async function exportAllMachinesIncrementallyToDocx(
+  // @ts-ignore - ensure docx loaded before usage
   machines: MachineEncyclopediaEntry[],
   onProgress?: (current: number, total: number) => void
 ): Promise<void> {
@@ -448,9 +476,10 @@ export async function exportAllMachinesIncrementallyToDocx(
     throw new Error('No machines to export');
   }
 
+  await ensureDocxLoaded();
   console.log(`[ExportDocx] Exporting ${machines.length} machines incrementally...`);
 
-  const docSections: Paragraph[] = [];
+  const docSections: any[] = [];
 
   docSections.push(
     new Paragraph({
@@ -517,6 +546,7 @@ export async function exportAllMachinesIncrementallyToDocx(
     URL.revokeObjectURL(url);
     console.log('[ExportDocx] Export complete (web)');
   } else {
+    const Sharing = await getSharing();
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
       await Sharing.shareAsync(blob as any, {
@@ -531,8 +561,8 @@ export async function exportAllMachinesIncrementallyToDocx(
   }
 }
 
-function buildMachineSections(machine: MachineEncyclopediaEntry, index: number): Paragraph[] {
-  const sections: Paragraph[] = [];
+function buildMachineSections(machine: MachineEncyclopediaEntry, index: number): any[] {
+  const sections: any[] = [];
   const anyMachine = machine as any;
 
   if (index > 0) {
@@ -1466,9 +1496,10 @@ export async function exportFavoriteMachinesToDocx(machines: MachineEncyclopedia
     throw new Error('No favorite machines to export');
   }
 
+  await ensureDocxLoaded();
   console.log(`[ExportDocx] Exporting ${machines.length} favorite machines...`);
 
-  const docSections: Paragraph[] = [];
+  const docSections: any[] = [];
 
   docSections.push(
     new Paragraph({
@@ -2442,6 +2473,7 @@ export async function exportFavoriteMachinesToDocx(machines: MachineEncyclopedia
     URL.revokeObjectURL(url);
     console.log('[ExportDocx] Export complete (web)');
   } else {
+    const Sharing = await getSharing();
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
       await Sharing.shareAsync(blob as any, {

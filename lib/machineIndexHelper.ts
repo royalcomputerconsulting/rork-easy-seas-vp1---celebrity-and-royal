@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MACHINES_262 from '@/assets/MACHINES_262.json';
 import type { SlotManufacturer, MachineVolatility, CabinetType, PersistenceType } from '@/types/models';
 
 const MACHINE_INDEX_KEY = '@easyseas/MACHINE_INDEX_V3_262_ONLY';
@@ -44,14 +43,28 @@ export interface MachineFullDetails extends MachineIndexEntry {
   [key: string]: any;
 }
 
+let _machinesData: any[] | null = null;
+
+async function getMachinesData(): Promise<any[]> {
+  if (_machinesData) return _machinesData;
+  try {
+    const mod = await import('@/assets/MACHINES_262.json');
+    _machinesData = mod.default as any[];
+    console.log(`[MachineIndex] Lazy-loaded ${_machinesData.length} machines from MACHINES_262.json`);
+  } catch (e) {
+    console.error('[MachineIndex] Failed to load MACHINES_262.json:', e);
+    _machinesData = [];
+  }
+  return _machinesData;
+}
+
 class MachineIndexHelper {
   private static instance: MachineIndexHelper;
   private indexCache: MachineIndexEntry[] | null = null;
   private fullMachineMap: Map<string, any> = new Map();
+  private mapInitialized = false;
 
-  private constructor() {
-    this.initializeFullMachineMap();
-  }
+  private constructor() {}
 
   static getInstance(): MachineIndexHelper {
     if (!MachineIndexHelper.instance) {
@@ -60,15 +73,15 @@ class MachineIndexHelper {
     return MachineIndexHelper.instance;
   }
 
-  private initializeFullMachineMap(): void {
+  private async ensureMapInitialized(): Promise<void> {
+    if (this.mapInitialized) return;
     console.log('[MachineIndex] Building machine lookup map from MACHINES_262 only...');
-    const allMachines = [...(MACHINES_262 as any[])];
-    
+    const allMachines = await getMachinesData();
     for (const machine of allMachines) {
       const id = machine.id || `custom-${machine.name}-${machine.manufacturer}`;
       this.fullMachineMap.set(id, machine);
     }
-    
+    this.mapInitialized = true;
     console.log(`[MachineIndex] Lookup map built with ${this.fullMachineMap.size} machines`);
   }
 
@@ -100,7 +113,7 @@ class MachineIndexHelper {
   }
 
   private async buildIndex(): Promise<MachineIndexEntry[]> {
-    const allMachines = [...(MACHINES_262 as any[])];
+    const allMachines = await getMachinesData();
     console.log(`[MachineIndex] Building index from ${allMachines.length} machines (MACHINES_262 only)...`);
 
     const index: MachineIndexEntry[] = [];
@@ -148,6 +161,7 @@ class MachineIndexHelper {
         return JSON.parse(cached);
       }
 
+      await this.ensureMapInitialized();
       const fullMachine = this.fullMachineMap.get(id);
       
       if (!fullMachine) {

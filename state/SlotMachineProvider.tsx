@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { SlotMachine, SlotMachineFilter, DeckPlanLocation } from '@/types/models';
-import { GLOBAL_SLOT_MACHINES, searchSlotMachines, filterSlotMachines } from '@/constants/globalSlotMachines';
+import { searchSlotMachines, filterSlotMachines } from '@/constants/globalSlotMachines';
 
 const STORAGE_KEYS = {
   USER_MACHINES: '@easyseas/user_slot_machines',
@@ -58,7 +58,7 @@ const DEFAULT_FILTERS: SlotMachineFilter = {
 };
 
 export const [SlotMachineProvider, useSlotMachines] = createContextHook((): SlotMachineState => {
-  const [globalMachines] = useState<SlotMachine[]>(GLOBAL_SLOT_MACHINES);
+  const [globalMachines, setGlobalMachines] = useState<SlotMachine[]>([]);
   const [userMachines, setUserMachines] = useState<SlotMachine[]>([]);
   const [deckLocations, setDeckLocations] = useState<DeckPlanLocation[]>([]);
   const [filters, setFiltersState] = useState<SlotMachineFilter>(DEFAULT_FILTERS);
@@ -72,6 +72,9 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
     try {
       setIsLoading(true);
       console.log('[SlotMachine] Loading data from storage...');
+      
+      const { GLOBAL_SLOT_MACHINES } = await import('@/constants/globalSlotMachines');
+      setGlobalMachines(GLOBAL_SLOT_MACHINES);
       
       const [userMachinesData, deckLocationsData] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.USER_MACHINES),

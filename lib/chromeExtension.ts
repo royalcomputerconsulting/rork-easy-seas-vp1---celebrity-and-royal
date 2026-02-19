@@ -1,4 +1,3 @@
-import JSZip from 'jszip';
 import { Platform } from 'react-native';
 
 const EASY_SEAS_EXTENSION_VERSION = '3.1.0';
@@ -1324,6 +1323,7 @@ export async function downloadScraperExtension(): Promise<{ success: boolean; er
 
   try {
     console.log('[ChromeExtension] Creating Easy Seas Sync extension ZIP v3.1...');
+    const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
 
     const extensionFiles = getEasySeasExtensionFiles();
