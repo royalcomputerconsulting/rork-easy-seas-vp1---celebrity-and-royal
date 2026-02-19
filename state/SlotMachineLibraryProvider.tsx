@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { InteractionManager } from 'react-native';
 import createContextHook from '@nkzw/create-context-hook';
 import { 
   MachineEncyclopediaEntry, 
   AddGameWizardData,
 } from '@/types/models';
-import { GlobalSlotMachine } from '@/constants/globalSlotMachinesDatabase';
+import type { GlobalSlotMachine } from '@/constants/globalSlotMachinesDatabase';
 import { permanentDB } from '@/lib/permanentMachineDatabase';
 import { machineIndexHelper, type MachineFullDetails } from '@/lib/machineIndexHelper';
 import { useEntitlement } from '@/state/EntitlementProvider';
@@ -248,7 +249,10 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   }, [loadMachinesFromIndex]);
 
   useEffect(() => {
-    initializeAndLoadData();
+    const handle = InteractionManager.runAfterInteractions(() => {
+      initializeAndLoadData();
+    });
+    return () => handle.cancel();
   }, [initializeAndLoadData]);
 
 
@@ -685,23 +689,26 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     return isUserWhitelisted || isPro;
   }, [isPro, isUserWhitelisted]);
 
+  const proLoadTriggeredRef = useRef(false);
+
   useEffect(() => {
     if (!hasFullAccess) return;
     if (isLoading) return;
+    if (proLoadTriggeredRef.current) return;
+    proLoadTriggeredRef.current = true;
 
-    console.log('[SlotMachineLibrary] Pro access detected - ensuring full encyclopedia is loaded', {
-      encyclopediaCount: encyclopedia.length,
-      myAtlasIds: myAtlasIds.length,
-      indexLoadComplete,
+    console.log('[SlotMachineLibrary] Pro access detected - ensuring full encyclopedia is loaded');
+
+    const handle = InteractionManager.runAfterInteractions(() => {
+      ensureEncyclopediaFullyLoadedForPro(encyclopedia, myAtlasIds)
+        .then((result) => {
+          if (!result.didChange) return;
+          setEncyclopedia(result.encyclopedia);
+        })
+        .catch((e) => console.error('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro unhandled error', e));
     });
-
-    ensureEncyclopediaFullyLoadedForPro(encyclopedia, myAtlasIds)
-      .then((result) => {
-        if (!result.didChange) return;
-        setEncyclopedia(result.encyclopedia);
-      })
-      .catch((e) => console.error('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro unhandled error', e));
-  }, [ensureEncyclopediaFullyLoadedForPro, encyclopedia, hasFullAccess, indexLoadComplete, isLoading, myAtlasIds]);
+    return () => handle.cancel();
+  }, [ensureEncyclopediaFullyLoadedForPro, hasFullAccess, isLoading, encyclopedia, myAtlasIds]);
 
   const globalLibrary = useMemo(() => {
     if (hasFullAccess) {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { SlotMachine, SlotMachineFilter, DeckPlanLocation } from '@/types/models';
@@ -102,7 +103,10 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
   }, []);
   
   useEffect(() => {
-    loadFromStorage();
+    const handle = InteractionManager.runAfterInteractions(() => {
+      loadFromStorage();
+    });
+    return () => handle.cancel();
   }, [loadFromStorage]);
   
   const persistUserMachines = useCallback(async (machines: SlotMachine[]) => {
