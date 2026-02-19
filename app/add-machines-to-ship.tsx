@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Search, X, Check, Ship, Filter } from 'lucide-react-native';
 import { COLORS } from '@/constants/theme';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
+import { useSlotMachineFilters } from '@/hooks/useSlotMachineFilters';
 import { useDeckPlan } from '@/state/DeckPlanProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { SlotManufacturer, MachineEncyclopediaEntry } from '@/types/models';
@@ -53,7 +54,8 @@ const MachineRow = React.memo(function MachineRow({ machine, isSelected, onToggl
 
 export default function AddMachinesToShipScreen() {
   const router = useRouter();
-  const { filteredGlobalLibrary, searchQuery, setSearchQuery, filterManufacturers, setFilterManufacturers, sortBy, setSortBy } = useSlotMachineLibrary();
+  const { globalLibrary } = useSlotMachineLibrary();
+  const { filteredLibrary: filteredGlobalLibrary, searchQuery, setSearchQuery, filterManufacturers, setFilterManufacturers, sortBy, setSortBy } = useSlotMachineFilters(globalLibrary);
   const { addMapping, getMappingsByShip } = useDeckPlan();
   const { bookedCruises } = useCoreData();
 

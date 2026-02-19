@@ -4,10 +4,6 @@ import createContextHook from '@nkzw/create-context-hook';
 import { 
   MachineEncyclopediaEntry, 
   AddGameWizardData,
-  SlotManufacturer,
-  MachineVolatility,
-  CabinetType,
-  PersistenceType
 } from '@/types/models';
 import { GlobalSlotMachine } from '@/constants/globalSlotMachinesDatabase';
 import { permanentDB } from '@/lib/permanentMachineDatabase';
@@ -63,17 +59,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isLoadingIndex] = useState<boolean>(false);
   const [indexLoadComplete, setIndexLoadComplete] = useState<boolean>(false);
-
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [filterManufacturers, setFilterManufacturers] = useState<SlotManufacturer[]>([]);
-  const [filterVolatility, setFilterVolatility] = useState<MachineVolatility[]>([]);
-  const [filterCabinet, setFilterCabinet] = useState<CabinetType[]>([]);
-  const [filterPersistence, setFilterPersistence] = useState<PersistenceType[]>([]);
-  const [filterHasMHB, setFilterHasMHB] = useState<boolean | undefined>(undefined);
-  const [filterYearRange, setFilterYearRange] = useState<{ min: number; max: number } | undefined>(undefined);
-  const [filterOnlyMyAtlas, setFilterOnlyMyAtlas] = useState<boolean>(false);
-  const [sortBy, setSortBy] = useState<'name' | 'manufacturer' | 'year' | 'volatility'>('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const [wizardOpen, setWizardOpen] = useState<boolean>(false);
   const [wizardData, setWizardData] = useState<AddGameWizardData>({ step: 1 });
@@ -725,99 +710,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     return encyclopedia.slice(0, FREE_USER_MACHINE_LIMIT);
   }, [encyclopedia, hasFullAccess]);
 
-  const filteredGlobalLibrary = useMemo(() => {
-    let filtered = [...globalLibrary];
-
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        m =>
-          m.machineName.toLowerCase().includes(query) ||
-          m.manufacturer.toLowerCase().includes(query) ||
-          m.gameSeries?.toLowerCase().includes(query) ||
-          m.theme?.toLowerCase().includes(query)
-      );
-    }
-
-    if (filterManufacturers.length > 0) {
-      filtered = filtered.filter(m => filterManufacturers.includes(m.manufacturer));
-    }
-
-    if (filterVolatility.length > 0) {
-      filtered = filtered.filter(m => filterVolatility.includes(m.volatility));
-    }
-
-    if (filterCabinet.length > 0) {
-      filtered = filtered.filter(m => filterCabinet.includes(m.cabinetType));
-    }
-
-    if (filterPersistence.length > 0) {
-      filtered = filtered.filter(m => 
-        m.apMetadata && filterPersistence.includes(m.apMetadata.persistenceType)
-      );
-    }
-
-    if (filterHasMHB !== undefined) {
-      filtered = filtered.filter(m => m.apMetadata?.hasMustHitBy === filterHasMHB);
-    }
-
-    if (filterYearRange) {
-      filtered = filtered.filter(
-        m => m.releaseYear != null && m.releaseYear >= filterYearRange.min && m.releaseYear <= filterYearRange.max
-      );
-    }
-
-    if (filterOnlyMyAtlas) {
-      filtered = filtered.filter(m => m.isInMyAtlas);
-    }
-
-    filtered.sort((a, b) => {
-      let aVal: string | number = a.machineName;
-      let bVal: string | number = b.machineName;
-
-      switch (sortBy) {
-        case 'manufacturer':
-          aVal = a.manufacturer;
-          bVal = b.manufacturer;
-          break;
-        case 'year':
-          aVal = a.releaseYear ?? 0;
-          bVal = b.releaseYear ?? 0;
-          break;
-        case 'volatility':
-          aVal = a.volatility;
-          bVal = b.volatility;
-          break;
-      }
-
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-
-      const strA = String(aVal).toLowerCase();
-      const strB = String(bVal).toLowerCase();
-      if (sortOrder === 'asc') {
-        return strA < strB ? -1 : strA > strB ? 1 : 0;
-      } else {
-        return strB < strA ? -1 : strB > strA ? 1 : 0;
-      }
-    });
-
-    return filtered;
-  }, [
-    globalLibrary,
-    searchQuery,
-    filterManufacturers,
-    filterVolatility,
-    filterCabinet,
-    filterPersistence,
-    filterHasMHB,
-    filterYearRange,
-    filterOnlyMyAtlas,
-    sortBy,
-    sortOrder,
-  ]);
-
   const myAtlasMachines = useMemo(() => {
     return encyclopedia;
   }, [encyclopedia]);
@@ -833,6 +725,10 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   const favoriteMachines = useMemo(() => {
     return encyclopedia.filter(entry => entry.isFavorite);
   }, [encyclopedia]);
+
+  const clearAllFilters = useCallback(() => {
+    console.log('[SlotMachineLibrary] clearAllFilters called (no-op, filters are local now)');
+  }, []);
 
   const toggleFavorite = async (id: string) => {
     const machine = encyclopedia.find(e => e.id === id);
@@ -854,17 +750,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     setEncyclopedia(updatedEncyclopedia);
     await saveEncyclopedia(updatedEncyclopedia);
     console.log('[SlotMachineLibrary] Toggled favorite:', id, !machine.isFavorite);
-  };
-
-  const clearAllFilters = () => {
-    setSearchQuery('');
-    setFilterManufacturers([]);
-    setFilterVolatility([]);
-    setFilterCabinet([]);
-    setFilterPersistence([]);
-    setFilterHasMHB(undefined);
-    setFilterYearRange(undefined);
-    setFilterOnlyMyAtlas(false);
   };
 
   const openWizard = (source?: 'global' | 'youtube' | 'manual', globalMachineId?: string) => {
@@ -993,7 +878,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     favoriteMachines,
     myAtlasIds,
     globalLibrary,
-    filteredGlobalLibrary,
     isLoading,
     isUserWhitelisted,
     setIsUserWhitelisted,
@@ -1001,26 +885,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     totalAtlasMachineCount,
     freeUserMachineLimit: FREE_USER_MACHINE_LIMIT,
 
-    searchQuery,
-    setSearchQuery,
-    filterManufacturers,
-    setFilterManufacturers,
-    filterVolatility,
-    setFilterVolatility,
-    filterCabinet,
-    setFilterCabinet,
-    filterPersistence,
-    setFilterPersistence,
-    filterHasMHB,
-    setFilterHasMHB,
-    filterYearRange,
-    setFilterYearRange,
-    filterOnlyMyAtlas,
-    setFilterOnlyMyAtlas,
-    sortBy,
-    setSortBy,
-    sortOrder,
-    setSortOrder,
     clearAllFilters,
 
     addMachineFromGlobal,

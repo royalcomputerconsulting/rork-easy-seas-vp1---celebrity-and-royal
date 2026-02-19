@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, Filter, X, Plus, ChevronDown, Ship } from 'lucide-react-native';
 import { COLORS } from '@/constants/theme';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
+import { useSlotMachineFilters } from '@/hooks/useSlotMachineFilters';
 import type { SlotManufacturer, MachineVolatility, PersistenceType, MachineEncyclopediaEntry } from '@/types/models';
 
 interface MachineCardProps {
@@ -77,7 +78,12 @@ const MachineCard = React.memo(function MachineCard({ machine, onPress, onAdd }:
 export default function GlobalLibraryScreen() {
   const router = useRouter();
   const {
-    filteredGlobalLibrary,
+    globalLibrary,
+    addMachineFromGlobal,
+  } = useSlotMachineLibrary();
+
+  const {
+    filteredLibrary: filteredGlobalLibrary,
     searchQuery,
     setSearchQuery,
     filterManufacturers,
@@ -91,8 +97,8 @@ export default function GlobalLibraryScreen() {
     sortBy,
     setSortBy,
     clearAllFilters,
-    addMachineFromGlobal,
-  } = useSlotMachineLibrary();
+    activeFilterCount: filterCount,
+  } = useSlotMachineFilters(globalLibrary);
 
   const [filterModalVisible, setFilterModalVisible] = useState<boolean>(false);
   const [sortModalVisible, setSortModalVisible] = useState<boolean>(false);
@@ -125,11 +131,7 @@ export default function GlobalLibraryScreen() {
     </View>
   ), []);
 
-  const activeFilterCount = 
-    filterManufacturers.length + 
-    filterVolatility.length + 
-    filterPersistence.length +
-    (filterHasMHB !== undefined ? 1 : 0);
+  const activeFilterCount = filterCount;
 
   return (
     <>
