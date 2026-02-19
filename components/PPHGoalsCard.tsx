@@ -46,7 +46,7 @@ interface PeriodStats {
   trend: number;
 }
 
-export function PPHGoalsCard({
+export const PPHGoalsCard = React.memo(function PPHGoalsCard({
   analytics,
   sessions,
   targetPPH,
@@ -420,7 +420,7 @@ export function PPHGoalsCard({
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

@@ -36,7 +36,7 @@ interface MinimalistFilterBarProps {
   onClearShips?: () => void;
 }
 
-export function MinimalistFilterBar({
+export const MinimalistFilterBar = React.memo(function MinimalistFilterBar({
   tabs,
   activeTab,
   onTabPress,
@@ -187,7 +187,7 @@ export function MinimalistFilterBar({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

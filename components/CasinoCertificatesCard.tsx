@@ -25,7 +25,7 @@ interface CasinoCertificatesCardProps {
   onViewOffersPress?: () => void;
 }
 
-export function CasinoCertificatesCard({
+export const CasinoCertificatesCard = React.memo(function CasinoCertificatesCard({
   certificates,
   totalCertificates,
   availableCruises,
@@ -114,7 +114,7 @@ export function CasinoCertificatesCard({
       </ImageBackground>
     </View>
   );
-}
+});
 
 const CASINO_BG = 'https://images.unsplash.com/photo-1596838132731-3301c3fd4317?w=600&q=80';
 

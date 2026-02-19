@@ -56,7 +56,7 @@ const QUICK_ACTIONS = [
   { id: 'offers', label: 'Offers', icon: Gift, prompt: 'Show expiring offers' },
 ];
 
-export function AgentXChat({
+export const AgentXChat = React.memo(function AgentXChat({
   messages,
   onSendMessage,
   isLoading = false,
@@ -305,7 +305,7 @@ export function AgentXChat({
       </View>
     </KeyboardAvoidingView>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

@@ -42,7 +42,7 @@ interface OfferSummaryCardProps {
   activeSortMode?: 'soonest' | 'highestValue';
 }
 
-export function OfferSummaryCard({
+export const OfferSummaryCard = React.memo(function OfferSummaryCard({
   totalValue,
   totalCruises,
   totalOffers,
@@ -136,7 +136,7 @@ export function OfferSummaryCard({
       </ImageBackground>
     </View>
   );
-}
+});
 
 // Keep JackpotDealsCard for backwards compatibility but mark as deprecated
 /** @deprecated Use OfferSummaryCard instead */
@@ -238,7 +238,7 @@ const summaryStyles = StyleSheet.create({
   },
 });
 
-export function CasinoOfferCard({
+export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   offerCode,
   offerName,
   expiryDate,
@@ -642,7 +642,7 @@ export function CasinoOfferCard({
       </Modal>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

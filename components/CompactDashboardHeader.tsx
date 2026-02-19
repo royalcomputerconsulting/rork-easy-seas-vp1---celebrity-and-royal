@@ -30,7 +30,7 @@ interface CompactDashboardHeaderProps {
   crewMemberCount?: number;
 }
 
-export function CompactDashboardHeader({
+export const CompactDashboardHeader = React.memo(function CompactDashboardHeader({
   memberName = 'Player',
   crownAnchorNumber,
   onSettingsPress,
@@ -576,7 +576,7 @@ export function CompactDashboardHeader({
       )}
     </LinearGradient>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

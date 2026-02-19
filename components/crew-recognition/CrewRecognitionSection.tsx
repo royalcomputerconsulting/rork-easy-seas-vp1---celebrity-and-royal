@@ -58,7 +58,7 @@ const MOCK_CREW_MEMBER = {
   updatedAt: new Date().toISOString(),
 };
 
-export function CrewRecognitionSection() {
+export const CrewRecognitionSection = React.memo(function CrewRecognitionSection() {
   const {
     userId,
     stats,
@@ -478,7 +478,7 @@ export function CrewRecognitionSection() {
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

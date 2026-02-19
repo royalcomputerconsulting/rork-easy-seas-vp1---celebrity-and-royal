@@ -45,7 +45,7 @@ interface CasinoMetricsCardProps {
   alwaysExpanded?: boolean;
 }
 
-export function CasinoMetricsCard({
+export const CasinoMetricsCard = React.memo(function CasinoMetricsCard({
   completedCruises,
   currentPoints,
   currentTier,
@@ -587,7 +587,7 @@ export function CasinoMetricsCard({
       </Modal>
     </LinearGradient>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

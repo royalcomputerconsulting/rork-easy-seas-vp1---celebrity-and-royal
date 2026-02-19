@@ -45,7 +45,7 @@ const MACHINE_TYPE_LABELS: Record<MachineType, string> = {
   'other': 'Other',
 };
 
-export function PointsPerHourCard({
+export const PointsPerHourCard = React.memo(function PointsPerHourCard({
   analytics,
   sessions,
   compact = false,
@@ -212,7 +212,7 @@ export function PointsPerHourCard({
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

@@ -16,7 +16,7 @@ interface ProgressBarProps {
   eta?: string;
 }
 
-export function ProgressBar({
+export const ProgressBar = React.memo(function ProgressBar({
   progress,
   label,
   value,
@@ -66,7 +66,7 @@ export function ProgressBar({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

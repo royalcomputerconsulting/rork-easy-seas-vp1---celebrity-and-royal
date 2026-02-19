@@ -32,7 +32,7 @@ function formatDuration(minutes: number): string {
   return `${hours}h ${mins}m`;
 }
 
-export function SessionsSummaryCard({
+export const SessionsSummaryCard = React.memo(function SessionsSummaryCard({
   analytics,
   sessions,
   targetPPH,
@@ -245,7 +245,7 @@ export function SessionsSummaryCard({
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

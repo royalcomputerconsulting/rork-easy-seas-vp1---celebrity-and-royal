@@ -200,7 +200,7 @@ function HourlyBreakdownChart({
   );
 }
 
-export function CasinoSessionTracker({
+export const CasinoSessionTracker = React.memo(function CasinoSessionTracker({
   date,
   goldenTimeSlots,
   sessions,
@@ -356,7 +356,7 @@ export function CasinoSessionTracker({
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

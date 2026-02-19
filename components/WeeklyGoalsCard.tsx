@@ -334,7 +334,7 @@ function WeekProgressBar({ weeklyGoals }: { weeklyGoals: WeeklyGoal[] }) {
   );
 }
 
-export function WeeklyGoalsCard({ onGoalComplete, compact = false }: WeeklyGoalsCardProps) {
+export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalComplete, compact = false }: WeeklyGoalsCardProps) {
   const { weeklyGoals } = useGamification();
   const [editingGoal, setEditingGoal] = useState<WeeklyGoal['type'] | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
@@ -539,7 +539,7 @@ export function WeeklyGoalsCard({ onGoalComplete, compact = false }: WeeklyGoals
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

@@ -208,7 +208,7 @@ interface InsightItemProps {
   insight: PatternInsight;
 }
 
-export function InsightItem({ insight }: InsightItemProps) {
+export const InsightItem = React.memo(function InsightItem({ insight }: InsightItemProps) {
   const getTrendIcon = () => {
     if (insight.type === 'trend' && insight.data.trend) {
       return insight.data.trend === 'increasing' || insight.data.trend === 'stable'
@@ -243,7 +243,7 @@ export function InsightItem({ insight }: InsightItemProps) {
       </View>
     </View>
   );
-}
+});
 
 interface AlertsCardProps {
   alerts: Alert[];
@@ -256,7 +256,7 @@ interface AlertsCardProps {
   title?: string;
 }
 
-export function AlertsCard({
+export const AlertsCard = React.memo(function AlertsCard({
   alerts,
   insights = [],
   onDismiss,
@@ -363,7 +363,7 @@ export function AlertsCard({
       )}
     </View>
   );
-}
+});
 
 interface AlertsBadgeProps {
   count: number;
@@ -371,7 +371,7 @@ interface AlertsBadgeProps {
   size?: 'small' | 'medium';
 }
 
-export function AlertsBadge({ count, hasCritical = false, size = 'small' }: AlertsBadgeProps) {
+export const AlertsBadge = React.memo(function AlertsBadge({ count, hasCritical = false, size = 'small' }: AlertsBadgeProps) {
   if (count === 0) return null;
 
   const badgeSize = size === 'small' ? 18 : 22;
@@ -394,7 +394,7 @@ export function AlertsBadge({ count, hasCritical = false, size = 'small' }: Aler
       </Text>
     </View>
   );
-}
+});
 
 interface CompactAlertsListProps {
   alerts: Alert[];
@@ -402,7 +402,7 @@ interface CompactAlertsListProps {
   onPress?: (alert: Alert) => void;
 }
 
-export function CompactAlertsList({ alerts, maxItems = 3, onPress }: CompactAlertsListProps) {
+export const CompactAlertsList = React.memo(function CompactAlertsList({ alerts, maxItems = 3, onPress }: CompactAlertsListProps) {
   const displayAlerts = alerts.slice(0, maxItems);
 
   if (alerts.length === 0) return null;
@@ -429,7 +429,7 @@ export function CompactAlertsList({ alerts, maxItems = 3, onPress }: CompactAler
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

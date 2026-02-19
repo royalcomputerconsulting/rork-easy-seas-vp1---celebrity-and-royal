@@ -15,7 +15,7 @@ interface TierBadgeProps {
   showLabel?: boolean;
 }
 
-export function TierBadge({
+export const TierBadge = React.memo(function TierBadge({
   tier,
   type = 'clubRoyale',
   size = 'medium',
@@ -114,7 +114,7 @@ export function TierBadge({
       {content}
     </View>
   );
-}
+});
 
 interface TierBadgeGroupProps {
   clubRoyaleTier: string;
@@ -124,7 +124,7 @@ interface TierBadgeGroupProps {
   onCrownAnchorPress?: () => void;
 }
 
-export function TierBadgeGroup({
+export const TierBadgeGroup = React.memo(function TierBadgeGroup({
   clubRoyaleTier,
   crownAnchorLevel,
   size = 'medium',
@@ -147,7 +147,7 @@ export function TierBadgeGroup({
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
