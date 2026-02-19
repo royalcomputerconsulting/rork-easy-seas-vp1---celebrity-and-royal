@@ -77,15 +77,39 @@
       // Fall back to DOM-scraped identity (VIFP number visible on page)
       if (!authData) {
         var bodyText = document.body ? document.body.innerText : '';
-        var welcomeMatch = bodyText.match(/WELCOME\s+BACK[,\s]+([A-Z]+)/i);
-        var vifpMatch = bodyText.match(/VIFP\s+Club[#:\s]+(\d{6,12})/i) || bodyText.match(/Club#[:\s]+(\d{6,12})/i);
-        var isLoggedIn = welcomeMatch || vifpMatch;
+        var bodyHTML = document.body ? document.body.innerHTML : '';
+        var welcomeMatch = bodyText.match(/WELCOME\s+BACK[,\s]+([A-Z][A-Z]+)/i);
+        // Try multiple VIFP number patterns
+        var vifpMatch =
+          bodyText.match(/VIFP\s*Club\s*#?\s*:?\s*(\d{6,12})/i) ||
+          bodyText.match(/Club\s*#\s*:?\s*(\d{6,12})/i) ||
+          bodyHTML.match(/vifp[^>]{0,200}>(\d{9,12})/i) ||
+          bodyHTML.match(/loyalty[^>]{0,200}>(\d{9,12})/i);
+        // Check nav for Manage Bookings (only shown when logged in)
+        var allLinks = document.querySelectorAll('a, button');
+        var hasManageBookingsNav = false;
+        for (var ni = 0; ni < allLinks.length; ni++) {
+          var txt = (allLinks[ni].textContent || '').trim().toUpperCase();
+          if (txt === 'MANAGE BOOKINGS' || txt === 'MY PROFILE' || txt === 'SIGN OUT') {
+            hasManageBookingsNav = true;
+            break;
+          }
+        }
+        var hasProfileLink = document.querySelectorAll('a[href*="/profilemanagement"], a[href*="/myprofile"]').length > 0;
+        var isLoggedIn = welcomeMatch || vifpMatch || hasManageBookingsNav || hasProfileLink;
         if (isLoggedIn) {
+          var vifpNum = vifpMatch ? vifpMatch[1] : '';
+          var firstName = welcomeMatch ? welcomeMatch[1] : '';
+          // If no name from welcome, try to grab from nav/header
+          if (!firstName) {
+            var nameEl = document.querySelector('[class*="user-name"], [class*="greeting"], [class*="member-name"], [class*="welcomeBack"]');
+            if (nameEl) firstName = (nameEl.textContent || '').trim().replace(/WELCOME\s+BACK,?\s*/i, '').split(/\s/)[0] || '';
+          }
           authData = {
             token: 'carnival_dom_auth',
-            accountId: vifpMatch ? vifpMatch[1] : 'carnival_user',
-            loyaltyId: vifpMatch ? vifpMatch[1] : '',
-            firstName: welcomeMatch ? welcomeMatch[1] : ''
+            accountId: vifpNum || 'carnival_user',
+            loyaltyId: vifpNum || '',
+            firstName: firstName || ''
           };
         }
       }
