@@ -143,20 +143,40 @@ export const AUTH_DETECTION_SCRIPT = `
           var isCarnivalDomain = (window.location && window.location.hostname || '').includes('carnival.com');
           if (isCarnivalDomain && response.ok && response.status === 200) {
             var lowerUrl = url.toLowerCase();
-            if (lowerUrl.includes('/api/profile') || lowerUrl.includes('/profilemanagement') || lowerUrl.includes('/api/booking') || lowerUrl.includes('/api/account')) {
+            var contentType = '';
+            try { contentType = response.headers.get('content-type') || ''; } catch(e) {}
+            var isJsonResponse = contentType.includes('json') || contentType.includes('javascript');
+            if (lowerUrl.includes('/api/profile') || lowerUrl.includes('/profilemanagement') || lowerUrl.includes('/api/booking') || lowerUrl.includes('/api/account') || lowerUrl.includes('/api/cruise') || lowerUrl.includes('/api/reservation') || lowerUrl.includes('/api/trip')) {
               clonedResponse.clone().json().then(function(data) {
-                if (data && (data.bookings || data.cruises || data.reservations || (Array.isArray(data) && data.length > 0 && data[0].bookingId))) {
+                if (!data) return;
+                var bookingArr = data.bookings || data.cruises || data.reservations || data.upcoming || data.trips || data.payload || data.data || null;
+                if (Array.isArray(data) && data.length > 0 && (data[0].bookingId || data[0].confirmationNumber || data[0].shipName)) bookingArr = data;
+                if (Array.isArray(bookingArr) && bookingArr.length > 0 && (bookingArr[0].bookingId || bookingArr[0].confirmationNumber || bookingArr[0].shipName || bookingArr[0].sailDate || bookingArr[0].departureDate)) {
                   window.capturedPayloads.upcomingCruises = data;
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'network_payload', endpoint: 'upcomingCruises', data: data, url: url
                   }));
                   window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log', message: '📦 Captured Carnival bookings API from ' + url, logType: 'success'
+                    type: 'log', message: '📦 Captured Carnival bookings (' + bookingArr.length + ') from ' + url, logType: 'success'
+                  }));
+                }
+                if (data.TierCode || data.PastGuestNumber || data.loyaltyTier || data.vifpNumber || data.loyaltyLevel) {
+                  if (!window.capturedPayloads.loyalty) {
+                    window.capturedPayloads.loyalty = data;
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'network_payload', endpoint: 'loyalty', data: data, url: url
+                    }));
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'log', message: '📦 Captured Carnival loyalty from profile API', logType: 'success'
+                    }));
+                  }
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'carnival_user_data', data: data
                   }));
                 }
               }).catch(function() {});
             }
-            if (lowerUrl.includes('personaliz') || lowerUrl.includes('vifp') || lowerUrl.includes('cruise-deals') || lowerUrl.includes('tgo') || lowerUrl.includes('member')) {
+            if (lowerUrl.includes('personaliz') || lowerUrl.includes('vifp') || lowerUrl.includes('cruise-deals') || lowerUrl.includes('tgo') || lowerUrl.includes('member') || lowerUrl.includes('offers') || lowerUrl.includes('casino')) {
               clonedResponse.clone().json().then(function(data) {
                 if (data && data.Items && Array.isArray(data.Items) && data.Items.length > 0 && data.Items[0].OfferId) {
                   window.capturedPayloads.carnivalVifpOffers = data;
@@ -165,12 +185,20 @@ export const AUTH_DETECTION_SCRIPT = `
                     type: 'network_payload', endpoint: 'carnival_vifp_offers', data: data, url: url
                   }));
                   window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log', message: '📦 Captured Carnival VIFP offers (' + data.Items.length + ' offers) from ' + url, logType: 'success'
+                    type: 'log', message: '📦 Captured Carnival VIFP offers (' + data.Items.length + ') from ' + url, logType: 'success'
+                  }));
+                }
+                if (data && data.offers && Array.isArray(data.offers) && data.offers.length > 0) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'network_payload', endpoint: 'offers', data: data, url: url
+                  }));
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log', message: '📦 Captured Carnival casino offers (' + data.offers.length + ') from ' + url, logType: 'success'
                   }));
                 }
               }).catch(function() {});
             }
-            if (lowerUrl.includes('/api/profile/loyalty') || lowerUrl.includes('loyaltyinformation') || lowerUrl.includes('/vifp')) {
+            if (lowerUrl.includes('/api/profile/loyalty') || lowerUrl.includes('loyaltyinformation') || lowerUrl.includes('/vifp') || lowerUrl.includes('/loyalty') || lowerUrl.includes('/pastguest') || lowerUrl.includes('/tier')) {
               clonedResponse.clone().json().then(function(data) {
                 if (data && !window.capturedPayloads.loyalty) {
                   window.capturedPayloads.loyalty = data;
@@ -183,21 +211,37 @@ export const AUTH_DETECTION_SCRIPT = `
                 }
               }).catch(function() {});
             }
-            clonedResponse.clone().text().then(function(text) {
-              try {
-                var jsonData = JSON.parse(text);
-                if (jsonData && jsonData.Items && Array.isArray(jsonData.Items) && jsonData.Items.length > 0 && jsonData.Items[0].OfferId && !window.__carnivalVifpOffers) {
-                  window.__carnivalVifpOffers = jsonData;
-                  window.capturedPayloads.carnivalVifpOffers = jsonData;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'network_payload', endpoint: 'carnival_vifp_offers', data: jsonData, url: url
-                  }));
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log', message: '📦 Auto-captured Carnival VIFP offers from response body (' + jsonData.Items.length + ')', logType: 'success'
-                  }));
-                }
-              } catch(e) {}
-            }).catch(function() {});
+            if (isJsonResponse) {
+              clonedResponse.clone().text().then(function(text) {
+                try {
+                  var jsonData = JSON.parse(text);
+                  if (!jsonData || typeof jsonData !== 'object') return;
+                  if (jsonData.Items && Array.isArray(jsonData.Items) && jsonData.Items.length > 0 && jsonData.Items[0].OfferId && !window.__carnivalVifpOffers) {
+                    window.__carnivalVifpOffers = jsonData;
+                    window.capturedPayloads.carnivalVifpOffers = jsonData;
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'network_payload', endpoint: 'carnival_vifp_offers', data: jsonData, url: url
+                    }));
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'log', message: '📦 Auto-captured Carnival VIFP offers (' + jsonData.Items.length + ')', logType: 'success'
+                    }));
+                  }
+                  if (!window.capturedPayloads.upcomingCruises) {
+                    var autoBookings = jsonData.bookings || jsonData.cruises || jsonData.reservations || jsonData.upcoming || null;
+                    if (!autoBookings && Array.isArray(jsonData) && jsonData.length > 0 && (jsonData[0].bookingId || jsonData[0].confirmationNumber || jsonData[0].shipName)) autoBookings = jsonData;
+                    if (Array.isArray(autoBookings) && autoBookings.length > 0 && (autoBookings[0].bookingId || autoBookings[0].confirmationNumber || autoBookings[0].shipName)) {
+                      window.capturedPayloads.upcomingCruises = jsonData;
+                      window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'network_payload', endpoint: 'upcomingCruises', data: jsonData, url: url
+                      }));
+                      window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'log', message: '📦 Auto-captured Carnival bookings (' + autoBookings.length + ') from ' + url, logType: 'success'
+                      }));
+                    }
+                  }
+                } catch(e) {}
+              }).catch(function() {});
+            }
           }
         }
         
@@ -313,8 +357,8 @@ export const AUTH_DETECTION_SCRIPT = `
             }
             
             var xhrIsCarnival = (window.location && window.location.hostname || '').includes('carnival.com');
-            if (xhrIsCarnival && this.status === 200) {
-              if (data && data.Items && Array.isArray(data.Items) && data.Items.length > 0 && data.Items[0].OfferId && !window.__carnivalVifpOffers) {
+            if (xhrIsCarnival && this.status === 200 && data && typeof data === 'object') {
+              if (data.Items && Array.isArray(data.Items) && data.Items.length > 0 && data.Items[0].OfferId && !window.__carnivalVifpOffers) {
                 window.__carnivalVifpOffers = data;
                 window.capturedPayloads.carnivalVifpOffers = data;
                 window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -322,6 +366,36 @@ export const AUTH_DETECTION_SCRIPT = `
                 }));
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'log', message: '📦 [XHR] Captured Carnival VIFP offers (' + data.Items.length + ')', logType: 'success'
+                }));
+              }
+              if (data.offers && Array.isArray(data.offers) && data.offers.length > 0) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'network_payload', endpoint: 'offers', data: data, url: this._url
+                }));
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log', message: '📦 [XHR] Captured Carnival casino offers (' + data.offers.length + ')', logType: 'success'
+                }));
+              }
+              if (!window.capturedPayloads.upcomingCruises) {
+                var xhrBookings = data.bookings || data.cruises || data.reservations || data.upcoming || null;
+                if (!xhrBookings && Array.isArray(data) && data.length > 0 && (data[0].bookingId || data[0].confirmationNumber || data[0].shipName)) xhrBookings = data;
+                if (Array.isArray(xhrBookings) && xhrBookings.length > 0 && (xhrBookings[0].bookingId || xhrBookings[0].confirmationNumber || xhrBookings[0].shipName)) {
+                  window.capturedPayloads.upcomingCruises = data;
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'network_payload', endpoint: 'upcomingCruises', data: data, url: this._url
+                  }));
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log', message: '📦 [XHR] Captured Carnival bookings (' + xhrBookings.length + ')', logType: 'success'
+                  }));
+                }
+              }
+              if ((data.TierCode || data.PastGuestNumber || data.loyaltyTier) && !window.capturedPayloads.loyalty) {
+                window.capturedPayloads.loyalty = data;
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'network_payload', endpoint: 'loyalty', data: data, url: this._url
+                }));
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'carnival_user_data', data: data
                 }));
               }
             }
