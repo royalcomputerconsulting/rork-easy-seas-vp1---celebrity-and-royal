@@ -68,7 +68,7 @@ export interface Cruise {
   offerValue?: number;
   perks?: string[];
   percentOff?: number;
-  status?: 'available' | 'booked' | 'completed' | 'cancelled';
+  status?: 'available' | 'booked' | 'completed' | 'cancelled' | 'Courtesy Hold';
   notes?: string;
   imageUrl?: string;
   itinerary?: ItineraryDay[];
