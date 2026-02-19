@@ -310,7 +310,49 @@ function CarnivalSyncScreen() {
                   source={{ uri: webViewUrl || 'https://www.carnival.com/profilemanagement/profiles/cruises' }}
                   style={styles.webView}
                   onMessage={onMessage}
-                  onLoadEnd={onPageLoaded}
+                  onLoadEnd={(e) => {
+                    onPageLoaded();
+                    const url = e.nativeEvent.url || '';
+                    console.log('[CarnivalSync] Page loaded, URL:', url);
+                    if (url.includes('carnival.com') && !url.includes('login') && !url.includes('sign-in') && !url.includes('okta') && !url.includes('auth0') && !url.includes('identitytoolkit')) {
+                      console.log('[CarnivalSync] On carnival.com (non-auth page) after load, injecting re-check');
+                      if (webViewRef.current) {
+                        webViewRef.current.injectJavaScript(`
+                          (function() {
+                            try {
+                              var hasForm = document.querySelector('input[type="password"]') !== null;
+                              var isLoggedIn = !hasForm;
+                              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'auth_status', loggedIn: isLoggedIn }));
+                              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: 'Carnival page loaded: ' + (isLoggedIn ? 'logged in (no password form)' : 'not logged in (password form found)'), logType: isLoggedIn ? 'success' : 'info' }));
+                            } catch(e) {}
+                          })();
+                          true;
+                        `);
+                      }
+                    }
+                  }}
+                  onNavigationStateChange={(navState) => {
+                    const url = navState.url || '';
+                    console.log('[CarnivalSync] Navigation state change, URL:', url);
+                    if (url.includes('carnival.com') && !url.includes('login') && !url.includes('sign-in') && !url.includes('okta') && !url.includes('auth0')) {
+                      setTimeout(() => {
+                        if (webViewRef.current) {
+                          webViewRef.current.injectJavaScript(`
+                            (function() {
+                              try {
+                                var hasForm = document.querySelector('input[type="password"]') !== null;
+                                var signOutPresent = document.body ? document.body.innerHTML.toLowerCase().includes('sign out') : false;
+                                var isLoggedIn = !hasForm || signOutPresent;
+                                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'auth_status', loggedIn: isLoggedIn }));
+                                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: 'Nav change on carnival.com: ' + (isLoggedIn ? 'logged in' : 'not yet'), logType: 'info' }));
+                              } catch(e) {}
+                            })();
+                            true;
+                          `);
+                        }
+                      }, 1500);
+                    }
+                  }}
                   javaScriptEnabled={true}
                   domStorageEnabled={true}
                   sharedCookiesEnabled={true}
@@ -445,13 +487,15 @@ function CarnivalSyncScreen() {
                   </Pressable>
                 </View>
 
-                {(state.status === 'not_logged_in' || state.status === 'login_expired') && (
+                {!isRunning && state.status !== 'complete' && (
                   <Pressable
                     style={styles.forceLoginButton}
                     onPress={forceMarkLoggedIn}
                   >
                     <CheckCircle size={18} color="#fff" />
-                    <Text style={styles.forceLoginButtonText}>I'm Logged In to Carnival — Start Sync</Text>
+                    <Text style={styles.forceLoginButtonText}>
+                      {state.status === 'logged_in' ? '✓ Logged In — Ready to Sync' : "I'm Logged In to Carnival — Start Sync"}
+                    </Text>
                   </Pressable>
                 )}
               </View>
