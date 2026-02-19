@@ -241,8 +241,7 @@ interface CoreDataState {
 
 
 export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataState => {
-  console.log('[CoreData] === CONTEXT HOOK INITIALIZING ===');
-  console.log('[CoreData] === CREATING STATE ===');
+
   const { authenticatedEmail, isAuthenticated } = useAuth();
   const { initialCheckComplete, hasCloudData } = useUserDataSync();
   const [cruises, setCruisesState] = useState<Cruise[]>([]);
@@ -252,7 +251,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const [isLoading, setIsLoading] = useState(true);
   const loadAttemptedRef = useRef(false);
   const lastAuthEmailRef = useRef<string | null>(null);
-  console.log('[CoreData] === STATE CREATED ===');
+
   const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
   
   const [filters, setFiltersState] = useState<CruiseFilter>(DEFAULT_FILTERS);

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StyleSheet, View, Text, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
 import { CoreDataProvider, useCoreData } from "@/state/CoreDataProvider";
@@ -350,10 +350,21 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail, isWhitelisted } = useAuth();
   const { initialCheckComplete, isSyncing, syncError, hasCloudData, lastRestoreTime } = useUserDataSync();
   const { setIsUserWhitelisted } = useSlotMachineLibrary();
-  const coreData = useCoreData();
+  const { refreshData } = useCoreData();
   const { updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
   const [showLandingPage, setShowLandingPage] = useState(true);
   const [forceSkipRestore, setForceSkipRestore] = useState(false);
+
+  const refreshDataRef = useRef(refreshData);
+  refreshDataRef.current = refreshData;
+  const syncUserRef = useRef(syncUserFromStorage);
+  syncUserRef.current = syncUserFromStorage;
+  const ensureOwnerRef = useRef(ensureOwner);
+  ensureOwnerRef.current = ensureOwner;
+  const updateUserRef = useRef(updateUser);
+  updateUserRef.current = updateUser;
+  const emailSyncDoneRef = useRef<string | null>(null);
+  const lastRestoreHandledRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (isAuthenticated && !initialCheckComplete && !forceSkipRestore) {
@@ -370,32 +381,38 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   }, []);
 
   useEffect(() => {
+    if (!isAuthenticated || !authenticatedEmail) {
+      emailSyncDoneRef.current = null;
+      return;
+    }
+    if (emailSyncDoneRef.current === authenticatedEmail) return;
+
     const syncEmailToProfile = async () => {
-      if (isAuthenticated && authenticatedEmail) {
-        try {
-          const owner = await ensureOwner();
-          if (owner && owner.email !== authenticatedEmail) {
-            await updateUser(owner.id, { email: authenticatedEmail });
-          }
-        } catch (error) {
-          console.error('[AppContent] Error syncing email:', error);
+      try {
+        const owner = await ensureOwnerRef.current();
+        if (owner && owner.email !== authenticatedEmail) {
+          await updateUserRef.current(owner.id, { email: authenticatedEmail });
         }
+        emailSyncDoneRef.current = authenticatedEmail;
+      } catch (error) {
+        console.error('[AppContent] Error syncing email:', error);
       }
     };
     syncEmailToProfile();
-  }, [isAuthenticated, authenticatedEmail, ensureOwner, updateUser]);
+  }, [isAuthenticated, authenticatedEmail]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    if (!lastRestoreTime) return;
+    if (!isAuthenticated || !lastRestoreTime) return;
+    if (lastRestoreHandledRef.current === lastRestoreTime) return;
+    lastRestoreHandledRef.current = lastRestoreTime;
 
     Promise.all([
-      coreData.refreshData(),
-      syncUserFromStorage(),
+      refreshDataRef.current(),
+      syncUserRef.current(),
     ]).catch((error) => {
       console.error('[AppContent] Error refreshing after cloud restore:', error);
     });
-  }, [isAuthenticated, lastRestoreTime, authenticatedEmail, coreData, syncUserFromStorage]);
+  }, [isAuthenticated, lastRestoreTime]);
 
   useEffect(() => {
     setIsUserWhitelisted(isWhitelisted);
