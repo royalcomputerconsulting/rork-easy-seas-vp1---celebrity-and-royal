@@ -185,49 +185,63 @@ void function() {
       var bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
       var bodyHTML = (document.body && document.body.innerHTML) ? document.body.innerHTML : '';
       var bodyTextUpper = bodyText.toUpperCase();
-      var hasWelcome = bodyTextUpper.indexOf('WELCOME BACK') !== -1;
-      var hasVIFP = bodyText.indexOf('VIFP') !== -1 || bodyText.indexOf('VIFP Club') !== -1 || bodyHTML.indexOf('VIFP') !== -1 || bodyHTML.indexOf('vifp') !== -1;
-      var hasVIFPEl = document.querySelectorAll('[class*="vifp"], [class*="VIFP"], [class*="loyalty-number"], [class*="member-name"], [class*="guest-name"], [class*="welcomeBack"], [class*="welcome-back"], [class*="loyaltyNumber"], [class*="loyalty-info"], [class*="greeting"], [class*="user-name"], [class*="header-account"]').length > 0;
-      var hasLogout = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"], a[href*="signout"], a[href*="sign_out"], a[href*="SignOut"], a[href*="signIn"][class*="sign-out"]').length > 0;
+      var bodyHTMLUpper = bodyHTML.toUpperCase();
+      var hasWelcome = bodyTextUpper.indexOf('WELCOME BACK') !== -1 || bodyHTMLUpper.indexOf('WELCOME BACK') !== -1 || bodyHTMLUpper.indexOf('WELCOME&NBSP;BACK') !== -1;
+      var hasVIFP = bodyText.indexOf('VIFP') !== -1 || bodyHTML.indexOf('VIFP') !== -1 || bodyHTML.indexOf('vifp') !== -1 || bodyHTMLUpper.indexOf('VIFP CLUB') !== -1;
+      var hasVIFPEl = document.querySelectorAll('[class*="vifp" i], [class*="VIFP"], [class*="loyalty-number"], [class*="member-name"], [class*="guest-name"], [class*="welcomeBack"], [class*="welcome-back"], [class*="loyaltyNumber"], [class*="loyalty-info"], [class*="greeting"], [class*="user-name"], [class*="header-account"], [class*="logged-in"], [class*="loggedIn"], [class*="authenticated"], [class*="member"], [class*="tier"], [id*="vifp" i], [id*="loyalty" i], [id*="member" i], [data-vifp], [data-loyalty], [data-member]').length > 0;
+      var hasLogout = document.querySelectorAll('a[href*="logout"], a[href*="sign-out"], a[href*="signout"], a[href*="sign_out"], a[href*="SignOut"], a[href*="signIn"][class*="sign-out"], button[class*="logout"], button[class*="sign-out"], [data-testid*="logout"], [data-testid*="sign-out"]').length > 0;
       var isProfilePage = window.location.href.indexOf('/profilemanagement') !== -1 || window.location.href.indexOf('/myprofile') !== -1;
-      // Check cookies for Carnival session indicators
       var cookieStr = document.cookie || '';
       var hasCookie = cookieStr.indexOf('CCL') !== -1 || cookieStr.indexOf('carnival') !== -1 ||
         cookieStr.indexOf('VIFP') !== -1 || cookieStr.indexOf('vifp') !== -1 ||
         cookieStr.indexOf('sess') !== -1 || cookieStr.indexOf('auth') !== -1 ||
         cookieStr.length > 200;
-      // Check localStorage for Carnival auth indicators
       var hasLocalStorage = false;
       try {
         var keys = Object.keys(localStorage || {});
         for (var li = 0; li < keys.length; li++) {
-          if (/token|auth|session|user|vifp|loyalty|profile/i.test(keys[li])) {
+          if (/token|auth|session|user|vifp|loyalty|profile|member|account/i.test(keys[li])) {
             var lsVal = localStorage.getItem(keys[li]);
             if (lsVal && lsVal.length > 10) { hasLocalStorage = true; break; }
           }
         }
       } catch(lse) {}
-      // Check for Manage Bookings / profile nav links (only shown when logged in on Carnival)
-      var hasManageBookings = document.querySelectorAll('a[href*="/booked"], a[href*="/profilemanagement"], a[href*="manage-booking"], a[href*="/myprofile"], a[href*="my-cruise"], [data-testid*="manage"], [data-testid*="profile"]').length > 0;
-      // Check for nav text "Manage Bookings" (Carnival shows this when logged in)
-      var allNavLinks = Array.from(document.querySelectorAll('a, button, nav *'));
-      var hasManageBookingsText = allNavLinks.some(function(el) {
-        var txt = (el.textContent || '').trim().toUpperCase();
-        return txt === 'MANAGE BOOKINGS' || txt === 'MY PROFILE' || txt === 'SIGN OUT' || txt === 'MY ACCOUNT';
+      var hasManageBookings = document.querySelectorAll('a[href*="/booked"], a[href*="/profilemanagement"], a[href*="manage-booking"], a[href*="Manage-Bookings"], a[href*="manage-bookings"], a[href*="/myprofile"], a[href*="my-cruise"], a[href*="/booking"], a[href*="/reservations"], [data-testid*="manage"], [data-testid*="profile"], [data-testid*="booking"]').length > 0;
+      var allElements = Array.from(document.querySelectorAll('a, button, nav *, header *, div[role="navigation"] *, [class*="nav"] *, [class*="header"] *, span, li'));
+      var hasManageBookingsText = allElements.some(function(el) {
+        var txt = (el.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+        return txt === 'MANAGE BOOKINGS' || txt === 'MY PROFILE' || txt === 'SIGN OUT' ||
+               txt === 'MY ACCOUNT' || txt === 'LOG OUT' || txt === 'SIGN OFF' ||
+               txt.indexOf('MANAGE BOOKINGS') !== -1 || txt.indexOf('MY ACCOUNT') !== -1 ||
+               txt.indexOf('SIGN OUT') !== -1 || txt.indexOf('LOG OUT') !== -1;
       });
-      // Check for VIFP number pattern in DOM text (10-digit number near VIFP text)
-      var hasVIFPNumber = /VIFP\s*Club\s*#?\s*:?\s*\d{6,12}/i.test(bodyText) || /Club\s*#\s*:?\s*\d{6,12}/i.test(bodyText);
+      var hasVIFPNumber = /VIFP\s*Club\s*#?\s*:?\s*\d{6,12}/i.test(bodyText) || /Club\s*#\s*:?\s*\d{6,12}/i.test(bodyText) ||
+        /VIFP[^<]{0,50}\d{6,12}/i.test(bodyHTML) || /Club[^<]{0,30}#[^<]{0,10}\d{6,12}/i.test(bodyHTML);
+      var hasVIFPInHTML = /vifp/i.test(bodyHTML) && /\d{9,12}/.test(bodyHTML);
+      var hasTierText = bodyTextUpper.indexOf('TIER RED') !== -1 || bodyTextUpper.indexOf('TIER BLUE') !== -1 ||
+        bodyTextUpper.indexOf('TIER GOLD') !== -1 || bodyTextUpper.indexOf('TIER PLATINUM') !== -1 ||
+        bodyTextUpper.indexOf('TIER DIAMOND') !== -1 || bodyHTMLUpper.indexOf('TIER RED') !== -1 ||
+        bodyHTMLUpper.indexOf('TIER BLUE') !== -1 || bodyHTMLUpper.indexOf('TIER GOLD') !== -1 ||
+        bodyHTMLUpper.indexOf('TIER PLATINUM') !== -1 || bodyHTMLUpper.indexOf('TIER DIAMOND') !== -1;
       var wasLoggedIn = capturedData.isLoggedIn;
-      capturedData.isLoggedIn = hasWelcome || hasVIFP || hasVIFPEl || hasLogout || isProfilePage || hasManageBookings || hasManageBookingsText || hasVIFPNumber || (hasCookie && hasLocalStorage);
-      // If we detected login and it changed, persist it and set authContext
+      capturedData.isLoggedIn = hasWelcome || hasVIFP || hasVIFPEl || hasLogout || isProfilePage || hasManageBookings || hasManageBookingsText || hasVIFPNumber || hasVIFPInHTML || hasTierText || (hasCookie && hasLocalStorage);
+      console.log('[Easy Seas] Carnival login check:', JSON.stringify({
+        hasWelcome: hasWelcome, hasVIFP: hasVIFP, hasVIFPEl: hasVIFPEl, hasLogout: hasLogout,
+        isProfilePage: isProfilePage, hasManageBookings: hasManageBookings, hasManageBookingsText: hasManageBookingsText,
+        hasVIFPNumber: hasVIFPNumber, hasVIFPInHTML: hasVIFPInHTML, hasTierText: hasTierText,
+        hasCookie: hasCookie, hasLocalStorage: hasLocalStorage, result: capturedData.isLoggedIn,
+        bodyTextLen: bodyText.length, bodyHTMLLen: bodyHTML.length
+      }));
       if (capturedData.isLoggedIn && !wasLoggedIn) {
-        // Extract VIFP number from DOM for authContext
         var vifpNum = '';
-        var vifpM = bodyText.match(/(?:VIFP\s*Club[#:\s]+|Club#[:\s]+)(\d{6,12})/i) ||
+        var vifpM = bodyText.match(/(?:VIFP\s*Club[#:\s]+|Club\s*#\s*:?\s*)(\d{6,12})/i) ||
+                    bodyHTML.match(/(?:VIFP|vifp|Club)[^>]*?>\s*(\d{9,12})/i) ||
+                    bodyHTML.match(/(?:vifp|VIFP|loyalty|member)[^"]*?["'][^"]*?(\d{9,12})/i) ||
                     bodyText.match(/(\d{9,12})/);
         if (vifpM) vifpNum = vifpM[1];
         var firstName = '';
-        var nameM = bodyText.match(/WELCOME\s+BACK[,\s]+([A-Z]+)/i);
+        var nameM = bodyText.match(/WELCOME\s+BACK[,\s]+([A-Z]+)/i) ||
+                    bodyHTML.match(/welcome[\s-]*back[^>]*>[^<]*?([A-Z]{2,})/i);
         if (nameM) firstName = nameM[1];
         if (!authContext) {
           authContext = {
@@ -1400,6 +1414,22 @@ void function() {
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
+  function watchForCarnivalLogin() {
+    if (capturedData.cruiseLine !== 'carnival' || capturedData.isLoggedIn) return;
+    if (!document.body) { setTimeout(watchForCarnivalLogin, 500); return; }
+    var carnivalObserver = new MutationObserver(function() {
+      if (capturedData.isLoggedIn) { carnivalObserver.disconnect(); return; }
+      checkAuthFromDOM();
+      if (capturedData.isLoggedIn) {
+        updateUI();
+        carnivalObserver.disconnect();
+        addLog('Login detected via DOM mutation observer', 'success');
+      }
+    });
+    carnivalObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+    setTimeout(function() { carnivalObserver.disconnect(); }, 60000);
+  }
+
   async function init() {
     injectPageScript();
 
@@ -1408,6 +1438,7 @@ void function() {
     var onReady = async function() {
       createOverlay();
       watchForOverlayRemoval();
+      watchForCarnivalLogin();
       addLog('Extension ready on ' + capturedData.cruiseLine + ' (' + window.location.pathname + ')', 'info');
       // Run auth check immediately for Carnival (DOM-based login detection)
       if (capturedData.cruiseLine === 'carnival') {
@@ -1426,7 +1457,7 @@ void function() {
 
       // Extra retries for Carnival SPA which renders content late
       if (capturedData.cruiseLine === 'carnival') {
-        var retryDelays = [2000, 3000, 5000, 8000];
+        var retryDelays = [1000, 2000, 3000, 5000, 8000, 12000, 20000];
         retryDelays.forEach(function(delay) {
           setTimeout(function() {
             if (!capturedData.isLoggedIn) {
@@ -1455,12 +1486,12 @@ void function() {
 
     setInterval(function() {
       ensureOverlay();
-      if (!authContext || !capturedData.isLoggedIn) {
+      if (!capturedData.isLoggedIn) {
         checkAuthFromDOM();
         window.postMessage({ source: 'easy-seas-ext', type: 'get_auth' }, '*');
         updateUI();
       }
-    }, 2500);
+    }, 2000);
   }
 
   init();

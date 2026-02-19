@@ -33,7 +33,6 @@
       var keys = Object.keys(localStorage || {});
       var authData = null;
 
-      // Try common Carnival localStorage key patterns
       var carnivalPatterns = ['carnival_session', 'carnival_auth', 'cc_session', 'vifp_session', 'user_session', 'persist:auth', 'persist:user', 'persist:root'];
       for (var pi = 0; pi < carnivalPatterns.length; pi++) {
         var raw = localStorage.getItem(carnivalPatterns[pi]);
@@ -52,18 +51,17 @@
         } catch(e) {}
       }
 
-      // Try scanning all localStorage keys for auth-like data
       if (!authData) {
         for (var ki = 0; ki < keys.length; ki++) {
-          if (/token|auth|session|user|profile/i.test(keys[ki])) {
+          if (/token|auth|session|user|profile|member|account|vifp|loyalty/i.test(keys[ki])) {
             try {
               var val = localStorage.getItem(keys[ki]);
               if (!val) continue;
               var obj = JSON.parse(val);
-              if (obj && typeof obj === 'object' && (obj.accountId || obj.loyaltyNumber || obj.vifpNumber)) {
+              if (obj && typeof obj === 'object' && (obj.accountId || obj.loyaltyNumber || obj.vifpNumber || obj.memberId)) {
                 authData = {
                   token: obj.token || obj.accessToken || 'carnival_dom_auth',
-                  accountId: String(obj.accountId || obj.loyaltyNumber || obj.vifpNumber || ''),
+                  accountId: String(obj.accountId || obj.loyaltyNumber || obj.vifpNumber || obj.memberId || ''),
                   loyaltyId: obj.loyaltyNumber || obj.vifpNumber || '',
                   firstName: obj.firstName || obj.name || ''
                 };
@@ -74,35 +72,48 @@
         }
       }
 
-      // Fall back to DOM-scraped identity (VIFP number visible on page)
       if (!authData) {
         var bodyText = document.body ? document.body.innerText : '';
         var bodyHTML = document.body ? document.body.innerHTML : '';
-        var welcomeMatch = bodyText.match(/WELCOME\s+BACK[,\s]+([A-Z][A-Z]+)/i);
-        // Try multiple VIFP number patterns
+        var bodyTextUpper = (bodyText || '').toUpperCase();
+        var bodyHTMLUpper = (bodyHTML || '').toUpperCase();
+        var welcomeMatch = bodyText.match(/WELCOME\s+BACK[,\s]+([A-Z][A-Z]+)/i) ||
+                           bodyHTML.match(/welcome[\s-]*back[^>]*>[^<]*?([A-Z]{2,})/i);
         var vifpMatch =
           bodyText.match(/VIFP\s*Club\s*#?\s*:?\s*(\d{6,12})/i) ||
           bodyText.match(/Club\s*#\s*:?\s*(\d{6,12})/i) ||
           bodyHTML.match(/vifp[^>]{0,200}>(\d{9,12})/i) ||
-          bodyHTML.match(/loyalty[^>]{0,200}>(\d{9,12})/i);
-        // Check nav for Manage Bookings (only shown when logged in)
-        var allLinks = document.querySelectorAll('a, button');
+          bodyHTML.match(/loyalty[^>]{0,200}>(\d{9,12})/i) ||
+          bodyHTML.match(/VIFP[^<]{0,50}(\d{9,12})/i) ||
+          bodyHTML.match(/Club[^<]{0,30}#[^<]{0,10}(\d{9,12})/i);
+        var allLinks = document.querySelectorAll('a, button, span, li, div, nav *, header *');
         var hasManageBookingsNav = false;
+        var hasWelcomeText = bodyTextUpper.indexOf('WELCOME BACK') !== -1 || bodyHTMLUpper.indexOf('WELCOME BACK') !== -1;
+        var hasVIFPText = bodyText.indexOf('VIFP') !== -1 || bodyHTML.indexOf('VIFP') !== -1 || bodyHTML.indexOf('vifp') !== -1;
+        var hasTierText = bodyTextUpper.indexOf('TIER RED') !== -1 || bodyTextUpper.indexOf('TIER BLUE') !== -1 ||
+          bodyTextUpper.indexOf('TIER GOLD') !== -1 || bodyTextUpper.indexOf('TIER PLATINUM') !== -1 ||
+          bodyTextUpper.indexOf('TIER DIAMOND') !== -1;
         for (var ni = 0; ni < allLinks.length; ni++) {
-          var txt = (allLinks[ni].textContent || '').trim().toUpperCase();
-          if (txt === 'MANAGE BOOKINGS' || txt === 'MY PROFILE' || txt === 'SIGN OUT') {
+          var txt = (allLinks[ni].textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+          if (txt === 'MANAGE BOOKINGS' || txt === 'MY PROFILE' || txt === 'SIGN OUT' ||
+              txt.indexOf('MANAGE BOOKINGS') !== -1 || txt.indexOf('MY ACCOUNT') !== -1 ||
+              txt.indexOf('SIGN OUT') !== -1 || txt.indexOf('LOG OUT') !== -1) {
             hasManageBookingsNav = true;
             break;
           }
         }
-        var hasProfileLink = document.querySelectorAll('a[href*="/profilemanagement"], a[href*="/myprofile"]').length > 0;
-        var isLoggedIn = welcomeMatch || vifpMatch || hasManageBookingsNav || hasProfileLink;
+        var hasProfileLink = document.querySelectorAll('a[href*="/profilemanagement"], a[href*="/myprofile"], a[href*="manage-booking"], a[href*="Manage-Bookings"]').length > 0;
+        var isLoggedIn = welcomeMatch || vifpMatch || hasManageBookingsNav || hasProfileLink || hasWelcomeText || hasVIFPText || hasTierText;
+        console.log('[Easy Seas Page] Carnival DOM auth check:', JSON.stringify({
+          hasWelcomeMatch: !!welcomeMatch, hasVifpMatch: !!vifpMatch, hasManageBookingsNav: hasManageBookingsNav,
+          hasProfileLink: hasProfileLink, hasWelcomeText: hasWelcomeText, hasVIFPText: hasVIFPText,
+          hasTierText: hasTierText, bodyTextLen: bodyText.length, result: !!isLoggedIn
+        }));
         if (isLoggedIn) {
           var vifpNum = vifpMatch ? vifpMatch[1] : '';
           var firstName = welcomeMatch ? welcomeMatch[1] : '';
-          // If no name from welcome, try to grab from nav/header
           if (!firstName) {
-            var nameEl = document.querySelector('[class*="user-name"], [class*="greeting"], [class*="member-name"], [class*="welcomeBack"]');
+            var nameEl = document.querySelector('[class*="user-name"], [class*="greeting"], [class*="member-name"], [class*="welcomeBack"], [class*="welcome"]');
             if (nameEl) firstName = (nameEl.textContent || '').trim().replace(/WELCOME\s+BACK,?\s*/i, '').split(/\s/)[0] || '';
           }
           authData = {
@@ -115,7 +126,7 @@
       }
 
       return authData;
-    } catch(e) { return null; }
+    } catch(e) { console.error('[Easy Seas Page] getCarnivalAuth error:', e); return null; }
   }
 
   function findAppKey() {
@@ -248,11 +259,14 @@
   });
 
   sendAuth();
+  setTimeout(sendAuth, 1000);
   setTimeout(sendAuth, 2000);
-  setTimeout(sendAuth, 5000);
-  // Extra retries for Carnival since DOM takes longer to render VIFP info
+  setTimeout(sendAuth, 4000);
   if (isCarnival) {
+    setTimeout(sendAuth, 6000);
     setTimeout(sendAuth, 8000);
     setTimeout(sendAuth, 12000);
+    setTimeout(sendAuth, 18000);
+    setTimeout(sendAuth, 25000);
   }
 })();
