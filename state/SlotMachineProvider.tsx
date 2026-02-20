@@ -3,7 +3,7 @@ import { InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { SlotMachine, SlotMachineFilter, DeckPlanLocation } from '@/types/models';
-import { GLOBAL_SLOT_MACHINES, searchSlotMachines, filterSlotMachines } from '@/constants/globalSlotMachines';
+import { searchSlotMachines, filterSlotMachines, loadGlobalSlotMachines } from '@/lib/slotMachineUtils';
 
 const STORAGE_KEYS = {
   USER_MACHINES: '@easyseas/user_slot_machines',
@@ -74,12 +74,13 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
       setIsLoading(true);
       console.log('[SlotMachine] Loading data from storage...');
       
-      setGlobalMachines(GLOBAL_SLOT_MACHINES);
-      
-      const [userMachinesData, deckLocationsData] = await Promise.all([
+      const [globalData, userMachinesData, deckLocationsData] = await Promise.all([
+        loadGlobalSlotMachines(),
         AsyncStorage.getItem(STORAGE_KEYS.USER_MACHINES),
         AsyncStorage.getItem(STORAGE_KEYS.DECK_LOCATIONS),
       ]);
+      
+      setGlobalMachines(globalData);
       
       if (userMachinesData) {
         const parsed = JSON.parse(userMachinesData);
@@ -93,7 +94,7 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
         console.log('[SlotMachine] Loaded', parsed.length, 'deck locations');
       }
       
-      console.log('[SlotMachine] Total machines available:', GLOBAL_SLOT_MACHINES.length + (userMachinesData ? JSON.parse(userMachinesData).length : 0));
+      console.log('[SlotMachine] Total machines available:', globalData.length + (userMachinesData ? JSON.parse(userMachinesData).length : 0));
     } catch (error) {
       console.error('[SlotMachine] Failed to load from storage:', error);
     } finally {

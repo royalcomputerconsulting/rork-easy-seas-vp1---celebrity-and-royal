@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/state/AuthProvider';
-import { CREW_RECOGNITION_CSV } from '@/constants/crew-recognition-csv';
+
 import type { RecognitionEntryWithCrew, Sailing, Department } from '@/types/crew-recognition';
 
 const STORAGE_KEY_ENTRIES = 'crew_recognition_entries_v2';
@@ -481,6 +481,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
   const syncFromCSVLocally = useCallback(async () => {
     console.log('[CrewRecognition] Parsing CSV locally...');
+    const { CREW_RECOGNITION_CSV } = await import('@/constants/crew-recognition-csv');
     const { entries: parsedEntries, sailings: parsedSailings } = parseCSVToEntries(CREW_RECOGNITION_CSV);
     console.log('[CrewRecognition] Parsed', parsedEntries.length, 'entries,', parsedSailings.length, 'sailings');
 
