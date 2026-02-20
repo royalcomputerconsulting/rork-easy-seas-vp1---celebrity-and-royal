@@ -776,7 +776,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, [addLog, config]);
 
   const runIngestion = useCallback(async () => {
-    if (state.status !== 'logged_in') {
+    if (state.status !== 'logged_in' && state.status !== 'complete') {
       addLog('Cannot run ingestion: user not logged in', 'error');
       return;
     }

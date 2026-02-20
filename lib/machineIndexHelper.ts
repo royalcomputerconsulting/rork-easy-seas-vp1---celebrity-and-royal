@@ -43,18 +43,12 @@ export interface MachineFullDetails extends MachineIndexEntry {
   [key: string]: any;
 }
 
-let _machinesData: any[] | null = null;
+import MACHINES_262_RAW from '@/assets/MACHINES_262.json';
+
+const _machinesData: any[] = (MACHINES_262_RAW as any[]) ?? [];
 
 async function getMachinesData(): Promise<any[]> {
-  if (_machinesData) return _machinesData;
-  try {
-    const mod = await import('@/assets/MACHINES_262.json');
-    _machinesData = mod.default as any[];
-    console.log(`[MachineIndex] Lazy-loaded ${_machinesData.length} machines from MACHINES_262.json`);
-  } catch (e) {
-    console.error('[MachineIndex] Failed to load MACHINES_262.json:', e);
-    _machinesData = [];
-  }
+  console.log(`[MachineIndex] Using ${_machinesData.length} machines from MACHINES_262.json`);
   return _machinesData;
 }
 

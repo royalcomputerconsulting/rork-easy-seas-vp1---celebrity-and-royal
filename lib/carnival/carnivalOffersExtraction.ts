@@ -923,6 +923,14 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
       }));
       log('VIFP loyalty: ' + tierName + ' (VIFP# ' + (userCookie.PastGuestNumber || 'N/A') + ')', 'success');
     }
+
+    // Signal step 2 completion so the sync flow doesn't hang
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'step_complete', step: 2, totalCount: bookings.length, data: []
+      }));
+      log('Carnival bookings extraction step complete', 'info');
+    } catch(e) {}
   }
 
   if (document.readyState === 'loading') {

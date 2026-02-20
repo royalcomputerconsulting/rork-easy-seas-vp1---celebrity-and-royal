@@ -1,4 +1,5 @@
 import type { SlotMachine } from '@/types/models';
+import { GLOBAL_SLOT_MACHINES } from '@/constants/globalSlotMachines';
 
 export function searchSlotMachines(query: string, machines: SlotMachine[]): SlotMachine[] {
   const lowerQuery = query.toLowerCase().trim();
@@ -50,15 +51,10 @@ export function filterSlotMachines(machines: SlotMachine[], filters: {
   return filtered;
 }
 
-let _cachedGlobalMachines: SlotMachine[] | null = null;
-
 export async function loadGlobalSlotMachines(): Promise<SlotMachine[]> {
-  if (_cachedGlobalMachines) return _cachedGlobalMachines;
   try {
-    const mod = await import('@/constants/globalSlotMachines');
-    _cachedGlobalMachines = mod.GLOBAL_SLOT_MACHINES;
-    console.log(`[SlotMachineUtils] Lazy-loaded ${_cachedGlobalMachines!.length} global machines`);
-    return _cachedGlobalMachines!;
+    console.log(`[SlotMachineUtils] Loaded ${GLOBAL_SLOT_MACHINES.length} global machines`);
+    return GLOBAL_SLOT_MACHINES;
   } catch (e) {
     console.error('[SlotMachineUtils] Failed to load global machines:', e);
     return [];
