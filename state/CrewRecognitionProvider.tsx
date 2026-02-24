@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/state/AuthProvider';
 
 import type { RecognitionEntryWithCrew, Sailing, Department } from '@/types/crew-recognition';
+import { CREW_RECOGNITION_CSV } from '@/constants/crew-recognition-csv';
 
 const STORAGE_KEY_ENTRIES = 'crew_recognition_entries_v2';
 const STORAGE_KEY_SAILINGS = 'crew_recognition_sailings_v2';
@@ -318,9 +319,10 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
         const result = await createCrewMemberMutation.mutateAsync(data as any);
         return result;
       } catch (err) {
-        console.log('[CrewRecognition] Backend create failed, falling back to local:', err);
+        console.log('[CrewRecognition] Backend create failed, falling back to local:', err instanceof Error ? err.message : String(err));
       }
     }
+    console.log('[CrewRecognition] Creating crew member locally:', data.fullName);
 
     const now = new Date().toISOString();
     const crewId = `local_crew_manual_${Date.now()}`;
@@ -481,7 +483,6 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
   const syncFromCSVLocally = useCallback(async () => {
     console.log('[CrewRecognition] Parsing CSV locally...');
-    const { CREW_RECOGNITION_CSV } = await import('@/constants/crew-recognition-csv');
     const { entries: parsedEntries, sailings: parsedSailings } = parseCSVToEntries(CREW_RECOGNITION_CSV);
     console.log('[CrewRecognition] Parsed', parsedEntries.length, 'entries,', parsedSailings.length, 'sailings');
 
