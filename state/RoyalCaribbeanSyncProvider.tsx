@@ -1430,6 +1430,21 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
   const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any, providedExtendedLoyalty?: ExtendedLoyaltyData | null) => {
     const loyaltyToSync = providedExtendedLoyalty ?? extendedLoyaltyData;
+    const fallbackExtendedLoyaltyFromState = state.loyaltyData
+      ? convertLoyaltyInfoToExtended(state.loyaltyData as unknown as LoyaltyApiInformation)
+      : null;
+    const effectiveExtendedLoyalty = loyaltyToSync ?? fallbackExtendedLoyaltyFromState;
+
+    console.log('[RoyalCaribbeanSync] ========================================');
+    console.log('[RoyalCaribbeanSync] Loyalty sync input diagnostics:', {
+      hasProvidedExtendedLoyalty: !!providedExtendedLoyalty,
+      hasExtendedLoyaltyState: !!extendedLoyaltyData,
+      hasLoyaltyState: !!state.loyaltyData,
+      hasEffectiveExtendedLoyalty: !!effectiveExtendedLoyalty,
+      clubRoyalePointsFromEffective: effectiveExtendedLoyalty?.clubRoyalePointsFromApi,
+      crownAndAnchorPointsFromEffective: effectiveExtendedLoyalty?.crownAndAnchorPointsFromApi,
+    });
+    console.log('[RoyalCaribbeanSync] ========================================');
     console.log('[RoyalCaribbeanSync] ========================================');
     console.log('[RoyalCaribbeanSync] SYNC TO APP STARTED');
     console.log('[RoyalCaribbeanSync] ========================================');
@@ -1555,29 +1570,31 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }
       
-      if (loyaltyToSync && loyaltyContext.setExtendedLoyaltyData) {
+      if (effectiveExtendedLoyalty && loyaltyContext.setExtendedLoyaltyData) {
         try {
           addLog('Syncing extended loyalty data...', 'info');
           
-          if (loyaltyToSync.clubRoyalePointsFromApi !== undefined) {
-            addLog(`  → Club Royale: ${loyaltyToSync.clubRoyaleTierFromApi || 'N/A'} - ${loyaltyToSync.clubRoyalePointsFromApi.toLocaleString()} points`, 'info');
+          if (effectiveExtendedLoyalty.clubRoyalePointsFromApi !== undefined) {
+            addLog(`  → Club Royale: ${effectiveExtendedLoyalty.clubRoyaleTierFromApi || 'N/A'} - ${effectiveExtendedLoyalty.clubRoyalePointsFromApi.toLocaleString()} points`, 'info');
           }
-          if (loyaltyToSync.crownAndAnchorPointsFromApi !== undefined) {
-            addLog(`  → Crown & Anchor: ${loyaltyToSync.crownAndAnchorTier || 'N/A'} - ${loyaltyToSync.crownAndAnchorPointsFromApi} points`, 'info');
+          if (effectiveExtendedLoyalty.crownAndAnchorPointsFromApi !== undefined) {
+            addLog(`  → Crown & Anchor: ${effectiveExtendedLoyalty.crownAndAnchorTier || 'N/A'} - ${effectiveExtendedLoyalty.crownAndAnchorPointsFromApi} points`, 'info');
           }
-          if (loyaltyToSync.captainsClubPoints !== undefined && loyaltyToSync.captainsClubPoints > 0) {
-            addLog(`  → Captain's Club: ${loyaltyToSync.captainsClubTier || 'N/A'} - ${loyaltyToSync.captainsClubPoints} points`, 'info');
+          if (effectiveExtendedLoyalty.captainsClubPoints !== undefined && effectiveExtendedLoyalty.captainsClubPoints > 0) {
+            addLog(`  → Captain's Club: ${effectiveExtendedLoyalty.captainsClubTier || 'N/A'} - ${effectiveExtendedLoyalty.captainsClubPoints} points`, 'info');
           }
-          if (loyaltyToSync.celebrityBlueChipPoints !== undefined && loyaltyToSync.celebrityBlueChipPoints > 0) {
-            addLog(`  → Blue Chip Club: ${loyaltyToSync.celebrityBlueChipTier || 'N/A'} - ${loyaltyToSync.celebrityBlueChipPoints} points`, 'info');
+          if (effectiveExtendedLoyalty.celebrityBlueChipPoints !== undefined && effectiveExtendedLoyalty.celebrityBlueChipPoints > 0) {
+            addLog(`  → Blue Chip Club: ${effectiveExtendedLoyalty.celebrityBlueChipTier || 'N/A'} - ${effectiveExtendedLoyalty.celebrityBlueChipPoints} points`, 'info');
           }
           
-          await loyaltyContext.setExtendedLoyaltyData(loyaltyToSync);
+          await loyaltyContext.setExtendedLoyaltyData(effectiveExtendedLoyalty);
           addLog('Extended loyalty data synced successfully', 'success');
         } catch (extLoyaltyError) {
           console.error('[RoyalCaribbeanSync] Error syncing extended loyalty:', extLoyaltyError);
           addLog(`⚠️ Warning: Failed to sync extended loyalty data: ${extLoyaltyError}`, 'warning');
         }
+      } else {
+        addLog('⚠️ No extended loyalty payload available at sync time', 'warning');
       }
 
       console.log('[RoyalCaribbeanSync] Setting status to complete...');
