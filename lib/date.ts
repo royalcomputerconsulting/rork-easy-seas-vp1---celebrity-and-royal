@@ -26,6 +26,43 @@ export function createDateFromString(dateString: string): Date {
     return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
   }
 
+  // Handle "Mon DD, YYYY" format (e.g., "Mar 16, 2026", "Jan 7, 2026")
+  const shortMonthNames: Record<string, number> = {
+    'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
+    'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
+  };
+  const monthNameMatch = dateString.match(/^(\w{3})\s+(\d{1,2}),?\s*(\d{4})/);
+  if (monthNameMatch) {
+    const monthIdx = shortMonthNames[monthNameMatch[1].toLowerCase()];
+    if (monthIdx !== undefined) {
+      const day = parseInt(monthNameMatch[2], 10);
+      const year = parseInt(monthNameMatch[3], 10);
+      return new Date(year, monthIdx, day);
+    }
+  }
+
+  // Handle full month names (e.g., "March 16, 2026")
+  const fullMonthNames: Record<string, number> = {
+    'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5,
+    'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11
+  };
+  const fullMonthMatch = dateString.match(/^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s*(\d{4})/i);
+  if (fullMonthMatch) {
+    const monthIdx = fullMonthNames[fullMonthMatch[1].toLowerCase()];
+    if (monthIdx !== undefined) {
+      const day = parseInt(fullMonthMatch[2], 10);
+      const year = parseInt(fullMonthMatch[3], 10);
+      return new Date(year, monthIdx, day);
+    }
+  }
+
+  // Handle YYYYMMDD format (8 digits, e.g., "20260316")
+  const compactMatch = dateString.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compactMatch) {
+    const [, year, month, day] = compactMatch;
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+
   const date = new Date(dateString);
   
   if (isNaN(date.getTime())) {
