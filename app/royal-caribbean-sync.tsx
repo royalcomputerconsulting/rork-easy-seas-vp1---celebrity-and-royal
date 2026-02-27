@@ -922,14 +922,68 @@ function RoyalCaribbeanSyncScreen() {
 
         {state.status === 'complete' && state.lastSyncTimestamp && (
           <View style={styles.successContainer}>
-            <CheckCircle size={24} color="#10b981" />
+            <View style={styles.successIconCircle}>
+              <CheckCircle size={28} color="#fff" />
+            </View>
             <View style={styles.successContent}>
               <Text style={styles.successTitle}>Sync Complete!</Text>
               <Text style={styles.successMessage}>
                 {state.syncCounts && (
-                  `Successfully synced ${state.syncCounts.offerCount} offer${state.syncCounts.offerCount !== 1 ? 's' : ''} with ${state.syncCounts.offerRows} sailing${state.syncCounts.offerRows !== 1 ? 's' : ''}, ${state.syncCounts.upcomingCruises} upcoming cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}, and ${state.syncCounts.courtesyHolds} courtesy hold${state.syncCounts.courtesyHolds !== 1 ? 's' : ''} to your app.`
+                  `${state.syncCounts.offerCount} offer${state.syncCounts.offerCount !== 1 ? 's' : ''} (${state.syncCounts.offerRows} sailing${state.syncCounts.offerRows !== 1 ? 's' : ''}), ${state.syncCounts.upcomingCruises} upcoming cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}, ${state.syncCounts.courtesyHolds} courtesy hold${state.syncCounts.courtesyHolds !== 1 ? 's' : ''}`
                 )}
               </Text>
+
+              {(extendedLoyaltyData || state.loyaltyData) && (
+                <View style={styles.successLoyaltyContainer}>
+                  <View style={styles.successLoyaltyHeader}>
+                    <Crown size={14} color="#fbbf24" />
+                    <Text style={styles.successLoyaltyTitle}>Loyalty Data Synced</Text>
+                  </View>
+                  {(extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel) && (
+                    <View style={styles.successLoyaltyRow}>
+                      <Anchor size={12} color="#60a5fa" />
+                      <Text style={styles.successLoyaltyText}>
+                        Crown & Anchor: {extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel}
+                        {(extendedLoyaltyData?.crownAndAnchorPointsFromApi ?? 0) > 0 && ` — ${extendedLoyaltyData!.crownAndAnchorPointsFromApi!.toLocaleString()} pts`}
+                      </Text>
+                    </View>
+                  )}
+                  {(extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier) && (
+                    <View style={styles.successLoyaltyRow}>
+                      <Crown size={12} color="#f59e0b" />
+                      <Text style={styles.successLoyaltyText}>
+                        Club Royale: {extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier}
+                        {(extendedLoyaltyData?.clubRoyalePointsFromApi ?? 0) > 0 && ` — ${extendedLoyaltyData!.clubRoyalePointsFromApi!.toLocaleString()} pts`}
+                      </Text>
+                    </View>
+                  )}
+                  {extendedLoyaltyData?.captainsClubTier && (
+                    <View style={styles.successLoyaltyRow}>
+                      <Star size={12} color="#10b981" />
+                      <Text style={styles.successLoyaltyText}>
+                        Captain's Club: {extendedLoyaltyData.captainsClubTier}
+                        {(extendedLoyaltyData.captainsClubPoints ?? 0) > 0 && ` — ${extendedLoyaltyData.captainsClubPoints!.toLocaleString()} pts`}
+                      </Text>
+                    </View>
+                  )}
+                  {extendedLoyaltyData?.celebrityBlueChipTier && (
+                    <View style={styles.successLoyaltyRow}>
+                      <Award size={12} color="#8b5cf6" />
+                      <Text style={styles.successLoyaltyText}>
+                        Blue Chip: {extendedLoyaltyData.celebrityBlueChipTier}
+                        {(extendedLoyaltyData.celebrityBlueChipPoints ?? 0) > 0 && ` — ${extendedLoyaltyData.celebrityBlueChipPoints!.toLocaleString()} pts`}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {!(extendedLoyaltyData || state.loyaltyData) && (
+                <View style={styles.successLoyaltyMissing}>
+                  <AlertCircle size={13} color="#f59e0b" />
+                  <Text style={styles.successLoyaltyMissingText}>Loyalty data was not captured this session</Text>
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -1390,20 +1444,28 @@ const styles = StyleSheet.create({
   successContainer: {
     flexDirection: 'row' as const,
     alignItems: 'flex-start' as const,
-    gap: 12,
+    gap: 14,
     margin: 12,
     padding: 16,
     backgroundColor: '#064e3b',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#059669'
+  },
+  successIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#059669',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const
   },
   successContent: {
     flex: 1
   },
   successTitle: {
-    color: '#10b981',
-    fontSize: 16,
+    color: '#34d399',
+    fontSize: 17,
     fontWeight: '700' as const,
     marginBottom: 4
   },
@@ -1411,6 +1473,48 @@ const styles = StyleSheet.create({
     color: '#6ee7b7',
     fontSize: 13,
     lineHeight: 18
+  },
+  successLoyaltyContainer: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#065f46',
+    gap: 6
+  },
+  successLoyaltyHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    marginBottom: 2
+  },
+  successLoyaltyTitle: {
+    color: '#fbbf24',
+    fontSize: 12,
+    fontWeight: '700' as const,
+    letterSpacing: 0.3
+  },
+  successLoyaltyRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6
+  },
+  successLoyaltyText: {
+    color: '#a7f3d0',
+    fontSize: 12,
+    lineHeight: 16
+  },
+  successLoyaltyMissing: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#065f46'
+  },
+  successLoyaltyMissingText: {
+    color: '#fbbf24',
+    fontSize: 12
   },
   loyaltyCard: {
     backgroundColor: '#0f172a',
