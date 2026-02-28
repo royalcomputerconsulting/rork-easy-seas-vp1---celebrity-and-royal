@@ -24,6 +24,7 @@ interface AuthState {
   addToWhitelist: (email: string) => Promise<void>;
   removeFromWhitelist: (email: string) => Promise<void>;
   isEmailWhitelisted: (email: string) => Promise<boolean>;
+  updateEmail: (newEmail: string) => Promise<void>;
 }
 
 export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
@@ -214,6 +215,16 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     return true;
   };
 
+  const updateEmail = async (newEmail: string) => {
+    const normalizedEmail = newEmail.toLowerCase().trim();
+    console.log('[AuthProvider] Updating authenticated email to:', normalizedEmail);
+    await AsyncStorage.setItem(AUTH_EMAIL_KEY, normalizedEmail);
+    setAuthenticatedEmail(normalizedEmail);
+    setIsAdmin(normalizedEmail === ADMIN_EMAIL.toLowerCase());
+    const whitelisted = await checkWhitelistStatus(normalizedEmail);
+    setIsWhitelisted(whitelisted);
+  };
+
   const logout = async () => {
     console.log('[AuthProvider] Logging out and clearing all user data...');
     await AsyncStorage.clear();
@@ -244,5 +255,6 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     addToWhitelist,
     removeFromWhitelist,
     isEmailWhitelisted,
+    updateEmail,
   };
 });

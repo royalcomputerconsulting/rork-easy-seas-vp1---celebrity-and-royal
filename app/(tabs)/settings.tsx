@@ -141,7 +141,7 @@ export default function SettingsScreen() {
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
-  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist } = useAuth();
+  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail } = useAuth();
   const { stats: crewStats } = useCrewRecognition();
 
 
@@ -1262,7 +1262,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       
       if (emailChanged) {
         console.log('[Settings] Email changed - updating auth state and triggering re-login');
-        await AsyncStorage.setItem('easyseas_auth_email', newEmail);
+        await updateEmail(newEmail);
         await syncUserFromStorage();
         
         Alert.alert(
