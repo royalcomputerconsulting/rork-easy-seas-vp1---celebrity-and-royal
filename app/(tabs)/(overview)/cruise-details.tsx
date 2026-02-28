@@ -97,7 +97,7 @@ export default function CruiseDetailsScreen() {
     nextCruiseCertificate: '',
   });
 
-  const { bookedCruises: storeBookedCruises, cruises: storeCruises, casinoOffers: storeOffers, updateBookedCruise: updateCruiseInStore, removeBookedCruise, addBookedCruise } = useCoreData();
+  const { bookedCruises: storeBookedCruises, cruises: storeCruises, casinoOffers: storeOffers, updateBookedCruise: updateCruiseInStore, updateCruise: updateCruiseInCruisesStore, removeBookedCruise, addBookedCruise } = useCoreData();
   const { currentUser } = useUser();
   
   const [heroImageUri, setHeroImageUri] = useState<string>(DEFAULT_CRUISE_IMAGE);
@@ -115,22 +115,26 @@ export default function CruiseDetailsScreen() {
     console.log('[CruiseDetails] Updating cruise:', updatedCruise);
     console.log('[CruiseDetails] Updated points:', updatedCruise.earnedPoints);
     console.log('[CruiseDetails] Updated winnings:', updatedCruise.winnings);
+    console.log('[CruiseDetails] Updated sailDate:', updatedCruise.sailDate);
+    console.log('[CruiseDetails] Updated returnDate:', updatedCruise.returnDate);
     
-    // Update in CruiseStore - this is the single source of truth
-    // CruiseStore updates CoreDataProvider, which LoyaltyProvider reads from
     updateCruiseInStore(updatedCruise.id, updatedCruise);
+    
+    const existsInCruises = (storeCruises || []).some(c => c.id === updatedCruise.id);
+    if (existsInCruises) {
+      console.log('[CruiseDetails] Also updating in non-booked cruises store');
+      updateCruiseInCruisesStore(updatedCruise.id, updatedCruise);
+    }
     
     console.log('[CruiseDetails] Cruise updated in store. LoyaltyProvider will recalculate automatically.');
   };
 
   const cruise = useMemo(() => {
-    // Priority: CruiseStore data > localData
-    // CruiseStore has enriched itinerary data from enrichCruisesWithMockItineraries
     const allCruises = [
-      ...(storeCruises || []),
       ...(storeBookedCruises || []),
-      ...(localData.cruises || []),
+      ...(storeCruises || []),
       ...(localData.booked || []),
+      ...(localData.cruises || []),
     ];
     
     let found = allCruises.find(c => c.id === id);
@@ -511,14 +515,36 @@ export default function CruiseDetailsScreen() {
   const saveFullEdit = () => {
     if (!cruise) return;
     
+    const newNights = parseInt(editForm.nights) || cruise.nights;
+    const newSailDate = editForm.sailDate || cruise.sailDate;
+    
+    let newReturnDate = cruise.returnDate;
+    if (newSailDate !== cruise.sailDate || newNights !== cruise.nights) {
+      try {
+        const sailDateObj = createDateFromString(newSailDate);
+        if (sailDateObj && !isNaN(sailDateObj.getTime())) {
+          const returnDateObj = new Date(sailDateObj);
+          returnDateObj.setDate(returnDateObj.getDate() + newNights);
+          const mm = String(returnDateObj.getMonth() + 1).padStart(2, '0');
+          const dd = String(returnDateObj.getDate()).padStart(2, '0');
+          const yyyy = returnDateObj.getFullYear();
+          newReturnDate = `${mm}-${dd}-${yyyy}`;
+          console.log('[CruiseDetails] Recalculated returnDate:', newReturnDate);
+        }
+      } catch (e) {
+        console.warn('[CruiseDetails] Failed to recalculate returnDate:', e);
+      }
+    }
+    
     const updatedCruise = {
       ...cruise,
       shipName: editForm.shipName || cruise.shipName,
       departurePort: editForm.departurePort || cruise.departurePort,
       destination: editForm.destination || cruise.destination,
       itineraryName: editForm.destination || cruise.itineraryName,
-      nights: parseInt(editForm.nights) || cruise.nights,
-      sailDate: editForm.sailDate || cruise.sailDate,
+      nights: newNights,
+      sailDate: newSailDate,
+      returnDate: newReturnDate,
       cabinType: editForm.cabinType || cruise.cabinType,
       guests: parseInt(editForm.guests) || cruise.guests || 2,
       interiorPrice: parseFloat(editForm.interiorPrice) || 0,
