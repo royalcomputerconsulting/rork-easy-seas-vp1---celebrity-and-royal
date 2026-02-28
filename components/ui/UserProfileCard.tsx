@@ -542,15 +542,12 @@ export function UserProfileCard({
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.modalContent}>
-                {renderEditForm()}
-              </View>
-
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={styles.modalCancelButton}
                   onPress={() => setIsModalVisible(false)}
                   activeOpacity={0.7}
+                  testID="profile-modal-cancel-top-button"
                 >
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
@@ -559,6 +556,7 @@ export function UserProfileCard({
                   onPress={handleSave}
                   activeOpacity={0.7}
                   disabled={isSaving}
+                  testID="profile-modal-save-top-button"
                 >
                   <LinearGradient
                     colors={getBrandGradient()}
@@ -577,6 +575,10 @@ export function UserProfileCard({
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
+
+              <View style={styles.modalContent}>
+                {renderEditForm()}
+              </View> 
             </ScrollView>
           </View>
         </View>
@@ -795,8 +797,12 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     gap: SPACING.sm,
-    padding: SPACING.lg,
-    paddingTop: 0,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: COLORS.white,
   },
   modalCancelButton: {
     flex: 1,
