@@ -13,6 +13,7 @@ import { Users, Plus, Download, Search, Filter, X, RefreshCcw, UserCheck, Check,
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+import { useCoreData } from '@/state/CoreDataProvider';
 import { AddCrewMemberModal } from './AddCrewMemberModal';
 import { RecognitionEntryDetailModal } from './RecognitionEntryDetailModal';
 import { SurveyListModal } from './SurveyListModal';
@@ -75,6 +76,8 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     deleteRecognitionEntry,
     syncFromCSVLocally,
   } = useCrewRecognition();
+
+  const { bookedCruises } = useCoreData();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<RecognitionEntryWithCrew | null>(null);
@@ -456,6 +459,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
           await createCrewMember({ ...data, department: data.department as Department, userId });
         }}
         sailings={sailings}
+        bookedCruises={bookedCruises}
       />
 
       <RecognitionEntryDetailModal

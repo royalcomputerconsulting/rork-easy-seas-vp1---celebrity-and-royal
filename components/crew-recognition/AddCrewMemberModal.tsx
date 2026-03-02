@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,11 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { X, User } from 'lucide-react-native';
+import { X, User, Anchor } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { DEPARTMENTS } from '@/types/crew-recognition';
 import type { Sailing } from '@/types/crew-recognition';
+import type { BookedCruise } from '@/types/models';
 
 interface AddCrewMemberModalProps {
   visible: boolean;
@@ -26,9 +27,37 @@ interface AddCrewMemberModalProps {
     sailingId?: string;
   }) => Promise<void>;
   sailings: Sailing[];
+  bookedCruises?: BookedCruise[];
 }
 
-export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings }: AddCrewMemberModalProps) {
+function findCurrentAboardSailing(sailings: Sailing[], bookedCruises: BookedCruise[]): Sailing | null {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (const sailing of sailings) {
+    const start = new Date(sailing.sailStartDate + 'T00:00:00');
+    const end = new Date(sailing.sailEndDate + 'T23:59:59');
+    if (today >= start && today <= end) {
+      return sailing;
+    }
+  }
+
+  for (const cruise of bookedCruises) {
+    if (!cruise.sailDate || !cruise.returnDate) continue;
+    const start = new Date(cruise.sailDate + 'T00:00:00');
+    const end = new Date(cruise.returnDate + 'T23:59:59');
+    if (today >= start && today <= end) {
+      const matchingSailing = sailings.find(
+        s => s.shipName === cruise.shipName && s.sailStartDate === cruise.sailDate
+      );
+      if (matchingSailing) return matchingSailing;
+    }
+  }
+
+  return null;
+}
+
+export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, bookedCruises = [] }: AddCrewMemberModalProps) {
   const [fullName, setFullName] = useState('');
   const [department, setDepartment] = useState('');
   const [roleTitle, setRoleTitle] = useState('');
@@ -37,6 +66,21 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings }: Add
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDepartmentPicker, setShowDepartmentPicker] = useState(false);
   const [showSailingPicker, setShowSailingPicker] = useState(false);
+  const [autoLinked, setAutoLinked] = useState(false);
+
+  const currentAboardSailing = useMemo(
+    () => findCurrentAboardSailing(sailings, bookedCruises),
+    [sailings, bookedCruises]
+  );
+
+  useEffect(() => {
+    if (visible && currentAboardSailing && sailingId === '') {
+      console.log('[AddCrewMember] Auto-linking to current sailing:', currentAboardSailing.shipName, currentAboardSailing.sailStartDate);
+      setSailingId(currentAboardSailing.id);
+      setAutoLinked(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, currentAboardSailing]);
 
   const handleSubmit = async () => {
     if (!fullName.trim()) {
@@ -64,6 +108,7 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings }: Add
       setRoleTitle('');
       setNotes('');
       setSailingId('');
+      setAutoLinked(false);
       onClose();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to add crew member');
@@ -152,9 +197,15 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings }: Add
 
             <View style={styles.field}>
               <Text style={styles.label}>Link to Sailing (Optional)</Text>
+              {autoLinked && selectedSailing && (
+                <View style={styles.autoLinkedBadge}>
+                  <Anchor size={12} color="#0369A1" />
+                  <Text style={styles.autoLinkedText}>Auto-linked — currently aboard this sailing</Text>
+                </View>
+              )}
               <TouchableOpacity
-                style={styles.picker}
-                onPress={() => setShowSailingPicker(!showSailingPicker)}
+                style={[styles.picker, autoLinked && selectedSailing && styles.pickerAutoLinked]}
+                onPress={() => { setShowSailingPicker(!showSailingPicker); setAutoLinked(false); }}
               >
                 <Text style={sailingId ? styles.pickerText : styles.pickerPlaceholder}>
                   {selectedSailing
@@ -335,5 +386,24 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '600' as const,
     color: '#fff',
+  },
+  autoLinkedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 6,
+  },
+  autoLinkedText: {
+    fontSize: 11,
+    fontWeight: '500' as const,
+    color: '#0369A1',
+  },
+  pickerAutoLinked: {
+    borderColor: '#0369A1',
+    backgroundColor: 'rgba(3, 105, 161, 0.04)',
   },
 });
