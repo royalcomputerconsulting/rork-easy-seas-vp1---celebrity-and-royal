@@ -29,6 +29,7 @@ import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
+import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 
 const EVENT_COLORS = {
   cruise: '#3B82F6',
@@ -1014,6 +1015,10 @@ export default function DayAgendaScreen() {
             </>
           )}
           
+          <View style={styles.sectionContainer}>
+            <TimeZoneConverter />
+          </View>
+
           <CrewRecognitionSection />
         </ScrollView>
       </SafeAreaView>
