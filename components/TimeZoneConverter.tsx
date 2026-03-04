@@ -55,15 +55,9 @@ function getDateInZone(tz: string): string {
   }
 }
 
-function getOffsetDifference(localTz: string, remoteTz: string): string {
+function getOffsetDifference(localOffset: number, remoteOffset: number): string {
   try {
-    const now = new Date();
-    const localStr = now.toLocaleString('en-US', { timeZone: localTz });
-    const remoteStr = now.toLocaleString('en-US', { timeZone: remoteTz });
-    const localDate = new Date(localStr);
-    const remoteDate = new Date(remoteStr);
-    const diffMs = remoteDate.getTime() - localDate.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
+    const diffHours = remoteOffset - localOffset;
     const sign = diffHours >= 0 ? '+' : '';
     if (diffHours % 1 === 0) {
       return `${sign}${diffHours}h`;
@@ -266,7 +260,7 @@ export function TimeZoneConverter() {
   }, [expanded]);
 
   const offset = useMemo(
-    () => getOffsetDifference(localTz.value, remoteTz.value),
+    () => getOffsetDifference(localTz.offset, remoteTz.offset),
     [localTz, remoteTz]
   );
 
