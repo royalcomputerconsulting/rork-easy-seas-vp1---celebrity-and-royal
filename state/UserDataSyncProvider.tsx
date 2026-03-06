@@ -4,7 +4,7 @@ import createContextHook from "@nkzw/create-context-hook";
 import { trpc, trpcClient, isBackendReachable } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
 import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
-import { clearAllAppData } from "@/lib/dataManager";
+import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 
 const LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 1;
@@ -297,6 +297,14 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return false;
     }
 
+    const pendingSwitchEarly = await AsyncStorage.getItem(PENDING_ACCOUNT_SWITCH_KEY);
+    if (pendingSwitchEarly === "true") {
+      console.log("[UserDataSync] Account switch detected early - clearing local user data regardless of backend status");
+      await clearUserSpecificData();
+      await AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY);
+      console.log("[UserDataSync] Local user data cleared for account switch (early)");
+    }
+
     const reachable = await isBackendReachable();
     if (!reachable) {
       console.log("[UserDataSync] Backend not reachable, skipping cloud load");
@@ -323,21 +331,11 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     setSyncError(null);
 
     try {
-      const pendingSwitch = await AsyncStorage.getItem(PENDING_ACCOUNT_SWITCH_KEY);
-      if (pendingSwitch === "true") {
-        console.log("[UserDataSync] Pending account switch detected - will only clear local data AFTER confirming cloud data exists");
-      }
-
       const result = await fetchAllUserDataByEmail(authenticatedEmail);
 
       if (!isMountedRef.current) return false;
 
       if (result?.found && result.data) {
-        if (pendingSwitch === "true") {
-          console.log("[UserDataSync] Cloud data found for new account - clearing local app data now (safe) before restore");
-          await clearAllAppData();
-          await AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY);
-        }
         console.log("[UserDataSync] Cloud data found, restoring...");
         setHasCloudData(true);
 
@@ -363,7 +361,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           return true;
         }
       } else {
-        console.log("[UserDataSync] No cloud data found for this user");
+        console.log("[UserDataSync] No cloud data found for this user - starting fresh");
         setHasCloudData(false);
         retryCountRef.current = 0;
       }

@@ -21,6 +21,7 @@ import {
   processCalendarEvents,
   processMetadata,
 } from "./coreData/storageLoaders";
+import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -251,6 +252,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const [isLoading, setIsLoading] = useState(true);
   const loadAttemptedRef = useRef(false);
   const lastAuthEmailRef = useRef<string | null>(null);
+  const accountSwitchClearingRef = useRef<Promise<void> | null>(null);
 
   const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
   
@@ -530,7 +532,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
 
     if (authenticatedEmail !== lastAuthEmailRef.current) {
-      console.log('[CoreData] User changed from', lastAuthEmailRef.current, 'to', authenticatedEmail, '- reloading data');
+      const previousEmail = lastAuthEmailRef.current;
+      console.log('[CoreData] User changed from', previousEmail, 'to', authenticatedEmail, '- clearing ALL local data and reloading');
       lastAuthEmailRef.current = authenticatedEmail;
       loadAttemptedRef.current = false;
       isInitialLoadRef.current = true;
@@ -541,6 +544,19 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setCalendarEventsState([]);
       setClubRoyaleProfileState(SAMPLE_CLUB_ROYALE_PROFILE);
       setUserPointsState(0);
+      setSettings(DEFAULT_SETTINGS);
+      setLastSyncDate(null);
+
+      if (previousEmail !== null) {
+        console.log('[CoreData] Account switch detected - clearing AsyncStorage user data to prevent data leakage');
+        accountSwitchClearingRef.current = clearUserSpecificData().then(() => {
+          console.log('[CoreData] AsyncStorage user data cleared for account switch');
+        }).catch((err) => {
+          console.error('[CoreData] Failed to clear AsyncStorage on account switch:', err);
+        }).finally(() => {
+          accountSwitchClearingRef.current = null;
+        });
+      }
     }
 
     console.log('[CoreData] === MOUNT: Starting initial load ===');
@@ -556,8 +572,12 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     
     const doLoad = async () => {
       try {
-        // Wait for cloud sync check to complete before loading
-        // This prevents showing sample data to returning users
+        if (accountSwitchClearingRef.current) {
+          console.log('[CoreData] === Waiting for account switch data clear to complete ===');
+          await accountSwitchClearingRef.current;
+          console.log('[CoreData] === Account switch data clear completed ===');
+        }
+
         if (!initialCheckComplete) {
           console.log('[CoreData] === Waiting for cloud sync check to complete ===');
           return;
