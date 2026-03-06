@@ -17,7 +17,6 @@ import { useEntitlement } from '@/state/EntitlementProvider';
 export default function TabLayout() {
   const router = useRouter();
   const { tier } = useEntitlement();
-
   const handleTabPress = useCallback((e: any) => {
     const routeName = e?.target?.split('-')[0];
     
@@ -48,9 +47,6 @@ export default function TabLayout() {
           backgroundColor: COLORS.white,
           borderTopWidth: 1,
           borderTopColor: COLORS.borderLight,
-          height: Platform.OS === 'ios' ? 88 : 70,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 10,
-          paddingTop: 6,
           elevation: 8,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
@@ -61,7 +57,6 @@ export default function TabLayout() {
           fontSize: 9,
           fontWeight: '600' as const,
           marginTop: 2,
-          marginBottom: Platform.OS === 'ios' ? 0 : 2,
           letterSpacing: 0,
         },
         tabBarItemStyle: {
