@@ -437,10 +437,14 @@ function RoyalCaribbeanSyncScreen() {
                 allowsInlineMediaPlayback={true}
                 mediaPlaybackRequiresUserAction={false}
                 allowsLinkPreview={false}
-                bounces={false}
+                bounces={true}
                 scrollEnabled={true}
+                nestedScrollEnabled={true}
                 automaticallyAdjustContentInsets={false}
                 contentInsetAdjustmentBehavior="never"
+                overScrollMode="always"
+                setBuiltInZoomControls={true}
+                scalesPageToFit={true}
                 onError={(syntheticEvent) => {
                   const { nativeEvent } = syntheticEvent;
                   console.warn('WebView error:', nativeEvent);
@@ -1082,7 +1086,7 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const
   },
   webViewContainer: {
-    height: 300,
+    height: 500,
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b'
   },
