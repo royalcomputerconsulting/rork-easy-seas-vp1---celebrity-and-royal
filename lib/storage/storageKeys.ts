@@ -39,6 +39,13 @@ export const ALL_STORAGE_KEYS = {
   EXTENDED_LOYALTY_DATA: 'easyseas_extended_loyalty_data',
   CREW_RECOGNITION_ENTRIES: 'crew_recognition_entries_v2',
   CREW_RECOGNITION_SAILINGS: 'crew_recognition_sailings_v2',
+  BANKROLL_LIMITS: 'easyseas_bankroll',
+  BANKROLL_ALERTS: 'easyseas_bankroll_alerts',
+  BANKROLL_DATA: 'easyseas_bankroll_data',
+  LOYALTY_DATA: 'easyseas_loyalty_data',
+  USER_SLOT_MACHINES: '@easyseas/user_slot_machines',
+  DECK_PLAN_LOCATIONS: '@easyseas/deck_plan_locations',
+  MACHINE_SETTINGS: '@easyseas/machine_settings',
 } as const;
 
 export const STORAGE_KEYS = ALL_STORAGE_KEYS;

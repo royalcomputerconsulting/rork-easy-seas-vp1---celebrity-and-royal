@@ -1,8 +1,9 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import type { BookedCruise, ClubRoyaleTier, CrownAnchorLevel } from "@/types/models";
 import { useCoreData } from "./CoreDataProvider";
+import { useAuth } from "./AuthProvider";
 import { 
   CLUB_ROYALE_TIERS, 
   getTierByPoints, 
@@ -98,11 +99,13 @@ const DEFAULT_LOYALTY = {
   crownAnchorPoints: 0,
 };
 
-const DEFAULT_TIER = 'Choice' as ClubRoyaleTier;
-const DEFAULT_LEVEL = 'Gold' as CrownAnchorLevel;
+const _DEFAULT_TIER = 'Choice' as ClubRoyaleTier;
+const _DEFAULT_LEVEL = 'Gold' as CrownAnchorLevel;
 
 export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState => {
   const { bookedCruises: storedBookedCruises, isLoading: cruisesLoading } = useCoreData();
+  const { authenticatedEmail } = useAuth();
+  const lastEmailRef = useRef<string | null>(null);
   
   const [manualClubRoyalePoints, setManualClubRoyalePointsState] = useState<number | null>(null);
   const [manualCrownAnchorPoints, setManualCrownAnchorPointsState] = useState<number | null>(null);
@@ -195,7 +198,47 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
   }, []);
 
   useEffect(() => {
-    loadManualPoints();
+    if (authenticatedEmail !== lastEmailRef.current) {
+      const previousEmail = lastEmailRef.current;
+      lastEmailRef.current = authenticatedEmail;
+      
+      if (previousEmail !== null && previousEmail !== authenticatedEmail) {
+        console.log('[LoyaltyProvider] User changed from', previousEmail, 'to', authenticatedEmail, '- resetting loyalty data');
+        setManualClubRoyalePointsState(null);
+        setManualCrownAnchorPointsState(null);
+        setExtendedLoyaltyState(null);
+      }
+    }
+    
+    void loadManualPoints();
+  }, [loadManualPoints, authenticatedEmail]);
+
+  useEffect(() => {
+    const handleDataCleared = () => {
+      console.log('[LoyaltyProvider] Data cleared event detected, resetting loyalty data');
+      setManualClubRoyalePointsState(null);
+      setManualCrownAnchorPointsState(null);
+      setExtendedLoyaltyState(null);
+      setIsLoading(false);
+    };
+
+    const handleCloudRestore = () => {
+      console.log('[LoyaltyProvider] Cloud data restored, reloading loyalty data');
+      void loadManualPoints();
+    };
+
+    try {
+      if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
+        window.addEventListener('appDataCleared', handleDataCleared);
+        window.addEventListener('cloudDataRestored', handleCloudRestore);
+        return () => {
+          window.removeEventListener('appDataCleared', handleDataCleared);
+          window.removeEventListener('cloudDataRestored', handleCloudRestore);
+        };
+      }
+    } catch (e) {
+      console.log('[LoyaltyProvider] Could not set up event listeners:', e);
+    }
   }, [loadManualPoints]);
 
   const setManualClubRoyalePoints = useCallback(async (points: number) => {
@@ -632,7 +675,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     };
   }, [bookedCruises, manualClubRoyalePoints, manualCrownAnchorPoints, extendedLoyalty]);
 
-  return {
+  return useMemo(() => ({
     ...calculatedData,
     extendedLoyalty,
     isLoading: isLoading || cruisesLoading,
@@ -640,5 +683,5 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     setManualCrownAnchorPoints,
     setExtendedLoyaltyData,
     syncFromStorage: loadManualPoints,
-  };
+  }), [calculatedData, extendedLoyalty, isLoading, cruisesLoading, setManualClubRoyalePoints, setManualCrownAnchorPoints, setExtendedLoyaltyData, loadManualPoints]);
 });

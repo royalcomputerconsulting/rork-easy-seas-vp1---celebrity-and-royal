@@ -47,6 +47,15 @@ export async function clearUserSpecificData(): Promise<void> {
   }
 
   console.log('[StorageOps] Cleared', keysToRemove.length, 'user-specific keys for account switch');
+
+  try {
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+      console.log('[StorageOps] Dispatching appDataCleared event for account switch');
+      window.dispatchEvent(new CustomEvent('appDataCleared'));
+    }
+  } catch (e) {
+    console.log('[StorageOps] Could not dispatch appDataCleared event:', e);
+  }
 }
 
 export async function clearAllAppData(): Promise<{

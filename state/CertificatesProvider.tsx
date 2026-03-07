@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { Certificate, CertificateType } from '@/components/CertificateManagerModal';
+import { useAuth } from './AuthProvider';
 
 const CERTIFICATES_STORAGE_KEY = '@easyseas_certificates';
 
@@ -19,35 +20,76 @@ interface CertificatesState {
 const DEFAULT_CERTIFICATES: Certificate[] = [];
 
 export const [CertificatesProvider, useCertificates] = createContextHook((): CertificatesState => {
+  const { authenticatedEmail } = useAuth();
+  const lastEmailRef = useRef<string | null>(null);
   const isInitializedRef = useRef(false);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const loadCertificates = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(CERTIFICATES_STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          setCertificates(parsed);
-          console.log('[CertificatesProvider] Loaded certificates:', parsed.length);
-        } else {
-          setCertificates(DEFAULT_CERTIFICATES);
-          await AsyncStorage.setItem(CERTIFICATES_STORAGE_KEY, JSON.stringify(DEFAULT_CERTIFICATES));
-          console.log('[CertificatesProvider] Initialized with default certificates');
-        }
-        isInitializedRef.current = true;
-      } catch (error) {
-        console.error('[CertificatesProvider] Error loading certificates:', error);
+  const loadCertificates = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const stored = await AsyncStorage.getItem(CERTIFICATES_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setCertificates(parsed);
+        console.log('[CertificatesProvider] Loaded certificates:', parsed.length);
+      } else {
         setCertificates(DEFAULT_CERTIFICATES);
-        isInitializedRef.current = true;
-      } finally {
-        setIsLoading(false);
+        await AsyncStorage.setItem(CERTIFICATES_STORAGE_KEY, JSON.stringify(DEFAULT_CERTIFICATES));
+        console.log('[CertificatesProvider] Initialized with default certificates');
       }
+      isInitializedRef.current = true;
+    } catch (error) {
+      console.error('[CertificatesProvider] Error loading certificates:', error);
+      setCertificates(DEFAULT_CERTIFICATES);
+      isInitializedRef.current = true;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authenticatedEmail !== lastEmailRef.current) {
+      const previousEmail = lastEmailRef.current;
+      lastEmailRef.current = authenticatedEmail;
+      
+      if (previousEmail !== null && previousEmail !== authenticatedEmail) {
+        console.log('[CertificatesProvider] User changed from', previousEmail, 'to', authenticatedEmail, '- resetting certificates');
+        isInitializedRef.current = false;
+        setCertificates(DEFAULT_CERTIFICATES);
+      }
+    }
+    
+    void loadCertificates();
+  }, [loadCertificates, authenticatedEmail]);
+
+  useEffect(() => {
+    const handleDataCleared = () => {
+      console.log('[CertificatesProvider] Data cleared event detected, resetting certificates');
+      isInitializedRef.current = false;
+      setCertificates(DEFAULT_CERTIFICATES);
+      setIsLoading(false);
     };
 
-    loadCertificates();
-  }, []);
+    const handleCloudRestore = () => {
+      console.log('[CertificatesProvider] Cloud data restored, reloading certificates');
+      void loadCertificates();
+    };
+
+    try {
+      if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
+        window.addEventListener('appDataCleared', handleDataCleared);
+        window.addEventListener('cloudDataRestored', handleCloudRestore);
+        return () => {
+          window.removeEventListener('appDataCleared', handleDataCleared);
+          window.removeEventListener('cloudDataRestored', handleCloudRestore);
+        };
+      }
+    } catch (e) {
+      console.log('[CertificatesProvider] Could not set up event listeners:', e);
+    }
+  }, [loadCertificates]);
 
   useEffect(() => {
     if (!isInitializedRef.current) return;
@@ -61,7 +103,7 @@ export const [CertificatesProvider, useCertificates] = createContextHook((): Cer
       }
     };
 
-    saveCertificates();
+    void saveCertificates();
   }, [certificates]);
 
   const addCertificate = useCallback((cert: Omit<Certificate, 'id'>) => {
@@ -100,7 +142,7 @@ export const [CertificatesProvider, useCertificates] = createContextHook((): Cer
       .reduce((sum, cert) => sum + cert.value, 0);
   }, [certificates]);
 
-  return {
+  return useMemo(() => ({
     certificates,
     isLoading,
     addCertificate,
@@ -109,5 +151,5 @@ export const [CertificatesProvider, useCertificates] = createContextHook((): Cer
     getCertificatesByType,
     getAvailableCertificates,
     getTotalValue,
-  };
+  }), [certificates, isLoading, addCertificate, updateCertificate, deleteCertificate, getCertificatesByType, getAvailableCertificates, getTotalValue]);
 });

@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { SlotMachine, SlotMachineFilter, DeckPlanLocation } from '@/types/models';
 import { searchSlotMachines, filterSlotMachines, loadGlobalSlotMachines } from '@/lib/slotMachineUtils';
+import { useAuth } from './AuthProvider';
 
 const STORAGE_KEYS = {
   USER_MACHINES: '@easyseas/user_slot_machines',
@@ -59,6 +60,8 @@ const DEFAULT_FILTERS: SlotMachineFilter = {
 };
 
 export const [SlotMachineProvider, useSlotMachines] = createContextHook((): SlotMachineState => {
+  const { authenticatedEmail } = useAuth();
+  const lastEmailRef = useRef<string | null>(null);
   const [globalMachines, setGlobalMachines] = useState<SlotMachine[]>([]);
   const [userMachines, setUserMachines] = useState<SlotMachine[]>([]);
   const [deckLocations, setDeckLocations] = useState<DeckPlanLocation[]>([]);
@@ -103,10 +106,50 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
   }, []);
   
   useEffect(() => {
+    if (authenticatedEmail !== lastEmailRef.current) {
+      const previousEmail = lastEmailRef.current;
+      lastEmailRef.current = authenticatedEmail;
+      
+      if (previousEmail !== null && previousEmail !== authenticatedEmail) {
+        console.log('[SlotMachine] User changed from', previousEmail, 'to', authenticatedEmail, '- resetting user machines');
+        setUserMachines([]);
+        setDeckLocations([]);
+        setFiltersState(DEFAULT_FILTERS);
+      }
+    }
+    
     const handle = InteractionManager.runAfterInteractions(() => {
-      loadFromStorage();
+      void loadFromStorage();
     });
     return () => handle.cancel();
+  }, [loadFromStorage, authenticatedEmail]);
+
+  useEffect(() => {
+    const handleDataCleared = () => {
+      console.log('[SlotMachine] Data cleared event detected, resetting user machines');
+      setUserMachines([]);
+      setDeckLocations([]);
+      setFiltersState(DEFAULT_FILTERS);
+      setIsLoading(false);
+    };
+
+    const handleCloudRestore = () => {
+      console.log('[SlotMachine] Cloud data restored, reloading machines');
+      void loadFromStorage();
+    };
+
+    try {
+      if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
+        window.addEventListener('appDataCleared', handleDataCleared);
+        window.addEventListener('cloudDataRestored', handleCloudRestore);
+        return () => {
+          window.removeEventListener('appDataCleared', handleDataCleared);
+          window.removeEventListener('cloudDataRestored', handleCloudRestore);
+        };
+      }
+    } catch (e) {
+      console.log('[SlotMachine] Could not set up event listeners:', e);
+    }
   }, [loadFromStorage]);
   
   const persistUserMachines = useCallback(async (machines: SlotMachine[]) => {
@@ -138,7 +181,7 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
     
     setUserMachines(prev => {
       const updated = [...prev, newMachine];
-      persistUserMachines(updated);
+      void persistUserMachines(updated);
       return updated;
     });
     
@@ -153,7 +196,7 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
           ? { ...machine, ...updates, updatedAt: new Date().toISOString() }
           : machine
       );
-      persistUserMachines(updated);
+      void persistUserMachines(updated);
       return updated;
     });
     
@@ -163,7 +206,7 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
   const deleteMachine = useCallback(async (id: string) => {
     setUserMachines(prev => {
       const updated = prev.filter(machine => machine.id !== id);
-      persistUserMachines(updated);
+      void persistUserMachines(updated);
       return updated;
     });
     
@@ -179,7 +222,7 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
     
     setDeckLocations(prev => {
       const updated = [...prev, newLocation];
-      persistDeckLocations(updated);
+      void persistDeckLocations(updated);
       return updated;
     });
     
@@ -194,7 +237,7 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
           ? { ...location, ...updates }
           : location
       );
-      persistDeckLocations(updated);
+      void persistDeckLocations(updated);
       return updated;
     });
     
@@ -204,7 +247,7 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
   const deleteDeckLocation = useCallback(async (id: string) => {
     setDeckLocations(prev => {
       const updated = prev.filter(location => location.id !== id);
-      persistDeckLocations(updated);
+      void persistDeckLocations(updated);
       return updated;
     });
     
@@ -335,7 +378,7 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
     await loadFromStorage();
   }, [loadFromStorage]);
   
-  return {
+  return useMemo(() => ({
     globalMachines,
     userMachines,
     allMachines,
@@ -361,5 +404,5 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
     getMachinesForShip,
     getShipsForMachine,
     refreshData,
-  };
+  }), [globalMachines, userMachines, allMachines, deckLocations, filters, filteredMachines, isLoading, addMachine, updateMachine, deleteMachine, addDeckLocation, updateDeckLocation, deleteDeckLocation, getDeckLocationsForShip, getDeckLocationsForMachine, setFilters, clearFilters, searchMachinesFunc, getMachineById, getMachinesByManufacturer, getMachinesWithAPPotential, getMachinesWithMustHitBy, getMachinesForShip, getShipsForMachine, refreshData]);
 });

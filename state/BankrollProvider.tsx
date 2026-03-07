@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { useCasinoSessions } from './CasinoSessionProvider';
+import { useAuth } from './AuthProvider';
 
 export type AlertLevel = 'info' | 'warning' | 'critical';
 
@@ -113,6 +114,8 @@ function getStartOfPeriod(period: 'daily' | 'weekly' | 'monthly'): Date {
 }
 
 export const [BankrollProvider, useBankroll] = createContextHook((): BankrollState => {
+  const { authenticatedEmail } = useAuth();
+  const lastEmailRef = useRef<string | null>(null);
   const [limits, setLimits] = useState<BankrollLimit[]>([]);
   const [alerts, setAlerts] = useState<BankrollAlert[]>([]);
   const [sessionBankroll, setSessionBankroll] = useState<SessionBankroll | null>(null);
@@ -173,7 +176,47 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
   }, [persistLimits]);
 
   useEffect(() => {
-    loadData();
+    if (authenticatedEmail !== lastEmailRef.current) {
+      const previousEmail = lastEmailRef.current;
+      lastEmailRef.current = authenticatedEmail;
+      
+      if (previousEmail !== null && previousEmail !== authenticatedEmail) {
+        console.log('[BankrollProvider] User changed from', previousEmail, 'to', authenticatedEmail, '- resetting bankroll data');
+        setLimits([]);
+        setAlerts([]);
+        setSessionBankroll(null);
+      }
+    }
+    
+    void loadData();
+  }, [loadData, authenticatedEmail]);
+
+  useEffect(() => {
+    const handleDataCleared = () => {
+      console.log('[BankrollProvider] Data cleared event detected, resetting bankroll data');
+      setLimits([]);
+      setAlerts([]);
+      setSessionBankroll(null);
+      setIsLoading(false);
+    };
+
+    const handleCloudRestore = () => {
+      console.log('[BankrollProvider] Cloud data restored, reloading bankroll data');
+      void loadData();
+    };
+
+    try {
+      if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
+        window.addEventListener('appDataCleared', handleDataCleared);
+        window.addEventListener('cloudDataRestored', handleCloudRestore);
+        return () => {
+          window.removeEventListener('appDataCleared', handleDataCleared);
+          window.removeEventListener('cloudDataRestored', handleCloudRestore);
+        };
+      }
+    } catch (e) {
+      console.log('[BankrollProvider] Could not set up event listeners:', e);
+    }
   }, [loadData]);
 
   const setLimit = useCallback(async (
@@ -365,7 +408,7 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
     if (newAlerts.length > 0) {
       const updatedAlerts = [...alerts, ...newAlerts];
       setAlerts(updatedAlerts);
-      persistAlerts(updatedAlerts);
+      void persistAlerts(updatedAlerts);
       console.log('[BankrollProvider] Triggered', newAlerts.length, 'new alerts');
     }
     
@@ -375,13 +418,13 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
   const dismissAlert = useCallback((alertId: string) => {
     const updatedAlerts = alerts.filter(a => a.id !== alertId);
     setAlerts(updatedAlerts);
-    persistAlerts(updatedAlerts);
+    void persistAlerts(updatedAlerts);
     console.log('[BankrollProvider] Dismissed alert:', alertId);
   }, [alerts, persistAlerts]);
 
   const clearAllAlerts = useCallback(() => {
     setAlerts([]);
-    persistAlerts([]);
+    void persistAlerts([]);
     console.log('[BankrollProvider] Cleared all alerts');
   }, [persistAlerts]);
 
@@ -420,7 +463,7 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
     console.log('[BankrollProvider] Reset period:', period);
   }, [alerts, persistAlerts]);
 
-  return {
+  return useMemo(() => ({
     limits,
     alerts,
     sessionBankroll,
@@ -436,5 +479,5 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
     dismissAlert,
     clearAllAlerts,
     resetPeriod,
-  };
+  }), [limits, alerts, sessionBankroll, isLoading, setLimit, updateLimit, toggleLimit, startSessionBankroll, updateSessionBankroll, endSessionBankroll, getBankrollStats, checkAndTriggerAlerts, dismissAlert, clearAllAlerts, resetPeriod]);
 });
