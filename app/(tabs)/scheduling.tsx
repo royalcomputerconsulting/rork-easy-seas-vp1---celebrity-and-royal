@@ -43,7 +43,7 @@ import { Link2, Calendar, Users, Tag, Anchor } from 'lucide-react-native';
 
 type ViewTab = 'available' | 'all' | 'foryou' | 'booked';
 type CabinFilter = 'all' | 'Interior' | 'Oceanview' | 'Balcony' | 'Suite';
-type SortOption = 'date-asc' | 'date-desc' | 'value-asc' | 'value-desc';
+type SortOption = 'date-asc' | 'date-desc' | 'value-asc' | 'value-desc' | 'nights-desc';
 
 interface FilterState {
   cabinType: CabinFilter;
@@ -299,6 +299,8 @@ export default function SchedulingScreen() {
           const valueB = calculateCruiseValue(b as Cruise | BookedCruise).totalRetailValue;
           return valueB - valueA;
         }
+        case 'nights-desc':
+          return (b.nights || 0) - (a.nights || 0);
         default:
           return createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime();
       }
@@ -554,11 +556,11 @@ export default function SchedulingScreen() {
       <View style={styles.sortFilterRow}>
         <View style={styles.sortChips}>
           <TouchableOpacity
-            style={[styles.sortChip, filters.sortBy === 'date-asc' && styles.sortChipActive]}
-            onPress={() => handleSortChange('date-asc')}
+            style={[styles.sortChip, (filters.sortBy === 'date-asc' || filters.sortBy === 'nights-desc') && styles.sortChipActive]}
+            onPress={() => handleSortChange(filters.sortBy === 'date-asc' ? 'nights-desc' : 'date-asc')}
             activeOpacity={0.7}
           >
-            <Text style={[styles.sortChipText, filters.sortBy === 'date-asc' && styles.sortChipTextActive]}>Soonest</Text>
+            <Text style={[styles.sortChipText, (filters.sortBy === 'date-asc' || filters.sortBy === 'nights-desc') && styles.sortChipTextActive]}>{filters.sortBy === 'nights-desc' ? 'Longest' : 'Soonest'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.sortChip, filters.sortBy === 'date-desc' && styles.sortChipActive]}
