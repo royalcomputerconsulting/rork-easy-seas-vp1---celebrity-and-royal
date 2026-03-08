@@ -300,14 +300,20 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         return null;
       }
     } else {
-      apiKey = (
+      const sharedKey = (
         process.env.EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY ??
-        process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ??
-        process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ??
         process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ??
         process.env.EXPO_PUBLIC_REVENUECAT_KEY ??
-        'appl_ByMylGXTSwaAUxxRUwhteOFaJjL'
+        ''
       ).trim();
+
+      if (sharedKey) {
+        apiKey = sharedKey;
+      } else if (Platform.OS === 'android') {
+        apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '').trim();
+      } else {
+        apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? 'appl_ByMylGXTSwaAUxxRUwhteOFaJjL').trim();
+      }
     }
 
     if (!apiKey) {
