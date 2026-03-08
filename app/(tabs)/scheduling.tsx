@@ -38,8 +38,8 @@ import { useAgentX } from '@/state/AgentXProvider';
 import { getRecommendedCruises, type RecommendationScore } from '@/lib/recommendationEngine';
 import { AgentXChat } from '@/components/AgentXChat';
 import { AlertsManagerModal } from '@/components/AlertsManagerModal';
-import { findBackToBackSets, type BackToBackSet, type SailingSlot, type CruiseOffer } from '@/lib/backToBackFinder';
-import { Link2, Calendar, Users, Tag, Anchor } from 'lucide-react-native';
+import { findBackToBackSets, type BackToBackSet, type CruiseOffer } from '@/lib/backToBackFinder';
+import { Link2, Calendar, Tag, Anchor } from 'lucide-react-native';
 
 type ViewTab = 'available' | 'all' | 'foryou' | 'booked';
 type CabinFilter = 'all' | 'Interior' | 'Oceanview' | 'Balcony' | 'Suite';
@@ -132,7 +132,7 @@ export default function SchedulingScreen() {
   const [, setRecommendationScores] = useState<Map<string, RecommendationScore>>(new Map());
   const [b2bSets, setB2bSets] = useState<BackToBackSet[]>([]);
 
-  const getSmartRecommendations = useCallback((cruises: Cruise[]): Cruise[] => {
+  const _getSmartRecommendations = useCallback((cruises: Cruise[]): Cruise[] => {
     const allBooked = [...(localData.booked || []), ...(bookedCruises || [])];
     const offers = localData.offers || [];
     
@@ -258,7 +258,7 @@ export default function SchedulingScreen() {
       getBackToBackSets(enrichedCruises);
       return [];
     } else if (activeTab === 'booked') {
-      return bookedCruisesData.filter(c => !isDateInPast(c.returnDate || c.sailDate)) as Cruise[];
+      result = bookedCruisesData.filter(c => !isDateInPast(c.returnDate || c.sailDate)) as Cruise[];
     }
 
     if (filters.cabinType !== 'all') {
@@ -306,7 +306,7 @@ export default function SchedulingScreen() {
       }
     });
     return result;
-  }, [enrichedCruises, activeTab, filters, bookedIds, hasConflict, getSmartRecommendations, bookedCruisesData]);
+  }, [enrichedCruises, activeTab, filters, bookedIds, hasConflict, bookedCruisesData, getBackToBackSets]);
 
   const stats = useMemo(() => ({
     showing: filteredCruises.length,
@@ -332,7 +332,7 @@ export default function SchedulingScreen() {
     setRefreshing(false);
   }, []);
 
-  const handleSearch = useCallback((query: string) => {
+  const _handleSearch = useCallback((query: string) => {
     setFilters(prev => ({ ...prev, searchQuery: query }));
   }, []);
 
@@ -376,7 +376,7 @@ export default function SchedulingScreen() {
     setShowAlertsModal(true);
   }, []);
 
-  const renderCruiseCard = useCallback(({ item, index }: { item: Cruise; index: number }) => {
+  const renderCruiseCard = useCallback(({ item, index: _index }: { item: Cruise; index: number }) => {
     const isBooked = bookedIds.has(item.id) || activeTab === 'booked';
     
     return (
@@ -428,8 +428,38 @@ export default function SchedulingScreen() {
     );
   }, [handleCruisePress]);
 
+  const getB2BSetValue = useCallback((set: BackToBackSet): number => {
+    return set.cruises.reduce((sum, c) => sum + calculateCruiseValue(c).totalRetailValue, 0);
+  }, []);
+
+  const sortedB2bSets = useMemo(() => {
+    if (b2bSets.length === 0) return b2bSets;
+    const sorted = [...b2bSets];
+    switch (filters.sortBy) {
+      case 'date-asc':
+        sorted.sort((a, b) => createDateFromString(a.startDate).getTime() - createDateFromString(b.startDate).getTime());
+        break;
+      case 'date-desc':
+        sorted.sort((a, b) => createDateFromString(b.startDate).getTime() - createDateFromString(a.startDate).getTime());
+        break;
+      case 'nights-desc':
+        sorted.sort((a, b) => b.totalNights - a.totalNights);
+        break;
+      case 'value-desc':
+        sorted.sort((a, b) => getB2BSetValue(b) - getB2BSetValue(a));
+        break;
+      case 'value-asc':
+        sorted.sort((a, b) => getB2BSetValue(a) - getB2BSetValue(b));
+        break;
+      default:
+        sorted.sort((a, b) => createDateFromString(a.startDate).getTime() - createDateFromString(b.startDate).getTime());
+    }
+    return sorted;
+  }, [b2bSets, filters.sortBy, getB2BSetValue]);
+
   const renderB2BSetCard = useCallback((set: BackToBackSet, index: number) => {
     const slots = set.slots || [];
+    const setValue = set.cruises.reduce((sum, c) => sum + calculateCruiseValue(c).totalRetailValue, 0);
     
     return (
       <View key={set.id} style={styles.b2bSetCard}>
@@ -457,7 +487,14 @@ export default function SchedulingScreen() {
               <Text style={styles.b2bSummaryText}>{set.departurePort}</Text>
             </View>
           </View>
-          <Text style={styles.b2bDateRange}>{set.startDate} → {set.endDate}</Text>
+          <View style={styles.b2bValueRow}>
+            <Text style={styles.b2bDateRange}>{set.startDate} → {set.endDate}</Text>
+            {setValue > 0 && (
+              <View style={styles.b2bValueBadge}>
+                <Text style={styles.b2bValueText}>${setValue.toLocaleString()}</Text>
+              </View>
+            )}
+          </View>
         </LinearGradient>
         
         {slots.map((slot, slotIndex) => (
@@ -518,7 +555,7 @@ export default function SchedulingScreen() {
         </View>
       </View>
     );
-  }, [handleCruisePress, renderSlotOffers]);
+  }, [renderSlotOffers]);
 
   const renderHeader = () => (
     <View style={styles.headerContent}>
@@ -773,7 +810,7 @@ export default function SchedulingScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {activeTab === 'foryou' ? (
           <FlatList
-            data={b2bSets}
+            data={sortedB2bSets}
             renderItem={({ item, index }) => renderB2BSetCard(item, index)}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
@@ -1835,5 +1872,24 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.navyDeep,
     lineHeight: 18,
+  },
+  b2bValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.xs,
+  },
+  b2bValueBadge: {
+    backgroundColor: 'rgba(34, 139, 34, 0.15)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 139, 34, 0.3)',
+  },
+  b2bValueText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '700' as const,
+    color: '#228B22',
   },
 });
