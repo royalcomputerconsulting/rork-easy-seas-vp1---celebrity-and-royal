@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState, useEffect } from 'react';
@@ -46,6 +46,8 @@ function RoyalCaribbeanSyncScreen() {
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
   const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [syncingPricing, setSyncingPricing] = useState(false);
+  const [syncStarted, setSyncStarted] = useState(false);
+  const syncPulse = useState(() => new Animated.Value(1))[0];
   const [pricingSyncResults, setPricingSyncResults] = useState<{ updated: number; total: number } | null>(null);
   
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
@@ -53,6 +55,26 @@ function RoyalCaribbeanSyncScreen() {
   
   const isCelebrity = cruiseLine === 'celebrity';
   const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
+
+  useEffect(() => {
+    if (isRunningOrSyncing) {
+      setSyncStarted(true);
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(syncPulse, { toValue: 0.6, duration: 800, useNativeDriver: true }),
+          Animated.timing(syncPulse, { toValue: 1, duration: 800, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      syncPulse.stopAnimation();
+      syncPulse.setValue(1);
+      if (syncStarted && state.status === 'complete') {
+        setTimeout(() => setSyncStarted(false), 3000);
+      } else if (!isRunningOrSyncing && state.status !== 'complete') {
+        setSyncStarted(false);
+      }
+    }
+  }, [isRunningOrSyncing, state.status, syncPulse, syncStarted]);
   
   const isBackendAvailable = isWebSyncAvailable();
   
@@ -566,12 +588,23 @@ function RoyalCaribbeanSyncScreen() {
               </Pressable>
 
               <Pressable 
-                style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled]}
+                style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled, isRunning && styles.syncActiveButton]}
                 onPress={runIngestion}
                 disabled={!canRunIngestion || isRunning}
               >
-                <RefreshCcw size={20} color="#34d399" />
-                <Text style={styles.quickActionLabel}>SYNC NOW</Text>
+                {isRunning ? (
+                  <Animated.View style={{ opacity: syncPulse }}>
+                    <ActivityIndicator size="small" color="#34d399" />
+                  </Animated.View>
+                ) : (
+                  <RefreshCcw size={20} color={!canRunIngestion ? '#475569' : '#34d399'} />
+                )}
+                <Text style={[styles.quickActionLabel, isRunning && styles.syncActiveLabel]}>
+                  {isRunning ? 'SYNCING...' : 'SYNC NOW'}
+                </Text>
+                {isRunning && (
+                  <Text style={styles.syncHintText}>This may take 1-2 min</Text>
+                )}
               </Pressable>
 
               <Pressable 
@@ -1938,6 +1971,19 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 14,
     fontWeight: '500' as const
+  },
+  syncActiveButton: {
+    borderColor: '#34d399',
+    borderWidth: 1,
+  },
+  syncActiveLabel: {
+    color: '#34d399',
+  },
+  syncHintText: {
+    color: '#64748b',
+    fontSize: 10,
+    marginTop: 2,
+    textAlign: 'center' as const,
   }
 });
 
