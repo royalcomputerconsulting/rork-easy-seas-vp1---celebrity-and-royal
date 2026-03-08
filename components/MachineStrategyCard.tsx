@@ -167,7 +167,7 @@ function RecommendationItem({ recommendation, rank, isHighlight }: Recommendatio
               {recommendation.sessionCount} session{recommendation.sessionCount !== 1 ? 's' : ''}
             </Text>
           </View>
-          <View style={[styles.volatilityBadge, styles[`volatility${recommendation.volatility.charAt(0).toUpperCase() + recommendation.volatility.slice(1)}` as keyof typeof styles]]}>
+          <View style={[styles.volatilityBadge, styles[`volatility${recommendation.volatility.charAt(0).toUpperCase() + recommendation.volatility.slice(1)}` as keyof typeof styles] as import('react-native').ViewStyle]}>
             <Text style={styles.volatilityText}>
               {recommendation.volatility.toUpperCase()}
             </Text>
