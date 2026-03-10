@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { trpc, trpcClient, isBackendReachable } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
-import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
+import { getUserScopedKey, ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 
 const LAST_SYNC_KEY = "easyseas_last_cloud_sync";
@@ -26,6 +26,10 @@ interface SyncState {
 
 export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): SyncState => {
   const { authenticatedEmail, isAuthenticated } = useAuth();
+
+  const emailRef = useRef<string | null>(authenticatedEmail);
+  useEffect(() => { emailRef.current = authenticatedEmail; }, [authenticatedEmail]);
+  const sk = (baseKey: string) => getUserScopedKey(baseKey, emailRef.current);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -76,25 +80,25 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         crewEntriesRaw,
         crewSailingsRaw,
       ] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.BOOKED_CRUISES),
-        AsyncStorage.getItem(STORAGE_KEYS.CASINO_OFFERS),
-        AsyncStorage.getItem(STORAGE_KEYS.CALENDAR_EVENTS),
-        AsyncStorage.getItem(STORAGE_KEYS.CASINO_SESSIONS),
-        AsyncStorage.getItem(STORAGE_KEYS.CLUB_PROFILE),
-        AsyncStorage.getItem(STORAGE_KEYS.SETTINGS),
-        AsyncStorage.getItem(STORAGE_KEYS.USER_POINTS),
-        AsyncStorage.getItem(STORAGE_KEYS.CERTIFICATES),
-        AsyncStorage.getItem(STORAGE_KEYS.ALERTS),
-        AsyncStorage.getItem(STORAGE_KEYS.ALERT_RULES),
-        AsyncStorage.getItem(STORAGE_KEYS.MY_SLOT_ATLAS),
-        AsyncStorage.getItem("easyseas_loyalty_data"),
-        AsyncStorage.getItem("easyseas_bankroll_data"),
-        AsyncStorage.getItem(STORAGE_KEYS.CELEBRITY_EMAIL),
-        AsyncStorage.getItem(STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_NUMBER),
-        AsyncStorage.getItem(STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_POINTS),
-        AsyncStorage.getItem(STORAGE_KEYS.CELEBRITY_BLUE_CHIP_POINTS),
-        AsyncStorage.getItem(STORAGE_KEYS.CREW_RECOGNITION_ENTRIES),
-        AsyncStorage.getItem(STORAGE_KEYS.CREW_RECOGNITION_SAILINGS),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CLUB_PROFILE)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.SETTINGS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.USER_POINTS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CERTIFICATES)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.ALERTS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.ALERT_RULES)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.LOYALTY_DATA)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BANKROLL_DATA)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CELEBRITY_EMAIL)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_NUMBER)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_POINTS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CELEBRITY_BLUE_CHIP_POINTS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS)),
       ]);
 
       const celebrityData = {
@@ -149,105 +153,105 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
       if (cloudData.bookedCruises !== undefined) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.BOOKED_CRUISES, JSON.stringify(cloudData.bookedCruises ?? []))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), JSON.stringify(cloudData.bookedCruises ?? []))
         );
       }
       if (cloudData.casinoOffers !== undefined) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.CASINO_OFFERS, JSON.stringify(cloudData.casinoOffers ?? []))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS), JSON.stringify(cloudData.casinoOffers ?? []))
         );
       }
       if (cloudData.calendarEvents !== undefined) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.CALENDAR_EVENTS, JSON.stringify(cloudData.calendarEvents ?? []))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), JSON.stringify(cloudData.calendarEvents ?? []))
         );
       }
       if (cloudData.casinoSessions !== undefined) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.CASINO_SESSIONS, JSON.stringify(cloudData.casinoSessions ?? []))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), JSON.stringify(cloudData.casinoSessions ?? []))
         );
       }
       if (cloudData.clubRoyaleProfile) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.CLUB_PROFILE, JSON.stringify(cloudData.clubRoyaleProfile))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CLUB_PROFILE), JSON.stringify(cloudData.clubRoyaleProfile))
         );
       }
       if (cloudData.settings) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(cloudData.settings))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.SETTINGS), JSON.stringify(cloudData.settings))
         );
       }
       if (cloudData.userPoints !== undefined && cloudData.userPoints > 0) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.USER_POINTS, cloudData.userPoints.toString())
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.USER_POINTS), cloudData.userPoints.toString())
         );
       }
       if (cloudData.certificates?.length > 0) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.CERTIFICATES, JSON.stringify(cloudData.certificates))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CERTIFICATES), JSON.stringify(cloudData.certificates))
         );
       }
       if (cloudData.alerts?.length > 0) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.ALERTS, JSON.stringify(cloudData.alerts))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.ALERTS), JSON.stringify(cloudData.alerts))
         );
       }
       if (cloudData.alertRules?.length > 0) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.ALERT_RULES, JSON.stringify(cloudData.alertRules))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.ALERT_RULES), JSON.stringify(cloudData.alertRules))
         );
       }
       if (cloudData.slotAtlas?.length > 0) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.MY_SLOT_ATLAS, JSON.stringify(cloudData.slotAtlas))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), JSON.stringify(cloudData.slotAtlas))
         );
       }
       if (cloudData.loyaltyData) {
         savePromises.push(
-          AsyncStorage.setItem("easyseas_loyalty_data", JSON.stringify(cloudData.loyaltyData))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.LOYALTY_DATA), JSON.stringify(cloudData.loyaltyData))
         );
       }
       if (cloudData.bankrollData) {
         savePromises.push(
-          AsyncStorage.setItem("easyseas_bankroll_data", JSON.stringify(cloudData.bankrollData))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BANKROLL_DATA), JSON.stringify(cloudData.bankrollData))
         );
       }
       if (cloudData.celebrityData) {
         if (cloudData.celebrityData.email) {
           savePromises.push(
-            AsyncStorage.setItem(STORAGE_KEYS.CELEBRITY_EMAIL, cloudData.celebrityData.email)
+            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CELEBRITY_EMAIL), cloudData.celebrityData.email)
           );
         }
         if (cloudData.celebrityData.captainsClubNumber) {
           savePromises.push(
-            AsyncStorage.setItem(STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_NUMBER, cloudData.celebrityData.captainsClubNumber)
+            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_NUMBER), cloudData.celebrityData.captainsClubNumber)
           );
         }
         if (cloudData.celebrityData.captainsClubPoints) {
           savePromises.push(
-            AsyncStorage.setItem(STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_POINTS, cloudData.celebrityData.captainsClubPoints.toString())
+            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_POINTS), cloudData.celebrityData.captainsClubPoints.toString())
           );
         }
         if (cloudData.celebrityData.blueChipPoints) {
           savePromises.push(
-            AsyncStorage.setItem(STORAGE_KEYS.CELEBRITY_BLUE_CHIP_POINTS, cloudData.celebrityData.blueChipPoints.toString())
+            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CELEBRITY_BLUE_CHIP_POINTS), cloudData.celebrityData.blueChipPoints.toString())
           );
         }
       }
 
       if (cloudData.crewRecognitionEntries?.length > 0) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.CREW_RECOGNITION_ENTRIES, JSON.stringify(cloudData.crewRecognitionEntries))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), JSON.stringify(cloudData.crewRecognitionEntries))
         );
       }
       if (cloudData.crewRecognitionSailings?.length > 0) {
         savePromises.push(
-          AsyncStorage.setItem(STORAGE_KEYS.CREW_RECOGNITION_SAILINGS, JSON.stringify(cloudData.crewRecognitionSailings))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), JSON.stringify(cloudData.crewRecognitionSailings))
         );
       }
 
       savePromises.push(
-        AsyncStorage.setItem(STORAGE_KEYS.HAS_IMPORTED_DATA, "true")
+        AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), "true")
       );
 
       await Promise.all(savePromises);

@@ -3,8 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { Certificate, CertificateType } from '@/components/CertificateManagerModal';
 import { useAuth } from './AuthProvider';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
 
-const CERTIFICATES_STORAGE_KEY = '@easyseas_certificates';
+const BASE_CERT_KEY = '@easyseas_certificates';
 
 interface CertificatesState {
   certificates: Certificate[];
@@ -26,17 +27,23 @@ export const [CertificatesProvider, useCertificates] = createContextHook((): Cer
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const storageKeyRef = useRef(getUserScopedKey(BASE_CERT_KEY, authenticatedEmail));
+  useEffect(() => {
+    storageKeyRef.current = getUserScopedKey(BASE_CERT_KEY, authenticatedEmail);
+    console.log('[CertificatesProvider] Scoped storage key updated for:', authenticatedEmail);
+  }, [authenticatedEmail]);
+
   const loadCertificates = useCallback(async () => {
     try {
       setIsLoading(true);
-      const stored = await AsyncStorage.getItem(CERTIFICATES_STORAGE_KEY);
+      const stored = await AsyncStorage.getItem(storageKeyRef.current);
       if (stored) {
         const parsed = JSON.parse(stored);
         setCertificates(parsed);
         console.log('[CertificatesProvider] Loaded certificates:', parsed.length);
       } else {
         setCertificates(DEFAULT_CERTIFICATES);
-        await AsyncStorage.setItem(CERTIFICATES_STORAGE_KEY, JSON.stringify(DEFAULT_CERTIFICATES));
+        await AsyncStorage.setItem(storageKeyRef.current, JSON.stringify(DEFAULT_CERTIFICATES));
         console.log('[CertificatesProvider] Initialized with default certificates');
       }
       isInitializedRef.current = true;
@@ -96,7 +103,7 @@ export const [CertificatesProvider, useCertificates] = createContextHook((): Cer
     
     const saveCertificates = async () => {
       try {
-        await AsyncStorage.setItem(CERTIFICATES_STORAGE_KEY, JSON.stringify(certificates));
+        await AsyncStorage.setItem(storageKeyRef.current, JSON.stringify(certificates));
         console.log('[CertificatesProvider] Auto-saved certificates:', certificates.length);
       } catch (error) {
         console.error('[CertificatesProvider] Error saving certificates:', error);

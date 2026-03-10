@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ALL_STORAGE_KEYS } from './storageKeys';
+import { ALL_STORAGE_KEYS, GLOBAL_KEYS } from './storageKeys';
 
 const AUTH_PRESERVE_KEYS = new Set<string>([
   ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE,
@@ -14,39 +14,32 @@ const AUTH_PRESERVE_KEYS = new Set<string>([
 ]);
 
 export async function clearUserSpecificData(): Promise<void> {
-  console.log('[StorageOps] Clearing user-specific data for account switch...');
+  console.log('[StorageOps] Clearing user-specific data for account switch (scoped keys mean this is now a safety net)...');
   
-  const allDefinedKeys = Object.values(ALL_STORAGE_KEYS);
-  const keysToRemove: string[] = [];
-
-  for (const key of allDefinedKeys) {
-    if (!AUTH_PRESERVE_KEYS.has(key)) {
-      keysToRemove.push(key);
-    }
-  }
-
   try {
     const allStoredKeys = await AsyncStorage.getAllKeys();
-    const dynamicKeys = allStoredKeys.filter(
-      key =>
-        (key.startsWith('easyseas') || key.startsWith('@easyseas') || key.startsWith('crew_recognition')) &&
-        !AUTH_PRESERVE_KEYS.has(key) &&
-        !keysToRemove.includes(key)
-    );
-    keysToRemove.push(...dynamicKeys);
-  } catch (error) {
-    console.error('[StorageOps] Error scanning dynamic keys:', error);
-  }
+    const keysToRemove = allStoredKeys.filter(key => {
+      if (AUTH_PRESERVE_KEYS.has(key)) return false;
+      if (GLOBAL_KEYS.has(key)) return false;
+      if (key.includes('::')) return false;
+      if (key.startsWith('easyseas') || key.startsWith('@easyseas') || key.startsWith('crew_recognition')) {
+        return true;
+      }
+      return false;
+    });
 
-  for (const key of keysToRemove) {
-    try {
-      await AsyncStorage.removeItem(key);
-    } catch (error) {
-      console.error(`[StorageOps] Error removing ${key}:`, error);
+    for (const key of keysToRemove) {
+      try {
+        await AsyncStorage.removeItem(key);
+      } catch (error) {
+        console.error(`[StorageOps] Error removing ${key}:`, error);
+      }
     }
-  }
 
-  console.log('[StorageOps] Cleared', keysToRemove.length, 'user-specific keys for account switch');
+    console.log('[StorageOps] Cleared', keysToRemove.length, 'legacy unscoped keys for account switch');
+  } catch (error) {
+    console.error('[StorageOps] Error scanning keys:', error);
+  }
 
   try {
     if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {

@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { useCasinoSessions } from './CasinoSessionProvider';
 import { useAuth } from './AuthProvider';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
 
 export type AlertLevel = 'info' | 'warning' | 'critical';
 
@@ -70,8 +71,8 @@ interface BankrollState {
   resetPeriod: (period: 'daily' | 'weekly' | 'monthly') => Promise<void>;
 }
 
-const STORAGE_KEY = 'easyseas_bankroll';
-const ALERTS_STORAGE_KEY = 'easyseas_bankroll_alerts';
+const BASE_STORAGE_KEY = 'easyseas_bankroll';
+const BASE_ALERTS_STORAGE_KEY = 'easyseas_bankroll_alerts';
 
 const DEFAULT_LIMITS: Omit<BankrollLimit, 'id'>[] = [
   {
@@ -123,9 +124,17 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
   
   const { sessions } = useCasinoSessions();
 
+  const limitsKeyRef = useRef(getUserScopedKey(BASE_STORAGE_KEY, authenticatedEmail));
+  const alertsKeyRef = useRef(getUserScopedKey(BASE_ALERTS_STORAGE_KEY, authenticatedEmail));
+  useEffect(() => {
+    limitsKeyRef.current = getUserScopedKey(BASE_STORAGE_KEY, authenticatedEmail);
+    alertsKeyRef.current = getUserScopedKey(BASE_ALERTS_STORAGE_KEY, authenticatedEmail);
+    console.log('[BankrollProvider] Scoped storage keys updated for:', authenticatedEmail);
+  }, [authenticatedEmail]);
+
   const persistLimits = useCallback(async (newLimits: BankrollLimit[]) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newLimits));
+      await AsyncStorage.setItem(limitsKeyRef.current, JSON.stringify(newLimits));
       console.log('[BankrollProvider] Persisted limits:', newLimits.length);
     } catch (error) {
       console.error('[BankrollProvider] Failed to persist limits:', error);
@@ -134,7 +143,7 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
 
   const persistAlerts = useCallback(async (newAlerts: BankrollAlert[]) => {
     try {
-      await AsyncStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify(newAlerts));
+      await AsyncStorage.setItem(alertsKeyRef.current, JSON.stringify(newAlerts));
       console.log('[BankrollProvider] Persisted alerts:', newAlerts.length);
     } catch (error) {
       console.error('[BankrollProvider] Failed to persist alerts:', error);
@@ -146,8 +155,8 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
       setIsLoading(true);
       
       const [storedLimits, storedAlerts] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEY),
-        AsyncStorage.getItem(ALERTS_STORAGE_KEY),
+        AsyncStorage.getItem(limitsKeyRef.current),
+        AsyncStorage.getItem(alertsKeyRef.current),
       ]);
       
       if (storedLimits) {

@@ -7,7 +7,7 @@ import {
   enrichCruisesWithMockItineraries,
   applyFreeplayOBCData,
 } from "./dataEnrichment";
-import { STORAGE_KEYS, DEFAULT_SETTINGS, CURRENT_CRUISE_DATA_VERSION, type AppSettings } from "./storageConfig";
+import { STORAGE_KEYS, DEFAULT_SETTINGS, CURRENT_CRUISE_DATA_VERSION, getScopedStorageKeys, type AppSettings } from "./storageConfig";
 
 export interface StorageSnapshot {
   cruisesData: string | null;
@@ -84,21 +84,22 @@ export function enrichCruisePipeline(cruises: BookedCruise[]): BookedCruise[] {
   return enrichCruisesWithReceiptData(withFreeplayOBC);
 }
 
-export async function readAllStorageKeys(): Promise<StorageSnapshot> {
-  console.log('[CoreData] Loading from storage...');
+export async function readAllStorageKeys(email?: string | null): Promise<StorageSnapshot> {
+  const keys = email ? getScopedStorageKeys(email) : STORAGE_KEYS;
+  console.log('[CoreData] Loading from storage for user:', email || 'unknown', 'using scoped keys:', !!email);
   const [cruisesData, bookedData, offersData, eventsData, lastSync, settingsData, pointsData, profileData, hasImportedData] = await Promise.all([
-    AsyncStorage.getItem(STORAGE_KEYS.CRUISES).catch(e => { console.error('[CoreData] Error loading cruises:', e); return null; }),
-    AsyncStorage.getItem(STORAGE_KEYS.BOOKED_CRUISES).catch(e => { console.error('[CoreData] Error loading booked:', e); return null; }),
-    AsyncStorage.getItem(STORAGE_KEYS.CASINO_OFFERS).catch(e => { console.error('[CoreData] Error loading offers:', e); return null; }),
-    AsyncStorage.getItem(STORAGE_KEYS.CALENDAR_EVENTS).catch(e => { console.error('[CoreData] Error loading events:', e); return null; }),
-    AsyncStorage.getItem(STORAGE_KEYS.LAST_SYNC).catch(e => { console.error('[CoreData] Error loading lastSync:', e); return null; }),
-    AsyncStorage.getItem(STORAGE_KEYS.SETTINGS).catch(e => { console.error('[CoreData] Error loading settings:', e); return null; }),
-    AsyncStorage.getItem(STORAGE_KEYS.USER_POINTS).catch(e => { console.error('[CoreData] Error loading points:', e); return null; }),
-    AsyncStorage.getItem(STORAGE_KEYS.CLUB_PROFILE).catch(e => { console.error('[CoreData] Error loading profile:', e); return null; }),
-    AsyncStorage.getItem(STORAGE_KEYS.HAS_IMPORTED_DATA).catch(e => { console.error('[CoreData] Error loading import flag:', e); return null; }),
+    AsyncStorage.getItem(keys.CRUISES).catch(e => { console.error('[CoreData] Error loading cruises:', e); return null; }),
+    AsyncStorage.getItem(keys.BOOKED_CRUISES).catch(e => { console.error('[CoreData] Error loading booked:', e); return null; }),
+    AsyncStorage.getItem(keys.CASINO_OFFERS).catch(e => { console.error('[CoreData] Error loading offers:', e); return null; }),
+    AsyncStorage.getItem(keys.CALENDAR_EVENTS).catch(e => { console.error('[CoreData] Error loading events:', e); return null; }),
+    AsyncStorage.getItem(keys.LAST_SYNC).catch(e => { console.error('[CoreData] Error loading lastSync:', e); return null; }),
+    AsyncStorage.getItem(keys.SETTINGS).catch(e => { console.error('[CoreData] Error loading settings:', e); return null; }),
+    AsyncStorage.getItem(keys.USER_POINTS).catch(e => { console.error('[CoreData] Error loading points:', e); return null; }),
+    AsyncStorage.getItem(keys.CLUB_PROFILE).catch(e => { console.error('[CoreData] Error loading profile:', e); return null; }),
+    AsyncStorage.getItem(keys.HAS_IMPORTED_DATA).catch(e => { console.error('[CoreData] Error loading import flag:', e); return null; }),
   ]);
 
-  console.log('[CoreData] Storage promises resolved');
+  console.log('[CoreData] Storage promises resolved for user:', email || 'unknown');
 
   return { cruisesData, bookedData, offersData, eventsData, lastSync, settingsData, pointsData, profileData, hasImportedData };
 }
@@ -138,6 +139,7 @@ export async function processBookedCruises(
   snapshot: StorageSnapshot,
   getMockCruises: () => { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] },
   getFirstTimeUserSampleData: () => { sampleCruises: BookedCruise[]; sampleOffers: CasinoOffer[] },
+  email?: string | null,
 ): Promise<ProcessedBookedResult> {
   const { parsedBookedData, isFirstTimeUser, hasRealData } = status;
   const { bookedData } = snapshot;
@@ -147,7 +149,8 @@ export async function processBookedCruises(
 
     const nonMockCruises = filterDemoCruises(parsedBookedData);
 
-    const storedVersion = await AsyncStorage.getItem(STORAGE_KEYS.CRUISE_DATA_VERSION).catch(() => null);
+    const versionKey = email ? getScopedStorageKeys(email).CRUISE_DATA_VERSION : STORAGE_KEYS.CRUISE_DATA_VERSION;
+    const storedVersion = await AsyncStorage.getItem(versionKey).catch(() => null);
     let mergedCruises = nonMockCruises;
 
     if (storedVersion !== CURRENT_CRUISE_DATA_VERSION) {
@@ -165,7 +168,7 @@ export async function processBookedCruises(
         console.log('[CoreData] No missing cruises to add');
       }
 
-      await AsyncStorage.setItem(STORAGE_KEYS.CRUISE_DATA_VERSION, CURRENT_CRUISE_DATA_VERSION).catch(console.error);
+      await AsyncStorage.setItem(versionKey, CURRENT_CRUISE_DATA_VERSION).catch(console.error);
     }
 
     console.log('[CoreData] Filtered cruises:', {

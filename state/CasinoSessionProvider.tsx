@@ -4,6 +4,7 @@ import createContextHook from "@nkzw/create-context-hook";
 import { generateSessionsFromCruise } from '@/lib/historicalSessionCalculator';
 import type { BookedCruise } from '@/types/models';
 import { useAuth } from './AuthProvider';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
 
 export type MachineType = 
   | 'penny-slots'
@@ -173,7 +174,7 @@ interface CasinoSessionState {
   reload: () => Promise<void>;
 }
 
-const STORAGE_KEY = 'easyseas_casino_sessions';
+const BASE_STORAGE_KEY = 'easyseas_casino_sessions';
 
 export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): CasinoSessionState => {
   const { authenticatedEmail } = useAuth();
@@ -181,9 +182,15 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
   const [sessions, setSessions] = useState<CasinoSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const storageKeyRef = useRef(getUserScopedKey(BASE_STORAGE_KEY, authenticatedEmail));
+  useEffect(() => {
+    storageKeyRef.current = getUserScopedKey(BASE_STORAGE_KEY, authenticatedEmail);
+    console.log('[CasinoSessionProvider] Scoped storage key updated for:', authenticatedEmail);
+  }, [authenticatedEmail]);
+
   const persistSessions = useCallback(async (newSessions: CasinoSession[]) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newSessions));
+      await AsyncStorage.setItem(storageKeyRef.current, JSON.stringify(newSessions));
       console.log('[CasinoSessionProvider] Persisted sessions:', newSessions.length);
     } catch (error) {
       console.error('[CasinoSessionProvider] Failed to persist sessions:', error);
@@ -193,7 +200,7 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
   const loadSessions = useCallback(async () => {
     try {
       setIsLoading(true);
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      const stored = await AsyncStorage.getItem(storageKeyRef.current);
       if (stored) {
         const parsed = JSON.parse(stored) as CasinoSession[];
         setSessions(parsed);

@@ -16,10 +16,8 @@ import {
 } from "@/constants/crownAnchor";
 import { createDateFromString } from "@/lib/date";
 import { isRoyalCaribbeanShip } from "@/constants/shipInfo";
-import { ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
+import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import type { ExtendedLoyaltyData } from "@/lib/royalCaribbean/types";
-
-// Crown & Anchor uses cruise nights directly (1 credit per night)
 
 interface LoyaltyState {
   clubRoyalePoints: number;
@@ -88,11 +86,7 @@ interface LoyaltyState {
   syncFromStorage: () => Promise<void>;
 }
 
-const STORAGE_KEYS = {
-  MANUAL_CLUB_ROYALE_POINTS: ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS,
-  MANUAL_CROWN_ANCHOR_POINTS: ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS,
-  EXTENDED_LOYALTY_DATA: ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA,
-};
+
 
 const DEFAULT_LOYALTY = {
   clubRoyalePoints: 0,
@@ -106,6 +100,20 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
   const { bookedCruises: storedBookedCruises, isLoading: cruisesLoading } = useCoreData();
   const { authenticatedEmail } = useAuth();
   const lastEmailRef = useRef<string | null>(null);
+
+  const skRef = useRef({
+    MANUAL_CLUB_ROYALE_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, authenticatedEmail),
+    MANUAL_CROWN_ANCHOR_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, authenticatedEmail),
+    EXTENDED_LOYALTY_DATA: getUserScopedKey(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA, authenticatedEmail),
+  });
+  useEffect(() => {
+    skRef.current = {
+      MANUAL_CLUB_ROYALE_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, authenticatedEmail),
+      MANUAL_CROWN_ANCHOR_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, authenticatedEmail),
+      EXTENDED_LOYALTY_DATA: getUserScopedKey(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA, authenticatedEmail),
+    };
+    console.log('[LoyaltyProvider] Scoped keys updated for:', authenticatedEmail);
+  }, [authenticatedEmail]);
   
   const [manualClubRoyalePoints, setManualClubRoyalePointsState] = useState<number | null>(null);
   const [manualCrownAnchorPoints, setManualCrownAnchorPointsState] = useState<number | null>(null);
@@ -120,14 +128,14 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     try {
       setIsLoading(true);
       console.log('[LoyaltyProvider] ==================== LOADING MANUAL POINTS ====================');
-      console.log('[LoyaltyProvider] Storage keys:', STORAGE_KEYS);
+      console.log('[LoyaltyProvider] Storage keys:', skRef.current);
       
       await new Promise(resolve => setTimeout(resolve, 200));
       
       const [clubRoyale, crownAnchor, extendedData] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS),
-        AsyncStorage.getItem(STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS),
-        AsyncStorage.getItem(STORAGE_KEYS.EXTENDED_LOYALTY_DATA),
+        AsyncStorage.getItem(skRef.current.MANUAL_CLUB_ROYALE_POINTS),
+        AsyncStorage.getItem(skRef.current.MANUAL_CROWN_ANCHOR_POINTS),
+        AsyncStorage.getItem(skRef.current.EXTENDED_LOYALTY_DATA),
       ]);
       
       console.log('[LoyaltyProvider] Raw storage values:', { 
@@ -149,7 +157,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       } else {
         loadedClubRoyale = DEFAULT_LOYALTY.clubRoyalePoints;
         console.log('[LoyaltyProvider] No stored Club Royale points, using default:', loadedClubRoyale);
-        await AsyncStorage.setItem(STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, loadedClubRoyale.toString());
+        await AsyncStorage.setItem(skRef.current.MANUAL_CLUB_ROYALE_POINTS, loadedClubRoyale.toString());
         console.log('[LoyaltyProvider] ✓ Persisted default Club Royale points to storage:', loadedClubRoyale);
       }
       
@@ -165,7 +173,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       } else {
         loadedCrownAnchor = DEFAULT_LOYALTY.crownAnchorPoints;
         console.log('[LoyaltyProvider] No stored Crown & Anchor points, using default:', loadedCrownAnchor);
-        await AsyncStorage.setItem(STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, loadedCrownAnchor.toString());
+        await AsyncStorage.setItem(skRef.current.MANUAL_CROWN_ANCHOR_POINTS, loadedCrownAnchor.toString());
         console.log('[LoyaltyProvider] ✓ Persisted default Crown & Anchor points to storage:', loadedCrownAnchor);
       }
       
@@ -245,23 +253,23 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     try {
       console.log('[LoyaltyProvider] ==================== SAVING CLUB ROYALE POINTS ====================');
       console.log('[LoyaltyProvider] Points to save:', points);
-      console.log('[LoyaltyProvider] Storage key:', STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS);
+      console.log('[LoyaltyProvider] Storage key:', skRef.current.MANUAL_CLUB_ROYALE_POINTS);
       
       setManualClubRoyalePointsState(points);
       console.log('[LoyaltyProvider] ✓ State updated with:', points);
       
       const stringValue = points.toString();
-      await AsyncStorage.setItem(STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, stringValue);
+      await AsyncStorage.setItem(skRef.current.MANUAL_CLUB_ROYALE_POINTS, stringValue);
       console.log('[LoyaltyProvider] ✓ Wrote to AsyncStorage:', stringValue);
       
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      const verification = await AsyncStorage.getItem(STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS);
+      const verification = await AsyncStorage.getItem(skRef.current.MANUAL_CLUB_ROYALE_POINTS);
       console.log('[LoyaltyProvider] ✓ Verification read from storage:', verification);
       
       if (verification !== stringValue) {
         console.error('[LoyaltyProvider] ✗ VERIFICATION FAILED! Expected:', stringValue, 'Got:', verification);
-        await AsyncStorage.setItem(STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, stringValue);
+        await AsyncStorage.setItem(skRef.current.MANUAL_CLUB_ROYALE_POINTS, stringValue);
         console.log('[LoyaltyProvider] ⚠ Retried save operation');
       }
       
@@ -276,23 +284,23 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     try {
       console.log('[LoyaltyProvider] ==================== SAVING CROWN & ANCHOR POINTS ====================');
       console.log('[LoyaltyProvider] Points to save:', points);
-      console.log('[LoyaltyProvider] Storage key:', STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS);
+      console.log('[LoyaltyProvider] Storage key:', skRef.current.MANUAL_CROWN_ANCHOR_POINTS);
       
       setManualCrownAnchorPointsState(points);
       console.log('[LoyaltyProvider] ✓ State updated with:', points);
       
       const stringValue = points.toString();
-      await AsyncStorage.setItem(STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, stringValue);
+      await AsyncStorage.setItem(skRef.current.MANUAL_CROWN_ANCHOR_POINTS, stringValue);
       console.log('[LoyaltyProvider] ✓ Wrote to AsyncStorage:', stringValue);
       
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      const verification = await AsyncStorage.getItem(STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS);
+      const verification = await AsyncStorage.getItem(skRef.current.MANUAL_CROWN_ANCHOR_POINTS);
       console.log('[LoyaltyProvider] ✓ Verification read from storage:', verification);
       
       if (verification !== stringValue) {
         console.error('[LoyaltyProvider] ✗ VERIFICATION FAILED! Expected:', stringValue, 'Got:', verification);
-        await AsyncStorage.setItem(STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, stringValue);
+        await AsyncStorage.setItem(skRef.current.MANUAL_CROWN_ANCHOR_POINTS, stringValue);
         console.log('[LoyaltyProvider] ⚠ Retried save operation');
       }
       
@@ -311,7 +319,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       setExtendedLoyaltyState(data);
       
       const jsonValue = JSON.stringify(data);
-      await AsyncStorage.setItem(STORAGE_KEYS.EXTENDED_LOYALTY_DATA, jsonValue);
+      await AsyncStorage.setItem(skRef.current.EXTENDED_LOYALTY_DATA, jsonValue);
       console.log('[LoyaltyProvider] ✓ Extended loyalty data saved to storage');
       
       // Update Royal Caribbean loyalty data

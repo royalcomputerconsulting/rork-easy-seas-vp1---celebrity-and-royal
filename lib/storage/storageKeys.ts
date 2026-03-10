@@ -1,3 +1,24 @@
+export function getUserScopedKey(baseKey: string, email: string | null): string {
+  if (!email) {
+    console.warn('[StorageKeys] No email provided for scoped key, using base key:', baseKey);
+    return baseKey;
+  }
+  const normalizedEmail = email.toLowerCase().trim();
+  return `${baseKey}::${normalizedEmail}`;
+}
+
+export function getScopedKeys(email: string | null): Record<keyof typeof ALL_STORAGE_KEYS, string> {
+  const scoped = {} as Record<string, string>;
+  for (const [name, baseKey] of Object.entries(ALL_STORAGE_KEYS)) {
+    if (GLOBAL_KEYS.has(baseKey)) {
+      scoped[name] = baseKey;
+    } else {
+      scoped[name] = getUserScopedKey(baseKey, email);
+    }
+  }
+  return scoped as Record<keyof typeof ALL_STORAGE_KEYS, string>;
+}
+
 export const ALL_STORAGE_KEYS = {
   CRUISES: 'easyseas_cruises',
   BOOKED_CRUISES: 'easyseas_booked_cruises',
@@ -47,6 +68,15 @@ export const ALL_STORAGE_KEYS = {
   DECK_PLAN_LOCATIONS: '@easyseas/deck_plan_locations',
   MACHINE_SETTINGS: '@easyseas/machine_settings',
 } as const;
+
+export const GLOBAL_KEYS = new Set<string>([
+  ALL_STORAGE_KEYS.USERS,
+  ALL_STORAGE_KEYS.CURRENT_USER,
+  ALL_STORAGE_KEYS.AUTHENTICATED,
+  ALL_STORAGE_KEYS.EMAIL_WHITELIST,
+  ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE,
+  ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA,
+]);
 
 export const STORAGE_KEYS = ALL_STORAGE_KEYS;
 
