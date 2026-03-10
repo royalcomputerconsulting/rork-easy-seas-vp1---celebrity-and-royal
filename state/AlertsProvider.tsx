@@ -22,18 +22,20 @@ import {
   processAnomaliesWithRules,
   filterActiveAlerts,
   sortAlertsByPriority,
-  dismissAlert as dismissAlertFn,
+  dismissAlert as _dismissAlertFn,
   snoozeAlert as snoozeAlertFn,
   resolveAlert as resolveAlertFn,
   getAlertSummary,
   type AlertSummary,
 } from '@/lib/alertRules';
 import { useEntitlement } from './EntitlementProvider';
+import { useAuth } from './AuthProvider';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
 
-const ALERTS_STORAGE_KEY = '@easy_seas_alerts';
-const RULES_STORAGE_KEY = '@easy_seas_alert_rules';
-const DISMISSED_IDS_KEY = '@easy_seas_dismissed_alerts';
-const DISMISSED_ENTITIES_KEY = '@easy_seas_dismissed_entities';
+const BASE_ALERTS_KEY = '@easy_seas_alerts';
+const BASE_RULES_KEY = '@easy_seas_alert_rules';
+const BASE_DISMISSED_IDS_KEY = '@easy_seas_dismissed_alerts';
+const BASE_DISMISSED_ENTITIES_KEY = '@easy_seas_dismissed_entities';
 
 interface AlertsState {
   alerts: Alert[];
@@ -64,8 +66,25 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   const { tier } = useEntitlement();
   const { bookedCruises, casinoOffers } = useCoreData();
   const { clubRoyaleProfile } = useAppState();
+  const { authenticatedEmail } = useAuth();
   const priceHistoryState = usePriceHistory();
-  const priceDropAlerts = priceHistoryState?.priceDropAlerts ?? [];
+  const priceDropAlerts = useMemo(() => priceHistoryState?.priceDropAlerts ?? [], [priceHistoryState?.priceDropAlerts]);
+
+  const skRef = useRef({
+    ALERTS: getUserScopedKey(BASE_ALERTS_KEY, authenticatedEmail),
+    RULES: getUserScopedKey(BASE_RULES_KEY, authenticatedEmail),
+    DISMISSED_IDS: getUserScopedKey(BASE_DISMISSED_IDS_KEY, authenticatedEmail),
+    DISMISSED_ENTITIES: getUserScopedKey(BASE_DISMISSED_ENTITIES_KEY, authenticatedEmail),
+  });
+  useEffect(() => {
+    skRef.current = {
+      ALERTS: getUserScopedKey(BASE_ALERTS_KEY, authenticatedEmail),
+      RULES: getUserScopedKey(BASE_RULES_KEY, authenticatedEmail),
+      DISMISSED_IDS: getUserScopedKey(BASE_DISMISSED_IDS_KEY, authenticatedEmail),
+      DISMISSED_ENTITIES: getUserScopedKey(BASE_DISMISSED_ENTITIES_KEY, authenticatedEmail),
+    };
+    console.log('[AlertsProvider] Scoped storage keys updated for:', authenticatedEmail);
+  }, [authenticatedEmail]);
   
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [rules, setRules] = useState<AlertRule[]>(DEFAULT_ALERT_RULES);
@@ -89,9 +108,9 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     const loadStoredData = async () => {
       try {
         const [storedAlerts, storedRules, storedDismissed] = await Promise.all([
-          AsyncStorage.getItem(ALERTS_STORAGE_KEY),
-          AsyncStorage.getItem(RULES_STORAGE_KEY),
-          AsyncStorage.getItem(DISMISSED_IDS_KEY),
+          AsyncStorage.getItem(skRef.current.ALERTS),
+          AsyncStorage.getItem(skRef.current.RULES),
+          AsyncStorage.getItem(skRef.current.DISMISSED_IDS),
         ]);
 
         if (storedAlerts) {
@@ -112,7 +131,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
           console.log('[AlertsProvider] Loaded dismissed IDs:', parsed.length);
         }
 
-        const storedDismissedEntities = await AsyncStorage.getItem(DISMISSED_ENTITIES_KEY);
+        const storedDismissedEntities = await AsyncStorage.getItem(skRef.current.DISMISSED_ENTITIES);
         if (storedDismissedEntities) {
           const parsed = JSON.parse(storedDismissedEntities);
           setDismissedEntities(new Set(parsed));
@@ -123,57 +142,57 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
       }
     };
 
-    loadStoredData();
+    void loadStoredData();
   }, []);
 
   useEffect(() => {
     const saveAlerts = async () => {
       try {
-        await AsyncStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify(alerts));
+        await AsyncStorage.setItem(skRef.current.ALERTS, JSON.stringify(alerts));
       } catch (error) {
         console.error('[AlertsProvider] Error saving alerts:', error);
       }
     };
 
     if (alerts.length > 0) {
-      saveAlerts();
+      void saveAlerts();
     }
   }, [alerts]);
 
   useEffect(() => {
     const saveRules = async () => {
       try {
-        await AsyncStorage.setItem(RULES_STORAGE_KEY, JSON.stringify(rules));
+        await AsyncStorage.setItem(skRef.current.RULES, JSON.stringify(rules));
       } catch (error) {
         console.error('[AlertsProvider] Error saving rules:', error);
       }
     };
 
-    saveRules();
+    void saveRules();
   }, [rules]);
 
   useEffect(() => {
     const saveDismissed = async () => {
       try {
-        await AsyncStorage.setItem(DISMISSED_IDS_KEY, JSON.stringify([...dismissedIds]));
+        await AsyncStorage.setItem(skRef.current.DISMISSED_IDS, JSON.stringify([...dismissedIds]));
       } catch (error) {
         console.error('[AlertsProvider] Error saving dismissed IDs:', error);
       }
     };
 
-    saveDismissed();
+    void saveDismissed();
   }, [dismissedIds]);
 
   useEffect(() => {
     const saveDismissedEntities = async () => {
       try {
-        await AsyncStorage.setItem(DISMISSED_ENTITIES_KEY, JSON.stringify([...dismissedEntities]));
+        await AsyncStorage.setItem(skRef.current.DISMISSED_ENTITIES, JSON.stringify([...dismissedEntities]));
       } catch (error) {
         console.error('[AlertsProvider] Error saving dismissed entities:', error);
       }
     };
 
-    saveDismissedEntities();
+    void saveDismissedEntities();
   }, [dismissedEntities]);
 
   const runDetection = useCallback(() => {
@@ -277,7 +296,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     setDismissedEntities(prev => new Set([...prev, ...allEntityKeys]));
     
     try {
-      await AsyncStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify([]));
+      await AsyncStorage.setItem(skRef.current.ALERTS, JSON.stringify([]));
       console.log('[AlertsProvider] Cleared all alerts from storage');
     } catch (error) {
       console.error('[AlertsProvider] Error clearing alerts from storage:', error);
@@ -326,7 +345,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     [alerts]
   );
 
-  return {
+  return useMemo(() => ({
     alerts,
     rules,
     anomalies,
@@ -347,5 +366,5 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     updateConfig,
     getAlertsByType,
     getPriceDropAlerts,
-  };
+  }), [alerts, rules, anomalies, insights, config, isLoading, lastDetectionRun, summary, activeAlerts, criticalAlerts, priceDropCount, runDetection, dismissAlert, snoozeAlert, resolveAlert, clearAllAlerts, toggleRule, updateConfig, getAlertsByType, getPriceDropAlerts]);
 });

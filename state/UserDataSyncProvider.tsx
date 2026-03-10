@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { trpc, trpcClient, isBackendReachable } from "@/lib/trpc";
@@ -6,7 +6,7 @@ import { useAuth } from "@/state/AuthProvider";
 import { getUserScopedKey, ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 
-const LAST_SYNC_KEY = "easyseas_last_cloud_sync";
+const _BASE_LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 1;
 const MIN_SYNC_INTERVAL_MS = 60000;
 const PENDING_ACCOUNT_SWITCH_KEY = "easyseas_pending_account_switch";
@@ -30,6 +30,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const emailRef = useRef<string | null>(authenticatedEmail);
   useEffect(() => { emailRef.current = authenticatedEmail; }, [authenticatedEmail]);
   const sk = (baseKey: string) => getUserScopedKey(baseKey, emailRef.current);
+  const lastSyncKey = () => getUserScopedKey(_BASE_LAST_SYNC_KEY, emailRef.current);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -349,7 +350,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           const syncTime = new Date().toISOString();
           setLastSyncTime(syncTime);
           setLastRestoreTime(syncTime);
-          await AsyncStorage.setItem(LAST_SYNC_KEY, syncTime);
+          await AsyncStorage.setItem(lastSyncKey(), syncTime);
           lastSyncedEmailRef.current = authenticatedEmail;
           retryCountRef.current = 0;
           console.log("[UserDataSync] Successfully loaded and restored cloud data");
@@ -456,7 +457,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       const syncTime = new Date().toISOString();
       setLastSyncTime(syncTime);
       setHasCloudData(true);
-      await AsyncStorage.setItem(LAST_SYNC_KEY, syncTime);
+      await AsyncStorage.setItem(lastSyncKey(), syncTime);
       lastSyncedEmailRef.current = authenticatedEmail;
       retryCountRef.current = 0;
       
@@ -562,7 +563,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         console.log("[UserDataSync] No cloud data, will sync local data after delay");
         const timeoutId = setTimeout(() => {
           if (isMountedRef.current) {
-            syncToCloud();
+            void syncToCloud();
           }
         }, 5000);
         
@@ -570,7 +571,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       }
     };
 
-    initSync();
+    void initSync();
   }, [isAuthenticated, authenticatedEmail, loadFromCloud, syncToCloud, initialCheckComplete]);
 
   // Removed automatic storage change listener to prevent continuous sync loops
@@ -589,12 +590,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem(LAST_SYNC_KEY).then((time) => {
+    void AsyncStorage.getItem(lastSyncKey()).then((time) => {
       if (time) setLastSyncTime(time);
     });
   }, []);
 
-  return {
+  return useMemo(() => ({
     isSyncing,
     lastSyncTime,
     lastRestoreTime,
@@ -605,5 +606,5 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     loadFromCloud,
     forceSyncNow,
     checkCloudDataExists,
-  };
+  }), [isSyncing, lastSyncTime, lastRestoreTime, syncError, hasCloudData, initialCheckComplete, syncToCloud, loadFromCloud, forceSyncNow, checkCloudDataExists]);
 });

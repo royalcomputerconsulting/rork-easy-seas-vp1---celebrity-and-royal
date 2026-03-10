@@ -1,9 +1,11 @@
 import createContextHook from '@nkzw/create-context-hook';
-import { useState, useCallback, useRef, useEffect, useContext, createContext, ReactNode } from 'react';
+import { useState, useCallback, useRef, useEffect, useContext, createContext, useMemo, ReactNode } from 'react';
 import { WebView } from 'react-native-webview';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
+import { useAuth } from './AuthProvider';
 import { 
   RoyalCaribbeanSyncState, 
   SyncStatus,
@@ -73,13 +75,15 @@ const INITIAL_EXTENDED_LOYALTY: ExtendedLoyaltyData | null = null;
 // Flag to track if we've received API loyalty data (which should take precedence)
 let hasReceivedApiLoyaltyData = false;
 
-const DEFAULT_CRUISE_LINE: CruiseLine = 'royal_caribbean';
+const _DEFAULT_CRUISE_LINE: CruiseLine = 'royal_caribbean';
 
 const InitialCruiseLineContext = createContext<CruiseLine>('royal_caribbean');
 
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
   console.log('[RoyalCaribbeanSync] Provider initializing...');
   const initialCruiseLine = useContext(InitialCruiseLineContext);
+  const { authenticatedEmail } = useAuth();
+  const staySignedInKey = useCallback(() => getUserScopedKey('stay_signed_in', authenticatedEmail), [authenticatedEmail]);
   const [state, setState] = useState<RoyalCaribbeanSyncState>(INITIAL_STATE);
   const [cruiseLine, setCruiseLine] = useState<CruiseLine>(initialCruiseLine);
   const [extendedLoyaltyData, setExtendedLoyaltyData] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
@@ -97,9 +101,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   useEffect(() => {
     const ensureStaySignedInDefault = async () => {
       try {
-        const preference = await AsyncStorage.getItem('stay_signed_in');
+        const preference = await AsyncStorage.getItem(staySignedInKey());
         if (preference == null) {
-          await AsyncStorage.setItem('stay_signed_in', 'true');
+          await AsyncStorage.setItem(staySignedInKey(), 'true');
           setStaySignedIn(true);
           console.log('[RoyalCaribbeanSync] Stay signed in default applied (first run)');
           return;
@@ -112,7 +116,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         console.error('[RoyalCaribbeanSync] Failed to load stay signed in preference:', error);
       }
     };
-    ensureStaySignedInDefault();
+    void ensureStaySignedInDefault();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -145,7 +150,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
   const toggleStaySignedIn = useCallback(async (enabled: boolean) => {
     try {
-      await AsyncStorage.setItem('stay_signed_in', enabled ? 'true' : 'false');
+      await AsyncStorage.setItem(staySignedInKey(), enabled ? 'true' : 'false');
       setStaySignedIn(enabled);
       if (!enabled) {
         if (Platform.OS !== 'web' && webViewRef.current) {
@@ -171,7 +176,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     } catch (error) {
       console.error('[RoyalCaribbeanSync] Failed to save stay signed in preference:', error);
     }
-  }, [addLog]);
+  }, [addLog, staySignedInKey]);
 
   const setProgress = useCallback((current: number, total: number, stepName?: string) => {
     setState(prev => ({
@@ -624,9 +629,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             const dollarSign = String.fromCharCode(36);
             const offerRows: OfferRow[] = data.Items.map((item: any) => {
               let rateCode = '';
-              try { const m = (item.CtaUrl || '').match(/rateCodes=([A-Z0-9]+)/i); if (m) rateCode = m[1]; } catch(e) {}
+              try { const m = (item.CtaUrl || '').match(/rateCodes=([A-Z0-9]+)/i); if (m) rateCode = m[1]; } catch { /* ignore */ }
               let expiry = '';
-              try { const m2 = (item.Subtitle || '').match(/Book by (.+)/i); if (m2) expiry = m2[1].trim(); } catch(e) {}
+              try { const m2 = (item.Subtitle || '').match(/Book by (.+)/i); if (m2) expiry = m2[1].trim(); } catch { /* ignore */ }
               const desc = (item.Description || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
               const priceNum = item.Price ? Number(item.Price) : 0;
               const priceStr = priceNum > 0 ? (dollarSign + priceNum.toFixed(2)) : '';
@@ -957,7 +962,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
         }
       } catch (step2Error) {
-        addLog(`Step 2 error: ${step2Error} - continuing with collected data`, 'warning');
+        addLog(`Step 2 error: ${String(step2Error)} - continuing with collected data`, 'warning');
       }
       
       setState(prev => {
@@ -1200,7 +1205,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           await waitForStepComplete(3, loyaltyTimeout);
         }
       } catch (step3Error) {
-        addLog(`Step 3 error: ${step3Error} - continuing without loyalty data`, 'warning');
+        addLog(`Step 3 error: ${String(step3Error)} - continuing without loyalty data`, 'warning');
       }
       } // end loyalty fallback else
       
@@ -1300,9 +1305,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       });
       
     } catch (error) {
-      addLog(`Ingestion failed: ${error}`, 'error');
+      addLog(`Ingestion failed: ${String(error)}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.status, state.scrapePricingAndItinerary, addLog, config, cruiseLine]);
 
   const exportOffersCSV = useCallback(async () => {
@@ -1323,7 +1329,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       } else {
         const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
         const file = new ExpoFile(ExpoPaths.cache, 'offers.csv');
-        await file.write(csv);
+        file.write(csv);
 
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(file.uri, {
@@ -1334,7 +1340,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Offers CSV exported successfully', 'success');
       }
     } catch (error) {
-      addLog(`Failed to export offers CSV: ${error}`, 'error');
+      addLog(`Failed to export offers CSV: ${String(error)}`, 'error');
     }
   }, [state.extractedOffers, state.loyaltyData, addLog]);
 
@@ -1356,7 +1362,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       } else {
         const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
         const file = new ExpoFile(ExpoPaths.cache, 'Booked_Cruises.csv');
-        await file.write(csv);
+        file.write(csv);
 
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(file.uri, {
@@ -1367,7 +1373,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Booked Cruises CSV exported successfully', 'success');
       }
     } catch (error) {
-      addLog(`Failed to export booked cruises CSV: ${error}`, 'error');
+      addLog(`Failed to export booked cruises CSV: ${String(error)}`, 'error');
     }
   }, [state.extractedBookedCruises, state.loyaltyData, addLog]);
 
@@ -1389,7 +1395,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       } else {
         const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
         const file = new ExpoFile(ExpoPaths.cache, 'last.log');
-        await file.write(logText);
+        file.write(logText);
 
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(file.uri, {
@@ -1400,7 +1406,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Log exported successfully', 'success');
       }
     } catch (error) {
-      addLog(`Failed to export log: ${error}`, 'error');
+      addLog(`Failed to export log: ${String(error)}`, 'error');
     }
   }, [addLog]);
 
@@ -1526,7 +1532,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('✅ Offers persisted to storage', 'success');
       } catch (offerError) {
         console.error('[RoyalCaribbeanSync] Error persisting offers:', offerError);
-        addLog(`⚠️ Warning: Failed to persist offers: ${offerError}`, 'warning');
+        addLog(`⚠️ Warning: Failed to persist offers: ${String(offerError)}`, 'warning');
       }
 
       console.log('[RoyalCaribbeanSync] Step: Persisting available cruises...');
@@ -1538,7 +1544,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('✅ Available cruises persisted to storage', 'success');
       } catch (cruiseError) {
         console.error('[RoyalCaribbeanSync] Error persisting cruises:', cruiseError);
-        addLog(`⚠️ Warning: Failed to persist cruises: ${cruiseError}`, 'warning');
+        addLog(`⚠️ Warning: Failed to persist cruises: ${String(cruiseError)}`, 'warning');
       }
 
       console.log('[RoyalCaribbeanSync] Step: Persisting booked cruises...');
@@ -1550,7 +1556,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('✅ Booked cruises persisted to storage', 'success');
       } catch (bookedError) {
         console.error('[RoyalCaribbeanSync] Error persisting booked cruises:', bookedError);
-        addLog(`⚠️ Warning: Failed to persist booked cruises: ${bookedError}`, 'warning');
+        addLog(`⚠️ Warning: Failed to persist booked cruises: ${String(bookedError)}`, 'warning');
       }
 
       if (preview.loyalty) {
@@ -1566,7 +1572,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
         } catch (loyaltyError) {
           console.error('[RoyalCaribbeanSync] Error updating loyalty points:', loyaltyError);
-          addLog(`⚠️ Warning: Failed to update loyalty points: ${loyaltyError}`, 'warning');
+          addLog(`⚠️ Warning: Failed to update loyalty points: ${String(loyaltyError)}`, 'warning');
         }
       }
       
@@ -1591,7 +1597,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           addLog('Extended loyalty data synced successfully', 'success');
         } catch (extLoyaltyError) {
           console.error('[RoyalCaribbeanSync] Error syncing extended loyalty:', extLoyaltyError);
-          addLog(`⚠️ Warning: Failed to sync extended loyalty data: ${extLoyaltyError}`, 'warning');
+          addLog(`⚠️ Warning: Failed to sync extended loyalty data: ${String(extLoyaltyError)}`, 'warning');
         }
       } else {
         addLog('⚠️ No extended loyalty payload available at sync time', 'warning');
@@ -1654,7 +1660,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
   
 
-  return {
+  return useMemo(() => ({
     state,
     webViewRef,
     cruiseLine,
@@ -1676,7 +1682,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     toggleStaySignedIn,
     webViewUrl,
     onPageLoaded
-  };
+  }), [
+    state, webViewRef, cruiseLine, setCruiseLine, config, openLogin, runIngestion,
+    exportOffersCSV, exportBookedCruisesCSV, exportLog, resetState, syncToApp,
+    cancelSync, handleWebViewMessage, addLog, extendedLoyaltyData, setExtendedLoyalty,
+    staySignedIn, toggleStaySignedIn, webViewUrl, onPageLoaded
+  ]);
 });
 
 export function CarnivalSyncProvider({ children }: { children: ReactNode }) {

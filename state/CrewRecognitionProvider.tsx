@@ -1,14 +1,15 @@
 import createContextHook from '@nkzw/create-context-hook';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/state/AuthProvider';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
 
 import type { RecognitionEntryWithCrew, Sailing, Department } from '@/types/crew-recognition';
 import { CREW_RECOGNITION_CSV } from '@/constants/crew-recognition-csv';
 
-const STORAGE_KEY_ENTRIES = 'crew_recognition_entries_v2';
-const STORAGE_KEY_SAILINGS = 'crew_recognition_sailings_v2';
+const BASE_STORAGE_KEY_ENTRIES = 'crew_recognition_entries_v2';
+const BASE_STORAGE_KEY_SAILINGS = 'crew_recognition_sailings_v2';
 
 interface CrewRecognitionFilters {
   search: string;
@@ -122,6 +123,14 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   const auth = useAuth();
   const userId = auth.authenticatedEmail || 'guest';
 
+  const skEntriesRef = useRef(getUserScopedKey(BASE_STORAGE_KEY_ENTRIES, auth.authenticatedEmail));
+  const skSailingsRef = useRef(getUserScopedKey(BASE_STORAGE_KEY_SAILINGS, auth.authenticatedEmail));
+  useEffect(() => {
+    skEntriesRef.current = getUserScopedKey(BASE_STORAGE_KEY_ENTRIES, auth.authenticatedEmail);
+    skSailingsRef.current = getUserScopedKey(BASE_STORAGE_KEY_SAILINGS, auth.authenticatedEmail);
+    console.log('[CrewRecognition] Scoped storage keys updated for:', auth.authenticatedEmail);
+  }, [auth.authenticatedEmail]);
+
   const [filters, setFilters] = useState<CrewRecognitionFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
@@ -131,11 +140,11 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const [storedEntries, storedSailings] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_KEY_ENTRIES),
-          AsyncStorage.getItem(STORAGE_KEY_SAILINGS),
+          AsyncStorage.getItem(skEntriesRef.current),
+          AsyncStorage.getItem(skSailingsRef.current),
         ]);
         if (storedEntries) {
           setLocalEntries(JSON.parse(storedEntries));
@@ -170,11 +179,11 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
     const handleCloudRestore = () => {
       console.log('[CrewRecognition] Cloud data restored, reloading crew data');
-      (async () => {
+      void (async () => {
         try {
           const [storedEntries, storedSailings] = await Promise.all([
-            AsyncStorage.getItem(STORAGE_KEY_ENTRIES),
-            AsyncStorage.getItem(STORAGE_KEY_SAILINGS),
+            AsyncStorage.getItem(skEntriesRef.current),
+            AsyncStorage.getItem(skSailingsRef.current),
           ]);
           setLocalEntries(storedEntries ? JSON.parse(storedEntries) : []);
           setLocalSailings(storedSailings ? JSON.parse(storedSailings) : []);
@@ -301,8 +310,8 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
   const createCrewMemberMutation = trpc.crewRecognition.createCrewMember.useMutation({
     onSuccess: () => {
-      statsQuery.refetch();
-      entriesQuery.refetch();
+      void statsQuery.refetch();
+      void entriesQuery.refetch();
     },
   });
 
@@ -350,41 +359,41 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     const updatedEntries = [newEntry, ...localEntries];
     setLocalEntries(updatedEntries);
     setIsOfflineMode(true);
-    await AsyncStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(updatedEntries));
+    await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
     console.log('[CrewRecognition] Added crew member locally with notes:', data.fullName, data.notes ? '(has notes)' : '(no notes)');
     return newEntry;
   }, [isOfflineMode, createCrewMemberMutation, localEntries, localSailings]);
 
   const updateCrewMemberMutation = trpc.crewRecognition.updateCrewMember.useMutation({
     onSuccess: () => {
-      entriesQuery.refetch();
+      void entriesQuery.refetch();
     },
   });
 
   const deleteCrewMemberMutation = trpc.crewRecognition.deleteCrewMember.useMutation({
     onSuccess: () => {
-      statsQuery.refetch();
-      entriesQuery.refetch();
+      void statsQuery.refetch();
+      void entriesQuery.refetch();
     },
   });
 
   const createRecognitionEntryMutation = trpc.crewRecognition.createRecognitionEntry.useMutation({
     onSuccess: () => {
-      statsQuery.refetch();
-      entriesQuery.refetch();
+      void statsQuery.refetch();
+      void entriesQuery.refetch();
     },
   });
 
   const updateRecognitionEntryMutation = trpc.crewRecognition.updateRecognitionEntry.useMutation({
     onSuccess: () => {
-      entriesQuery.refetch();
+      void entriesQuery.refetch();
     },
   });
 
   const deleteRecognitionEntryMutation = trpc.crewRecognition.deleteRecognitionEntry.useMutation({
     onSuccess: () => {
-      statsQuery.refetch();
-      entriesQuery.refetch();
+      void statsQuery.refetch();
+      void entriesQuery.refetch();
     },
   });
 
@@ -400,7 +409,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
     const updatedEntries = localEntries.filter(e => e.id !== data.id);
     setLocalEntries(updatedEntries);
-    await AsyncStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(updatedEntries));
+    await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
     console.log('[CrewRecognition] Deleted entry locally:', data.id);
     return { success: true };
   }, [isOfflineMode, deleteRecognitionEntryMutation, localEntries]);
@@ -435,7 +444,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
       return updated;
     });
     setLocalEntries(updatedEntries);
-    await AsyncStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(updatedEntries));
+    await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
     console.log('[CrewRecognition] Updated entry locally:', data.id);
     return { success: true };
   }, [isOfflineMode, updateRecognitionEntryMutation, localEntries, localSailings]);
@@ -452,14 +461,14 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
     const updatedEntries = localEntries.filter(e => e.crewMemberId !== data.id);
     setLocalEntries(updatedEntries);
-    await AsyncStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(updatedEntries));
+    await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
     console.log('[CrewRecognition] Deleted crew member entries locally:', data.id);
     return { success: true };
   }, [isOfflineMode, deleteCrewMemberMutation, localEntries]);
 
   const createSailingMutation = trpc.crewRecognition.createSailing.useMutation({
     onSuccess: () => {
-      sailingsQuery.refetch();
+      void sailingsQuery.refetch();
     },
   });
 
@@ -472,8 +481,8 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     setIsOfflineMode(false);
     try {
       await Promise.all([
-        AsyncStorage.removeItem(STORAGE_KEY_ENTRIES),
-        AsyncStorage.removeItem(STORAGE_KEY_SAILINGS),
+        AsyncStorage.removeItem(skEntriesRef.current),
+        AsyncStorage.removeItem(skSailingsRef.current),
       ]);
       console.log('[CrewRecognition] Crew data cleared from storage');
     } catch (e) {
@@ -491,8 +500,8 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     setIsOfflineMode(true);
 
     await Promise.all([
-      AsyncStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(parsedEntries)),
-      AsyncStorage.setItem(STORAGE_KEY_SAILINGS, JSON.stringify(parsedSailings)),
+      AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(parsedEntries)),
+      AsyncStorage.setItem(skSailingsRef.current, JSON.stringify(parsedSailings)),
     ]);
     console.log('[CrewRecognition] Saved to local storage');
 
@@ -528,7 +537,13 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   }, [entriesQuery.data?.entries]);
   const backendTotal = entriesQuery.data?.total || 0;
 
-  return {
+  const refetch = useCallback(() => {
+    void statsQuery.refetch();
+    void entriesQuery.refetch();
+    void sailingsQuery.refetch();
+  }, [statsQuery, entriesQuery, sailingsQuery]);
+
+  return useMemo(() => ({
     userId,
     filters,
     updateFilters,
@@ -555,10 +570,14 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     deleteRecognitionEntry: deleteRecognitionEntryWithFallback,
     createSailing: createSailingMutation.mutateAsync,
     clearCrewData,
-    refetch: () => {
-      statsQuery.refetch();
-      entriesQuery.refetch();
-      sailingsQuery.refetch();
-    },
-  };
+    refetch,
+  }), [
+    userId, filters, updateFilters, resetFilters, page, pageSize, nextPage, previousPage, goToPage,
+    useLocal, localStats, statsQuery.data, statsQuery.isLoading, filteredLocalEntries, backendEntries, backendTotal,
+    entriesQuery.isLoading, localSailings, sailingsQuery.data, sailingsQuery.isLoading,
+    syncFromCSVLocally, addCrewMemberWithFallback, updateCrewMemberMutation.mutateAsync,
+    deleteCrewMemberWithFallback, createRecognitionEntryMutation.mutateAsync,
+    updateRecognitionEntryWithFallback, deleteRecognitionEntryWithFallback,
+    createSailingMutation.mutateAsync, clearCrewData, refetch,
+  ]);
 });
