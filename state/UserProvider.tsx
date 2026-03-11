@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { useAuth } from "./AuthProvider";
@@ -135,8 +135,43 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const lastAuthenticatedEmailRef = useRef<string | null>(normalizedAuthenticatedEmail);
 
-  const currentUser = users.find((user) => user.id === currentUserId) || users.find((user) => user.isOwner) || null;
+  const currentUser = useMemo(() => {
+    const resolvedUser = users.find((user) => user.id === currentUserId) || users.find((user) => user.isOwner) || null;
+
+    if (!resolvedUser || !normalizedAuthenticatedEmail) {
+      return resolvedUser;
+    }
+
+    const resolvedEmail = normalizeEmail(resolvedUser.email);
+    if (resolvedEmail !== normalizedAuthenticatedEmail) {
+      console.log('[UserProvider] Suppressing stale user during account transition:', {
+        authenticatedEmail: normalizedAuthenticatedEmail,
+        resolvedEmail,
+        userId: resolvedUser.id,
+      });
+      return null;
+    }
+
+    return resolvedUser;
+  }, [currentUserId, normalizedAuthenticatedEmail, users]);
+
+  useEffect(() => {
+    if (lastAuthenticatedEmailRef.current === normalizedAuthenticatedEmail) {
+      return;
+    }
+
+    console.log('[UserProvider] Authenticated email changed, clearing in-memory user state:', {
+      previousEmail: lastAuthenticatedEmailRef.current,
+      nextEmail: normalizedAuthenticatedEmail,
+    });
+
+    lastAuthenticatedEmailRef.current = normalizedAuthenticatedEmail;
+    setUsers([]);
+    setCurrentUserId(null);
+    setIsLoading(!!normalizedAuthenticatedEmail);
+  }, [normalizedAuthenticatedEmail]);
 
   const persistUsers = useCallback(async (newUsers: UserProfile[]) => {
     const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
@@ -396,10 +431,11 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     try {
       const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
       const storedUsersRaw = await AsyncStorage.getItem(scopedKeys.USERS);
-      let currentUsers: UserProfile[] = storedUsersRaw ? JSON.parse(storedUsersRaw) as UserProfile[] : users;
+      const inMemoryScopedUsers = users.filter((user) => normalizeEmail(user.email) === normalizedAuthenticatedEmail);
+      let currentUsers: UserProfile[] = storedUsersRaw ? JSON.parse(storedUsersRaw) as UserProfile[] : inMemoryScopedUsers;
 
-      if (currentUsers.length === 0 && users.length > 0) {
-        currentUsers = users;
+      if (currentUsers.length === 0 && inMemoryScopedUsers.length > 0) {
+        currentUsers = inMemoryScopedUsers;
       }
 
       const normalizedUpdates: Partial<UserProfile> = {
@@ -437,7 +473,17 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
   }, [normalizedAuthenticatedEmail, users]);
 
   const ensureOwner = useCallback(async (): Promise<UserProfile> => {
-    const existingOwner = users.find((user) => user.isOwner);
+    const existingOwner = users.find((user) => {
+      if (!user.isOwner) {
+        return false;
+      }
+
+      if (!normalizedAuthenticatedEmail) {
+        return true;
+      }
+
+      return normalizeEmail(user.email) === normalizedAuthenticatedEmail;
+    });
 
     if (existingOwner) {
       if (!currentUserId) {

@@ -80,8 +80,8 @@ interface LoyaltyState {
   
   isLoading: boolean;
   
-  setManualClubRoyalePoints: (points: number) => void;
-  setManualCrownAnchorPoints: (points: number) => void;
+  setManualClubRoyalePoints: (points: number) => Promise<void>;
+  setManualCrownAnchorPoints: (points: number) => Promise<void>;
   setExtendedLoyaltyData: (data: ExtendedLoyaltyData) => Promise<void>;
   syncFromStorage: () => Promise<void>;
 }

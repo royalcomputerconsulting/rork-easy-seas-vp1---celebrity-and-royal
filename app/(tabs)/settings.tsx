@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useMemo, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -22,7 +22,6 @@ import {
   Download, 
   Upload,
   Trash2, 
-  Info, 
   ChevronRight,
   Ship,
   ExternalLink,
@@ -34,9 +33,7 @@ import {
   CheckCircle,
   FolderArchive,
   FolderInput,
-  FileText,
   Database,
-  Tag,
   Save,
   RefreshCcw,
   BookOpen,
@@ -44,7 +41,6 @@ import {
   FileDown,
   TrendingDown,
   Users,
-  Clock,
   Award,
   Anchor,
   Link2,
@@ -77,7 +73,7 @@ import {
 } from '@/lib/dataManager';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
-import { RENDER_BACKEND_URL } from '@/lib/trpc';
+import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
 
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -90,9 +86,17 @@ import { generateSampleData, SAMPLE_LOYALTY_POINTS } from '@/lib/sampleData';
 import { useAuth } from '@/state/AuthProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
-import { trpc } from '@/lib/trpc';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+
+function normalizeAccountEmail(email: string | null | undefined): string | null {
+  if (!email) {
+    return null;
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  return normalizedEmail.length > 0 ? normalizedEmail : null;
+}
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -101,9 +105,15 @@ export default function SettingsScreen() {
   const coreData = useCoreData();
   const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers } = coreData;
   const cruises = coreData.cruises;
-  const { currentUser, updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
-  const { 
-    clubRoyalePoints: loyaltyClubRoyalePoints, 
+  const {
+    currentUser,
+    updateUser,
+    ensureOwner,
+    syncFromStorage: syncUserFromStorage,
+    isLoading: isUserLoading,
+  } = useUser();
+  const {
+    clubRoyalePoints: loyaltyClubRoyalePoints,
     crownAnchorPoints: loyaltyCrownAnchorPoints,
     crownAnchorLevel: loyaltyCrownAnchorLevel,
     clubRoyaleTier: loyaltyClubRoyaleTier,
@@ -113,6 +123,7 @@ export default function SettingsScreen() {
     extendedLoyalty,
     venetianSociety,
     captainsClub,
+    isLoading: isLoyaltyLoading,
   } = useLoyalty();
   
   const [isImporting, setIsImporting] = useState(false);
@@ -131,8 +142,6 @@ export default function SettingsScreen() {
   const [isLoadingWhitelist, setIsLoadingWhitelist] = useState(false);
   const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   const [isUserManualVisible, setIsUserManualVisible] = useState(false);
-  const [secretTapCount, setSecretTapCount] = useState(0);
-  const secretTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [calendarFeedToken, setCalendarFeedToken] = useState<string | null>(null);
   const [calendarFeedUrl, setCalendarFeedUrl] = useState<string | null>(null);
   const [isPublishingFeed, setIsPublishingFeed] = useState(false);
@@ -141,8 +150,29 @@ export default function SettingsScreen() {
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
-  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail } = useAuth();
+  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail, authenticatedEmail } = useAuth();
   const { stats: crewStats } = useCrewRecognition();
+
+  const normalizedAuthenticatedEmail = useMemo(() => normalizeAccountEmail(authenticatedEmail), [authenticatedEmail]);
+  const normalizedCurrentUserEmail = useMemo(() => normalizeAccountEmail(currentUser?.email), [currentUser?.email]);
+  const isProfileIdentityReady = useMemo(() => {
+    if (!normalizedAuthenticatedEmail) {
+      return false;
+    }
+
+    if (isUserLoading) {
+      return false;
+    }
+
+    if (!currentUser || !normalizedCurrentUserEmail) {
+      return false;
+    }
+
+    return normalizedCurrentUserEmail === normalizedAuthenticatedEmail;
+  }, [currentUser, isUserLoading, normalizedAuthenticatedEmail, normalizedCurrentUserEmail]);
+  const isProfileDisplayReady = useMemo(() => {
+    return isProfileIdentityReady && !isLoyaltyLoading;
+  }, [isProfileIdentityReady, isLoyaltyLoading]);
 
 
 
@@ -161,7 +191,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     if (isAdmin) {
-      loadWhitelist();
+      void loadWhitelist();
     }
   }, [isAdmin, loadWhitelist]);
 
@@ -207,28 +237,52 @@ export default function SettingsScreen() {
   };
 
   const currentProfileValues = useMemo(() => ({
-    name: currentUser?.name || '',
-    email: currentUser?.email || '',
-    crownAnchorNumber: currentUser?.crownAnchorNumber || '',
-    clubRoyalePoints: loyaltyClubRoyalePoints,
-    clubRoyaleTier: loyaltyClubRoyaleTier,
-    loyaltyPoints: loyaltyCrownAnchorPoints,
-    crownAnchorLevel: loyaltyCrownAnchorLevel,
-    celebrityEmail: currentUser?.celebrityEmail || '',
-    celebrityCaptainsClubNumber: currentUser?.celebrityCaptainsClubNumber || '',
-    celebrityCaptainsClubPoints: currentUser?.celebrityCaptainsClubPoints || 0,
-    celebrityBlueChipPoints: currentUser?.celebrityBlueChipPoints || 0,
+    name: isProfileDisplayReady ? currentUser?.name || '' : '',
+    email: isProfileDisplayReady ? currentUser?.email || authenticatedEmail || '' : authenticatedEmail || '',
+    crownAnchorNumber: isProfileDisplayReady ? currentUser?.crownAnchorNumber || '' : '',
+    clubRoyalePoints: isProfileDisplayReady ? loyaltyClubRoyalePoints : 0,
+    clubRoyaleTier: isProfileDisplayReady ? loyaltyClubRoyaleTier : 'Choice',
+    loyaltyPoints: isProfileDisplayReady ? loyaltyCrownAnchorPoints : 0,
+    crownAnchorLevel: isProfileDisplayReady ? loyaltyCrownAnchorLevel : 'Gold',
+    celebrityEmail: isProfileDisplayReady ? currentUser?.celebrityEmail || '' : '',
+    celebrityCaptainsClubNumber: isProfileDisplayReady ? currentUser?.celebrityCaptainsClubNumber || '' : '',
+    celebrityCaptainsClubPoints: isProfileDisplayReady ? currentUser?.celebrityCaptainsClubPoints || 0 : 0,
+    celebrityBlueChipPoints: isProfileDisplayReady ? currentUser?.celebrityBlueChipPoints || 0 : 0,
     celebrityBlueChipTier: 'Pearl',
     celebrityCaptainsClubLevel: 'Preview',
-    preferredBrand: currentUser?.preferredBrand || 'royal',
-    silverseaEmail: currentUser?.silverseaEmail || '',
-    silverseaVenetianNumber: currentUser?.silverseaVenetianNumber || '',
-    silverseaVenetianTier: currentUser?.silverseaVenetianTier || '',
-    silverseaVenetianPoints: currentUser?.silverseaVenetianPoints || 0,
-  }), [currentUser, loyaltyClubRoyalePoints, loyaltyClubRoyaleTier, loyaltyCrownAnchorPoints, loyaltyCrownAnchorLevel]);
+    preferredBrand: isProfileDisplayReady ? currentUser?.preferredBrand || 'royal' : 'royal',
+    silverseaEmail: isProfileDisplayReady ? currentUser?.silverseaEmail || '' : '',
+    silverseaVenetianNumber: isProfileDisplayReady ? currentUser?.silverseaVenetianNumber || '' : '',
+    silverseaVenetianTier: isProfileDisplayReady ? currentUser?.silverseaVenetianTier || '' : '',
+    silverseaVenetianPoints: isProfileDisplayReady ? currentUser?.silverseaVenetianPoints || 0 : 0,
+  }), [
+    authenticatedEmail,
+    currentUser,
+    isProfileDisplayReady,
+    loyaltyClubRoyalePoints,
+    loyaltyClubRoyaleTier,
+    loyaltyCrownAnchorLevel,
+    loyaltyCrownAnchorPoints,
+  ]);
+
+  const currentPlayingHours = useMemo(() => {
+    if (!isProfileDisplayReady) {
+      return DEFAULT_PLAYING_HOURS;
+    }
+
+    return currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
+  }, [currentUser?.playingHours, isProfileDisplayReady]);
+
+  const profileTransitionSubtitle = useMemo(() => {
+    if (authenticatedEmail) {
+      return `Loading private settings for ${authenticatedEmail}`;
+    }
+
+    return 'Securing your private settings';
+  }, [authenticatedEmail]);
 
   const enrichmentData = useMemo(() => {
-    if (!extendedLoyalty) return null;
+    if (!extendedLoyalty || !isProfileDisplayReady) return null;
 
     return {
       accountId: extendedLoyalty.accountId,
@@ -268,7 +322,7 @@ export default function SettingsScreen() {
       coBrandCardStatus: extendedLoyalty.coBrandCardStatus,
       coBrandCardErrorMessage: extendedLoyalty.coBrandCardErrorMessage,
     };
-  }, [extendedLoyalty, venetianSociety, captainsClub]);
+  }, [captainsClub, extendedLoyalty, isProfileDisplayReady, venetianSociety]);
 
   const dataStats = useMemo(() => {
     const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
@@ -401,7 +455,7 @@ export default function SettingsScreen() {
         console.error('[Settings] Error loading feed token:', error);
       }
     };
-    loadFeedToken();
+    void loadFeedToken();
   }, []);
 
   const handlePublishCalendarFeed = useCallback(async () => {
@@ -564,7 +618,7 @@ export default function SettingsScreen() {
                   return;
                 }
 
-                setLocalData({
+                await setLocalData({
                   calendar: [...(localData.calendar || []), ...events],
                 });
 
@@ -631,7 +685,7 @@ export default function SettingsScreen() {
         return;
       }
 
-      setLocalData({
+      await setLocalData({
         calendar: [...(localData.calendar || []), ...events],
       });
 
@@ -749,7 +803,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [setBookedCruises, setLocalData, bookedCruises, localData.booked]);
+  }, [bookedCruises, entitlement.tier, localData.booked, router, setBookedCruises, setLocalData]);
 
   const handleExportBookedCSV = useCallback(async () => {
     try {
@@ -861,7 +915,7 @@ export default function SettingsScreen() {
               
               if (result.success) {
                 await clearAllData();
-                clearLocalData();
+                await clearLocalData();
                 setLastImportResult(null);
                 
                 console.log('[Settings] Resetting user profile to blank for all cruise lines...');
@@ -1009,7 +1063,7 @@ export default function SettingsScreen() {
           events: syncedEvents.length,
         });
         
-        setLocalData({
+        await setLocalData({
           cruises: syncedCruises,
           booked: syncedBooked,
           offers: syncedOffers,
@@ -1031,7 +1085,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImportingAll(false);
     }
-  }, [coreData, setLocalData, syncUserFromStorage, syncLoyaltyFromStorage, reloadMachines, reloadCasinoSessions]);
+  }, [coreData, entitlement.tier, reloadCasinoSessions, reloadMachines, router, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
 
   const handleDownloadExtension = useCallback(async () => {
     try {
@@ -1091,7 +1145,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     }
   }, []);
 
-  const handleSaveProfile = useCallback(async (profileData: {
+  const handleSaveProfile = async (profileData: {
     name: string;
     email: string;
     crownAnchorNumber: string;
@@ -1111,6 +1165,12 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     silverseaVenetianTier?: string;
     silverseaVenetianPoints?: number;
   }) => {
+    if (!isProfileDisplayReady) {
+      console.log('[Settings] Blocked profile save while account data is still loading');
+      Alert.alert('Profile Loading', 'Please wait for your account data to finish loading.');
+      return;
+    }
+
     try {
       setIsSaving(true);
       console.log('[Settings] Saving profile:', profileData);
@@ -1179,9 +1239,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       Alert.alert('Save Error', 'Failed to save profile. Please try again.');
       setIsSaving(false);
     }
-  }, [currentUser, updateUser, ensureOwner, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncUserFromStorage]);
+  };
 
-  const continueProfileSave = async (
+  async function continueProfileSave(
     profileData: {
       name: string;
       email: string;
@@ -1205,7 +1265,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     oldEmail: string | undefined,
     newEmail: string,
     emailChanged: boolean
-  ) => {
+  ) {
     try {
       if (currentUser) {
         await updateUser(currentUser.id, { 
@@ -1286,7 +1346,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     } finally {
       setIsSaving(false);
     }
-  };
+  }
 
 
 
@@ -1296,97 +1356,13 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     });
   }, []);
 
-  const handleSecretUnlock = useCallback(() => {
-    setSecretTapCount(prev => {
-      const newCount = prev + 1;
-      
-      if (secretTapTimer.current) {
-        clearTimeout(secretTapTimer.current);
-      }
-      
-      secretTapTimer.current = setTimeout(() => {
-        setSecretTapCount(0);
-      }, 2000);
-      
-      if (newCount >= 3) {
-        setSecretTapCount(0);
-        if (secretTapTimer.current) {
-          clearTimeout(secretTapTimer.current);
-        }
-        
-        Alert.prompt(
-          'Developer Access',
-          'Enter password:',
-          [
-            {
-              text: 'Cancel',
-              style: 'cancel',
-            },
-            {
-              text: 'Unlock',
-              onPress: async (password?: string) => {
-                if (password === 'a1') {
-                  try {
-                    console.log('[Settings] Secret unlock activated - granting full access');
-                    
-                    await AsyncStorage.setItem(KEYS.WEB_IS_PRO, 'true');
-                    
-                    if (!mountedRef.current) return;
-                    
-                    entitlement.refresh();
-                    
-                    Alert.alert(
-                      '🔓 Full Access Unlocked',
-                      'Developer mode activated. All pro features are now available.',
-                      [
-                        {
-                          text: 'OK',
-                          onPress: () => {
-                            try {
-                              if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
-                                console.log('[Settings] Dispatching entitlementProUnlocked event');
-                                window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
-                              }
-                            } catch (e) {
-                              console.error('[Settings] Failed to dispatch event', e);
-                            }
-                          }
-                        }
-                      ]
-                    );
-                  } catch (error) {
-                    console.error('[Settings] Secret unlock error:', error);
-                    Alert.alert('Error', 'Failed to unlock. Please try again.');
-                  }
-                } else {
-                  Alert.alert('Incorrect Password', 'Access denied.');
-                }
-              },
-            },
-          ],
-          'secure-text'
-        );
-      }
-      
-      return newCount;
-    });
-  }, [entitlement]);
-
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      if (secretTapTimer.current) {
-        clearTimeout(secretTapTimer.current);
-      }
-    };
-  }, []);
-
-  const KEYS = {
-    WEB_IS_PRO: 'easyseas_entitlements_web_is_pro',
-  } as const;
-
   const handleSavePlayingHours = useCallback(async (playingHours: PlayingHours) => {
+    if (!isProfileDisplayReady) {
+      console.log('[Settings] Blocked playing-hours save while account data is still loading');
+      Alert.alert('Profile Loading', 'Please wait for your account data to finish loading.');
+      return;
+    }
+
     try {
       setIsSavingPlayingHours(true);
       console.log('[Settings] Saving playing hours:', playingHours);
@@ -1405,7 +1381,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     } finally {
       setIsSavingPlayingHours(false);
     }
-  }, [currentUser, updateUser, ensureOwner]);
+  }, [currentUser, ensureOwner, isProfileDisplayReady, updateUser]);
 
   const handleImportMachinesJSON = useCallback(async () => {
     try {
@@ -1751,18 +1727,46 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             </View>
           </View>
 
-          <UserProfileCard
-            currentValues={currentProfileValues}
-            enrichmentData={enrichmentData}
-            onSave={handleSaveProfile}
-            isSaving={isSaving}
-          />
+          {isProfileDisplayReady ? (
+            <>
+              <UserProfileCard
+                key={`profile-${normalizedAuthenticatedEmail ?? 'guest'}`}
+                currentValues={currentProfileValues}
+                enrichmentData={enrichmentData}
+                onSave={handleSaveProfile}
+                isSaving={isSaving}
+              />
 
-          <PlayingHoursCard
-            currentValues={currentUser?.playingHours || DEFAULT_PLAYING_HOURS}
-            onSave={handleSavePlayingHours}
-            isSaving={isSavingPlayingHours}
-          />
+              <PlayingHoursCard
+                key={`playing-hours-${normalizedAuthenticatedEmail ?? 'guest'}`}
+                currentValues={currentPlayingHours}
+                onSave={handleSavePlayingHours}
+                isSaving={isSavingPlayingHours}
+              />
+            </>
+          ) : (
+            <>
+              <View style={styles.profileLoadingCard} testID="settings-profile-loading-card">
+                <View style={styles.profileLoadingIconWrap}>
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                </View>
+                <View style={styles.profileLoadingCopy}>
+                  <Text style={styles.profileLoadingTitle}>Securing your profile</Text>
+                  <Text style={styles.profileLoadingSubtitle}>{profileTransitionSubtitle}</Text>
+                </View>
+              </View>
+
+              <View style={styles.profileLoadingCard} testID="settings-playing-hours-loading-card">
+                <View style={styles.profileLoadingIconWrap}>
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                </View>
+                <View style={styles.profileLoadingCopy}>
+                  <Text style={styles.profileLoadingTitle}>Refreshing playing hours</Text>
+                  <Text style={styles.profileLoadingSubtitle}>Your account preferences will appear as soon as the correct profile is loaded.</Text>
+                </View>
+              </View>
+            </>
+          )}
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
@@ -2434,6 +2438,40 @@ const styles = StyleSheet.create({
   dangerCard: {
     borderColor: 'rgba(244, 67, 54, 0.3)',
     backgroundColor: '#FFF5F5',
+  },
+  profileLoadingCard: {
+    marginTop: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    backgroundColor: '#F0F9FF',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.2)',
+    padding: SPACING.lg,
+    ...SHADOW.sm,
+  },
+  profileLoadingIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+  },
+  profileLoadingCopy: {
+    flex: 1,
+  },
+  profileLoadingTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  profileLoadingSubtitle: {
+    marginTop: 4,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: CLEAN_THEME.text.secondary,
+    lineHeight: 20,
   },
   settingRow: {
     flexDirection: 'row',
