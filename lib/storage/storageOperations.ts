@@ -20,6 +20,7 @@ export async function clearUserSpecificData(): Promise<void> {
     const allStoredKeys = await AsyncStorage.getAllKeys();
     const keysToRemove = allStoredKeys.filter(key => {
       if (AUTH_PRESERVE_KEYS.has(key)) return false;
+      if (key === ALL_STORAGE_KEYS.USERS || key === ALL_STORAGE_KEYS.CURRENT_USER) return true;
       if (GLOBAL_KEYS.has(key)) return false;
       if (key.includes('::')) return false;
       if (key.startsWith('easyseas') || key.startsWith('@easyseas') || key.startsWith('crew_recognition')) {

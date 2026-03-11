@@ -93,9 +93,6 @@ const DEFAULT_LOYALTY = {
   crownAnchorPoints: 0,
 };
 
-const _DEFAULT_TIER = 'Choice' as ClubRoyaleTier;
-const _DEFAULT_LEVEL = 'Gold' as CrownAnchorLevel;
-
 export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState => {
   const { bookedCruises: storedBookedCruises, isLoading: cruisesLoading } = useCoreData();
   const { authenticatedEmail } = useAuth();
@@ -123,6 +120,11 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
   const bookedCruises = useMemo((): BookedCruise[] => {
     return storedBookedCruises || [];
   }, [storedBookedCruises]);
+
+  const userStorageKeys = useMemo(() => ({
+    USERS: getUserScopedKey(ALL_STORAGE_KEYS.USERS, authenticatedEmail),
+    CURRENT_USER: getUserScopedKey(ALL_STORAGE_KEYS.CURRENT_USER, authenticatedEmail),
+  }), [authenticatedEmail]);
 
   const loadManualPoints = useCallback(async () => {
     try {
@@ -357,18 +359,18 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
         console.log('[LoyaltyProvider] ✓ Updating user profile with all cruise line data:', allUpdates);
         
         // Store to AsyncStorage to persist across all three cruise lines
-        const usersData = await AsyncStorage.getItem('easyseas_users');
+        const usersData = await AsyncStorage.getItem(userStorageKeys.USERS);
         if (usersData) {
           const users = JSON.parse(usersData);
-          const currentUserId = await AsyncStorage.getItem('easyseas_current_user');
+          const currentUserId = await AsyncStorage.getItem(userStorageKeys.CURRENT_USER);
           if (currentUserId) {
             const updatedUsers = users.map((u: any) => 
               u.id === currentUserId 
                 ? { ...u, ...allUpdates, updatedAt: new Date().toISOString() }
                 : u
             );
-            await AsyncStorage.setItem('easyseas_users', JSON.stringify(updatedUsers));
-            console.log('[LoyaltyProvider] ✓ User profile updated in storage with all cruise line loyalty data');
+            await AsyncStorage.setItem(userStorageKeys.USERS, JSON.stringify(updatedUsers));
+            console.log('[LoyaltyProvider] ✓ User profile updated in scoped storage with all cruise line loyalty data');
           }
         }
       }
@@ -378,7 +380,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       console.error('[LoyaltyProvider] ✗ Failed to save extended loyalty data:', error);
       throw error;
     }
-  }, [setManualClubRoyalePoints, setManualCrownAnchorPoints]);
+  }, [setManualClubRoyalePoints, setManualCrownAnchorPoints, userStorageKeys]);
 
   const calculatedData = useMemo(() => {
     let calculatedClubRoyalePoints = 0;

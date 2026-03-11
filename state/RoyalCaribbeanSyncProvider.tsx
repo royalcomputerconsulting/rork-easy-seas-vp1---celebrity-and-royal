@@ -72,11 +72,6 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
 
 const INITIAL_EXTENDED_LOYALTY: ExtendedLoyaltyData | null = null;
 
-// Flag to track if we've received API loyalty data (which should take precedence)
-let hasReceivedApiLoyaltyData = false;
-
-const _DEFAULT_CRUISE_LINE: CruiseLine = 'royal_caribbean';
-
 const InitialCruiseLineContext = createContext<CruiseLine>('royal_caribbean');
 
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
@@ -89,6 +84,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const [extendedLoyaltyData, setExtendedLoyaltyData] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
   const [staySignedIn, setStaySignedIn] = useState(true);
   const webViewRef = useRef<WebView | null>(null);
+  const hasReceivedApiLoyaltyDataRef = useRef(false);
+  const lastAuthenticatedEmailRef = useRef<string | null>(authenticatedEmail);
   const stepCompleteResolvers = useRef<{ [key: number]: () => void }>({});
   const progressCallbacks = useRef<{ onProgress?: () => void }>({});
   const processedPayloads = useRef<Set<string>>(new Set());
@@ -117,12 +114,50 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
     };
     void ensureStaySignedInDefault();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [staySignedInKey]);
 
   useEffect(() => {
     setWebViewUrl(CRUISE_LINE_CONFIG[cruiseLine].loginUrl);
   }, [cruiseLine]);
+
+  useEffect(() => {
+    const previousEmail = lastAuthenticatedEmailRef.current;
+
+    if (previousEmail === authenticatedEmail) {
+      return;
+    }
+
+    lastAuthenticatedEmailRef.current = authenticatedEmail;
+    processedPayloads.current.clear();
+    capturedSections.current = { offers: false, bookings: false, loyalty: false };
+    hasReceivedApiLoyaltyDataRef.current = false;
+    rcLogger.clear();
+    setExtendedLoyaltyData(null);
+    setState(INITIAL_STATE);
+    setWebViewUrl(CRUISE_LINE_CONFIG[cruiseLine].loginUrl);
+
+    try {
+      webViewRef.current?.injectJavaScript(`
+        (function() {
+          try {
+            localStorage.clear();
+            sessionStorage.clear();
+            document.cookie.split(";").forEach(function(c) {
+              document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date(0).toUTCString() + ";path=/");
+            });
+          } catch (e) {}
+          true;
+        })();
+      `);
+    } catch (error) {
+      console.error('[RoyalCaribbeanSync] Failed to clear embedded session on user change:', error);
+    }
+
+    console.log('[RoyalCaribbeanSync] Reset sync state for authenticated user change:', {
+      previousEmail,
+      authenticatedEmail,
+    });
+  }, [authenticatedEmail, cruiseLine]);
 
   const onPageLoaded = useCallback(() => {
     console.log('[RoyalCaribbeanSync] Page finished loading');
@@ -362,7 +397,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           const loyaltyInfo = message.loyalty as LoyaltyApiInformation;
           const converted = convertLoyaltyInfoToExtended(loyaltyInfo, '');
           setExtendedLoyaltyData(converted);
-          hasReceivedApiLoyaltyData = true;
+          hasReceivedApiLoyaltyDataRef.current = true;
           
           setState(prev => ({
             ...prev,
@@ -387,7 +422,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`   📊 Level: "${converted.crownAndAnchorTier || 'N/A'}"`, 'success');
             addLog(`   💎 Points: ${converted.crownAndAnchorPointsFromApi.toLocaleString()}`, 'success');
           }
-        } else if (!hasReceivedApiLoyaltyData) {
+        } else if (!hasReceivedApiLoyaltyDataRef.current) {
           // This is DOM fallback data
           setState(prev => ({ ...prev, loyaltyData: message.data ?? null }));
           addLog('Loyalty data extracted (DOM fallback)', 'info');
@@ -402,7 +437,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         setExtendedLoyaltyData(converted);
         
         // Mark that we've received API data - this takes precedence over DOM scraping
-        hasReceivedApiLoyaltyData = true;
+        hasReceivedApiLoyaltyDataRef.current = true;
         
         setState(prev => ({
           ...prev,
@@ -694,7 +729,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           
           const convertedLoyalty = convertLoyaltyInfoToExtended(loyaltyInfo, accountId);
           setExtendedLoyaltyData(convertedLoyalty);
-          hasReceivedApiLoyaltyData = true;
+          hasReceivedApiLoyaltyDataRef.current = true;
           
           setState(prev => ({
             ...prev,
@@ -792,7 +827,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
 
     processedPayloads.current.clear();
-    hasReceivedApiLoyaltyData = false;
+    hasReceivedApiLoyaltyDataRef.current = false;
     capturedSections.current = { offers: false, bookings: false, loyalty: false };
 
     setState(prev => ({
@@ -913,7 +948,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           : isCarnivalMode
           ? 'https://www.carnival.com/profilemanagement/profiles'
           : 'https://www.royalcaribbean.com/account';
-        const CAPTURE_PAGES: Array<{ url: string; section: 'bookings' | 'loyalty'; name: string }> = [
+        const CAPTURE_PAGES: { url: string; section: 'bookings' | 'loyalty'; name: string }[] = [
           { url: config.upcomingUrl, section: 'bookings', name: 'Upcoming Cruises' },
           { url: config.holdsUrl, section: 'bookings', name: 'Courtesy Holds' },
           { url: config.loyaltyPageUrl, section: 'loyalty', name: 'Loyalty Programs' },
@@ -1413,7 +1448,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const resetState = useCallback(() => {
     setState(INITIAL_STATE);
     setExtendedLoyaltyData(null);
-    hasReceivedApiLoyaltyData = false;
+    hasReceivedApiLoyaltyDataRef.current = false;
     rcLogger.clear();
   }, []);
 

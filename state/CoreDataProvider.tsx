@@ -22,6 +22,7 @@ import {
   processMetadata,
 } from "./coreData/storageLoaders";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
+import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -38,6 +39,44 @@ const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUI
     return { BOOKED_CRUISES_DATA: [], COMPLETED_CRUISES_DATA: [] };
   }
 };
+
+function parseOptionalStoredNumber(value: string | null): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const parsedValue = parseInt(value, 10);
+  return Number.isNaN(parsedValue) ? null : parsedValue;
+}
+
+function normalizeLoyaltySyncPayload(loyaltyData: unknown): {
+  extendedLoyaltyData: unknown;
+  manualClubRoyalePoints: number | null;
+  manualCrownAnchorPoints: number | null;
+} | null {
+  if (!loyaltyData || typeof loyaltyData !== 'object') {
+    return null;
+  }
+
+  const loyaltyRecord = loyaltyData as Record<string, unknown>;
+  if (
+    Object.prototype.hasOwnProperty.call(loyaltyRecord, 'extendedLoyaltyData') ||
+    Object.prototype.hasOwnProperty.call(loyaltyRecord, 'manualClubRoyalePoints') ||
+    Object.prototype.hasOwnProperty.call(loyaltyRecord, 'manualCrownAnchorPoints')
+  ) {
+    return {
+      extendedLoyaltyData: loyaltyRecord.extendedLoyaltyData ?? null,
+      manualClubRoyalePoints: typeof loyaltyRecord.manualClubRoyalePoints === 'number' ? loyaltyRecord.manualClubRoyalePoints : null,
+      manualCrownAnchorPoints: typeof loyaltyRecord.manualCrownAnchorPoints === 'number' ? loyaltyRecord.manualCrownAnchorPoints : null,
+    };
+  }
+
+  return {
+    extendedLoyaltyData: loyaltyData,
+    manualClubRoyalePoints: null,
+    manualCrownAnchorPoints: null,
+  };
+}
 
 const getFirstTimeUserSampleData = (): { sampleCruises: BookedCruise[]; sampleOffers: CasinoOffer[] } => {
   const today = new Date();
@@ -315,14 +354,21 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     
     try {
       const scopedKeys = getScopedStorageKeys(authenticatedEmail);
-      const [bookedData, offersData, eventsData, settingsData, pointsData, profileData, extendedLoyaltyData] = await Promise.all([
+      const scopedLoyaltyKeys = {
+        EXTENDED_LOYALTY_DATA: getUserScopedKey(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA, authenticatedEmail),
+        MANUAL_CLUB_ROYALE_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, authenticatedEmail),
+        MANUAL_CROWN_ANCHOR_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, authenticatedEmail),
+      };
+      const [bookedData, offersData, eventsData, settingsData, pointsData, profileData, extendedLoyaltyDataRaw, manualClubRoyalePointsRaw, manualCrownAnchorPointsRaw] = await Promise.all([
         AsyncStorage.getItem(scopedKeys.BOOKED_CRUISES),
         AsyncStorage.getItem(scopedKeys.CASINO_OFFERS),
         AsyncStorage.getItem(scopedKeys.CALENDAR_EVENTS),
         AsyncStorage.getItem(scopedKeys.SETTINGS),
         AsyncStorage.getItem(scopedKeys.USER_POINTS),
         AsyncStorage.getItem(scopedKeys.CLUB_PROFILE),
-        AsyncStorage.getItem(getScopedStorageKeys(authenticatedEmail).LAST_SYNC),
+        AsyncStorage.getItem(scopedLoyaltyKeys.EXTENDED_LOYALTY_DATA),
+        AsyncStorage.getItem(scopedLoyaltyKeys.MANUAL_CLUB_ROYALE_POINTS),
+        AsyncStorage.getItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS),
       ]);
       
       const parsedBooked = bookedData ? JSON.parse(bookedData) : [];
@@ -331,7 +377,21 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const parsedSettings = settingsData ? JSON.parse(settingsData) : undefined;
       const parsedPoints = pointsData ? parseInt(pointsData, 10) : undefined;
       const parsedProfile = profileData ? JSON.parse(profileData) : undefined;
-      const parsedExtendedLoyalty = extendedLoyaltyData ? JSON.parse(extendedLoyaltyData) : undefined;
+      const parsedExtendedLoyalty = extendedLoyaltyDataRaw
+        ? {
+            extendedLoyaltyData: JSON.parse(extendedLoyaltyDataRaw),
+            manualClubRoyalePoints: parseOptionalStoredNumber(manualClubRoyalePointsRaw),
+            manualCrownAnchorPoints: parseOptionalStoredNumber(manualCrownAnchorPointsRaw),
+          }
+        : (
+            parseOptionalStoredNumber(manualClubRoyalePointsRaw) !== null || parseOptionalStoredNumber(manualCrownAnchorPointsRaw) !== null
+              ? {
+                  extendedLoyaltyData: null,
+                  manualClubRoyalePoints: parseOptionalStoredNumber(manualClubRoyalePointsRaw),
+                  manualCrownAnchorPoints: parseOptionalStoredNumber(manualCrownAnchorPointsRaw),
+                }
+              : undefined
+          );
       
       console.log('[CoreData] Syncing to backend:', {
         email: authenticatedEmail,
@@ -406,8 +466,35 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         if (userData.clubRoyaleProfile) {
           savePromises.push(AsyncStorage.setItem(scopedKeys.CLUB_PROFILE, JSON.stringify(userData.clubRoyaleProfile)));
         }
-        if (userData.loyaltyData) {
-          savePromises.push(AsyncStorage.setItem(scopedKeys.LAST_SYNC, JSON.stringify(userData.loyaltyData)));
+        if (userData.loyaltyData !== undefined) {
+          const normalizedLoyaltyData = normalizeLoyaltySyncPayload(userData.loyaltyData);
+          const scopedLoyaltyKeys = {
+            EXTENDED_LOYALTY_DATA: getUserScopedKey(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA, authenticatedEmail),
+            MANUAL_CLUB_ROYALE_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, authenticatedEmail),
+            MANUAL_CROWN_ANCHOR_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, authenticatedEmail),
+          };
+
+          const extendedLoyaltyData = normalizedLoyaltyData?.extendedLoyaltyData ?? null;
+          const manualClubRoyalePoints = normalizedLoyaltyData?.manualClubRoyalePoints ?? null;
+          const manualCrownAnchorPoints = normalizedLoyaltyData?.manualCrownAnchorPoints ?? null;
+
+          if (extendedLoyaltyData !== null) {
+            savePromises.push(AsyncStorage.setItem(scopedLoyaltyKeys.EXTENDED_LOYALTY_DATA, JSON.stringify(extendedLoyaltyData)));
+          } else {
+            savePromises.push(AsyncStorage.removeItem(scopedLoyaltyKeys.EXTENDED_LOYALTY_DATA));
+          }
+
+          if (manualClubRoyalePoints !== null) {
+            savePromises.push(AsyncStorage.setItem(scopedLoyaltyKeys.MANUAL_CLUB_ROYALE_POINTS, manualClubRoyalePoints.toString()));
+          } else {
+            savePromises.push(AsyncStorage.removeItem(scopedLoyaltyKeys.MANUAL_CLUB_ROYALE_POINTS));
+          }
+
+          if (manualCrownAnchorPoints !== null) {
+            savePromises.push(AsyncStorage.setItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS, manualCrownAnchorPoints.toString()));
+          } else {
+            savePromises.push(AsyncStorage.removeItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS));
+          }
         }
         
         await Promise.all(savePromises);
@@ -503,7 +590,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
       if (authenticatedEmail && !isSyncingRef.current) {
         isSyncingRef.current = true;
-        syncToBackend().finally(() => {
+        void syncToBackend().finally(() => {
           isSyncingRef.current = false;
         });
       }
@@ -606,7 +693,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       }
     };
     
-    doLoad();
+    void doLoad();
     
     return () => {
       console.log('[CoreData] === Cleanup: clearing timeout ===');
@@ -624,7 +711,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       if (!isSyncingRef.current) {
         console.log('[CoreData] Auto-syncing to backend...');
         isSyncingRef.current = true;
-        syncToBackend().finally(() => {
+        void syncToBackend().finally(() => {
           isSyncingRef.current = false;
         });
       }
@@ -657,7 +744,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           return cruise;
         });
         
-        persistData(skRef.current.BOOKED_CRUISES, updated);
+        void persistData(skRef.current.BOOKED_CRUISES, updated);
         return updated;
       });
     };
@@ -665,7 +752,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const handleCloudDataRestored = () => {
       console.log('[CoreDataProvider] Cloud data restored event received, reloading data...');
       loadAttemptedRef.current = false;
-      loadFromStorage(true);
+      void loadFromStorage(true);
     };
 
     try {
@@ -673,7 +760,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         const handleEntitlementProUnlocked = () => {
           console.log('[CoreDataProvider] entitlementProUnlocked event received, reloading data...');
           loadAttemptedRef.current = false;
-          loadFromStorage(true);
+          void loadFromStorage(true);
         };
 
         window.addEventListener('casinoSessionPointsUpdated', handleSessionPointsUpdate as EventListener);
@@ -700,7 +787,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const addCruise = useCallback((cruise: Cruise) => {
     setCruisesState(prev => {
       const updated = [...prev, cruise];
-      persistData(skRef.current.CRUISES, updated);
+      void persistData(skRef.current.CRUISES, updated);
       return updated;
     });
   }, [persistData]);
@@ -708,7 +795,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const updateCruise = useCallback((id: string, updates: Partial<Cruise>) => {
     setCruisesState(prev => {
       const updated = prev.map(c => c.id === id ? { ...c, ...updates } : c);
-      persistData(skRef.current.CRUISES, updated);
+      void persistData(skRef.current.CRUISES, updated);
       return updated;
     });
   }, [persistData]);
@@ -716,7 +803,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const removeCruise = useCallback((id: string) => {
     setCruisesState(prev => {
       const updated = prev.filter(c => c.id !== id);
-      persistData(skRef.current.CRUISES, updated);
+      void persistData(skRef.current.CRUISES, updated);
       return updated;
     });
   }, [persistData]);
@@ -774,7 +861,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     
     if (!isSyncingRef.current) {
       isSyncingRef.current = true;
-      syncToBackend().finally(() => {
+      void syncToBackend().finally(() => {
         isSyncingRef.current = false;
       });
     }
@@ -795,14 +882,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const addBookedCruise = useCallback((cruise: BookedCruise) => {
     setBookedCruisesState(prev => {
       const updated = [...prev, cruise];
-      persistData(skRef.current.BOOKED_CRUISES, updated);
+      void persistData(skRef.current.BOOKED_CRUISES, updated);
       return updated;
     });
     const calEvent = buildCalendarEventFromCruise(cruise);
     setCalendarEventsState(prev => {
       const filtered = prev.filter(e => e.id !== calEvent.id);
       const updated = [...filtered, calEvent];
-      persistData(skRef.current.CALENDAR_EVENTS, updated);
+      void persistData(skRef.current.CALENDAR_EVENTS, updated);
       console.log('[CoreData] Auto-added calendar event for cruise:', cruise.id, cruise.shipName);
       return updated;
     });
@@ -811,7 +898,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const updateBookedCruise = useCallback((id: string, updates: Partial<BookedCruise>) => {
     setBookedCruisesState(prev => {
       const updated = prev.map(c => c.id === id ? { ...c, ...updates } : c);
-      persistData(skRef.current.BOOKED_CRUISES, updated);
+      void persistData(skRef.current.BOOKED_CRUISES, updated);
       
       if (updates.earnedPoints !== undefined) {
         console.log('[CoreDataProvider] Cruise points updated via updateBookedCruise:', {
@@ -829,7 +916,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
             const updatedEvents = prevEvents.map(e => e.id === calEvent.id ? calEvent : e);
             const exists = prevEvents.some(e => e.id === calEvent.id);
             const finalEvents = exists ? updatedEvents : [...prevEvents, calEvent];
-            persistData(skRef.current.CALENDAR_EVENTS, finalEvents);
+            void persistData(skRef.current.CALENDAR_EVENTS, finalEvents);
             console.log('[CoreData] Auto-updated calendar event for cruise:', id);
             return finalEvents;
           });
@@ -850,7 +937,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const isMockCruise = allMockCruises.some(mc => mc.id === id);
       
       if (isMockCruise) {
-        AsyncStorage.getItem(skRef.current.REMOVED_MOCK_CRUISES)
+        void AsyncStorage.getItem(skRef.current.REMOVED_MOCK_CRUISES)
           .then(data => {
             const existing = data ? new Set<string>(JSON.parse(data)) : new Set<string>();
             existing.add(id);
@@ -863,13 +950,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       }
       
       const updated = prev.filter(c => c.id !== id);
-      persistData(skRef.current.BOOKED_CRUISES, updated);
+      void persistData(skRef.current.BOOKED_CRUISES, updated);
       return updated;
     });
     const calEventId = `cruise-${id}`;
     setCalendarEventsState(prev => {
       const updated = prev.filter(e => e.id !== calEventId && e.cruiseId !== id);
-      persistData(skRef.current.CALENDAR_EVENTS, updated);
+      void persistData(skRef.current.CALENDAR_EVENTS, updated);
       console.log('[CoreData] Auto-removed calendar event for cruise:', id);
       return updated;
     });
@@ -894,7 +981,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     
     if (!isSyncingRef.current) {
       isSyncingRef.current = true;
-      syncToBackend().finally(() => {
+      void syncToBackend().finally(() => {
         isSyncingRef.current = false;
       });
     }
@@ -903,7 +990,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const addCasinoOffer = useCallback((offer: CasinoOffer) => {
     setCasinoOffersState(prev => {
       const updated = [...prev, offer];
-      persistData(skRef.current.CASINO_OFFERS, updated);
+      void persistData(skRef.current.CASINO_OFFERS, updated);
       return updated;
     });
   }, [persistData]);
@@ -911,7 +998,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const updateCasinoOffer = useCallback((id: string, updates: Partial<CasinoOffer>) => {
     setCasinoOffersState(prev => {
       const updated = prev.map(o => o.id === id ? { ...o, ...updates } : o);
-      persistData(skRef.current.CASINO_OFFERS, updated);
+      void persistData(skRef.current.CASINO_OFFERS, updated);
       return updated;
     });
   }, [persistData]);
@@ -919,7 +1006,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const removeCasinoOffer = useCallback((id: string) => {
     setCasinoOffersState(prev => {
       const updated = prev.filter(o => o.id !== id);
-      persistData(skRef.current.CASINO_OFFERS, updated);
+      void persistData(skRef.current.CASINO_OFFERS, updated);
       return updated;
     });
   }, [persistData]);
@@ -927,12 +1014,12 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const setCalendarEvents = useCallback((newEvents: CalendarEvent[]) => {
     console.log('[CoreData] Setting calendar events:', newEvents.length);
     setCalendarEventsState(newEvents);
-    persistData(skRef.current.CALENDAR_EVENTS, newEvents);
-    AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
+    void persistData(skRef.current.CALENDAR_EVENTS, newEvents);
+    void AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     
     if (!isSyncingRef.current) {
       isSyncingRef.current = true;
-      syncToBackend().finally(() => {
+      void syncToBackend().finally(() => {
         isSyncingRef.current = false;
       });
     }
@@ -941,13 +1028,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const addCalendarEvent = useCallback((event: CalendarEvent) => {
     setCalendarEventsState(prev => {
       const updated = [...prev, event];
-      persistData(skRef.current.CALENDAR_EVENTS, updated);
+      void persistData(skRef.current.CALENDAR_EVENTS, updated);
       return updated;
     });
     
     if (!isSyncingRef.current) {
       isSyncingRef.current = true;
-      syncToBackend().finally(() => {
+      void syncToBackend().finally(() => {
         isSyncingRef.current = false;
       });
     }
@@ -956,7 +1043,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const updateCalendarEvent = useCallback((id: string, updates: Partial<CalendarEvent>) => {
     setCalendarEventsState(prev => {
       const updated = prev.map(e => e.id === id ? { ...e, ...updates } : e);
-      persistData(skRef.current.CALENDAR_EVENTS, updated);
+      void persistData(skRef.current.CALENDAR_EVENTS, updated);
       return updated;
     });
   }, [persistData]);
@@ -964,7 +1051,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const removeCalendarEvent = useCallback((id: string) => {
     setCalendarEventsState(prev => {
       const updated = prev.filter(e => e.id !== id);
-      persistData(skRef.current.CALENDAR_EVENTS, updated);
+      void persistData(skRef.current.CALENDAR_EVENTS, updated);
       return updated;
     });
   }, [persistData]);
@@ -1072,7 +1159,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     });
   }, [bookedCruises]);
 
-  return {
+  return useMemo(() => ({
     cruises,
     bookedCruises,
     completedCruises,
@@ -1113,5 +1200,46 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     clearAllData,
     refreshData,
     restoreMockData,
-  };
+  }), [
+    cruises,
+    bookedCruises,
+    completedCruises,
+    casinoOffers,
+    calendarEvents,
+    isLoading,
+    lastSyncDate,
+    filters,
+    activeFilterCount,
+    hasActiveFilters,
+    settings,
+    userPoints,
+    clubRoyaleProfile,
+    hasLocalData,
+    setCruises,
+    addCruise,
+    updateCruise,
+    removeCruise,
+    setBookedCruises,
+    addBookedCruise,
+    updateBookedCruise,
+    removeBookedCruise,
+    setCasinoOffers,
+    addCasinoOffer,
+    updateCasinoOffer,
+    removeCasinoOffer,
+    setCalendarEvents,
+    addCalendarEvent,
+    updateCalendarEvent,
+    removeCalendarEvent,
+    setFilter,
+    setFilters,
+    clearFilters,
+    clearFilter,
+    updateSettings,
+    setUserPoints,
+    setClubRoyaleProfile,
+    clearAllData,
+    refreshData,
+    restoreMockData,
+  ]);
 });

@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
+import { useAuth } from "./AuthProvider";
+import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 
 export interface PlayingHours {
   enabled: boolean;
-  startTime: string; // HH:mm format e.g. "05:00"
-  endTime: string;   // HH:mm format e.g. "07:30"
+  startTime: string;
+  endTime: string;
   preferSeaDayMorning: boolean;
   preferPortDayEvening: boolean;
   sessions: PlayingSession[];
@@ -69,9 +71,9 @@ interface UserState {
 }
 
 const KEYS = {
-  USERS: 'easyseas_users',
-  CURRENT_USER: 'easyseas_current_user',
-};
+  USERS: ALL_STORAGE_KEYS.USERS,
+  CURRENT_USER: ALL_STORAGE_KEYS.CURRENT_USER,
+} as const;
 
 const DEFAULT_OWNER = {
   name: 'Player',
@@ -88,123 +90,243 @@ const DEFAULT_OWNER = {
   silverseaVenetianPoints: 0,
 };
 
+function normalizeEmail(email: string | null | undefined): string | null {
+  if (!email) {
+    return null;
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  return normalizedEmail.length > 0 ? normalizedEmail : null;
+}
+
+function getScopedUserKeys(email: string | null) {
+  return {
+    USERS: getUserScopedKey(KEYS.USERS, email),
+    CURRENT_USER: getUserScopedKey(KEYS.CURRENT_USER, email),
+  } as const;
+}
+
+function createOwnerProfile(email: string | null): UserProfile {
+  const now = new Date().toISOString();
+
+  return {
+    id: `user_${Date.now()}`,
+    name: DEFAULT_OWNER.name,
+    email: email ?? DEFAULT_OWNER.email,
+    isOwner: true,
+    crownAnchorNumber: DEFAULT_OWNER.crownAnchorNumber,
+    celebrityEmail: DEFAULT_OWNER.celebrityEmail,
+    celebrityCaptainsClubNumber: DEFAULT_OWNER.celebrityCaptainsClubNumber,
+    celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
+    celebrityBlueChipPoints: DEFAULT_OWNER.celebrityBlueChipPoints,
+    preferredBrand: DEFAULT_OWNER.preferredBrand,
+    silverseaEmail: DEFAULT_OWNER.silverseaEmail,
+    silverseaVenetianNumber: DEFAULT_OWNER.silverseaVenetianNumber,
+    silverseaVenetianTier: DEFAULT_OWNER.silverseaVenetianTier,
+    silverseaVenetianPoints: DEFAULT_OWNER.silverseaVenetianPoints,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export const [UserProvider, useUser] = createContextHook((): UserState => {
+  const { authenticatedEmail } = useAuth();
+  const normalizedAuthenticatedEmail = normalizeEmail(authenticatedEmail);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const currentUser = users.find(u => u.id === currentUserId) || null;
+  const currentUser = users.find((user) => user.id === currentUserId) || users.find((user) => user.isOwner) || null;
 
-  const persistUsers = async (newUsers: UserProfile[]) => {
+  const persistUsers = useCallback(async (newUsers: UserProfile[]) => {
+    const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+
     try {
-      await AsyncStorage.setItem(KEYS.USERS, JSON.stringify(newUsers));
-      console.log('[UserProvider] Persisted users:', newUsers.length);
+      await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(newUsers));
+      console.log('[UserProvider] Persisted scoped users:', {
+        email: normalizedAuthenticatedEmail,
+        count: newUsers.length,
+        key: scopedKeys.USERS,
+      });
     } catch (error) {
-      console.error('[UserProvider] Failed to persist users:', error);
+      console.error('[UserProvider] Failed to persist scoped users:', error);
     }
-  };
+  }, [normalizedAuthenticatedEmail]);
 
-  const persistCurrentUser = async (userId: string | null) => {
+  const persistCurrentUser = useCallback(async (userId: string | null) => {
+    const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+
     try {
       if (userId) {
-        await AsyncStorage.setItem(KEYS.CURRENT_USER, userId);
+        await AsyncStorage.setItem(scopedKeys.CURRENT_USER, userId);
       } else {
-        await AsyncStorage.removeItem(KEYS.CURRENT_USER);
+        await AsyncStorage.removeItem(scopedKeys.CURRENT_USER);
       }
-      console.log('[UserProvider] Persisted current user:', userId);
-    } catch (error) {
-      console.error('[UserProvider] Failed to persist current user:', error);
-    }
-  };
 
-  const loadUsers = async () => {
+      console.log('[UserProvider] Persisted scoped current user:', {
+        email: normalizedAuthenticatedEmail,
+        userId,
+        key: scopedKeys.CURRENT_USER,
+      });
+    } catch (error) {
+      console.error('[UserProvider] Failed to persist scoped current user:', error);
+    }
+  }, [normalizedAuthenticatedEmail]);
+
+  const migrateLegacyUsersIfNeeded = useCallback(async (): Promise<{ migratedUsers: UserProfile[]; migratedCurrentUserId: string | null } | null> => {
+    if (!normalizedAuthenticatedEmail) {
+      return null;
+    }
+
     try {
-      setIsLoading(true);
-      console.log('[UserProvider] Loading users from storage...');
-      
-      const [storedUsers, storedCurrentUser] = await Promise.all([
+      const [legacyUsersRaw, legacyCurrentUserId] = await Promise.all([
         AsyncStorage.getItem(KEYS.USERS),
         AsyncStorage.getItem(KEYS.CURRENT_USER),
       ]);
-      
-      console.log('[UserProvider] Raw stored users:', storedUsers);
-      console.log('[UserProvider] Raw stored current user:', storedCurrentUser);
-      
-      if (storedUsers) {
-        const parsed = JSON.parse(storedUsers) as UserProfile[];
-        setUsers(parsed);
-        console.log('[UserProvider] Loaded users:', parsed.length);
-        console.log('[UserProvider] Loaded user data:', JSON.stringify(parsed.map(u => ({ id: u.id, name: u.name, crownAnchorNumber: u.crownAnchorNumber }))));
-        
-        // Validate current user exists in loaded users
-        if (storedCurrentUser) {
-          const userExists = parsed.some(u => u.id === storedCurrentUser);
-          if (userExists) {
-            setCurrentUserId(storedCurrentUser);
-            console.log('[UserProvider] Loaded current user:', storedCurrentUser);
-          } else {
-            // Current user not found, set to first user or owner
-            const owner = parsed.find(u => u.isOwner) || parsed[0];
-            if (owner) {
-              setCurrentUserId(owner.id);
-              await AsyncStorage.setItem(KEYS.CURRENT_USER, owner.id);
-              console.log('[UserProvider] Current user not found, defaulting to:', owner.id);
-            }
-          }
-        } else if (parsed.length > 0) {
-          // No current user set, default to owner
-          const owner = parsed.find(u => u.isOwner) || parsed[0];
-          setCurrentUserId(owner.id);
-          await AsyncStorage.setItem(KEYS.CURRENT_USER, owner.id);
-          console.log('[UserProvider] No current user, defaulting to:', owner.id);
-        }
-      } else {
-        // No stored users found - create default owner
-        console.log('[UserProvider] No stored users found, creating default owner...');
-        const now = new Date().toISOString();
-        const defaultOwner: UserProfile = {
-          id: `user_${Date.now()}`,
-          name: DEFAULT_OWNER.name,
-          email: DEFAULT_OWNER.email,
-          isOwner: true,
-          crownAnchorNumber: DEFAULT_OWNER.crownAnchorNumber,
-          celebrityEmail: DEFAULT_OWNER.celebrityEmail,
-          celebrityCaptainsClubNumber: DEFAULT_OWNER.celebrityCaptainsClubNumber,
-          celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
-          celebrityBlueChipPoints: DEFAULT_OWNER.celebrityBlueChipPoints,
-          preferredBrand: DEFAULT_OWNER.preferredBrand,
-          silverseaEmail: DEFAULT_OWNER.silverseaEmail,
-          silverseaVenetianNumber: DEFAULT_OWNER.silverseaVenetianNumber,
-          silverseaVenetianTier: DEFAULT_OWNER.silverseaVenetianTier,
-          silverseaVenetianPoints: DEFAULT_OWNER.silverseaVenetianPoints,
-          createdAt: now,
-          updatedAt: now,
-        };
-        
-        const newUsers = [defaultOwner];
-        setUsers(newUsers);
-        setCurrentUserId(defaultOwner.id);
-        await AsyncStorage.setItem(KEYS.USERS, JSON.stringify(newUsers));
-        await AsyncStorage.setItem(KEYS.CURRENT_USER, defaultOwner.id);
-        console.log('[UserProvider] Created and persisted default owner:', defaultOwner.name, defaultOwner.id);
+
+      if (!legacyUsersRaw) {
+        return null;
       }
+
+      const parsedLegacyUsers = JSON.parse(legacyUsersRaw) as UserProfile[];
+      const matchingUsers = parsedLegacyUsers.filter((user) => normalizeEmail(user.email) === normalizedAuthenticatedEmail);
+
+      if (matchingUsers.length === 0) {
+        console.log('[UserProvider] Legacy user storage does not match authenticated email, skipping migration:', normalizedAuthenticatedEmail);
+        return null;
+      }
+
+      const selectedCurrentUser = matchingUsers.find((user) => user.id === legacyCurrentUserId)
+        || matchingUsers.find((user) => user.isOwner)
+        || matchingUsers[0]
+        || null;
+
+      if (!selectedCurrentUser) {
+        return null;
+      }
+
+      const migratedUsers = matchingUsers.map((user) => ({
+        ...user,
+        email: normalizeEmail(user.email) ?? normalizedAuthenticatedEmail,
+        isOwner: user.id === selectedCurrentUser.id,
+      }));
+
+      const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+      await Promise.all([
+        AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(migratedUsers)),
+        AsyncStorage.setItem(scopedKeys.CURRENT_USER, selectedCurrentUser.id),
+      ]);
+
+      console.log('[UserProvider] Migrated legacy profile data into scoped storage for:', normalizedAuthenticatedEmail);
+
+      return {
+        migratedUsers,
+        migratedCurrentUserId: selectedCurrentUser.id,
+      };
     } catch (error) {
-      console.error('[UserProvider] Failed to load users:', error);
+      console.error('[UserProvider] Failed to migrate legacy user storage:', error);
+      return null;
+    }
+  }, [normalizedAuthenticatedEmail]);
+
+  const loadUsers = useCallback(async () => {
+    if (!normalizedAuthenticatedEmail) {
+      console.log('[UserProvider] No authenticated email, resetting scoped user state');
+      setUsers([]);
+      setCurrentUserId(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+
+    try {
+      setIsLoading(true);
+      console.log('[UserProvider] Loading scoped users from storage:', {
+        email: normalizedAuthenticatedEmail,
+        usersKey: scopedKeys.USERS,
+        currentUserKey: scopedKeys.CURRENT_USER,
+      });
+
+      let [storedUsersRaw, storedCurrentUserId] = await Promise.all([
+        AsyncStorage.getItem(scopedKeys.USERS),
+        AsyncStorage.getItem(scopedKeys.CURRENT_USER),
+      ]);
+
+      if (!storedUsersRaw) {
+        const migratedData = await migrateLegacyUsersIfNeeded();
+        if (migratedData) {
+          setUsers(migratedData.migratedUsers);
+          setCurrentUserId(migratedData.migratedCurrentUserId);
+          console.log('[UserProvider] Scoped user state restored from migrated legacy data');
+          return;
+        }
+      }
+
+      storedUsersRaw = storedUsersRaw ?? await AsyncStorage.getItem(scopedKeys.USERS);
+      storedCurrentUserId = storedCurrentUserId ?? await AsyncStorage.getItem(scopedKeys.CURRENT_USER);
+
+      if (storedUsersRaw) {
+        const parsedUsers = JSON.parse(storedUsersRaw) as UserProfile[];
+        const normalizedUsers = parsedUsers.map((user) => ({
+          ...user,
+          email: normalizeEmail(user.email) ?? normalizedAuthenticatedEmail,
+        }));
+
+        const owner = normalizedUsers.find((user) => user.isOwner) ?? normalizedUsers[0] ?? null;
+        const resolvedCurrentUserId = storedCurrentUserId && normalizedUsers.some((user) => user.id === storedCurrentUserId)
+          ? storedCurrentUserId
+          : owner?.id ?? null;
+
+        setUsers(normalizedUsers);
+        setCurrentUserId(resolvedCurrentUserId);
+
+        if (resolvedCurrentUserId !== storedCurrentUserId) {
+          await persistCurrentUser(resolvedCurrentUserId);
+        }
+
+        console.log('[UserProvider] Loaded scoped users:', {
+          email: normalizedAuthenticatedEmail,
+          count: normalizedUsers.length,
+          currentUserId: resolvedCurrentUserId,
+        });
+        return;
+      }
+
+      const owner = createOwnerProfile(normalizedAuthenticatedEmail);
+      const newUsers = [owner];
+      setUsers(newUsers);
+      setCurrentUserId(owner.id);
+      await Promise.all([
+        AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(newUsers)),
+        AsyncStorage.setItem(scopedKeys.CURRENT_USER, owner.id),
+      ]);
+
+      console.log('[UserProvider] Created new scoped owner profile:', {
+        email: normalizedAuthenticatedEmail,
+        ownerId: owner.id,
+      });
+    } catch (error) {
+      console.error('[UserProvider] Failed to load scoped users:', error);
+      setUsers([]);
+      setCurrentUserId(null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [migrateLegacyUsersIfNeeded, normalizedAuthenticatedEmail, persistCurrentUser]);
 
   useEffect(() => {
-    loadUsers();
-  }, []);
+    void loadUsers();
+  }, [loadUsers]);
 
-  const addUser = async (user: { id?: string; name: string; email: string; avatarUrl?: string }): Promise<UserProfile> => {
+  const addUser = useCallback(async (user: { id?: string; name: string; email: string; avatarUrl?: string }): Promise<UserProfile> => {
     const now = new Date().toISOString();
+    const normalizedEmail = normalizeEmail(user.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email;
+
     const newUser: UserProfile = {
       id: user.id || `user_${Date.now()}`,
       name: user.name,
-      email: user.email.toLowerCase().trim(),
+      email: normalizedEmail,
       avatarUrl: user.avatarUrl,
       isOwner: users.length === 0,
       createdAt: now,
@@ -220,140 +342,147 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       await persistCurrentUser(newUser.id);
     }
 
-    console.log('[UserProvider] Added user:', newUser.name);
+    console.log('[UserProvider] Added scoped user:', {
+      authenticatedEmail: normalizedAuthenticatedEmail,
+      userId: newUser.id,
+      name: newUser.name,
+    });
+
     return newUser;
-  };
+  }, [currentUserId, normalizedAuthenticatedEmail, persistCurrentUser, persistUsers, users]);
 
-  const switchUser = async (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    if (user) {
-      setCurrentUserId(userId);
-      await persistCurrentUser(userId);
-      console.log('[UserProvider] Switched to user:', user.name);
+  const switchUser = useCallback(async (userId: string) => {
+    const user = users.find((candidate) => candidate.id === userId);
+
+    if (!user) {
+      return;
     }
-  };
 
-  const removeUser = async (userId: string) => {
-    const user = users.find(u => u.id === userId);
+    setCurrentUserId(userId);
+    await persistCurrentUser(userId);
+    console.log('[UserProvider] Switched scoped user:', {
+      authenticatedEmail: normalizedAuthenticatedEmail,
+      userId,
+      name: user.name,
+    });
+  }, [normalizedAuthenticatedEmail, persistCurrentUser, users]);
+
+  const removeUser = useCallback(async (userId: string) => {
+    const user = users.find((candidate) => candidate.id === userId);
+
     if (user?.isOwner) {
       console.warn('[UserProvider] Cannot remove owner user');
       return;
     }
 
-    const newUsers = users.filter(u => u.id !== userId);
+    const newUsers = users.filter((candidate) => candidate.id !== userId);
+    const nextCurrentUser = currentUserId === userId ? (newUsers.find((candidate) => candidate.isOwner) ?? newUsers[0] ?? null) : null;
+
     setUsers(newUsers);
     await persistUsers(newUsers);
 
-    if (currentUserId === userId && newUsers.length > 0) {
-      const owner = newUsers.find(u => u.isOwner) || newUsers[0];
-      setCurrentUserId(owner.id);
-      await persistCurrentUser(owner.id);
+    if (nextCurrentUser) {
+      setCurrentUserId(nextCurrentUser.id);
+      await persistCurrentUser(nextCurrentUser.id);
     }
 
-    console.log('[UserProvider] Removed user:', userId);
-  };
+    console.log('[UserProvider] Removed scoped user:', {
+      authenticatedEmail: normalizedAuthenticatedEmail,
+      removedUserId: userId,
+    });
+  }, [currentUserId, normalizedAuthenticatedEmail, persistCurrentUser, persistUsers, users]);
 
-  const updateUser = async (userId: string, updates: Partial<UserProfile>) => {
+  const updateUser = useCallback(async (userId: string, updates: Partial<UserProfile>) => {
     try {
-      // First, get the current state of users from storage to ensure we have latest
-      const storedUsers = await AsyncStorage.getItem(KEYS.USERS);
-      let currentUsers: UserProfile[] = storedUsers ? JSON.parse(storedUsers) : users;
-      
-      // If storage is empty but we have users in state, use state
+      const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+      const storedUsersRaw = await AsyncStorage.getItem(scopedKeys.USERS);
+      let currentUsers: UserProfile[] = storedUsersRaw ? JSON.parse(storedUsersRaw) as UserProfile[] : users;
+
       if (currentUsers.length === 0 && users.length > 0) {
         currentUsers = users;
       }
-      
-      // Apply the updates
-      const updatedUsers = currentUsers.map(u => 
-        u.id === userId 
-          ? { ...u, ...updates, updatedAt: new Date().toISOString() }
-          : u
-      );
-      
-      // Persist to storage FIRST
-      await AsyncStorage.setItem(KEYS.USERS, JSON.stringify(updatedUsers));
-      console.log('[UserProvider] Persisted user update:', userId, 'with updates:', JSON.stringify(updates));
-      console.log('[UserProvider] Stored users:', JSON.stringify(updatedUsers.map(u => ({ id: u.id, name: u.name, crownAnchorNumber: u.crownAnchorNumber }))));
-      
-      // Then update React state
-      setUsers(updatedUsers);
-    } catch (error) {
-      console.error('[UserProvider] Failed to persist user update:', error);
-      // Fallback: still update state even if storage fails
-      setUsers(prevUsers => prevUsers.map(u => 
-        u.id === userId 
-          ? { ...u, ...updates, updatedAt: new Date().toISOString() }
-          : u
+
+      const normalizedUpdates: Partial<UserProfile> = {
+        ...updates,
+        email: updates.email !== undefined ? (normalizeEmail(updates.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email) : updates.email,
+      };
+
+      const updatedUsers = currentUsers.map((user) => (
+        user.id === userId
+          ? { ...user, ...normalizedUpdates, updatedAt: new Date().toISOString() }
+          : user
       ));
-    }
-  };
 
-  const ensureOwner = async (): Promise<UserProfile> => {
-    // Check in-memory state first to avoid unnecessary storage reads
-    const owner = users.find(u => u.isOwner);
-    if (owner) {
+      await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(updatedUsers));
+      setUsers(updatedUsers);
+
+      console.log('[UserProvider] Updated scoped user:', {
+        authenticatedEmail: normalizedAuthenticatedEmail,
+        userId,
+        updates: normalizedUpdates,
+      });
+    } catch (error) {
+      console.error('[UserProvider] Failed to persist scoped user update:', error);
+      setUsers((previousUsers) => previousUsers.map((user) => (
+        user.id === userId
+          ? {
+              ...user,
+              ...updates,
+              email: updates.email !== undefined ? (normalizeEmail(updates.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email) : user.email,
+              updatedAt: new Date().toISOString(),
+            }
+          : user
+      )));
+    }
+  }, [normalizedAuthenticatedEmail, users]);
+
+  const ensureOwner = useCallback(async (): Promise<UserProfile> => {
+    const existingOwner = users.find((user) => user.isOwner);
+
+    if (existingOwner) {
       if (!currentUserId) {
-        setCurrentUserId(owner.id);
-        await persistCurrentUser(owner.id);
+        setCurrentUserId(existingOwner.id);
+        await persistCurrentUser(existingOwner.id);
       }
-      return owner;
+
+      return existingOwner;
     }
 
-    // Check stored users if not in memory
+    const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+
     try {
-      const storedUsers = await AsyncStorage.getItem(KEYS.USERS);
-      if (storedUsers) {
-        const parsed = JSON.parse(storedUsers) as UserProfile[];
-        const existingOwner = parsed.find(u => u.isOwner);
-        if (existingOwner) {
-          // Only update state if it's actually different
-          if (parsed.length !== users.length || !users.find(u => u.id === existingOwner.id)) {
-            setUsers(parsed);
-          }
-          if (!currentUserId) {
-            setCurrentUserId(existingOwner.id);
-            await persistCurrentUser(existingOwner.id);
-          }
-          return existingOwner;
+      const storedUsersRaw = await AsyncStorage.getItem(scopedKeys.USERS);
+      if (storedUsersRaw) {
+        const parsedUsers = JSON.parse(storedUsersRaw) as UserProfile[];
+        const storedOwner = parsedUsers.find((user) => user.isOwner) ?? parsedUsers[0] ?? null;
+
+        if (storedOwner) {
+          setUsers(parsedUsers);
+          setCurrentUserId(storedOwner.id);
+          await persistCurrentUser(storedOwner.id);
+          return storedOwner;
         }
       }
     } catch (error) {
-      console.error('[UserProvider] Error checking stored users:', error);
+      console.error('[UserProvider] Error checking scoped users for owner:', error);
     }
 
-    // Create new owner with default values only if none exists
-    const now = new Date().toISOString();
-    const newOwner: UserProfile = {
-      id: `user_${Date.now()}`,
-      name: DEFAULT_OWNER.name,
-      email: DEFAULT_OWNER.email,
-      isOwner: true,
-      crownAnchorNumber: DEFAULT_OWNER.crownAnchorNumber,
-      celebrityEmail: DEFAULT_OWNER.celebrityEmail,
-      celebrityCaptainsClubNumber: DEFAULT_OWNER.celebrityCaptainsClubNumber,
-      celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
-      celebrityBlueChipPoints: DEFAULT_OWNER.celebrityBlueChipPoints,
-      preferredBrand: DEFAULT_OWNER.preferredBrand,
-      silverseaEmail: DEFAULT_OWNER.silverseaEmail,
-      silverseaVenetianNumber: DEFAULT_OWNER.silverseaVenetianNumber,
-      silverseaVenetianTier: DEFAULT_OWNER.silverseaVenetianTier,
-      silverseaVenetianPoints: DEFAULT_OWNER.silverseaVenetianPoints,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    const newUsers = [newOwner];
+    const owner = createOwnerProfile(normalizedAuthenticatedEmail);
+    const newUsers = [owner];
     setUsers(newUsers);
-    setCurrentUserId(newOwner.id);
+    setCurrentUserId(owner.id);
     await persistUsers(newUsers);
-    await persistCurrentUser(newOwner.id);
-    
-    console.log('[UserProvider] Created owner:', newOwner.name, newOwner.id);
-    return newOwner;
-  };
+    await persistCurrentUser(owner.id);
 
-  return {
+    console.log('[UserProvider] Created scoped owner:', {
+      authenticatedEmail: normalizedAuthenticatedEmail,
+      ownerId: owner.id,
+    });
+
+    return owner;
+  }, [currentUserId, normalizedAuthenticatedEmail, persistCurrentUser, persistUsers, users]);
+
+  return useMemo(() => ({
     users,
     currentUserId,
     currentUser,
@@ -364,5 +493,5 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     updateUser,
     ensureOwner,
     syncFromStorage: loadUsers,
-  };
+  }), [users, currentUserId, currentUser, isLoading, addUser, switchUser, removeUser, updateUser, ensureOwner, loadUsers]);
 });

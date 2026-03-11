@@ -11,6 +11,59 @@ const MAX_RETRY_ATTEMPTS = 1;
 const MIN_SYNC_INTERVAL_MS = 60000;
 const PENDING_ACCOUNT_SWITCH_KEY = "easyseas_pending_account_switch";
 
+interface SyncedLoyaltyPayload {
+  extendedLoyaltyData: unknown;
+  manualClubRoyalePoints: number | null;
+  manualCrownAnchorPoints: number | null;
+}
+
+function parseStoredNumber(value: string | null): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const parsedValue = parseInt(value, 10);
+  return Number.isNaN(parsedValue) ? null : parsedValue;
+}
+
+function parseUnknownNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsedValue = parseInt(value, 10);
+    return Number.isNaN(parsedValue) ? null : parsedValue;
+  }
+
+  return null;
+}
+
+function normalizeSyncedLoyaltyPayload(loyaltyData: unknown): SyncedLoyaltyPayload | null {
+  if (!loyaltyData || typeof loyaltyData !== 'object') {
+    return null;
+  }
+
+  const loyaltyRecord = loyaltyData as Record<string, unknown>;
+  if (
+    Object.prototype.hasOwnProperty.call(loyaltyRecord, 'extendedLoyaltyData') ||
+    Object.prototype.hasOwnProperty.call(loyaltyRecord, 'manualClubRoyalePoints') ||
+    Object.prototype.hasOwnProperty.call(loyaltyRecord, 'manualCrownAnchorPoints')
+  ) {
+    return {
+      extendedLoyaltyData: loyaltyRecord.extendedLoyaltyData ?? null,
+      manualClubRoyalePoints: parseUnknownNumber(loyaltyRecord.manualClubRoyalePoints),
+      manualCrownAnchorPoints: parseUnknownNumber(loyaltyRecord.manualCrownAnchorPoints),
+    };
+  }
+
+  return {
+    extendedLoyaltyData: loyaltyData,
+    manualClubRoyalePoints: null,
+    manualCrownAnchorPoints: null,
+  };
+}
+
 interface SyncState {
   isSyncing: boolean;
   lastSyncTime: string | null;
@@ -72,6 +125,9 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         alertsRaw,
         alertRulesRaw,
         slotAtlasRaw,
+        extendedLoyaltyDataRaw,
+        manualClubRoyalePointsRaw,
+        manualCrownAnchorPointsRaw,
         loyaltyDataRaw,
         bankrollDataRaw,
         celebrityEmailRaw,
@@ -92,6 +148,9 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.ALERTS)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.ALERT_RULES)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.LOYALTY_DATA)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BANKROLL_DATA)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CELEBRITY_EMAIL)),
@@ -109,6 +168,21 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         blueChipPoints: celebrityBlueChipRaw ? parseInt(celebrityBlueChipRaw, 10) : 0,
       };
 
+      const parsedLegacyLoyaltyData = loyaltyDataRaw ? JSON.parse(loyaltyDataRaw) : null;
+      const parsedExtendedLoyaltyData = extendedLoyaltyDataRaw ? JSON.parse(extendedLoyaltyDataRaw) : null;
+      const manualClubRoyalePoints = parseStoredNumber(manualClubRoyalePointsRaw);
+      const manualCrownAnchorPoints = parseStoredNumber(manualCrownAnchorPointsRaw);
+      const normalizedLegacyLoyaltyData = normalizeSyncedLoyaltyPayload(parsedLegacyLoyaltyData);
+      const loyaltyData = parsedExtendedLoyaltyData !== null
+        || manualClubRoyalePoints !== null
+        || manualCrownAnchorPoints !== null
+        ? {
+            extendedLoyaltyData: parsedExtendedLoyaltyData,
+            manualClubRoyalePoints,
+            manualCrownAnchorPoints,
+          }
+        : normalizedLegacyLoyaltyData;
+
       const data = {
         bookedCruises: bookedCruisesRaw ? JSON.parse(bookedCruisesRaw) : [],
         casinoOffers: casinoOffersRaw ? JSON.parse(casinoOffersRaw) : [],
@@ -121,7 +195,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         alerts: alertsRaw ? JSON.parse(alertsRaw) : [],
         alertRules: alertRulesRaw ? JSON.parse(alertRulesRaw) : [],
         slotAtlas: slotAtlasRaw ? JSON.parse(slotAtlasRaw) : [],
-        loyaltyData: loyaltyDataRaw ? JSON.parse(loyaltyDataRaw) : null,
+        loyaltyData,
         bankrollData: bankrollDataRaw ? JSON.parse(bankrollDataRaw) : null,
         celebrityData,
         crewRecognitionEntries: crewEntriesRaw ? JSON.parse(crewEntriesRaw) : [],
@@ -207,7 +281,36 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), JSON.stringify(cloudData.slotAtlas))
         );
       }
-      if (cloudData.loyaltyData) {
+      if (cloudData.loyaltyData !== undefined) {
+        const normalizedLoyaltyData = normalizeSyncedLoyaltyPayload(cloudData.loyaltyData);
+        const extendedLoyaltyData = normalizedLoyaltyData?.extendedLoyaltyData ?? null;
+        const manualClubRoyalePoints = normalizedLoyaltyData?.manualClubRoyalePoints ?? null;
+        const manualCrownAnchorPoints = normalizedLoyaltyData?.manualCrownAnchorPoints ?? null;
+
+        if (extendedLoyaltyData !== null) {
+          savePromises.push(
+            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA), JSON.stringify(extendedLoyaltyData))
+          );
+        } else {
+          savePromises.push(AsyncStorage.removeItem(sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA)));
+        }
+
+        if (manualClubRoyalePoints !== null) {
+          savePromises.push(
+            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS), manualClubRoyalePoints.toString())
+          );
+        } else {
+          savePromises.push(AsyncStorage.removeItem(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS)));
+        }
+
+        if (manualCrownAnchorPoints !== null) {
+          savePromises.push(
+            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS), manualCrownAnchorPoints.toString())
+          );
+        } else {
+          savePromises.push(AsyncStorage.removeItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS)));
+        }
+
         savePromises.push(
           AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.LOYALTY_DATA), JSON.stringify(cloudData.loyaltyData))
         );
@@ -440,7 +543,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         localData.casinoOffers.length > 0 ||
         localData.calendarEvents.length > 0 ||
         localData.casinoSessions.length > 0 ||
-        localData.clubRoyaleProfile;
+        localData.clubRoyaleProfile ||
+        localData.loyaltyData;
 
       if (!hasData) {
         console.log("[UserDataSync] No meaningful data to sync, skipping");
@@ -590,10 +694,26 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   }, []);
 
   useEffect(() => {
+    setHasCloudData(false);
+    setLastSyncTime(null);
+    setLastRestoreTime(null);
+    setSyncError(null);
+    setInitialCheckComplete(false);
+    lastSyncedEmailRef.current = null;
+    retryCountRef.current = 0;
+    lastSyncAttemptRef.current = 0;
+    hasInitializedRef.current = false;
+
+    if (!authenticatedEmail) {
+      return;
+    }
+
     void AsyncStorage.getItem(lastSyncKey()).then((time) => {
-      if (time) setLastSyncTime(time);
+      if (time) {
+        setLastSyncTime(time);
+      }
     });
-  }, []);
+  }, [authenticatedEmail]);
 
   return useMemo(() => ({
     isSyncing,
