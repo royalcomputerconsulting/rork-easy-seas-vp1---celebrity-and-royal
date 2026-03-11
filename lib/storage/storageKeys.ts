@@ -67,6 +67,7 @@ export const ALL_STORAGE_KEYS = {
   USER_SLOT_MACHINES: '@easyseas/user_slot_machines',
   DECK_PLAN_LOCATIONS: '@easyseas/deck_plan_locations',
   MACHINE_SETTINGS: '@easyseas/machine_settings',
+  FAVORITE_STATEROOMS: 'easyseas_favorite_staterooms',
 } as const;
 
 export const GLOBAL_KEYS = new Set<string>([

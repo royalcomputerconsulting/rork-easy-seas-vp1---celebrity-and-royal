@@ -38,6 +38,7 @@ import { useAgentX } from '@/state/AgentXProvider';
 import { getRecommendedCruises, type RecommendationScore } from '@/lib/recommendationEngine';
 import { AgentXChat } from '@/components/AgentXChat';
 import { AlertsManagerModal } from '@/components/AlertsManagerModal';
+import { FavoriteStateroomsSection } from '@/components/favorite-staterooms/FavoriteStateroomsSection';
 import { findBackToBackSets, type BackToBackSet, type CruiseOffer } from '@/lib/backToBackFinder';
 import { Link2, Calendar, Tag, Anchor } from 'lucide-react-native';
 
@@ -744,6 +745,14 @@ export default function SchedulingScreen() {
     </View>
   );
 
+  const renderListFooter = useCallback(() => {
+    if (activeTab !== 'available') {
+      return null;
+    }
+
+    return <FavoriteStateroomsSection shipOptions={availableShips} />;
+  }, [activeTab, availableShips]);
+
   const renderEmpty = () => {
     if (activeTab === 'foryou') {
       return (
@@ -834,6 +843,7 @@ export default function SchedulingScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             ListHeaderComponent={renderHeader}
+            ListFooterComponent={renderListFooter}
             ListEmptyComponent={renderEmpty}
             refreshControl={
               <RefreshControl
