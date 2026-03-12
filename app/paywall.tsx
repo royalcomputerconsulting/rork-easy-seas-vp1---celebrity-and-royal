@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ExternalLink, RefreshCcw, Shield, Sparkles, Check } from 'lucide-react-native';
+import { ExternalLink, RefreshCcw, Shield, Sparkles } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
 import { COLORS, BORDER_RADIUS, SHADOW } from '@/constants/theme';
-import { useEntitlement, BASIC_PRODUCT_ID_MONTHLY, PRO_PRODUCT_ID_MONTHLY, PRO_PRODUCT_ID_ANNUAL } from '@/state/EntitlementProvider';
+import { useEntitlement, PRO_PRODUCT_ID_ANNUAL } from '@/state/EntitlementProvider';
 
 export default function PaywallScreen() {
   const router = useRouter();
@@ -33,16 +33,6 @@ export default function PaywallScreen() {
       Alert.alert('Error', 'Incorrect password.');
     }
   };
-
-  const findProMonthlyPackage = useMemo(() => {
-    for (const offering of entitlement.offerings) {
-      const pkg = (offering.availablePackages ?? []).find(
-        p => p.product.identifier === PRO_PRODUCT_ID_MONTHLY
-      );
-      if (pkg) return pkg;
-    }
-    return null;
-  }, [entitlement.offerings]);
 
   const findProAnnualPackage = useMemo(() => {
     for (const offering of entitlement.offerings) {
@@ -78,68 +68,20 @@ export default function PaywallScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.title}>Choose Your Plan</Text>
+            <Text style={styles.title}>Purchase an Annual Subscription</Text>
             {entitlement.isGrandfathered ? (
               <Text style={styles.subtitle}>
                 🎉 You're grandfathered into Pro! Your account was created before 2/8/2026, so you have lifetime Pro access at no charge. Thank you for being an early supporter!
               </Text>
             ) : (
               <Text style={styles.subtitle}>
-                Choose Pro monthly or annual to unlock Analytics, Agent X, Alerts, and SLOTS.
+                Purchase the full-year plan to unlock Analytics, Agent X, Alerts, and SLOTS for $79.99 per year.
               </Text>
             )}
 
             <View style={styles.statusBadge}>
               <Text style={styles.statusText}>{tierStatusText}</Text>
             </View>
-
-            {!entitlement.isGrandfathered && (
-            <TouchableOpacity
-              style={[styles.proMonthlyCard, (entitlement.isLoading || entitlement.isPro) && styles.subscriptionCardDisabled]}
-              onPress={() => entitlement.subscribeProMonthly()}
-              activeOpacity={0.9}
-              disabled={entitlement.isLoading || entitlement.isPro}
-              testID="paywall.subscribe-pro-monthly"
-            >
-              <View style={styles.subscriptionHeader}>
-                <Text style={styles.proMonthlyTitle}>Pro Monthly</Text>
-                {entitlement.isPro && <Text style={styles.activeBadge}>Active</Text>}
-              </View>
-              <Text style={styles.proMonthlyPrice}>
-                {findProMonthlyPackage ? findProMonthlyPackage.product.priceString : '$14.99'}
-              </Text>
-              <Text style={styles.subscriptionPeriod}>per month</Text>
-              <View style={styles.featureList}>
-                <View style={styles.featureItem}>
-                  <Check size={14} color={COLORS.money} />
-                  <Text style={styles.featureText}>Data Sync & Import</Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <Check size={14} color={COLORS.money} />
-                  <Text style={styles.featureText}>Analytics</Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <Check size={14} color={COLORS.money} />
-                  <Text style={styles.featureText}>Agent X</Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <Check size={14} color={COLORS.money} />
-                  <Text style={styles.featureText}>Alerts</Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <Check size={14} color={COLORS.money} />
-                  <Text style={styles.featureText}>SLOTS Access</Text>
-                </View>
-              </View>
-              {entitlement.isLoading ? (
-                <ActivityIndicator color={COLORS.navyDeep} style={styles.loader} />
-              ) : (
-                <View style={styles.subscriptionButtonContainer}>
-                  <Text style={styles.subscriptionButtonText}>Subscribe</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            )}
 
             {!entitlement.isGrandfathered && (
             <TouchableOpacity
@@ -150,21 +92,21 @@ export default function PaywallScreen() {
               testID="paywall.subscribe-pro-annual"
             >
               <View style={styles.bestValueBadge}>
-                <Text style={styles.bestValueText}>BEST VALUE - Save $100+</Text>
+                <Text style={styles.bestValueText}>FULL-YEAR ACCESS</Text>
               </View>
               <View style={styles.annualHeader}>
                 <View>
-                  <Text style={styles.annualTitle}>Pro Annual</Text>
+                  <Text style={styles.annualTitle}>Annual Subscription</Text>
                   <Text style={styles.annualPrice}>
-                    {findProAnnualPackage ? findProAnnualPackage.product.priceString : '$79'}
+                    {findProAnnualPackage ? findProAnnualPackage.product.priceString : '$79.99'}
                   </Text>
-                  <Text style={styles.annualPeriod}>per year</Text>
+                  <Text style={styles.annualPeriod}>full year</Text>
                 </View>
                 {entitlement.isLoading ? (
                   <ActivityIndicator color={COLORS.white} />
                 ) : (
                   <View style={styles.annualButton}>
-                    <Text style={styles.annualButtonText}>Subscribe</Text>
+                    <Text style={styles.annualButtonText}>Purchase</Text>
                   </View>
                 )}
               </View>
@@ -210,7 +152,7 @@ export default function PaywallScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.disclosureTitle}>Auto-renew disclosure</Text>
+            <Text style={styles.disclosureTitle}>Annual renewal disclosure</Text>
             <Text style={styles.disclosureBody}>
               Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews unless it is cancelled at least 24 hours before the end of the current period. You can manage and cancel your subscription in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
             </Text>

@@ -4,11 +4,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import Constants from 'expo-constants';
 import type { CustomerInfo, PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
 import { useAuth } from './AuthProvider';
+
+type PurchasesLogInResult = {
+  customerInfo: CustomerInfo;
+  created?: boolean;
+};
 
 type PurchasesModule = {
   getOfferings: () => Promise<{ all?: Record<string, PurchasesOffering> }>;
   getCustomerInfo: () => Promise<CustomerInfo>;
+  getAppUserID: () => Promise<string>;
+  logIn: (appUserID: string) => Promise<PurchasesLogInResult>;
+  logOut: () => Promise<CustomerInfo>;
   purchasePackage: (pkg: PurchasesPackage) => Promise<{ productIdentifier: string; customerInfo: CustomerInfo }>;
   restorePurchases: () => Promise<CustomerInfo>;
   configure: (args: { apiKey: string; appUserID?: string }) => void;
@@ -45,7 +54,7 @@ export interface EntitlementState {
   manualUnlock: () => Promise<void>;
 }
 
-const KEYS = {
+const BASE_KEYS = {
   WEB_IS_PRO: 'easyseas_entitlements_web_is_pro',
   TRIAL_START: 'easyseas_trial_start',
   TRIAL_END: 'easyseas_trial_end',
@@ -84,6 +93,24 @@ const PRIVACY_URL = 'https://www.royalcomputerconsulting.com/privacy-policy' as 
 const TERMS_URL = 'https://www.royalcomputerconsulting.com/support-policy' as const;
 const MANAGE_SUBS_IOS_URL = 'https://apps.apple.com/account/subscriptions' as const;
 const MANAGE_SUBS_ANDROID_URL = 'https://play.google.com/store/account/subscriptions' as const;
+
+function normalizeEntitlementIdentity(email: string | null | undefined): string | null {
+  if (!email) {
+    return null;
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  return normalizedEmail.length > 0 ? normalizedEmail : null;
+}
+
+function getScopedEntitlementKeys(email: string | null) {
+  return {
+    WEB_IS_PRO: getUserScopedKey(BASE_KEYS.WEB_IS_PRO, email),
+    TRIAL_START: getUserScopedKey(BASE_KEYS.TRIAL_START, email),
+    TRIAL_END: getUserScopedKey(BASE_KEYS.TRIAL_END, email),
+    FIRST_ACCOUNT_CREATED: getUserScopedKey(BASE_KEYS.FIRST_ACCOUNT_CREATED, email),
+  } as const;
+}
 
 function computeIsProFromCustomerInfo(info: CustomerInfo | null): boolean {
   if (!info) return false;
@@ -138,6 +165,14 @@ async function safeOpenURL(url: string): Promise<void> {
 
 export const [EntitlementProvider, useEntitlement] = createContextHook((): EntitlementState => {
   const auth = useAuth();
+  const normalizedAuthenticatedEmail = useMemo(
+    () => normalizeEntitlementIdentity(auth.authenticatedEmail),
+    [auth.authenticatedEmail]
+  );
+  const storageKeys = useMemo(
+    () => getScopedEntitlementKeys(normalizedAuthenticatedEmail),
+    [normalizedAuthenticatedEmail]
+  );
   const [isPro, setIsPro] = useState<boolean>(false);
   const [isBasic, setIsBasic] = useState<boolean>(false);
   const [tier, setTier] = useState<SubscriptionTier>('trial');
@@ -155,6 +190,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   const mountedRef = useRef<boolean>(true);
   const actionInFlightRef = useRef<boolean>(false);
   const lastIsProRef = useRef<boolean>(false);
+  const lastIdentityRef = useRef<string | null>(normalizedAuthenticatedEmail);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -163,16 +199,40 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     };
   }, []);
 
+  useEffect(() => {
+    if (lastIdentityRef.current === normalizedAuthenticatedEmail) {
+      return;
+    }
+
+    console.log('[Entitlement] Authenticated identity changed - resetting in-memory subscription state', {
+      previousEmail: lastIdentityRef.current,
+      nextEmail: normalizedAuthenticatedEmail,
+    });
+
+    lastIdentityRef.current = normalizedAuthenticatedEmail;
+    actionInFlightRef.current = false;
+    lastIsProRef.current = false;
+    setIsPro(false);
+    setIsBasic(false);
+    setTier('trial');
+    setCustomerInfo(null);
+    setSource('unknown');
+    setError(null);
+    setLastCheckedAt(null);
+    setOfferings([]);
+    setIsLoading(true);
+  }, [normalizedAuthenticatedEmail]);
+
   const initializeAccountTracking = useCallback(async () => {
     try {
-      const storedAccountCreated = await AsyncStorage.getItem(KEYS.FIRST_ACCOUNT_CREATED);
+      const storedAccountCreated = await AsyncStorage.getItem(storageKeys.FIRST_ACCOUNT_CREATED);
       
       let accountDate: Date;
       if (storedAccountCreated) {
         accountDate = new Date(storedAccountCreated);
         console.log('[Entitlement] Account creation date found:', storedAccountCreated);
       } else {
-        const storedTrialStart = await AsyncStorage.getItem(KEYS.TRIAL_START);
+        const storedTrialStart = await AsyncStorage.getItem(storageKeys.TRIAL_START);
         const hasImportedData = await AsyncStorage.getItem('easyseas_has_imported_data');
         
         if (storedTrialStart || hasImportedData) {
@@ -184,7 +244,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
           console.log('[Entitlement] New user - account creation date set to now:', accountDate.toISOString());
         }
         
-        await AsyncStorage.setItem(KEYS.FIRST_ACCOUNT_CREATED, accountDate.toISOString());
+        await AsyncStorage.setItem(storageKeys.FIRST_ACCOUNT_CREATED, accountDate.toISOString());
       }
       
       setAccountCreatedAt(accountDate);
@@ -205,12 +265,12 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       console.error('[Entitlement] Failed to initialize account tracking', e);
       return false;
     }
-  }, []);
+  }, [storageKeys.FIRST_ACCOUNT_CREATED, storageKeys.TRIAL_START]);
 
   const initializeTrial = useCallback(async () => {
     try {
-      const storedTrialStart = await AsyncStorage.getItem(KEYS.TRIAL_START);
-      const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
+      const storedTrialStart = await AsyncStorage.getItem(storageKeys.TRIAL_START);
+      const storedTrialEnd = await AsyncStorage.getItem(storageKeys.TRIAL_END);
 
       if (storedTrialStart && storedTrialEnd) {
         console.log('[Entitlement] Trial already initialized', { storedTrialStart, storedTrialEnd });
@@ -225,8 +285,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       const now = new Date();
       const end = new Date(now.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000);
       
-      await AsyncStorage.setItem(KEYS.TRIAL_START, now.toISOString());
-      await AsyncStorage.setItem(KEYS.TRIAL_END, end.toISOString());
+      await AsyncStorage.setItem(storageKeys.TRIAL_START, now.toISOString());
+      await AsyncStorage.setItem(storageKeys.TRIAL_END, end.toISOString());
       
       console.log('[Entitlement] Trial initialized', { start: now.toISOString(), end: end.toISOString() });
       setTrialEnd(end);
@@ -234,7 +294,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     } catch (e) {
       console.error('[Entitlement] Failed to initialize trial', e);
     }
-  }, []);
+  }, [storageKeys.TRIAL_END, storageKeys.TRIAL_START]);
 
   const computeTier = useCallback((isPro: boolean, isBasic: boolean, trialEnd: Date | null, isGrandfathered: boolean): SubscriptionTier => {
     if (isGrandfathered) return 'pro';
@@ -342,7 +402,10 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         keyType: isExpoGo ? 'test' : 'production',
       });
 
-      Purchases.configure({ apiKey });
+      Purchases.configure({
+        apiKey,
+        appUserID: normalizedAuthenticatedEmail ?? undefined,
+      });
       purchasesInitError = null;
 
       return Purchases;
@@ -354,7 +417,38 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       console.error('[Entitlement] Failed to load/initialize react-native-purchases', e);
       return null;
     }
-  }, []);
+  }, [normalizedAuthenticatedEmail]);
+
+  const syncPurchasesIdentity = useCallback(async (purchases: PurchasesModule): Promise<void> => {
+    const currentAppUserId = await purchases.getAppUserID();
+    console.log('[Entitlement] Syncing RevenueCat identity', {
+      currentAppUserId,
+      authenticatedEmail: normalizedAuthenticatedEmail,
+    });
+
+    if (!normalizedAuthenticatedEmail) {
+      if (currentAppUserId) {
+        await withTimeout(purchases.logOut(), DEFAULT_TIMEOUT_MS, 'Clearing purchase session');
+      }
+      return;
+    }
+
+    if (currentAppUserId === normalizedAuthenticatedEmail) {
+      return;
+    }
+
+    const loginResult = await withTimeout(
+      purchases.logIn(normalizedAuthenticatedEmail),
+      DEFAULT_TIMEOUT_MS,
+      'Linking subscription to your email'
+    );
+
+    console.log('[Entitlement] RevenueCat identity updated', {
+      authenticatedEmail: normalizedAuthenticatedEmail,
+      created: loginResult.created ?? false,
+      activeSubscriptions: loginResult.customerInfo.activeSubscriptions ?? [],
+    });
+  }, [normalizedAuthenticatedEmail]);
 
   const refresh = useCallback(async () => {
     console.log('[Entitlement] refresh called');
@@ -366,12 +460,12 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     const currentIsGrandfathered = await initializeAccountTracking();
     await initializeTrial();
 
-    const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
+    const storedTrialEnd = await AsyncStorage.getItem(storageKeys.TRIAL_END);
     const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
 
     if (Platform.OS === 'web') {
       try {
-        const stored = await AsyncStorage.getItem(KEYS.WEB_IS_PRO);
+        const stored = await AsyncStorage.getItem(storageKeys.WEB_IS_PRO);
         const storedIsPro = stored === 'true';
         console.log('[Entitlement] web refresh: storedIsPro', storedIsPro, 'isGrandfathered', currentIsGrandfathered);
         if (!mountedRef.current) return;
@@ -388,8 +482,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         if (!mountedRef.current) return;
         setError(e instanceof Error ? e.message : 'Failed to refresh entitlements.');
       } finally {
-        if (!mountedRef.current) return;
-        setIsLoading(false);
+        if (mountedRef.current) {
+          setIsLoading(false);
+        }
       }
       return;
     }
@@ -402,6 +497,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setError(message);
         return;
       }
+
+      await syncPurchasesIdentity(purchases);
 
       console.log('[Entitlement] Fetching offerings');
       try {
@@ -423,10 +520,11 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       if (!mountedRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to refresh entitlements.');
     } finally {
-      if (!mountedRef.current) return;
-      setIsLoading(false);
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [ensurePurchasesLoaded, setStateFromCustomerInfo, initializeAccountTracking, initializeTrial, computeTier]);
+  }, [computeTier, ensurePurchasesLoaded, initializeAccountTracking, initializeTrial, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO, syncPurchasesIdentity]);
 
   useEffect(() => {
     console.log('[Entitlement] Provider mounted - refreshing entitlements');
@@ -480,7 +578,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
     if (Platform.OS === 'web') {
       try {
-        await AsyncStorage.setItem(KEYS.WEB_IS_PRO, 'true');
+        await AsyncStorage.setItem(storageKeys.WEB_IS_PRO, 'true');
         if (!mountedRef.current) return;
         setIsPro(true);
         setSource('dev');
@@ -522,7 +620,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       });
 
       if (!mountedRef.current) return;
-      const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
+      const storedTrialEnd = await AsyncStorage.getItem(storageKeys.TRIAL_END);
       const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
       setStateFromCustomerInfo(result.customerInfo, currentTrialEnd, isGrandfathered);
       Alert.alert('Success', 'Full access unlocked.');
@@ -534,10 +632,11 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       Alert.alert('Subscription Failed', message);
     } finally {
       actionInFlightRef.current = false;
-      if (!mountedRef.current) return;
-      setIsLoading(false);
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [ensurePurchasesLoaded, findPackageByProductId, setStateFromCustomerInfo]);
+  }, [ensurePurchasesLoaded, findPackageByProductId, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO]);
 
   const subscribeBasicMonthly = useCallback(async () => {
     await subscribeToProduct(BASIC_PRODUCT_ID_MONTHLY, 'Basic monthly subscription');
@@ -618,7 +717,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       const hasBasicPurchase = computeIsBasicFromCustomerInfo(info);
       const hasAnyActivePurchase = hasProPurchase || hasBasicPurchase;
       
-      const storedTrialEnd = await AsyncStorage.getItem(KEYS.TRIAL_END);
+      const storedTrialEnd = await AsyncStorage.getItem(storageKeys.TRIAL_END);
       const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
       setStateFromCustomerInfo(info, currentTrialEnd, isGrandfathered);
       
@@ -644,10 +743,11 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       Alert.alert('Restore Failed', message);
     } finally {
       actionInFlightRef.current = false;
-      if (!mountedRef.current) return;
-      setIsLoading(false);
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [auth.isWhitelisted, auth.authenticatedEmail, ensurePurchasesLoaded, setStateFromCustomerInfo]);
+  }, [auth.authenticatedEmail, auth.isWhitelisted, ensurePurchasesLoaded, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END]);
 
   const openManageSubscription = useCallback(async () => {
     const url = Platform.OS === 'android' ? MANAGE_SUBS_ANDROID_URL : MANAGE_SUBS_IOS_URL;
@@ -665,7 +765,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   const manualUnlock = useCallback(async () => {
     console.log('[Entitlement] manualUnlock called');
     try {
-      await AsyncStorage.setItem(KEYS.WEB_IS_PRO, 'true');
+      await AsyncStorage.setItem(storageKeys.WEB_IS_PRO, 'true');
       if (!mountedRef.current) return;
       
       const wasPro = lastIsProRef.current;
@@ -692,7 +792,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       console.error('[Entitlement] manualUnlock failed', e);
       throw e;
     }
-  }, []);
+  }, [storageKeys.WEB_IS_PRO]);
 
   return useMemo(
     () => ({

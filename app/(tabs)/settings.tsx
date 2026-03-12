@@ -2131,7 +2131,7 @@ STEP 4: Optional Calendar Import
                     {entitlement.isPro ? 'Pro Active' : entitlement.isBasic ? 'Basic Active' : entitlement.tier === 'trial' ? 'Trial Active' : 'View Only'}
                   </Text>
                   <Text style={styles.subscriptionStatusSubtitle}>
-                    {entitlement.isPro ? 'All features unlocked' : entitlement.isBasic ? 'Basic features active' : entitlement.tier === 'trial' ? `${entitlement.trialDaysRemaining} days remaining` : 'Upgrade to unlock features'}
+                    {entitlement.isPro ? 'All features unlocked' : entitlement.isBasic ? 'Basic features active' : entitlement.tier === 'trial' ? `${entitlement.trialDaysRemaining} days remaining` : 'Purchase the annual subscription to unlock features'}
                   </Text>
                 </View>
               </View>
@@ -2150,7 +2150,7 @@ STEP 4: Optional Calendar Import
               )}
               {renderSettingRow(
                 <Crown size={18} color={COLORS.navyDeep} />,
-                'Upgrade to Pro',
+                'Purchase an Annual Subscription.',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
                 () => router.push('/paywall' as any)
               )}
@@ -2169,7 +2169,7 @@ STEP 4: Optional Calendar Import
               )}
             </View>
             <Text style={styles.subscriptionHint}>
-              Manage your subscription status, restore previous purchases, and review legal terms. Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
+              Manage your subscription status, restore previous purchases, and review legal terms. The annual subscription renews automatically unless canceled at least 24 hours before the end of the current period.
             </Text>
           </View>
 
