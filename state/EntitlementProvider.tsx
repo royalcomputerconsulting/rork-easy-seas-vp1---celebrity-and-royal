@@ -421,14 +421,20 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
   const syncPurchasesIdentity = useCallback(async (purchases: PurchasesModule): Promise<void> => {
     const currentAppUserId = await purchases.getAppUserID();
+    const isAnonymous = !currentAppUserId || currentAppUserId.startsWith('$RCAnonymousID:');
     console.log('[Entitlement] Syncing RevenueCat identity', {
       currentAppUserId,
+      isAnonymous,
       authenticatedEmail: normalizedAuthenticatedEmail,
     });
 
     if (!normalizedAuthenticatedEmail) {
-      if (currentAppUserId) {
-        await withTimeout(purchases.logOut(), DEFAULT_TIMEOUT_MS, 'Clearing purchase session');
+      if (currentAppUserId && !isAnonymous) {
+        try {
+          await withTimeout(purchases.logOut(), DEFAULT_TIMEOUT_MS, 'Clearing purchase session');
+        } catch (e) {
+          console.warn('[Entitlement] logOut failed (user may already be anonymous):', e);
+        }
       }
       return;
     }
