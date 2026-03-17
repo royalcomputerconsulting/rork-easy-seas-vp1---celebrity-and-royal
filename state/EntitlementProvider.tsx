@@ -296,12 +296,11 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     }
   }, [storageKeys.TRIAL_END, storageKeys.TRIAL_START]);
 
-  const computeTier = useCallback((isPro: boolean, isBasic: boolean, trialEnd: Date | null, isGrandfathered: boolean): SubscriptionTier => {
+  const computeTier = useCallback((isPro: boolean, isBasic: boolean, _trialEnd: Date | null, isGrandfathered: boolean): SubscriptionTier => {
     if (isGrandfathered) return 'pro';
     if (isPro) return 'pro';
     if (isBasic) return 'basic';
-    if (trialEnd && new Date() < trialEnd) return 'trial';
-    return 'view';
+    return 'basic';
   }, []);
 
   const setStateFromCustomerInfo = useCallback((info: CustomerInfo | null, currentTrialEnd: Date | null, currentIsGrandfathered: boolean) => {
@@ -777,6 +776,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       const wasPro = lastIsProRef.current;
       
       setIsPro(true);
+      setTier('pro');
       setSource('dev');
       setLastCheckedAt(new Date().toISOString());
       

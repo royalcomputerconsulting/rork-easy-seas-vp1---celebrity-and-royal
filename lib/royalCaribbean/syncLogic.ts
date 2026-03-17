@@ -541,9 +541,27 @@ export function applySyncPreview(
   existingCruises: Cruise[],
   existingBookedCruises: BookedCruise[]
 ): { offers: CasinoOffer[]; cruises: Cruise[]; bookedCruises: BookedCruise[] } {
+  // STRATEGY: Synced data is the SOURCE OF TRUTH for royal-source data.
+  // Royal-source items NOT present in the sync are REMOVED.
+  // Non-royal-source items are always preserved.
+
   const updatedOfferIds = new Set(preview.offers.updates.map(u => u.existing.id));
   const finalOffers = [
+    // Keep non-royal offers that aren't being updated or replaced
     ...existingOffers
+      .filter(o => {
+        // If it's a royal-source offer not matched by sync, DROP it (sync is source of truth)
+        if (o.offerSource === 'royal' && !updatedOfferIds.has(o.id)) {
+          const isBeingReplaced = preview.offers.new.some(newOffer => 
+            findMatchingOffer(newOffer, [o])
+          );
+          if (!isBeingReplaced) {
+            console.log(`[SyncLogic] Removing stale royal-source offer: ${o.offerCode} - ${o.offerName}`);
+            return false;
+          }
+        }
+        return true;
+      })
       .filter(o => !updatedOfferIds.has(o.id))
       .filter(o => {
         const isBeingReplaced = preview.offers.new.some(newOffer => 
@@ -557,7 +575,20 @@ export function applySyncPreview(
 
   const updatedCruiseIds = new Set(preview.cruises.updates.map(u => u.existing.id));
   const finalCruises = [
+    // Keep non-royal cruises; drop royal-source cruises not in sync
     ...existingCruises
+      .filter(c => {
+        if (c.cruiseSource === 'royal' && !updatedCruiseIds.has(c.id)) {
+          const isBeingReplaced = preview.cruises.new.some(newCruise => 
+            findMatchingCruise(newCruise, [c])
+          );
+          if (!isBeingReplaced) {
+            console.log(`[SyncLogic] Removing stale royal-source cruise: ${c.shipName} on ${c.sailDate}`);
+            return false;
+          }
+        }
+        return true;
+      })
       .filter(c => !updatedCruiseIds.has(c.id))
       .filter(c => {
         const isBeingReplaced = preview.cruises.new.some(newCruise => 
@@ -571,7 +602,20 @@ export function applySyncPreview(
 
   const updatedBookedCruiseIds = new Set(preview.bookedCruises.updates.map(u => u.existing.id));
   const finalBookedCruises = [
+    // Keep non-royal booked cruises; drop royal-source ones not in sync
     ...existingBookedCruises
+      .filter(c => {
+        if (c.cruiseSource === 'royal' && !updatedBookedCruiseIds.has(c.id)) {
+          const isBeingReplaced = preview.bookedCruises.new.some(newCruise => 
+            findMatchingBookedCruise(newCruise, [c])
+          );
+          if (!isBeingReplaced) {
+            console.log(`[SyncLogic] Removing stale royal-source booked cruise: ${c.shipName} on ${c.sailDate}`);
+            return false;
+          }
+        }
+        return true;
+      })
       .filter(c => !updatedBookedCruiseIds.has(c.id))
       .filter(c => {
         const isBeingReplaced = preview.bookedCruises.new.some(newCruise => 
@@ -582,6 +626,17 @@ export function applySyncPreview(
     ...preview.bookedCruises.updates.map(u => u.updated),
     ...preview.bookedCruises.new
   ];
+
+  console.log('[SyncLogic] applySyncPreview final counts:', {
+    existingOffers: existingOffers.length,
+    finalOffers: finalOffers.length,
+    existingCruises: existingCruises.length,
+    finalCruises: finalCruises.length,
+    existingBooked: existingBookedCruises.length,
+    finalBooked: finalBookedCruises.length,
+    royalOffersRemoved: existingOffers.filter(o => o.offerSource === 'royal').length - finalOffers.filter(o => o.offerSource === 'royal').length + preview.offers.new.filter(() => true).length,
+    royalCruisesRemoved: existingCruises.filter(c => c.cruiseSource === 'royal').length - finalCruises.filter(c => c.cruiseSource === 'royal').length + preview.cruises.new.length,
+  });
 
   return { offers: finalOffers, cruises: finalCruises, bookedCruises: finalBookedCruises };
 }

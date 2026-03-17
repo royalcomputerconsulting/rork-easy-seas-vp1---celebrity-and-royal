@@ -114,7 +114,7 @@ function getCruiseROILevel(roi: number): 'high' | 'medium' | 'low' {
 
 export default function AnalyticsScreen() {
   const router = useRouter();
-  const { tier } = useEntitlement();
+  useEntitlement();
   const { analytics, casinoAnalytics } = useSimpleAnalytics();
   const { 
     activeAlerts, 
@@ -187,16 +187,7 @@ export default function AnalyticsScreen() {
     return [];
   }, [localData.booked, storedBookedCruises]);
 
-  useEffect(() => {
-    if (tier !== 'pro') {
-      console.log('[Analytics] Access denied. Tier:', tier);
-      router.replace('/paywall' as any);
-    }
-  }, [tier, router]);
 
-  if (tier !== 'pro') {
-    return null;
-  }
 
   const currentPoints = loyaltyClubRoyalePoints || clubRoyaleProfile?.tierPoints || analytics.totalPoints || 0;
   const totalNights = loyaltyCrownAnchorPoints || clubRoyaleProfile?.lifetimeNights || analytics.totalNights || 0;

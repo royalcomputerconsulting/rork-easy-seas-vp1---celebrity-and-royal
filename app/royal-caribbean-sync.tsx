@@ -1,10 +1,10 @@
-import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, ActivityIndicator, Animated } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, ArrowLeft, Download, FileDown, Cookie } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, Download, FileDown, Cookie } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -12,14 +12,10 @@ import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
 import { trpc, isWebSyncAvailable, RENDER_BACKEND_URL } from '@/lib/trpc';
 import { syncCruisePricing } from '@/lib/cruisePricingSync';
-import { useEntitlement } from '@/state/EntitlementProvider';
-
-
 function RoyalCaribbeanSyncScreen() {
   const router = useRouter();
   const coreData = useCoreData();
   const loyalty = useLoyalty();
-  const entitlement = useEntitlement();
   
   const {
     state,
@@ -48,7 +44,7 @@ function RoyalCaribbeanSyncScreen() {
   const [syncingPricing, setSyncingPricing] = useState(false);
   const [syncStarted, setSyncStarted] = useState(false);
   const syncPulse = useState(() => new Animated.Value(1))[0];
-  const [pricingSyncResults, setPricingSyncResults] = useState<{ updated: number; total: number } | null>(null);
+  const [_pricingSyncResults, setPricingSyncResults] = useState<{ updated: number; total: number } | null>(null);
   
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
   const cookieSyncMutation = trpc.royalCaribbeanSync.cookieSync.useMutation();
@@ -78,16 +74,7 @@ function RoyalCaribbeanSyncScreen() {
   
   const isBackendAvailable = isWebSyncAvailable();
   
-  useEffect(() => {
-    if (entitlement.tier === 'view') {
-      console.log('[RoyalCaribbeanSync] View-only mode detected. Redirecting to paywall.');
-      router.replace('/paywall' as any);
-    }
-  }, [entitlement.tier, router]);
-  
-  if (entitlement.tier === 'view') {
-    return null;
-  }
+
   
   const handleCookieSync = async (cookies: string) => {
     console.log('[CookieSync] Starting cookie-based sync...');

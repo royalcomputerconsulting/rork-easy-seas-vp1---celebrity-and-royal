@@ -1,7 +1,7 @@
-import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, Download, FileDown } from 'lucide-react-native';
@@ -10,9 +10,7 @@ import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
-import { trpc, isWebSyncAvailable, RENDER_BACKEND_URL } from '@/lib/trpc';
-import { useEntitlement } from '@/state/EntitlementProvider';
-
+import { trpc, isWebSyncAvailable } from '@/lib/trpc';
 const CARNIVAL_RED = '#CC2232';
 const CARNIVAL_GOLD = '#FFB400';
 const CARNIVAL_DARK = '#0c1520';
@@ -20,17 +18,15 @@ const CARNIVAL_CARD = '#1a2535';
 const CARNIVAL_BORDER = '#2a3a50';
 
 function CarnivalSyncScreen() {
-  const router = useRouter();
+  const _router = useRouter();
   const coreData = useCoreData();
   const loyalty = useLoyalty();
-  const entitlement = useEntitlement();
-
   const {
     state,
     webViewRef,
-    cruiseLine,
-    setCruiseLine,
-    config,
+    cruiseLine: _cruiseLine,
+    setCruiseLine: _setCruiseLine,
+    config: _config,
     openLogin,
     runIngestion,
     syncToApp,
@@ -52,14 +48,6 @@ function CarnivalSyncScreen() {
   const cookieSyncMutation = trpc.royalCaribbeanSync.cookieSync.useMutation();
 
   const isBackendAvailable = isWebSyncAvailable();
-
-  useEffect(() => {
-    if (entitlement.tier === 'view') {
-      router.replace('/paywall' as any);
-    }
-  }, [entitlement.tier, router]);
-
-  if (entitlement.tier === 'view') return null;
 
   const handleCookieSync = async (cookies: string) => {
     console.log('[CarnivalCookieSync] Starting...');

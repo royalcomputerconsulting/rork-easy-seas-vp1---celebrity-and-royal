@@ -355,18 +355,6 @@ export default function SettingsScreen() {
   }, [cruises, bookedCruises, casinoOffers, localData, myAtlasMachines, crewStats]);
 
   const handleImportOffersCSV = useCallback(async () => {
-    if (entitlement.tier === 'view') {
-      Alert.alert(
-        'View-Only Mode',
-        'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
-        ]
-      );
-      return;
-    }
-    
     try {
       setIsImporting(true);
       setLastImportResult(null);
@@ -435,7 +423,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [entitlement.tier, router, setCruises, setCasinoOffers, setLocalData]);
+  }, [setCruises, setCasinoOffers, setLocalData]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
@@ -652,18 +640,6 @@ export default function SettingsScreen() {
   }, [setLocalData, localData.calendar, fetchICSMutation]);
 
   const handleImportCalendarFromFile = useCallback(async () => {
-    if (entitlement.tier === 'view') {
-      Alert.alert(
-        'View-Only Mode',
-        'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
-        ]
-      );
-      return;
-    }
-    
     try {
       setIsImporting(true);
       setLastImportResult(null);
@@ -701,7 +677,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [entitlement.tier, router, setLocalData, localData.calendar]);
+  }, [setLocalData, localData.calendar]);
 
   const handleImportCalendarICS = useCallback(() => {
     Alert.alert(
@@ -726,18 +702,6 @@ export default function SettingsScreen() {
   }, [handleImportCalendarFromFile, handleImportCalendarFromURL]);
 
   const handleImportBookedCSV = useCallback(async () => {
-    if (entitlement.tier === 'view') {
-      Alert.alert(
-        'View-Only Mode',
-        'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
-        ]
-      );
-      return;
-    }
-    
     try {
       setIsImporting(true);
       setLastImportResult(null);
@@ -803,7 +767,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [bookedCruises, entitlement.tier, localData.booked, router, setBookedCruises, setLocalData]);
+  }, [bookedCruises, localData.booked, setBookedCruises, setLocalData]);
 
   const handleExportBookedCSV = useCallback(async () => {
     try {
@@ -1002,18 +966,6 @@ export default function SettingsScreen() {
   }, []);
 
   const handleImportAllData = useCallback(async () => {
-    if (entitlement.tier === 'view') {
-      Alert.alert(
-        'View-Only Mode',
-        'Importing data is not available in view-only mode. Reactivate with Basic or Pro to sync and add new data.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/paywall' as any) },
-        ]
-      );
-      return;
-    }
-    
     try {
       setIsImportingAll(true);
       console.log('[Settings] Starting full data import...');
@@ -1085,7 +1037,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImportingAll(false);
     }
-  }, [coreData, entitlement.tier, reloadCasinoSessions, reloadMachines, router, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
+  }, [coreData, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
 
   const handleDownloadExtension = useCallback(async () => {
     try {

@@ -1,4 +1,4 @@
-import { Tabs, useRouter } from "expo-router";
+import { Tabs } from "expo-router";
 import { 
   Tag, 
   CalendarClock, 
@@ -12,25 +12,12 @@ import React, { useCallback } from "react";
 import { Platform, View, StyleSheet } from "react-native";
 import { COLORS } from '../../constants/theme';
 import * as Haptics from 'expo-haptics';
-import { useEntitlement } from '@/state/EntitlementProvider';
-
 export default function TabLayout() {
-  const router = useRouter();
-  const { tier } = useEntitlement();
-  const handleTabPress = useCallback((e: any) => {
-    const routeName = e?.target?.split('-')[0];
-    
-    if (routeName === 'machines' && tier !== 'pro') {
-      e.preventDefault();
-      console.log('[TabLayout] Blocked Slots tab access. Tier:', tier);
-      router.push('/paywall' as any);
-      return;
-    }
-
+  const handleTabPress = useCallback(() => {
     if (Platform.OS !== 'web') {
       Haptics.selectionAsync().catch(() => {});
     }
-  }, [tier, router]);
+  }, []);
 
   return (
     <Tabs

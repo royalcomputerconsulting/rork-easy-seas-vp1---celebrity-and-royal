@@ -47,10 +47,8 @@ export default function PaywallScreen() {
   const tierStatusText = useMemo(() => {
     if (entitlement.isGrandfathered) return 'Pro Active - Grandfathered';
     if (entitlement.tier === 'pro') return 'Pro Active';
-    if (entitlement.tier === 'basic') return 'Basic Active';
-    if (entitlement.tier === 'trial') return `Trial: ${entitlement.trialDaysRemaining} days remaining`;
-    return 'View-Only Mode';
-  }, [entitlement.tier, entitlement.trialDaysRemaining, entitlement.isGrandfathered]);
+    return 'Basic Active';
+  }, [entitlement.tier, entitlement.isGrandfathered]);
 
   return (
     <>
