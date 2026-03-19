@@ -501,17 +501,20 @@ export function createSyncPreview(
 }
 
 export function calculateSyncCounts(preview: SyncPreview): SyncPreviewCounts {
-  // Count upcoming cruises - all booked cruises that are NOT courtesy holds
-  const upcomingCruises = preview.bookedCruises.new.filter(c => !c.isCourtesyHold).length + 
-                          preview.bookedCruises.updates.filter(u => !u.updated.isCourtesyHold).length;
-  
-  // Count courtesy holds
-  const courtesyHolds = preview.bookedCruises.new.filter(c => c.isCourtesyHold === true).length + 
-                        preview.bookedCruises.updates.filter(u => u.updated.isCourtesyHold === true).length;
+  // Count upcoming cruises - include new, updated, AND unchanged that are NOT courtesy holds
+  const allBookedCruises = [
+    ...preview.bookedCruises.new,
+    ...preview.bookedCruises.updates.map(u => u.updated),
+    ...preview.bookedCruises.unchanged,
+  ];
+
+  const upcomingCruises = allBookedCruises.filter(c => !c.isCourtesyHold).length;
+  const courtesyHolds = allBookedCruises.filter(c => c.isCourtesyHold === true).length;
   
   console.log('[SyncLogic] calculateSyncCounts:', {
     newCruises: preview.bookedCruises.new.length,
     updatedCruises: preview.bookedCruises.updates.length,
+    unchangedCruises: preview.bookedCruises.unchanged.length,
     upcomingCruises,
     courtesyHolds,
     newCruisesDetails: preview.bookedCruises.new.map(c => ({ ship: c.shipName, date: c.sailDate, isHold: c.isCourtesyHold })),
@@ -529,9 +532,9 @@ export function calculateSyncCounts(preview: SyncPreview): SyncPreviewCounts {
     bookedCruisesUnchanged: preview.bookedCruises.unchanged.length,
     upcomingCruises,
     courtesyHolds,
-    totalOffers: preview.offers.new.length + preview.offers.updates.length,
-    totalCruises: preview.cruises.new.length + preview.cruises.updates.length,
-    totalBookedCruises: preview.bookedCruises.new.length + preview.bookedCruises.updates.length
+    totalOffers: preview.offers.new.length + preview.offers.updates.length + preview.offers.unchanged.length,
+    totalCruises: preview.cruises.new.length + preview.cruises.updates.length + preview.cruises.unchanged.length,
+    totalBookedCruises: preview.bookedCruises.new.length + preview.bookedCruises.updates.length + preview.bookedCruises.unchanged.length
   };
 }
 
@@ -601,11 +604,34 @@ export function applySyncPreview(
   ];
 
   const updatedBookedCruiseIds = new Set(preview.bookedCruises.updates.map(u => u.existing.id));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const finalBookedCruises = [
-    // Keep non-royal booked cruises; drop royal-source ones not in sync
+    // Keep non-royal booked cruises; drop royal-source UPCOMING ones not in sync
+    // ALWAYS preserve completed cruises — sync only captures upcoming ones from the website
     ...existingBookedCruises
       .filter(c => {
         if (c.cruiseSource === 'royal' && !updatedBookedCruiseIds.has(c.id)) {
+          // Preserve completed cruises — they won't appear in sync data
+          const isCompleted = c.completionState === 'completed' || c.status === 'completed';
+          let isPastReturnDate = false;
+          if (c.returnDate) {
+            try {
+              const parts = c.returnDate.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
+              const returnDate = parts
+                ? new Date(parseInt(parts[3]), parseInt(parts[1]) - 1, parseInt(parts[2]))
+                : new Date(c.returnDate);
+              returnDate.setHours(0, 0, 0, 0);
+              isPastReturnDate = returnDate < today;
+            } catch {
+              isPastReturnDate = false;
+            }
+          }
+          if (isCompleted || isPastReturnDate) {
+            console.log(`[SyncLogic] Preserving completed royal-source booked cruise: ${c.shipName} on ${c.sailDate}`);
+            return true;
+          }
+
           const isBeingReplaced = preview.bookedCruises.new.some(newCruise => 
             findMatchingBookedCruise(newCruise, [c])
           );

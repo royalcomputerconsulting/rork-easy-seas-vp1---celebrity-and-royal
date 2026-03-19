@@ -1654,18 +1654,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }));
       
-      // Trigger data refresh in background (non-blocking)
-      console.log('[RoyalCaribbeanSync] Triggering background data refresh...');
-      if (coreDataContext.refreshData && typeof coreDataContext.refreshData === 'function') {
-        // Don't await - let it run in background
-        coreDataContext.refreshData()
-          .then(() => {
-            console.log('[RoyalCaribbeanSync] Background refresh completed');
-          })
-          .catch((refreshError: unknown) => {
-            console.error('[RoyalCaribbeanSync] Background refresh error (non-fatal):', refreshError);
-          });
-      }
+      // NOTE: Do NOT call refreshData() here.
+      // The data is already correctly set in state and persisted to AsyncStorage by
+      // setCasinoOffers/setCruises/setBookedCruises above.
+      // Calling refreshData() triggers loadFromBackend() which fetches STALE data
+      // from the server (syncToBackend hasn't completed yet) and overwrites the
+      // just-synced correct local data, causing incorrect counts.
+      console.log('[RoyalCaribbeanSync] Sync complete - skipping refreshData to avoid stale backend overwrite');
       
       console.log('[RoyalCaribbeanSync] ========================================');
       console.log('[RoyalCaribbeanSync] SYNC TO APP COMPLETED SUCCESSFULLY!');
