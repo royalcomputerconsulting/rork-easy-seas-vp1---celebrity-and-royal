@@ -20,6 +20,8 @@ import {
   DollarSign,
   Ban,
   Archive,
+  BedDouble,
+  Users,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -422,6 +424,26 @@ export default function OfferDetailsScreen() {
             </Text>
           </View>
 
+          {/* Cabin Type & Guest Count */}
+          {(item.cabinType || offerData.offer?.roomType || item.guests || item.guestsInfo || offerData.offer?.guestsInfo || offerData.offer?.guests) && (
+            <View style={styles.cabinGuestRow}>
+              {(item.cabinType || offerData.offer?.roomType) && (
+                <View style={styles.cabinBadge}>
+                  <BedDouble size={13} color="#1E40AF" />
+                  <Text style={styles.cabinBadgeText}>{item.cabinType || offerData.offer?.roomType}</Text>
+                </View>
+              )}
+              {(item.guests || item.guestsInfo || offerData.offer?.guestsInfo || offerData.offer?.guests) && (
+                <View style={styles.guestBadge}>
+                  <Users size={13} color="#7C3AED" />
+                  <Text style={styles.guestBadgeText}>
+                    {item.guestsInfo || offerData.offer?.guestsInfo || `${item.guests || offerData.offer?.guests || 2} Guest${(item.guests || offerData.offer?.guests || 2) === 1 ? '' : 's'}`}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
           {/* Line 3: Sailing Date + Departure Port with labels */}
           <View style={styles.headerLine3}>
             <View style={styles.headerDetailBlock}>
@@ -476,7 +498,7 @@ export default function OfferDetailsScreen() {
         )}
       </TouchableOpacity>
     );
-  }, [bookedCruiseIds, handleCruisePress, getCruiseSummary]);
+  }, [bookedCruiseIds, handleCruisePress, getCruiseSummary, offerData.offer?.roomType, offerData.offer?.guests, offerData.offer?.guestsInfo]);
 
   return (
     <View style={styles.container}>
@@ -986,6 +1008,45 @@ const styles = StyleSheet.create({
   },
   headerLine2: {
     marginBottom: SPACING.xs,
+  },
+  cabinGuestRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+    flexWrap: 'wrap' as const,
+  },
+  cabinBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  cabinBadgeText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#1E40AF',
+  },
+  guestBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F5F3FF',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+  },
+  guestBadgeText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#7C3AED',
   },
   nightsDestinationText: {
     fontSize: 16,
