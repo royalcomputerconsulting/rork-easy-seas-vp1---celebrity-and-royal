@@ -1,54 +1,20 @@
-import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useCallback } from 'react';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ExternalLink, RefreshCcw, Shield, Sparkles } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
 import { COLORS, BORDER_RADIUS, SHADOW } from '@/constants/theme';
-import { useEntitlement, PRO_PRODUCT_ID_ANNUAL } from '@/state/EntitlementProvider';
+import { useEntitlement } from '@/state/EntitlementProvider';
 
 export default function PaywallScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
-  const [overrideLoading, setOverrideLoading] = useState(false);
-  const [overridePassword, setOverridePassword] = useState('');
 
   const handleClose = useCallback(() => {
     console.log('[Paywall] Close requested - navigating to home');
     router.replace('/(tabs)/(overview)' as any);
   }, [router]);
 
-  const handleManualOverride = async () => {
-    if (overridePassword === 'Wnzy5mti2!') {
-      setOverrideLoading(true);
-      try {
-        await entitlement.manualUnlock();
-        Alert.alert('Success', 'Full access unlocked via manual override.');
-        handleClose();
-      } catch {
-        Alert.alert('Error', 'Failed to unlock. Please try again.');
-      } finally {
-        setOverrideLoading(false);
-      }
-    } else {
-      Alert.alert('Error', 'Incorrect password.');
-    }
-  };
-
-  const findProAnnualPackage = useMemo(() => {
-    for (const offering of entitlement.offerings) {
-      const pkg = (offering.availablePackages ?? []).find(
-        p => p.product.identifier === PRO_PRODUCT_ID_ANNUAL
-      );
-      if (pkg) return pkg;
-    }
-    return null;
-  }, [entitlement.offerings]);
-
-  const tierStatusText = useMemo(() => {
-    if (entitlement.isGrandfathered) return 'Pro Active - Grandfathered';
-    if (entitlement.tier === 'pro') return 'Pro Active';
-    return 'Basic Active';
-  }, [entitlement.tier, entitlement.isGrandfathered]);
 
   return (
     <>
@@ -66,59 +32,22 @@ export default function PaywallScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.title}>Purchase an Annual Subscription</Text>
-            {entitlement.isGrandfathered ? (
-              <Text style={styles.subtitle}>
-                🎉 You're grandfathered into Pro! Your account was created before 2/8/2026, so you have lifetime Pro access at no charge. Thank you for being an early supporter!
-              </Text>
-            ) : (
-              <Text style={styles.subtitle}>
-                Purchase the full-year plan to unlock Analytics, Agent X, Alerts, and SLOTS for $79.99 per year.
-              </Text>
-            )}
+            <Text style={styles.title}>Annual Subscription</Text>
+            <Text style={styles.priceHero}>$79.99<Text style={styles.priceUnit}> / year</Text></Text>
 
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>{tierStatusText}</Text>
-            </View>
-
-            {!entitlement.isGrandfathered && (
             <TouchableOpacity
-              style={[styles.annualCard, (entitlement.isLoading || entitlement.isPro) && styles.subscriptionCardDisabled]}
+              style={[styles.purchaseButton, (entitlement.isLoading || entitlement.isPro) && styles.purchaseButtonDisabled]}
               onPress={() => entitlement.subscribeProAnnual()}
-              activeOpacity={0.9}
+              activeOpacity={0.85}
               disabled={entitlement.isLoading || entitlement.isPro}
               testID="paywall.subscribe-pro-annual"
             >
-              <View style={styles.bestValueBadge}>
-                <Text style={styles.bestValueText}>FULL-YEAR ACCESS</Text>
-              </View>
-              <View style={styles.annualHeader}>
-                <View>
-                  <Text style={styles.annualTitle}>Annual Subscription</Text>
-                  <Text style={styles.annualPrice}>
-                    {findProAnnualPackage ? findProAnnualPackage.product.priceString : '$79.99'}
-                  </Text>
-                  <Text style={styles.annualPeriod}>full year</Text>
-                </View>
-                {entitlement.isLoading ? (
-                  <ActivityIndicator color={COLORS.white} />
-                ) : (
-                  <View style={styles.annualButton}>
-                    <Text style={styles.annualButtonText}>Purchase</Text>
-                  </View>
-                )}
-              </View>
+              {entitlement.isLoading ? (
+                <ActivityIndicator color={COLORS.white} />
+              ) : (
+                <Text style={styles.purchaseButtonText}>{entitlement.isPro ? 'Subscribed' : 'Subscribe Now'}</Text>
+              )}
             </TouchableOpacity>
-            )}
-
-            {entitlement.isGrandfathered && (
-              <View style={styles.grandfatheredBox} testID="paywall.grandfathered">
-                <Text style={styles.grandfatheredTitle}>🎉 GRANDFATHERED USER</Text>
-                <Text style={styles.grandfatheredBody}>
-                  Your account was created on {entitlement.accountCreatedAt ? new Date(entitlement.accountCreatedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'before'} {entitlement.accountCreatedAt ? '- before the 2/8/2026 cutoff.' : '2/8/2026.'} You have lifetime Pro access at no charge. All Pro features are unlocked for you!
-                </Text>
-              </View>
-            )}
 
             {!!entitlement.error && (
               <View style={styles.errorBox} testID="paywall.error">
@@ -150,46 +79,18 @@ export default function PaywallScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.disclosureTitle}>Annual renewal disclosure</Text>
             <Text style={styles.disclosureBody}>
-              Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews unless it is cancelled at least 24 hours before the end of the current period. You can manage and cancel your subscription in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
+              Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews at $79.99/year unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
             </Text>
 
             <View style={styles.legalRow}>
               <TouchableOpacity style={styles.legalLink} onPress={() => entitlement.openPrivacyPolicy()} testID="paywall.privacy">
-                <Shield size={16} color={COLORS.navyDeep} />
+                <Shield size={14} color={COLORS.navyDeep} />
                 <Text style={styles.legalLinkText}>Privacy Policy</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.legalLink} onPress={() => entitlement.openTerms()} testID="paywall.terms">
-                <Shield size={16} color={COLORS.navyDeep} />
+                <Shield size={14} color={COLORS.navyDeep} />
                 <Text style={styles.legalLinkText}>Terms of Use (EULA)</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.manualOverrideContainer}>
-              <Text style={styles.manualOverrideLabel}>Manual Override Password</Text>
-              <TextInput
-                style={styles.manualOverrideInput}
-                placeholder="Enter password"
-                placeholderTextColor={COLORS.textDarkGrey}
-                secureTextEntry
-                value={overridePassword}
-                onChangeText={setOverridePassword}
-                editable={!overrideLoading && !entitlement.isPro}
-                testID="paywall.password-input"
-              />
-              <TouchableOpacity
-                style={styles.manualOverrideButton}
-                onPress={handleManualOverride}
-                activeOpacity={0.8}
-                disabled={overrideLoading || entitlement.isPro}
-                testID="paywall.manual-override"
-              >
-                {overrideLoading ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                ) : (
-                  <Text style={styles.manualOverrideText}>Manual Override</Text>
-                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -205,13 +106,13 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingTop: 24,
-    paddingHorizontal: 16,
-    paddingBottom: 110,
+    paddingHorizontal: 20,
+    paddingBottom: 60,
   },
   card: {
-    backgroundColor: 'rgba(255,255,255,0.96)',
+    backgroundColor: 'rgba(255,255,255,0.97)',
     borderRadius: BORDER_RADIUS.xl,
-    padding: 18,
+    padding: 24,
     ...SHADOW.lg,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.55)',
@@ -220,137 +121,75 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 20,
   },
   badge: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
     backgroundColor: COLORS.navyDeep,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
   },
   badgeText: {
     color: COLORS.white,
-    fontWeight: '800' as const,
-    fontSize: 12,
+    fontWeight: '700' as const,
+    fontSize: 13,
   },
   closeText: {
     color: COLORS.navyDeep,
-    fontWeight: '800' as const,
-    fontSize: 13,
+    fontWeight: '700' as const,
+    fontSize: 15,
   },
   title: {
-    fontSize: 26,
-    fontWeight: '900' as const,
-    color: COLORS.navyDeep,
-    marginBottom: 6,
-  },
-  subtitle: {
-    color: COLORS.textDarkGrey,
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 14,
-  },
-  proMonthlyCard: {
-    backgroundColor: COLORS.bgSecondary,
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 2,
-    borderColor: COLORS.money,
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  subscriptionCardDisabled: {
-    opacity: 0.6,
-  },
-  subscriptionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  subscriptionTitle: {
-    fontSize: 18,
-    fontWeight: '900' as const,
-    color: COLORS.navyDeep,
-  },
-  proMonthlyTitle: {
-    fontSize: 20,
-    fontWeight: '900' as const,
-    color: COLORS.navyDeep,
-  },
-  proMonthlyPrice: {
     fontSize: 28,
     fontWeight: '900' as const,
-    color: COLORS.money,
-    marginBottom: 6,
+    color: COLORS.navyDeep,
+    marginBottom: 4,
+    textAlign: 'center',
   },
-  activeBadge: {
-    fontSize: 10,
-    fontWeight: '800' as const,
-    color: COLORS.money,
-    backgroundColor: 'rgba(76, 175, 80, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  subscriptionPrice: {
-    fontSize: 24,
+  priceHero: {
+    fontSize: 42,
     fontWeight: '900' as const,
     color: COLORS.money,
-    marginBottom: 6,
+    textAlign: 'center',
+    marginBottom: 20,
   },
-  subscriptionPeriod: {
-    fontSize: 12,
-    fontWeight: '600' as const,
-    color: COLORS.textDarkGrey,
-    marginBottom: 8,
-  },
-  featureList: {
-    marginBottom: 12,
-    gap: 6,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  featureText: {
-    fontSize: 12,
+  priceUnit: {
+    fontSize: 18,
     fontWeight: '600' as const,
     color: COLORS.textDarkGrey,
   },
-  subscriptionButtonContainer: {
+  purchaseButton: {
     backgroundColor: COLORS.money,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  subscriptionButtonText: {
+  purchaseButtonDisabled: {
+    opacity: 0.6,
+  },
+  purchaseButtonText: {
     color: COLORS.white,
     fontWeight: '800' as const,
-    fontSize: 14,
-  },
-  loader: {
-    marginTop: 10,
+    fontSize: 17,
   },
   rowButtons: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 10,
+    marginBottom: 16,
   },
   secondaryButton: {
     flex: 1,
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.bgSecondary,
-    borderRadius: 14,
-    paddingVertical: 12,
+    borderRadius: 12,
+    paddingVertical: 11,
     borderWidth: 1,
     borderColor: 'rgba(10, 31, 68, 0.10)',
   },
@@ -359,49 +198,40 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: COLORS.navyDeep,
-    fontWeight: '800' as const,
+    fontWeight: '700' as const,
     fontSize: 13,
-  },
-  disclosureTitle: {
-    marginTop: 16,
-    color: COLORS.navyDeep,
-    fontWeight: '900' as const,
-    fontSize: 12,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
   disclosureBody: {
-    marginTop: 8,
     color: COLORS.textDarkGrey,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 14,
   },
   legalRow: {
-    marginTop: 14,
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     flexWrap: 'wrap',
   },
   legalLink: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: 'rgba(18, 58, 99, 0.06)',
     borderWidth: 1,
     borderColor: 'rgba(18, 58, 99, 0.10)',
   },
   legalLinkText: {
     color: COLORS.navyDeep,
-    fontWeight: '800' as const,
+    fontWeight: '700' as const,
     fontSize: 12,
   },
   errorBox: {
-    marginTop: 10,
+    marginBottom: 12,
     padding: 12,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(176,0,32,0.22)',
     backgroundColor: 'rgba(176,0,32,0.06)',
@@ -418,129 +248,5 @@ const styles = StyleSheet.create({
     color: '#8A0020',
     fontSize: 13,
     lineHeight: 18,
-  },
-  grandfatheredBox: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: COLORS.money,
-    backgroundColor: 'rgba(76, 175, 80, 0.08)',
-  },
-  grandfatheredTitle: {
-    color: COLORS.money,
-    fontWeight: '900' as const,
-    marginBottom: 8,
-    fontSize: 14,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  grandfatheredBody: {
-    color: COLORS.navyDeep,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '600' as const,
-  },
-  manualOverrideContainer: {
-    marginTop: 20,
-    gap: 12,
-  },
-  manualOverrideLabel: {
-    color: COLORS.navyDeep,
-    fontWeight: '700' as const,
-    fontSize: 13,
-  },
-  manualOverrideInput: {
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(18, 58, 99, 0.20)',
-    color: COLORS.navyDeep,
-    fontSize: 15,
-    fontWeight: '600' as const,
-  },
-  manualOverrideButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: 'rgba(18, 58, 99, 0.08)',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(18, 58, 99, 0.12)',
-  },
-  manualOverrideText: {
-    color: COLORS.navyDeep,
-    fontWeight: '700' as const,
-    fontSize: 13,
-  },
-  statusBadge: {
-    alignSelf: 'center',
-    backgroundColor: 'rgba(76, 175, 80, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-    marginBottom: 14,
-  },
-  statusText: {
-    color: COLORS.money,
-    fontWeight: '800' as const,
-    fontSize: 12,
-  },
-  annualCard: {
-    backgroundColor: COLORS.navyDeep,
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 12,
-    borderWidth: 2,
-    borderColor: COLORS.money,
-  },
-  bestValueBadge: {
-    backgroundColor: COLORS.money,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    marginBottom: 12,
-  },
-  bestValueText: {
-    color: COLORS.white,
-    fontWeight: '900' as const,
-    fontSize: 11,
-    letterSpacing: 0.5,
-  },
-  annualHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  annualTitle: {
-    fontSize: 20,
-    fontWeight: '900' as const,
-    color: COLORS.white,
-    marginBottom: 4,
-  },
-  annualPrice: {
-    fontSize: 32,
-    fontWeight: '900' as const,
-    color: COLORS.money,
-    marginBottom: 2,
-  },
-  annualPeriod: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  annualButton: {
-    backgroundColor: COLORS.money,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  annualButtonText: {
-    color: COLORS.white,
-    fontWeight: '800' as const,
-    fontSize: 14,
   },
 });
