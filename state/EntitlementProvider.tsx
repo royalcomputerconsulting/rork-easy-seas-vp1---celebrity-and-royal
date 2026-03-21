@@ -28,6 +28,7 @@ let purchasesInitError: string | null = null;
 
 export type EntitlementSource = 'iap' | 'dev' | 'grandfathered' | 'unknown';
 export type SubscriptionTier = 'trial' | 'view' | 'basic' | 'pro';
+export type SubscriptionDisplayStatus = 'grace_period' | 'monthly' | 'annual' | 'expired';
 
 export interface EntitlementState {
   isPro: boolean;
@@ -43,6 +44,7 @@ export interface EntitlementState {
   error: string | null;
   isGrandfathered: boolean;
   accountCreatedAt: Date | null;
+  subscriptionDisplayStatus: SubscriptionDisplayStatus;
   refresh: () => Promise<void>;
   subscribeBasicMonthly: () => Promise<void>;
   subscribeProMonthly: () => Promise<void>;
@@ -61,7 +63,7 @@ const BASE_KEYS = {
   FIRST_ACCOUNT_CREATED: 'easyseas_first_account_created',
 } as const;
 
-const TRIAL_DURATION_DAYS = 30;
+const TRIAL_DURATION_DAYS = 5;
 const GRANDFATHERING_CUTOFF_DATE = new Date('2026-02-08T23:59:59.999Z');
 
 const DEFAULT_TIMEOUT_MS = 5000 as const;
@@ -130,6 +132,27 @@ function computeIsProFromCustomerInfo(info: CustomerInfo | null): boolean {
   }
 }
 
+function detectActiveSubscriptionType(info: CustomerInfo | null): 'monthly' | 'annual' | null {
+  if (!info) return null;
+  try {
+    const active = (info.activeSubscriptions ?? []) as string[];
+    console.log('[Entitlement] Detecting subscription type from active subs:', active);
+    if (active.includes(PRO_PRODUCT_ID_ANNUAL)) return 'annual';
+    if (active.includes(PRO_PRODUCT_ID_MONTHLY) || active.includes(BASIC_PRODUCT_ID_MONTHLY)) return 'monthly';
+    
+    const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
+    const entitlementIds = Object.keys(entitlements);
+    if (entitlementIds.includes('pro') || entitlementIds.includes('basic')) {
+      if (active.some(s => s.toLowerCase().includes('annual') || s.toLowerCase().includes('yearly'))) return 'annual';
+      return 'monthly';
+    }
+    return null;
+  } catch (e) {
+    console.error('[Entitlement] detectActiveSubscriptionType failed', e);
+    return null;
+  }
+}
+
 function computeIsBasicFromCustomerInfo(info: CustomerInfo | null): boolean {
   if (!info) return false;
 
@@ -186,6 +209,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
   const [isGrandfathered, setIsGrandfathered] = useState<boolean>(false);
   const [accountCreatedAt, setAccountCreatedAt] = useState<Date | null>(null);
+  const [subscriptionDisplayStatus, setSubscriptionDisplayStatus] = useState<SubscriptionDisplayStatus>('grace_period');
 
   const mountedRef = useRef<boolean>(true);
   const actionInFlightRef = useRef<boolean>(false);
@@ -303,6 +327,25 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     return 'basic';
   }, []);
 
+  const computeDisplayStatus = useCallback((info: CustomerInfo | null, currentTrialEnd: Date | null, currentIsGrandfathered: boolean, computedIsPro: boolean, computedIsBasic: boolean): SubscriptionDisplayStatus => {
+    const subType = detectActiveSubscriptionType(info);
+    console.log('[Entitlement] computeDisplayStatus', { subType, currentIsGrandfathered, computedIsPro, computedIsBasic, trialEnd: currentTrialEnd?.toISOString() });
+    
+    if (subType === 'annual') return 'annual';
+    if (subType === 'monthly') return 'monthly';
+    
+    if (currentIsGrandfathered) return 'monthly';
+    
+    if (computedIsPro || computedIsBasic) return 'monthly';
+    
+    if (currentTrialEnd) {
+      const now = new Date();
+      if (now < currentTrialEnd) return 'grace_period';
+    }
+    
+    return 'expired';
+  }, []);
+
   const setStateFromCustomerInfo = useCallback((info: CustomerInfo | null, currentTrialEnd: Date | null, currentIsGrandfathered: boolean) => {
     const computedIsPro = computeIsProFromCustomerInfo(info);
     const computedIsBasic = computeIsBasicFromCustomerInfo(info);
@@ -326,6 +369,10 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     setTier(computedTier);
     setSource(currentIsGrandfathered ? 'grandfathered' : (computedIsPro || computedIsBasic ? 'iap' : 'unknown'));
     setLastCheckedAt(new Date().toISOString());
+    
+    const displayStatus = computeDisplayStatus(info, currentTrialEnd, currentIsGrandfathered, computedIsPro, computedIsBasic);
+    setSubscriptionDisplayStatus(displayStatus);
+    console.log('[Entitlement] Display status set to:', displayStatus);
 
     lastIsProRef.current = finalIsPro;
 
@@ -339,7 +386,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         console.error('[Entitlement] Failed to dispatch entitlementProUnlocked event', e);
       }
     }
-  }, [computeTier]);
+  }, [computeDisplayStatus, computeTier]);
 
   const ensurePurchasesLoaded = useCallback(async (): Promise<PurchasesModule | null> => {
     if (Platform.OS === 'web') return null;
@@ -482,6 +529,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setLastCheckedAt(new Date().toISOString());
         setCustomerInfo(null);
         setOfferings([]);
+        const webDisplayStatus = computeDisplayStatus(null, currentTrialEnd, currentIsGrandfathered, storedIsPro, false);
+        setSubscriptionDisplayStatus(webDisplayStatus);
+        console.log('[Entitlement] Web display status set to:', webDisplayStatus);
       } catch (e) {
         console.error('[Entitlement] web refresh failed', e);
         if (!mountedRef.current) return;
@@ -529,7 +579,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setIsLoading(false);
       }
     }
-  }, [computeTier, ensurePurchasesLoaded, initializeAccountTracking, initializeTrial, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO, syncPurchasesIdentity]);
+  }, [computeDisplayStatus, computeTier, ensurePurchasesLoaded, initializeAccountTracking, initializeTrial, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO, syncPurchasesIdentity]);
 
   useEffect(() => {
     console.log('[Entitlement] Provider mounted - refreshing entitlements');
@@ -815,6 +865,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       error,
       isGrandfathered,
       accountCreatedAt,
+      subscriptionDisplayStatus,
       refresh,
       subscribeBasicMonthly,
       subscribeProMonthly,
@@ -839,6 +890,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       error,
       isGrandfathered,
       accountCreatedAt,
+      subscriptionDisplayStatus,
       refresh,
       subscribeBasicMonthly,
       subscribeProMonthly,

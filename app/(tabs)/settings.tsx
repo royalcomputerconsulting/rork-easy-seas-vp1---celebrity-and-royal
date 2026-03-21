@@ -2077,13 +2077,24 @@ STEP 4: Optional Calendar Import
             <View style={styles.sectionCard}>
               {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan')}
               <View style={styles.subscriptionStatusBanner}>
-                <Crown size={18} color={entitlement.isPro ? '#10B981' : entitlement.isBasic ? '#3B82F6' : '#F59E0B'} />
+                <Crown size={18} color={
+                  entitlement.subscriptionDisplayStatus === 'annual' ? '#10B981' :
+                  entitlement.subscriptionDisplayStatus === 'monthly' ? '#3B82F6' :
+                  entitlement.subscriptionDisplayStatus === 'grace_period' ? '#F59E0B' :
+                  '#EF4444'
+                } />
                 <View style={styles.subscriptionStatusText}>
                   <Text style={styles.subscriptionStatusTitle}>
-                    {entitlement.isPro ? 'Pro Active' : entitlement.isBasic ? 'Basic Active' : entitlement.tier === 'trial' ? 'Trial Active' : 'View Only'}
+                    {entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual Subscription' :
+                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly Subscription' :
+                     entitlement.subscriptionDisplayStatus === 'grace_period' ? '5-Day Grace Period' :
+                     'Subscription Expired'}
                   </Text>
                   <Text style={styles.subscriptionStatusSubtitle}>
-                    {entitlement.isPro ? 'All features unlocked' : entitlement.isBasic ? 'Basic features active' : entitlement.tier === 'trial' ? `${entitlement.trialDaysRemaining} days remaining` : 'Purchase the annual subscription to unlock features'}
+                    {entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual plan active — all features unlocked' :
+                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly plan active — all features unlocked' :
+                     entitlement.subscriptionDisplayStatus === 'grace_period' ? `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining — full access` :
+                     'Purchase a monthly or annual subscription to continue'}
                   </Text>
                 </View>
               </View>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
-import { Save, CheckCircle, AlertCircle, Crown, Award, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
+import { Save, CheckCircle, AlertCircle, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
@@ -202,10 +202,10 @@ export function UserProfileCard({
     : !!enrichmentData?.venetianSocietyMemberNumber;
 
   const getSubscriptionTierDisplay = () => {
-    if (entitlement.isPro) return { text: 'Pro Active', color: '#10B981' };
-    if (entitlement.isBasic) return { text: 'Basic Active', color: '#3B82F6' };
-    if (entitlement.tier === 'trial') return { text: `Trial (${entitlement.trialDaysRemaining}d left)`, color: '#F59E0B' };
-    return { text: 'View Only', color: '#6B7280' };
+    if (entitlement.subscriptionDisplayStatus === 'annual') return { text: 'Annual Subscription', color: '#10B981' };
+    if (entitlement.subscriptionDisplayStatus === 'monthly') return { text: 'Monthly Subscription', color: '#3B82F6' };
+    if (entitlement.subscriptionDisplayStatus === 'grace_period') return { text: `Grace Period (${entitlement.trialDaysRemaining}d left)`, color: '#F59E0B' };
+    return { text: 'Subscription Expired', color: '#EF4444' };
   };
 
   const renderRoyalCaribbeanValues = () => {
