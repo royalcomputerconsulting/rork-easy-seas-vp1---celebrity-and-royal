@@ -66,7 +66,8 @@ const BASE_KEYS = {
 const TRIAL_DURATION_DAYS = 5;
 const GRANDFATHERING_CUTOFF_DATE = new Date('2026-02-08T23:59:59.999Z');
 
-const DEFAULT_TIMEOUT_MS = 5000 as const;
+const DEFAULT_TIMEOUT_MS = 10000 as const;
+const PURCHASE_TIMEOUT_MS = 120000 as const;
 
 async function withTimeout<T>(
   promise: Promise<T>,
@@ -119,8 +120,8 @@ function computeIsProFromCustomerInfo(info: CustomerInfo | null): boolean {
 
   try {
     const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
-    const entitlementIds = Object.keys(entitlements);
-    if (entitlementIds.includes('pro')) return true;
+    const entitlementIds = Object.keys(entitlements).map(k => k.toLowerCase().trim());
+    if (entitlementIds.includes('pro') || entitlementIds.includes('pro access')) return true;
 
     const active = (info.activeSubscriptions ?? []) as string[];
     if (active.includes(PRO_PRODUCT_ID_MONTHLY) || active.includes(PRO_PRODUCT_ID_ANNUAL)) return true;
@@ -141,8 +142,8 @@ function detectActiveSubscriptionType(info: CustomerInfo | null): 'monthly' | 'a
     if (active.includes(PRO_PRODUCT_ID_MONTHLY) || active.includes(BASIC_PRODUCT_ID_MONTHLY)) return 'monthly';
     
     const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
-    const entitlementIds = Object.keys(entitlements);
-    if (entitlementIds.includes('pro') || entitlementIds.includes('basic')) {
+    const entitlementIds = Object.keys(entitlements).map(k => k.toLowerCase().trim());
+    if (entitlementIds.includes('pro') || entitlementIds.includes('pro access') || entitlementIds.includes('basic')) {
       if (active.some(s => s.toLowerCase().includes('annual') || s.toLowerCase().includes('yearly'))) return 'annual';
       return 'monthly';
     }
@@ -158,7 +159,7 @@ function computeIsBasicFromCustomerInfo(info: CustomerInfo | null): boolean {
 
   try {
     const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
-    const entitlementIds = Object.keys(entitlements);
+    const entitlementIds = Object.keys(entitlements).map(k => k.toLowerCase().trim());
     if (entitlementIds.includes('basic')) return true;
 
     const active = (info.activeSubscriptions ?? []) as string[];
@@ -668,7 +669,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       }
 
       console.log('[Entitlement] Purchasing package', { productId: pkg.product.identifier, offeringId: pkg.offeringIdentifier });
-      const result = await withTimeout(purchases.purchasePackage(pkg), DEFAULT_TIMEOUT_MS, 'Purchasing subscription');
+      const result = await withTimeout(purchases.purchasePackage(pkg), PURCHASE_TIMEOUT_MS, 'Purchasing subscription');
       console.log('[Entitlement] purchasePackage result', {
         purchasedProductId: result.productIdentifier,
         activeSubscriptions: result.customerInfo?.activeSubscriptions ?? [],
