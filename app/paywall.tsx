@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ExternalLink, RefreshCcw, Shield, Calendar } from 'lucide-react-native';
+import { ExternalLink, RefreshCcw, Shield } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
 import { COLORS } from '@/constants/theme';
 import { useEntitlement } from '@/state/EntitlementProvider';
@@ -31,17 +31,6 @@ export default function PaywallScreen() {
           <View style={styles.centerBlock}>
             <Text style={styles.title}>Annual Subscription</Text>
             <Text style={styles.priceHero}>$79.99<Text style={styles.priceUnit}> / year</Text></Text>
-
-            <TouchableOpacity
-              style={[styles.monthlyNavButton, (entitlement.isLoading || entitlement.isPro) && styles.purchaseButtonDisabled]}
-              onPress={() => router.push('/paywall-monthly' as any)}
-              activeOpacity={0.85}
-              disabled={entitlement.isPro}
-              testID="paywall.go-monthly"
-            >
-              <Calendar size={20} color={COLORS.white} />
-              <Text style={styles.purchaseButtonText}>Purchase a Monthly Subscription</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.purchaseButton, (entitlement.isLoading || entitlement.isPro) && styles.purchaseButtonDisabled]}
@@ -173,18 +162,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600' as const,
     color: 'rgba(255,255,255,0.6)',
-  },
-  monthlyNavButton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    marginBottom: 10,
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
   },
   purchaseButton: {
     backgroundColor: '#22C55E',

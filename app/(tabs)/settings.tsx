@@ -2092,17 +2092,23 @@ STEP 4: Optional Calendar Import
                 <RefreshCcw size={18} color={COLORS.navyDeep} />,
                 'Restore Purchases',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
-                () => entitlement.restore()
+                () => { void entitlement.restore(); }
               )}
               {renderSettingRow(
                 <ExternalLink size={18} color={COLORS.navyDeep} />,
                 'Manage Subscriptions',
                 <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
-                () => entitlement.openManageSubscription()
+                () => { void entitlement.openManageSubscription(); }
+              )}
+              {renderSettingRow(
+                <Calendar size={18} color={COLORS.navyDeep} />,
+                'Purchase a Monthly Subscription',
+                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                () => router.push('/paywall-monthly' as any)
               )}
               {renderSettingRow(
                 <Crown size={18} color={COLORS.navyDeep} />,
-                'Purchase an Annual Subscription.',
+                'Purchase an Annual Subscription',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
                 () => router.push('/paywall' as any)
               )}
