@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ExternalLink, RefreshCcw, Shield, Sparkles } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
-import { COLORS, BORDER_RADIUS, SHADOW } from '@/constants/theme';
+import { COLORS } from '@/constants/theme';
 import { useEntitlement } from '@/state/EntitlementProvider';
 
 export default function PaywallScreen() {
@@ -20,18 +20,18 @@ export default function PaywallScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient colors={['#0B1B33', '#123A63', '#E8F4FC']} locations={[0, 0.55, 1]} style={styles.bg}>
-        <ScrollView contentContainerStyle={styles.content} testID="paywall.scroll">
-          <View style={styles.card} testID="paywall.card">
-            <View style={styles.headerRow}>
-              <View style={styles.badge}>
-                <Sparkles size={16} color={COLORS.white} />
-                <Text style={styles.badgeText}>Unlock Full Access</Text>
-              </View>
-              <TouchableOpacity onPress={handleClose} activeOpacity={0.8} testID="paywall.close">
-                <Text style={styles.closeText}>Close</Text>
-              </TouchableOpacity>
+        <View style={styles.content} testID="paywall.scroll">
+          <View style={styles.topRow}>
+            <View style={styles.badge}>
+              <Sparkles size={20} color={COLORS.white} />
+              <Text style={styles.badgeText}>Unlock Full Access</Text>
             </View>
+            <TouchableOpacity onPress={handleClose} activeOpacity={0.8} testID="paywall.close">
+              <Text style={styles.closeText}>Close</Text>
+            </TouchableOpacity>
+          </View>
 
+          <View style={styles.centerBlock}>
             <Text style={styles.title}>Annual Subscription</Text>
             <Text style={styles.priceHero}>$79.99<Text style={styles.priceUnit}> / year</Text></Text>
 
@@ -64,7 +64,7 @@ export default function PaywallScreen() {
                 disabled={entitlement.isLoading}
                 testID="paywall.restore"
               >
-                <RefreshCcw size={16} color={COLORS.navyDeep} />
+                <RefreshCcw size={18} color={COLORS.navyDeep} />
                 <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
               </TouchableOpacity>
 
@@ -74,27 +74,29 @@ export default function PaywallScreen() {
                 activeOpacity={0.9}
                 testID="paywall.manage"
               >
-                <ExternalLink size={16} color={COLORS.navyDeep} />
+                <ExternalLink size={18} color={COLORS.navyDeep} />
                 <Text style={styles.secondaryButtonText}>Manage</Text>
               </TouchableOpacity>
             </View>
+          </View>
 
+          <View style={styles.bottomBlock}>
             <Text style={styles.disclosureBody}>
               Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews at $79.99/year unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
             </Text>
 
             <View style={styles.legalRow}>
               <TouchableOpacity style={styles.legalLink} onPress={() => entitlement.openPrivacyPolicy()} testID="paywall.privacy">
-                <Shield size={14} color={COLORS.navyDeep} />
+                <Shield size={16} color={'rgba(255,255,255,0.7)'} />
                 <Text style={styles.legalLinkText}>Privacy Policy</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.legalLink} onPress={() => entitlement.openTerms()} testID="paywall.terms">
-                <Shield size={14} color={COLORS.navyDeep} />
+                <Shield size={16} color={'rgba(255,255,255,0.7)'} />
                 <Text style={styles.legalLinkText}>Terms of Use (EULA)</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </ScrollView>
+        </View>
       </LinearGradient>
     </>
   );
@@ -105,69 +107,71 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 24,
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 36,
   },
-  card: {
-    backgroundColor: 'rgba(255,255,255,0.97)',
-    borderRadius: BORDER_RADIUS.xl,
-    padding: 20,
-    ...SHADOW.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.55)',
-  },
-  headerRow: {
+  topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 20,
   },
   badge: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     alignItems: 'center',
-    backgroundColor: COLORS.navyDeep,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   badgeText: {
     color: COLORS.white,
     fontWeight: '700' as const,
-    fontSize: 13,
+    fontSize: 16,
   },
   closeText: {
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.8)',
     fontWeight: '700' as const,
-    fontSize: 15,
+    fontSize: 18,
+  },
+  centerBlock: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
-    fontSize: 22,
+    fontSize: 30,
     fontWeight: '800' as const,
-    color: COLORS.navyDeep,
-    marginBottom: 2,
+    color: COLORS.white,
+    marginBottom: 8,
     textAlign: 'center',
   },
   priceHero: {
-    fontSize: 34,
+    fontSize: 52,
     fontWeight: '900' as const,
-    color: COLORS.money,
+    color: '#4ADE80',
     textAlign: 'center',
-    marginBottom: 14,
+    marginBottom: 28,
   },
   priceUnit: {
-    fontSize: 15,
+    fontSize: 22,
     fontWeight: '600' as const,
-    color: COLORS.textDarkGrey,
+    color: 'rgba(255,255,255,0.6)',
   },
   purchaseButton: {
-    backgroundColor: COLORS.money,
-    borderRadius: 14,
-    paddingVertical: 14,
+    backgroundColor: '#22C55E',
+    borderRadius: 16,
+    paddingVertical: 18,
     alignItems: 'center',
-    marginBottom: 10,
+    alignSelf: 'stretch',
+    marginBottom: 16,
+    width: '100%',
   },
   purchaseButtonDisabled: {
     opacity: 0.6,
@@ -175,81 +179,87 @@ const styles = StyleSheet.create({
   purchaseButtonText: {
     color: COLORS.white,
     fontWeight: '800' as const,
-    fontSize: 16,
+    fontSize: 20,
   },
   rowButtons: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
+    gap: 12,
+    width: '100%',
   },
   secondaryButton: {
     flex: 1,
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.bgSecondary,
-    borderRadius: 12,
-    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 14,
+    paddingVertical: 14,
     borderWidth: 1,
-    borderColor: 'rgba(10, 31, 68, 0.10)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   secondaryButtonDisabled: {
     opacity: 0.6,
   },
   secondaryButtonText: {
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     fontWeight: '700' as const,
-    fontSize: 13,
+    fontSize: 16,
+  },
+  bottomBlock: {
+    alignItems: 'center',
+    marginTop: 20,
   },
   disclosureBody: {
-    color: COLORS.textDarkGrey,
-    fontSize: 11,
-    lineHeight: 15,
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '500' as const,
-    marginBottom: 12,
+    marginBottom: 16,
     textAlign: 'center',
   },
   legalRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
+    justifyContent: 'center',
     flexWrap: 'wrap',
   },
   legalLink: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: 'rgba(18, 58, 99, 0.06)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(18, 58, 99, 0.10)',
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   legalLinkText: {
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.75)',
     fontWeight: '700' as const,
-    fontSize: 11,
+    fontSize: 15,
   },
   errorBox: {
     marginBottom: 12,
-    padding: 12,
-    borderRadius: 12,
+    padding: 14,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(176,0,32,0.22)',
-    backgroundColor: 'rgba(176,0,32,0.06)',
+    borderColor: 'rgba(255,100,100,0.3)',
+    backgroundColor: 'rgba(255,100,100,0.12)',
+    width: '100%',
   },
   errorTitle: {
-    color: '#8A0020',
+    color: '#FF8A8A',
     fontWeight: '900' as const,
     marginBottom: 4,
-    fontSize: 12,
+    fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   errorBody: {
-    color: '#8A0020',
-    fontSize: 13,
-    lineHeight: 18,
+    color: '#FF8A8A',
+    fontSize: 15,
+    lineHeight: 20,
   },
 });
