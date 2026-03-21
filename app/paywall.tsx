@@ -24,7 +24,7 @@ export default function PaywallScreen() {
           <View style={styles.topRow}>
             <View style={styles.badge}>
               <Sparkles size={20} color={COLORS.white} />
-              <Text style={styles.badgeText}>Unlock Full Access</Text>
+              <Text style={styles.badgeText}>Annual Subscription</Text>
             </View>
             <TouchableOpacity onPress={handleClose} activeOpacity={0.8} testID="paywall.close">
               <Text style={styles.closeText}>Close</Text>
