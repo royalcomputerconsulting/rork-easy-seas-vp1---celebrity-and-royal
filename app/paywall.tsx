@@ -81,17 +81,19 @@ export default function PaywallScreen() {
           </View>
 
           <View style={styles.bottomBlock}>
-            <Text style={styles.disclosureBody}>
-              Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews at $79.99/year unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
-            </Text>
+            <View style={styles.disclosureBox}>
+              <Text style={styles.disclosureBody}>
+                Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews at $79.99/year unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
+              </Text>
+            </View>
 
             <View style={styles.legalRow}>
               <TouchableOpacity style={styles.legalLink} onPress={() => entitlement.openPrivacyPolicy()} testID="paywall.privacy">
-                <Shield size={16} color={'rgba(255,255,255,0.7)'} />
+                <Shield size={16} color={'#333'} />
                 <Text style={styles.legalLinkText}>Privacy Policy</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.legalLink} onPress={() => entitlement.openTerms()} testID="paywall.terms">
-                <Shield size={16} color={'rgba(255,255,255,0.7)'} />
+                <Shield size={16} color={'#333'} />
                 <Text style={styles.legalLinkText}>Terms of Use (EULA)</Text>
               </TouchableOpacity>
             </View>
@@ -211,12 +213,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
   },
+  disclosureBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 16,
+  },
   disclosureBody: {
-    color: 'rgba(255,255,255,0.75)',
+    color: '#111111',
     fontSize: 17,
     lineHeight: 24,
     fontWeight: '500' as const,
-    marginBottom: 16,
     textAlign: 'center',
   },
   legalRow: {
@@ -232,12 +240,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: '#E0E0E0',
   },
   legalLinkText: {
-    color: 'rgba(255,255,255,0.75)',
+    color: '#111111',
     fontWeight: '700' as const,
     fontSize: 15,
   },
