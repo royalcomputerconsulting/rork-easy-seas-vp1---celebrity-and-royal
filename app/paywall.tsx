@@ -203,9 +203,11 @@ const styles = StyleSheet.create({
   },
   disclosureBody: {
     color: COLORS.textDarkGrey,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 28,
+    lineHeight: 36,
+    fontWeight: '900' as const,
     marginBottom: 14,
+    textAlign: 'center',
   },
   legalRow: {
     flexDirection: 'row',
