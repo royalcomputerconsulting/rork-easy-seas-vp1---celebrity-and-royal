@@ -88,9 +88,9 @@ async function withTimeout<T>(
   }
 }
 
-export const BASIC_PRODUCT_ID_MONTHLY = 'easyseas_basic_monthly' as const;
-export const PRO_PRODUCT_ID_MONTHLY = 'easyseas_pro_monthly' as const;
-export const PRO_PRODUCT_ID_ANNUAL = 'easyseas_pro_annual' as const;
+export const BASIC_PRODUCT_ID_MONTHLY = 'ofrngeddbd379a4' as const;
+export const PRO_PRODUCT_ID_MONTHLY = 'ofrngeddbd379a4' as const;
+export const PRO_PRODUCT_ID_ANNUAL = 'ofrng8ec8ef5be7' as const;
 
 const PRIVACY_URL = 'https://www.royalcomputerconsulting.com/privacy-policy' as const;
 const TERMS_URL = 'https://www.royalcomputerconsulting.com/support-policy' as const;
