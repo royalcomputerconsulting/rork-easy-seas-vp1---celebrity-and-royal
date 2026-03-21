@@ -75,7 +75,7 @@ export default function PaywallScreen() {
                 testID="paywall.manage"
               >
                 <ExternalLink size={18} color={COLORS.navyDeep} />
-                <Text style={styles.secondaryButtonText}>Manage</Text>
+                <Text style={styles.secondaryButtonText} numberOfLines={1}>Manage Subscription</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -112,14 +112,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 44,
     paddingBottom: 36,
   },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 8,
   },
   badge: {
     flexDirection: 'row',
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   badgeText: {
     color: COLORS.white,
     fontWeight: '700' as const,
-    fontSize: 16,
+    fontSize: 14,
   },
   closeText: {
     color: 'rgba(255,255,255,0.8)',
@@ -148,31 +148,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '800' as const,
     color: COLORS.white,
-    marginBottom: 8,
+    marginBottom: 4,
     textAlign: 'center',
   },
   priceHero: {
-    fontSize: 52,
+    fontSize: 42,
     fontWeight: '900' as const,
     color: '#4ADE80',
     textAlign: 'center',
-    marginBottom: 28,
+    marginBottom: 18,
   },
   priceUnit: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '600' as const,
     color: 'rgba(255,255,255,0.6)',
   },
   purchaseButton: {
     backgroundColor: '#22C55E',
     borderRadius: 14,
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center',
     alignSelf: 'stretch',
-    marginBottom: 12,
+    marginBottom: 10,
     width: '100%',
   },
   purchaseButtonDisabled: {
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 12,
     paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
   },
@@ -207,11 +207,12 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: COLORS.white,
     fontWeight: '700' as const,
-    fontSize: 13,
+    fontSize: 12,
+    flexShrink: 1,
   },
   bottomBlock: {
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 12,
   },
   disclosureBox: {
     backgroundColor: '#FFFFFF',
@@ -222,8 +223,8 @@ const styles = StyleSheet.create({
   },
   disclosureBody: {
     color: '#111111',
-    fontSize: 17,
-    lineHeight: 24,
+    fontSize: 20,
+    lineHeight: 28,
     fontWeight: '500' as const,
     textAlign: 'center',
   },
@@ -247,7 +248,7 @@ const styles = StyleSheet.create({
   legalLinkText: {
     color: '#111111',
     fontWeight: '700' as const,
-    fontSize: 15,
+    fontSize: 20,
   },
   errorBox: {
     marginBottom: 12,
