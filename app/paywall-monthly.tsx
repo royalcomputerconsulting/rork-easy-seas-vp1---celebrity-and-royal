@@ -12,11 +12,7 @@ export default function PaywallMonthlyScreen() {
 
   const handleClose = useCallback(() => {
     console.log('[PaywallMonthly] Close requested');
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/(overview)' as any);
-    }
+    router.replace('/(tabs)/(overview)' as any);
   }, [router]);
 
   return (
