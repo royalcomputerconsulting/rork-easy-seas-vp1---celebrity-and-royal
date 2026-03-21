@@ -1,54 +1,46 @@
 import { useCallback } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ExternalLink, RefreshCcw, Shield, Calendar } from 'lucide-react-native';
+import { ExternalLink, RefreshCcw, Shield } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
 import { COLORS } from '@/constants/theme';
 import { useEntitlement } from '@/state/EntitlementProvider';
 
-export default function PaywallScreen() {
+export default function PaywallMonthlyScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
 
   const handleClose = useCallback(() => {
-    console.log('[Paywall] Close requested - navigating to home');
-    router.replace('/(tabs)/(overview)' as any);
+    console.log('[PaywallMonthly] Close requested');
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/(overview)' as any);
+    }
   }, [router]);
-
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient colors={['#0B1B33', '#123A63', '#E8F4FC']} locations={[0, 0.55, 1]} style={styles.bg}>
-        <View style={styles.content} testID="paywall.scroll">
+        <View style={styles.content} testID="paywall-monthly.scroll">
           <View style={styles.topRow}>
             <View />
-            <TouchableOpacity onPress={handleClose} activeOpacity={0.8} testID="paywall.close">
+            <TouchableOpacity onPress={handleClose} activeOpacity={0.8} testID="paywall-monthly.close">
               <Text style={styles.closeText}>Close</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.centerBlock}>
-            <Text style={styles.title}>Annual Subscription</Text>
-            <Text style={styles.priceHero}>$79.99<Text style={styles.priceUnit}> / year</Text></Text>
-
-            <TouchableOpacity
-              style={[styles.monthlyNavButton, (entitlement.isLoading || entitlement.isPro) && styles.purchaseButtonDisabled]}
-              onPress={() => router.push('/paywall-monthly' as any)}
-              activeOpacity={0.85}
-              disabled={entitlement.isPro}
-              testID="paywall.go-monthly"
-            >
-              <Calendar size={20} color={COLORS.white} />
-              <Text style={styles.purchaseButtonText}>Purchase a Monthly Subscription</Text>
-            </TouchableOpacity>
+            <Text style={styles.title}>Monthly Subscription</Text>
+            <Text style={styles.priceHero}>$9.99<Text style={styles.priceUnit}> / month</Text></Text>
 
             <TouchableOpacity
               style={[styles.purchaseButton, (entitlement.isLoading || entitlement.isPro) && styles.purchaseButtonDisabled]}
-              onPress={() => entitlement.subscribeProAnnual()}
+              onPress={() => entitlement.subscribeProMonthly()}
               activeOpacity={0.85}
               disabled={entitlement.isLoading || entitlement.isPro}
-              testID="paywall.subscribe-pro-annual"
+              testID="paywall-monthly.subscribe-pro-monthly"
             >
               {entitlement.isLoading ? (
                 <ActivityIndicator color={COLORS.white} />
@@ -58,7 +50,7 @@ export default function PaywallScreen() {
             </TouchableOpacity>
 
             {!!entitlement.error && (
-              <View style={styles.errorBox} testID="paywall.error">
+              <View style={styles.errorBox} testID="paywall-monthly.error">
                 <Text style={styles.errorTitle}>Purchase unavailable</Text>
                 <Text style={styles.errorBody}>{entitlement.error}</Text>
               </View>
@@ -70,7 +62,7 @@ export default function PaywallScreen() {
                 onPress={() => entitlement.restore()}
                 activeOpacity={0.9}
                 disabled={entitlement.isLoading}
-                testID="paywall.restore"
+                testID="paywall-monthly.restore"
               >
                 <RefreshCcw size={18} color={COLORS.navyDeep} />
                 <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
@@ -80,7 +72,7 @@ export default function PaywallScreen() {
                 style={styles.secondaryButton}
                 onPress={() => entitlement.openManageSubscription()}
                 activeOpacity={0.9}
-                testID="paywall.manage"
+                testID="paywall-monthly.manage"
               >
                 <ExternalLink size={18} color={COLORS.navyDeep} />
                 <Text style={styles.secondaryButtonText} numberOfLines={1}>Manage Subscription</Text>
@@ -91,16 +83,16 @@ export default function PaywallScreen() {
           <View style={styles.bottomBlock}>
             <View style={styles.disclosureBox}>
               <Text style={styles.disclosureBody}>
-                Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews at $79.99/year unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
+                Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews at $9.99/month unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
               </Text>
             </View>
 
             <View style={styles.legalRow}>
-              <TouchableOpacity style={styles.legalLink} onPress={() => entitlement.openPrivacyPolicy()} testID="paywall.privacy">
+              <TouchableOpacity style={styles.legalLink} onPress={() => entitlement.openPrivacyPolicy()} testID="paywall-monthly.privacy">
                 <Shield size={16} color={'#333'} />
                 <Text style={styles.legalLinkText}>Privacy Policy</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.legalLink} onPress={() => entitlement.openTerms()} testID="paywall.terms">
+              <TouchableOpacity style={styles.legalLink} onPress={() => entitlement.openTerms()} testID="paywall-monthly.terms">
                 <Shield size={16} color={'#333'} />
                 <Text style={styles.legalLinkText}>Terms of Use (EULA)</Text>
               </TouchableOpacity>
@@ -128,22 +120,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
-  },
-  badge: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  badgeText: {
-    color: COLORS.white,
-    fontWeight: '700' as const,
-    fontSize: 14,
   },
   closeText: {
     color: 'rgba(255,255,255,0.8)',
@@ -174,20 +150,8 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: 'rgba(255,255,255,0.6)',
   },
-  monthlyNavButton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    marginBottom: 10,
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
   purchaseButton: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#2563EB',
     borderRadius: 14,
     paddingVertical: 12,
     alignItems: 'center',

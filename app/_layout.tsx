@@ -225,6 +225,14 @@ function RootLayoutNav() {
           animation: 'slide_from_bottom' as const,
         }}
       />
+      <Stack.Screen
+        name="paywall-monthly"
+        options={{
+          presentation: "modal",
+          headerShown: false,
+          animation: 'slide_from_bottom' as const,
+        }}
+      />
       <Stack.Screen 
         name="modal" 
         options={{ 
