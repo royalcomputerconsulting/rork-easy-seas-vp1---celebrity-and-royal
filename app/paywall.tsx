@@ -166,11 +166,11 @@ const styles = StyleSheet.create({
   },
   purchaseButton: {
     backgroundColor: '#22C55E',
-    borderRadius: 16,
-    paddingVertical: 18,
+    borderRadius: 14,
+    paddingVertical: 14,
     alignItems: 'center',
     alignSelf: 'stretch',
-    marginBottom: 16,
+    marginBottom: 12,
     width: '100%',
   },
   purchaseButtonDisabled: {
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   purchaseButtonText: {
     color: COLORS.white,
     fontWeight: '800' as const,
-    fontSize: 20,
+    fontSize: 17,
   },
   rowButtons: {
     flexDirection: 'row',
@@ -189,12 +189,13 @@ const styles = StyleSheet.create({
   secondaryButton: {
     flex: 1,
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
   },
@@ -204,16 +205,16 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: COLORS.white,
     fontWeight: '700' as const,
-    fontSize: 16,
+    fontSize: 13,
   },
   bottomBlock: {
     alignItems: 'center',
     marginTop: 20,
   },
   disclosureBody: {
-    color: 'rgba(255,255,255,0.65)',
-    fontSize: 14,
-    lineHeight: 20,
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 17,
+    lineHeight: 24,
     fontWeight: '500' as const,
     marginBottom: 16,
     textAlign: 'center',
