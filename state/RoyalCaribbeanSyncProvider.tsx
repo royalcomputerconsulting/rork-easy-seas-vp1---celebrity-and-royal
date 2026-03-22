@@ -47,7 +47,7 @@ export const CRUISE_LINE_CONFIG = {
   carnival: {
     name: 'Carnival Cruise Line',
     loginUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
-    offersUrl: 'https://www.carnival.com/cruise-deals',
+    offersUrl: 'https://www.carnival.com/profilemanagement/profiles/offers',
     upcomingUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     holdsUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     loyaltyClubName: 'VIFP Club',
@@ -948,12 +948,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           : isCarnivalMode
           ? 'https://www.carnival.com/profilemanagement/profiles'
           : 'https://www.royalcaribbean.com/account';
-        const CAPTURE_PAGES: { url: string; section: 'bookings' | 'loyalty'; name: string }[] = [
-          { url: config.upcomingUrl, section: 'bookings', name: 'Upcoming Cruises' },
-          { url: config.holdsUrl, section: 'bookings', name: 'Courtesy Holds' },
-          { url: config.loyaltyPageUrl, section: 'loyalty', name: 'Loyalty Programs' },
-          { url: accountHomeUrl, section: 'loyalty', name: 'Account Home' },
-        ];
+        const CAPTURE_PAGES: { url: string; section: 'bookings' | 'loyalty'; name: string }[] = isCarnivalMode
+          ? [
+              { url: 'https://www.carnival.com/profilemanagement/profiles/cruises', section: 'bookings', name: 'My Cruises' },
+              { url: 'https://www.carnival.com/profilemanagement/profiles', section: 'loyalty', name: 'Profile Home' },
+              { url: 'https://www.carnival.com/profilemanagement/profiles/offers', section: 'loyalty', name: 'My Offers' },
+              { url: accountHomeUrl, section: 'loyalty', name: 'Account Home' },
+            ]
+          : [
+              { url: config.upcomingUrl, section: 'bookings', name: 'Upcoming Cruises' },
+              { url: config.holdsUrl, section: 'bookings', name: 'Courtesy Holds' },
+              { url: config.loyaltyPageUrl, section: 'loyalty', name: 'Loyalty Programs' },
+              { url: accountHomeUrl, section: 'loyalty', name: 'Account Home' },
+            ];
         
         const MAX_CYCLES = 3;
         
@@ -979,9 +986,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`📍 Visiting ${page.name}...`, 'info');
             await navigateToPage(page.url, 15000);
             
-            if (isCarnivalMode && page.section === 'bookings' && webViewRef.current) {
-              addLog('🎪 Injecting Carnival bookings scraper...', 'info');
-              webViewRef.current.injectJavaScript(injectCarnivalBookingsScrape() + '; true;');
+            if (isCarnivalMode && webViewRef.current) {
+              if (page.section === 'bookings') {
+                addLog('🎪 Injecting Carnival bookings scraper...', 'info');
+                webViewRef.current.injectJavaScript(injectCarnivalBookingsScrape() + '; true;');
+              } else if (page.name === 'Profile Home') {
+                addLog('🎪 Injecting Carnival bookings scraper on profile page...', 'info');
+                webViewRef.current.injectJavaScript(injectCarnivalBookingsScrape() + '; true;');
+              }
             }
             
             if (capturedSections.current[page.section]) {

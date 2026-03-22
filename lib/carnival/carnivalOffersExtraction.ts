@@ -125,74 +125,6 @@ export const CARNIVAL_OFFERS_SCRIPT = `
     return String(val);
   }
 
-  function buildAuthHeaders() {
-    var headers = { 'accept': 'application/json', 'content-type': 'application/json' };
-    var loyaltyId = '';
-    try {
-      var keys = Object.keys(localStorage || {});
-      for (var i = 0; i < keys.length; i++) {
-        var k = keys[i];
-        try {
-          var v = localStorage.getItem(k);
-          if (!v || v.length < 30) continue;
-          var parsed = JSON.parse(v);
-          if (parsed && parsed.token) {
-            var token = typeof parsed.token === 'string' ? JSON.parse(parsed.token) : parsed.token;
-            var user = parsed.user ? (typeof parsed.user === 'string' ? JSON.parse(parsed.user) : parsed.user) : null;
-            if (token && user && user.accountId) {
-              var rawAuth = token.toString ? token.toString() : String(token);
-              headers['authorization'] = rawAuth.startsWith('Bearer ') ? rawAuth : 'Bearer ' + rawAuth;
-              headers['account-id'] = user.accountId;
-              if (user.cruiseLoyaltyId) loyaltyId = user.cruiseLoyaltyId;
-              break;
-            }
-          }
-        } catch(e2) {}
-      }
-    } catch(e) {}
-    return { headers: headers, loyaltyId: loyaltyId };
-  }
-
-  async function tryCasinoOffersAPI(loyaltyId) {
-    try {
-      log('Trying casino offers API with cookie auth...', 'info');
-      var auth = buildAuthHeaders();
-      if (!loyaltyId && auth.loyaltyId) loyaltyId = auth.loyaltyId;
-
-      var controller = new AbortController();
-      var timeoutId = setTimeout(function() { controller.abort(); }, 12000);
-
-      var response = await fetch('/api/casino/casino-offers/v1', {
-        method: 'POST',
-        headers: auth.headers,
-        credentials: 'include',
-        signal: controller.signal,
-        body: JSON.stringify({ cruiseLoyaltyId: loyaltyId || '', offerCode: '', brand: 'CCL' })
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        var data = await response.json();
-        if (data && data.offers && data.offers.length > 0) {
-          log('Casino offers API returned ' + data.offers.length + ' offers!', 'success');
-          return data;
-        }
-        log('Casino offers API returned empty (status ' + response.status + ')', 'info');
-      } else {
-        log('Casino offers API returned ' + response.status + ' - not available on carnival.com', 'info');
-      }
-      return null;
-    } catch(e) {
-      if (e.name === 'AbortError') {
-        log('Casino offers API timed out - not available on carnival.com', 'info');
-      } else {
-        log('Casino offers API error: ' + (e.message || e), 'info');
-      }
-      return null;
-    }
-  }
-
   function processRCStyleOffers(data) {
     var allRows = [];
     if (!data || !Array.isArray(data.offers)) return { rows: allRows, count: 0 };
@@ -276,69 +208,192 @@ export const CARNIVAL_OFFERS_SCRIPT = `
     return rows;
   }
 
-  function tryExtractFromNextData() {
-    try {
-      var el = document.getElementById('__NEXT_DATA__');
-      if (!el) return [];
-      var pageData = JSON.parse(el.textContent || '');
-      var props = pageData && pageData.props && pageData.props.pageProps;
-      if (!props) return [];
-      log('Found __NEXT_DATA__ on page, scanning for deals...', 'info');
-      var keys = Object.keys(props);
-      for (var ki = 0; ki < keys.length; ki++) {
-        var val = props[keys[ki]];
-        if (Array.isArray(val) && val.length > 0 && val[0]) {
-          var first = val[0];
-          if (first.shipName || first.ship || first.sailDate || first.departureDate ||
-              first.price || first.startingPrice || first.cruiseTitle || first.itinerary) {
-            log('Found ' + val.length + ' deals in __NEXT_DATA__.' + keys[ki], 'success');
-            var rows = [];
-            for (var vi = 0; vi < val.length; vi++) {
-              var item = val[vi];
-              var price = item.price || item.startingPrice || item.lowestPrice || 0;
-              rows.push({
-                sourcePage: 'Offers',
-                offerName: item.cruiseTitle || item.title || item.name || 'Carnival Cruise Deal',
-                offerCode: item.rateCode || item.offerCode || '',
-                offerExpirationDate: '',
-                offerType: 'Cruise Deal',
-                shipName: item.shipName || item.ship || '',
-                shipCode: item.shipCode || '',
-                sailingDate: formatSailDate(item.sailDate || item.departureDate || item.startDate || ''),
-                itinerary: item.itinerary || item.destination || item.destinationName || '',
-                departurePort: item.departurePort || item.homePort || '',
-                cabinType: '',
-                numberOfGuests: '2',
-                perks: '',
-                loyaltyLevel: '', loyaltyPoints: '',
-                interiorPrice: price ? '$' + Number(price).toFixed(2) : '',
-                oceanviewPrice: '', balconyPrice: '', suitePrice: '', taxesAndFees: '',
-                portList: Array.isArray(item.ports) ? item.ports.map(function(p) { return typeof p === 'string' ? p : (p.name || ''); }).join(', ') : '',
-                dayByDayItinerary: [],
-                destinationName: item.destination || item.destinationName || '',
-                totalNights: item.duration || item.nights || item.numberOfNights || null,
-                bookingLink: item.bookingUrl || item.url || item.productViewLink || ''
-              });
+  function scrapeVifpOffersFromDOM() {
+    var deals = [];
+    log('Scraping VIFP offers from profile/offers page DOM...', 'info');
+
+    var offerCards = [];
+    var selectors = [
+      '[class*="offer-card"], [class*="offerCard"], [class*="OfferCard"]',
+      '[class*="offer-tile"], [class*="offerTile"], [class*="OfferTile"]',
+      '[data-testid*="offer"], [data-testid*="deal"]',
+      '[class*="promo-card"], [class*="promoCard"], [class*="PromoCard"]',
+      '[class*="PersonalizedOffer"], [class*="personalized-offer"]',
+      '[class*="casino-offer"], [class*="casinoOffer"]',
+      '[class*="member-offer"], [class*="memberOffer"]',
+      '[class*="vifp-offer"], [class*="vifpOffer"]',
+      '[class*="exclusive-offer"], [class*="exclusiveOffer"]',
+      '[class*="campaign"], [class*="Campaign"]',
+      'article[class*="offer"], article[class*="deal"]',
+      '[class*="loyalty"] [class*="card"], [class*="loyalty"] [class*="Card"]'
+    ];
+
+    for (var si = 0; si < selectors.length; si++) {
+      try {
+        var found = document.querySelectorAll(selectors[si]);
+        if (found.length > 0) {
+          offerCards = found;
+          log('Found ' + found.length + ' offer elements via: ' + selectors[si], 'info');
+          break;
+        }
+      } catch(e) {}
+    }
+
+    if (offerCards.length === 0) {
+      try {
+        var shopLinks = document.querySelectorAll('a[href*="cruise-search"], a[href*="rateCodes"], a[href*="rateCode"], a[href*="offerCode"], a[href*="shop"], a[href*="book-now"]');
+        if (shopLinks.length > 0) {
+          log('Found ' + shopLinks.length + ' offer/shop links - checking parent cards', 'info');
+          var parents = [];
+          for (var li = 0; li < shopLinks.length; li++) {
+            var parent = shopLinks[li].closest('article, section, [class*="card"], [class*="Card"], [class*="tile"], [class*="Tile"], [class*="offer"], [class*="Offer"], [class*="promo"], [class*="Promo"], div[class]');
+            if (parent && parents.indexOf(parent) === -1) {
+              var parentText = (parent.textContent || '').trim();
+              if (parentText.length > 20 && parentText.length < 5000) {
+                parents.push(parent);
+              }
             }
-            return rows;
+          }
+          if (parents.length > 0) {
+            offerCards = parents;
+            log('Found ' + parents.length + ' offer card containers from shop links', 'info');
           }
         }
-      }
-    } catch(e) {
-      log('__NEXT_DATA__ parse error: ' + (e.message || e), 'warning');
+      } catch(e) {}
     }
-    return [];
+
+    if (offerCards.length === 0) {
+      try {
+        var allEls = document.querySelectorAll('section, article, [role="listitem"], div[class*="card"], div[class*="Card"]');
+        var matchEls = [];
+        for (var ei = 0; ei < allEls.length; ei++) {
+          var txt = (allEls[ei].textContent || '').substring(0, 1000).toLowerCase();
+          var hasOfferSignal = (
+            txt.includes('book by') || txt.includes('book now') || txt.includes('shop now') ||
+            txt.includes('shop offers') || txt.includes('rate code') || txt.includes('offer code') ||
+            txt.includes('per person') || txt.includes('from $') || txt.includes('starting at') ||
+            txt.includes('booking bucks') || txt.includes('onboard credit') || txt.includes('obc') ||
+            txt.includes('free upgrade') || txt.includes('bonus offer') || txt.includes('exclusive')
+          );
+          var hasPriceOrDeal = /\\$\\s*[\\d,]+/.test(txt) || /\\d+[\\s-]*night/i.test(txt);
+          if (hasOfferSignal && (hasPriceOrDeal || txt.includes('shop'))) {
+            matchEls.push(allEls[ei]);
+          }
+        }
+        if (matchEls.length > 0 && matchEls.length < 50) {
+          offerCards = matchEls;
+          log('Found ' + matchEls.length + ' potential offer elements by content analysis', 'info');
+        }
+      } catch(e) {}
+    }
+
+    for (var i = 0; i < offerCards.length; i++) {
+      try {
+        var card = offerCards[i];
+        var text = (card.textContent || '').replace(/\\s+/g, ' ').trim();
+        if (text.length < 15) continue;
+
+        var headings = card.querySelectorAll('h1, h2, h3, h4, h5, [class*="title"], [class*="Title"], [class*="heading"], [class*="Heading"], [class*="name"], [class*="Name"]');
+        var offerName = '';
+        for (var hi = 0; hi < headings.length; hi++) {
+          var hText = (headings[hi].textContent || '').trim();
+          if (hText.length > 3 && hText.length < 150) {
+            offerName = hText;
+            break;
+          }
+        }
+        if (!offerName) {
+          var firstStrong = card.querySelector('strong, b, [class*="bold"]');
+          if (firstStrong) offerName = (firstStrong.textContent || '').trim();
+        }
+        if (!offerName) offerName = text.substring(0, 60).split('.')[0].trim();
+
+        var expiryMatch = text.match(/(?:book by|expires?|valid (?:through|until|thru)|offer ends?)[:\\s]*([A-Za-z]+\\.?\\s+\\d{1,2},?\\s+\\d{4}|\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/i);
+        var expiry = expiryMatch ? expiryMatch[1].trim() : '';
+
+        var priceMatch = text.match(/(?:from|starting at|per person|pp)?\\s*\\$\\s*([\\d,]+)/i);
+        var price = priceMatch ? '$' + priceMatch[1].replace(/,/g, '') : '';
+
+        var rateCode = '';
+        try {
+          var links = card.querySelectorAll('a[href]');
+          for (var li2 = 0; li2 < links.length; li2++) {
+            var href = links[li2].getAttribute('href') || '';
+            var rcMatch = href.match(/rateCodes?=([A-Z0-9]+)/i);
+            if (rcMatch) { rateCode = rcMatch[1]; break; }
+            var offerMatch = href.match(/offerCode=([A-Z0-9]+)/i);
+            if (offerMatch) { rateCode = offerMatch[1]; break; }
+          }
+        } catch(e3) {}
+
+        var shipMatch = text.match(SHIP_PATTERN);
+        var shipName = shipMatch ? shipMatch[1] : '';
+
+        var nightsMatch = text.match(/(\\d+)\\s*[-\\s]?\\s*(?:Night|night|Nite|Day)/i);
+        var nights = nightsMatch ? parseInt(nightsMatch[1]) : null;
+
+        var destMatch = text.match(/((?:Western|Eastern|Southern)?\\s*Caribbean|Bahamas|Mexico|Alaska|Hawaii|Bermuda|Europe|Mediterranean|Panama Canal|Transatlantic|Canada|New England|Cuba|Riviera)/i);
+        var destination = destMatch ? destMatch[1].trim() : '';
+
+        var portMatch = text.match(/(?:from|departing|departs?|sailing from)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*(?:,\\s*[A-Z]{2})?)/i);
+        var port = portMatch ? portMatch[1] : '';
+
+        var descEls = card.querySelectorAll('p, [class*="desc"], [class*="Desc"], [class*="detail"], [class*="Detail"], [class*="subtitle"], [class*="Subtitle"]');
+        var perks = '';
+        for (var di = 0; di < descEls.length; di++) {
+          var dText = (descEls[di].textContent || '').trim();
+          if (dText.length > 10 && dText.length < 300 && dText !== offerName) {
+            perks = dText;
+            break;
+          }
+        }
+
+        var bookingLink = '';
+        try {
+          var shopBtn = card.querySelector('a[href*="cruise-search"], a[href*="rateCodes"], a[href*="book"], a[href*="shop"]');
+          if (shopBtn) bookingLink = shopBtn.getAttribute('href') || '';
+        } catch(e4) {}
+
+        if (offerName || rateCode || price) {
+          deals.push({
+            sourcePage: 'Offers',
+            offerName: offerName || 'Carnival VIFP Offer',
+            offerCode: rateCode,
+            offerExpirationDate: expiry,
+            offerType: 'VIFP Club',
+            shipName: shipName,
+            shipCode: '',
+            sailingDate: '',
+            itinerary: destination,
+            departurePort: port,
+            cabinType: '',
+            numberOfGuests: '2',
+            perks: perks.substring(0, 200),
+            loyaltyLevel: '', loyaltyPoints: '',
+            interiorPrice: price,
+            oceanviewPrice: '', balconyPrice: '', suitePrice: '', taxesAndFees: '',
+            portList: '',
+            dayByDayItinerary: [],
+            destinationName: destination,
+            totalNights: nights,
+            bookingLink: bookingLink
+          });
+          log('Scraped offer: ' + (offerName || rateCode) + (price ? ' - ' + price : '') + (rateCode ? ' (Code: ' + rateCode + ')' : ''), 'success');
+        }
+      } catch(e) {}
+    }
+
+    return deals;
   }
 
-  function scrapeDealCardsFromDOM() {
+  function scrapeCruiseDealsFromDOM() {
     var deals = [];
-    log('Attempting DOM scrape of cruise deals page...', 'info');
+    log('Scraping cruise deals from page DOM...', 'info');
 
     var selectorList = [
       '[data-testid*="deal"], [data-testid*="cruise"], [data-testid*="offer"]',
       '[class*="DealCard"], [class*="deal-card"], [class*="dealCard"]',
       '[class*="CruiseCard"], [class*="cruise-card"], [class*="cruiseCard"]',
-      '[class*="OfferCard"], [class*="offer-card"], [class*="offerCard"]',
       '[class*="SearchResult"], [class*="search-result"]',
       'article[class*="deal"], article[class*="cruise"]',
       '[class*="tile"][class*="cruise"], [class*="tile"][class*="deal"]'
@@ -360,10 +415,9 @@ export const CARNIVAL_OFFERS_SCRIPT = `
       try {
         var cruiseLinks = document.querySelectorAll('a[href*="/cruise-search"], a[href*="/booking"], a[href*="itineraryCode"], a[href*="/cruise-deals/"]');
         if (cruiseLinks.length > 1) {
-          log('Found ' + cruiseLinks.length + ' cruise links - checking parent cards', 'info');
           var parents = [];
           for (var li = 0; li < cruiseLinks.length; li++) {
-            var parent = cruiseLinks[li].closest('article, section, [class*="card"], [class*="Card"], [class*="tile"], [class*="Tile"], [class*="deal"], [class*="Deal"]');
+            var parent = cruiseLinks[li].closest('article, section, [class*="card"], [class*="Card"], [class*="tile"], [class*="Tile"]');
             if (parent && parents.indexOf(parent) === -1) parents.push(parent);
           }
           if (parents.length > 0) cards = parents;
@@ -381,10 +435,7 @@ export const CARNIVAL_OFFERS_SCRIPT = `
             shipEls.push(allEls[ei]);
           }
         }
-        if (shipEls.length > 0) {
-          cards = shipEls;
-          log('Found ' + shipEls.length + ' elements with ship names + prices', 'info');
-        }
+        if (shipEls.length > 0) cards = shipEls;
       } catch(e) {}
     }
 
@@ -455,6 +506,175 @@ export const CARNIVAL_OFFERS_SCRIPT = `
     return deals;
   }
 
+  function tryExtractFromNextData() {
+    try {
+      var el = document.getElementById('__NEXT_DATA__');
+      if (!el) return [];
+      var pageData = JSON.parse(el.textContent || '');
+      var props = pageData && pageData.props && pageData.props.pageProps;
+      if (!props) return [];
+      log('Found __NEXT_DATA__ on page, scanning for deals...', 'info');
+      var keys = Object.keys(props);
+      for (var ki = 0; ki < keys.length; ki++) {
+        var val = props[keys[ki]];
+        if (Array.isArray(val) && val.length > 0 && val[0]) {
+          var first = val[0];
+          if (first.shipName || first.ship || first.sailDate || first.departureDate ||
+              first.price || first.startingPrice || first.cruiseTitle || first.itinerary ||
+              first.OfferId || first.Title || first.CtaUrl) {
+            log('Found ' + val.length + ' deals in __NEXT_DATA__.' + keys[ki], 'success');
+            var rows = [];
+            for (var vi = 0; vi < val.length; vi++) {
+              var item = val[vi];
+              if (item.OfferId || item.Title) {
+                var rateCode2 = '';
+                try { var rm = (item.CtaUrl || '').match(/rateCodes=([A-Z0-9]+)/i); if (rm) rateCode2 = rm[1]; } catch(e) {}
+                var expiry2 = '';
+                try { var em = (item.Subtitle || '').match(/Book by (.+)/i); if (em) expiry2 = em[1].trim(); } catch(e) {}
+                rows.push({
+                  sourcePage: 'Offers',
+                  offerName: item.Title || 'Carnival VIFP Offer',
+                  offerCode: rateCode2,
+                  offerExpirationDate: expiry2,
+                  offerType: 'VIFP Club',
+                  shipName: '', shipCode: '', sailingDate: '', itinerary: '',
+                  departurePort: '', cabinType: '', numberOfGuests: '2',
+                  perks: (item.Description || '').replace(/<[^>]*>/g, ' ').substring(0, 200),
+                  loyaltyLevel: '', loyaltyPoints: '',
+                  interiorPrice: item.Price ? '$' + Number(item.Price).toFixed(2) : '',
+                  oceanviewPrice: '', balconyPrice: '', suitePrice: '', taxesAndFees: '',
+                  portList: '', dayByDayItinerary: [], destinationName: '',
+                  totalNights: null, bookingLink: item.CtaUrl || '',
+                  carnivalOfferId: item.OfferId || ''
+                });
+              } else {
+                var price = item.price || item.startingPrice || item.lowestPrice || 0;
+                rows.push({
+                  sourcePage: 'Offers',
+                  offerName: item.cruiseTitle || item.title || item.name || 'Carnival Cruise Deal',
+                  offerCode: item.rateCode || item.offerCode || '',
+                  offerExpirationDate: '',
+                  offerType: 'Cruise Deal',
+                  shipName: item.shipName || item.ship || '',
+                  shipCode: item.shipCode || '',
+                  sailingDate: formatSailDate(item.sailDate || item.departureDate || item.startDate || ''),
+                  itinerary: item.itinerary || item.destination || item.destinationName || '',
+                  departurePort: item.departurePort || item.homePort || '',
+                  cabinType: '',
+                  numberOfGuests: '2',
+                  perks: '',
+                  loyaltyLevel: '', loyaltyPoints: '',
+                  interiorPrice: price ? '$' + Number(price).toFixed(2) : '',
+                  oceanviewPrice: '', balconyPrice: '', suitePrice: '', taxesAndFees: '',
+                  portList: Array.isArray(item.ports) ? item.ports.map(function(p) { return typeof p === 'string' ? p : (p.name || ''); }).join(', ') : '',
+                  dayByDayItinerary: [],
+                  destinationName: item.destination || item.destinationName || '',
+                  totalNights: item.duration || item.nights || item.numberOfNights || null,
+                  bookingLink: item.bookingUrl || item.url || item.productViewLink || ''
+                });
+              }
+            }
+            return rows;
+          }
+        }
+      }
+      if (props.offers && Array.isArray(props.offers)) {
+        log('Found offers array in __NEXT_DATA__.pageProps.offers', 'success');
+        return props.offers.map(function(item, idx) {
+          return {
+            sourcePage: 'Offers',
+            offerName: item.title || item.name || item.offerName || 'Carnival Offer ' + (idx + 1),
+            offerCode: item.rateCode || item.offerCode || item.code || '',
+            offerExpirationDate: item.expirationDate || item.bookByDate || '',
+            offerType: 'VIFP Club',
+            shipName: item.shipName || '', shipCode: '', sailingDate: '',
+            itinerary: item.itinerary || item.destination || '',
+            departurePort: item.departurePort || '', cabinType: '', numberOfGuests: '2',
+            perks: (item.description || '').substring(0, 200),
+            loyaltyLevel: '', loyaltyPoints: '',
+            interiorPrice: item.price ? '$' + Number(item.price).toFixed(2) : '',
+            oceanviewPrice: '', balconyPrice: '', suitePrice: '', taxesAndFees: '',
+            portList: '', dayByDayItinerary: [], destinationName: item.destination || '',
+            totalNights: item.nights || item.duration || null,
+            bookingLink: item.url || item.bookingUrl || ''
+          };
+        });
+      }
+    } catch(e) {
+      log('__NEXT_DATA__ parse error: ' + (e.message || e), 'warning');
+    }
+    return [];
+  }
+
+  function tryFetchCarnivalOffersAPI() {
+    var apiEndpoints = [
+      '/profilemanagement/api/offers',
+      '/profilemanagement/api/profiles/offers',
+      '/api/profile/offers',
+      '/api/loyalty/offers',
+      '/api/vifp/offers',
+      '/api/personalization/offers',
+      '/api/casino/offers',
+      '/api/member/offers'
+    ];
+
+    return new Promise(function(resolve) {
+      var tried = 0;
+      var totalEndpoints = apiEndpoints.length;
+
+      function tryNext() {
+        if (tried >= totalEndpoints) {
+          resolve(null);
+          return;
+        }
+        var endpoint = apiEndpoints[tried];
+        tried++;
+
+        var controller = new AbortController();
+        var timeoutId = setTimeout(function() { controller.abort(); }, 6000);
+
+        fetch(endpoint, {
+          method: 'GET',
+          headers: { 'accept': 'application/json', 'x-requested-with': 'XMLHttpRequest' },
+          credentials: 'include',
+          signal: controller.signal
+        }).then(function(response) {
+          clearTimeout(timeoutId);
+          if (response.ok) {
+            var ct = response.headers.get('content-type') || '';
+            if (ct.includes('json')) {
+              return response.json().then(function(data) {
+                if (!data) { tryNext(); return; }
+                if (data.Items && Array.isArray(data.Items) && data.Items.length > 0) {
+                  log('Found ' + data.Items.length + ' VIFP offers from ' + endpoint, 'success');
+                  resolve({ type: 'vifp', data: data });
+                  return;
+                }
+                if (data.offers && Array.isArray(data.offers) && data.offers.length > 0) {
+                  log('Found ' + data.offers.length + ' casino offers from ' + endpoint, 'success');
+                  resolve({ type: 'casino', data: data });
+                  return;
+                }
+                if (Array.isArray(data) && data.length > 0) {
+                  log('Found ' + data.length + ' offers (array) from ' + endpoint, 'success');
+                  resolve({ type: 'array', data: data });
+                  return;
+                }
+                tryNext();
+              });
+            }
+          }
+          tryNext();
+        }).catch(function() {
+          clearTimeout(timeoutId);
+          tryNext();
+        });
+      }
+
+      tryNext();
+    });
+  }
+
   async function extractCarnivalOffers() {
     try {
       log('Starting Carnival offer extraction...', 'info');
@@ -478,13 +698,8 @@ export const CARNIVAL_OFFERS_SCRIPT = `
         log('Found ' + tgoCookie.offers.length + ' rate codes from TGO cookie', 'success');
       }
 
-      var loyaltyId = '';
-      if (userCookie && userCookie.PastGuestNumber) loyaltyId = userCookie.PastGuestNumber;
-      else if (tgoCookie && tgoCookie.vifpNumber) loyaltyId = tgoCookie.vifpNumber;
-
       progress(0, 100, 'Starting Carnival offer extraction...');
 
-      // Strategy 1: Check already-captured VIFP offers from network interception
       var vifpSource = window.__carnivalVifpOffers || (window.capturedPayloads && window.capturedPayloads.carnivalVifpOffers);
       if (vifpSource) {
         var immediateRows = convertVifpOffers(vifpSource);
@@ -496,25 +711,32 @@ export const CARNIVAL_OFFERS_SCRIPT = `
         }
       }
 
-      // Strategy 2: Try casino offers API (works if carnival.com has this endpoint)
-      progress(5, 100, 'Trying Carnival offers API...');
-      var casinoData = await tryCasinoOffersAPI(loyaltyId);
-      if (casinoData && casinoData.offers && casinoData.offers.length > 0) {
-        log('Processing casino offers API data...', 'info');
-        var result = processRCStyleOffers(casinoData);
-        for (var k = 0; k < result.rows.length; k += BATCH_SIZE) {
-          sendBatch(result.rows.slice(k, k + BATCH_SIZE), false);
+      progress(5, 100, 'Trying Carnival offers APIs...');
+      var apiResult = await tryFetchCarnivalOffersAPI();
+      if (apiResult) {
+        if (apiResult.type === 'vifp') {
+          var vifpRows = convertVifpOffers(apiResult.data);
+          if (vifpRows.length > 0) {
+            sendBatch(vifpRows, false);
+            sendBatch([], true, vifpRows.length, vifpRows.length);
+            return;
+          }
+        } else if (apiResult.type === 'casino') {
+          var result = processRCStyleOffers(apiResult.data);
+          if (result.rows.length > 0) {
+            for (var k = 0; k < result.rows.length; k += BATCH_SIZE) {
+              sendBatch(result.rows.slice(k, k + BATCH_SIZE), false);
+            }
+            sendBatch([], true, result.rows.length, result.count);
+            return;
+          }
         }
-        sendBatch([], true, result.rows.length, result.count);
-        log('Offers complete: ' + result.rows.length + ' sailings from ' + result.count + ' offers', 'success');
-        return;
       }
 
-      // Strategy 3: Wait for VIFP offers from page API calls (network interception)
       log('Waiting for Carnival page to load offers data...', 'info');
-      for (var wi = 0; wi < 12; wi++) {
-        await wait(2500);
-        progress(15 + (wi * 5), 100, 'Waiting for Carnival offers (' + ((wi + 1) * 2.5).toFixed(0) + 's)...');
+      for (var wi = 0; wi < 15; wi++) {
+        await wait(2000);
+        progress(15 + (wi * 4), 100, 'Waiting for Carnival offers (' + ((wi + 1) * 2) + 's)...');
 
         var captured = window.__carnivalVifpOffers || (window.capturedPayloads && window.capturedPayloads.carnivalVifpOffers);
         if (captured) {
@@ -526,10 +748,22 @@ export const CARNIVAL_OFFERS_SCRIPT = `
             return;
           }
         }
+
+        if (window.capturedPayloads && window.capturedPayloads.offers) {
+          var capturedOffers = window.capturedPayloads.offers;
+          if (capturedOffers.offers && capturedOffers.offers.length > 0) {
+            var casinoResult = processRCStyleOffers(capturedOffers);
+            if (casinoResult.rows.length > 0) {
+              sendBatch(casinoResult.rows, false);
+              sendBatch([], true, casinoResult.rows.length, casinoResult.count);
+              log('Casino offers captured: ' + casinoResult.rows.length + ' sailings', 'success');
+              return;
+            }
+          }
+        }
       }
 
-      // Strategy 4: Try __NEXT_DATA__
-      progress(80, 100, 'Checking page data...');
+      progress(75, 100, 'Checking page data...');
       var nextDataRows = tryExtractFromNextData();
       if (nextDataRows.length > 0) {
         sendBatch(nextDataRows, false);
@@ -538,17 +772,24 @@ export const CARNIVAL_OFFERS_SCRIPT = `
         return;
       }
 
-      // Strategy 5: DOM scraping
-      progress(85, 100, 'Scraping page for deals...');
-      var domDeals = scrapeDealCardsFromDOM();
-      if (domDeals.length > 0) {
-        sendBatch(domDeals, false);
-        sendBatch([], true, domDeals.length, domDeals.length);
-        log('Scraped ' + domDeals.length + ' deals from page', 'success');
+      progress(80, 100, 'Scraping VIFP offers from page...');
+      var vifpDeals = scrapeVifpOffersFromDOM();
+      if (vifpDeals.length > 0) {
+        sendBatch(vifpDeals, false);
+        sendBatch([], true, vifpDeals.length, vifpDeals.length);
+        log('Scraped ' + vifpDeals.length + ' VIFP offers from page', 'success');
         return;
       }
 
-      // Strategy 6: TGO cookie fallback
+      progress(90, 100, 'Scraping cruise deals from page...');
+      var domDeals = scrapeCruiseDealsFromDOM();
+      if (domDeals.length > 0) {
+        sendBatch(domDeals, false);
+        sendBatch([], true, domDeals.length, domDeals.length);
+        log('Scraped ' + domDeals.length + ' cruise deals from page', 'success');
+        return;
+      }
+
       if (tgoCookie && tgoCookie.offers.length > 0) {
         log('Creating offers from TGO cookie rate codes...', 'info');
         var cookieRows = [];
@@ -682,11 +923,15 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
 
   async function tryFetchBookingsAPI() {
     var endpoints = [
+      '/profilemanagement/api/bookings',
+      '/profilemanagement/api/profiles/cruises',
+      '/profilemanagement/api/cruises',
       '/api/profile/bookings',
       '/api/account/bookings',
-      '/profilemanagement/api/bookings',
       '/api/booking/upcoming',
-      '/api/profile/cruises'
+      '/api/profile/cruises',
+      '/api/reservation/list',
+      '/api/guest/bookings'
     ];
 
     for (var ei = 0; ei < endpoints.length; ei++) {
@@ -695,7 +940,7 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
         var tid = setTimeout(function() { controller.abort(); }, 8000);
         var response = await fetch(endpoints[ei], {
           method: 'GET',
-          headers: { 'accept': 'application/json' },
+          headers: { 'accept': 'application/json', 'x-requested-with': 'XMLHttpRequest' },
           credentials: 'include',
           signal: controller.signal
         });
@@ -713,6 +958,8 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
             else if (data.data && Array.isArray(data.data)) bookings = data.data;
             else if (data.payload && Array.isArray(data.payload)) bookings = data.payload;
             else if (data.upcoming && Array.isArray(data.upcoming)) bookings = data.upcoming;
+            else if (data.pastCruises && Array.isArray(data.pastCruises)) bookings = data.pastCruises;
+            else if (data.upcomingCruises && Array.isArray(data.upcomingCruises)) bookings = data.upcomingCruises;
 
             if (bookings && bookings.length > 0) {
               log('Found ' + bookings.length + ' bookings from ' + endpoints[ei], 'success');
@@ -746,21 +993,30 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
       if (props.bookings) return Array.isArray(props.bookings) ? props.bookings : [];
       if (props.cruises) return Array.isArray(props.cruises) ? props.cruises : [];
       if (props.trips) return Array.isArray(props.trips) ? props.trips : [];
+      if (props.pastCruises) return Array.isArray(props.pastCruises) ? props.pastCruises : [];
+      if (props.upcomingCruises) return Array.isArray(props.upcomingCruises) ? props.upcomingCruises : [];
     } catch(e) {}
     return [];
   }
 
   function scrapeBookingsFromDOM() {
     var bookings = [];
+    log('Scraping bookings from Carnival profile page DOM...', 'info');
 
     var selectorList = [
-      '[data-testid*="booking"], [data-testid*="cruise"], [data-testid*="trip"]',
+      '[data-testid*="booking"], [data-testid*="cruise"], [data-testid*="trip"], [data-testid*="reservation"]',
       '[class*="BookingCard"], [class*="booking-card"], [class*="bookingCard"]',
       '[class*="CruiseCard"], [class*="cruise-card"], [class*="cruiseCard"]',
       '[class*="TripCard"], [class*="trip-card"], [class*="tripCard"]',
       '[class*="reservation"], [class*="Reservation"]',
       '[class*="upcoming-cruise"], [class*="UpcomingCruise"]',
-      '[class*="profile-cruise"], [class*="ProfileCruise"]'
+      '[class*="profile-cruise"], [class*="ProfileCruise"]',
+      '[class*="past-cruise"], [class*="PastCruise"]',
+      '[class*="cruise-history"], [class*="CruiseHistory"]',
+      '[class*="cruise-summary"], [class*="CruiseSummary"]',
+      '[class*="booking-summary"], [class*="BookingSummary"]',
+      'table[class*="cruise"] tr, table[class*="booking"] tr',
+      '[class*="my-cruise"], [class*="MyCruise"]'
     ];
 
     var cards = [];
@@ -776,7 +1032,22 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
     }
 
     if (cards.length === 0) {
-      var allElements = document.querySelectorAll('section, article, [role="listitem"], [class*="card"], [class*="Card"]');
+      try {
+        var bookingLinks = document.querySelectorAll('a[href*="manage-booking"], a[href*="managebooking"], a[href*="booking-detail"], a[href*="reservation"], a[href*="confirmationNumber"]');
+        if (bookingLinks.length > 0) {
+          log('Found ' + bookingLinks.length + ' booking links', 'info');
+          var parents = [];
+          for (var bi = 0; bi < bookingLinks.length; bi++) {
+            var parent = bookingLinks[bi].closest('article, section, [class*="card"], [class*="Card"], [class*="tile"], [class*="Tile"], [class*="booking"], [class*="Booking"], [class*="cruise"], [class*="Cruise"], tr, li, div[class]');
+            if (parent && parents.indexOf(parent) === -1) parents.push(parent);
+          }
+          if (parents.length > 0) cards = parents;
+        }
+      } catch(e) {}
+    }
+
+    if (cards.length === 0) {
+      var allElements = document.querySelectorAll('section, article, [role="listitem"], [class*="card"], [class*="Card"], tr, li');
       var matchingEls = [];
       for (var ei = 0; ei < allElements.length; ei++) {
         var elText = (allElements[ei].textContent || '').substring(0, 600);
@@ -803,7 +1074,7 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
         var nightsMatch = text.match(/(\\d+)\\s*[-\\s]?\\s*(?:Night|night|Nite)/i);
         var nights = nightsMatch ? nightsMatch[1] : '';
 
-        var bookingIdMatch = text.match(/(?:Booking|Confirmation|Booking\\s*Number|Conf(?:irmation)?|Reference)\\s*(?:#|:|Number:?)?\\s*([A-Z0-9]{4,12})/i);
+        var bookingIdMatch = text.match(/(?:Booking|Confirmation|Booking\\s*Number|Conf(?:irmation)?|Reference|Reservation)\\s*(?:#|:|Number:?)?\\s*([A-Z0-9]{4,12})/i);
         var bookingId = bookingIdMatch ? bookingIdMatch[1] : '';
         if (!bookingId) bookingId = card.getAttribute('data-booking-id') || card.getAttribute('data-confirmation') || '';
 
@@ -819,6 +1090,12 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
         var destMatch = text.match(/((?:Western|Eastern|Southern)?\\s*Caribbean|Bahamas|Mexico|Alaska|Hawaii|Bermuda|Europe|Mediterranean|Panama Canal|Transatlantic)/i);
         var destination = destMatch ? destMatch[1].trim() : '';
 
+        var statusMatch = text.match(/(Past|Completed|Upcoming|Confirmed|Booked|Cancelled|Canceled)/i);
+        var status = statusMatch ? statusMatch[1] : 'Upcoming';
+        if (/past|completed/i.test(status)) status = 'Completed';
+        else if (/cancel/i.test(status)) status = 'Cancelled';
+        else status = 'Upcoming';
+
         bookings.push({
           rawBooking: null, sourcePage: 'Upcoming',
           shipName: shipMatch[1], shipCode: '',
@@ -829,13 +1106,13 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
           cabinNumberOrGTY: cabin || 'GTY', deckNumber: '',
           bookingId: bookingId || ('CCL-DOM-' + Date.now() + '-' + i),
           numberOfGuests: '2', numberOfNights: nights,
-          daysToGo: '', status: 'Upcoming', holdExpiration: '',
+          daysToGo: '', status: status, holdExpiration: '',
           loyaltyLevel: '', loyaltyPoints: '', paidInFull: '',
           balanceDue: '', musterStation: '', bookingStatus: 'BK',
           packageCode: '', passengerStatus: '',
           stateroomNumber: cabin, stateroomCategoryCode: '', stateroomType: category
         });
-        log('Found booking: ' + shipMatch[1] + (dateStr ? ' - ' + dateStr : '') + (nights ? ' (' + nights + ' nights)' : ''), 'success');
+        log('Found booking: ' + shipMatch[1] + (dateStr ? ' - ' + dateStr : '') + (nights ? ' (' + nights + ' nights)' : '') + ' [' + status + ']', 'success');
       } catch(e) {}
     }
 
@@ -848,7 +1125,6 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
 
     var bookings = [];
 
-    // Strategy 1: Try booking APIs with cookie auth
     log('Trying Carnival booking APIs...', 'info');
     var apiBookings = await tryFetchBookingsAPI();
     if (apiBookings && apiBookings.length > 0) {
@@ -858,7 +1134,6 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
       log('Captured ' + bookings.length + ' booking(s) from Carnival API', 'success');
     }
 
-    // Strategy 2: Check network captures
     if (bookings.length === 0 && window.capturedPayloads) {
       var captured = window.capturedPayloads.upcomingCruises;
       if (captured) {
@@ -868,6 +1143,9 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
         else if (captured.cruises) capBookings = captured.cruises;
         else if (captured.data && Array.isArray(captured.data)) capBookings = captured.data;
         else if (captured.payload && Array.isArray(captured.payload)) capBookings = captured.payload;
+        else if (captured.upcoming && Array.isArray(captured.upcoming)) capBookings = captured.upcoming;
+        else if (captured.upcomingCruises && Array.isArray(captured.upcomingCruises)) capBookings = captured.upcomingCruises;
+        else if (captured.pastCruises && Array.isArray(captured.pastCruises)) capBookings = captured.pastCruises;
 
         if (capBookings && capBookings.length > 0) {
           for (var ci = 0; ci < capBookings.length; ci++) {
@@ -878,7 +1156,6 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
       }
     }
 
-    // Strategy 3: __NEXT_DATA__
     if (bookings.length === 0) {
       var nextBookings = tryExtractFromNextData();
       if (nextBookings.length > 0) {
@@ -889,7 +1166,6 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
       }
     }
 
-    // Strategy 4: DOM scraping
     if (bookings.length === 0) {
       log('No API/network bookings - scraping DOM...', 'info');
       bookings = scrapeBookingsFromDOM();
@@ -901,10 +1177,9 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
       }));
       log('Total: ' + bookings.length + ' Carnival booking(s) captured', 'success');
     } else {
-      log('No bookings found - you may have no upcoming cruises booked', 'info');
+      log('No bookings found - you may have no cruises booked with Carnival', 'info');
     }
 
-    // Loyalty from user cookie
     var userCookie = parseCarnivalUserCookie();
     if (userCookie) {
       var tierMap = { '01': 'Red', '02': 'Gold', '03': 'Platinum', '04': 'Diamond' };
@@ -924,7 +1199,6 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
       log('VIFP loyalty: ' + tierName + ' (VIFP# ' + (userCookie.PastGuestNumber || 'N/A') + ')', 'success');
     }
 
-    // Signal step 2 completion so the sync flow doesn't hang
     try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'step_complete', step: 2, totalCount: bookings.length, data: []
