@@ -71,6 +71,7 @@ import {
   exportAllDataToFile,
   importAllDataFromFile,
 } from '@/lib/dataManager';
+import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
 import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
@@ -986,22 +987,22 @@ export default function SettingsScreen() {
         
         console.log('[Settings] Syncing data from storage to all providers...');
         await Promise.all([
-          coreData.refreshData(),
           syncUserFromStorage(),
           syncLoyaltyFromStorage(),
           reloadMachines(),
           reloadCasinoSessions(),
         ]);
         
-        console.log('[Settings] Waiting for state updates to propagate...');
-        await new Promise(resolve => setTimeout(resolve, 100));
+        console.log('[Settings] Waiting for provider syncs to settle...');
+        await new Promise(resolve => setTimeout(resolve, 200));
         
-        console.log('[Settings] Re-reading from AsyncStorage to ensure data is available...');
+        const sk = (baseKey: string) => getUserScopedKey(baseKey, authenticatedEmail ?? null);
+        console.log('[Settings] Re-reading from AsyncStorage using scoped keys for user:', authenticatedEmail);
         const [cruisesData, bookedData, offersData, eventsData] = await Promise.all([
-          AsyncStorage.getItem('easyseas_cruises'),
-          AsyncStorage.getItem('easyseas_booked_cruises'),
-          AsyncStorage.getItem('easyseas_casino_offers'),
-          AsyncStorage.getItem('easyseas_calendar_events'),
+          AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CRUISES)),
+          AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
+          AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS)),
+          AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS)),
         ]);
         
         const syncedCruises = cruisesData ? JSON.parse(cruisesData) : [];
@@ -1009,7 +1010,7 @@ export default function SettingsScreen() {
         const syncedOffers = offersData ? JSON.parse(offersData) : [];
         const syncedEvents = eventsData ? JSON.parse(eventsData) : [];
         
-        console.log('[Settings] Read data counts from storage:', {
+        console.log('[Settings] Read data counts from scoped storage:', {
           cruises: syncedCruises.length,
           booked: syncedBooked.length,
           offers: syncedOffers.length,
@@ -1023,8 +1024,8 @@ export default function SettingsScreen() {
           calendar: syncedEvents,
         });
         
-        console.log('[Settings] Triggering additional sync to propagate to UI...');
-        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('[Settings] Triggering final refresh to propagate to UI...');
+        await new Promise(resolve => setTimeout(resolve, 300));
         await coreData.refreshData();
         
         Alert.alert(
