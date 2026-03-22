@@ -3,6 +3,7 @@ import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
 import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
+import { exportFile } from '@/lib/importExport';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, Download, FileDown } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
@@ -43,6 +44,7 @@ function CarnivalSyncScreen() {
   const [showCookieModal, setShowCookieModal] = useState(false);
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
   const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
+  const [isExportingLog, setIsExportingLog] = useState(false);
 
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
   const cookieSyncMutation = trpc.royalCaribbeanSync.cookieSync.useMutation();
@@ -165,6 +167,47 @@ function CarnivalSyncScreen() {
       case 'login_expired':
       case 'error': return <AlertCircle size={size} color={color} />;
       default: return null;
+    }
+  };
+
+  const handleExportSyncLog = async () => {
+    try {
+      setIsExportingLog(true);
+      console.log('[CarnivalSync] Exporting sync log...');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+      const fileName = `carnival_sync_log_${timestamp}.txt`;
+      
+      let logContent = `CARNIVAL CRUISE LINE - SYNC LOG\n`;
+      logContent += `Generated: ${new Date().toLocaleString()}\n`;
+      logContent += `Status: ${state.status}\n`;
+      if (state.lastSyncTimestamp) {
+        logContent += `Last Sync: ${new Date(state.lastSyncTimestamp).toLocaleString()}\n`;
+      }
+      if (state.syncCounts) {
+        logContent += `\n--- SYNC SUMMARY ---\n`;
+        logContent += `Offers: ${state.syncCounts.offerCount} unique deal(s)\n`;
+        logContent += `Sailings: ${state.syncCounts.offerRows} total sailing(s)\n`;
+        logContent += `Booked Cruises: ${state.syncCounts.upcomingCruises}\n`;
+        logContent += `Courtesy Holds: ${state.syncCounts.courtesyHolds}\n`;
+      }
+      logContent += `\n--- DETAILED LOG ---\n`;
+      state.logs.forEach(log => {
+        const typeTag = log.type === 'error' ? '[ERROR]' : log.type === 'success' ? '[OK]' : log.type === 'warning' ? '[WARN]' : '[INFO]';
+        logContent += `${log.timestamp} ${typeTag} ${log.message}\n`;
+      });
+      logContent += `\n--- END OF LOG ---\n`;
+      
+      const success = await exportFile(logContent, fileName);
+      if (success) {
+        addLog('Sync log exported: ' + fileName, 'success');
+      } else {
+        addLog('Log saved but sharing may not be available', 'info');
+      }
+    } catch (error) {
+      console.error('[CarnivalSync] Export log error:', error);
+      addLog('Failed to export sync log', 'error');
+    } finally {
+      setIsExportingLog(false);
     }
   };
 
@@ -467,7 +510,7 @@ function CarnivalSyncScreen() {
                   <Pressable
                     style={styles.quickActionButton}
                     onPress={() => {
-                      Linking.openURL('https://www.carnival.com/profilemanagement/profiles/cruises');
+                      void Linking.openURL('https://www.carnival.com/profilemanagement/profiles/cruises');
                     }}
                   >
                     <FileDown size={20} color={CARNIVAL_RED} />
@@ -631,8 +674,31 @@ function CarnivalSyncScreen() {
                     : 'Carnival data synced successfully.'
                   }
                 </Text>
+                <Pressable
+                  style={styles.exportLogButton}
+                  onPress={handleExportSyncLog}
+                  disabled={isExportingLog}
+                >
+                  <FileDown size={14} color="#10b981" />
+                  <Text style={styles.exportLogButtonText}>
+                    {isExportingLog ? 'Exporting...' : 'Export Sync Log'}
+                  </Text>
+                </Pressable>
               </View>
             </View>
+          )}
+
+          {state.logs.length > 0 && state.status !== 'complete' && (
+            <Pressable
+              style={styles.exportLogFloatingButton}
+              onPress={handleExportSyncLog}
+              disabled={isExportingLog}
+            >
+              <FileDown size={16} color="#94a3b8" />
+              <Text style={styles.exportLogFloatingText}>
+                {isExportingLog ? 'Exporting...' : 'Export Current Log'}
+              </Text>
+            </Pressable>
           )}
 
           <WebSyncCredentialsModal
@@ -1093,6 +1159,42 @@ const styles = StyleSheet.create({
     color: '#6ee7b7',
     fontSize: 13,
     lineHeight: 18,
+  },
+  exportLogButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    alignSelf: 'flex-start' as const,
+  },
+  exportLogButtonText: {
+    color: '#10b981',
+    fontSize: 12,
+    fontWeight: '600' as const,
+  },
+  exportLogFloatingButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    margin: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: CARNIVAL_CARD,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: CARNIVAL_BORDER,
+  },
+  exportLogFloatingText: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '500' as const,
   },
   mobileActionsContainer: {
     gap: 12,

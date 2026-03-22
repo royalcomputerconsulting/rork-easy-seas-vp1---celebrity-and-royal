@@ -48,11 +48,15 @@ export interface UserProfile {
   celebrityCaptainsClubNumber?: string;
   celebrityCaptainsClubPoints?: number;
   celebrityBlueChipPoints?: number;
-  preferredBrand?: 'royal' | 'celebrity' | 'silversea';
+  preferredBrand?: 'royal' | 'celebrity' | 'silversea' | 'carnival';
   silverseaEmail?: string;
   silverseaVenetianNumber?: string;
   silverseaVenetianTier?: string;
   silverseaVenetianPoints?: number;
+  carnivalVifpNumber?: string;
+  carnivalVifpTier?: string;
+  carnivalPlayersClubTier?: string;
+  carnivalPlayersClubPoints?: number;
   createdAt: string;
   updatedAt: string;
 }

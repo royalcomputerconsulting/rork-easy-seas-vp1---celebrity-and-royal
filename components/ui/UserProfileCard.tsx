@@ -24,11 +24,15 @@ interface UserProfileData {
   celebrityBlueChipPoints: number;
   celebrityBlueChipTier: string;
   celebrityCaptainsClubLevel: string;
-  preferredBrand?: 'royal' | 'celebrity' | 'silversea';
+  preferredBrand?: 'royal' | 'celebrity' | 'silversea' | 'carnival';
   silverseaEmail?: string;
   silverseaVenetianNumber?: string;
   silverseaVenetianTier?: string;
   silverseaVenetianPoints?: number;
+  carnivalVifpNumber?: string;
+  carnivalVifpTier?: string;
+  carnivalPlayersClubTier?: string;
+  carnivalPlayersClubPoints?: number;
 }
 
 interface EnrichmentData {
@@ -59,6 +63,10 @@ interface EnrichmentData {
   venetianSocietyMemberNumber?: string;
   venetianSocietyEnrolled?: boolean;
   venetianSocietyLoyaltyMatchTier?: string;
+  carnivalVifpTier?: string;
+  carnivalVifpNumber?: string;
+  carnivalPlayersClubTier?: string;
+  carnivalPlayersClubPoints?: number;
   hasCoBrandCard?: boolean;
   coBrandCardStatus?: number;
   coBrandCardErrorMessage?: string;
@@ -164,6 +172,8 @@ export function UserProfileCard({
         return <Star size={20} color={COLORS.white} />;
       case 'silversea':
         return <Ship size={20} color={COLORS.white} />;
+      case 'carnival':
+        return <Ship size={20} color={COLORS.white} />;
       default:
         return <Anchor size={20} color={COLORS.white} />;
     }
@@ -177,6 +187,8 @@ export function UserProfileCard({
         return 'Celebrity Cruises Profile';
       case 'silversea':
         return 'Silversea Profile';
+      case 'carnival':
+        return 'Carnival Cruise Line Profile';
       default:
         return 'User Profile';
     }
@@ -190,6 +202,8 @@ export function UserProfileCard({
         return ['#1E40AF', '#2563EB'] as [string, string];
       case 'silversea':
         return ['#78350F', '#92400E'] as [string, string];
+      case 'carnival':
+        return ['#CC2232', '#E02040'] as [string, string];
       default:
         return ['#0369A1', '#0284C7'] as [string, string];
     }
@@ -199,6 +213,8 @@ export function UserProfileCard({
     ? !!enrichmentData?.crownAndAnchorId 
     : activeBrand === 'celebrity' 
     ? !!enrichmentData?.captainsClubId 
+    : activeBrand === 'carnival'
+    ? !!enrichmentData?.carnivalVifpNumber
     : !!enrichmentData?.venetianSocietyMemberNumber;
 
   const getSubscriptionTierDisplay = () => {
@@ -256,6 +272,20 @@ export function UserProfileCard({
         {renderValueCard('Tier', enrichmentData?.venetianSocietyTier || currentValues.silverseaVenetianTier)}
         {renderValueCard('Points', currentValues.silverseaVenetianPoints, COLORS.loyalty)}
         {enrichmentData?.venetianSocietyNextTier && renderValueCard('Next Tier', enrichmentData.venetianSocietyNextTier)}
+      </View>
+    );
+  };
+
+  const renderCarnivalValues = () => {
+    const subTier = getSubscriptionTierDisplay();
+    return (
+      <View style={styles.valuesGrid}>
+        {renderValueCard('Subscription', subTier.text, subTier.color, true)}
+        {renderValueCard('Name', currentValues.name, undefined, true)}
+        {renderValueCard('VIFP Club #', enrichmentData?.carnivalVifpNumber || currentValues.carnivalVifpNumber, undefined, true)}
+        {renderValueCard('VIFP Tier', enrichmentData?.carnivalVifpTier || currentValues.carnivalVifpTier, '#CC2232')}
+        {renderValueCard('Players Club Tier', enrichmentData?.carnivalPlayersClubTier || currentValues.carnivalPlayersClubTier, '#FFB400')}
+        {renderValueCard('Players Club Points', enrichmentData?.carnivalPlayersClubPoints ?? currentValues.carnivalPlayersClubPoints, COLORS.points)}
       </View>
     );
   };
@@ -407,6 +437,63 @@ export function UserProfileCard({
           </View>
         </>
       );
+    } else if (activeBrand === 'carnival') {
+      return (
+        <>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Name</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.name}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
+              placeholder="Enter your name"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>VIFP Club #</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.carnivalVifpNumber || ''}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, carnivalVifpNumber: text }))}
+              placeholder="Enter VIFP number"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numeric"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>VIFP Tier</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.carnivalVifpTier || ''}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, carnivalVifpTier: text }))}
+              placeholder="e.g., Red, Gold, Platinum, Diamond"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Players Club Tier</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.carnivalPlayersClubTier || ''}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, carnivalPlayersClubTier: text }))}
+              placeholder="e.g., Red, Gold, Platinum"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Players Club Points</Text>
+            <TextInput
+              style={styles.input}
+              value={(formData.carnivalPlayersClubPoints || 0).toString()}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, carnivalPlayersClubPoints: parseInt(text) || 0 }))}
+              placeholder="Enter points"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numeric"
+            />
+          </View>
+        </>
+      );
     } else {
       return (
         <>
@@ -498,6 +585,7 @@ export function UserProfileCard({
         {activeBrand === 'royal' && renderRoyalCaribbeanValues()}
         {activeBrand === 'celebrity' && renderCelebrityValues()}
         {activeBrand === 'silversea' && renderSilverseaValues()}
+        {activeBrand === 'carnival' && renderCarnivalValues()}
       </View>
 
       {enrichmentData?.lastSyncTimestamp && (

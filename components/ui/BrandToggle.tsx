@@ -2,15 +2,16 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 
-export type BrandType = 'royal' | 'celebrity' | 'silversea';
+export type BrandType = 'royal' | 'celebrity' | 'silversea' | 'carnival';
 
 interface BrandToggleProps {
   activeBrand: BrandType;
   onToggle: (brand: BrandType) => void;
   showSilversea?: boolean;
+  showCarnival?: boolean;
 }
 
-export function BrandToggle({ activeBrand, onToggle, showSilversea = true }: BrandToggleProps) {
+export function BrandToggle({ activeBrand, onToggle, showSilversea = true, showCarnival = true }: BrandToggleProps) {
   return (
     <View style={styles.container}>
       <View style={styles.toggleContainer}>
@@ -58,7 +59,7 @@ export function BrandToggle({ activeBrand, onToggle, showSilversea = true }: Bra
           <TouchableOpacity
             style={[
               styles.toggleButton,
-              styles.rightButton,
+              styles.middleButton,
               activeBrand === 'silversea' && styles.activeButton,
             ]}
             onPress={() => onToggle('silversea')}
@@ -72,6 +73,28 @@ export function BrandToggle({ activeBrand, onToggle, showSilversea = true }: Bra
               numberOfLines={1}
             >
               Silversea
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {showCarnival && (
+          <TouchableOpacity
+            style={[
+              styles.toggleButton,
+              styles.rightButton,
+              activeBrand === 'carnival' && styles.carnivalActiveButton,
+            ]}
+            onPress={() => onToggle('carnival')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.toggleText,
+                activeBrand === 'carnival' && styles.activeText,
+              ]}
+              numberOfLines={1}
+            >
+              Carnival
             </Text>
           </TouchableOpacity>
         )}
@@ -112,6 +135,9 @@ const styles = StyleSheet.create({
   },
   activeButton: {
     backgroundColor: COLORS.textNavy,
+  },
+  carnivalActiveButton: {
+    backgroundColor: '#CC2232',
   },
   toggleText: {
     fontSize: 9,

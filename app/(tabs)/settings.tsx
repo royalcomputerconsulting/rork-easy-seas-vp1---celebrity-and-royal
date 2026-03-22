@@ -256,6 +256,10 @@ export default function SettingsScreen() {
     silverseaVenetianNumber: isProfileDisplayReady ? currentUser?.silverseaVenetianNumber || '' : '',
     silverseaVenetianTier: isProfileDisplayReady ? currentUser?.silverseaVenetianTier || '' : '',
     silverseaVenetianPoints: isProfileDisplayReady ? currentUser?.silverseaVenetianPoints || 0 : 0,
+    carnivalVifpNumber: isProfileDisplayReady ? currentUser?.carnivalVifpNumber || '' : '',
+    carnivalVifpTier: isProfileDisplayReady ? currentUser?.carnivalVifpTier || '' : '',
+    carnivalPlayersClubTier: isProfileDisplayReady ? currentUser?.carnivalPlayersClubTier || '' : '',
+    carnivalPlayersClubPoints: isProfileDisplayReady ? currentUser?.carnivalPlayersClubPoints || 0 : 0,
   }), [
     authenticatedEmail,
     currentUser,
@@ -283,47 +287,53 @@ export default function SettingsScreen() {
   }, [authenticatedEmail]);
 
   const enrichmentData = useMemo(() => {
-    if (!extendedLoyalty || !isProfileDisplayReady) return null;
+    if (!isProfileDisplayReady) return null;
+    if (!extendedLoyalty && !currentUser?.carnivalVifpNumber) return null;
 
     return {
-      accountId: extendedLoyalty.accountId,
+      accountId: extendedLoyalty?.accountId,
 
-      crownAndAnchorId: extendedLoyalty.crownAndAnchorId,
-      crownAndAnchorTier: extendedLoyalty.crownAndAnchorTier,
-      crownAndAnchorNextTier: extendedLoyalty.crownAndAnchorNextTier,
-      crownAndAnchorRemainingPoints: extendedLoyalty.crownAndAnchorRemainingPoints,
-      crownAndAnchorTrackerPercentage: extendedLoyalty.crownAndAnchorTrackerPercentage,
-      crownAndAnchorRelationshipPointsFromApi: extendedLoyalty.crownAndAnchorRelationshipPointsFromApi,
-      crownAndAnchorLoyaltyMatchTier: extendedLoyalty.crownAndAnchorLoyaltyMatchTier,
+      crownAndAnchorId: extendedLoyalty?.crownAndAnchorId,
+      crownAndAnchorTier: extendedLoyalty?.crownAndAnchorTier,
+      crownAndAnchorNextTier: extendedLoyalty?.crownAndAnchorNextTier,
+      crownAndAnchorRemainingPoints: extendedLoyalty?.crownAndAnchorRemainingPoints,
+      crownAndAnchorTrackerPercentage: extendedLoyalty?.crownAndAnchorTrackerPercentage,
+      crownAndAnchorRelationshipPointsFromApi: extendedLoyalty?.crownAndAnchorRelationshipPointsFromApi,
+      crownAndAnchorLoyaltyMatchTier: extendedLoyalty?.crownAndAnchorLoyaltyMatchTier,
 
-      clubRoyaleTierFromApi: extendedLoyalty.clubRoyaleTierFromApi,
-      clubRoyalePointsFromApi: extendedLoyalty.clubRoyalePointsFromApi,
-      clubRoyaleRelationshipPointsFromApi: extendedLoyalty.clubRoyaleRelationshipPointsFromApi,
+      clubRoyaleTierFromApi: extendedLoyalty?.clubRoyaleTierFromApi,
+      clubRoyalePointsFromApi: extendedLoyalty?.clubRoyalePointsFromApi,
+      clubRoyaleRelationshipPointsFromApi: extendedLoyalty?.clubRoyaleRelationshipPointsFromApi,
 
-      captainsClubId: extendedLoyalty.captainsClubId,
-      captainsClubTier: captainsClub?.tier || extendedLoyalty.captainsClubTier,
-      captainsClubPoints: captainsClub?.points || extendedLoyalty.captainsClubPoints,
-      captainsClubRelationshipPoints: extendedLoyalty.captainsClubRelationshipPoints,
-      captainsClubNextTier: captainsClub?.nextTier || extendedLoyalty.captainsClubNextTier,
-      captainsClubRemainingPoints: captainsClub?.remainingPoints || extendedLoyalty.captainsClubRemainingPoints,
-      captainsClubTrackerPercentage: captainsClub?.trackerPercentage || extendedLoyalty.captainsClubTrackerPercentage,
-      captainsClubLoyaltyMatchTier: extendedLoyalty.captainsClubLoyaltyMatchTier,
+      captainsClubId: extendedLoyalty?.captainsClubId,
+      captainsClubTier: captainsClub?.tier || extendedLoyalty?.captainsClubTier,
+      captainsClubPoints: captainsClub?.points || extendedLoyalty?.captainsClubPoints,
+      captainsClubRelationshipPoints: extendedLoyalty?.captainsClubRelationshipPoints,
+      captainsClubNextTier: captainsClub?.nextTier || extendedLoyalty?.captainsClubNextTier,
+      captainsClubRemainingPoints: captainsClub?.remainingPoints || extendedLoyalty?.captainsClubRemainingPoints,
+      captainsClubTrackerPercentage: captainsClub?.trackerPercentage || extendedLoyalty?.captainsClubTrackerPercentage,
+      captainsClubLoyaltyMatchTier: extendedLoyalty?.captainsClubLoyaltyMatchTier,
 
-      celebrityBlueChipTier: extendedLoyalty.celebrityBlueChipTier,
-      celebrityBlueChipPoints: extendedLoyalty.celebrityBlueChipPoints,
-      celebrityBlueChipRelationshipPoints: extendedLoyalty.celebrityBlueChipRelationshipPoints,
+      celebrityBlueChipTier: extendedLoyalty?.celebrityBlueChipTier,
+      celebrityBlueChipPoints: extendedLoyalty?.celebrityBlueChipPoints,
+      celebrityBlueChipRelationshipPoints: extendedLoyalty?.celebrityBlueChipRelationshipPoints,
 
-      venetianSocietyTier: venetianSociety?.tier || extendedLoyalty.venetianSocietyTier,
-      venetianSocietyNextTier: venetianSociety?.nextTier || extendedLoyalty.venetianSocietyNextTier,
-      venetianSocietyMemberNumber: venetianSociety?.memberNumber || extendedLoyalty.venetianSocietyMemberNumber,
-      venetianSocietyEnrolled: venetianSociety?.enrolled || extendedLoyalty.venetianSocietyEnrolled,
-      venetianSocietyLoyaltyMatchTier: extendedLoyalty.venetianSocietyLoyaltyMatchTier,
+      venetianSocietyTier: venetianSociety?.tier || extendedLoyalty?.venetianSocietyTier,
+      venetianSocietyNextTier: venetianSociety?.nextTier || extendedLoyalty?.venetianSocietyNextTier,
+      venetianSocietyMemberNumber: venetianSociety?.memberNumber || extendedLoyalty?.venetianSocietyMemberNumber,
+      venetianSocietyEnrolled: venetianSociety?.enrolled || extendedLoyalty?.venetianSocietyEnrolled,
+      venetianSocietyLoyaltyMatchTier: extendedLoyalty?.venetianSocietyLoyaltyMatchTier,
 
-      hasCoBrandCard: extendedLoyalty.hasCoBrandCard,
-      coBrandCardStatus: extendedLoyalty.coBrandCardStatus,
-      coBrandCardErrorMessage: extendedLoyalty.coBrandCardErrorMessage,
+      carnivalVifpTier: currentUser?.carnivalVifpTier,
+      carnivalVifpNumber: currentUser?.carnivalVifpNumber,
+      carnivalPlayersClubTier: currentUser?.carnivalPlayersClubTier,
+      carnivalPlayersClubPoints: currentUser?.carnivalPlayersClubPoints,
+
+      hasCoBrandCard: extendedLoyalty?.hasCoBrandCard,
+      coBrandCardStatus: extendedLoyalty?.coBrandCardStatus,
+      coBrandCardErrorMessage: extendedLoyalty?.coBrandCardErrorMessage,
     };
-  }, [captainsClub, extendedLoyalty, isProfileDisplayReady, venetianSociety]);
+  }, [captainsClub, currentUser, extendedLoyalty, isProfileDisplayReady, venetianSociety]);
 
   const dataStats = useMemo(() => {
     const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
@@ -1113,11 +1123,15 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     celebrityBlueChipPoints: number;
     celebrityBlueChipTier: string;
     celebrityCaptainsClubLevel: string;
-    preferredBrand?: 'royal' | 'celebrity' | 'silversea';
+    preferredBrand?: 'royal' | 'celebrity' | 'silversea' | 'carnival';
     silverseaEmail?: string;
     silverseaVenetianNumber?: string;
     silverseaVenetianTier?: string;
     silverseaVenetianPoints?: number;
+    carnivalVifpNumber?: string;
+    carnivalVifpTier?: string;
+    carnivalPlayersClubTier?: string;
+    carnivalPlayersClubPoints?: number;
   }) => {
     if (!isProfileDisplayReady) {
       console.log('[Settings] Blocked profile save while account data is still loading');
@@ -1210,11 +1224,15 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       celebrityBlueChipPoints: number;
       celebrityBlueChipTier: string;
       celebrityCaptainsClubLevel: string;
-      preferredBrand?: 'royal' | 'celebrity' | 'silversea';
+      preferredBrand?: 'royal' | 'celebrity' | 'silversea' | 'carnival';
       silverseaEmail?: string;
       silverseaVenetianNumber?: string;
       silverseaVenetianTier?: string;
       silverseaVenetianPoints?: number;
+      carnivalVifpNumber?: string;
+      carnivalVifpTier?: string;
+      carnivalPlayersClubTier?: string;
+      carnivalPlayersClubPoints?: number;
     },
     oldEmail: string | undefined,
     newEmail: string,
@@ -1235,6 +1253,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           silverseaVenetianNumber: profileData.silverseaVenetianNumber,
           silverseaVenetianTier: profileData.silverseaVenetianTier,
           silverseaVenetianPoints: profileData.silverseaVenetianPoints,
+          carnivalVifpNumber: profileData.carnivalVifpNumber,
+          carnivalVifpTier: profileData.carnivalVifpTier,
+          carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
+          carnivalPlayersClubPoints: profileData.carnivalPlayersClubPoints,
         });
       } else {
         const owner = await ensureOwner();
@@ -1251,6 +1273,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           silverseaVenetianNumber: profileData.silverseaVenetianNumber,
           silverseaVenetianTier: profileData.silverseaVenetianTier,
           silverseaVenetianPoints: profileData.silverseaVenetianPoints,
+          carnivalVifpNumber: profileData.carnivalVifpNumber,
+          carnivalVifpTier: profileData.carnivalVifpTier,
+          carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
+          carnivalPlayersClubPoints: profileData.carnivalPlayersClubPoints,
         });
       }
       
@@ -1272,6 +1298,13 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       console.log('[Settings] ✓ Updated Silversea loyalty:', {
         venetianTier: profileData.silverseaVenetianTier,
         venetianPoints: profileData.silverseaVenetianPoints
+      });
+      
+      console.log('[Settings] ✓ Updated Carnival loyalty:', {
+        vifpNumber: profileData.carnivalVifpNumber,
+        vifpTier: profileData.carnivalVifpTier,
+        playersClubTier: profileData.carnivalPlayersClubTier,
+        playersClubPoints: profileData.carnivalPlayersClubPoints
       });
       
       if (emailChanged) {
