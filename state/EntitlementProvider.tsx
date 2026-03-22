@@ -88,9 +88,9 @@ async function withTimeout<T>(
   }
 }
 
-export const BASIC_PRODUCT_ID_MONTHLY = 'ofrngeddbd379a4' as const;
-export const PRO_PRODUCT_ID_MONTHLY = 'ofrngeddbd379a4' as const;
-export const PRO_PRODUCT_ID_ANNUAL = 'ofrng8ec8ef5be7' as const;
+export const BASIC_PRODUCT_ID_MONTHLY = 'easyseas_pro_monthly' as const;
+export const PRO_PRODUCT_ID_MONTHLY = 'easyseas_pro_monthly' as const;
+export const PRO_PRODUCT_ID_ANNUAL = 'easyseas_pro_annual' as const;
 
 const PRIVACY_URL = 'https://www.royalcomputerconsulting.com/privacy-policy' as const;
 const TERMS_URL = 'https://www.royalcomputerconsulting.com/support-policy' as const;
@@ -593,29 +593,20 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
   const findPackageByProductId = useCallback((productId: string): PurchasesPackage | null => {
     try {
-      const paywallOffering = offerings.find(o => o.identifier === 'PAYWALL');
-      if (paywallOffering) {
-        for (const p of paywallOffering.availablePackages ?? []) {
-          const id = p.product.identifier;
-          console.log('[Entitlement] Checking package in PAYWALL offering:', { id, priceString: p.product.priceString });
-          if (id === productId) {
-            console.log('[Entitlement] Found matching package in PAYWALL offering');
-            return p;
-          }
-        }
-      }
-      
-      console.log('[Entitlement] PAYWALL offering not found, searching all offerings');
+      console.log('[Entitlement] Searching for product:', productId, 'across', offerings.length, 'offerings');
       for (const offering of offerings) {
+        console.log('[Entitlement] Checking offering:', offering.identifier, 'packages:', (offering.availablePackages ?? []).length);
         for (const p of offering.availablePackages ?? []) {
           const id = p.product.identifier;
+          console.log('[Entitlement] Checking package product:', { id, priceString: p.product.priceString });
           if (id === productId) {
             console.log('[Entitlement] Found matching package in offering:', offering.identifier);
             return p;
           }
         }
       }
-      console.warn('[Entitlement] No package found with product ID:', productId);
+      console.warn('[Entitlement] No package found with store product ID:', productId);
+      console.warn('[Entitlement] Available products:', offerings.flatMap(o => (o.availablePackages ?? []).map(p => p.product.identifier)));
       return null;
     } catch (e) {
       console.error('[Entitlement] findPackageByProductId failed', e);
