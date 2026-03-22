@@ -886,15 +886,24 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           resolve();
         }, maxWaitMs);
         
-        pageLoadResolver.current = () => {
-          clearTimeout(timeout);
-          setTimeout(resolve, 3000);
-        };
+        // Clear any existing resolver so stale onLoadEnd from the current page is ignored
+        pageLoadResolver.current = null;
         
         addLog(`🌐 Navigating to: ${url}`, 'info');
         // Force navigation by changing the WebView source prop directly from React Native.
         // JS injection (window.location.href) is absorbed/ignored by Royal Caribbean's SPA router.
         setWebViewUrl(url);
+        
+        // Delay setting the resolver to avoid consuming it with a stale onLoadEnd
+        // from the page that was already loaded before navigation started.
+        setTimeout(() => {
+          if (pageLoadResolver.current === null) {
+            pageLoadResolver.current = () => {
+              clearTimeout(timeout);
+              setTimeout(resolve, 3000);
+            };
+          }
+        }, 800);
       });
     };
 
@@ -908,11 +917,30 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog('⏱️ This may take several minutes - extracting all offers and sailings...', 'info');
       
       addLog('📍 Navigating to offers page...', 'info');
-      await navigateToPage(config.offersUrl, 15000);
+      await navigateToPage(config.offersUrl, 20000);
+      
+      if (isCarnivalMode) {
+        addLog('⏳ Waiting for Carnival offers page to fully render...', 'info');
+        await delay(4000);
+      }
       
       if (webViewRef.current) {
         if (isCarnivalMode) {
-          addLog('🎪 Using Carnival-specific extraction (cookie auth + VIFP offers)...', 'info');
+          addLog('🎪 Injecting Carnival extraction on offers page...', 'info');
+          webViewRef.current.injectJavaScript(`
+            (function() {
+              var currentUrl = window.location.href || '';
+              try {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: 'Extraction running on: ' + currentUrl,
+                  logType: currentUrl.includes('/offers') ? 'success' : 'warning'
+                }));
+              } catch(e) {}
+            })();
+            true;
+          `);
+          await delay(500);
           webViewRef.current.injectJavaScript(injectCarnivalOffersExtraction() + '; true;');
         } else {
           webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
@@ -984,7 +1012,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             if (capturedSections.current[page.section]) continue;
             
             addLog(`📍 Visiting ${page.name}...`, 'info');
-            await navigateToPage(page.url, 15000);
+            await navigateToPage(page.url, 18000);
+            
+            if (isCarnivalMode) {
+              await delay(3000);
+            }
             
             if (isCarnivalMode && webViewRef.current) {
               if (page.section === 'bookings') {
