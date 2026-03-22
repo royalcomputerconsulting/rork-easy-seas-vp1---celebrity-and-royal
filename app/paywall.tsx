@@ -42,7 +42,13 @@ export default function PaywallScreen() {
               {entitlement.isLoading ? (
                 <ActivityIndicator color={COLORS.white} />
               ) : (
-                <Text style={styles.purchaseButtonText}>{entitlement.isPro ? 'Subscribed' : 'Subscribe Now'}</Text>
+                <Text style={styles.purchaseButtonText}>
+                  {entitlement.isPro
+                    ? 'Subscribed'
+                    : Platform.OS === 'android'
+                      ? 'Subscribe via Google Play'
+                      : 'Subscribe Now'}
+                </Text>
               )}
             </TouchableOpacity>
 

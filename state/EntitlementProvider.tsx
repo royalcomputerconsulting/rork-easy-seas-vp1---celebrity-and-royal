@@ -394,44 +394,38 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
     const isExpoGo = Constants.appOwnership === 'expo';
     
-    let apiKey: string;
+    let apiKey = '';
+    let keySource = '';
+
     if (isExpoGo) {
-      apiKey = (
-        process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ??
-        ''
-      ).trim();
-      
+      apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? '').trim();
+      keySource = 'test-store (Expo Go)';
       if (!apiKey) {
         purchasesInitError = 'IAP not available in Expo Go. Use a development build or web preview for testing.';
-        console.warn('[Entitlement] RevenueCat IAP requires a development build or Test Store API Key for Expo Go. See https://rev.cat/sdk-test-store');
+        console.warn('[Entitlement] RevenueCat IAP requires a development build or Test Store API Key for Expo Go.');
         return null;
       }
+    } else if (Platform.OS === 'android') {
+      apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '').trim();
+      keySource = 'android-production (Google Play)';
+      console.log('[Entitlement] ANDROID PATH: Using Google Play Store RevenueCat API key');
     } else {
-      const sharedKey = (
-        process.env.EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY ??
-        process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ??
-        process.env.EXPO_PUBLIC_REVENUECAT_KEY ??
-        ''
-      ).trim();
-
-      if (sharedKey) {
-        apiKey = sharedKey;
-      } else if (Platform.OS === 'android') {
-        apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '').trim();
-      } else {
-        apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? 'appl_ByMylGXTSwaAUxxRUwhteOFaJjL').trim();
-      }
+      apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '').trim();
+      keySource = 'ios-production (App Store / StoreKit)';
+      console.log('[Entitlement] iOS PATH: Using Apple App Store RevenueCat API key');
     }
 
     if (!apiKey) {
-      purchasesInitError = 'Missing RevenueCat API Key. Set EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY or EXPO_PUBLIC_REVENUECAT_API_KEY.';
-      console.warn('[Entitlement] Missing RevenueCat API Key.');
+      const storeName = Platform.OS === 'android'
+        ? 'EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY'
+        : 'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY';
+      purchasesInitError = `Missing RevenueCat API Key for ${Platform.OS}. Set ${storeName}.`;
+      console.warn(`[Entitlement] Missing RevenueCat API Key for ${Platform.OS}. Expected env: ${storeName}`);
       return null;
     }
 
     if (apiKey.startsWith('sk_')) {
-      purchasesInitError =
-        'Invalid RevenueCat key provided. This looks like a secret key (sk_...). Please use the Public SDK Key from RevenueCat (typically starts with appl_...).';
+      purchasesInitError = 'Invalid RevenueCat key provided. This looks like a secret key (sk_...). Please use the Public SDK Key from RevenueCat.';
       console.warn('[Entitlement] Refusing to initialize Purchases with a secret key (sk_...)');
       return null;
     }
@@ -443,10 +437,10 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       Purchases = mod.default;
 
       console.log('[Entitlement] Configuring Purchases', {
-        hasApiKey: !!apiKey,
         platform: Platform.OS,
+        keySource,
         isExpoGo,
-        keyType: isExpoGo ? 'test' : 'production',
+        keyPrefix: apiKey.substring(0, 5) + '...',
       });
 
       Purchases.configure({
@@ -455,6 +449,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       });
       purchasesInitError = null;
 
+      console.log(`[Entitlement] RevenueCat initialized successfully for ${Platform.OS} via ${keySource}`);
       return Purchases;
     } catch (e) {
       purchasesInitError =
@@ -659,7 +654,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         return;
       }
 
-      console.log('[Entitlement] Purchasing package', { productId: pkg.product.identifier, offeringId: pkg.offeringIdentifier });
+      const storePath = Platform.OS === 'android' ? 'Google Play' : 'Apple App Store';
+      console.log(`[Entitlement] Purchasing package via ${storePath}`, { productId: pkg.product.identifier, offeringId: pkg.offeringIdentifier, platform: Platform.OS });
       const result = await withTimeout(purchases.purchasePackage(pkg), PURCHASE_TIMEOUT_MS, 'Purchasing subscription');
       console.log('[Entitlement] purchasePackage result', {
         purchasedProductId: result.productIdentifier,
@@ -670,7 +666,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       const storedTrialEnd = await AsyncStorage.getItem(storageKeys.TRIAL_END);
       const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
       setStateFromCustomerInfo(result.customerInfo, currentTrialEnd, isGrandfathered);
-      Alert.alert('Success', 'Full access unlocked.');
+      const successStore = Platform.OS === 'android' ? 'Google Play' : 'App Store';
+      Alert.alert('Success', `Full access unlocked via ${successStore}.`);
     } catch (e) {
       console.error(`[Entitlement] subscribeToProduct failed`, e);
       const message = e instanceof Error ? e.message : 'Subscription failed.';
@@ -698,7 +695,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   }, [subscribeToProduct]);
 
   const restore = useCallback(async () => {
-    console.log('[Entitlement] restore called');
+    const restoreStoreName = Platform.OS === 'android' ? 'Google Play' : Platform.OS === 'ios' ? 'App Store' : 'Web';
+    console.log(`[Entitlement] restore called on ${restoreStoreName} (${Platform.OS})`);
     if (actionInFlightRef.current) {
       console.log('[Entitlement] restore ignored: action already in flight');
       return;
@@ -753,6 +751,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         return;
       }
 
+      console.log(`[Entitlement] Restoring purchases via ${restoreStoreName}`);
       const info = await withTimeout(purchases.restorePurchases(), DEFAULT_TIMEOUT_MS, 'Restoring purchases');
       console.log('[Entitlement] restorePurchases customerInfo', {
         activeSubscriptions: info?.activeSubscriptions ?? [],
@@ -797,7 +796,13 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   }, [auth.authenticatedEmail, auth.isWhitelisted, ensurePurchasesLoaded, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END]);
 
   const openManageSubscription = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Not Available', 'Subscription management is available on your mobile device.');
+      return;
+    }
     const url = Platform.OS === 'android' ? MANAGE_SUBS_ANDROID_URL : MANAGE_SUBS_IOS_URL;
+    const storeName = Platform.OS === 'android' ? 'Google Play' : 'App Store';
+    console.log(`[Entitlement] Opening ${storeName} subscription management: ${url}`);
     await safeOpenURL(url);
   }, []);
 
