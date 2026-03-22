@@ -11,7 +11,7 @@ import type { UserProfile } from '@/state/UserProvider';
 import type { Certificate } from '@/components/CertificateManagerModal';
 import type { CasinoSession } from '@/state/CasinoSessionProvider';
 import type { RecognitionEntryWithCrew, Sailing } from '@/types/crew-recognition';
-import { ALL_STORAGE_KEYS, type AppSettings } from '../storage/storageKeys';
+import { ALL_STORAGE_KEYS, GLOBAL_KEYS, getUserScopedKey, type AppSettings } from '../storage/storageKeys';
 import { applyKnownRetailValuesToBooked } from '../dataEnrichment/retailValueEnrichment';
 
 export interface FullAppDataBundle {
@@ -64,9 +64,14 @@ export interface FullAppDataBundle {
   };
 }
 
-export async function getAllStoredData(): Promise<FullAppDataBundle> {
-  console.log('[DataBundle] Getting all stored data...');
+export async function getAllStoredData(email?: string | null): Promise<FullAppDataBundle> {
+  console.log('[DataBundle] Getting all stored data for email:', email || '(none)');
   
+  const sk = (baseKey: string): string => {
+    if (GLOBAL_KEYS.has(baseKey)) return baseKey;
+    return getUserScopedKey(baseKey, email ?? null);
+  };
+
   try {
     const [
       cruisesData,
@@ -86,22 +91,22 @@ export async function getAllStoredData(): Promise<FullAppDataBundle> {
       crewEntriesData,
       crewSailingsData,
     ] = await Promise.all([
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.CRUISES),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.BOOKED_CRUISES),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.CASINO_OFFERS),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.CALENDAR_EVENTS),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.CASINO_SESSIONS),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.CERTIFICATES),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.CLUB_PROFILE),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.SETTINGS),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.USER_POINTS),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.USERS),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.MY_SLOT_ATLAS),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CRUISES)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CERTIFICATES)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CLUB_PROFILE)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.SETTINGS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.USER_POINTS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.USERS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS)),
     ]);
 
     let cruises: Cruise[] = [];
@@ -329,7 +334,7 @@ export async function getAllStoredData(): Promise<FullAppDataBundle> {
   }
 }
 
-export async function importAllData(bundle: FullAppDataBundle): Promise<{
+export async function importAllData(bundle: FullAppDataBundle, email?: string | null): Promise<{
   success: boolean;
   imported: {
     cruises: number;
@@ -342,7 +347,7 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
   };
   errors: string[];
 }> {
-  console.log('[DataBundle] Importing all data...');
+  console.log('[DataBundle] Importing all data for email:', email || '(none)');
   const errors: string[] = [];
   const imported = {
     cruises: 0,
@@ -354,10 +359,15 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
     machines: 0,
   };
 
+  const sk = (baseKey: string): string => {
+    if (GLOBAL_KEYS.has(baseKey)) return baseKey;
+    return getUserScopedKey(baseKey, email ?? null);
+  };
+
   try {
     if (bundle.cruises && Array.isArray(bundle.cruises)) {
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.CRUISES, JSON.stringify(bundle.cruises));
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA, 'true');
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CRUISES), JSON.stringify(bundle.cruises));
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
       imported.cruises = bundle.cruises.length;
       console.log('[DataBundle] Imported cruises:', imported.cruises);
     }
@@ -368,8 +378,8 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
   try {
     if (bundle.bookedCruises && Array.isArray(bundle.bookedCruises)) {
       const enrichedBooked = applyKnownRetailValuesToBooked(bundle.bookedCruises);
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.BOOKED_CRUISES, JSON.stringify(enrichedBooked));
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA, 'true');
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), JSON.stringify(enrichedBooked));
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
       imported.bookedCruises = enrichedBooked.length;
       console.log('[DataBundle] Imported booked cruises:', imported.bookedCruises);
     }
@@ -379,8 +389,8 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
 
   try {
     if (bundle.casinoOffers && Array.isArray(bundle.casinoOffers)) {
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.CASINO_OFFERS, JSON.stringify(bundle.casinoOffers));
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA, 'true');
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS), JSON.stringify(bundle.casinoOffers));
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
       imported.casinoOffers = bundle.casinoOffers.length;
       console.log('[DataBundle] Imported casino offers:', imported.casinoOffers);
     }
@@ -390,7 +400,7 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
 
   try {
     if (bundle.calendarEvents && Array.isArray(bundle.calendarEvents)) {
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.CALENDAR_EVENTS, JSON.stringify(bundle.calendarEvents));
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), JSON.stringify(bundle.calendarEvents));
       imported.calendarEvents = bundle.calendarEvents.length;
       console.log('[DataBundle] Imported calendar events:', imported.calendarEvents);
     }
@@ -400,7 +410,7 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
 
   try {
     if (bundle.casinoSessions && Array.isArray(bundle.casinoSessions)) {
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.CASINO_SESSIONS, JSON.stringify(bundle.casinoSessions));
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), JSON.stringify(bundle.casinoSessions));
       imported.casinoSessions = bundle.casinoSessions.length;
       console.log('[DataBundle] Imported casino sessions:', imported.casinoSessions);
     }
@@ -410,7 +420,7 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
 
   try {
     if (bundle.certificates && Array.isArray(bundle.certificates)) {
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.CERTIFICATES, JSON.stringify(bundle.certificates));
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CERTIFICATES), JSON.stringify(bundle.certificates));
       imported.certificates = bundle.certificates.length;
       console.log('[DataBundle] Imported certificates:', imported.certificates);
     }
@@ -420,7 +430,7 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
 
   try {
     if (bundle.clubRoyaleProfile) {
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.CLUB_PROFILE, JSON.stringify(bundle.clubRoyaleProfile));
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CLUB_PROFILE), JSON.stringify(bundle.clubRoyaleProfile));
       console.log('[DataBundle] Imported club profile');
     }
   } catch (error) {
@@ -429,7 +439,7 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
 
   try {
     if (bundle.settings) {
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.SETTINGS, JSON.stringify(bundle.settings));
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.SETTINGS), JSON.stringify(bundle.settings));
       console.log('[DataBundle] Imported settings');
     }
   } catch (error) {
@@ -440,19 +450,19 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
     if (bundle.loyaltyData) {
       if (bundle.loyaltyData.manualClubRoyalePoints !== null) {
         await AsyncStorage.setItem(
-          ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, 
+          sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS), 
           bundle.loyaltyData.manualClubRoyalePoints.toString()
         );
       }
       if (bundle.loyaltyData.manualCrownAnchorPoints !== null) {
         await AsyncStorage.setItem(
-          ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, 
+          sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS), 
           bundle.loyaltyData.manualCrownAnchorPoints.toString()
         );
       }
       if (bundle.loyaltyData.userPoints !== null) {
         await AsyncStorage.setItem(
-          ALL_STORAGE_KEYS.USER_POINTS, 
+          sk(ALL_STORAGE_KEYS.USER_POINTS), 
           bundle.loyaltyData.userPoints.toString()
         );
       }
@@ -494,13 +504,13 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
     }
     
     if (usersToImport && usersToImport.length > 0) {
-      await AsyncStorage.setItem(ALL_STORAGE_KEYS.USERS, JSON.stringify(usersToImport));
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.USERS), JSON.stringify(usersToImport));
       console.log('[DataBundle] Successfully imported', usersToImport.length, 'users to storage');
       console.log('[DataBundle] Imported users:', JSON.stringify(usersToImport.map(u => ({ id: u.id, name: u.name, crownAnchorNumber: u.crownAnchorNumber, hasPlayingHours: !!u.playingHours }))));
       
       const ownerUser = usersToImport.find(u => u.isOwner) || usersToImport[0];
       if (ownerUser) {
-        await AsyncStorage.setItem(ALL_STORAGE_KEYS.CURRENT_USER, ownerUser.id);
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CURRENT_USER), ownerUser.id);
         console.log('[DataBundle] Set current user to:', ownerUser.id, ownerUser.name);
       }
     }
@@ -512,11 +522,11 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
   try {
     if (bundle.machines) {
       if (bundle.machines.encyclopedia && Array.isArray(bundle.machines.encyclopedia)) {
-        await AsyncStorage.setItem(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA, JSON.stringify(bundle.machines.encyclopedia));
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA), JSON.stringify(bundle.machines.encyclopedia));
         console.log('[DataBundle] Imported machine encyclopedia:', bundle.machines.encyclopedia.length);
       }
       if (bundle.machines.atlasIds && Array.isArray(bundle.machines.atlasIds)) {
-        await AsyncStorage.setItem(ALL_STORAGE_KEYS.MY_SLOT_ATLAS, JSON.stringify(bundle.machines.atlasIds));
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), JSON.stringify(bundle.machines.atlasIds));
         imported.machines = bundle.machines.atlasIds.length;
         console.log('[DataBundle] Imported slot atlas:', imported.machines, 'machines');
       }
@@ -529,11 +539,11 @@ export async function importAllData(bundle: FullAppDataBundle): Promise<{
   try {
     if (bundle.crewRecognition) {
       if (bundle.crewRecognition.entries && Array.isArray(bundle.crewRecognition.entries)) {
-        await AsyncStorage.setItem(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES, JSON.stringify(bundle.crewRecognition.entries));
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), JSON.stringify(bundle.crewRecognition.entries));
         console.log('[DataBundle] Imported crew recognition entries:', bundle.crewRecognition.entries.length);
       }
       if (bundle.crewRecognition.sailings && Array.isArray(bundle.crewRecognition.sailings)) {
-        await AsyncStorage.setItem(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS, JSON.stringify(bundle.crewRecognition.sailings));
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), JSON.stringify(bundle.crewRecognition.sailings));
         console.log('[DataBundle] Imported crew recognition sailings:', bundle.crewRecognition.sailings.length);
       }
     }

@@ -3,15 +3,15 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import { getAllStoredData, importAllData, type FullAppDataBundle } from '../dataBundle/bundleOperations';
 
-export async function exportAllDataToFile(): Promise<{
+export async function exportAllDataToFile(email?: string | null): Promise<{
   success: boolean;
   fileName?: string;
   error?: string;
 }> {
   try {
-    console.log('[DataFileIO] Exporting all data to file...');
+    console.log('[DataFileIO] Exporting all data to file for email:', email || '(none)');
     
-    const bundle = await getAllStoredData();
+    const bundle = await getAllStoredData(email);
     const jsonContent = JSON.stringify(bundle, null, 2);
     
     const now = new Date();
@@ -59,7 +59,7 @@ export async function exportAllDataToFile(): Promise<{
   }
 }
 
-export async function importAllDataFromFile(): Promise<{
+export async function importAllDataFromFile(email?: string | null): Promise<{
   success: boolean;
   imported?: {
     cruises: number;
@@ -162,7 +162,7 @@ export async function importAllDataFromFile(): Promise<{
     if (!Array.isArray(bundle.machines.encyclopedia)) bundle.machines.encyclopedia = [];
     if (!Array.isArray(bundle.machines.atlasIds)) bundle.machines.atlasIds = [];
 
-    const importResult = await importAllData(bundle);
+    const importResult = await importAllData(bundle, email ?? null);
     
     if (importResult.errors.length > 0) {
       console.log('[DataFileIO] Import completed with errors:', importResult.errors);

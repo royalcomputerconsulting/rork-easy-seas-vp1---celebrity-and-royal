@@ -947,7 +947,7 @@ export default function SettingsScreen() {
       setIsExportingAll(true);
       console.log('[Settings] Starting full data export...');
       
-      const result = await exportAllDataToFile();
+      const result = await exportAllDataToFile(authenticatedEmail);
       
       if (result.success) {
         Alert.alert(
@@ -963,14 +963,14 @@ export default function SettingsScreen() {
     } finally {
       setIsExportingAll(false);
     }
-  }, []);
+  }, [authenticatedEmail]);
 
   const handleImportAllData = useCallback(async () => {
     try {
       setIsImportingAll(true);
       console.log('[Settings] Starting full data import...');
       
-      const result = await importAllDataFromFile();
+      const result = await importAllDataFromFile(authenticatedEmail);
       
       if (!result.success) {
         if (result.error !== 'Import cancelled') {
@@ -979,6 +979,7 @@ export default function SettingsScreen() {
         setIsImportingAll(false);
         return;
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       
       if (result.success && result.imported) {
         const { cruises: importedCruises, bookedCruises: importedBooked, casinoOffers: importedOffers, calendarEvents, casinoSessions: importedSessions, certificates, machines: importedMachines } = result.imported;
@@ -1037,7 +1038,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImportingAll(false);
     }
-  }, [coreData, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
+  }, [authenticatedEmail, coreData, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
 
   const handleDownloadExtension = useCallback(async () => {
     try {
