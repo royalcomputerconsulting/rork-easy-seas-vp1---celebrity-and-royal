@@ -291,7 +291,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           setState(prev => {
             const incoming = message.data as BookedCruiseRow[];
             const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
-            const deduped = incoming.filter(c => !c.bookingId || !existingIds.has(c.bookingId));
+            const existingShipDates = new Set(prev.extractedBookedCruises.map(c => `${c.shipName}|${c.sailingStartDate}`));
+            const deduped = incoming.filter(c => {
+              if (c.bookingId && existingIds.has(c.bookingId)) return false;
+              const key = `${c.shipName}|${c.sailingStartDate}`;
+              if (existingShipDates.has(key)) return false;
+              return true;
+            });
             if (deduped.length < incoming.length) {
               console.log(`[RoyalCaribbeanSync] Deduped cruise_batch: ${incoming.length} -> ${deduped.length} (removed ${incoming.length - deduped.length} duplicates)`);
             }
@@ -348,44 +354,72 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       case 'all_bookings_data':
         if (message.bookings && Array.isArray(message.bookings)) {
-          const formattedCruises = message.bookings.map((booking: any) => ({
-            rawBooking: booking,
-            sourcePage: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
-            shipName: booking.shipName || booking.shipCode + ' of the Seas',
-            shipCode: booking.shipCode,
-            cruiseTitle: booking.cruiseTitle || booking.numberOfNights + ' Night Cruise',
-            sailingStartDate: booking.sailDate,
-            sailingEndDate: booking.sailingEndDate || '',
-            sailingDates: booking.sailingDates || '',
-            itinerary: booking.itinerary || '',
-            departurePort: booking.departurePort || '',
-            arrivalPort: booking.arrivalPort || '',
-            cabinType: booking.stateroomType || '',
-            cabinCategory: booking.stateroomCategoryCode || '',
-            cabinNumberOrGTY: booking.stateroomNumber === 'GTY' ? 'GTY' : booking.stateroomNumber,
-            deckNumber: booking.deckNumber || '',
-            bookingId: booking.bookingId,
-            numberOfGuests: booking.passengers?.length.toString() || '1',
-            numberOfNights: booking.numberOfNights,
-            daysToGo: '',
-            status: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
-            holdExpiration: booking.offerExpirationDate || '',
-            loyaltyLevel: '',
-            loyaltyPoints: '',
-            paidInFull: booking.paidInFull ? 'Yes' : 'No',
-            balanceDue: booking.balanceDueAmount?.toString() || '0',
-            musterStation: booking.musterStation || '',
-            bookingStatus: booking.bookingStatus,
-            packageCode: booking.packageCode || '',
-            passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
-            stateroomNumber: booking.stateroomNumber,
-            stateroomCategoryCode: booking.stateroomCategoryCode,
-            stateroomType: booking.stateroomType
-          }));
+          const isCarnivalBookings = cruiseLine === 'carnival';
+          
+          function getBookingStatus(sailDateStr: string, bStatus: string): string {
+            if (bStatus === 'OF') return 'Courtesy Hold';
+            if (bStatus === 'CX' || bStatus === 'XX') return 'Cancelled';
+            try {
+              const sd = new Date(sailDateStr);
+              if (!isNaN(sd.getTime()) && sd < new Date()) return 'Completed';
+            } catch { /* ignore */ }
+            return 'Upcoming';
+          }
+          
+          const formattedCruises = message.bookings.map((booking: any) => {
+            const sailDate = booking.sailDate || booking.departureDate || '';
+            const bStatus = booking.bookingStatus || 'BK';
+            const status = getBookingStatus(sailDate, bStatus);
+            let shipName = booking.shipName || '';
+            if (!shipName && booking.shipCode) {
+              shipName = isCarnivalBookings ? `Carnival ${booking.shipCode}` : `${booking.shipCode} of the Seas`;
+            }
+            const nights = booking.numberOfNights || booking.duration || 0;
+            return {
+              rawBooking: booking,
+              sourcePage: status === 'Completed' ? 'Completed' : 'Upcoming',
+              shipName,
+              shipCode: booking.shipCode || '',
+              cruiseTitle: booking.cruiseTitle || (nights ? `${nights} Night Cruise` : 'Cruise'),
+              sailingStartDate: sailDate,
+              sailingEndDate: booking.sailingEndDate || booking.endDate || '',
+              sailingDates: booking.sailingDates || '',
+              itinerary: booking.itinerary || booking.destination || '',
+              departurePort: booking.departurePort || booking.homePort || '',
+              arrivalPort: booking.arrivalPort || '',
+              cabinType: booking.stateroomType || booking.cabinType || '',
+              cabinCategory: booking.stateroomCategoryCode || '',
+              cabinNumberOrGTY: booking.stateroomNumber === 'GTY' ? 'GTY' : (booking.stateroomNumber || booking.cabinNumber || 'GTY'),
+              deckNumber: booking.deckNumber || '',
+              bookingId: (booking.bookingId || booking.confirmationNumber || '').toString(),
+              numberOfGuests: (booking.passengers?.length || booking.guestCount || 1).toString(),
+              numberOfNights: nights.toString(),
+              daysToGo: '',
+              status,
+              holdExpiration: booking.offerExpirationDate || '',
+              loyaltyLevel: '',
+              loyaltyPoints: '',
+              paidInFull: booking.paidInFull ? 'Yes' : 'No',
+              balanceDue: (booking.balanceDueAmount || booking.balanceDue || '0').toString(),
+              musterStation: booking.musterStation || '',
+              bookingStatus: bStatus,
+              packageCode: booking.packageCode || '',
+              passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
+              stateroomNumber: booking.stateroomNumber || '',
+              stateroomCategoryCode: booking.stateroomCategoryCode || '',
+              stateroomType: booking.stateroomType || ''
+            };
+          });
           
           setState(prev => {
             const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
-            const deduped = formattedCruises.filter((c: any) => !c.bookingId || !existingIds.has(c.bookingId));
+            const existingShipDates = new Set(prev.extractedBookedCruises.map(c => `${c.shipName}|${c.sailingStartDate}`));
+            const deduped = formattedCruises.filter((c: any) => {
+              if (c.bookingId && existingIds.has(c.bookingId)) return false;
+              const key = `${c.shipName}|${c.sailingStartDate}`;
+              if (existingShipDates.has(key)) return false;
+              return true;
+            });
             if (deduped.length < formattedCruises.length) {
               console.log(`[RoyalCaribbeanSync] Deduped all_bookings_data: ${formattedCruises.length} -> ${deduped.length}`);
             }
@@ -398,7 +432,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           capturedSections.current.bookings = true;
           addLog(`✅ Captured ${message.bookings.length} booking(s) from consolidated API call`, 'success');
           formattedCruises.forEach((c: any) => {
-            addLog(`✅ Captured booking: ${c.shipName} - ${c.sailingStartDate} (${c.numberOfNights} nights)`, 'success');
+            addLog(`✅ Captured booking: ${c.shipName} - ${c.sailingStartDate} (${c.numberOfNights} nights) [${c.status}]`, 'success');
           });
         }
         break;
@@ -565,7 +599,23 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             console.log(`[RoyalCaribbeanSync] First booking FULL:`, JSON.stringify(bookings[0]));
             console.log(`[RoyalCaribbeanSync] First booking keys:`, Object.keys(bookings[0]));
             
-            const SHIP_CODE_MAP: Record<string, string> = {
+            const isCarnivalBooking = cruiseLine === 'carnival' || (typeof url === 'string' && url.includes('carnival.com'));
+            
+            const CARNIVAL_SHIP_CODE_MAP: Record<string, string> = {
+              'BR': 'Carnival Breeze', 'CL': 'Carnival Celebration', 'CQ': 'Carnival Conquest',
+              'DR': 'Carnival Dream', 'EL': 'Carnival Elation', 'FA': 'Carnival Fascination',
+              'FI': 'Carnival Firenze', 'CF': 'Carnival Freedom', 'GL': 'Carnival Glory',
+              'HZ': 'Carnival Horizon', 'IM': 'Carnival Imagination', 'IN': 'Carnival Inspiration',
+              'JB': 'Carnival Jubilee', 'LE': 'Carnival Legend', 'LI': 'Carnival Liberty',
+              'LU': 'Carnival Luminosa', 'MG': 'Carnival Magic', 'MG2': 'Mardi Gras',
+              'MI': 'Carnival Miracle', 'PO': 'Carnival Panorama', 'PA': 'Carnival Paradise',
+              'PR': 'Carnival Pride', 'RA': 'Carnival Radiance', 'SN': 'Carnival Sensation',
+              'SP': 'Carnival Spirit', 'SL': 'Carnival Splendor', 'SR': 'Carnival Sunrise',
+              'SS': 'Carnival Sunshine', 'VL': 'Carnival Valor', 'VE': 'Carnival Venice',
+              'VI': 'Carnival Vista'
+            };
+            
+            const RC_SHIP_CODE_MAP: Record<string, string> = {
               'AL': 'Allure of the Seas', 'AN': 'Anthem of the Seas', 'AD': 'Adventure of the Seas',
               'BR': 'Brilliance of the Seas', 'EN': 'Enchantment of the Seas', 'EX': 'Explorer of the Seas',
               'FR': 'Freedom of the Seas', 'GR': 'Grandeur of the Seas', 'HM': 'Harmony of the Seas',
@@ -582,56 +632,83 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               'I': 'Interior', 'O': 'Ocean View', 'B': 'Balcony', 'S': 'Suite'
             };
             
+            function determineCruiseStatus(sailDateStr: string, bookingStatus: string): string {
+              if (bookingStatus === 'OF') return 'Courtesy Hold';
+              if (bookingStatus === 'CX' || bookingStatus === 'XX') return 'Cancelled';
+              try {
+                const sailDate = new Date(sailDateStr);
+                if (!isNaN(sailDate.getTime())) {
+                  const now = new Date();
+                  if (sailDate < now) return 'Completed';
+                }
+              } catch { /* ignore */ }
+              return 'Upcoming';
+            }
+            
             const formattedCruises = bookings.map((booking: any) => {
-              const nights = booking.numberOfNights || 0;
+              const nights = booking.numberOfNights || booking.duration || booking.numNights || 0;
               const shipCode = booking.shipCode || '';
-              const shipName = SHIP_CODE_MAP[shipCode] || (shipCode ? `${shipCode} of the Seas` : 'Unknown Ship');
-              const stateroomType = booking.stateroomType || '';
+              let shipName = '';
+              if (isCarnivalBooking) {
+                shipName = booking.shipName || booking.ship || CARNIVAL_SHIP_CODE_MAP[shipCode] || (shipCode ? `Carnival ${shipCode}` : 'Unknown Ship');
+              } else {
+                shipName = booking.shipName || RC_SHIP_CODE_MAP[shipCode] || (shipCode ? `${shipCode} of the Seas` : 'Unknown Ship');
+              }
+              const stateroomType = booking.stateroomType || booking.cabinType || booking.categoryType || '';
               const cabinType = STATEROOM_TYPE_MAP[stateroomType] || stateroomType || '';
               
-              const stateroomNumber = booking.stateroomNumber || '';
+              const stateroomNumber = booking.stateroomNumber || booking.cabinNumber || '';
               const cabinNumber = stateroomNumber === 'GTY' ? '' : stateroomNumber;
               const isGTY = stateroomNumber === 'GTY' || !stateroomNumber;
+              const sailDate = booking.sailDate || booking.departureDate || booking.startDate || '';
+              const bookingStatus = booking.bookingStatus || 'BK';
+              const status = determineCruiseStatus(sailDate, bookingStatus);
               
               return {
                 rawBooking: booking,
-                sourcePage: 'Upcoming',
+                sourcePage: status === 'Completed' ? 'Completed' : 'Upcoming',
                 shipName,
                 shipCode,
-                cruiseTitle: nights ? `${nights} Night Cruise` : 'Cruise',
-                sailingStartDate: booking.sailDate || '',
-                sailingEndDate: '',
-                sailingDates: booking.sailDate || '',
-                itinerary: '',
-                departurePort: '',
-                arrivalPort: '',
+                cruiseTitle: booking.cruiseTitle || booking.title || (nights ? `${nights} Night Cruise` : 'Cruise'),
+                sailingStartDate: sailDate,
+                sailingEndDate: booking.endDate || booking.returnDate || '',
+                sailingDates: sailDate,
+                itinerary: booking.itinerary || booking.destination || '',
+                departurePort: booking.departurePort || booking.homePort || '',
+                arrivalPort: booking.arrivalPort || '',
                 cabinType,
-                cabinCategory: booking.stateroomCategoryCode || '',
+                cabinCategory: booking.stateroomCategoryCode || booking.categoryCode || '',
                 cabinNumberOrGTY: isGTY ? 'GTY' : cabinNumber,
                 deckNumber: booking.deckNumber || '',
-                bookingId: booking.bookingId?.toString() || '',
-                numberOfGuests: booking.passengers?.length?.toString() || '1',
+                bookingId: (booking.bookingId || booking.confirmationNumber || booking.reservationId || '').toString(),
+                numberOfGuests: (booking.passengers?.length || booking.guestCount || booking.numberOfGuests || 1).toString(),
                 numberOfNights: nights.toString(),
                 daysToGo: '',
-                status: booking.bookingStatus === 'OF' ? 'Courtesy Hold' : 'Upcoming',
-                holdExpiration: '',
+                status,
+                holdExpiration: booking.offerExpirationDate || '',
                 loyaltyLevel: '',
                 loyaltyPoints: '',
                 paidInFull: booking.paidInFull ? 'Yes' : 'No',
-                balanceDue: booking.balanceDueAmount?.toString() || '0',
+                balanceDue: (booking.balanceDueAmount || booking.balanceDue || booking.amountDue || '0').toString(),
                 musterStation: booking.musterStation || '',
-                bookingStatus: booking.bookingStatus || 'BK',
+                bookingStatus,
                 packageCode: booking.packageCode || '',
                 passengerStatus: booking.passengers?.[0]?.passengerStatus || '',
                 stateroomNumber,
-                stateroomCategoryCode: booking.stateroomCategoryCode || '',
+                stateroomCategoryCode: booking.stateroomCategoryCode || booking.categoryCode || '',
                 stateroomType
               };
             });
             
             setState(prev => {
               const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
-              const deduped = formattedCruises.filter((c: any) => !c.bookingId || !existingIds.has(c.bookingId));
+              const existingShipDates = new Set(prev.extractedBookedCruises.map(c => `${c.shipName}|${c.sailingStartDate}`));
+              const deduped = formattedCruises.filter((c: any) => {
+                if (c.bookingId && existingIds.has(c.bookingId)) return false;
+                const shipDateKey = `${c.shipName}|${c.sailingStartDate}`;
+                if (existingShipDates.has(shipDateKey)) return false;
+                return true;
+              });
               if (deduped.length < formattedCruises.length) {
                 console.log(`[RoyalCaribbeanSync] Deduped network_payload bookings: ${formattedCruises.length} -> ${deduped.length}`);
                 addLog(`ℹ️ Skipped ${formattedCruises.length - deduped.length} duplicate booking(s)`, 'info');
@@ -643,9 +720,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             });
             
             capturedSections.current.bookings = true;
-            addLog(`✅ Captured ${bookings.length} booking(s) from Royal Caribbean API`, 'success');
+            const cruiseLineName = isCarnivalBooking ? 'Carnival' : config.name;
+            addLog(`✅ Captured ${bookings.length} booking(s) from ${cruiseLineName} API`, 'success');
             formattedCruises.forEach((c: any) => {
-              addLog(`✅ Captured booking: ${c.shipName} - ${c.sailingStartDate} - ${c.cabinType} ${c.cabinNumberOrGTY} (${c.numberOfNights} nights)`, 'success');
+              addLog(`✅ Captured booking: ${c.shipName} - ${c.sailingStartDate} - ${c.cabinType} ${c.cabinNumberOrGTY} (${c.numberOfNights} nights) [${c.status}]`, 'success');
             });
             
             setState(prev => {
@@ -827,7 +905,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('Ingestion completed successfully', 'success');
         break;
     }
-  }, [addLog, setProgress]);
+  }, [addLog, setProgress, cruiseLine, config.name]);
 
   const openLogin = useCallback(() => {
     setWebViewUrl(config.loginUrl);
@@ -940,33 +1018,63 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       if (isCarnivalMode) {
         addLog('⏳ Waiting for Carnival offers page to fully render...', 'info');
-        await delay(4000);
+        await delay(6000);
+        
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`
+            (function() {
+              var currentUrl = window.location.href || '';
+              var isOnOffers = currentUrl.includes('/offers');
+              try {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log',
+                  message: 'Current page before extraction: ' + currentUrl + (isOnOffers ? ' (CORRECT)' : ' (WRONG PAGE - will force navigate)'),
+                  logType: isOnOffers ? 'success' : 'warning'
+                }));
+                if (!isOnOffers) {
+                  window.location.href = '${config.offersUrl}';
+                }
+              } catch(e) {}
+            })();
+            true;
+          `);
+          
+          if (webViewRef.current) {
+            const _checkResult = await new Promise<boolean>((resolve) => {
+              setTimeout(() => resolve(false), 3000);
+              const checkInterval = setInterval(() => {
+                if (webViewRef.current) {
+                  webViewRef.current.injectJavaScript(`
+                    (function() {
+                      try {
+                        var onOffers = (window.location.href || '').includes('/offers');
+                        if (onOffers) {
+                          window.ReactNativeWebView.postMessage(JSON.stringify({
+                            type: 'log', message: 'Confirmed on offers page', logType: 'success'
+                          }));
+                        }
+                      } catch(e) {}
+                    })(); true;
+                  `);
+                }
+              }, 1000);
+              setTimeout(() => { clearInterval(checkInterval); resolve(true); }, 4000);
+            });
+          }
+          await delay(3000);
+        }
       }
       
       if (webViewRef.current) {
         if (isCarnivalMode) {
           addLog('🎪 Injecting Carnival extraction on offers page...', 'info');
-          webViewRef.current.injectJavaScript(`
-            (function() {
-              var currentUrl = window.location.href || '';
-              try {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: 'Extraction running on: ' + currentUrl,
-                  logType: currentUrl.includes('/offers') ? 'success' : 'warning'
-                }));
-              } catch(e) {}
-            })();
-            true;
-          `);
-          await delay(500);
           webViewRef.current.injectJavaScript(injectCarnivalOffersExtraction() + '; true;');
         } else {
           webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
         }
       }
       
-      await waitForStepComplete(1, isCarnivalMode ? 120000 : 900000);
+      await waitForStepComplete(1, isCarnivalMode ? 180000 : 900000);
       capturedSections.current.offers = true;
       
       setState(prev => {
@@ -1441,7 +1549,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           return status === 'courtesy hold' || status === 'hold' || status === 'offer';
         }).length;
         
-        console.log('[RoyalCaribbeanSync] Status counts - Upcoming:', upcomingCruises, ', Courtesy Holds:', courtesyHolds);
+        const completedCruises = prev.extractedBookedCruises.filter(c => {
+          const status = (c.status || '').toLowerCase();
+          return status === 'completed' || status === 'past';
+        }).length;
+        
+        console.log('[RoyalCaribbeanSync] Status counts - Upcoming:', upcomingCruises, ', Completed:', completedCruises, ', Courtesy Holds:', courtesyHolds);
         
         // Group by offer name to get unique offer count
         const offersByName = new Map<string, number>();
@@ -1493,7 +1606,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         });
         
         addLog(`📊 SUMMARY: ${uniqueOffers} casino offer(s) with ${prev.extractedOffers.length} total sailing(s)`, 'success');
-        addLog(`📊 SUMMARY: ${prev.extractedBookedCruises.length} cruise(s) - ${upcomingCruises} booked, ${courtesyHolds} courtesy holds`, 'success');
+        const statusParts: string[] = [];
+        if (upcomingCruises > 0) statusParts.push(`${upcomingCruises} upcoming`);
+        if (completedCruises > 0) statusParts.push(`${completedCruises} completed`);
+        if (courtesyHolds > 0) statusParts.push(`${courtesyHolds} courtesy holds`);
+        addLog(`📊 SUMMARY: ${prev.extractedBookedCruises.length} cruise(s)${statusParts.length > 0 ? ' - ' + statusParts.join(', ') : ''}`, 'success');
         if (prev.loyaltyData || extendedLoyaltyData) {
           addLog(`📊 SUMMARY: Loyalty status captured successfully`, 'success');
         }

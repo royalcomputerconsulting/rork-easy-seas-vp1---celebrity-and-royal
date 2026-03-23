@@ -980,16 +980,30 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
     return '';
   }
 
+  function determineCruiseStatus(sailDateStr, bookingStatus) {
+    if (bookingStatus === 'OF') return 'Courtesy Hold';
+    if (bookingStatus === 'CX' || bookingStatus === 'XX') return 'Cancelled';
+    try {
+      var sailDate = new Date(sailDateStr);
+      if (!isNaN(sailDate.getTime()) && sailDate < new Date()) return 'Completed';
+    } catch(e) {}
+    return 'Upcoming';
+  }
+
   function formatBookingFromAPI(booking, index) {
     var shipName = booking.shipName || booking.ship || '';
     if (!shipName && booking.shipCode) shipName = 'Carnival ' + booking.shipCode;
+    var sailDate = booking.sailDate || booking.departureDate || booking.startDate || '';
+    var bStatus = booking.bookingStatus || 'BK';
+    var status = determineCruiseStatus(sailDate, bStatus);
+    if (booking.status && /past|completed/i.test(booking.status)) status = 'Completed';
     return {
       rawBooking: booking,
-      sourcePage: 'Upcoming',
+      sourcePage: status === 'Completed' ? 'Completed' : 'Upcoming',
       shipName: shipName,
       shipCode: booking.shipCode || '',
       cruiseTitle: booking.cruiseTitle || booking.title || (booking.numberOfNights ? booking.numberOfNights + ' Night Cruise' : 'Cruise'),
-      sailingStartDate: booking.sailDate || booking.departureDate || booking.startDate || '',
+      sailingStartDate: sailDate,
       sailingEndDate: booking.endDate || booking.returnDate || '',
       sailingDates: '',
       itinerary: booking.itinerary || booking.destination || '',
@@ -1003,14 +1017,14 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
       numberOfGuests: (booking.guestCount || booking.numberOfGuests || 2).toString(),
       numberOfNights: (booking.numberOfNights || booking.duration || '').toString(),
       daysToGo: '',
-      status: booking.status || 'Upcoming',
+      status: status,
       holdExpiration: '',
       loyaltyLevel: '',
       loyaltyPoints: '',
       paidInFull: booking.paidInFull ? 'Yes' : '',
       balanceDue: (booking.balanceDue || booking.amountDue || '').toString(),
       musterStation: '',
-      bookingStatus: booking.bookingStatus || 'BK',
+      bookingStatus: bStatus,
       packageCode: '',
       passengerStatus: '',
       stateroomNumber: booking.stateroomNumber || booking.cabinNumber || '',
