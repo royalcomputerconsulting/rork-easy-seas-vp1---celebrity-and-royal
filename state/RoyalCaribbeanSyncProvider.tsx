@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { useAuth } from './AuthProvider';
+import { useUser } from './UserProvider';
 import { 
   RoyalCaribbeanSyncState, 
   SyncStatus,
@@ -83,6 +84,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const [cruiseLine, setCruiseLine] = useState<CruiseLine>(initialCruiseLine);
   const [extendedLoyaltyData, setExtendedLoyaltyData] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
   const [staySignedIn, setStaySignedIn] = useState(true);
+  const { currentUser, updateUser: updateUserProfile } = useUser();
   const carnivalUserDataRef = useRef<{ vifpNumber: string; vifpTier: string; firstName: string; lastName: string } | null>(null);
   const webViewRef = useRef<WebView | null>(null);
   const hasReceivedApiLoyaltyDataRef = useRef(false);
@@ -1953,20 +1955,23 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           addLog('Syncing Carnival VIFP loyalty data to user profile...', 'info');
           console.log('[CarnivalSync] Writing Carnival loyalty to user profile:', carnivalData);
 
-          if (coreDataContext.updateUserProfile) {
-            await coreDataContext.updateUserProfile({
+          if (currentUser && updateUserProfile) {
+            console.log('[CarnivalSync] Using UserProvider.updateUser for userId:', currentUser.id);
+            await updateUserProfile(currentUser.id, {
               carnivalVifpNumber: carnivalData.vifpNumber,
               carnivalVifpTier: carnivalData.vifpTier,
             });
+            console.log('[CarnivalSync] Carnival loyalty data saved via UserProvider');
           } else {
+            console.warn('[CarnivalSync] No currentUser available, falling back to direct AsyncStorage write');
             const scopedUsersKey = getUserScopedKey(ALL_STORAGE_KEYS.USERS, authenticatedEmail);
             const scopedCurrentUserKey = getUserScopedKey(ALL_STORAGE_KEYS.CURRENT_USER, authenticatedEmail);
             const usersRaw = await AsyncStorage.getItem(scopedUsersKey);
-            const currentUserId = await AsyncStorage.getItem(scopedCurrentUserKey);
-            if (usersRaw && currentUserId) {
+            const storedCurrentUserId = await AsyncStorage.getItem(scopedCurrentUserKey);
+            if (usersRaw && storedCurrentUserId) {
               const users = JSON.parse(usersRaw);
               const updatedUsers = users.map((u: any) =>
-                u.id === currentUserId
+                u.id === storedCurrentUserId
                   ? {
                       ...u,
                       carnivalVifpNumber: carnivalData.vifpNumber,
@@ -1976,7 +1981,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                   : u
               );
               await AsyncStorage.setItem(scopedUsersKey, JSON.stringify(updatedUsers));
-              console.log('[CarnivalSync] Carnival loyalty data written to user profile storage');
+              console.log('[CarnivalSync] Carnival loyalty data written to scoped user storage');
+            } else {
+              console.warn('[CarnivalSync] No users found in scoped storage, cannot save VIFP data');
+              addLog('⚠️ No user profile found to save VIFP data', 'warning');
             }
           }
 
@@ -2030,7 +2038,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`❌ Sync failed: ${errorMessage}`, 'error');
       addLog('Please try again or contact support if the issue persists', 'error');
     }
-  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail]);
+  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail, currentUser, updateUserProfile]);
 
   const cancelSync = useCallback(() => {
     setState(prev => ({ ...prev, status: 'logged_in', syncCounts: null }));
