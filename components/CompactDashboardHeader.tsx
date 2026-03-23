@@ -8,6 +8,8 @@ import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/club
 import { CROWN_ANCHOR_LEVELS, LEVEL_ORDER } from '@/constants/crownAnchor';
 import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER, getCelebrityCaptainsClubLevelByPoints } from '@/constants/celebrityCaptainsClub';
 import { CELEBRITY_BLUE_CHIP_TIERS, CELEBRITY_TIER_ORDER, getCelebrityBlueChipTierByLevel } from '@/constants/celebrityBlueChipClub';
+import { SILVERSEA_VENETIAN_TIERS, SILVERSEA_TIER_ORDER, getSilverseaTierByDays, getNextSilverseaTier } from '@/constants/silverseaVenetianSociety';
+import { CARNIVAL_VIFP_TIERS, CARNIVAL_VIFP_TIER_ORDER, CARNIVAL_PLAYERS_CLUB_TIERS } from '@/constants/carnivalVifpClub';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
 import { BrandToggle, BrandType } from '@/components/ui/BrandToggle';
@@ -56,10 +58,10 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     projectedBookedPoints,
   } = useLoyalty();
   const { currentUser } = useUser();
-  const [activeBrand, setActiveBrand] = useState<BrandType>((currentUser?.preferredBrand === 'silversea' ? 'royal' : currentUser?.preferredBrand) || 'royal');
+  const [activeBrand, setActiveBrand] = useState<BrandType>(currentUser?.preferredBrand || 'royal');
 
   useEffect(() => {
-    setActiveBrand((currentUser?.preferredBrand === 'silversea' ? 'royal' : currentUser?.preferredBrand) || 'royal');
+    setActiveBrand(currentUser?.preferredBrand || 'royal');
   }, [currentUser?.preferredBrand]);
 
   const celebrityCaptainsClubPoints = currentUser?.celebrityCaptainsClubPoints || 0;
@@ -92,18 +94,27 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     return `${mm}-${dd}-${yy}`;
   };
 
-  const getTierColor = (tier: string): string => {
-    const tierData = CLUB_ROYALE_TIERS[tier as keyof typeof CLUB_ROYALE_TIERS];
-    return tierData?.color || COLORS.beigeWarm;
-  };
-
   const marbleConfig = MARBLE_TEXTURES.lightBlue;
 
-  const displayName = activeBrand === 'royal' ? memberName : (currentUser?.name || memberName);
+  const displayName = currentUser?.name || memberName;
   const displayNumber = activeBrand === 'royal' 
-    ? (crownAnchorNumber || currentUser?.crownAnchorNumber || '305812247')
-    : (currentUser?.celebrityCaptainsClubNumber || 'Not set');
-  const displayNumberLabel = activeBrand === 'royal' ? 'C&A #' : 'Captain\'s Club #';
+    ? (crownAnchorNumber || currentUser?.crownAnchorNumber || '')
+    : activeBrand === 'celebrity'
+    ? (currentUser?.celebrityCaptainsClubNumber || 'Not set')
+    : activeBrand === 'silversea'
+    ? (currentUser?.silverseaVenetianNumber || 'Not set')
+    : (currentUser?.carnivalVifpNumber || 'Not set');
+  const displayNumberLabel = activeBrand === 'royal' ? 'C&A #'
+    : activeBrand === 'celebrity' ? 'Captain\'s Club #'
+    : activeBrand === 'silversea' ? 'Venetian Society #'
+    : 'VIFP Club #';
+
+  const silverseaTier = currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints || 0);
+  const silverseaPoints = currentUser?.silverseaVenetianPoints || 0;
+
+  const carnivalVifpTier = currentUser?.carnivalVifpTier || 'Blue';
+  const carnivalPlayersClubTier = currentUser?.carnivalPlayersClubTier || 'Blue';
+  const carnivalPlayersClubPoints = currentUser?.carnivalPlayersClubPoints || 0;
 
   return (
     <LinearGradient
@@ -170,6 +181,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
       {activeBrand === 'royal' ? (
         <>
+      {/* === ROYAL CARIBBEAN === */}
       <View style={styles.tierRow}>
         <View style={[styles.tierBadge, { backgroundColor: '#FFFFFF', borderColor: 'rgba(0, 31, 63, 0.2)' }]}>
           <Text style={[styles.tierText, { color: COLORS.navyDeep }]}>{clubRoyaleTier.toUpperCase()}</Text>
@@ -416,8 +428,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </TouchableOpacity>
       </View>
         </>
-      ) : (
+      ) : activeBrand === 'celebrity' ? (
         <>
+      {/* === CELEBRITY CRUISES === */}
       <View style={styles.tierRow}>
         <View style={[styles.tierBadge, { backgroundColor: (CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color ?? '#F0EAD6') + '30', borderColor: CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color ?? '#F0EAD6' }]}>
           <Text style={[styles.tierText, { color: CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#F0EAD6' }]}>{celebrityTier.toUpperCase()}</Text>
@@ -428,7 +441,6 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       </View>
 
       <View style={styles.progressGrid}>
-        {/* Celebrity Captain's Club Progress */}
         {(() => {
           const currentLevelIndex = CELEBRITY_LEVEL_ORDER.indexOf(celebrityLevel);
           const nextLevel = currentLevelIndex < CELEBRITY_LEVEL_ORDER.length - 1 ? CELEBRITY_LEVEL_ORDER[currentLevelIndex + 1] : null;
@@ -479,7 +491,6 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           );
         })()}
 
-        {/* Celebrity Blue Chip Progress */}
         {(() => {
           const currentTierIndex = CELEBRITY_TIER_ORDER.indexOf(celebrityTier);
           const nextTier = currentTierIndex < CELEBRITY_TIER_ORDER.length - 1 ? CELEBRITY_TIER_ORDER[currentTierIndex + 1] : null;
@@ -538,6 +549,251 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{Math.max(0, 3000 - celebrityCaptainsClubPoints)}</Text>
           <Text style={styles.statLabel}>To Zenith</Text>
+        </View>
+      </View>
+
+      <View style={styles.quickStatsPillRow}>
+        <TouchableOpacity 
+          style={styles.quickStatPill}
+          onPress={onCruisesPress}
+          activeOpacity={0.7}
+        >
+          <Anchor size={14} color={COLORS.points} />
+          <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
+          <Text style={styles.quickStatPillLabel}>Cruises</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.quickStatPill}
+          onPress={onBookedPress}
+          activeOpacity={0.7}
+        >
+          <Ship size={14} color={COLORS.money} />
+          <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
+          <Text style={styles.quickStatPillLabel}>Booked</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.quickStatPill}
+          onPress={onOffersPress}
+          activeOpacity={0.7}
+        >
+          <Tag size={14} color={COLORS.gold} />
+          <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
+          <Text style={styles.quickStatPillLabel}>Offers</Text>
+        </TouchableOpacity>
+      </View>
+        </>
+      ) : activeBrand === 'silversea' ? (
+        <>
+      {/* === SILVERSEA === */}
+      <View style={styles.tierRow}>
+        <View style={[styles.tierBadge, { backgroundColor: (SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color ?? '#708090') + '30', borderColor: SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color ?? '#708090' }]}>
+          <Text style={[styles.tierText, { color: SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color || '#708090' }]}>{silverseaTier.toUpperCase()}</Text>
+        </View>
+      </View>
+
+      <View style={styles.progressGrid}>
+        {(() => {
+          const currentTierIndex = SILVERSEA_TIER_ORDER.indexOf(silverseaTier);
+          const nextTier = currentTierIndex < SILVERSEA_TIER_ORDER.length - 1 ? SILVERSEA_TIER_ORDER[currentTierIndex + 1] : null;
+          const isMax = silverseaTier === 'Diamond Elite';
+          
+          const currentThreshold = SILVERSEA_VENETIAN_TIERS[silverseaTier]?.cruiseDays || 0;
+          const nextThreshold = nextTier ? SILVERSEA_VENETIAN_TIERS[nextTier]?.cruiseDays : 500;
+          const rangeSize = nextThreshold - currentThreshold;
+          const progressInRange = silverseaPoints - currentThreshold;
+          const percentComplete = isMax ? 100 : Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100));
+          const daysToNext = isMax ? 0 : Math.max(0, nextThreshold - silverseaPoints);
+          
+          const tierColor = SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color || '#708090';
+          const nextTierColor = nextTier ? SILVERSEA_VENETIAN_TIERS[nextTier]?.color : tierColor;
+          
+          return (
+            <View style={styles.progressCard}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressLabel}>
+                  {isMax 
+                    ? `Diamond Elite (${silverseaPoints} days)`
+                    : `${silverseaTier} → ${nextTier} (${silverseaPoints}/${nextThreshold} days)`
+                  }
+                </Text>
+                {isMax ? (
+                  <View style={styles.achievedBadge}>
+                    <Text style={styles.achievedBadgeText}>MAX TIER</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.progressPercent}>{percentComplete.toFixed(1)}%</Text>
+                )}
+              </View>
+              <View style={styles.progressBarBg}>
+                <LinearGradient
+                  colors={[tierColor, nextTierColor]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
+                />
+              </View>
+              <Text style={styles.progressEta}>
+                {isMax 
+                  ? 'Diamond Elite achieved! Maximum Venetian Society tier'
+                  : `${daysToNext} cruise days to ${nextTier}`
+                }
+              </Text>
+            </View>
+          );
+        })()}
+      </View>
+
+      <View style={styles.statsRow}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{silverseaPoints}</Text>
+          <Text style={styles.statLabel}>Cruise Days</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{silverseaTier}</Text>
+          <Text style={styles.statLabel}>Venetian Tier</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{(() => {
+            const nextTier = getNextSilverseaTier(silverseaTier);
+            if (!nextTier) return 0;
+            return Math.max(0, (SILVERSEA_VENETIAN_TIERS[nextTier]?.cruiseDays || 0) - silverseaPoints);
+          })()}</Text>
+          <Text style={styles.statLabel}>To Next Tier</Text>
+        </View>
+      </View>
+
+      <View style={styles.quickStatsPillRow}>
+        <TouchableOpacity 
+          style={styles.quickStatPill}
+          onPress={onCruisesPress}
+          activeOpacity={0.7}
+        >
+          <Anchor size={14} color={COLORS.points} />
+          <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
+          <Text style={styles.quickStatPillLabel}>Cruises</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.quickStatPill}
+          onPress={onBookedPress}
+          activeOpacity={0.7}
+        >
+          <Ship size={14} color={COLORS.money} />
+          <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
+          <Text style={styles.quickStatPillLabel}>Booked</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.quickStatPill}
+          onPress={onOffersPress}
+          activeOpacity={0.7}
+        >
+          <Tag size={14} color={COLORS.gold} />
+          <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
+          <Text style={styles.quickStatPillLabel}>Offers</Text>
+        </TouchableOpacity>
+      </View>
+        </>
+      ) : (
+        <>
+      {/* === CARNIVAL === */}
+      <View style={styles.tierRow}>
+        <View style={[styles.tierBadge, { backgroundColor: (CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.color ?? '#1E90FF') + '30', borderColor: CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.color ?? '#1E90FF' }]}>
+          <Text style={[styles.tierText, { color: CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.color || '#1E90FF' }]}>VIFP {carnivalVifpTier.toUpperCase()}</Text>
+        </View>
+        <View style={[styles.tierBadge, { backgroundColor: (CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color ?? '#1E90FF') + '30', borderColor: CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color ?? '#1E90FF' }]}>
+          <Text style={[styles.tierText, { color: CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color || '#1E90FF' }]}>PLAYERS {carnivalPlayersClubTier.toUpperCase()}</Text>
+        </View>
+      </View>
+
+      <View style={styles.progressGrid}>
+        {(() => {
+          const currentTierIndex = CARNIVAL_VIFP_TIER_ORDER.indexOf(carnivalVifpTier);
+          const nextTier = currentTierIndex < CARNIVAL_VIFP_TIER_ORDER.length - 1 ? CARNIVAL_VIFP_TIER_ORDER[currentTierIndex + 1] : null;
+          const isMax = carnivalVifpTier === 'Diamond';
+          
+          const currentThreshold = CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.cruiseDays || 0;
+          const nextThreshold = nextTier ? CARNIVAL_VIFP_TIERS[nextTier]?.cruiseDays : 500;
+          const _rangeSize = nextThreshold - currentThreshold;
+          
+          const tierColor = CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.color || '#1E90FF';
+          const nextTierColor = nextTier ? CARNIVAL_VIFP_TIERS[nextTier]?.color : tierColor;
+          
+          return (
+            <View style={styles.progressCard}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressLabel}>
+                  {isMax 
+                    ? `VIFP Diamond`
+                    : `VIFP ${carnivalVifpTier} → ${nextTier}`
+                  }
+                </Text>
+                {isMax ? (
+                  <View style={styles.achievedBadge}>
+                    <Text style={styles.achievedBadgeText}>MAX TIER</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.progressPercent}>--</Text>
+                )}
+              </View>
+              <View style={styles.progressBarBg}>
+                <LinearGradient
+                  colors={[tierColor, nextTierColor]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.progressBarFill, { width: isMax ? '100%' : '0%' }]}
+                />
+              </View>
+              <Text style={styles.progressEta}>
+                {isMax 
+                  ? 'VIFP Diamond achieved! Maximum loyalty tier'
+                  : `Cruise to earn VIFP tier progress`
+                }
+              </Text>
+            </View>
+          );
+        })()}
+
+        {(() => {
+          const tierColor = CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color || '#1E90FF';
+          
+          return (
+            <View style={styles.progressCard}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressLabel}>
+                  Players Club: {carnivalPlayersClubTier} ({carnivalPlayersClubPoints.toLocaleString()} pts)
+                </Text>
+                <Text style={styles.progressPercent}>--</Text>
+              </View>
+              <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarFill, { width: '0%', backgroundColor: tierColor }]} />
+              </View>
+              <Text style={styles.progressEta}>
+                Play in the casino to earn Players Club tier progress
+              </Text>
+            </View>
+          );
+        })()}
+      </View>
+
+      <View style={styles.statsRow}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{carnivalPlayersClubPoints.toLocaleString()}</Text>
+          <Text style={styles.statLabel}>Players Pts</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{carnivalVifpTier}</Text>
+          <Text style={styles.statLabel}>VIFP Tier</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{carnivalPlayersClubTier}</Text>
+          <Text style={styles.statLabel}>Players Tier</Text>
         </View>
       </View>
 
