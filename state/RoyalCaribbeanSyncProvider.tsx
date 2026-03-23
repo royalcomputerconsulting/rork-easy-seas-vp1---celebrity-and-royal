@@ -19,7 +19,7 @@ import { convertLoyaltyInfoToExtended } from '@/lib/royalCaribbean/loyaltyConver
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
-import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape } from '@/lib/carnival/carnivalOffersExtraction';
+import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { healImportedData } from '@/lib/dataHealing';
 
@@ -91,6 +91,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const processedPayloads = useRef<Set<string>>(new Set());
   const capturedSections = useRef({ offers: false, bookings: false, loyalty: false });
   const pageLoadResolver = useRef<(() => void) | null>(null);
+  const offerSailingsResolver = useRef<((sailings: OfferRow[]) => void) | null>(null);
   
   const config = CRUISE_LINE_CONFIG[cruiseLine];
   const [webViewUrl, setWebViewUrl] = useState<string>(CRUISE_LINE_CONFIG[initialCruiseLine].loginUrl);
@@ -323,6 +324,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           progressCallbacks.current.onProgress();
         }
         break;
+
+      case 'offer_sailings_result': {
+        const sailingsMsg = message as any;
+        const sailingsData = (sailingsMsg.sailings || []) as OfferRow[];
+        console.log(`[CarnivalSync] offer_sailings_result: ${sailingsData.length} sailings for ${sailingsMsg.offerName} (${sailingsMsg.offerCode})`);
+        if (offerSailingsResolver.current) {
+          offerSailingsResolver.current(sailingsData);
+          offerSailingsResolver.current = null;
+        }
+        break;
+      }
 
       case 'step_complete':
         const itemCount = message.totalCount ?? message.data?.length ?? 0;
@@ -964,6 +976,106 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         return prev;
       });
       
+      // Step 1.5: Carnival offer enrichment - navigate to each offer's cruise search page
+      if (isCarnivalMode) {
+        let offersToEnrich: { offerName: string; offerCode: string; bookingLink: string; offerExpiry: string; perks: string }[] = [];
+        setState(prev => {
+          const seen = new Set<string>();
+          prev.extractedOffers.forEach(offer => {
+            const code = offer.offerCode || '';
+            const link = offer.bookingLink || '';
+            if (code && !seen.has(code) && !offer.shipName && !offer.sailingDate) {
+              seen.add(code);
+              let fullLink = link;
+              if (fullLink && !fullLink.startsWith('http')) {
+                fullLink = 'https://www.carnival.com' + (fullLink.startsWith('/') ? '' : '/') + fullLink;
+              }
+              if (!fullLink && code) {
+                fullLink = 'https://www.carnival.com/cruise-search?rateCodes=' + code;
+              }
+              if (fullLink) {
+                offersToEnrich.push({
+                  offerName: offer.offerName || 'Unknown Offer',
+                  offerCode: code,
+                  bookingLink: fullLink,
+                  offerExpiry: offer.offerExpirationDate || '',
+                  perks: offer.perks || ''
+                });
+              }
+            }
+          });
+          return prev;
+        });
+
+        if (offersToEnrich.length > 0) {
+          addLog(`🔍 ====== STEP 1.5: ENRICHING ${offersToEnrich.length} OFFER(S) WITH CRUISE DETAILS ======`, 'info');
+          addLog('🚢 Navigating to each offer\'s cruise search page to find actual sailings...', 'info');
+
+          const waitForOfferSailings = (timeoutMs: number = 30000): Promise<OfferRow[]> => {
+            return new Promise((resolve) => {
+              const timeout = setTimeout(() => {
+                offerSailingsResolver.current = null;
+                resolve([]);
+              }, timeoutMs);
+
+              offerSailingsResolver.current = (sailings: OfferRow[]) => {
+                clearTimeout(timeout);
+                resolve(sailings);
+              };
+            });
+          };
+
+          let totalEnrichedSailings = 0;
+          for (let oi = 0; oi < offersToEnrich.length; oi++) {
+            const offer = offersToEnrich[oi];
+            addLog(`🔍 Offer ${oi + 1}/${offersToEnrich.length}: Navigating to "${offer.offerName}" (${offer.offerCode})...`, 'info');
+            addLog(`   📍 URL: ${offer.bookingLink}`, 'info');
+
+            await navigateToPage(offer.bookingLink, 20000);
+            await delay(3000);
+
+            if (webViewRef.current) {
+              addLog(`   🎪 Injecting cruise search scraper for ${offer.offerCode}...`, 'info');
+              webViewRef.current.injectJavaScript(
+                injectCarnivalCruiseSearchScrape(offer.offerName, offer.offerCode, offer.offerExpiry, offer.perks)
+              );
+            }
+
+            const sailings = await waitForOfferSailings(25000);
+
+            if (sailings.length > 0) {
+              totalEnrichedSailings += sailings.length;
+              addLog(`   ✅ Found ${sailings.length} sailing(s) for "${offer.offerName}"`, 'success');
+              sailings.slice(0, 3).forEach((s, idx) => {
+                if (s.shipName || s.sailingDate) {
+                  addLog(`      🚢 Sailing ${idx + 1}: ${s.shipName || 'TBD'} - ${s.sailingDate || 'TBD'}${s.interiorPrice ? ' from ' + s.interiorPrice : ''}`, 'success');
+                }
+              });
+              if (sailings.length > 3) {
+                addLog(`      ➕ ...and ${sailings.length - 3} more sailing(s)`, 'success');
+              }
+              setState(prev => {
+                const existingWithoutThisOffer = prev.extractedOffers.filter(
+                  o => o.offerCode !== offer.offerCode || (o.shipName && o.sailingDate)
+                );
+                return {
+                  ...prev,
+                  extractedOffers: [...existingWithoutThisOffer, ...sailings]
+                };
+              });
+            } else {
+              addLog(`   ⚠️ No sailings found on cruise search page for "${offer.offerName}" - keeping offer-level row`, 'warning');
+            }
+
+            await delay(1000);
+          }
+
+          addLog(`✅ STEP 1.5 COMPLETE: Enriched offers with ${totalEnrichedSailings} total sailing(s) from ${offersToEnrich.length} offer page(s)`, 'success');
+        } else {
+          addLog('ℹ️ All offers already have sailing details or no booking links found - skipping enrichment', 'info');
+        }
+      }
+
       // Step 2: Passive capture loop - visit pages to trigger API calls
       setState(prev => ({ ...prev, status: 'running_step_2' }));
       addLog('🚀 ====== STEP 2: BOOKINGS & LOYALTY ======', 'info');

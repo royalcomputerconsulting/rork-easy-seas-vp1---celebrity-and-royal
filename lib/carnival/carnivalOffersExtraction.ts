@@ -1300,3 +1300,209 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
 export function injectCarnivalBookingsScrape(): string {
   return CARNIVAL_BOOKINGS_SCRAPE_SCRIPT;
 }
+
+export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
+(function() {
+  var CARNIVAL_SHIPS = [
+    'Carnival Breeze', 'Carnival Celebration', 'Carnival Conquest', 'Carnival Dream',
+    'Carnival Elation', 'Carnival Fascination', 'Carnival Firenze', 'Carnival Freedom',
+    'Carnival Glory', 'Carnival Horizon', 'Carnival Imagination', 'Carnival Inspiration',
+    'Carnival Jubilee', 'Carnival Legend', 'Carnival Liberty', 'Carnival Luminosa',
+    'Carnival Magic', 'Mardi Gras', 'Carnival Miracle', 'Carnival Panorama',
+    'Carnival Paradise', 'Carnival Pride', 'Carnival Radiance', 'Carnival Sensation',
+    'Carnival Spirit', 'Carnival Splendor', 'Carnival Sunrise', 'Carnival Sunshine',
+    'Carnival Valor', 'Carnival Venice', 'Carnival Vista'
+  ];
+  var SHIP_PATTERN = new RegExp('(' + CARNIVAL_SHIPS.map(function(s) { return s.replace(/\\s+/g, '\\\\s+'); }).join('|') + ')', 'i');
+
+  function log(message, type) {
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: message, logType: type || 'info' }));
+    } catch(e) {}
+  }
+
+  function formatSailDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      var date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      var month = String(date.getMonth() + 1).padStart(2, '0');
+      var day = String(date.getDate()).padStart(2, '0');
+      var year = date.getFullYear();
+      return month + '/' + day + '/' + year;
+    } catch(e) { return dateStr; }
+  }
+
+  function extractSailingsFromSearchPage() {
+    var sailings = [];
+    var offerName = window.__enrichOfferName || '';
+    var offerCode = window.__enrichOfferCode || '';
+    var offerExpiry = window.__enrichOfferExpiry || '';
+    var offerPerks = window.__enrichOfferPerks || '';
+
+    log('Scraping cruise search results for offer: ' + offerName + ' (' + offerCode + ')', 'info');
+
+    var cardSelectors = [
+      '[data-testid*="result"], [data-testid*="cruise"], [data-testid*="sailing"], [data-testid*="itinerary"]',
+      '[class*="SearchResult"], [class*="search-result"], [class*="searchResult"]',
+      '[class*="CruiseCard"], [class*="cruise-card"], [class*="cruiseCard"]',
+      '[class*="SailingCard"], [class*="sailing-card"], [class*="sailingCard"]',
+      '[class*="ItineraryCard"], [class*="itinerary-card"], [class*="itineraryCard"]',
+      '[class*="DealCard"], [class*="deal-card"], [class*="dealCard"]',
+      '[class*="result-card"], [class*="ResultCard"]',
+      'article[class*="cruise"], article[class*="sailing"], article[class*="result"]',
+      '[class*="tile"][class*="cruise"], [class*="tile"][class*="result"]'
+    ];
+
+    var cards = [];
+    for (var si = 0; si < cardSelectors.length; si++) {
+      try {
+        var found = document.querySelectorAll(cardSelectors[si]);
+        if (found.length > 0) {
+          cards = found;
+          log('Found ' + found.length + ' cruise result elements via: ' + cardSelectors[si], 'info');
+          break;
+        }
+      } catch(e) {}
+    }
+
+    if (cards.length === 0) {
+      try {
+        var allEls = document.querySelectorAll('section, article, [role="listitem"], div[class*="card"], div[class*="Card"], li[class]');
+        var matchEls = [];
+        for (var ei = 0; ei < allEls.length; ei++) {
+          var txt = (allEls[ei].textContent || '').substring(0, 800);
+          var hasShip = SHIP_PATTERN.test(txt);
+          var hasPrice = /\\$\\s*[\\d,]+/.test(txt);
+          var hasNights = /\\d+\\s*[-\\s]?\\s*(?:Night|night|Nite|Day)/i.test(txt);
+          if (hasShip && (hasPrice || hasNights)) {
+            matchEls.push(allEls[ei]);
+          }
+        }
+        if (matchEls.length > 0 && matchEls.length < 80) {
+          cards = matchEls;
+          log('Found ' + matchEls.length + ' cruise elements by content analysis', 'info');
+        }
+      } catch(e) {}
+    }
+
+    if (cards.length === 0) {
+      try {
+        var nextEl = document.getElementById('__NEXT_DATA__');
+        if (nextEl) {
+          var pageData = JSON.parse(nextEl.textContent || '');
+          var props = pageData && pageData.props && pageData.props.pageProps;
+          if (props) {
+            var keys = Object.keys(props);
+            for (var ki = 0; ki < keys.length; ki++) {
+              var val = props[keys[ki]];
+              if (Array.isArray(val) && val.length > 0 && val[0]) {
+                var first = val[0];
+                if (first.shipName || first.ship || first.sailDate || first.departureDate || first.price || first.startingPrice) {
+                  log('Found ' + val.length + ' sailings in __NEXT_DATA__.' + keys[ki], 'success');
+                  for (var vi = 0; vi < val.length; vi++) {
+                    var item = val[vi];
+                    var rawPrice = item.price || item.startingPrice || item.lowestPrice || item.interiorPrice || 0;
+                    var dollarChar = String.fromCharCode(36);
+                    sailings.push({
+                      sourcePage: 'Offers', offerName: offerName, offerCode: offerCode,
+                      offerExpirationDate: offerExpiry, offerType: 'VIFP Club',
+                      shipName: item.shipName || item.ship || item.vesselName || '',
+                      shipCode: item.shipCode || '',
+                      sailingDate: formatSailDate(item.sailDate || item.departureDate || item.startDate || ''),
+                      itinerary: item.itinerary || item.itineraryDescription || item.destination || item.destinationName || '',
+                      departurePort: item.departurePort || item.homePort || item.departurePortName || '',
+                      cabinType: '', numberOfGuests: '2', perks: offerPerks,
+                      loyaltyLevel: '', loyaltyPoints: '',
+                      interiorPrice: rawPrice > 0 ? dollarChar + Number(rawPrice).toFixed(2) : '',
+                      oceanviewPrice: '', balconyPrice: '', suitePrice: '', taxesAndFees: '',
+                      portList: Array.isArray(item.ports) ? item.ports.map(function(p) { return typeof p === 'string' ? p : (p.name || ''); }).join(', ') : '',
+                      dayByDayItinerary: [], destinationName: item.destination || item.destinationName || '',
+                      totalNights: item.duration || item.nights || item.numberOfNights || null,
+                      bookingLink: item.bookingUrl || item.url || ''
+                    });
+                  }
+                  break;
+                }
+              }
+            }
+          }
+        }
+      } catch(e) { log('__NEXT_DATA__ parse error: ' + (e.message || e), 'warning'); }
+    }
+
+    for (var i = 0; i < cards.length; i++) {
+      try {
+        var card = cards[i];
+        var text = (card.textContent || '').replace(/\\s+/g, ' ').trim();
+        if (text.length < 15) continue;
+
+        var shipMatch = text.match(SHIP_PATTERN);
+        var shipName = shipMatch ? shipMatch[1] : '';
+
+        var dateMatch = text.match(/((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{1,2},?\\s+\\d{4})/i);
+        if (!dateMatch) dateMatch = text.match(/(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/);
+        if (!dateMatch) dateMatch = text.match(/(\\d{4}-\\d{2}-\\d{2})/);
+        var sailDate = dateMatch ? dateMatch[1] : '';
+
+        var nightsMatch = text.match(/(\\d+)\\s*[-\\s]?\\s*(?:Night|night|Nite|Day)/i);
+        var nights = nightsMatch ? parseInt(nightsMatch[1]) : null;
+
+        var priceMatch = text.match(/\\$\\s*([\\d,]+)/);
+        var price = priceMatch ? '
+ + priceMatch[1].replace(/,/g, '') : '';
+
+        var destMatch = text.match(/((?:Western|Eastern|Southern)?\\s*Caribbean|Bahamas|Mexico|Alaska|Hawaii|Bermuda|Europe|Mediterranean|Panama Canal|Transatlantic|Canada|New England|Cuba|Riviera)/i);
+        var destination = destMatch ? destMatch[1].trim() : '';
+
+        var portMatch = text.match(/(?:from|departing|departs?|sailing from)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*(?:,\\s*[A-Z]{2})?)/i);
+        var port = portMatch ? portMatch[1] : '';
+
+        if (shipName || (sailDate && nights) || (price && nights)) {
+          sailings.push({
+            sourcePage: 'Offers', offerName: offerName, offerCode: offerCode,
+            offerExpirationDate: offerExpiry, offerType: 'VIFP Club',
+            shipName: shipName, shipCode: '',
+            sailingDate: sailDate, itinerary: destination,
+            departurePort: port, cabinType: '', numberOfGuests: '2',
+            perks: offerPerks, loyaltyLevel: '', loyaltyPoints: '',
+            interiorPrice: price, oceanviewPrice: '', balconyPrice: '',
+            suitePrice: '', taxesAndFees: '', portList: '',
+            dayByDayItinerary: [], destinationName: destination,
+            totalNights: nights, bookingLink: ''
+          });
+        }
+      } catch(e) {}
+    }
+
+    log('Scraped ' + sailings.length + ' sailing(s) from cruise search page for ' + offerName, sailings.length > 0 ? 'success' : 'warning');
+
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'offer_sailings_result',
+        offerCode: offerCode,
+        offerName: offerName,
+        sailings: sailings
+      }));
+    } catch(e) {}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(extractSailingsFromSearchPage, 2000); });
+  } else {
+    setTimeout(extractSailingsFromSearchPage, 2000);
+  }
+})();
+`;
+
+export function injectCarnivalCruiseSearchScrape(offerName: string, offerCode: string, offerExpiry: string, offerPerks: string): string {
+  const escaped = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+  return `
+    window.__enrichOfferName = '${escaped(offerName)}';
+    window.__enrichOfferCode = '${escaped(offerCode)}';
+    window.__enrichOfferExpiry = '${escaped(offerExpiry)}';
+    window.__enrichOfferPerks = '${escaped(offerPerks)}';
+    ${CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT}
+    true;
+  `;
+}
