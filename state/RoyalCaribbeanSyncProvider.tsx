@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { getUserScopedKey } from '@/lib/storage/storageKeys';
+import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { useAuth } from './AuthProvider';
 import { 
   RoyalCaribbeanSyncState, 
@@ -83,6 +83,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const [cruiseLine, setCruiseLine] = useState<CruiseLine>(initialCruiseLine);
   const [extendedLoyaltyData, setExtendedLoyaltyData] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
   const [staySignedIn, setStaySignedIn] = useState(true);
+  const carnivalUserDataRef = useRef<{ vifpNumber: string; vifpTier: string; firstName: string; lastName: string } | null>(null);
   const webViewRef = useRef<WebView | null>(null);
   const hasReceivedApiLoyaltyDataRef = useRef(false);
   const lastAuthenticatedEmailRef = useRef<string | null>(authenticatedEmail);
@@ -789,6 +790,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           const tierMap: Record<string, string> = { '01': 'Red', '02': 'Gold', '03': 'Platinum', '04': 'Diamond' };
           const tierName = tierMap[userData.TierCode] || userData.TierCode || 'Unknown';
           console.log('[CarnivalSync] User data captured:', userData.FirstName, userData.LastName, 'VIFP#', userData.PastGuestNumber, 'Tier:', tierName);
+          carnivalUserDataRef.current = {
+            vifpNumber: userData.PastGuestNumber || '',
+            vifpTier: tierName,
+            firstName: userData.FirstName || '',
+            lastName: userData.LastName || '',
+          };
           capturedSections.current.loyalty = true;
           setState(prev => ({
             ...prev,
@@ -1031,8 +1038,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`🔍 Offer ${oi + 1}/${offersToEnrich.length}: Navigating to "${offer.offerName}" (${offer.offerCode})...`, 'info');
             addLog(`   📍 URL: ${offer.bookingLink}`, 'info');
 
-            await navigateToPage(offer.bookingLink, 20000);
-            await delay(3000);
+            await navigateToPage(offer.bookingLink, 25000);
+            await delay(5000);
 
             if (webViewRef.current) {
               addLog(`   🎪 Injecting cruise search scraper for ${offer.offerCode}...`, 'info');
@@ -1041,7 +1048,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               );
             }
 
-            const sailings = await waitForOfferSailings(25000);
+            const sailings = await waitForOfferSailings(35000);
 
             if (sailings.length > 0) {
               totalEnrichedSailings += sailings.length;
@@ -1794,6 +1801,46 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('⚠️ No extended loyalty payload available at sync time', 'warning');
       }
 
+      if (cruiseLine === 'carnival' && carnivalUserDataRef.current) {
+        try {
+          const carnivalData = carnivalUserDataRef.current;
+          addLog('Syncing Carnival VIFP loyalty data to user profile...', 'info');
+          console.log('[CarnivalSync] Writing Carnival loyalty to user profile:', carnivalData);
+
+          if (coreDataContext.updateUserProfile) {
+            await coreDataContext.updateUserProfile({
+              carnivalVifpNumber: carnivalData.vifpNumber,
+              carnivalVifpTier: carnivalData.vifpTier,
+            });
+          } else {
+            const scopedUsersKey = getUserScopedKey(ALL_STORAGE_KEYS.USERS, authenticatedEmail);
+            const scopedCurrentUserKey = getUserScopedKey(ALL_STORAGE_KEYS.CURRENT_USER, authenticatedEmail);
+            const usersRaw = await AsyncStorage.getItem(scopedUsersKey);
+            const currentUserId = await AsyncStorage.getItem(scopedCurrentUserKey);
+            if (usersRaw && currentUserId) {
+              const users = JSON.parse(usersRaw);
+              const updatedUsers = users.map((u: any) =>
+                u.id === currentUserId
+                  ? {
+                      ...u,
+                      carnivalVifpNumber: carnivalData.vifpNumber,
+                      carnivalVifpTier: carnivalData.vifpTier,
+                      updatedAt: new Date().toISOString(),
+                    }
+                  : u
+              );
+              await AsyncStorage.setItem(scopedUsersKey, JSON.stringify(updatedUsers));
+              console.log('[CarnivalSync] Carnival loyalty data written to user profile storage');
+            }
+          }
+
+          addLog(`✅ Carnival VIFP synced: ${carnivalData.vifpTier} tier, VIFP# ${carnivalData.vifpNumber || 'N/A'}`, 'success');
+        } catch (carnivalLoyaltyError) {
+          console.error('[CarnivalSync] Error syncing Carnival loyalty to profile:', carnivalLoyaltyError);
+          addLog(`⚠️ Warning: Failed to sync Carnival loyalty: ${String(carnivalLoyaltyError)}`, 'warning');
+        }
+      }
+
       console.log('[RoyalCaribbeanSync] Setting status to complete...');
       addLog('✅ Data synced successfully to app!', 'success');
       
@@ -1837,7 +1884,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`❌ Sync failed: ${errorMessage}`, 'error');
       addLog('Please try again or contact support if the issue persists', 'error');
     }
-  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog]);
+  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail]);
 
   const cancelSync = useCallback(() => {
     setState(prev => ({ ...prev, status: 'logged_in', syncCounts: null }));
