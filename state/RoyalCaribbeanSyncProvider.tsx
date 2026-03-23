@@ -48,7 +48,7 @@ export const CRUISE_LINE_CONFIG = {
   carnival: {
     name: 'Carnival Cruise Line',
     loginUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
-    offersUrl: 'https://www.carnival.com/profilemanagement/profiles/offers',
+    offersUrl: 'https://www.carnival.com/cruise-deals',
     upcomingUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     holdsUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     loyaltyClubName: 'VIFP Club',
@@ -1052,7 +1052,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               (function() {
                 try {
                   var currentUrl = window.location.href || '';
-                  var onOffers = currentUrl.includes('/offers');
+                  var onOffers = currentUrl.includes('/offers') || currentUrl.includes('/cruise-deals');
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'carnival_page_check',
                     onOffers: onOffers,

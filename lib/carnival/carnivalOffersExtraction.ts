@@ -210,7 +210,7 @@ export const CARNIVAL_OFFERS_SCRIPT = `
 
   function scrapeVifpOffersFromDOM() {
     var deals = [];
-    log('Scraping VIFP offers from profile/offers page DOM...', 'info');
+    log('Scraping VIFP offers from cruise-deals page DOM...', 'info');
 
     var offerCards = [];
     var selectors = [
@@ -315,14 +315,19 @@ export const CARNIVAL_OFFERS_SCRIPT = `
         var price = priceMatch ? '$' + priceMatch[1].replace(/,/g, '') : '';
 
         var rateCode = '';
+        var bookingLink = '';
         try {
           var links = card.querySelectorAll('a[href]');
           for (var li2 = 0; li2 < links.length; li2++) {
             var href = links[li2].getAttribute('href') || '';
+            var linkText = (links[li2].textContent || '').trim().toUpperCase();
+            if (linkText.includes('SHOP') || href.includes('cruise-search') || href.includes('rateCodes') || href.includes('cruise-deals')) {
+              if (!bookingLink) bookingLink = href;
+            }
             var rcMatch = href.match(/rateCodes?=([A-Z0-9]+)/i);
-            if (rcMatch) { rateCode = rcMatch[1]; break; }
+            if (rcMatch && !rateCode) { rateCode = rcMatch[1]; bookingLink = href; }
             var offerMatch = href.match(/offerCode=([A-Z0-9]+)/i);
-            if (offerMatch) { rateCode = offerMatch[1]; break; }
+            if (offerMatch && !rateCode) { rateCode = offerMatch[1]; bookingLink = href; }
           }
         } catch(e3) {}
 
@@ -332,10 +337,10 @@ export const CARNIVAL_OFFERS_SCRIPT = `
         var nightsMatch = text.match(/(\\d+)\\s*[-\\s]?\\s*(?:Night|night|Nite|Day)/i);
         var nights = nightsMatch ? parseInt(nightsMatch[1]) : null;
 
-        var destMatch = text.match(/((?:Western|Eastern|Southern)?\\s*Caribbean|Bahamas|Mexico|Alaska|Hawaii|Bermuda|Europe|Mediterranean|Panama Canal|Transatlantic|Canada|New England|Cuba|Riviera)/i);
+        var destMatch = text.match(/((?:Western|Eastern|Southern)?\\s*Caribbean|Bahamas|Baja\\s*Mexico|Mexico|Alaska|Hawaii|Bermuda|Europe|Mediterranean|Panama Canal|Transatlantic|Canada|New England|Cuba|Riviera|Ensenada)/i);
         var destination = destMatch ? destMatch[1].trim() : '';
 
-        var portMatch = text.match(/(?:from|departing|departs?|sailing from)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*(?:,\\s*[A-Z]{2})?)/i);
+        var portMatch = text.match(/(?:from|departing|departs?|sailing from|Start:)\\s+([A-Z][a-z]+(?:\\s+(?:[A-Z][a-z]+|\\([A-Z][a-z\\s]+\\)))*(?:,\\s*[A-Z]{2})?)/i);
         var port = portMatch ? portMatch[1] : '';
 
         var descEls = card.querySelectorAll('p, [class*="desc"], [class*="Desc"], [class*="detail"], [class*="Detail"], [class*="subtitle"], [class*="Subtitle"]');
@@ -347,12 +352,6 @@ export const CARNIVAL_OFFERS_SCRIPT = `
             break;
           }
         }
-
-        var bookingLink = '';
-        try {
-          var shopBtn = card.querySelector('a[href*="cruise-search"], a[href*="rateCodes"], a[href*="book"], a[href*="shop"]');
-          if (shopBtn) bookingLink = shopBtn.getAttribute('href') || '';
-        } catch(e4) {}
 
         if (offerName || rateCode || price) {
           deals.push({
@@ -1505,6 +1504,39 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
       log('Phase 3: Waiting for page to fully render then scraping DOM...', 'info');
       await wait(3000);
 
+      log('Phase 3a: Clicking all SHOW DATES buttons to reveal sailing dates...', 'info');
+      try {
+        var showDatesBtns = document.querySelectorAll('button, a, [role="button"]');
+        var clickedCount = 0;
+        for (var bi = 0; bi < showDatesBtns.length; bi++) {
+          var btnText = (showDatesBtns[bi].textContent || '').trim().toUpperCase();
+          if (btnText.includes('SHOW') && (btnText.includes('DATE') || btnText.includes('DATES'))) {
+            try {
+              showDatesBtns[bi].click();
+              clickedCount++;
+            } catch(clickErr) {}
+          }
+        }
+        if (clickedCount > 0) {
+          log('Clicked ' + clickedCount + ' SHOW DATES button(s) - waiting for dates to render...', 'success');
+          await wait(3000);
+        } else {
+          log('No SHOW DATES buttons found on page', 'info');
+        }
+      } catch(showDatesErr) {
+        log('Error clicking SHOW DATES: ' + (showDatesErr.message || showDatesErr), 'warning');
+      }
+
+      log('Phase 3b: Scraping cruise results with itinerary cards...', 'info');
+      var cruiseResultCount = document.querySelectorAll('[class*="Cruise"] h2, [class*="cruise"] h2, [class*="result"] h2, [class*="Result"] h2').length;
+      var headerText = document.querySelector('h1, h2, [class*="results-count"], [class*="ResultsCount"]');
+      if (headerText) {
+        var countMatch = (headerText.textContent || '').match(/(\\d+)\\s*(?:Cruise|Result)/i);
+        if (countMatch) {
+          log('Page shows ' + countMatch[1] + ' cruise results', 'info');
+        }
+      }
+
       var cardSelectors = [
         '[data-testid*="result"], [data-testid*="cruise"], [data-testid*="sailing"], [data-testid*="itinerary"]',
         '[class*="SearchResult"], [class*="search-result"], [class*="searchResult"]',
@@ -1550,6 +1582,7 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
       }
 
       var dollarChar2 = String.fromCharCode(36);
+
       for (var i = 0; i < cards.length; i++) {
         try {
           var card = cards[i];
@@ -1559,33 +1592,118 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
           var shipMatch = text.match(SHIP_PATTERN);
           var shipName = shipMatch ? shipMatch[1] : '';
 
-          var dateMatch = text.match(/((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{1,2},?\\s+\\d{4})/i);
-          if (!dateMatch) dateMatch = text.match(/(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/);
-          if (!dateMatch) dateMatch = text.match(/(\\d{4}-\\d{2}-\\d{2})/);
-          var sailDate = dateMatch ? dateMatch[1] : '';
-
           var nightsMatch = text.match(/(\\d+)\\s*[-\\s]?\\s*(?:Night|night|Nite|Day)/i);
           var nights = nightsMatch ? parseInt(nightsMatch[1]) : null;
 
-          var priceMatch = text.match(/\\$\\s*([\\d,]+)/);
-          var price = priceMatch ? dollarChar2 + priceMatch[1].replace(/,/g, '') : '';
-
-          var destMatch = text.match(/((?:Western|Eastern|Southern)?\\s*Caribbean|Bahamas|Mexico|Alaska|Hawaii|Bermuda|Europe|Mediterranean|Panama Canal|Transatlantic|Canada|New England|Cuba|Riviera)/i);
+          var destMatch = text.match(/((?:Western|Eastern|Southern)?\\s*Caribbean|Bahamas|Baja\\s*Mexico|Mexico|Alaska|Hawaii|Bermuda|Europe|Mediterranean|Panama Canal|Transatlantic|Canada|New England|Cuba|Riviera|Ensenada)/i);
           var destination = destMatch ? destMatch[1].trim() : '';
 
-          var portMatch = text.match(/(?:from|departing|departs?|sailing from)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*(?:,\\s*[A-Z]{2})?)/i);
+          var portMatch = text.match(/(?:from|departing|departs?|sailing from|Start:)\\s+([A-Z][a-z]+(?:\\s+(?:[A-Z][a-z]+|\\([A-Z][a-z\\s]+\\)))*(?:,\\s*[A-Z]{2})?)/i);
           var port = portMatch ? portMatch[1] : '';
 
-          if (shipName || (sailDate && nights) || (price && nights)) {
+          var itineraryText = '';
+          try {
+            var viewItinLink = card.querySelector('a[href*="itinerary"], a[href*="Itinerary"]');
+            if (viewItinLink) {
+              var parentBlock = viewItinLink.closest('div, p, span');
+              if (parentBlock && parentBlock.previousElementSibling) {
+                itineraryText = (parentBlock.previousElementSibling.textContent || '').trim();
+              }
+            }
+          } catch(itinErr) {}
+
+          var dateContainers = card.querySelectorAll('[class*="date"], [class*="Date"], [class*="sailing"], [class*="Sailing"], [class*="Available"], [class*="available"]');
+          var dateTexts = [];
+          for (var di = 0; di < dateContainers.length; di++) {
+            var dText = (dateContainers[di].textContent || '').trim();
+            if (dText.length > 3 && dText.length < 200) dateTexts.push(dText);
+          }
+          var combinedDateText = dateTexts.join(' ');
+
+          var allDateMatches = [];
+          var dateRe1 = /((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{1,2}\\s*[-–]\\s*\\d{1,2})[,\\s]*(\\d{4})?/gi;
+          var dm1;
+          while ((dm1 = dateRe1.exec(combinedDateText + ' ' + text)) !== null) {
+            allDateMatches.push({ range: dm1[1].trim(), year: dm1[2] || '' });
+          }
+          var dateRe2 = /((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{1,2},?\\s+\\d{4})/gi;
+          var dm2;
+          while ((dm2 = dateRe2.exec(combinedDateText + ' ' + text)) !== null) {
+            allDateMatches.push({ range: dm2[1].trim(), year: '' });
+          }
+          var dateRe3 = /(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/g;
+          var dm3;
+          while ((dm3 = dateRe3.exec(combinedDateText + ' ' + text)) !== null) {
+            allDateMatches.push({ range: dm3[1].trim(), year: '' });
+          }
+
+          var priceContainers = card.querySelectorAll('[class*="price"], [class*="Price"], [class*="rate"], [class*="Rate"], [class*="cost"], [class*="Cost"]');
+          var prices = {};
+          for (var pi = 0; pi < priceContainers.length; pi++) {
+            var priceText = (priceContainers[pi].textContent || '').trim();
+            var priceVal = priceText.match(/\\$\\s*([\\d,]+)/);
+            if (priceVal) {
+              var lowerPriceText = priceText.toLowerCase();
+              var parentPriceText = ((priceContainers[pi].parentElement || {}).textContent || '').toLowerCase();
+              var combinedPT = lowerPriceText + ' ' + parentPriceText;
+              if (combinedPT.includes('interior') || combinedPT.includes('inside')) {
+                prices.interior = dollarChar2 + priceVal[1].replace(/,/g, '');
+              } else if (combinedPT.includes('ocean') || combinedPT.includes('oceanview')) {
+                prices.oceanview = dollarChar2 + priceVal[1].replace(/,/g, '');
+              } else if (combinedPT.includes('balcony')) {
+                prices.balcony = dollarChar2 + priceVal[1].replace(/,/g, '');
+              } else if (combinedPT.includes('suite')) {
+                prices.suite = dollarChar2 + priceVal[1].replace(/,/g, '');
+              } else if (!prices.interior) {
+                prices.interior = dollarChar2 + priceVal[1].replace(/,/g, '');
+              }
+            }
+          }
+          if (!prices.interior) {
+            var simplePriceMatch = text.match(/\\$\\s*([\\d,]+)/);
+            if (simplePriceMatch) prices.interior = dollarChar2 + simplePriceMatch[1].replace(/,/g, '');
+          }
+
+          if (allDateMatches.length > 0 && (shipName || nights)) {
+            var seenDates = {};
+            for (var dmi = 0; dmi < allDateMatches.length; dmi++) {
+              var dateKey = allDateMatches[dmi].range + (allDateMatches[dmi].year || '');
+              if (seenDates[dateKey]) continue;
+              seenDates[dateKey] = true;
+              var sailDateStr = allDateMatches[dmi].range;
+              if (allDateMatches[dmi].year && sailDateStr.indexOf(allDateMatches[dmi].year) === -1) {
+                sailDateStr += ' ' + allDateMatches[dmi].year;
+              }
+              sailings.push({
+                sourcePage: 'Offers', offerName: offerName, offerCode: offerCode,
+                offerExpirationDate: offerExpiry, offerType: 'VIFP Club',
+                shipName: shipName, shipCode: '',
+                sailingDate: sailDateStr, itinerary: itineraryText || destination,
+                departurePort: port, cabinType: '', numberOfGuests: '2',
+                perks: offerPerks, loyaltyLevel: '', loyaltyPoints: '',
+                interiorPrice: prices.interior || '', oceanviewPrice: prices.oceanview || '',
+                balconyPrice: prices.balcony || '', suitePrice: prices.suite || '',
+                taxesAndFees: '', portList: '',
+                dayByDayItinerary: [], destinationName: destination,
+                totalNights: nights, bookingLink: ''
+              });
+            }
+          } else if (shipName || (nights && (prices.interior || destination))) {
+            var fallbackDate = '';
+            var fallbackDateMatch = text.match(/((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{1,2},?\\s+\\d{4})/i);
+            if (!fallbackDateMatch) fallbackDateMatch = text.match(/(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})/);
+            if (fallbackDateMatch) fallbackDate = fallbackDateMatch[1];
+
             sailings.push({
               sourcePage: 'Offers', offerName: offerName, offerCode: offerCode,
               offerExpirationDate: offerExpiry, offerType: 'VIFP Club',
               shipName: shipName, shipCode: '',
-              sailingDate: sailDate, itinerary: destination,
+              sailingDate: fallbackDate, itinerary: itineraryText || destination,
               departurePort: port, cabinType: '', numberOfGuests: '2',
               perks: offerPerks, loyaltyLevel: '', loyaltyPoints: '',
-              interiorPrice: price, oceanviewPrice: '', balconyPrice: '',
-              suitePrice: '', taxesAndFees: '', portList: '',
+              interiorPrice: prices.interior || '', oceanviewPrice: prices.oceanview || '',
+              balconyPrice: prices.balcony || '', suitePrice: prices.suite || '',
+              taxesAndFees: '', portList: '',
               dayByDayItinerary: [], destinationName: destination,
               totalNights: nights, bookingLink: ''
             });
