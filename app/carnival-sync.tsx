@@ -606,22 +606,30 @@ function CarnivalSyncScreen() {
                     <View style={styles.loyaltyCard}>
                       <Text style={styles.loyaltyTitle}>Loyalty Status</Text>
 
-                      {(extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel) && (
+                      {(state.loyaltyData?.crownAndAnchorLevel) && (
                         <View style={styles.loyaltySection}>
                           <View style={styles.loyaltySectionHeader}>
                             <Star size={16} color={CARNIVAL_RED} />
                             <Text style={styles.loyaltySectionTitle}>VIFP Club</Text>
                           </View>
                           <View style={styles.loyaltyRow}>
-                            <Text style={styles.loyaltyLabel}>Level:</Text>
+                            <Text style={styles.loyaltyLabel}>Tier:</Text>
                             <Text style={styles.loyaltyValue}>
-                              {extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel}
+                              {state.loyaltyData?.crownAndAnchorLevel}
                             </Text>
                           </View>
+                          {state.loyaltyData?.crownAndAnchorPoints ? (
+                            <View style={styles.loyaltyRow}>
+                              <Text style={styles.loyaltyLabel}>VIFP #:</Text>
+                              <Text style={styles.loyaltyValue}>
+                                {state.loyaltyData.crownAndAnchorPoints}
+                              </Text>
+                            </View>
+                          ) : null}
                         </View>
                       )}
 
-                      {(extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier) && (
+                      {(state.loyaltyData?.clubRoyaleTier) && (
                         <View style={styles.loyaltySection}>
                           <View style={styles.loyaltySectionHeader}>
                             <Award size={16} color={CARNIVAL_GOLD} />
@@ -630,7 +638,7 @@ function CarnivalSyncScreen() {
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
                             <Text style={styles.loyaltyValue}>
-                              {extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier}
+                              {state.loyaltyData.clubRoyaleTier}
                             </Text>
                           </View>
                         </View>

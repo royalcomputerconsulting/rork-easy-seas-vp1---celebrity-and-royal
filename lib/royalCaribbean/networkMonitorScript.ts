@@ -196,6 +196,54 @@ export const NETWORK_MONITOR_SCRIPT = `
           
           log(\`🎫 [Fetch] Captured Booked Cruise Details from \${url}\`, 'info');
         }
+        
+        else if (url.includes('carnival.com') && (url.includes('/api/') || url.includes('/profilemanagement/'))) {
+          try {
+            const ct = clonedResponse.headers.get('content-type') || '';
+            if (ct.includes('json')) {
+              const data = await clonedResponse.json();
+              
+              if (url.includes('/offers') || url.includes('/vifp')) {
+                if (data.Items && Array.isArray(data.Items)) {
+                  window.capturedPayloads.carnivalVifpOffers = data;
+                  window.__carnivalVifpOffers = data;
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'network_payload',
+                    endpoint: 'carnival_vifp_offers',
+                    data: data,
+                    url: url
+                  }));
+                  log(\`🎪 [Fetch] Captured Carnival VIFP offers: \${data.Items.length} items from \${url}\`, 'success');
+                }
+              }
+              
+              if (url.includes('/bookings') || url.includes('/cruises') || url.includes('/reservation')) {
+                let bookings = null;
+                if (Array.isArray(data)) bookings = data;
+                else if (data.bookings && Array.isArray(data.bookings)) bookings = data.bookings;
+                else if (data.cruises && Array.isArray(data.cruises)) bookings = data.cruises;
+                else if (data.data && Array.isArray(data.data)) bookings = data.data;
+                else if (data.payload && Array.isArray(data.payload)) bookings = data.payload;
+                else if (data.upcoming && Array.isArray(data.upcoming)) bookings = data.upcoming;
+                else if (data.upcomingCruises && Array.isArray(data.upcomingCruises)) bookings = data.upcomingCruises;
+                else if (data.pastCruises && Array.isArray(data.pastCruises)) bookings = data.pastCruises;
+                
+                if (bookings && bookings.length > 0) {
+                  window.capturedPayloads.upcomingCruises = data;
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'network_payload',
+                    endpoint: 'bookings',
+                    data: data,
+                    url: url
+                  }));
+                  log(\`🎪 [Fetch] Captured Carnival bookings: \${bookings.length} from \${url}\`, 'success');
+                }
+              }
+            }
+          } catch (carnivalErr) {
+            // ignore carnival parse errors
+          }
+        }
       } catch (err) {
         console.log('[NetworkMonitor] Error processing response:', err);
       }
@@ -340,6 +388,48 @@ export const NETWORK_MONITOR_SCRIPT = `
             }));
             
             log(\`🎫 [XHR] Captured Booked Cruise Details from \${url}\`, 'info');
+          }
+          
+          else if (url.includes('carnival.com') && (url.includes('/api/') || url.includes('/profilemanagement/'))) {
+            try {
+              const data = JSON.parse(this.responseText);
+              
+              if (url.includes('/offers') || url.includes('/vifp')) {
+                if (data.Items && Array.isArray(data.Items)) {
+                  window.capturedPayloads.carnivalVifpOffers = data;
+                  window.__carnivalVifpOffers = data;
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'network_payload',
+                    endpoint: 'carnival_vifp_offers',
+                    data: data,
+                    url: url
+                  }));
+                  log(\`🎪 [XHR] Captured Carnival VIFP offers: \${data.Items.length} items from \${url}\`, 'success');
+                }
+              }
+              
+              if (url.includes('/bookings') || url.includes('/cruises') || url.includes('/reservation')) {
+                let bookings = null;
+                if (Array.isArray(data)) bookings = data;
+                else if (data.bookings && Array.isArray(data.bookings)) bookings = data.bookings;
+                else if (data.cruises && Array.isArray(data.cruises)) bookings = data.cruises;
+                else if (data.data && Array.isArray(data.data)) bookings = data.data;
+                else if (data.payload && Array.isArray(data.payload)) bookings = data.payload;
+                
+                if (bookings && bookings.length > 0) {
+                  window.capturedPayloads.upcomingCruises = data;
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'network_payload',
+                    endpoint: 'bookings',
+                    data: data,
+                    url: url
+                  }));
+                  log(\`🎪 [XHR] Captured Carnival bookings: \${bookings.length} from \${url}\`, 'success');
+                }
+              }
+            } catch (carnivalErr) {
+              // ignore
+            }
           }
         } catch (err) {
           console.log('[NetworkMonitor] Error processing XHR response:', err);
