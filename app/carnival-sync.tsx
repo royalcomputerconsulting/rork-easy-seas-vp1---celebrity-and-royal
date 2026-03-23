@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { exportFile } from '@/lib/importExport';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, Download, FileDown } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, Download, FileDown } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -161,7 +161,7 @@ function CarnivalSyncScreen() {
       case 'running_step_1':
       case 'running_step_2':
       case 'running_step_3':
-      case 'syncing': return <Loader2 size={size} color={color} />;
+      case 'syncing': return <LoaderCircle size={size} color={color} />;
       case 'complete': return <CheckCircle size={size} color={color} />;
       case 'awaiting_confirmation': return <Clock size={size} color={color} />;
       case 'login_expired':

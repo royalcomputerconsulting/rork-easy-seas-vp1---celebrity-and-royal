@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 import { useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, Download, FileDown, Cookie } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, Download, FileDown, Cookie } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -276,7 +276,7 @@ function RoyalCaribbeanSyncScreen() {
       case 'running_step_2':
       case 'running_step_3':
       case 'syncing':
-        return <Loader2 size={size} color={color} />;
+        return <LoaderCircle size={size} color={color} />;
       case 'complete':
         return <CheckCircle size={size} color={color} />;
       case 'awaiting_confirmation':
@@ -689,7 +689,7 @@ function RoyalCaribbeanSyncScreen() {
                 disabled={syncingPricing}
               >
                 {syncingPricing ? (
-                  <Loader2 size={20} color="#f59e0b" />
+                  <LoaderCircle size={20} color="#f59e0b" />
                 ) : (
                   <DollarSign size={20} color="#f59e0b" />
                 )}
