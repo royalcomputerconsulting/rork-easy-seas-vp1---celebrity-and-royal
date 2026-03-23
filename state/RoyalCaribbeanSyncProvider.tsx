@@ -93,6 +93,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const capturedSections = useRef({ offers: false, bookings: false, loyalty: false });
   const pageLoadResolver = useRef<(() => void) | null>(null);
   const offerSailingsResolver = useRef<((sailings: OfferRow[]) => void) | null>(null);
+  const carnivalPageCheckResolver = useRef<((onOffers: boolean) => void) | null>(null);
   
   const config = CRUISE_LINE_CONFIG[cruiseLine];
   const [webViewUrl, setWebViewUrl] = useState<string>(CRUISE_LINE_CONFIG[initialCruiseLine].loginUrl);
@@ -891,6 +892,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
       }
 
+      case 'carnival_page_check' as any: {
+        const checkMsg = message as any;
+        console.log('[CarnivalSync] Page check result:', checkMsg.onOffers, checkMsg.url);
+        if (carnivalPageCheckResolver.current) {
+          carnivalPageCheckResolver.current(!!checkMsg.onOffers);
+          carnivalPageCheckResolver.current = null;
+        }
+        break;
+      }
+
       case 'error':
         setState(prev => ({ ...prev, error: message.message, status: 'error' }));
         addLog(`Error: ${message.message}`, 'error');
@@ -1014,55 +1025,73 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog('⏱️ This may take several minutes - extracting all offers and sailings...', 'info');
       
       addLog('📍 Navigating to offers page...', 'info');
-      await navigateToPage(config.offersUrl, 20000);
       
       if (isCarnivalMode) {
+        addLog('🎪 Carnival SPA detected — forcing full navigation to offers page...', 'info');
+        await navigateToPage('about:blank', 3000);
+        await delay(500);
+        await navigateToPage(config.offersUrl, 20000);
         addLog('⏳ Waiting for Carnival offers page to fully render...', 'info');
-        await delay(6000);
+        await delay(5000);
         
-        if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`
-            (function() {
-              var currentUrl = window.location.href || '';
-              var isOnOffers = currentUrl.includes('/offers');
-              try {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: 'Current page before extraction: ' + currentUrl + (isOnOffers ? ' (CORRECT)' : ' (WRONG PAGE - will force navigate)'),
-                  logType: isOnOffers ? 'success' : 'warning'
-                }));
-                if (!isOnOffers) {
-                  window.location.href = '${config.offersUrl}';
-                }
-              } catch(e) {}
-            })();
-            true;
-          `);
+        const MAX_NAV_RETRIES = 4;
+        for (let navRetry = 0; navRetry < MAX_NAV_RETRIES; navRetry++) {
+          if (!webViewRef.current) break;
+          
+          const isOnOffers = await new Promise<boolean>((resolve) => {
+            const checkTimeout = setTimeout(() => resolve(false), 5000);
+            
+            carnivalPageCheckResolver.current = (onOffers: boolean) => {
+              clearTimeout(checkTimeout);
+              resolve(onOffers);
+            };
+            
+            webViewRef.current?.injectJavaScript(`
+              (function() {
+                try {
+                  var currentUrl = window.location.href || '';
+                  var onOffers = currentUrl.includes('/offers');
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'carnival_page_check',
+                    onOffers: onOffers,
+                    url: currentUrl
+                  }));
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log',
+                    message: 'Page check: ' + currentUrl + (onOffers ? ' (ON OFFERS)' : ' (NOT on offers)'),
+                    logType: onOffers ? 'success' : 'warning'
+                  }));
+                } catch(e) {}
+              })();
+              true;
+            `);
+          });
+          
+          if (isOnOffers) {
+            addLog('✅ Confirmed on Carnival offers page', 'success');
+            break;
+          }
+          
+          addLog(`⚠️ Not on offers page (attempt ${navRetry + 1}/${MAX_NAV_RETRIES}) — re-navigating...`, 'warning');
           
           if (webViewRef.current) {
-            const _checkResult = await new Promise<boolean>((resolve) => {
-              setTimeout(() => resolve(false), 3000);
-              const checkInterval = setInterval(() => {
-                if (webViewRef.current) {
-                  webViewRef.current.injectJavaScript(`
-                    (function() {
-                      try {
-                        var onOffers = (window.location.href || '').includes('/offers');
-                        if (onOffers) {
-                          window.ReactNativeWebView.postMessage(JSON.stringify({
-                            type: 'log', message: 'Confirmed on offers page', logType: 'success'
-                          }));
-                        }
-                      } catch(e) {}
-                    })(); true;
-                  `);
+            webViewRef.current.injectJavaScript(`
+              (function() {
+                try {
+                  window.location.replace('${config.offersUrl}');
+                } catch(e) {
+                  window.location.href = '${config.offersUrl}';
                 }
-              }, 1000);
-              setTimeout(() => { clearInterval(checkInterval); resolve(true); }, 4000);
-            });
+              })();
+              true;
+            `);
           }
-          await delay(3000);
+          await delay(5000);
         }
+        
+        await delay(2000);
+      } else {
+        await navigateToPage(config.offersUrl, 20000);
       }
       
       if (webViewRef.current) {
