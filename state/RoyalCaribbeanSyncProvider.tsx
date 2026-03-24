@@ -226,7 +226,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, []);
 
   const handleWebViewMessage = useCallback((message: WebViewMessage) => {
-    switch (message.type) {
+    try {
+    const msg = message as any;
+    const msgType = msg.type;
+    switch (msgType) {
       case 'auth_status':
         setState(prev => {
           const status = prev.status;
@@ -235,35 +238,34 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             console.log('[RoyalCaribbeanSync] Ignoring auth_status during active sync:', status);
             return prev;
           }
-          addLog(message.loggedIn ? 'User logged in successfully' : 'User not logged in', 'info');
-          return { ...prev, status: message.loggedIn ? 'logged_in' : 'not_logged_in' };
+          addLog(msg.loggedIn ? 'User logged in successfully' : 'User not logged in', 'info');
+          return { ...prev, status: msg.loggedIn ? 'logged_in' : 'not_logged_in' };
         });
         break;
 
       case 'log':
-        addLog(message.message, message.logType);
+        addLog(msg.message, msg.logType);
         break;
 
       case 'progress':
-        setProgress(message.current, message.total, message.stepName);
+        setProgress(msg.current, msg.total, msg.stepName);
         if (progressCallbacks.current.onProgress) {
           progressCallbacks.current.onProgress();
         }
         break;
 
       case 'offers_batch':
-        if (message.data && message.data.length > 0) {
+        if (msg.data && msg.data.length > 0) {
           setState(prev => {
-            const newOffers = [...prev.extractedOffers, ...(message.data as OfferRow[])];
-            const batch = message.data as OfferRow[];
+            const newOffers = [...prev.extractedOffers, ...(msg.data as OfferRow[])];
+            const batch = msg.data as OfferRow[];
             const offerName = batch[0]?.offerName || 'Unknown Offer';
             const offerCode = batch[0]?.offerCode || 'N/A';
-            console.log(`[RoyalCaribbeanSync] Batch received: ${message.data.length} items, total now: ${newOffers.length}`);
+            console.log(`[RoyalCaribbeanSync] Batch received: ${msg.data.length} items, total now: ${newOffers.length}`);
             
-            // Show detailed offer information
             if (batch[0]?.offerName) {
               addLog(`✅ Captured casino offer "${offerName}" (Code: ${offerCode})`, 'success');
-              addLog(`   📊 Captured ${message.data.length} sailing(s) for this offer`, 'success');
+              addLog(`   📊 Captured ${msg.data.length} sailing(s) for this offer`, 'success');
               
               // Show first few sailings as examples
               const sampleSailings = batch.slice(0, Math.min(3, batch.length));
@@ -290,9 +292,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
 
       case 'cruise_batch':
-        if (message.data && message.data.length > 0) {
+        if (msg.data && msg.data.length > 0) {
           setState(prev => {
-            const incoming = message.data as BookedCruiseRow[];
+            const incoming = msg.data as BookedCruiseRow[];
             const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
             const existingShipDates = new Set(prev.extractedBookedCruises.map(c => `${c.shipName}|${c.sailingStartDate}`));
             const deduped = incoming.filter(c => {
@@ -308,7 +310,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             console.log(`[RoyalCaribbeanSync] Cruise batch received: ${deduped.length} items, total now: ${newCruises.length}`);
             
             // Show detailed cruise capture info with more context
-            const batch = message.data as BookedCruiseRow[];
+            const batch = msg.data as BookedCruiseRow[];
             capturedSections.current.bookings = true;
             addLog(`✅ Captured ${batch.length} cruise booking(s)`, 'success');
             batch.forEach((cruise, idx) => {
@@ -329,7 +331,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
 
       case 'offer_progress':
-        addLog(`Offer ${message.offerIndex}/${message.totalOffers} (${message.offerName}): ${message.sailingsCount} sailings - ${message.status}`, 'info');
+        addLog(`Offer ${msg.offerIndex}/${msg.totalOffers} (${msg.offerName}): ${msg.sailingsCount} sailings - ${msg.status}`, 'info');
         if (progressCallbacks.current.onProgress) {
           progressCallbacks.current.onProgress();
         }
@@ -346,17 +348,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
       }
 
-      case 'step_complete':
-        const itemCount = message.totalCount ?? message.data?.length ?? 0;
-        addLog(`Step ${message.step} completed with ${itemCount} items`, 'success');
-        if (stepCompleteResolvers.current[message.step]) {
-          stepCompleteResolvers.current[message.step]();
-          delete stepCompleteResolvers.current[message.step];
+      case 'step_complete': {
+        const stepMsg = message as any;
+        const itemCount = stepMsg.totalCount ?? stepMsg.data?.length ?? 0;
+        addLog(`Step ${stepMsg.step} completed with ${itemCount} items`, 'success');
+        if (stepCompleteResolvers.current[stepMsg.step]) {
+          stepCompleteResolvers.current[stepMsg.step]();
+          delete stepCompleteResolvers.current[stepMsg.step];
         }
         break;
+      }
 
       case 'all_bookings_data':
-        if (message.bookings && Array.isArray(message.bookings)) {
+        if (msg.bookings && Array.isArray(msg.bookings)) {
           const isCarnivalBookings = cruiseLine === 'carnival';
           
           function getBookingStatus(sailDateStr: string, bStatus: string): string {
@@ -369,7 +373,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             return 'Upcoming';
           }
           
-          const formattedCruises = message.bookings.map((booking: any) => {
+          const formattedCruises = msg.bookings.map((booking: any) => {
             const sailDate = booking.sailDate || booking.departureDate || '';
             const bStatus = booking.bookingStatus || 'BK';
             const status = getBookingStatus(sailDate, bStatus);
@@ -433,7 +437,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           });
           
           capturedSections.current.bookings = true;
-          addLog(`✅ Captured ${message.bookings.length} booking(s) from consolidated API call`, 'success');
+          addLog(`✅ Captured ${msg.bookings.length} booking(s) from consolidated API call`, 'success');
           formattedCruises.forEach((c: any) => {
             addLog(`✅ Captured booking: ${c.shipName} - ${c.sailingStartDate} (${c.numberOfNights} nights) [${c.status}]`, 'success');
           });
@@ -441,10 +445,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
 
       case 'loyalty_data':
-        // Check if this is API data (from Step 1 consolidated call) or DOM fallback
-        if (message.loyalty && typeof message.loyalty === 'object') {
-          // This is API data from Step 1 consolidated call
-          const loyaltyInfo = message.loyalty as LoyaltyApiInformation;
+        if (msg.loyalty && typeof msg.loyalty === 'object') {
+          const loyaltyInfo = msg.loyalty as LoyaltyApiInformation;
           const converted = convertLoyaltyInfoToExtended(loyaltyInfo, '');
           setExtendedLoyaltyData(converted);
           hasReceivedApiLoyaltyDataRef.current = true;
@@ -474,16 +476,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
         } else if (!hasReceivedApiLoyaltyDataRef.current) {
           // This is DOM fallback data
-          setState(prev => ({ ...prev, loyaltyData: message.data ?? null }));
+          setState(prev => ({ ...prev, loyaltyData: msg.data ?? null }));
           addLog('Loyalty data extracted (DOM fallback)', 'info');
         } else {
           addLog('Ignoring DOM loyalty data - API data already received', 'info');
         }
         break;
 
-      case 'extended_loyalty_data':
-        const extData = message.data as LoyaltyApiInformation;
-        const converted = convertLoyaltyInfoToExtended(extData, (message as any).accountId);
+      case 'extended_loyalty_data': {
+        const extData = msg.data as LoyaltyApiInformation;
+        const converted = convertLoyaltyInfoToExtended(extData, msg.accountId);
         setExtendedLoyaltyData(converted);
         
         // Mark that we've received API data - this takes precedence over DOM scraping
@@ -523,9 +525,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           addLog(`   💎 Points: ${converted.celebrityBlueChipPoints.toLocaleString()}`, 'success');
         }
         break;
+      }
 
       case 'network_capture_headers': {
-        const headerMsg = message as any;
+        const headerMsg = msg;
         console.log('[RoyalCaribbeanSync] Captured request headers', {
           url: headerMsg.url,
           hasApiKey: headerMsg.hasApiKey,
@@ -536,8 +539,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
       }
 
-      case 'network_payload':
-        const { endpoint, data, url } = message as any;
+      case 'network_payload': {
+        const { endpoint, data, url } = msg;
         
         // Create unique key for this payload to prevent duplicate processing
         const payloadKey = `${endpoint}-${url}-${JSON.stringify(data).substring(0, 100)}`;
@@ -862,11 +865,20 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           });
         }
         break;
+      }
 
-      default: {
-        const msgType = (message as any).type;
-        if (msgType === 'carnival_user_data') {
-        const userData = (message as any).data;
+      case 'carnival_page_check': {
+        const checkMsg = msg;
+        console.log('[CarnivalSync] Page check result:', checkMsg.onOffers, checkMsg.url);
+        if (carnivalPageCheckResolver.current) {
+          carnivalPageCheckResolver.current(!!checkMsg.onOffers);
+          carnivalPageCheckResolver.current = null;
+        }
+        break;
+      }
+
+      case 'carnival_user_data': {
+        const userData = msg.data;
         if (userData) {
           const tierMap: Record<string, string> = { '01': 'Red', '02': 'Gold', '03': 'Platinum', '04': 'Diamond' };
           const tierName = tierMap[userData.TierCode] || userData.TierCode || 'Unknown';
@@ -890,24 +902,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }));
           addLog(`✅ Carnival VIFP: ${tierName} tier (VIFP# ${userData.PastGuestNumber || 'N/A'})`, 'success');
         }
-        }
         break;
       }
 
-      case 'carnival_page_check' as any: {
-        const checkMsg = message as any;
-        console.log('[CarnivalSync] Page check result:', checkMsg.onOffers, checkMsg.url);
-        if (carnivalPageCheckResolver.current) {
-          carnivalPageCheckResolver.current(!!checkMsg.onOffers);
-          carnivalPageCheckResolver.current = null;
-        }
+      case 'error': {
+        const errMsg = msg.message || 'Unknown error';
+        setState(prev => ({ ...prev, error: errMsg, status: 'error' }));
+        addLog(`Error: ${errMsg}`, 'error');
         break;
       }
-
-      case 'error':
-        setState(prev => ({ ...prev, error: message.message, status: 'error' }));
-        addLog(`Error: ${message.message}`, 'error');
-        break;
 
       case 'complete':
         setState(prev => ({ 
@@ -917,6 +920,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }));
         addLog('Ingestion completed successfully', 'success');
         break;
+
+      default:
+        console.log('[RoyalCaribbeanSync] Unhandled message type:', msgType);
+        break;
+    }
+    } catch (handlerError) {
+      console.error('[RoyalCaribbeanSync] Error handling WebView message:', handlerError);
+      try {
+        addLog(`Message handler error: ${String(handlerError)}`, 'error');
+      } catch { /* ignore logging errors */ }
     }
   }, [addLog, setProgress, cruiseLine, config.name]);
 

@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView } from 'react-native';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState } from 'react';
@@ -1324,8 +1325,10 @@ const styles = StyleSheet.create({
 
 export default function CarnivalSyncScreenWrapper() {
   return (
-    <CarnivalSyncProvider>
-      <CarnivalSyncScreen />
-    </CarnivalSyncProvider>
+    <ErrorBoundary>
+      <CarnivalSyncProvider>
+        <CarnivalSyncScreen />
+      </CarnivalSyncProvider>
+    </ErrorBoundary>
   );
 }
