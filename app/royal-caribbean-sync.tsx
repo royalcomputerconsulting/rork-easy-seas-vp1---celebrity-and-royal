@@ -30,8 +30,8 @@ function RoyalCaribbeanSyncScreen() {
     handleWebViewMessage,
     addLog,
     extendedLoyaltyData,
-    staySignedIn,
-    toggleStaySignedIn,
+    staySignedIn: _staySignedIn,
+    toggleStaySignedIn: _toggleStaySignedIn,
     webViewUrl,
     onPageLoaded
   } = useRoyalCaribbeanSync();
@@ -308,7 +308,7 @@ function RoyalCaribbeanSyncScreen() {
           style={styles.scrollView} 
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={true}
-          persistentScrollbar={true}
+
         >
 
         <View style={styles.cruiseLineToggleContainer}>
@@ -345,20 +345,6 @@ function RoyalCaribbeanSyncScreen() {
           <Text style={styles.importCruisesButtonText}>Fetch Booked Cruise Pricing</Text>
         </Pressable>
 
-        {false && Platform.OS !== 'web' && (
-          <View style={styles.staySignedInContainer}>
-            <View style={styles.staySignedInInfo}>
-              <Text style={styles.staySignedInLabel}>Stay Signed In</Text>
-              <Text style={styles.staySignedInDesc}>Keep your session active across app restarts</Text>
-            </View>
-            <Switch
-              value={staySignedIn}
-              onValueChange={toggleStaySignedIn}
-              trackColor={{ false: '#334155', true: '#059669' }}
-              thumbColor={staySignedIn ? '#10b981' : '#94a3b8'}
-            />
-          </View>
-        )}
 
         <View style={styles.logsContainerTop}>
           <View style={styles.logsHeaderRow}>
@@ -413,7 +399,7 @@ function RoyalCaribbeanSyncScreen() {
                     const url = isCelebrity 
                       ? 'https://www.celebritycruises.com/blue-chip-club/offers'
                       : 'https://www.royalcaribbean.com/club-royale/offers';
-                    Linking.openURL(url);
+                    void Linking.openURL(url);
                   }}
                 >
                   <ExternalLink size={18} color="#fff" />
@@ -516,7 +502,7 @@ function RoyalCaribbeanSyncScreen() {
                     <Pressable
                       style={[styles.webSyncButton, { marginTop: 12 }]}
                       onPress={() => {
-                        Linking.openURL('https://chromewebstore.google.com/detail/easy-seas/your-extension-id');
+                        void Linking.openURL('https://chromewebstore.google.com/detail/easy-seas/your-extension-id');
                       }}
                     >
                       <Download size={18} color="#fff" />
@@ -552,7 +538,7 @@ function RoyalCaribbeanSyncScreen() {
                         const url = isCelebrity 
                           ? 'https://www.celebritycruises.com/blue-chip-club/offers'
                           : 'https://www.royalcaribbean.com/club-royale/offers';
-                        Linking.openURL(url);
+                        void Linking.openURL(url);
                       }}
                     >
                       <ExternalLink size={16} color="#cbd5e1" />
@@ -661,7 +647,7 @@ function RoyalCaribbeanSyncScreen() {
                       avgPricing.balconyPrice = Math.round(avgPricing.balconyPrice / count);
                       avgPricing.suitePrice = Math.round(avgPricing.suitePrice / count);
 
-                      await coreData.updateBookedCruise(cruise.id, avgPricing);
+                      coreData.updateBookedCruise(cruise.id, avgPricing);
                       updatedCount++;
                       addLog(`Updated pricing for ${cruise.shipName}`, 'info');
                     }
@@ -934,7 +920,7 @@ function RoyalCaribbeanSyncScreen() {
                 <Pressable 
                   style={[styles.button, styles.confirmButton]}
                   onPress={() => {
-                    syncToApp(coreData, loyalty);
+                    void syncToApp(coreData, loyalty);
                   }}
                 >
                   <Text style={styles.buttonText}>Yes, Sync Now</Text>
@@ -968,7 +954,7 @@ function RoyalCaribbeanSyncScreen() {
                       <Anchor size={12} color="#60a5fa" />
                       <Text style={styles.successLoyaltyText}>
                         Crown & Anchor: {extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel}
-                        {(extendedLoyaltyData?.crownAndAnchorPointsFromApi ?? 0) > 0 && ` — ${extendedLoyaltyData!.crownAndAnchorPointsFromApi!.toLocaleString()} pts`}
+                        {(extendedLoyaltyData?.crownAndAnchorPointsFromApi ?? 0) > 0 && ` — ${(extendedLoyaltyData?.crownAndAnchorPointsFromApi ?? 0).toLocaleString()} pts`}
                       </Text>
                     </View>
                   )}
@@ -977,7 +963,7 @@ function RoyalCaribbeanSyncScreen() {
                       <Crown size={12} color="#f59e0b" />
                       <Text style={styles.successLoyaltyText}>
                         Club Royale: {extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier}
-                        {(extendedLoyaltyData?.clubRoyalePointsFromApi ?? 0) > 0 && ` — ${extendedLoyaltyData!.clubRoyalePointsFromApi!.toLocaleString()} pts`}
+                        {(extendedLoyaltyData?.clubRoyalePointsFromApi ?? 0) > 0 && ` — ${(extendedLoyaltyData?.clubRoyalePointsFromApi ?? 0).toLocaleString()} pts`}
                       </Text>
                     </View>
                   )}
@@ -986,7 +972,7 @@ function RoyalCaribbeanSyncScreen() {
                       <Star size={12} color="#10b981" />
                       <Text style={styles.successLoyaltyText}>
                         Captain's Club: {extendedLoyaltyData.captainsClubTier}
-                        {(extendedLoyaltyData.captainsClubPoints ?? 0) > 0 && ` — ${extendedLoyaltyData.captainsClubPoints!.toLocaleString()} pts`}
+                        {(extendedLoyaltyData.captainsClubPoints ?? 0) > 0 && ` — ${(extendedLoyaltyData.captainsClubPoints ?? 0).toLocaleString()} pts`}
                       </Text>
                     </View>
                   )}
@@ -995,7 +981,7 @@ function RoyalCaribbeanSyncScreen() {
                       <Award size={12} color="#8b5cf6" />
                       <Text style={styles.successLoyaltyText}>
                         Blue Chip: {extendedLoyaltyData.celebrityBlueChipTier}
-                        {(extendedLoyaltyData.celebrityBlueChipPoints ?? 0) > 0 && ` — ${extendedLoyaltyData.celebrityBlueChipPoints!.toLocaleString()} pts`}
+                        {(extendedLoyaltyData.celebrityBlueChipPoints ?? 0) > 0 && ` — ${(extendedLoyaltyData.celebrityBlueChipPoints ?? 0).toLocaleString()} pts`}
                       </Text>
                     </View>
                   )}

@@ -507,22 +507,22 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         if (converted.clubRoyalePointsFromApi !== undefined) {
           addLog(`   🎰 Club Royale Status`, 'success');
           addLog(`   📊 Tier: "${converted.clubRoyaleTierFromApi || 'N/A'}"`, 'success');
-          addLog(`   💎 Points: ${converted.clubRoyalePointsFromApi.toLocaleString()}`, 'success');
+          addLog(`   💎 Points: ${(converted.clubRoyalePointsFromApi ?? 0).toLocaleString()}`, 'success');
         }
         if (converted.crownAndAnchorPointsFromApi !== undefined) {
           addLog(`   ⚓ Crown & Anchor Society`, 'success');
           addLog(`   📊 Level: "${converted.crownAndAnchorTier || 'N/A'}"`, 'success');
-          addLog(`   💎 Points: ${converted.crownAndAnchorPointsFromApi.toLocaleString()}`, 'success');
+          addLog(`   💎 Points: ${(converted.crownAndAnchorPointsFromApi ?? 0).toLocaleString()}`, 'success');
         }
         if (converted.captainsClubPoints !== undefined && converted.captainsClubPoints > 0) {
           addLog(`   🌟 Captain's Club Status`, 'success');
           addLog(`   📊 Tier: "${converted.captainsClubTier || 'N/A'}"`, 'success');
-          addLog(`   💎 Points: ${converted.captainsClubPoints.toLocaleString()}`, 'success');
+          addLog(`   💎 Points: ${(converted.captainsClubPoints ?? 0).toLocaleString()}`, 'success');
         }
         if (converted.celebrityBlueChipPoints !== undefined && converted.celebrityBlueChipPoints > 0) {
           addLog(`   🎲 Blue Chip Club Status`, 'success');
           addLog(`   📊 Tier: "${converted.celebrityBlueChipTier || 'N/A'}"`, 'success');
-          addLog(`   💎 Points: ${converted.celebrityBlueChipPoints.toLocaleString()}`, 'success');
+          addLog(`   💎 Points: ${(converted.celebrityBlueChipPoints ?? 0).toLocaleString()}`, 'success');
         }
         break;
       }
