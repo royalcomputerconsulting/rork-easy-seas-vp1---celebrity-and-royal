@@ -404,10 +404,17 @@ function CarnivalSyncScreen() {
                   }}
                   onContentProcessDidTerminate={() => {
                     console.error('[CarnivalSync] WebView content process terminated, reloading...');
-                    if (webViewRef.current) {
-                      webViewRef.current.reload();
+                    addLog('WebView process terminated - reloading browser', 'warning');
+                    try {
+                      if (webViewRef.current) {
+                        webViewRef.current.reload();
+                      }
+                    } catch (e) {
+                      console.error('[CarnivalSync] Failed to reload WebView:', e);
                     }
                   }}
+                  cacheEnabled={true}
+                  incognito={false}
                 />
               )}
             </View>

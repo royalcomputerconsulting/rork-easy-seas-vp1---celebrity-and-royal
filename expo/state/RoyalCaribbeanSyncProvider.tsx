@@ -172,12 +172,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
   }, []);
 
-  const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
-    rcLogger.log(message, type);
-    // Batch log updates to prevent excessive state updates
+  const logUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const logUpdatePendingRef = useRef(false);
+
+  const flushLogs = useCallback(() => {
+    logUpdatePendingRef.current = false;
+    logUpdateTimerRef.current = null;
     setState(prev => {
       const newLogs = rcLogger.getDisplayLogs();
-      // Only update if logs actually changed
       if (prev.logs.length === newLogs.length) {
         return prev;
       }
@@ -187,6 +189,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       };
     });
   }, []);
+
+  const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    rcLogger.log(message, type);
+    if (!logUpdatePendingRef.current) {
+      logUpdatePendingRef.current = true;
+      if (logUpdateTimerRef.current) {
+        clearTimeout(logUpdateTimerRef.current);
+      }
+      logUpdateTimerRef.current = setTimeout(flushLogs, 300);
+    }
+  }, [flushLogs]);
 
   const toggleStaySignedIn = useCallback(async (enabled: boolean) => {
     try {
@@ -542,8 +555,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       case 'network_payload': {
         const { endpoint, data, url } = msg;
         
-        // Create unique key for this payload to prevent duplicate processing
-        const payloadKey = `${endpoint}-${url}-${JSON.stringify(data).substring(0, 100)}`;
+        let payloadKey: string;
+        try {
+          const urlBase = typeof url === 'string' ? url.split('?')[0] : '';
+          const dataLen = data ? (Array.isArray(data) ? data.length : JSON.stringify(data).length) : 0;
+          payloadKey = `${endpoint}-${urlBase}-${dataLen}`;
+        } catch {
+          payloadKey = `${endpoint}-${Date.now()}`;
+        }
         if (processedPayloads.current.has(payloadKey)) {
           console.log(`[RoyalCaribbeanSync] Skipping duplicate payload: ${endpoint}`);
           return;
