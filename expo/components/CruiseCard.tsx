@@ -5,7 +5,7 @@ import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 
 import { createDateFromString } from '@/lib/date';
-
+import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 
@@ -38,7 +38,7 @@ function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'acti
 export const CruiseCard = React.memo(function CruiseCard({ 
   cruise, 
   onPress, 
-  showPricePerNight: _showPricePerNight = true, 
+  showPricePerNight = true, 
   compact = false,
   mini = false,
   variant = 'default',
@@ -81,7 +81,7 @@ export const CruiseCard = React.memo(function CruiseCard({
   const retailValue = useMemo(() => {
     if (!showRetailValue) return null;
     
-    const _cabinType = cruise.cabinType || 'Balcony';
+    const cabinType = cruise.cabinType || 'Balcony';
     const guestCount = cruise.guests || 2;
     let cabinValueForTwo = 0;
     
@@ -266,7 +266,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             )}
           </View>
           {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
-            !!(bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
+            (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
              bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined || 
              bookedCruise.usedNextCruiseCertificate) && (
               <View style={styles.miniFpObcRow}>
@@ -326,7 +326,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             </View>
           )}
           {/* Booking Enrichment Data from Sync */}
-          {isBooked && !!(bookedCruise.musterStation || bookedCruise.bookingStatus || bookedCruise.packageCode || bookedCruise.stateroomNumber || bookedCruise.stateroomCategoryCode) && (
+          {isBooked && (bookedCruise.musterStation || bookedCruise.bookingStatus || bookedCruise.packageCode || bookedCruise.stateroomNumber || bookedCruise.stateroomCategoryCode) && (
             <View style={styles.miniEnrichmentSection}>
               {bookedCruise.bookingStatus && (
                 <View style={styles.miniEnrichmentRow}>
@@ -578,7 +578,7 @@ export const CruiseCard = React.memo(function CruiseCard({
         )}
 
         {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
-          !!(bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
+          (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
            bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined) && (
             <View style={styles.fpObcSection}>
               {(bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined) && (

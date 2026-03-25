@@ -11,6 +11,7 @@ import {
   Image,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import { useDeferredRender } from '@/hooks/useDeferredRender';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Ship,

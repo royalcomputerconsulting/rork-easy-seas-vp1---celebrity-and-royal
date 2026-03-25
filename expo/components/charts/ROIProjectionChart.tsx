@@ -227,15 +227,16 @@ export function ROIProjectionChart({
               <Text style={{ fontWeight: '700' as const, color: COLORS.success }}>
                 {formatCurrency(actualSavings)}
               </Text>
-              {' '}off retail prices. {pointsValue > 0 && (
-                <>
-                  Your {totalPointsEarned?.toLocaleString() ?? 0} points are worth{' '}
+              <Text>{' '}off retail prices.</Text>
+              {pointsValue > 0 ? (
+                <Text>
+                  {' '}Your {totalPointsEarned?.toLocaleString() ?? 0} points are worth{' '}
                   <Text style={{ fontWeight: '700' as const, color: COLORS.goldAccent }}>
                     {formatCurrency(pointsValue)}
                   </Text>
-                  {' '}at $5/point machine play.
-                </>
-              )}
+                  <Text>{' '}at $5/point machine play.</Text>
+                </Text>
+              ) : null}
             </Text>
           </View>
         )}

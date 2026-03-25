@@ -109,11 +109,20 @@ function CarnivalSyncScreen() {
   };
 
   const onMessage = (event: any) => {
+    const rawData = typeof event?.nativeEvent?.data === 'string' ? event.nativeEvent.data : '';
+
+    if (!rawData) {
+      return;
+    }
+
     try {
-      const message: WebViewMessage = JSON.parse(event.nativeEvent.data);
-      handleWebViewMessage(message);
+      const parsedMessage = JSON.parse(rawData) as unknown;
+      if (!parsedMessage || typeof parsedMessage !== 'object') {
+        return;
+      }
+      handleWebViewMessage(parsedMessage as WebViewMessage);
     } catch (error) {
-      console.error('[CarnivalSync] Failed to parse WebView message:', error);
+      console.error('[CarnivalSync] Failed to parse WebView message:', error, rawData.slice(0, 240));
     }
   };
 
@@ -343,7 +352,7 @@ function CarnivalSyncScreen() {
                   style={styles.webView}
                   onMessage={onMessage}
                   onLoadEnd={(e) => {
-                    onPageLoaded();
+                    onPageLoaded(e);
                     const url = e.nativeEvent.url || '';
                     console.log('[CarnivalSync] Page loaded, URL:', url);
                     if (url.includes('carnival.com') && !url.includes('login') && !url.includes('sign-in') && !url.includes('okta') && !url.includes('auth0') && !url.includes('identitytoolkit')) {
@@ -401,20 +410,20 @@ function CarnivalSyncScreen() {
                   onError={(syntheticEvent) => {
                     const { nativeEvent } = syntheticEvent;
                     console.warn('[CarnivalSync] WebView error:', nativeEvent);
+                    addLog(`⚠️ Browser error: ${nativeEvent.description || 'Unknown error'}`, 'warning');
+                  }}
+                  onHttpError={(syntheticEvent) => {
+                    const { nativeEvent } = syntheticEvent;
+                    console.warn('[CarnivalSync] WebView HTTP error:', nativeEvent);
+                    addLog(`⚠️ Browser HTTP ${String(nativeEvent.statusCode || 'error')} while loading Carnival`, 'warning');
                   }}
                   onContentProcessDidTerminate={() => {
                     console.error('[CarnivalSync] WebView content process terminated, reloading...');
-                    addLog('WebView process terminated - reloading browser', 'warning');
-                    try {
-                      if (webViewRef.current) {
-                        webViewRef.current.reload();
-                      }
-                    } catch (e) {
-                      console.error('[CarnivalSync] Failed to reload WebView:', e);
+                    addLog('⚠️ Carnival browser process restarted - reloading page', 'warning');
+                    if (webViewRef.current) {
+                      webViewRef.current.reload();
                     }
                   }}
-                  cacheEnabled={true}
-                  incognito={false}
                 />
               )}
             </View>
