@@ -149,6 +149,9 @@ export const AUTH_DETECTION_SCRIPT = `
             if (lowerUrl.includes('/api/profile') || lowerUrl.includes('/profilemanagement') || lowerUrl.includes('/api/booking') || lowerUrl.includes('/api/account') || lowerUrl.includes('/api/cruise') || lowerUrl.includes('/api/reservation') || lowerUrl.includes('/api/trip')) {
               clonedResponse.clone().json().then(function(data) {
                 if (!data) return;
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'log', message: '🎪 [NET] Carnival API intercepted: ' + url + ' | type=' + typeof data + ' isArr=' + Array.isArray(data) + ' keys=' + (typeof data === 'object' && !Array.isArray(data) ? Object.keys(data).join(',') : 'N/A') + ' preview=' + JSON.stringify(data).substring(0, 300), logType: 'info'
+                }));
                 var bookingArr = data.bookings || data.Bookings || data.cruises || data.Cruises || data.reservations || data.Reservations || data.upcoming || data.trips || data.payload || data.data || null;
                 if (Array.isArray(data) && data.length > 0 && (data[0].bookingId || data[0].BookingId || data[0].confirmationNumber || data[0].ConfirmationNumber || data[0].shipName || data[0].ShipName)) bookingArr = data;
                 if (Array.isArray(bookingArr) && bookingArr.length > 0 && (bookingArr[0].bookingId || bookingArr[0].BookingId || bookingArr[0].confirmationNumber || bookingArr[0].ConfirmationNumber || bookingArr[0].shipName || bookingArr[0].ShipName || bookingArr[0].sailDate || bookingArr[0].SailDate || bookingArr[0].departureDate || bookingArr[0].DepartureDate)) {
@@ -157,17 +160,28 @@ export const AUTH_DETECTION_SCRIPT = `
                     type: 'network_payload', endpoint: 'upcomingCruises', data: data, url: url
                   }));
                   window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log', message: '📦 Captured Carnival bookings (' + bookingArr.length + ') from ' + url, logType: 'success'
+                    type: 'log', message: '📦 Captured Carnival bookings (' + bookingArr.length + ') from ' + url + ' | first booking keys: ' + Object.keys(bookingArr[0]).join(',') + ' | first booking: ' + JSON.stringify(bookingArr[0]).substring(0, 300), logType: 'success'
+                  }));
+                } else {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log', message: '🎪 [NET] Carnival profile/booking API returned no recognizable bookings from ' + url + ' | data keys=' + (typeof data === 'object' ? Object.keys(data).join(',') : 'N/A'), logType: 'info'
                   }));
                 }
                 if (data.TierCode || data.PastGuestNumber || data.loyaltyTier || data.vifpNumber || data.loyaltyLevel) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'log', message: '🎪 [NET] Carnival loyalty/user data found in API response: TierCode=' + (data.TierCode || 'N/A') + ' PastGuestNumber=' + (data.PastGuestNumber || 'N/A') + ' loyaltyTier=' + (data.loyaltyTier || 'N/A') + ' | full: ' + JSON.stringify(data).substring(0, 400), logType: 'info'
+                  }));
                   if (!window.capturedPayloads.loyalty) {
                     window.capturedPayloads.loyalty = data;
                     window.ReactNativeWebView.postMessage(JSON.stringify({
                       type: 'network_payload', endpoint: 'loyalty', data: data, url: url
                     }));
                     window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'log', message: '📦 Captured Carnival loyalty from profile API', logType: 'success'
+                      type: 'log', message: '📦 Captured Carnival loyalty from profile API: ' + url, logType: 'success'
+                    }));
+                  } else {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'log', message: '🎪 [NET] Carnival loyalty already captured, skipping duplicate from ' + url, logType: 'info'
                     }));
                   }
                   window.ReactNativeWebView.postMessage(JSON.stringify({

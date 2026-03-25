@@ -636,7 +636,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`⚠️ Bookings data structure not recognized. Type: ${typeof data}, Keys: ${Object.keys(data).join(', ')}`, 'warning');
             if (data.payload) {
               addLog(`📦 Payload keys: ${Object.keys(data.payload).join(', ')}`, 'info');
+              if (data.payload && typeof data.payload === 'object') {
+                const payloadKeys = Object.keys(data.payload);
+                payloadKeys.forEach((pk: string) => {
+                  const pv = data.payload[pk];
+                  addLog(`📦 payload.${pk}: type=${typeof pv}${Array.isArray(pv) ? ` length=${pv.length}` : ''} preview=${JSON.stringify(pv).substring(0, 120)}`, 'info');
+                });
+              }
             }
+            addLog(`📦 Full raw data preview: ${JSON.stringify(data).substring(0, 500)}`, 'info');
             addLog(`📦 Captured ${endpoint} API payload (UNKNOWN STRUCTURE)`, 'warning');
             break;
           }
@@ -648,6 +656,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             console.log(`[RoyalCaribbeanSync] First booking keys:`, Object.keys(bookings[0]));
             
             const isCarnivalBooking = cruiseLine === 'carnival' || (typeof url === 'string' && url.includes('carnival.com'));
+            
+            if (isCarnivalBooking) {
+              addLog(`\ud83c\udfaa CARNIVAL RAW BOOKINGS DATA (${bookings.length} booking(s)):`, 'info');
+              addLog(`\ud83c\udfaa Source URL: ${typeof url === 'string' ? url : 'N/A'}`, 'info');
+              addLog(`\ud83c\udfaa First booking keys: ${Object.keys(bookings[0]).join(', ')}`, 'info');
+              bookings.forEach((b: any, idx: number) => {
+                addLog(`\ud83c\udfaa Raw Booking ${idx + 1}: shipName="${b.shipName || b.ShipName || 'N/A'}" shipCode="${b.shipCode || b.ShipCode || 'N/A'}" sailDate="${b.sailDate || b.SailDate || b.departureDate || 'N/A'}" nights=${b.numberOfNights || b.duration || 'N/A'} bookingId="${b.bookingId || b.BookingId || b.confirmationNumber || 'N/A'}" status="${b.bookingStatus || b.BookingStatus || 'N/A'}"`, 'info');
+                addLog(`\ud83c\udfaa   cabin="${b.stateroomNumber || b.cabinNumber || 'N/A'}" type="${b.stateroomType || b.cabinType || 'N/A'}" port="${b.departurePort || b.homePort || 'N/A'}" dest="${b.itinerary || b.destination || 'N/A'}" guests=${b.guestCount || b.numberOfGuests || 'N/A'}`, 'info');
+                addLog(`\ud83c\udfaa   FULL JSON: ${JSON.stringify(b).substring(0, 300)}`, 'info');
+              });
+            }
             
             const CARNIVAL_SHIP_CODE_MAP: Record<string, string> = {
               'BR': 'Carnival Breeze', 'CL': 'Carnival Celebration', 'CQ': 'Carnival Conquest',
@@ -803,8 +822,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         if (endpoint === 'carnival_vifp_offers' && data) {
           try {
           console.log('[CarnivalSync] VIFP offers captured:', data.Items?.length || 0);
+          console.log('[CarnivalSync] VIFP raw payload:', JSON.stringify(data).substring(0, 2000));
           addLog('Processing Carnival VIFP offers...', 'info');
+          addLog(`📋 VIFP payload keys: ${Object.keys(data).join(', ')}`, 'info');
+          addLog(`📋 VIFP source URL: ${typeof url === 'string' ? url : 'N/A'}`, 'info');
           if (data.Items && Array.isArray(data.Items)) {
+            addLog(`📋 Found ${data.Items.length} VIFP Items in response`, 'info');
+            data.Items.forEach((item: any, idx: number) => {
+              addLog(`📋 VIFP Item ${idx + 1}: Title="${item.Title || 'N/A'}" OfferId="${item.OfferId || 'N/A'}" Price=${item.Price || 'N/A'} CtaUrl="${(item.CtaUrl || '').substring(0, 80)}" Subtitle="${(item.Subtitle || '').substring(0, 60)}"`, 'info');
+            });
             const dollarSign = String.fromCharCode(36);
             const offerRows: OfferRow[] = data.Items.map((item: any) => {
               let rateCode = '';
@@ -853,9 +879,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               return { ...prev, extractedOffers: [...prev.extractedOffers, ...newOffers] };
             });
             capturedSections.current.offers = true;
-            addLog('Captured ' + String(offerRows.length) + ' Carnival VIFP offer(s)', 'success');
-            offerRows.forEach((o: OfferRow) => {
-              addLog('  ' + o.offerName + ' (' + o.offerCode + ')' + (o.interiorPrice ? ' - from ' + o.interiorPrice : ''), 'success');
+            addLog(`✅ Captured ${String(offerRows.length)} Carnival VIFP offer(s) - parsed successfully`, 'success');
+            offerRows.forEach((o: OfferRow, idx: number) => {
+              addLog(`  📦 Offer ${idx + 1}: "${o.offerName}" Code=${o.offerCode || 'NONE'} Price=${o.interiorPrice || 'N/A'} Expiry=${o.offerExpirationDate || 'N/A'} Link=${(o.bookingLink || '').substring(0, 60)}`, 'success');
             });
             if (stepCompleteResolvers.current[1]) {
               stepCompleteResolvers.current[1]();
@@ -948,6 +974,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           const tierMap: Record<string, string> = { '01': 'Red', '02': 'Gold', '03': 'Platinum', '04': 'Diamond' };
           const tierName = tierMap[userData.TierCode] || userData.TierCode || 'Unknown';
           console.log('[CarnivalSync] User data captured:', userData.FirstName, userData.LastName, 'VIFP#', userData.PastGuestNumber, 'Tier:', tierName);
+          addLog(`\ud83c\udfaa CARNIVAL USER COOKIE RAW DATA:`, 'info');
+          addLog(`\ud83c\udfaa   FirstName="${userData.FirstName || 'N/A'}" LastName="${userData.LastName || 'N/A'}"`, 'info');
+          addLog(`\ud83c\udfaa   PastGuestNumber="${userData.PastGuestNumber || 'N/A'}" TierCode="${userData.TierCode || 'N/A'}" -> Tier="${tierName}"`, 'info');
+          addLog(`\ud83c\udfaa   All cookie keys: ${Object.keys(userData).join(', ')}`, 'info');
+          addLog(`\ud83c\udfaa   Full cookie JSON: ${JSON.stringify(userData).substring(0, 400)}`, 'info');
           carnivalUserDataRef.current = {
             vifpNumber: userData.PastGuestNumber || '',
             vifpTier: tierName,
