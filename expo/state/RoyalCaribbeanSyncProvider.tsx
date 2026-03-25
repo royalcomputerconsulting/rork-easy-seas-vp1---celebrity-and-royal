@@ -842,7 +842,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 bookingLink: item.CtaUrl || ''
               } as unknown as OfferRow;
             });
-            setState(prev => ({ ...prev, extractedOffers: [...prev.extractedOffers, ...offerRows] }));
+            setState(prev => {
+              // Deduplicate: only add offers whose offerCode isn't already present
+              const existingCodes = new Set(prev.extractedOffers.map((o: OfferRow) => o.offerCode).filter(Boolean));
+              const newOffers = offerRows.filter((o: OfferRow) => !o.offerCode || !existingCodes.has(o.offerCode));
+              if (newOffers.length === 0) {
+                console.log('[CarnivalSync] All VIFP offers already present - skipping duplicate');
+                return prev;
+              }
+              return { ...prev, extractedOffers: [...prev.extractedOffers, ...newOffers] };
+            });
             capturedSections.current.offers = true;
             addLog('Captured ' + String(offerRows.length) + ' Carnival VIFP offer(s)', 'success');
             offerRows.forEach((o: OfferRow) => {
@@ -961,6 +970,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             console.error('[CarnivalSync] Error processing carnival_user_data:', carnivalUserError);
             addLog(`⚠️ Error processing Carnival user data: ${String(carnivalUserError)}`, 'warning');
           }
+        }
+        break;
+      }
+
+      case 'carnival_enrichment_complete': {
+        const enrichMsg = msg;
+        const enrichedSailings = (enrichMsg.sailings || []) as OfferRow[];
+        console.log(`[CarnivalSync] carnival_enrichment_complete received: ${enrichedSailings.length} sailing rows`);
+        if (enrichedSailings.length > 0) {
+          setState(prev => ({
+            ...prev,
+            extractedOffers: enrichedSailings
+          }));
+          addLog(`✅ Carnival inline enrichment complete: ${enrichedSailings.length} sailing row(s) with full details`, 'success');
+        } else {
+          addLog('ℹ️ Carnival inline enrichment returned no sailings - keeping existing offer data', 'info');
+        }
+        if (carnivalEnrichmentResolver.current) {
+          carnivalEnrichmentResolver.current();
+          carnivalEnrichmentResolver.current = null;
         }
         break;
       }
@@ -1102,9 +1131,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog('📍 Navigating to offers page...', 'info');
       
       if (isCarnivalMode) {
-        addLog('🎪 Carnival SPA detected — forcing full navigation to offers page...', 'info');
-        await navigateToPage('about:blank', 3000);
-        await delay(500);
+        addLog('🎪 Carnival mode — navigating directly to offers page...', 'info');
         await navigateToPage(config.offersUrl, 20000);
         addLog('⏳ Waiting for Carnival offers page to fully render...', 'info');
         await delay(5000);
