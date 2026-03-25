@@ -694,22 +694,22 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             }
             
             const formattedCruises = bookings.map((booking: any) => {
-              const nights = booking.numberOfNights || booking.duration || booking.numNights || 0;
-              const shipCode = booking.shipCode || '';
+              const nights = booking.numberOfNights || booking.NumberOfNights || booking.duration || booking.Duration || booking.numNights || 0;
+              const shipCode = booking.shipCode || booking.ShipCode || '';
               let shipName = '';
               if (isCarnivalBooking) {
-                shipName = booking.shipName || booking.ship || CARNIVAL_SHIP_CODE_MAP[shipCode] || (shipCode ? `Carnival ${shipCode}` : 'Unknown Ship');
+                shipName = booking.shipName || booking.ShipName || booking.ship || CARNIVAL_SHIP_CODE_MAP[shipCode] || (shipCode ? `Carnival ${shipCode}` : 'Unknown Ship');
               } else {
                 shipName = booking.shipName || RC_SHIP_CODE_MAP[shipCode] || (shipCode ? `${shipCode} of the Seas` : 'Unknown Ship');
               }
-              const stateroomType = booking.stateroomType || booking.cabinType || booking.categoryType || '';
+              const stateroomType = booking.stateroomType || booking.StateroomType || booking.cabinType || booking.categoryType || '';
               const cabinType = STATEROOM_TYPE_MAP[stateroomType] || stateroomType || '';
               
-              const stateroomNumber = booking.stateroomNumber || booking.cabinNumber || '';
+              const stateroomNumber = booking.stateroomNumber || booking.StateroomNumber || booking.cabinNumber || '';
               const cabinNumber = stateroomNumber === 'GTY' ? '' : stateroomNumber;
               const isGTY = stateroomNumber === 'GTY' || !stateroomNumber;
-              const sailDate = booking.sailDate || booking.departureDate || booking.startDate || '';
-              const bookingStatus = booking.bookingStatus || 'BK';
+              const sailDate = booking.sailDate || booking.SailDate || booking.departureDate || booking.DepartureDate || booking.startDate || '';
+              const bookingStatus = booking.bookingStatus || booking.BookingStatus || 'BK';
               const status = determineCruiseStatus(sailDate, bookingStatus);
               
               return {
@@ -717,19 +717,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 sourcePage: status === 'Completed' ? 'Completed' : 'Upcoming',
                 shipName,
                 shipCode,
-                cruiseTitle: booking.cruiseTitle || booking.title || (nights ? `${nights} Night Cruise` : 'Cruise'),
+                cruiseTitle: booking.cruiseTitle || booking.CruiseTitle || booking.title || (nights ? `${nights} Night Cruise` : 'Cruise'),
                 sailingStartDate: sailDate,
-                sailingEndDate: booking.endDate || booking.returnDate || '',
+                sailingEndDate: booking.endDate || booking.EndDate || booking.returnDate || '',
                 sailingDates: sailDate,
-                itinerary: booking.itinerary || booking.destination || '',
-                departurePort: booking.departurePort || booking.homePort || '',
-                arrivalPort: booking.arrivalPort || '',
+                itinerary: booking.itinerary || booking.Itinerary || booking.destination || booking.Destination || '',
+                departurePort: booking.departurePort || booking.DeparturePort || booking.homePort || booking.HomePort || '',
+                arrivalPort: booking.arrivalPort || booking.ArrivalPort || '',
                 cabinType,
-                cabinCategory: booking.stateroomCategoryCode || booking.categoryCode || '',
+                cabinCategory: booking.stateroomCategoryCode || booking.StateroomCategoryCode || booking.categoryCode || '',
                 cabinNumberOrGTY: isGTY ? 'GTY' : cabinNumber,
-                deckNumber: booking.deckNumber || '',
-                bookingId: (booking.bookingId || booking.confirmationNumber || booking.reservationId || '').toString(),
-                numberOfGuests: (booking.passengers?.length || booking.guestCount || booking.numberOfGuests || 1).toString(),
+                deckNumber: booking.deckNumber || booking.DeckNumber || '',
+                bookingId: (booking.bookingId || booking.BookingId || booking.confirmationNumber || booking.ConfirmationNumber || booking.reservationId || '').toString(),
+                numberOfGuests: (booking.passengers?.length || booking.guestCount || booking.GuestCount || booking.numberOfGuests || booking.NumberOfGuests || 1).toString(),
                 numberOfNights: nights.toString(),
                 daysToGo: '',
                 status,
@@ -1285,7 +1285,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               { url: accountHomeUrl, section: 'loyalty', name: 'Account Home' },
             ];
         
-        const MAX_CYCLES = 3;
+        const MAX_CYCLES = isCarnivalMode ? 2 : 3;
         
         for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
           const needBookings = !capturedSections.current.bookings;
@@ -1327,11 +1327,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               addLog(`✅ ${page.name} data captured!`, 'success');
             } else {
               addLog(`⏳ Waiting for ${page.name} API response...`, 'info');
-              await delay(isCarnivalMode ? 8000 : 6000);
+              await delay(isCarnivalMode ? 6000 : 6000);
               
               if (capturedSections.current[page.section]) {
                 addLog(`✅ ${page.name} data captured after wait!`, 'success');
               }
+            }
+            
+            if (isCarnivalMode && capturedSections.current.bookings && capturedSections.current.loyalty) {
+              addLog('✅ All Carnival data sections captured - skipping remaining pages', 'success');
+              break;
             }
           }
         }

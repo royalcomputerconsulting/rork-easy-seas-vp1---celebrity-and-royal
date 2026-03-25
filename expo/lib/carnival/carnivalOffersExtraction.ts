@@ -281,8 +281,19 @@ export const CARNIVAL_OFFERS_SCRIPT = `
           }
         }
         if (matchEls.length > 0 && matchEls.length < 50) {
-          offerCards = matchEls;
-          log('Found ' + matchEls.length + ' potential offer elements by content analysis', 'info');
+          var filtered = [];
+          for (var fi = 0; fi < matchEls.length; fi++) {
+            var isChild = false;
+            for (var fj = 0; fj < matchEls.length; fj++) {
+              if (fi !== fj && matchEls[fj].contains(matchEls[fi]) && matchEls[fj] !== matchEls[fi]) {
+                isChild = true;
+                break;
+              }
+            }
+            if (!isChild) filtered.push(matchEls[fi]);
+          }
+          offerCards = filtered.length > 0 ? filtered : matchEls;
+          log('Found ' + offerCards.length + ' potential offer elements by content analysis (filtered from ' + matchEls.length + ')', 'info');
         }
       } catch(e) {}
     }
@@ -382,7 +393,20 @@ export const CARNIVAL_OFFERS_SCRIPT = `
       } catch(e) {}
     }
 
-    return deals;
+    var dedupedDeals = [];
+    var seenOfferKeys = {};
+    for (var dd = 0; dd < deals.length; dd++) {
+      var deal = deals[dd];
+      var dedupKey = (deal.offerCode || '') + '|' + (deal.offerName || '').substring(0, 40).toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!seenOfferKeys[dedupKey]) {
+        seenOfferKeys[dedupKey] = true;
+        dedupedDeals.push(deal);
+      }
+    }
+    if (dedupedDeals.length < deals.length) {
+      log('Deduplicated DOM offers: ' + deals.length + ' -> ' + dedupedDeals.length, 'info');
+    }
+    return dedupedDeals;
   }
 
   function scrapeCruiseDealsFromDOM() {
