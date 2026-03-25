@@ -133,6 +133,104 @@ function createOwnerProfile(email: string | null): UserProfile {
   };
 }
 
+function sanitizePlayingSession(session: unknown, index: number): PlayingSession | null {
+  if (!session || typeof session !== 'object') {
+    return null;
+  }
+
+  const sessionRecord = session as Partial<PlayingSession>;
+  const fallbackSession = DEFAULT_PLAYING_HOURS.sessions[index] ?? DEFAULT_PLAYING_HOURS.sessions[0];
+
+  return {
+    id: typeof sessionRecord.id === 'string' && sessionRecord.id.trim().length > 0 ? sessionRecord.id : `${fallbackSession.id}_${index}`,
+    name: typeof sessionRecord.name === 'string' && sessionRecord.name.trim().length > 0 ? sessionRecord.name : fallbackSession.name,
+    startTime: typeof sessionRecord.startTime === 'string' ? sessionRecord.startTime : fallbackSession.startTime,
+    endTime: typeof sessionRecord.endTime === 'string' ? sessionRecord.endTime : fallbackSession.endTime,
+    enabled: typeof sessionRecord.enabled === 'boolean' ? sessionRecord.enabled : fallbackSession.enabled,
+  };
+}
+
+function sanitizePlayingHours(value: unknown): PlayingHours | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const playingHours = value as Partial<PlayingHours>;
+  const sessions = Array.isArray(playingHours.sessions)
+    ? playingHours.sessions
+        .map((session, index) => sanitizePlayingSession(session, index))
+        .filter((session): session is PlayingSession => session !== null)
+    : DEFAULT_PLAYING_HOURS.sessions;
+
+  return {
+    enabled: typeof playingHours.enabled === 'boolean' ? playingHours.enabled : DEFAULT_PLAYING_HOURS.enabled,
+    startTime: typeof playingHours.startTime === 'string' ? playingHours.startTime : DEFAULT_PLAYING_HOURS.startTime,
+    endTime: typeof playingHours.endTime === 'string' ? playingHours.endTime : DEFAULT_PLAYING_HOURS.endTime,
+    preferSeaDayMorning: typeof playingHours.preferSeaDayMorning === 'boolean' ? playingHours.preferSeaDayMorning : DEFAULT_PLAYING_HOURS.preferSeaDayMorning,
+    preferPortDayEvening: typeof playingHours.preferPortDayEvening === 'boolean' ? playingHours.preferPortDayEvening : DEFAULT_PLAYING_HOURS.preferPortDayEvening,
+    sessions: sessions.length > 0 ? sessions : DEFAULT_PLAYING_HOURS.sessions,
+  };
+}
+
+function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index: number): UserProfile | null {
+  if (!user || typeof user !== 'object') {
+    return null;
+  }
+
+  const userRecord = user as Partial<UserProfile>;
+  const now = new Date().toISOString();
+  const normalizedEmail = normalizeEmail(userRecord.email) ?? fallbackEmail ?? DEFAULT_OWNER.email;
+
+  return {
+    id: typeof userRecord.id === 'string' && userRecord.id.trim().length > 0 ? userRecord.id : `user_${Date.now()}_${index}`,
+    name: typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name,
+    email: normalizedEmail,
+    isOwner: userRecord.isOwner === true,
+    avatarUrl: typeof userRecord.avatarUrl === 'string' ? userRecord.avatarUrl : undefined,
+    crownAnchorNumber: typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber,
+    playingHours: sanitizePlayingHours(userRecord.playingHours),
+    celebrityEmail: typeof userRecord.celebrityEmail === 'string' ? userRecord.celebrityEmail : DEFAULT_OWNER.celebrityEmail,
+    celebrityCaptainsClubNumber: typeof userRecord.celebrityCaptainsClubNumber === 'string' ? userRecord.celebrityCaptainsClubNumber : DEFAULT_OWNER.celebrityCaptainsClubNumber,
+    celebrityCaptainsClubPoints: typeof userRecord.celebrityCaptainsClubPoints === 'number' ? userRecord.celebrityCaptainsClubPoints : DEFAULT_OWNER.celebrityCaptainsClubPoints,
+    celebrityBlueChipPoints: typeof userRecord.celebrityBlueChipPoints === 'number' ? userRecord.celebrityBlueChipPoints : DEFAULT_OWNER.celebrityBlueChipPoints,
+    preferredBrand: userRecord.preferredBrand === 'royal' || userRecord.preferredBrand === 'celebrity' || userRecord.preferredBrand === 'silversea' || userRecord.preferredBrand === 'carnival'
+      ? userRecord.preferredBrand
+      : DEFAULT_OWNER.preferredBrand,
+    silverseaEmail: typeof userRecord.silverseaEmail === 'string' ? userRecord.silverseaEmail : DEFAULT_OWNER.silverseaEmail,
+    silverseaVenetianNumber: typeof userRecord.silverseaVenetianNumber === 'string' ? userRecord.silverseaVenetianNumber : DEFAULT_OWNER.silverseaVenetianNumber,
+    silverseaVenetianTier: typeof userRecord.silverseaVenetianTier === 'string' ? userRecord.silverseaVenetianTier : DEFAULT_OWNER.silverseaVenetianTier,
+    silverseaVenetianPoints: typeof userRecord.silverseaVenetianPoints === 'number' ? userRecord.silverseaVenetianPoints : DEFAULT_OWNER.silverseaVenetianPoints,
+    carnivalVifpNumber: typeof userRecord.carnivalVifpNumber === 'string' ? userRecord.carnivalVifpNumber : '',
+    carnivalVifpTier: typeof userRecord.carnivalVifpTier === 'string' ? userRecord.carnivalVifpTier : '',
+    carnivalPlayersClubTier: typeof userRecord.carnivalPlayersClubTier === 'string' ? userRecord.carnivalPlayersClubTier : '',
+    carnivalPlayersClubPoints: typeof userRecord.carnivalPlayersClubPoints === 'number' ? userRecord.carnivalPlayersClubPoints : 0,
+    createdAt: typeof userRecord.createdAt === 'string' ? userRecord.createdAt : now,
+    updatedAt: typeof userRecord.updatedAt === 'string' ? userRecord.updatedAt : now,
+  };
+}
+
+function parseStoredUsers(rawValue: string | null, fallbackEmail: string | null): UserProfile[] {
+  if (!rawValue) {
+    return [];
+  }
+
+  try {
+    const parsedValue = JSON.parse(rawValue) as unknown;
+
+    if (!Array.isArray(parsedValue)) {
+      console.warn('[UserProvider] Stored users payload is not an array, ignoring invalid value');
+      return [];
+    }
+
+    return parsedValue
+      .map((user, index) => sanitizeUserProfile(user, fallbackEmail, index))
+      .filter((user): user is UserProfile => user !== null);
+  } catch (error) {
+    console.error('[UserProvider] Failed to parse stored users payload:', error);
+    return [];
+  }
+}
+
 export const [UserProvider, useUser] = createContextHook((): UserState => {
   const { authenticatedEmail } = useAuth();
   const normalizedAuthenticatedEmail = normalizeEmail(authenticatedEmail);
@@ -227,7 +325,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
         return null;
       }
 
-      const parsedLegacyUsers = JSON.parse(legacyUsersRaw) as UserProfile[];
+      const parsedLegacyUsers = parseStoredUsers(legacyUsersRaw, normalizedAuthenticatedEmail);
       const matchingUsers = parsedLegacyUsers.filter((user) => normalizeEmail(user.email) === normalizedAuthenticatedEmail);
 
       if (matchingUsers.length === 0) {
@@ -306,7 +404,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       storedCurrentUserId = storedCurrentUserId ?? await AsyncStorage.getItem(scopedKeys.CURRENT_USER);
 
       if (storedUsersRaw) {
-        const parsedUsers = JSON.parse(storedUsersRaw) as UserProfile[];
+        const parsedUsers = parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail);
         const normalizedUsers = parsedUsers.map((user) => ({
           ...user,
           email: normalizeEmail(user.email) ?? normalizedAuthenticatedEmail,
@@ -436,7 +534,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
       const storedUsersRaw = await AsyncStorage.getItem(scopedKeys.USERS);
       const inMemoryScopedUsers = users.filter((user) => normalizeEmail(user.email) === normalizedAuthenticatedEmail);
-      let currentUsers: UserProfile[] = storedUsersRaw ? JSON.parse(storedUsersRaw) as UserProfile[] : inMemoryScopedUsers;
+      let currentUsers: UserProfile[] = storedUsersRaw ? parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail) : inMemoryScopedUsers;
 
       if (currentUsers.length === 0 && inMemoryScopedUsers.length > 0) {
         currentUsers = inMemoryScopedUsers;
@@ -503,7 +601,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     try {
       const storedUsersRaw = await AsyncStorage.getItem(scopedKeys.USERS);
       if (storedUsersRaw) {
-        const parsedUsers = JSON.parse(storedUsersRaw) as UserProfile[];
+        const parsedUsers = parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail);
         const storedOwner = parsedUsers.find((user) => user.isOwner) ?? parsedUsers[0] ?? null;
 
         if (storedOwner) {
