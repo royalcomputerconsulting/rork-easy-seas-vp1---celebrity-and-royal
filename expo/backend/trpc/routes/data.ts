@@ -4,6 +4,7 @@ import { createTRPCRouter, publicProcedure } from "../create-context";
 
 const UserDataSchema = z.object({
   email: z.string().email(),
+  cruises: z.array(z.any()).optional(),
   bookedCruises: z.array(z.any()).optional(),
   casinoOffers: z.array(z.any()).optional(),
   calendarEvents: z.array(z.any()).optional(),
@@ -22,6 +23,7 @@ const UserDataSchema = z.object({
 
 interface StoredUserData {
   email: string;
+  cruises?: any[];
   bookedCruises?: any[];
   casinoOffers?: any[];
   calendarEvents?: any[];
@@ -118,6 +120,7 @@ export const dataRouter = createTRPCRouter({
       
       const dataToSave: StoredUserData = {
         email: normalizedEmail,
+        cruises: input.cruises ?? existingData?.cruises ?? [],
         bookedCruises: input.bookedCruises ?? existingData?.bookedCruises ?? [],
         casinoOffers: input.casinoOffers ?? existingData?.casinoOffers ?? [],
         calendarEvents: input.calendarEvents ?? existingData?.calendarEvents ?? [],
@@ -139,6 +142,7 @@ export const dataRouter = createTRPCRouter({
       if (existingData) {
         await db.query(
           `UPDATE user_profiles SET 
+            cruises = $cruises,
             bookedCruises = $bookedCruises,
             casinoOffers = $casinoOffers,
             calendarEvents = $calendarEvents,
@@ -168,6 +172,7 @@ export const dataRouter = createTRPCRouter({
 
       console.log('[API] Saved all user data:', {
         email: normalizedEmail,
+        availableCruises: dataToSave.cruises?.length ?? 0,
         cruises: dataToSave.bookedCruises?.length ?? 0,
         offers: dataToSave.casinoOffers?.length ?? 0,
         events: dataToSave.calendarEvents?.length ?? 0,
@@ -194,6 +199,7 @@ export const dataRouter = createTRPCRouter({
         const data = results[0][0];
         console.log('[API] Found user data:', {
           email: normalizedEmail,
+          availableCruises: data.cruises?.length ?? 0,
           cruises: data.bookedCruises?.length ?? 0,
           offers: data.casinoOffers?.length ?? 0,
           events: data.calendarEvents?.length ?? 0,
@@ -203,6 +209,7 @@ export const dataRouter = createTRPCRouter({
         return {
           found: true,
           data: {
+            cruises: data.cruises ?? [],
             bookedCruises: data.bookedCruises ?? [],
             casinoOffers: data.casinoOffers ?? [],
             calendarEvents: data.calendarEvents ?? [],

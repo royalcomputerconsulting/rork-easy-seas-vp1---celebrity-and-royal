@@ -260,6 +260,7 @@ interface CoreDataState {
   updateSettings: (updates: Partial<AppSettings>) => void;
   setUserPoints: (points: number) => void;
   setClubRoyaleProfile: (profile: ClubRoyaleProfile) => void;
+  syncToBackend: () => Promise<void>;
   
   clearAllData: () => Promise<void>;
   refreshData: () => Promise<void>;
@@ -359,7 +360,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         MANUAL_CLUB_ROYALE_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, authenticatedEmail),
         MANUAL_CROWN_ANCHOR_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, authenticatedEmail),
       };
-      const [bookedData, offersData, eventsData, settingsData, pointsData, profileData, extendedLoyaltyDataRaw, manualClubRoyalePointsRaw, manualCrownAnchorPointsRaw] = await Promise.all([
+      const [cruisesData, bookedData, offersData, eventsData, settingsData, pointsData, profileData, extendedLoyaltyDataRaw, manualClubRoyalePointsRaw, manualCrownAnchorPointsRaw] = await Promise.all([
+        AsyncStorage.getItem(scopedKeys.CRUISES),
         AsyncStorage.getItem(scopedKeys.BOOKED_CRUISES),
         AsyncStorage.getItem(scopedKeys.CASINO_OFFERS),
         AsyncStorage.getItem(scopedKeys.CALENDAR_EVENTS),
@@ -371,6 +373,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         AsyncStorage.getItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS),
       ]);
       
+      const parsedCruises = cruisesData ? JSON.parse(cruisesData) : [];
       const parsedBooked = bookedData ? JSON.parse(bookedData) : [];
       const parsedOffers = offersData ? JSON.parse(offersData) : [];
       const parsedEvents = eventsData ? JSON.parse(eventsData) : [];
@@ -395,6 +398,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       console.log('[CoreData] Syncing to backend:', {
         email: authenticatedEmail,
+        availableCruises: parsedCruises.length,
         cruises: parsedBooked.length,
         offers: parsedOffers.length,
         events: parsedEvents.length,
@@ -402,6 +406,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       await saveAllUserDataMutateAsync({
         email: authenticatedEmail,
+        cruises: parsedCruises,
         bookedCruises: parsedBooked,
         casinoOffers: parsedOffers,
         calendarEvents: parsedEvents,
@@ -440,6 +445,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         const userData = result.data.data;
         console.log('[CoreData] ✅ Backend data found:', {
           email: authenticatedEmail,
+          availableCruises: userData.cruises?.length || 0,
           cruises: userData.bookedCruises?.length || 0,
           offers: userData.casinoOffers?.length || 0,
           events: userData.calendarEvents?.length || 0,
@@ -448,6 +454,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         
         const scopedKeys = getScopedStorageKeys(authenticatedEmail);
         const savePromises = [];
+        if (userData.cruises) {
+          savePromises.push(AsyncStorage.setItem(scopedKeys.CRUISES, JSON.stringify(userData.cruises)));
+        }
         if (userData.bookedCruises) {
           savePromises.push(AsyncStorage.setItem(scopedKeys.BOOKED_CRUISES, JSON.stringify(userData.bookedCruises)));
         }
@@ -724,7 +733,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }, 5000); // Debounce 5 seconds to reduce request frequency
     
     return () => clearTimeout(syncTimeout);
-  }, [bookedCruises, casinoOffers, calendarEvents, settings, userPoints, clubRoyaleProfile, isAuthenticated, authenticatedEmail, syncToBackend]);
+  }, [cruises, bookedCruises, casinoOffers, calendarEvents, settings, userPoints, clubRoyaleProfile, isAuthenticated, authenticatedEmail, syncToBackend]);
 
   useEffect(() => {
     const handleSessionPointsUpdate = (event: any) => {
@@ -1203,6 +1212,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     updateSettings,
     setUserPoints,
     setClubRoyaleProfile,
+    syncToBackend,
     clearAllData,
     refreshData,
     restoreMockData,
@@ -1244,6 +1254,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     updateSettings,
     setUserPoints,
     setClubRoyaleProfile,
+    syncToBackend,
     clearAllData,
     refreshData,
     restoreMockData,

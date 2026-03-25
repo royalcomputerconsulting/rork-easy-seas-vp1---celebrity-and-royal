@@ -2195,6 +2195,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('⚠️ No extended loyalty payload available at sync time', 'warning');
       }
 
+      if (typeof coreDataContext.syncToBackend === 'function') {
+        try {
+          addLog('Flushing merged cruise data to backend...', 'info');
+          await coreDataContext.syncToBackend();
+          addLog('✅ Backend sync completed for merged cruise data', 'success');
+        } catch (backendSyncError) {
+          console.error('[RoyalCaribbeanSync] Error syncing merged data to backend:', backendSyncError);
+          addLog(`⚠️ Warning: Failed to sync merged data to backend: ${String(backendSyncError)}`, 'warning');
+        }
+      }
+
       if (cruiseLine === 'carnival' && carnivalUserDataRef.current) {
         try {
           const carnivalData = carnivalUserDataRef.current;

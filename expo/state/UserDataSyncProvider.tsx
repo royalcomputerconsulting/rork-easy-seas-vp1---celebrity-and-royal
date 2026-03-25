@@ -133,6 +133,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     
     try {
       const [
+        cruisesRaw,
         bookedCruisesRaw,
         casinoOffersRaw,
         calendarEventsRaw,
@@ -156,6 +157,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         crewEntriesRaw,
         crewSailingsRaw,
       ] = await Promise.all([
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CRUISES)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS)),
@@ -203,6 +205,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         : normalizedLegacyLoyaltyData;
 
       const data = {
+        cruises: cruisesRaw ? JSON.parse(cruisesRaw) : [],
         bookedCruises: bookedCruisesRaw ? JSON.parse(bookedCruisesRaw) : [],
         casinoOffers: casinoOffersRaw ? JSON.parse(casinoOffersRaw) : [],
         calendarEvents: calendarEventsRaw ? JSON.parse(calendarEventsRaw) : [],
@@ -222,6 +225,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       };
 
       console.log("[UserDataSync] Gathered data:", {
+        availableCruises: data.cruises.length,
         cruises: data.bookedCruises.length,
         offers: data.casinoOffers.length,
         events: data.calendarEvents.length,
@@ -245,6 +249,11 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     try {
       const savePromises: Promise<void>[] = [];
 
+      if (cloudData.cruises !== undefined) {
+        savePromises.push(
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CRUISES), JSON.stringify(cloudData.cruises ?? []))
+        );
+      }
       if (cloudData.bookedCruises !== undefined) {
         savePromises.push(
           AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), JSON.stringify(cloudData.bookedCruises ?? []))
@@ -380,6 +389,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       await Promise.all(savePromises);
 
       console.log("[UserDataSync] Cloud data restored to local storage:", {
+        availableCruises: cloudData.cruises?.length ?? 0,
         cruises: cloudData.bookedCruises?.length ?? 0,
         offers: cloudData.casinoOffers?.length ?? 0,
         events: cloudData.calendarEvents?.length ?? 0,
@@ -582,6 +592,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       }
 
       const hasData = 
+        localData.cruises.length > 0 ||
         localData.bookedCruises.length > 0 ||
         localData.casinoOffers.length > 0 ||
         localData.calendarEvents.length > 0 ||
