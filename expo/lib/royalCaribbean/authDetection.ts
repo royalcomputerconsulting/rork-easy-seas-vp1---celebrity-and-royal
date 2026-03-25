@@ -181,6 +181,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 if (data && data.Items && Array.isArray(data.Items) && data.Items.length > 0 && data.Items[0].OfferId) {
                   window.capturedPayloads.carnivalVifpOffers = data;
                   window.__carnivalVifpOffers = data;
+                  window.__carnivalLastOffersUrl = url;
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'network_payload', endpoint: 'carnival_vifp_offers', data: data, url: url
                   }));
@@ -219,6 +220,7 @@ export const AUTH_DETECTION_SCRIPT = `
                   if (jsonData.Items && Array.isArray(jsonData.Items) && jsonData.Items.length > 0 && jsonData.Items[0].OfferId && !window.__carnivalVifpOffers) {
                     window.__carnivalVifpOffers = jsonData;
                     window.capturedPayloads.carnivalVifpOffers = jsonData;
+                    window.__carnivalLastOffersUrl = url;
                     window.ReactNativeWebView.postMessage(JSON.stringify({
                       type: 'network_payload', endpoint: 'carnival_vifp_offers', data: jsonData, url: url
                     }));
@@ -361,6 +363,7 @@ export const AUTH_DETECTION_SCRIPT = `
               if (data.Items && Array.isArray(data.Items) && data.Items.length > 0 && data.Items[0].OfferId && !window.__carnivalVifpOffers) {
                 window.__carnivalVifpOffers = data;
                 window.capturedPayloads.carnivalVifpOffers = data;
+                window.__carnivalLastOffersUrl = this._url;
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'network_payload', endpoint: 'carnival_vifp_offers', data: data, url: this._url
                 }));
