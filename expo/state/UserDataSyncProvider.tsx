@@ -10,25 +10,6 @@ const _BASE_LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 1;
 const MIN_SYNC_INTERVAL_MS = 60000;
 const PENDING_ACCOUNT_SWITCH_KEY = "easyseas_pending_account_switch";
-const ASYNC_OPERATION_TIMEOUT_MS = 8000;
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  try {
-    const timeoutPromise = new Promise<T>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-    });
-
-    return await Promise.race([promise, timeoutPromise]);
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  }
-}
 
 interface SyncedLoyaltyPayload {
   extendedLoyaltyData: unknown;
@@ -424,31 +405,15 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return false;
     }
 
-    const pendingSwitchEarly = await withTimeout(
-      AsyncStorage.getItem(PENDING_ACCOUNT_SWITCH_KEY),
-      ASYNC_OPERATION_TIMEOUT_MS,
-      '[UserDataSync] Reading pending account switch flag'
-    );
+    const pendingSwitchEarly = await AsyncStorage.getItem(PENDING_ACCOUNT_SWITCH_KEY);
     if (pendingSwitchEarly === "true") {
       console.log("[UserDataSync] Account switch detected early - clearing local user data regardless of backend status");
-      await withTimeout(
-        clearUserSpecificData(),
-        ASYNC_OPERATION_TIMEOUT_MS,
-        '[UserDataSync] Clearing local data for account switch'
-      );
-      await withTimeout(
-        AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY),
-        ASYNC_OPERATION_TIMEOUT_MS,
-        '[UserDataSync] Removing pending account switch flag'
-      );
+      await clearUserSpecificData();
+      await AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY);
       console.log("[UserDataSync] Local user data cleared for account switch (early)");
     }
 
-    const reachable = await withTimeout(
-      isBackendReachable(),
-      ASYNC_OPERATION_TIMEOUT_MS,
-      '[UserDataSync] Checking backend reachability during cloud load'
-    );
+    const reachable = await isBackendReachable();
     if (!reachable) {
       console.log("[UserDataSync] Backend not reachable, skipping cloud load");
       setInitialCheckComplete(true);
@@ -474,11 +439,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     setSyncError(null);
 
     try {
-      const result = await withTimeout(
-        fetchAllUserDataByEmail(authenticatedEmail),
-        ASYNC_OPERATION_TIMEOUT_MS,
-        '[UserDataSync] Fetching cloud data'
-      );
+      const result = await fetchAllUserDataByEmail(authenticatedEmail);
 
       if (!isMountedRef.current) return false;
 
@@ -486,11 +447,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         console.log("[UserDataSync] Cloud data found, restoring...");
         setHasCloudData(true);
 
-        const restored = await withTimeout(
-          restoreDataToLocal(result.data),
-          ASYNC_OPERATION_TIMEOUT_MS,
-          '[UserDataSync] Restoring cloud data to local storage'
-        );
+        const restored = await restoreDataToLocal(result.data);
         
         if (restored) {
           const syncTime = new Date().toISOString();
@@ -688,11 +645,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     }, 6000);
     
     const initSync = async () => {
-      const reachable = await withTimeout(
-        isBackendReachable(),
-        ASYNC_OPERATION_TIMEOUT_MS,
-        '[UserDataSync] Checking backend reachability during initialization'
-      );
+      const reachable = await isBackendReachable();
       if (!reachable) {
         console.log("[UserDataSync] Backend not reachable, skipping initial sync");
         setInitialCheckComplete(true);
@@ -703,11 +656,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         return;
       }
 
-      const cloudLoaded = await withTimeout(
-        loadFromCloud(),
-        ASYNC_OPERATION_TIMEOUT_MS + 2000,
-        '[UserDataSync] Initial cloud restore'
-      );
+      const cloudLoaded = await loadFromCloud();
       
       if (safetyTimeoutRef.current) {
         clearTimeout(safetyTimeoutRef.current);

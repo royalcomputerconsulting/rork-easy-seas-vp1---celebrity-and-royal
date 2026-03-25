@@ -40,10 +40,9 @@ import { EntitlementProvider } from "@/state/EntitlementProvider";
 import { CrewRecognitionProvider } from "@/state/CrewRecognitionProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 import { composeProviders } from "@/lib/composeProviders";
-import { ensureStorageHealthy } from "@/lib/storage/storageRecovery";
 
 try {
-  void SplashScreen.preventAutoHideAsync();
+  SplashScreen.preventAutoHideAsync();
 } catch {
 }
 
@@ -64,38 +63,6 @@ const queryClient = new QueryClient({
 const rootStyles = StyleSheet.create({
   gestureHandler: {
     flex: 1,
-  },
-  storageBootstrapContainer: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: SPACING.xl,
-  },
-  storageBootstrapCard: {
-    width: "100%",
-    maxWidth: 520,
-    borderRadius: 20,
-    backgroundColor: "#F7FAFF",
-    borderWidth: 1,
-    borderColor: "#E6EEF9",
-    padding: SPACING.xl,
-  },
-  storageBootstrapTitle: {
-    fontSize: 22,
-    fontWeight: "800" as const,
-    color: COLORS.navy,
-    marginBottom: 8,
-  },
-  storageBootstrapSubtitle: {
-    fontSize: 14,
-    color: "#2A3B55",
-    marginTop: 12,
-  },
-  storageBootstrapError: {
-    fontSize: 13,
-    color: "#B00020",
-    marginTop: 12,
   },
   cloudRestoreContainer: {
     flex: 1,
@@ -194,7 +161,7 @@ function FreshStartHandler({ onComplete }: { onComplete: () => void }) {
       }
     };
     
-    void handleFirstLaunch();
+    handleFirstLaunch();
   }, [clearFreshStartFlag, router, onComplete]);
 
   return (
@@ -368,7 +335,7 @@ function AppContent() {
       }
     };
     
-    void hideSplash();
+    hideSplash();
     
     const timeout = setTimeout(() => {
       setShowSplash(false);
@@ -389,7 +356,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   setIsClearing: (clearing: boolean) => void;
 }) {
   const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail, isWhitelisted } = useAuth();
-  const { initialCheckComplete, isSyncing, syncError, lastRestoreTime } = useUserDataSync();
+  const { initialCheckComplete, isSyncing, syncError, hasCloudData, lastRestoreTime } = useUserDataSync();
   const { setIsUserWhitelisted } = useSlotMachineLibrary();
   const { refreshData } = useCoreData();
   const { updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
@@ -439,7 +406,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
         console.error('[AppContent] Error syncing email:', error);
       }
     };
-    void syncEmailToProfile();
+    syncEmailToProfile();
   }, [isAuthenticated, authenticatedEmail]);
 
   useEffect(() => {
@@ -548,86 +515,27 @@ const ServiceProviders = composeProviders(
 );
 
 export default function RootLayout() {
-  const [isStorageReady, setIsStorageReady] = useState<boolean>(false);
-  const [storageError, setStorageError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const bootstrapStorage = async () => {
-      try {
-        const result = await ensureStorageHealthy();
-
-        if (!isMounted) {
-          return;
-        }
-
-        if (result.recovered) {
-          console.warn('[RootLayout] Local storage was reset after a migration failure');
-        }
-
-        setStorageError(result.healthy ? null : result.errorMessage ?? 'Unable to open local storage.');
-        setIsStorageReady(result.healthy);
-      } catch (error) {
-        console.error('[RootLayout] Unexpected storage bootstrap failure:', error);
-
-        if (isMounted) {
-          setStorageError(error instanceof Error ? error.message : 'Unable to open local storage.');
-          setIsStorageReady(false);
-        }
-      } finally {
-        try {
-          await SplashScreen.hideAsync();
-        } catch {
-        }
-      }
-    };
-
-    void bootstrapStorage();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={rootStyles.gestureHandler}>
           <ErrorBoundary>
             <WebResponsiveWrapper>
-              {isStorageReady ? (
-                <AuthProvider>
-                  <UserDataSyncProvider>
-                    <UserProvider>
-                      <EntitlementProvider>
-                        <DataProviders>
-                          <CasinoProviders>
-                            <ServiceProviders>
-                              <AppContent />
-                            </ServiceProviders>
-                          </CasinoProviders>
-                        </DataProviders>
-                      </EntitlementProvider>
-                    </UserProvider>
-                  </UserDataSyncProvider>
-                </AuthProvider>
-              ) : (
-                <View style={rootStyles.storageBootstrapContainer}>
-                  <View style={rootStyles.storageBootstrapCard}>
-                    <ActivityIndicator size="large" color={COLORS.navy} />
-                    <Text style={rootStyles.storageBootstrapTitle}>{storageError ? 'Local storage needs attention' : 'Preparing your app'}</Text>
-                    <Text style={rootStyles.storageBootstrapSubtitle}>
-                      {storageError
-                        ? 'The app could not finish opening its local data store. Please restart the app and try again.'
-                        : 'Checking your saved data and finishing startup.'}
-                    </Text>
-                    {storageError ? (
-                      <Text style={rootStyles.storageBootstrapError}>{storageError}</Text>
-                    ) : null}
-                  </View>
-                </View>
-              )}
+              <AuthProvider>
+                <UserDataSyncProvider>
+                  <UserProvider>
+                    <EntitlementProvider>
+                      <DataProviders>
+                        <CasinoProviders>
+                          <ServiceProviders>
+                            <AppContent />
+                          </ServiceProviders>
+                        </CasinoProviders>
+                      </DataProviders>
+                    </EntitlementProvider>
+                  </UserProvider>
+                </UserDataSyncProvider>
+              </AuthProvider>
             </WebResponsiveWrapper>
           </ErrorBoundary>
         </GestureHandlerRootView>

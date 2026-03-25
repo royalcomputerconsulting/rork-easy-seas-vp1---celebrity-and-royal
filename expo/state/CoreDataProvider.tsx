@@ -666,8 +666,6 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }, 1000);
     
     const doLoad = async () => {
-      let didStartStorageLoad = false;
-
       try {
         if (accountSwitchClearingRef.current) {
           console.log('[CoreData] === Waiting for account switch data clear to complete ===');
@@ -677,14 +675,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
         if (!initialCheckComplete) {
           console.log('[CoreData] === Waiting for cloud sync check to complete ===');
-          if (isMounted) {
-            setIsLoading(false);
-          }
           return;
         }
         
         console.log('[CoreData] === Calling loadFromStorage ===');
-        didStartStorageLoad = true;
         await loadFromStorage();
         console.log('[CoreData] === loadFromStorage completed ===');
       } catch (error) {
@@ -693,7 +687,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           setIsLoading(false);
         }
       } finally {
-        if (isMounted && didStartStorageLoad) {
+        if (isMounted) {
           clearTimeout(loadTimeout);
         }
       }
