@@ -2,12 +2,20 @@ import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
 import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat, type SyncDataSource } from './dataTransformers';
 
+function getEffectiveSource(source: SyncDataSource | undefined): SyncDataSource {
+  return source ?? 'royal';
+}
+
+function areSourcesCompatible(sourceA: SyncDataSource | undefined, sourceB: SyncDataSource | undefined): boolean {
+  return getEffectiveSource(sourceA) === getEffectiveSource(sourceB);
+}
+
 function isManagedOfferSource(offer: CasinoOffer, syncSource: SyncDataSource): boolean {
-  return offer.offerSource === syncSource;
+  return getEffectiveSource(offer.offerSource) === syncSource;
 }
 
 function isManagedCruiseSource(cruise: Cruise | BookedCruise, syncSource: SyncDataSource): boolean {
-  return cruise.cruiseSource === syncSource;
+  return getEffectiveSource(cruise.cruiseSource) === syncSource;
 }
 
 export interface SyncPreview {
@@ -98,6 +106,10 @@ function findMatchingOffer(
     if (isInstantRewardOrCertificate(existing.offerCode, existing.offerName)) {
       return false;
     }
+
+    if (!areSourcesCompatible(offer.offerSource, existing.offerSource)) {
+      return false;
+    }
     
     if (offer.offerCode && existing.offerCode && offer.offerCode === existing.offerCode) {
       if (offer.shipName === existing.shipName && offer.sailingDate === existing.sailingDate) {
@@ -155,6 +167,10 @@ function findMatchingCruise(
   const cruiseOfferCode = (cruise.offerCode || '').trim().toUpperCase();
   
   return existingCruises.find(existing => {
+    if (!areSourcesCompatible(cruise.cruiseSource, existing.cruiseSource)) {
+      return false;
+    }
+
     const existingShip = normalizeShipName(existing.shipName);
     const existingDate = normalizeSailDate(existing.sailDate);
     const existingCabin = normalizeCabinType(existing.cabinType);
@@ -225,6 +241,10 @@ function findMatchingBookedCruise(
   existingCruises: BookedCruise[]
 ): BookedCruise | null {
   return existingCruises.find(existing => {
+    if (!areSourcesCompatible(cruise.cruiseSource, existing.cruiseSource)) {
+      return false;
+    }
+
     // PRIORITY 1: Match by reservation number (most reliable)
     if (cruise.reservationNumber && existing.reservationNumber) {
       const cruiseRes = cruise.reservationNumber.toString().trim();
@@ -247,27 +267,25 @@ function findMatchingBookedCruise(
     
     // PRIORITY 3: Match by ship + normalized sail date + cabin type for same-source cruises
     // This catches duplicates from re-syncs or imports where IDs might differ slightly
-    if (cruise.cruiseSource && cruise.cruiseSource === existing.cruiseSource) {
-      const cruiseShip = normalizeShipName(cruise.shipName);
-      const existingShip = normalizeShipName(existing.shipName);
-      const cruiseDate = normalizeSailDate(cruise.sailDate);
-      const existingDate = normalizeSailDate(existing.sailDate);
-      const cruiseCabin = normalizeCabinType(cruise.cabinType);
-      const existingCabin = normalizeCabinType(existing.cabinType);
-      
-      if (
-        cruiseShip && existingShip && cruiseShip === existingShip &&
-        cruiseDate && existingDate && cruiseDate === existingDate &&
-        (cruiseCabin === existingCabin || cruiseCabin === 'unknown' || existingCabin === 'unknown' ||
-         cruiseCabin.includes(existingCabin) || existingCabin.includes(cruiseCabin))
-      ) {
-        // Only match if neither has a different booking ID
-        const cruiseBook = (cruise.bookingId || '').toString().trim();
-        const existingBook = (existing.bookingId || '').toString().trim();
-        if (!cruiseBook || !existingBook || cruiseBook === existingBook) {
-          console.log(`[Dedup BookedCruise] Matched by ship+date+cabin (same source): ${cruise.shipName} on ${cruise.sailDate}`);
-          return true;
-        }
+    const cruiseShip = normalizeShipName(cruise.shipName);
+    const existingShip = normalizeShipName(existing.shipName);
+    const cruiseDate = normalizeSailDate(cruise.sailDate);
+    const existingDate = normalizeSailDate(existing.sailDate);
+    const cruiseCabin = normalizeCabinType(cruise.cabinType);
+    const existingCabin = normalizeCabinType(existing.cabinType);
+    
+    if (
+      cruiseShip && existingShip && cruiseShip === existingShip &&
+      cruiseDate && existingDate && cruiseDate === existingDate &&
+      (cruiseCabin === existingCabin || cruiseCabin === 'unknown' || existingCabin === 'unknown' ||
+       cruiseCabin.includes(existingCabin) || existingCabin.includes(cruiseCabin))
+    ) {
+      // Only match if neither has a different booking ID
+      const cruiseBook = (cruise.bookingId || '').toString().trim();
+      const existingBook = (existing.bookingId || '').toString().trim();
+      if (!cruiseBook || !existingBook || cruiseBook === existingBook) {
+        console.log(`[Dedup BookedCruise] Matched by ship+date+cabin (same source): ${cruise.shipName} on ${cruise.sailDate}`);
+        return true;
       }
     }
     
@@ -669,8 +687,8 @@ export function applySyncPreview(
     finalCruises: finalCruises.length,
     existingBooked: existingBookedCruises.length,
     finalBooked: finalBookedCruises.length,
-    managedOffersDelta: finalOffers.filter(o => o.offerSource === syncSource).length - existingOffers.filter(o => o.offerSource === syncSource).length,
-    managedCruisesDelta: finalCruises.filter(c => c.cruiseSource === syncSource).length - existingCruises.filter(c => c.cruiseSource === syncSource).length,
+    managedOffersDelta: finalOffers.filter(o => isManagedOfferSource(o, syncSource)).length - existingOffers.filter(o => isManagedOfferSource(o, syncSource)).length,
+    managedCruisesDelta: finalCruises.filter(c => isManagedCruiseSource(c, syncSource)).length - existingCruises.filter(c => isManagedCruiseSource(c, syncSource)).length,
   });
 
   return { offers: finalOffers, cruises: finalCruises, bookedCruises: finalBookedCruises };
