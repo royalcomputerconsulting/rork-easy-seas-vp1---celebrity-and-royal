@@ -971,7 +971,8 @@ function RoyalCaribbeanSyncScreen() {
                     <View style={styles.successLoyaltyRow}>
                       <Star size={12} color="#10b981" />
                       <Text style={styles.successLoyaltyText}>
-                        Captain's Club: {extendedLoyaltyData.captainsClubTier}
+                        {"Captain's Club: "}
+                        {extendedLoyaltyData.captainsClubTier}
                         {(extendedLoyaltyData.captainsClubPoints ?? 0) > 0 && ` — ${(extendedLoyaltyData.captainsClubPoints ?? 0).toLocaleString()} pts`}
                       </Text>
                     </View>

@@ -501,7 +501,7 @@ function CarnivalSyncScreen() {
                     <Text style={styles.loginHintTitle}>How to sync Carnival:</Text>
                     <Text style={styles.loginHintStep}>1. Press LOGIN below to open Carnival in the browser above</Text>
                     <Text style={styles.loginHintStep}>2. Sign in to your Carnival account</Text>
-                    <Text style={styles.loginHintStep}>3. Once logged in, press "I'm Logged In" to confirm</Text>
+                    <Text style={styles.loginHintStep}>{"3. Once logged in, press \"I'm Logged In\" to confirm"}</Text>
                     <Text style={styles.loginHintStep}>4. Press SYNC NOW to start syncing your data</Text>
                   </View>
                 )}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, ScrollView } from 'react-native';
-import { X, Ship, Cookie, AlertCircle, Eye, EyeOff, HelpCircle } from 'lucide-react-native';
+import { X, Cookie, AlertCircle, HelpCircle } from 'lucide-react-native';
 
 interface WebCookieSyncModalProps {
   visible: boolean;
@@ -87,8 +87,8 @@ export function WebCookieSyncModal({
                   <Text style={styles.instructionStep}>1. Open {websiteUrl} in a new tab</Text>
                   <Text style={styles.instructionStep}>2. Log in to your account</Text>
                   <Text style={styles.instructionStep}>3. Open Developer Tools (F12 or Right-click → Inspect)</Text>
-                  <Text style={styles.instructionStep}>4. Go to the "Application" or "Storage" tab</Text>
-                  <Text style={styles.instructionStep}>5. Click &quot;Cookies&quot; → &quot;{isCelebrity ? 'celebritycruises.com' : isCarnival ? 'carnival.com' : 'royalcaribbean.com'}&quot;</Text>
+                  <Text style={styles.instructionStep}>{'4. Go to the "Application" or "Storage" tab'}</Text>
+                  <Text style={styles.instructionStep}>{`5. Click "Cookies" → "${isCelebrity ? 'celebritycruises.com' : isCarnival ? 'carnival.com' : 'royalcaribbean.com'}"`}</Text>
                   <Text style={styles.instructionStep}>6. Copy ALL cookies (Name: Value pairs)</Text>
                   <Text style={styles.instructionStep}>7. Paste them below in this format:</Text>
                   <Text style={styles.instructionExample}>
@@ -99,7 +99,7 @@ export function WebCookieSyncModal({
                 <View style={styles.warningBox}>
                   <AlertCircle size={14} color="#f59e0b" />
                   <Text style={styles.warningText}>
-                    Important: Make sure you're logged in before copying cookies
+                    {"Important: Make sure you're logged in before copying cookies"}
                   </Text>
                 </View>
               </View>
