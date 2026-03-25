@@ -1,6 +1,18 @@
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
 import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 
+export type SyncDataSource = NonNullable<Cruise['cruiseSource']>;
+
+function getBrandOfferFallback(source: SyncDataSource): string {
+  if (source === 'celebrity') {
+    return 'Celebrity Cruises Offer';
+  }
+  if (source === 'carnival') {
+    return 'Carnival Offer';
+  }
+  return 'Royal Caribbean Offer';
+}
+
 function parseDate(dateStr: string): string {
   if (!dateStr) return '';
   
@@ -173,7 +185,8 @@ function calculateReturnDate(startDate: string, nights: number): string {
 
 export function transformOfferRowsToCruisesAndOffers(
   offerRows: OfferRow[],
-  loyaltyData: LoyaltyData | null
+  loyaltyData: LoyaltyData | null,
+  source: SyncDataSource = 'royal'
 ): { cruises: Cruise[]; offers: CasinoOffer[] } {
   const cruises: Cruise[] = [];
   const offerMap = new Map<string, CasinoOffer>();
@@ -210,7 +223,7 @@ export function transformOfferRowsToCruisesAndOffers(
       freePlay: extractFreePlay(offer.perks),
       freeOBC: extractOBC(offer.perks),
       perks: offer.perks ? [offer.perks] : [],
-      cruiseSource: 'royal',
+      cruiseSource: source,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -221,7 +234,7 @@ export function transformOfferRowsToCruisesAndOffers(
     if (!offerMap.has(offerKey)) {
       const displayName = offer.offerName && offer.offerName.trim() && offer.offerName !== offer.offerCode 
         ? offer.offerName 
-        : (offer.offerCode || 'Royal Caribbean Offer');
+        : (offer.offerCode || getBrandOfferFallback(source));
       
       const casinoOffer: CasinoOffer = {
         id: `offer_${offerKey.replace(/\s+/g, '_')}_${Date.now()}`,
@@ -236,7 +249,7 @@ export function transformOfferRowsToCruisesAndOffers(
         expiryDate: offerExpiryDate,
         offerExpiryDate: offerExpiryDate,
         status: 'active' as const,
-        offerSource: 'royal' as const,
+        offerSource: source,
         freePlay: extractFreePlay(offer.perks),
         freeplayAmount: extractFreePlay(offer.perks),
         OBC: extractOBC(offer.perks),
@@ -264,15 +277,17 @@ export function transformOfferRowsToCruisesAndOffers(
 
 export function transformOffersToCasinoOffers(
   offers: OfferRow[], 
-  loyaltyData: LoyaltyData | null
+  loyaltyData: LoyaltyData | null,
+  source: SyncDataSource = 'royal'
 ): CasinoOffer[] {
-  const { offers: casinoOffers } = transformOfferRowsToCruisesAndOffers(offers, loyaltyData);
+  const { offers: casinoOffers } = transformOfferRowsToCruisesAndOffers(offers, loyaltyData, source);
   return casinoOffers;
 }
 
 export function transformBookedCruisesToAppFormat(
   cruises: BookedCruiseRow[],
-  loyaltyData: LoyaltyData | null
+  loyaltyData: LoyaltyData | null,
+  source: SyncDataSource = 'royal'
 ): BookedCruise[] {
   return cruises.map(cruise => {
     const startDate = parseDate(cruise.sailingStartDate);
@@ -372,7 +387,7 @@ export function transformBookedCruisesToAppFormat(
       stateroomType: cruise.stateroomType,
       musterStation: cruise.musterStation,
       
-      cruiseSource: 'royal' as const,
+      cruiseSource: source,
       
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()

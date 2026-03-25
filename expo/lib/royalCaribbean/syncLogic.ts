@@ -1,6 +1,14 @@
 import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
-import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat } from './dataTransformers';
+import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat, type SyncDataSource } from './dataTransformers';
+
+function isManagedOfferSource(offer: CasinoOffer, syncSource: SyncDataSource): boolean {
+  return offer.offerSource === syncSource;
+}
+
+function isManagedCruiseSource(cruise: Cruise | BookedCruise, syncSource: SyncDataSource): boolean {
+  return cruise.cruiseSource === syncSource;
+}
 
 export interface SyncPreview {
   offers: {
@@ -239,7 +247,7 @@ function findMatchingBookedCruise(
     
     // PRIORITY 3: Match by ship + normalized sail date + cabin type for same-source cruises
     // This catches duplicates from re-syncs or imports where IDs might differ slightly
-    if (cruise.cruiseSource === existing.cruiseSource && cruise.cruiseSource === 'royal') {
+    if (cruise.cruiseSource && cruise.cruiseSource === existing.cruiseSource) {
       const cruiseShip = normalizeShipName(cruise.shipName);
       const existingShip = normalizeShipName(existing.shipName);
       const cruiseDate = normalizeSailDate(cruise.sailDate);
@@ -341,7 +349,8 @@ export function createSyncPreview(
   existingOffers: CasinoOffer[],
   existingCruises: Cruise[],
   existingBookedCruises: BookedCruise[],
-  currentLoyalty: { clubRoyalePoints: number; clubRoyaleTier: string; crownAndAnchorPoints: number; crownAndAnchorLevel: string }
+  currentLoyalty: { clubRoyalePoints: number; clubRoyaleTier: string; crownAndAnchorPoints: number; crownAndAnchorLevel: string },
+  syncSource: SyncDataSource = 'royal'
 ): SyncPreview {
   // STEP 0: Deduplicate raw extracted cruises (prevents duplicates from multiple API captures)
   const dedupedBookedCruises = deduplicateExtractedCruises(extractedBookedCruises);
@@ -361,8 +370,8 @@ export function createSyncPreview(
     console.log(`[SyncLogic] Filtered out ${inProgressCount} IN PROGRESS offer(s) from sync`);
   }
 
-  const { cruises: transformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(filteredOffers, loyaltyData);
-  const transformedBookedCruises = transformBookedCruisesToAppFormat(dedupedBookedCruises, loyaltyData);
+  const { cruises: transformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(filteredOffers, loyaltyData, syncSource);
+  const transformedBookedCruises = transformBookedCruisesToAppFormat(dedupedBookedCruises, loyaltyData, syncSource);
 
   console.log(`[SyncLogic] Transformed ${transformedCruises.length} cruise records from ${filteredOffers.length} offer rows`);
 
@@ -442,7 +451,7 @@ export function createSyncPreview(
   }
 
   let loyaltyPreview: SyncPreview['loyalty'] = null;
-  if (loyaltyData) {
+  if (loyaltyData && syncSource !== 'carnival') {
     const syncedClubRoyalePoints: number = loyaltyData.clubRoyalePoints != null
       ? (typeof loyaltyData.clubRoyalePoints === 'number' 
           ? loyaltyData.clubRoyalePoints 
@@ -542,24 +551,24 @@ export function applySyncPreview(
   preview: SyncPreview,
   existingOffers: CasinoOffer[],
   existingCruises: Cruise[],
-  existingBookedCruises: BookedCruise[]
+  existingBookedCruises: BookedCruise[],
+  syncSource: SyncDataSource = 'royal'
 ): { offers: CasinoOffer[]; cruises: Cruise[]; bookedCruises: BookedCruise[] } {
-  // STRATEGY: Synced data is the SOURCE OF TRUTH for royal-source data.
-  // Royal-source items NOT present in the sync are REMOVED.
-  // Non-royal-source items are always preserved.
+  // STRATEGY: Synced data is the SOURCE OF TRUTH for the active sync source.
+  // Items from that source NOT present in the sync are REMOVED.
+  // Other sources are always preserved.
 
   const updatedOfferIds = new Set(preview.offers.updates.map(u => u.existing.id));
   const finalOffers = [
-    // Keep non-royal offers that aren't being updated or replaced
+    // Keep offers from other sources; drop active-source offers not present in this sync
     ...existingOffers
       .filter(o => {
-        // If it's a royal-source offer not matched by sync, DROP it (sync is source of truth)
-        if (o.offerSource === 'royal' && !updatedOfferIds.has(o.id)) {
+        if (isManagedOfferSource(o, syncSource) && !updatedOfferIds.has(o.id)) {
           const isBeingReplaced = preview.offers.new.some(newOffer => 
             findMatchingOffer(newOffer, [o])
           );
           if (!isBeingReplaced) {
-            console.log(`[SyncLogic] Removing stale royal-source offer: ${o.offerCode} - ${o.offerName}`);
+            console.log(`[SyncLogic] Removing stale ${syncSource}-source offer: ${o.offerCode} - ${o.offerName}`);
             return false;
           }
         }
@@ -578,15 +587,15 @@ export function applySyncPreview(
 
   const updatedCruiseIds = new Set(preview.cruises.updates.map(u => u.existing.id));
   const finalCruises = [
-    // Keep non-royal cruises; drop royal-source cruises not in sync
+    // Keep cruises from other sources; drop active-source cruises not in sync
     ...existingCruises
       .filter(c => {
-        if (c.cruiseSource === 'royal' && !updatedCruiseIds.has(c.id)) {
+        if (isManagedCruiseSource(c, syncSource) && !updatedCruiseIds.has(c.id)) {
           const isBeingReplaced = preview.cruises.new.some(newCruise => 
             findMatchingCruise(newCruise, [c])
           );
           if (!isBeingReplaced) {
-            console.log(`[SyncLogic] Removing stale royal-source cruise: ${c.shipName} on ${c.sailDate}`);
+            console.log(`[SyncLogic] Removing stale ${syncSource}-source cruise: ${c.shipName} on ${c.sailDate}`);
             return false;
           }
         }
@@ -607,19 +616,18 @@ export function applySyncPreview(
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const finalBookedCruises = [
-    // Keep non-royal booked cruises; drop royal-source UPCOMING ones not in sync
-    // ALWAYS preserve completed cruises — sync only captures upcoming ones from the website
+    // Keep booked cruises from other sources; drop active-source UPCOMING cruises not in sync
+    // ALWAYS preserve completed cruises — sync only captures currently visible website bookings
     ...existingBookedCruises
       .filter(c => {
-        if (c.cruiseSource === 'royal' && !updatedBookedCruiseIds.has(c.id)) {
-          // Preserve completed cruises — they won't appear in sync data
+        if (isManagedCruiseSource(c, syncSource) && !updatedBookedCruiseIds.has(c.id)) {
           const isCompleted = c.completionState === 'completed' || c.status === 'completed';
           let isPastReturnDate = false;
           if (c.returnDate) {
             try {
               const parts = c.returnDate.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
               const returnDate = parts
-                ? new Date(parseInt(parts[3]), parseInt(parts[1]) - 1, parseInt(parts[2]))
+                ? new Date(parseInt(parts[3], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
                 : new Date(c.returnDate);
               returnDate.setHours(0, 0, 0, 0);
               isPastReturnDate = returnDate < today;
@@ -628,7 +636,7 @@ export function applySyncPreview(
             }
           }
           if (isCompleted || isPastReturnDate) {
-            console.log(`[SyncLogic] Preserving completed royal-source booked cruise: ${c.shipName} on ${c.sailDate}`);
+            console.log(`[SyncLogic] Preserving completed ${syncSource}-source booked cruise: ${c.shipName} on ${c.sailDate}`);
             return true;
           }
 
@@ -636,7 +644,7 @@ export function applySyncPreview(
             findMatchingBookedCruise(newCruise, [c])
           );
           if (!isBeingReplaced) {
-            console.log(`[SyncLogic] Removing stale royal-source booked cruise: ${c.shipName} on ${c.sailDate}`);
+            console.log(`[SyncLogic] Removing stale ${syncSource}-source booked cruise: ${c.shipName} on ${c.sailDate}`);
             return false;
           }
         }
@@ -654,14 +662,15 @@ export function applySyncPreview(
   ];
 
   console.log('[SyncLogic] applySyncPreview final counts:', {
+    syncSource,
     existingOffers: existingOffers.length,
     finalOffers: finalOffers.length,
     existingCruises: existingCruises.length,
     finalCruises: finalCruises.length,
     existingBooked: existingBookedCruises.length,
     finalBooked: finalBookedCruises.length,
-    royalOffersRemoved: existingOffers.filter(o => o.offerSource === 'royal').length - finalOffers.filter(o => o.offerSource === 'royal').length + preview.offers.new.filter(() => true).length,
-    royalCruisesRemoved: existingCruises.filter(c => c.cruiseSource === 'royal').length - finalCruises.filter(c => c.cruiseSource === 'royal').length + preview.cruises.new.length,
+    managedOffersDelta: finalOffers.filter(o => o.offerSource === syncSource).length - existingOffers.filter(o => o.offerSource === syncSource).length,
+    managedCruisesDelta: finalCruises.filter(c => c.cruiseSource === syncSource).length - existingCruises.filter(c => c.cruiseSource === syncSource).length,
   });
 
   return { offers: finalOffers, cruises: finalCruises, bookedCruises: finalBookedCruises };

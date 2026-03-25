@@ -2,7 +2,7 @@ import type { BookedCruise, CalendarEvent } from '@/types/models';
 
 function formatICSDate(dateStr: string): string {
   if (!dateStr) return '';
-  const cleaned = dateStr.replace(/[^\d-\/]/g, '');
+  const cleaned = dateStr.replace(/[^\d-/]/g, '');
   
   let year: string, month: string, day: string;
   
@@ -207,7 +207,11 @@ export function generateCalendarFeed(
     const description = buildCruiseDescription(cruise);
     const location = cruise.departurePort || '';
 
-    const brand = cruise.cruiseSource === 'celebrity' ? 'Celebrity' : 'Royal Caribbean';
+    const brand = cruise.cruiseSource === 'celebrity'
+      ? 'Celebrity'
+      : cruise.cruiseSource === 'carnival'
+        ? 'Carnival'
+        : 'Royal Caribbean';
 
     lines.push('BEGIN:VEVENT');
     lines.push(`UID:${generateUID(`cruise-${cruise.id}`)}`);

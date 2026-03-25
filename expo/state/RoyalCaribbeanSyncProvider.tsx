@@ -327,6 +327,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     processedPayloads.current.clear();
     capturedSections.current = { offers: false, bookings: false, loyalty: false };
     hasReceivedApiLoyaltyDataRef.current = false;
+    carnivalUserDataRef.current = null;
     rcLogger.clear();
     setExtendedLoyaltyData(null);
     setState(INITIAL_STATE);
@@ -1116,8 +1117,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               ...(prev.loyaltyData ?? {}),
               crownAndAnchorLevel: tierName,
               crownAndAnchorPoints: userData.PastGuestNumber || '',
-              clubRoyaleTier: tierName,
-              clubRoyalePoints: '',
             }
           }));
           addLog(`✅ Carnival VIFP: ${tierName} tier (VIFP# ${userData.PastGuestNumber || 'N/A'})`, 'success');
@@ -1172,6 +1171,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     processedPayloads.current.clear();
     hasReceivedApiLoyaltyDataRef.current = false;
     capturedSections.current = { offers: false, bookings: false, loyalty: false };
+    carnivalUserDataRef.current = null;
 
     setState(prev => ({
       ...prev,
@@ -2019,6 +2019,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       ? convertLoyaltyInfoToExtended(state.loyaltyData as unknown as LoyaltyApiInformation)
       : null;
     const effectiveExtendedLoyalty = loyaltyToSync ?? fallbackExtendedLoyaltyFromState;
+    const syncSource = cruiseLine === 'carnival' ? 'carnival' : cruiseLine === 'celebrity' ? 'celebrity' : 'royal';
 
     console.log('[RoyalCaribbeanSync] ========================================');
     console.log('[RoyalCaribbeanSync] Loyalty sync input diagnostics:', {
@@ -2074,7 +2075,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         coreDataContext.casinoOffers,
         coreDataContext.cruises,
         coreDataContext.bookedCruises,
-        currentLoyalty
+        currentLoyalty,
+        syncSource
       );
 
       console.log('[RoyalCaribbeanSync] Sync preview created successfully');
@@ -2092,7 +2094,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         preview,
         coreDataContext.casinoOffers,
         coreDataContext.cruises,
-        coreDataContext.bookedCruises
+        coreDataContext.bookedCruises,
+        syncSource
       );
 
       console.log('[RoyalCaribbeanSync] Running data healing pass...');
@@ -2148,7 +2151,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`⚠️ Warning: Failed to persist booked cruises: ${String(bookedError)}`, 'warning');
       }
 
-      if (preview.loyalty) {
+      if (syncSource !== 'carnival' && preview.loyalty) {
         try {
           if (preview.loyalty.clubRoyalePoints.changed) {
             addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
@@ -2165,7 +2168,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }
       
-      if (effectiveExtendedLoyalty && loyaltyContext.setExtendedLoyaltyData) {
+      if (syncSource !== 'carnival' && effectiveExtendedLoyalty && loyaltyContext.setExtendedLoyaltyData) {
         try {
           addLog('Syncing extended loyalty data...', 'info');
           
@@ -2188,7 +2191,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           console.error('[RoyalCaribbeanSync] Error syncing extended loyalty:', extLoyaltyError);
           addLog(`⚠️ Warning: Failed to sync extended loyalty data: ${String(extLoyaltyError)}`, 'warning');
         }
-      } else {
+      } else if (syncSource !== 'carnival') {
         addLog('⚠️ No extended loyalty payload available at sync time', 'warning');
       }
 
@@ -2203,6 +2206,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             await updateUserProfile(currentUser.id, {
               carnivalVifpNumber: carnivalData.vifpNumber,
               carnivalVifpTier: carnivalData.vifpTier,
+              preferredBrand: 'carnival',
             });
             console.log('[CarnivalSync] Carnival loyalty data saved via UserProvider');
           } else {
@@ -2212,19 +2216,25 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             const usersRaw = await AsyncStorage.getItem(scopedUsersKey);
             const storedCurrentUserId = await AsyncStorage.getItem(scopedCurrentUserKey);
             if (usersRaw && storedCurrentUserId) {
-              const users = JSON.parse(usersRaw);
-              const updatedUsers = users.map((u: any) =>
-                u.id === storedCurrentUserId
-                  ? {
-                      ...u,
-                      carnivalVifpNumber: carnivalData.vifpNumber,
-                      carnivalVifpTier: carnivalData.vifpTier,
-                      updatedAt: new Date().toISOString(),
-                    }
-                  : u
-              );
-              await AsyncStorage.setItem(scopedUsersKey, JSON.stringify(updatedUsers));
-              console.log('[CarnivalSync] Carnival loyalty data written to scoped user storage');
+              const parsedUsers = JSON.parse(usersRaw) as unknown;
+              if (Array.isArray(parsedUsers)) {
+                const updatedUsers = parsedUsers.map((u: any) =>
+                  u?.id === storedCurrentUserId
+                    ? {
+                        ...u,
+                        carnivalVifpNumber: carnivalData.vifpNumber,
+                        carnivalVifpTier: carnivalData.vifpTier,
+                        preferredBrand: 'carnival',
+                        updatedAt: new Date().toISOString(),
+                      }
+                    : u
+                );
+                await AsyncStorage.setItem(scopedUsersKey, JSON.stringify(updatedUsers));
+                console.log('[CarnivalSync] Carnival loyalty data written to scoped user storage');
+              } else {
+                console.warn('[CarnivalSync] Scoped users payload is not an array, skipping fallback VIFP write');
+                addLog('⚠️ Stored user profile data was invalid, so VIFP data could not be saved automatically', 'warning');
+              }
             } else {
               console.warn('[CarnivalSync] No users found in scoped storage, cannot save VIFP data');
               addLog('⚠️ No user profile found to save VIFP data', 'warning');

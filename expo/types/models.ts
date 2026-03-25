@@ -89,7 +89,7 @@ export interface Cruise {
   seaDays?: number;
   portDays?: number;
   received?: string;
-  cruiseSource?: 'royal' | 'celebrity';
+  cruiseSource?: 'royal' | 'celebrity' | 'carnival';
   createdAt?: string;
   updatedAt?: string;
 }
@@ -259,7 +259,7 @@ export interface CasinoOffer {
   eligibleShips?: string[];
   requiresDeposit?: boolean;
   
-  offerSource?: 'royal' | 'celebrity';
+  offerSource?: 'royal' | 'celebrity' | 'carnival';
   csvRowNumber?: number;
   createdAt?: string;
   updatedAt?: string;
