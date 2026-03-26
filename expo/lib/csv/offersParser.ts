@@ -33,6 +33,27 @@ export interface ParsedOfferRow {
   departurePort: string;
 }
 
+function inferCruiseSourceFromText(...values: string[]): Cruise['cruiseSource'] | undefined {
+  const joined = values
+    .map(value => value.toLowerCase())
+    .join(' ');
+
+  if (!joined) return undefined;
+  if (joined.includes('carnival') || joined.includes('vifp') || joined.includes('players club')) return 'carnival';
+  if (joined.includes('celebrity') || joined.includes('blue chip') || joined.includes("captain's club")) return 'celebrity';
+  if (joined.includes('royal caribbean') || joined.includes('club royale') || joined.includes('crown & anchor') || joined.includes(' of the seas')) return 'royal';
+  return undefined;
+}
+
+function inferCruiseSourceFromShipName(shipName: string): Cruise['cruiseSource'] | undefined {
+  const normalizedShipName = shipName.toLowerCase().trim();
+  if (!normalizedShipName) return undefined;
+  if (normalizedShipName.startsWith('carnival ') || normalizedShipName === 'mardi gras') return 'carnival';
+  if (normalizedShipName.startsWith('celebrity ')) return 'celebrity';
+  if (normalizedShipName.includes(' of the seas')) return 'royal';
+  return undefined;
+}
+
 function mapOfferType(typeStr: string): CasinoOffer['offerType'] {
   const lower = (typeStr || '').toLowerCase();
   if (lower.includes('freeplay') || lower.includes('free play')) return 'freeplay';
@@ -116,10 +137,12 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     offerType: getColumnIndex(headerMap, ['offer type / category', 'offer type', 'offertype', 'offer category', 'category', 'type']),
     nights: getColumnIndex(headerMap, ['nights', 'number of nights', 'total nights', 'duration', 'length']),
     departurePort: getColumnIndex(headerMap, ['departure port', 'departureport', 'depart port', 'home port', 'embarkation port', 'port']),
+    sourcePage: getColumnIndex(headerMap, ['source page', 'sourcepage', 'source']),
   };
 
   console.log('[OffersParser] Column indices:', colIndices);
 
+  const detectedSourceFromHeaders = inferCruiseSourceFromText(headers.join(' '));
   const cruises: Cruise[] = [];
   const offerMap = new Map<string, CasinoOffer>();
 
@@ -166,6 +189,10 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     const offerType = getValue(colIndices.offerType);
     const nights = getNumericValue(colIndices.nights) || 7;
     const departurePort = getValue(colIndices.departurePort);
+    const sourcePage = getValue(colIndices.sourcePage);
+    const parsedSource = inferCruiseSourceFromShipName(shipName)
+      ?? inferCruiseSourceFromText(sourcePage, offerName, offerType, perks, itinerary, departurePort)
+      ?? detectedSourceFromHeaders;
 
     if (!shipName || !sailingDateRaw) {
       console.log(`[OffersParser] Skipping row ${i}: missing ship or date`);
@@ -212,7 +239,9 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
       guestsInfo,
       status: 'available',
       category: finalShipClass,
+      cruiseSource: parsedSource,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     cruises.push(cruise);
@@ -245,7 +274,9 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
         suitePrice: priceSuite,
         taxesFees,
         status: 'active',
+        offerSource: parsedSource,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
       offerMap.set(offerCode, offer);
     } else if (offerCode) {

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView, useWindowDimensions, ActivityIndicator, Alert } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { exportFile } from '@/lib/importExport';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, Download, FileDown } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, Download, FileDown, FileText } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -21,7 +21,7 @@ const CARNIVAL_CARD = '#1a2535';
 const CARNIVAL_BORDER = '#2a3a50';
 
 function CarnivalSyncScreen() {
-  const _router = useRouter();
+  const router = useRouter();
   const coreData = useCoreData();
   const loyalty = useLoyalty();
   const {
@@ -135,6 +135,10 @@ function CarnivalSyncScreen() {
       }
 
       addLog(`Extension download started${result.filesAdded ? ` (${result.filesAdded} files)` : ''}`, 'success');
+      Alert.alert(
+        'Extension Ready',
+        '1. Unzip the download and install it in Chrome.\n2. Open Carnival and sign in.\n3. Run the Easy Seas overlay on carnival.com and download offers.csv and booked.csv.\n4. Import those CSV files from Settings in Easy Seas.\n\nCarnival imports now stay separate from Royal Caribbean and Celebrity data.'
+      );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unable to download Easy Seas browser extension';
       setWebSyncError(errorMessage);
@@ -261,6 +265,10 @@ function CarnivalSyncScreen() {
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
 
+  const handleOpenImportTools = () => {
+    router.push('/settings');
+  };
+
   const forceMarkLoggedIn = () => {
     console.log('[CarnivalSync] User manually confirmed login');
     addLog('User manually confirmed login', 'success');
@@ -373,7 +381,7 @@ function CarnivalSyncScreen() {
                     </View>
                     <Text style={styles.webWorkspaceTitle}>Use Carnival on desktop without the old blocker screen</Text>
                     <Text style={styles.webWorkspaceText}>
-                      Download the Easy Seas extension, open carnival.com in a new tab, sign in there, and run the sync overlay from the website. This is the web-safe Carnival path instead of the embedded mobile browser flow.
+                      Download the Easy Seas extension, open carnival.com in a new tab, sign in there, run the sync overlay on the website, then import the downloaded offers.csv and booked.csv files into Easy Seas. This is the web-safe Carnival path instead of the embedded mobile browser flow.
                     </Text>
                   </View>
 
@@ -404,8 +412,17 @@ function CarnivalSyncScreen() {
                     </Pressable>
                   </View>
 
+                  <Pressable
+                    style={[styles.webSecondaryButton, styles.webImportButton]}
+                    onPress={handleOpenImportTools}
+                    testID="carnival-open-import-tools-button"
+                  >
+                    <FileText size={18} color="#e2e8f0" />
+                    <Text style={styles.webSecondaryButtonText}>Open Import Tools</Text>
+                  </Pressable>
+
                   <Text style={styles.webWorkspaceFootnote}>
-                    Best results: use Chrome, keep the Carnival tab signed in, and run the overlay after the page fully loads.
+                    Best results: use Chrome, keep the Carnival tab signed in, run the overlay after the page fully loads, then import the downloaded CSV files from Settings.
                   </Text>
                 </View>
               ) : (
@@ -524,7 +541,7 @@ function CarnivalSyncScreen() {
                     <View style={styles.webSyncOptionContent}>
                       <Text style={styles.webSyncOptionTitle}>Desktop Browser Sync</Text>
                       <Text style={styles.webSyncOptionDesc}>
-                        Download the Easy Seas extension and run Carnival sync directly on carnival.com from your desktop browser.
+                        Download the Easy Seas extension, run Carnival sync directly on carnival.com, then import the downloaded CSV files back into Easy Seas.
                       </Text>
                       <Pressable
                         style={[styles.webSyncButton, { marginTop: 12, backgroundColor: CARNIVAL_RED }, isDownloadingExtension && styles.buttonDisabled]}
@@ -551,7 +568,7 @@ function CarnivalSyncScreen() {
                     <View style={styles.webSyncOptionContent}>
                       <Text style={styles.webSyncOptionTitle}>Open Carnival in a New Tab</Text>
                       <Text style={styles.webSyncOptionDesc}>
-                        Open Carnival, sign in, and keep that tab ready for the browser-assisted sync flow.
+                        Open Carnival, sign in, and keep that tab ready for the browser-assisted sync flow before importing the resulting CSV files here.
                       </Text>
                       <Pressable
                         style={[styles.webSyncButton, { marginTop: 12, backgroundColor: '#0f766e' }]}
@@ -560,6 +577,26 @@ function CarnivalSyncScreen() {
                       >
                         <ExternalLink size={18} color="#fff" />
                         <Text style={styles.webSyncButtonText}>Open Carnival Website</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  <View style={[styles.webSyncOptionCard, isCompactWindow && styles.webSyncOptionCardCompact]}>
+                    <View style={[styles.webSyncOptionIconContainer, { backgroundColor: '#0f766e20' }]}> 
+                      <FileText size={24} color="#0f766e" />
+                    </View>
+                    <View style={styles.webSyncOptionContent}>
+                      <Text style={styles.webSyncOptionTitle}>Import Downloaded CSV Files</Text>
+                      <Text style={styles.webSyncOptionDesc}>
+                        Once the extension downloads offers.csv and booked.csv, open Easy Seas Settings and import them here without overwriting your other cruise lines.
+                      </Text>
+                      <Pressable
+                        style={[styles.webSyncButton, { marginTop: 12, backgroundColor: '#0f766e' }]}
+                        onPress={handleOpenImportTools}
+                        testID="carnival-import-tools-card-button"
+                      >
+                        <FileText size={18} color="#fff" />
+                        <Text style={styles.webSyncButtonText}>Open Import Tools</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -1095,6 +1132,9 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 12,
     lineHeight: 17,
+  },
+  webImportButton: {
+    marginTop: 12,
   },
   webOpenButton: {
     flexDirection: 'row' as const,

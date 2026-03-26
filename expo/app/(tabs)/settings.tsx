@@ -74,6 +74,13 @@ import {
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
+import {
+  getImportedSource,
+  getImportedSourceLabel,
+  mergeImportedBookedCruises,
+  mergeImportedCruises,
+  mergeImportedOffers,
+} from '@/lib/importMerge';
 import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
 
 
@@ -395,21 +402,38 @@ export default function SettingsScreen() {
         fieldsFixed: healingReport.fieldsFixed.length,
       });
 
-      await setCruises(parsedCruises);
-      await setCasinoOffers(parsedOffers);
+      const existingCruises = cruises.length > 0 ? cruises : (localData.cruises || []);
+      const existingOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
+      const importedSource = getImportedSource({ cruises: parsedCruises, offers: parsedOffers });
+      const mergedCruises = mergeImportedCruises(existingCruises, parsedCruises);
+      const mergedOffers = mergeImportedOffers(existingOffers, parsedOffers);
+
+      console.log('[Settings] Merged imported offers CSV:', {
+        importedSource,
+        existingCruises: existingCruises.length,
+        existingOffers: existingOffers.length,
+        parsedCruises: parsedCruises.length,
+        parsedOffers: parsedOffers.length,
+        mergedCruises: mergedCruises.length,
+        mergedOffers: mergedOffers.length,
+      });
+
+      await setCruises(mergedCruises);
+      await setCasinoOffers(mergedOffers);
       await setLocalData({
-        cruises: parsedCruises,
-        offers: parsedOffers,
+        cruises: mergedCruises,
+        offers: mergedOffers,
       });
 
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
       console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
+      const sourceLabel = getImportedSourceLabel(importedSource);
       const healNote = healingReport.fieldsFixed.length > 0 ? `\n\nData healing fixed ${healingReport.fieldsFixed.length} field(s).` : '';
       setLastImportResult({ type: 'offers', count: parsedCruises.length });
       Alert.alert(
         'Import Successful', 
-        `Imported ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}${healNote}`
+        `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}`
       );
       console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {
@@ -434,7 +458,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [setCruises, setCasinoOffers, setLocalData]);
+  }, [casinoOffers, cruises, localData.cruises, localData.offers, setCruises, setCasinoOffers, setLocalData]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
@@ -730,16 +754,22 @@ export default function SettingsScreen() {
       const existingBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
       console.log('[Settings] Existing booked cruises:', existingBooked.length);
       
-      const parsedBooked = parseBookedCSV(result.content, existingBooked);
+      const parsedBooked = parseBookedCSV(result.content, []);
       
       if (parsedBooked.length === 0) {
-        Alert.alert('No New Cruises', 'All cruises in the file already exist in your database, or the file contains no valid data.');
+        Alert.alert('Import Failed', 'No valid booked cruise data was found in the CSV file.');
         setIsImporting(false);
         return;
       }
 
-      const mergedBooked = [...existingBooked, ...parsedBooked];
-      console.log('[Settings] Merged booked cruises:', mergedBooked.length, '(added:', parsedBooked.length, ')');
+      const importedSource = getImportedSource({ bookedCruises: parsedBooked });
+      const mergedBooked = mergeImportedBookedCruises(existingBooked, parsedBooked);
+      console.log('[Settings] Merged booked cruises:', {
+        importedSource,
+        existingBooked: existingBooked.length,
+        parsedBooked: parsedBooked.length,
+        mergedBooked: mergedBooked.length,
+      });
 
       await setBookedCruises(mergedBooked);
       await setLocalData({
@@ -749,13 +779,14 @@ export default function SettingsScreen() {
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
       console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
+      const sourceLabel = getImportedSourceLabel(importedSource);
       setLastImportResult({ type: 'booked', count: parsedBooked.length });
       
       Alert.alert(
         'Import Successful', 
-        `Added ${parsedBooked.length} new cruises from ${result.fileName}`
+        `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).`
       );
-      console.log('[Settings] Booked import complete:', parsedBooked.length, 'new cruises added');
+      console.log('[Settings] Booked import complete:', parsedBooked.length, 'cruise rows imported');
     } catch (error) {
       console.error('[Settings] Booked import error:', error);
       
