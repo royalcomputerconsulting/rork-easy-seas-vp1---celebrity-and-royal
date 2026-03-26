@@ -966,17 +966,22 @@ function getContentJS(): string {
 
     if (capturedData.cruiseLine === 'carnival') {
       updateProgress(1, 4, 'Step 1/4: Opening Carnival pages...');
-      addLog('Opening Carnival deals and account pages...', 'info');
-      await openRealTabs([
-        'https://www.carnival.com/cruise-deals',
+      addLog('Opening Carnival personalized offers and account pages...', 'info');
+      var currentCarnivalUrl = window.location.href || 'https://www.carnival.com/';
+      var carnivalHelperUrls = [
+        currentCarnivalUrl,
         'https://www.carnival.com/profilemanagement/profiles/cruises',
-        'https://www.carnival.com/profilemanagement/profiles'
-      ]);
+        'https://www.carnival.com/profilemanagement/profiles',
+        'https://www.carnival.com/profilemanagement/profiles/offers'
+      ].filter(function(url, index, array) {
+        return !!url && array.indexOf(url) === index;
+      });
+      await openRealTabs(carnivalHelperUrls);
 
       updateProgress(2, 4, 'Step 2/4: Capturing Carnival data...');
       await pollForHelperData(22000);
 
-      if (path.indexOf('/cruise-deals') !== -1 && capturedData.carnivalOffersRows.length === 0) {
+      if ((path.indexOf('/cruise-deals') !== -1 || path.indexOf('/cruise-search') !== -1 || path.indexOf('/offers') !== -1) && capturedData.carnivalOffersRows.length === 0) {
         capturedData.carnivalOffersRows = scrapeCarnivalOfferRowsFromDOM();
       }
       if (path.indexOf('/profilemanagement/profiles') !== -1 && capturedData.carnivalBookingsRows.length === 0) {

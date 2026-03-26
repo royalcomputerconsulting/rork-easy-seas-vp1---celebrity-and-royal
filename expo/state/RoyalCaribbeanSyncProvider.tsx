@@ -1110,7 +1110,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             loyaltyData: {
               ...(prev.loyaltyData ?? {}),
               crownAndAnchorLevel: tierName,
-              crownAndAnchorPoints: tgoMsg.vifp || (prev.loyaltyData?.crownAndAnchorPoints ?? ''),
+              crownAndAnchorPoints: prev.loyaltyData?.crownAndAnchorPoints ?? '',
             }
           }));
         }
@@ -1126,7 +1126,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         if (userData) {
           const tierMap: Record<string, string> = { '01': 'Red', '02': 'Gold', '03': 'Platinum', '04': 'Diamond' };
           const tierName = tierMap[userData.TierCode] || userData.TierCode || 'Unknown';
-          console.log('[CarnivalSync] User data captured:', userData.FirstName, userData.LastName, 'VIFP#', userData.PastGuestNumber, 'Tier:', tierName);
+          const points = stringifyValue(userData.Points || userData.TotalPoints || userData.VifpPoints || '');
+          console.log('[CarnivalSync] User data captured:', userData.FirstName, userData.LastName, 'VIFP#', userData.PastGuestNumber, 'Tier:', tierName, 'Points:', points || 'N/A');
           carnivalUserDataRef.current = {
             vifpNumber: userData.PastGuestNumber || '',
             vifpTier: tierName,
@@ -1139,10 +1140,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             loyaltyData: {
               ...(prev.loyaltyData ?? {}),
               crownAndAnchorLevel: tierName,
-              crownAndAnchorPoints: userData.PastGuestNumber || '',
+              crownAndAnchorPoints: points || (prev.loyaltyData?.crownAndAnchorPoints ?? ''),
             }
           }));
-          addLog(`✅ Carnival VIFP: ${tierName} tier (VIFP# ${userData.PastGuestNumber || 'N/A'})`, 'success');
+          addLog(`✅ Carnival VIFP: ${tierName} tier (VIFP# ${userData.PastGuestNumber || 'N/A'}${points ? ` • ${points} points` : ''})`, 'success');
         }
         break;
       }
@@ -1173,7 +1174,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Message handler error: ${String(handlerError)}`, 'error');
       } catch { /* ignore logging errors */ }
     }
-  }, [addLog, setProgress, cruiseLine, config.name, createPayloadSignature, getObjectKeys, normalizeBookedCruiseRows, normalizeOfferRows]);
+  }, [addLog, setProgress, cruiseLine, config.name, createPayloadSignature, getObjectKeys, normalizeBookedCruiseRows, normalizeOfferRows, stringifyValue]);
 
   const openLogin = useCallback(() => {
     setWebViewUrl(config.loginUrl);

@@ -20,7 +20,7 @@ import { convertLoyaltyInfoToExtended } from '@/lib/royalCaribbean/loyaltyConver
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
-import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape } from '@/lib/carnival/carnivalOffersExtraction';
+import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { healImportedData } from '@/lib/dataHealing';
 
@@ -96,6 +96,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const pageLoadResolver = useRef<((loadedUrl?: string) => void) | null>(null);
   const offerSailingsResolver = useRef<((sailings: OfferRow[]) => void) | null>(null);
   const carnivalPageCheckResolver = useRef<((onOffers: boolean) => void) | null>(null);
+  const carnivalTgoDataResolver = useRef<((data: { fullUrl: string; tgo: string; vifp: string; tierCode: string; tierName: string; rateCodes: Array<{ code: string; startDate: string; endDate: string }> }) => void) | null>(null);
   const navigationRequestIdRef = useRef<number>(0);
   const pendingNavigationTargetRef = useRef<string | null>(null);
   
@@ -1098,12 +1099,35 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
       }
 
+      case 'carnival_offers_url_data': {
+        const tgoMsg = msg as { fullUrl: string; tgo: string; vifp: string; tierCode: string; tierName: string; rateCodes: Array<{ code: string; startDate: string; endDate: string }> };
+        console.log('[CarnivalSync] offers URL data:', tgoMsg.rateCodes?.length, 'rate codes, VIFP#', tgoMsg.vifp);
+        if (tgoMsg.vifp || tgoMsg.tierName) {
+          const tierName = tgoMsg.tierName || 'VIFP Club';
+          capturedSections.current.loyalty = true;
+          setState(prev => ({
+            ...prev,
+            loyaltyData: {
+              ...(prev.loyaltyData ?? {}),
+              crownAndAnchorLevel: tierName,
+              crownAndAnchorPoints: prev.loyaltyData?.crownAndAnchorPoints ?? '',
+            }
+          }));
+        }
+        if (carnivalTgoDataResolver.current) {
+          carnivalTgoDataResolver.current(tgoMsg);
+          carnivalTgoDataResolver.current = null;
+        }
+        break;
+      }
+
       case 'carnival_user_data': {
         const userData = msg.data;
         if (userData) {
           const tierMap: Record<string, string> = { '01': 'Red', '02': 'Gold', '03': 'Platinum', '04': 'Diamond' };
           const tierName = tierMap[userData.TierCode] || userData.TierCode || 'Unknown';
-          console.log('[CarnivalSync] User data captured:', userData.FirstName, userData.LastName, 'VIFP#', userData.PastGuestNumber, 'Tier:', tierName);
+          const points = stringifyValue(userData.Points || userData.TotalPoints || userData.VifpPoints || '');
+          console.log('[CarnivalSync] User data captured:', userData.FirstName, userData.LastName, 'VIFP#', userData.PastGuestNumber, 'Tier:', tierName, 'Points:', points || 'N/A');
           carnivalUserDataRef.current = {
             vifpNumber: userData.PastGuestNumber || '',
             vifpTier: tierName,
@@ -1116,10 +1140,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             loyaltyData: {
               ...(prev.loyaltyData ?? {}),
               crownAndAnchorLevel: tierName,
-              crownAndAnchorPoints: userData.PastGuestNumber || '',
+              crownAndAnchorPoints: points || (prev.loyaltyData?.crownAndAnchorPoints ?? ''),
             }
           }));
-          addLog(`✅ Carnival VIFP: ${tierName} tier (VIFP# ${userData.PastGuestNumber || 'N/A'})`, 'success');
+          addLog(`✅ Carnival VIFP: ${tierName} tier (VIFP# ${userData.PastGuestNumber || 'N/A'}${points ? ` • ${points} points` : ''})`, 'success');
         }
         break;
       }
@@ -1150,7 +1174,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Message handler error: ${String(handlerError)}`, 'error');
       } catch { /* ignore logging errors */ }
     }
-  }, [addLog, setProgress, cruiseLine, config.name, createPayloadSignature, getObjectKeys, normalizeBookedCruiseRows, normalizeOfferRows]);
+  }, [addLog, setProgress, cruiseLine, config.name, createPayloadSignature, getObjectKeys, normalizeBookedCruiseRows, normalizeOfferRows, stringifyValue]);
 
   const openLogin = useCallback(() => {
     setWebViewUrl(config.loginUrl);
@@ -1261,70 +1285,48 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       addLog('📍 Navigating to offers page...', 'info');
       
+      type TgoData = { fullUrl: string; tgo: string; vifp: string; tierCode: string; tierName: string; rateCodes: Array<{ code: string; startDate: string; endDate: string }> };
+      let tgoData: TgoData | null = null;
+
       if (isCarnivalMode) {
-        addLog('🎪 Carnival SPA detected — forcing full navigation to offers page...', 'info');
+        addLog('🎪 Carnival — navigating to personalized offers page...', 'info');
         await navigateToPage('about:blank', 3000);
         await delay(500);
         await navigateToPage(config.offersUrl, 20000);
-        addLog('⏳ Waiting for Carnival offers page to fully render...', 'info');
-        await delay(5000);
-        
-        const MAX_NAV_RETRIES = 4;
-        for (let navRetry = 0; navRetry < MAX_NAV_RETRIES; navRetry++) {
-          if (!webViewRef.current) break;
-          
-          const isOnOffers = await new Promise<boolean>((resolve) => {
-            const checkTimeout = setTimeout(() => resolve(false), 5000);
-            
-            carnivalPageCheckResolver.current = (onOffers: boolean) => {
-              clearTimeout(checkTimeout);
-              resolve(onOffers);
-            };
-            
-            webViewRef.current?.injectJavaScript(`
-              (function() {
-                try {
-                  var currentUrl = window.location.href || '';
-                  var onOffers = currentUrl.includes('/offers') || currentUrl.includes('/cruise-deals');
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'carnival_page_check',
-                    onOffers: onOffers,
-                    url: currentUrl
-                  }));
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log',
-                    message: 'Page check: ' + currentUrl + (onOffers ? ' (ON OFFERS)' : ' (NOT on offers)'),
-                    logType: onOffers ? 'success' : 'warning'
-                  }));
-                } catch(e) {}
-              })();
-              true;
-            `);
-          });
-          
-          if (isOnOffers) {
-            addLog('✅ Confirmed on Carnival offers page', 'success');
-            break;
-          }
-          
-          addLog(`⚠️ Not on offers page (attempt ${navRetry + 1}/${MAX_NAV_RETRIES}) — re-navigating...`, 'warning');
-          
-          if (webViewRef.current) {
-            webViewRef.current.injectJavaScript(`
-              (function() {
-                try {
-                  window.location.replace('${config.offersUrl}');
-                } catch(e) {
-                  window.location.href = '${config.offersUrl}';
-                }
-              })();
-              true;
-            `);
-          }
-          await delay(5000);
+        addLog('⏳ Waiting for Carnival offers page to fully render and redirect to personalized URL...', 'info');
+        await delay(6000);
+
+        addLog('🔍 Extracting TGO rate codes from personalized offers URL...', 'info');
+        const extractTgo = (timeoutMs: number): Promise<TgoData | null> => new Promise<TgoData | null>((resolve) => {
+          carnivalTgoDataResolver.current = null;
+          const tgoTimeout = setTimeout(() => {
+            carnivalTgoDataResolver.current = null;
+            resolve(null);
+          }, timeoutMs);
+          carnivalTgoDataResolver.current = (data) => {
+            clearTimeout(tgoTimeout);
+            resolve(data);
+          };
+          webViewRef.current?.injectJavaScript(injectCarnivalTgoExtract());
+        });
+
+        tgoData = await extractTgo(9000);
+        if (!tgoData || tgoData.rateCodes.length === 0) {
+          addLog('⚠️ No TGO rate codes yet — waiting for personalized redirect...', 'warning');
+          await delay(4000);
+          tgoData = await extractTgo(8000);
         }
-        
-        await delay(2000);
+
+        if (tgoData && tgoData.rateCodes.length > 0) {
+          addLog(`✅ Found ${tgoData.rateCodes.length} rate codes: ${tgoData.rateCodes.map(r => r.code).join(', ')}`, 'success');
+          if (tgoData.vifp) {
+            addLog(`✅ VIFP# ${tgoData.vifp} (${tgoData.tierName} tier)`, 'success');
+          }
+        } else {
+          addLog('ℹ️ No personalized TGO URL — will scrape offers from page DOM', 'info');
+        }
+
+        addLog('🎪 Injecting Carnival offers page extraction...', 'info');
       } else {
         await navigateToPage(config.offersUrl, 20000);
       }
@@ -1355,103 +1357,118 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         return prev;
       });
       
-      // Step 1.5: Carnival offer enrichment - navigate to each offer's cruise search page
       if (isCarnivalMode) {
-        let offersToEnrich: { offerName: string; offerCode: string; bookingLink: string; offerExpiry: string; perks: string }[] = [];
-        setState(prev => {
-          const seen = new Set<string>();
-          prev.extractedOffers.forEach(offer => {
-            const code = offer.offerCode || '';
-            const link = offer.bookingLink || '';
-            if (code && !seen.has(code) && !offer.shipName && !offer.sailingDate) {
-              seen.add(code);
-              let fullLink = link;
-              if (fullLink && !fullLink.startsWith('http')) {
-                fullLink = 'https://www.carnival.com' + (fullLink.startsWith('/') ? '' : '/') + fullLink;
-              }
-              if (!fullLink && code) {
-                fullLink = 'https://www.carnival.com/cruise-search?rateCodes=' + code;
-              }
-              if (fullLink) {
-                offersToEnrich.push({
-                  offerName: offer.offerName || 'Unknown Offer',
-                  offerCode: code,
-                  bookingLink: fullLink,
-                  offerExpiry: offer.offerExpirationDate || '',
-                  perks: offer.perks || ''
-                });
-              }
+        type EnrichEntry = { offerName: string; offerCode: string; bookingLink: string; offerExpiry: string; perks: string };
+        const offersToEnrich: EnrichEntry[] = [];
+        const seenCodes = new Set<string>();
+
+        if (tgoData && tgoData.rateCodes.length > 0) {
+          const tgoParam = tgoData.tgo || '';
+          const tier = tgoData.tierCode || '01';
+          tgoData.rateCodes.forEach((entry: TgoData['rateCodes'][number]) => {
+            if (!seenCodes.has(entry.code)) {
+              seenCodes.add(entry.code);
+              const searchUrl = `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&ratecodes=${entry.code}&pagesize=50&sort=fromprice&showBest=true&tierCode=${tier}&tgo=${encodeURIComponent(tgoParam)}&pastGuest=true&currency=USD&locality=1&cruisedeals=jackpot`;
+              offersToEnrich.push({
+                offerName: `Rate Code ${entry.code}`,
+                offerCode: entry.code,
+                bookingLink: searchUrl,
+                offerExpiry: entry.endDate || '',
+                perks: ''
+              });
             }
           });
+          addLog(`🎯 Using ${offersToEnrich.length} personalized TGO rate codes for cruise search`, 'success');
+        }
+
+        let currentExtractedOffers: OfferRow[] = [];
+        setState(prev => {
+          currentExtractedOffers = prev.extractedOffers;
           return prev;
         });
+        currentExtractedOffers.forEach(offer => {
+          const code = offer.offerCode || '';
+          if (code && !seenCodes.has(code) && !offer.shipName && !offer.sailingDate) {
+            seenCodes.add(code);
+            let fullLink = offer.bookingLink || '';
+            if (fullLink && !fullLink.startsWith('http')) {
+              fullLink = 'https://www.carnival.com' + (fullLink.startsWith('/') ? '' : '/') + fullLink;
+            }
+            if (!fullLink && code) {
+              const tgoParam2 = tgoData?.tgo || '';
+              const tier2 = tgoData?.tierCode || '01';
+              fullLink = `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&ratecodes=${code}&pagesize=50&sort=fromprice&showBest=true&tierCode=${tier2}${tgoParam2 ? '&tgo=' + encodeURIComponent(tgoParam2) : ''}&pastGuest=true&currency=USD`;
+            }
+            if (fullLink) {
+              offersToEnrich.push({
+                offerName: offer.offerName || `Carnival Offer ${code}`,
+                offerCode: code,
+                bookingLink: fullLink,
+                offerExpiry: offer.offerExpirationDate || '',
+                perks: offer.perks || ''
+              });
+            }
+          }
+        });
+
+        const waitForOfferSailings = (timeoutMs: number = 35000): Promise<OfferRow[]> => {
+          return new Promise((resolve) => {
+            const timeout = setTimeout(() => {
+              offerSailingsResolver.current = null;
+              resolve([]);
+            }, timeoutMs);
+            offerSailingsResolver.current = (sailings: OfferRow[]) => {
+              clearTimeout(timeout);
+              resolve(sailings);
+            };
+          });
+        };
 
         if (offersToEnrich.length > 0) {
-          addLog(`🔍 ====== STEP 1.5: ENRICHING ${offersToEnrich.length} OFFER(S) WITH CRUISE DETAILS ======`, 'info');
-          addLog('🚢 Navigating to each offer\'s cruise search page to find actual sailings...', 'info');
-
-          const waitForOfferSailings = (timeoutMs: number = 30000): Promise<OfferRow[]> => {
-            return new Promise((resolve) => {
-              const timeout = setTimeout(() => {
-                offerSailingsResolver.current = null;
-                resolve([]);
-              }, timeoutMs);
-
-              offerSailingsResolver.current = (sailings: OfferRow[]) => {
-                clearTimeout(timeout);
-                resolve(sailings);
-              };
-            });
-          };
+          addLog(`🔍 ====== STEP 1.5: FETCHING SAILINGS FOR ${offersToEnrich.length} RATE CODE(S) ======`, 'info');
+          addLog('🚢 Navigating to each cruise search page (pagesize=50 with SHOW DATES expansion)...', 'info');
 
           let totalEnrichedSailings = 0;
           for (let oi = 0; oi < offersToEnrich.length; oi++) {
             const offer = offersToEnrich[oi];
-            addLog(`🔍 Offer ${oi + 1}/${offersToEnrich.length}: Navigating to "${offer.offerName}" (${offer.offerCode})...`, 'info');
-            addLog(`   📍 URL: ${offer.bookingLink}`, 'info');
+            addLog(`🔍 Rate code ${oi + 1}/${offersToEnrich.length}: ${offer.offerCode}`, 'info');
 
             await navigateToPage(offer.bookingLink, 25000);
             await delay(5000);
 
             if (webViewRef.current) {
-              addLog(`   🎪 Injecting cruise search scraper for ${offer.offerCode}...`, 'info');
               webViewRef.current.injectJavaScript(
                 injectCarnivalCruiseSearchScrape(offer.offerName, offer.offerCode, offer.offerExpiry, offer.perks)
               );
             }
 
-            const sailings = await waitForOfferSailings(35000);
+            const sailings = await waitForOfferSailings(40000);
 
             if (sailings.length > 0) {
               totalEnrichedSailings += sailings.length;
-              addLog(`   ✅ Found ${sailings.length} sailing(s) for "${offer.offerName}"`, 'success');
+              addLog(`   ✅ ${sailings.length} sailing(s) for ${offer.offerCode}`, 'success');
               sailings.slice(0, 3).forEach((s, idx) => {
                 if (s.shipName || s.sailingDate) {
-                  addLog(`      🚢 Sailing ${idx + 1}: ${s.shipName || 'TBD'} - ${s.sailingDate || 'TBD'}${s.interiorPrice ? ' from ' + s.interiorPrice : ''}`, 'success');
+                  addLog(`      🚢 ${idx + 1}: ${s.shipName || 'TBD'} - ${s.sailingDate || 'TBD'}${s.interiorPrice ? ' from ' + s.interiorPrice : ''}`, 'success');
                 }
               });
               if (sailings.length > 3) {
-                addLog(`      ➕ ...and ${sailings.length - 3} more sailing(s)`, 'success');
+                addLog(`      ➕ ...and ${sailings.length - 3} more`, 'success');
               }
               setState(prev => {
                 const existingWithoutThisOffer = prev.extractedOffers.filter(
                   o => o.offerCode !== offer.offerCode || (o.shipName && o.sailingDate)
                 );
-                return {
-                  ...prev,
-                  extractedOffers: [...existingWithoutThisOffer, ...sailings]
-                };
+                return { ...prev, extractedOffers: [...existingWithoutThisOffer, ...sailings] };
               });
             } else {
-              addLog(`   ⚠️ No sailings found on cruise search page for "${offer.offerName}" - keeping offer-level row`, 'warning');
+              addLog(`   ⚠️ No sailings found for ${offer.offerCode} — keeping offer-level row`, 'warning');
             }
-
-            await delay(1000);
+            await delay(800);
           }
-
-          addLog(`✅ STEP 1.5 COMPLETE: Enriched offers with ${totalEnrichedSailings} total sailing(s) from ${offersToEnrich.length} offer page(s)`, 'success');
+          addLog(`✅ STEP 1.5 COMPLETE: ${totalEnrichedSailings} total sailing(s) from ${offersToEnrich.length} rate code(s)`, 'success');
         } else {
-          addLog('ℹ️ All offers already have sailing details or no booking links found - skipping enrichment', 'info');
+          addLog('ℹ️ No rate codes to enrich — all offer data already complete or no offers found', 'info');
         }
       }
 

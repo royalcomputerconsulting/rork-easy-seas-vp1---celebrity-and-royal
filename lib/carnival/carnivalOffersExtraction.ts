@@ -1880,3 +1880,76 @@ export function injectCarnivalCruiseSearchScrape(offerName: string, offerCode: s
     true;
   `;
 }
+
+export const CARNIVAL_TGO_EXTRACT_SCRIPT = `(function() {
+  function post(type, payload) {
+    try { window.ReactNativeWebView.postMessage(JSON.stringify(Object.assign({ type: type }, payload || {}))); } catch(e) {}
+  }
+  function log(msg, t) { post('log', { message: msg, logType: t || 'info' }); }
+  function getCookie(name) {
+    try {
+      var c = document.cookie.split(';');
+      for (var i = 0; i < c.length; i++) {
+        var part = c[i].trim();
+        if (part.indexOf(name + '=') === 0) return part.substring(name.length + 1);
+      }
+    } catch(e) {}
+    return null;
+  }
+  function parseCarnivalUserCookie() {
+    try { var raw = getCookie('user'); if (!raw) return null; return JSON.parse(decodeURIComponent(raw)); } catch(e) { return null; }
+  }
+  function parseTgoString(tgo) {
+    if (!tgo) return [];
+    try {
+      var result = [];
+      var parts = tgo.split(';');
+      for (var i = 0; i < parts.length; i++) {
+        var fields = parts[i].trim().split(',');
+        var code = fields[0] ? fields[0].trim() : '';
+        if (code && /^[A-Z0-9]{2,6}$/.test(code)) {
+          result.push({ code: code, startDate: fields[1] || '', endDate: fields[2] || '' });
+        }
+      }
+      return result;
+    } catch(e) { return []; }
+  }
+  try {
+    var searchStr = window.location.search || '';
+    var params = new URLSearchParams(searchStr);
+    var tgo = params.get('tgo') || '';
+    var vifp = params.get('vifp') || '';
+    var tierCode = params.get('tierCode') || '';
+    var userCookie = parseCarnivalUserCookie();
+    if (userCookie) {
+      if (!vifp) vifp = String(userCookie.PastGuestNumber || '');
+      if (!tierCode) tierCode = String(userCookie.TierCode || '');
+      post('carnival_user_data', { data: userCookie });
+      var pts = userCookie.Points || userCookie.TotalPoints || userCookie.VifpPoints || '';
+      log('Carnival user: ' + (userCookie.FirstName || '') + ' ' + (userCookie.LastName || '') + ' VIFP#' + (userCookie.PastGuestNumber || 'N/A') + (pts ? ' (' + pts + ' pts)' : ''), 'success');
+    }
+    var tierMap = { '01': 'Red', '02': 'Gold', '03': 'Platinum', '04': 'Diamond' };
+    var tierName = tierMap[tierCode] || tierCode || 'VIFP Club';
+    var rateCodes = parseTgoString(tgo);
+    if (rateCodes.length > 0) {
+      log('TGO rate codes (' + rateCodes.length + '): ' + rateCodes.map(function(r) { return r.code; }).join(', '), 'success');
+    } else {
+      log('No TGO param in URL - will rely on page DOM for offers', 'info');
+    }
+    if (vifp) log('VIFP# ' + vifp + ' (' + tierName + ' tier)', 'success');
+    post('carnival_offers_url_data', {
+      fullUrl: window.location.href || '',
+      tgo: tgo,
+      vifp: vifp,
+      tierCode: tierCode,
+      tierName: tierName,
+      rateCodes: rateCodes
+    });
+  } catch(e) {
+    post('carnival_offers_url_data', { fullUrl: window.location.href || '', tgo: '', vifp: '', tierCode: '', tierName: '', rateCodes: [] });
+  }
+})();`;
+
+export function injectCarnivalTgoExtract(): string {
+  return CARNIVAL_TGO_EXTRACT_SCRIPT + '\ntrue;';
+}

@@ -56,9 +56,9 @@ function CarnivalSyncScreen() {
   const isBackendAvailable = isWebSyncAvailable();
   const isCompactWindow = windowWidth < 420;
   const browserPanelHeight = useMemo(() => {
-    const preferredHeight = Platform.OS === 'web' ? windowHeight * 0.34 : windowHeight * 0.42;
-    const minHeight = Platform.OS === 'web' ? 220 : 280;
-    const maxHeight = Platform.OS === 'web' ? 360 : 420;
+    const preferredHeight = Platform.OS === 'web' ? windowHeight * 0.4 : windowHeight * 0.42;
+    const minHeight = Platform.OS === 'web' ? 260 : 280;
+    const maxHeight = Platform.OS === 'web' ? 460 : 420;
     return Math.max(minHeight, Math.min(preferredHeight, maxHeight));
   }, [windowHeight]);
 
@@ -404,7 +404,7 @@ function CarnivalSyncScreen() {
 
                     <Pressable
                       style={styles.webSecondaryButton}
-                      onPress={() => Linking.openURL(webViewUrl || 'https://www.carnival.com/cruise-deals')}
+                      onPress={() => Linking.openURL(webViewUrl || 'https://www.carnival.com/')}
                       testID="carnival-open-website-button"
                     >
                       <ExternalLink size={18} color="#e2e8f0" />
@@ -572,7 +572,7 @@ function CarnivalSyncScreen() {
                       </Text>
                       <Pressable
                         style={[styles.webSyncButton, { marginTop: 12, backgroundColor: '#0f766e' }]}
-                        onPress={() => Linking.openURL('https://www.carnival.com/cruise-deals')}
+                        onPress={() => Linking.openURL('https://www.carnival.com/')}
                         testID="carnival-open-website-card-button"
                       >
                         <ExternalLink size={18} color="#fff" />
@@ -894,7 +894,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center' as const,
   },
   contentColumnWeb: {
-    maxWidth: 860,
+    maxWidth: 980,
   },
   brandBanner: {
     flexDirection: 'row' as const,
@@ -1082,7 +1082,7 @@ const styles = StyleSheet.create({
   webWorkspace: {
     flex: 1,
     padding: 18,
-    justifyContent: 'space-between' as const,
+    justifyContent: 'flex-start' as const,
     gap: 14,
     backgroundColor: '#101a27',
   },
@@ -1124,6 +1124,8 @@ const styles = StyleSheet.create({
   webWorkspaceButtonRow: {
     flexDirection: 'row' as const,
     gap: 10,
+    flexWrap: 'wrap' as const,
+    width: '100%',
   },
   webWorkspaceButtonRowCompact: {
     flexDirection: 'column' as const,
@@ -1146,6 +1148,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 12,
     minHeight: 48,
+    flexGrow: 1,
+    minWidth: 220,
   },
   webSecondaryButton: {
     flexDirection: 'row' as const,
@@ -1159,6 +1163,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#182334',
     borderWidth: 1,
     borderColor: CARNIVAL_BORDER,
+    flexGrow: 1,
+    minWidth: 220,
   },
   webOpenButtonText: {
     color: '#fff',
