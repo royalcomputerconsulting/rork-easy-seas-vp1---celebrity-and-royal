@@ -48,7 +48,7 @@ export const CRUISE_LINE_CONFIG = {
   carnival: {
     name: 'Carnival Cruise Line',
     loginUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
-    offersUrl: 'https://www.carnival.com/cruise-deals',
+    offersUrl: 'https://www.carnival.com/cruise-deals-2025',
     upcomingUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     holdsUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     loyaltyClubName: 'VIFP Club',
@@ -1366,7 +1366,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             if (!seenCodes.has(entry.code)) {
               seenCodes.add(entry.code);
               // Use pagesize=50 to get all cruise results at once
-              const searchUrl = `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&ratecodes=${entry.code}&pagesize=50&sort=fromprice&showBest=true&tierCode=${tier}&tgo=${encodeURIComponent(tgoParam)}&pastGuest=true&currency=USD&locality=1&cruisedeals=jackpot`;
+              const searchUrl = `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&ratecodes=${entry.code}&pagesize=50&sort=fromprice&showBest=true&tierCode=${tier}&tgo=${encodeURIComponent(tgoParam)}&pastGuest=true&pastguest=true&async=true&currency=USD&locality=1&cruisedeals=jackpot&icid=icp_vifp_11252020_lp_bttmbanner`;
               offersToEnrich.push({
                 offerName: `Rate Code ${entry.code}`,
                 offerCode: entry.code,
@@ -1393,7 +1393,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             if (!fullLink && code) {
               const tgoParam2 = tgoData?.tgo || '';
               const tier2 = tgoData?.tierCode || '01';
-              fullLink = `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&ratecodes=${code}&pagesize=50&sort=fromprice&showBest=true&tierCode=${tier2}${tgoParam2 ? '&tgo=' + encodeURIComponent(tgoParam2) : ''}&pastGuest=true&currency=USD`;
+              fullLink = `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&ratecodes=${code}&pagesize=50&sort=fromprice&showBest=true&tierCode=${tier2}${tgoParam2 ? '&tgo=' + encodeURIComponent(tgoParam2) : ''}&pastGuest=true&pastguest=true&async=true&currency=USD&locality=1&cruisedeals=jackpot`;
             }
             if (fullLink) {
               offersToEnrich.push({
