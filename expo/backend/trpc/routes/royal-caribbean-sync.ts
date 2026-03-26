@@ -62,23 +62,16 @@ export const royalCaribbeanSyncRouter = createTRPCRouter({
       console.log(`[CookieSync] Starting cookie-based sync for ${input.cruiseLine}`);
       console.log(`[CookieSync] Cookies length: ${input.cookies.length}`);
       
+      const brandName = input.cruiseLine === 'celebrity'
+        ? 'Celebrity Cruises'
+        : input.cruiseLine === 'carnival'
+          ? 'Carnival Cruise Line'
+          : 'Royal Caribbean';
       const response: WebSyncResponse = {
         success: false,
-        error: `Cookie-based sync for ${input.cruiseLine === 'celebrity' ? 'Celebrity Cruises' : 'Royal Caribbean'} is in development. ` +
-               `The backend needs to be configured to make authenticated requests using your cookies. ` +
-               `This requires:
-
-` +
-               `• Parsing and validating cookies
-` +
-               `• Making authenticated requests to ${input.cruiseLine === 'celebrity' ? 'Celebrity' : 'Royal Caribbean'} APIs
-` +
-               `• Handling CSRF tokens and session management
-` +
-               `• Scraping and parsing the offer and booking pages
-
-` +
-               `Please use the mobile app or browser extension for now.`,
+        error: `Cookie-based sync for ${brandName} is not enabled on this deployment yet. ` +
+               `The backend still needs to be configured to process authenticated browser sessions securely. ` +
+               `Please use the Easy Seas browser extension or the mobile in-app browser for now.`,
         offers: [],
         bookedCruises: [],
         loyaltyData: null,
@@ -116,13 +109,17 @@ export const royalCaribbeanSyncRouter = createTRPCRouter({
       console.log(`[WebSync] Direct API access is not available for ${input.cruiseLine}`);
       console.log(`[WebSync] Royal Caribbean does not provide a public API for third-party authentication`);
       
+      const brandName = input.cruiseLine === 'celebrity'
+        ? 'Celebrity Cruises'
+        : input.cruiseLine === 'carnival'
+          ? 'Carnival Cruise Line'
+          : 'Royal Caribbean';
       const response: WebSyncResponse = {
         success: false,
-        error: `Web-based sync is not available for ${input.cruiseLine === 'celebrity' ? 'Celebrity Cruises' : 'Royal Caribbean'}. ` +
-               `Their website does not provide a public API for third-party authentication. ` +
-               `Please use one of these alternatives:\n\n` +
+        error: `Web-based sync is not available for ${brandName} on this deployment. ` +
+               `Use one of these alternatives:\n\n` +
+               `• Browser Extension: Install the Easy Seas™ extension and sync on the website\n` +
                `• Mobile App: Use the in-app browser to log in directly\n` +
-               `• Browser Extension: Install Easy Seas™ extension and scrape from their website\n` +
                `• Manual Import: Export data from the website and import via CSV`,
         offers: [],
         bookedCruises: [],
@@ -136,7 +133,7 @@ export const royalCaribbeanSyncRouter = createTRPCRouter({
   checkStatus: publicProcedure.query(() => {
     return {
       available: false,
-      message: "Direct web sync is not available. Royal Caribbean and Celebrity Cruises do not provide public APIs for third-party authentication. Please use the mobile app or browser extension instead.",
+      message: "Direct web sync is not available on this deployment. Please use the Easy Seas browser extension or the mobile in-app browser instead.",
     };
   }),
 });

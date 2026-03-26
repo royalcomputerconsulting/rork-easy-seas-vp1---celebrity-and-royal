@@ -1,8 +1,8 @@
-import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { exportFile } from '@/lib/importExport';
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -13,6 +13,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
 import { trpc, isWebSyncAvailable } from '@/lib/trpc';
+import { downloadScraperExtension } from '@/lib/chromeExtension';
 const CARNIVAL_RED = '#CC2232';
 const CARNIVAL_GOLD = '#FFB400';
 const CARNIVAL_DARK = '#0c1520';
@@ -46,11 +47,20 @@ function CarnivalSyncScreen() {
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
   const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [isExportingLog, setIsExportingLog] = useState(false);
+  const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
   const cookieSyncMutation = trpc.royalCaribbeanSync.cookieSync.useMutation();
 
   const isBackendAvailable = isWebSyncAvailable();
+  const isCompactWindow = windowWidth < 420;
+  const browserPanelHeight = useMemo(() => {
+    const preferredHeight = Platform.OS === 'web' ? windowHeight * 0.34 : windowHeight * 0.42;
+    const minHeight = Platform.OS === 'web' ? 220 : 280;
+    const maxHeight = Platform.OS === 'web' ? 360 : 420;
+    return Math.max(minHeight, Math.min(preferredHeight, maxHeight));
+  }, [windowHeight]);
 
   const handleCookieSync = async (cookies: string) => {
     console.log('[CarnivalCookieSync] Starting...');
@@ -85,8 +95,8 @@ function CarnivalSyncScreen() {
     setWebSyncError(null);
 
     if (!isBackendAvailable) {
-      setWebSyncError('Backend not available. Use the in-app browser to log in to Carnival directly.');
-      addLog('Backend not available - use mobile browser', 'warning');
+      setWebSyncError('Backend not available. Use the Easy Seas browser extension or the in-app browser to sync Carnival.');
+      addLog('Backend not available - use browser-assisted Carnival sync', 'warning');
       return;
     }
 
@@ -96,7 +106,7 @@ function CarnivalSyncScreen() {
       const result = await webLoginMutation.mutateAsync({ username, password, cruiseLine: 'carnival' });
       if (!result.success) {
         setWebSyncError(result.error || 'Web sync is not available');
-        addLog('Web sync not available - use mobile browser', 'warning');
+        addLog('Web sync not available - use Carnival browser-assisted sync', 'warning');
         return;
       }
       addLog('Web sync completed!', 'success');
@@ -105,6 +115,32 @@ function CarnivalSyncScreen() {
       const msg = error instanceof Error ? error.message : 'Unable to connect to sync service';
       setWebSyncError(msg);
       addLog(`Web sync error: ${msg}`, 'error');
+    }
+  };
+
+  const handleDownloadExtension = async () => {
+    console.log('[CarnivalSync] Starting browser extension download...');
+    setWebSyncError(null);
+    setCookieSyncError(null);
+    setIsDownloadingExtension(true);
+    addLog('Preparing Easy Seas browser sync extension...', 'info');
+
+    try {
+      const result = await downloadScraperExtension();
+      if (!result.success) {
+        const errorMessage = result.error || 'Unable to download Easy Seas browser extension';
+        setWebSyncError(errorMessage);
+        addLog(`Extension download failed: ${errorMessage}`, 'error');
+        return;
+      }
+
+      addLog(`Extension download started${result.filesAdded ? ` (${result.filesAdded} files)` : ''}`, 'success');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unable to download Easy Seas browser extension';
+      setWebSyncError(errorMessage);
+      addLog(`Extension download error: ${errorMessage}`, 'error');
+    } finally {
+      setIsDownloadingExtension(false);
     }
   };
 
@@ -259,7 +295,8 @@ function CarnivalSyncScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={true}
         >
-          <View style={styles.brandBanner}>
+          <View style={[styles.contentColumn, Platform.OS === 'web' && styles.contentColumnWeb]}>
+            <View style={styles.brandBanner}>
             <View style={styles.brandIconWrap}>
               <Ship size={28} color={CARNIVAL_RED} />
             </View>
@@ -269,7 +306,7 @@ function CarnivalSyncScreen() {
             </View>
           </View>
 
-          <View style={styles.pillRow}>
+          <View style={[styles.pillRow, isCompactWindow && styles.pillRowCompact]}>
             <View style={[styles.pill, { backgroundColor: `${CARNIVAL_RED}20`, borderColor: `${CARNIVAL_RED}40` }]}>
               <Star size={12} color={CARNIVAL_RED} />
               <Text style={[styles.pillText, { color: CARNIVAL_RED }]}>VIFP Club</Text>
@@ -285,9 +322,10 @@ function CarnivalSyncScreen() {
           </View>
 
           <View style={styles.logsContainerTop}>
-            <View style={styles.logsHeaderRow}>
+            <View style={[styles.logsHeaderRow, isCompactWindow && styles.logsHeaderRowCompact]}>
               <Text style={styles.logsTitle}>Sync Log</Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
+              <View style={[styles.statusBadge, isCompactWindow && styles.statusBadgeCompact, { backgroundColor: getStatusColor() }]}>
+
                 {getStatusIcon()}
                 <Text style={styles.statusBadgeText}>{getStatusText()}</Text>
               </View>
@@ -325,21 +363,50 @@ function CarnivalSyncScreen() {
           </Pressable>
 
           {webViewVisible && (
-            <View style={styles.webViewContainer}>
+            <View style={[styles.webViewContainer, { height: browserPanelHeight }, isCompactWindow && styles.webViewContainerCompact]}>
               {Platform.OS === 'web' ? (
-                <View style={styles.webNotSupported}>
-                  <Ship size={48} color={CARNIVAL_RED} />
-                  <Text style={styles.webNotSupportedTitle}>Open Carnival Website</Text>
-                  <Text style={styles.webNotSupportedText}>
-                    Log in to your Carnival account, then return here and press &ldquo;I&apos;m Logged In&rdquo; to start syncing.
+                <View style={[styles.webWorkspace, isCompactWindow && styles.webWorkspaceCompact]} testID="carnival-web-workspace">
+                  <View style={styles.webWorkspaceHero}>
+                    <View style={styles.webWorkspaceBadge}>
+                      <Ship size={14} color={CARNIVAL_RED} />
+                      <Text style={styles.webWorkspaceBadgeText}>Carnival web sync uses a browser-assisted flow</Text>
+                    </View>
+                    <Text style={styles.webWorkspaceTitle}>Use Carnival on desktop without the old blocker screen</Text>
+                    <Text style={styles.webWorkspaceText}>
+                      Download the Easy Seas extension, open carnival.com in a new tab, sign in there, and run the sync overlay from the website. This is the web-safe Carnival path instead of the embedded mobile browser flow.
+                    </Text>
+                  </View>
+
+                  <View style={[styles.webWorkspaceButtonRow, isCompactWindow && styles.webWorkspaceButtonRowCompact]}>
+                    <Pressable
+                      style={[styles.webOpenButton, isDownloadingExtension && styles.buttonDisabled]}
+                      onPress={() => { void handleDownloadExtension(); }}
+                      disabled={isDownloadingExtension}
+                      testID="carnival-download-extension-button"
+                    >
+                      {isDownloadingExtension ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Download size={18} color="#fff" />
+                      )}
+                      <Text style={styles.webOpenButtonText}>
+                        {isDownloadingExtension ? 'Preparing Extension...' : 'Download Extension'}
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={styles.webSecondaryButton}
+                      onPress={() => Linking.openURL(webViewUrl || 'https://www.carnival.com/cruise-deals')}
+                      testID="carnival-open-website-button"
+                    >
+                      <ExternalLink size={18} color="#e2e8f0" />
+                      <Text style={styles.webSecondaryButtonText}>Open Carnival</Text>
+                    </Pressable>
+                  </View>
+
+                  <Text style={styles.webWorkspaceFootnote}>
+                    Best results: use Chrome, keep the Carnival tab signed in, and run the overlay after the page fully loads.
                   </Text>
-                  <Pressable
-                    style={styles.webOpenButton}
-                    onPress={() => Linking.openURL(webViewUrl || 'https://www.carnival.com/cruise-deals')}
-                  >
-                    <ExternalLink size={18} color="#fff" />
-                    <Text style={styles.webOpenButtonText}>Open Carnival Website</Text>
-                  </Pressable>
                 </View>
               ) : (
                 <WebView
@@ -436,44 +503,60 @@ function CarnivalSyncScreen() {
                   <View style={styles.webCredentialsIcon}>
                     <Ship size={28} color={CARNIVAL_RED} />
                   </View>
-                  <Text style={styles.webCredentialsTitle}>Sync Options</Text>
+                  <Text style={styles.webCredentialsTitle}>Carnival Web Sync</Text>
                   <Text style={styles.webCredentialsSubtitle}>
-                    Carnival doesn&apos;t provide a public API. Use one of these methods:
+                    Carnival works a little differently on web. Use the browser-assisted flow below instead of the old mobile-only blocker.
                   </Text>
                 </View>
 
-                <View style={styles.webSyncOptionsContainer}>
-                  <View style={styles.webSyncOptionCard}>
-                    <View style={[styles.webSyncOptionIconContainer, { backgroundColor: '#8b5cf620' }]}>
-                      <Cookie size={24} color="#8b5cf6" />
-                    </View>
-                    <View style={styles.webSyncOptionContent}>
-                      <Text style={styles.webSyncOptionTitle}>Cookie-Based Sync (Beta)</Text>
-                      <Text style={styles.webSyncOptionDesc}>
-                        Log in to Carnival, copy your browser cookies, and paste them here to sync.
-                      </Text>
-                      <Pressable
-                        style={[styles.webSyncButton, { marginTop: 12, backgroundColor: '#8b5cf6' }]}
-                        onPress={() => setShowCookieModal(true)}
-                      >
-                        <Cookie size={18} color="#fff" />
-                        <Text style={styles.webSyncButtonText}>Sync with Cookies</Text>
-                      </Pressable>
-                    </View>
+                {(webSyncError || cookieSyncError) && (
+                  <View style={styles.webInlineError}>
+                    <AlertCircle size={16} color="#fca5a5" />
+                    <Text style={styles.webInlineErrorText}>{webSyncError || cookieSyncError}</Text>
                   </View>
+                )}
 
-                  <View style={styles.webSyncOptionCard}>
+                <View style={styles.webSyncOptionsContainer}>
+                  <View style={[styles.webSyncOptionCard, isCompactWindow && styles.webSyncOptionCardCompact]}>
                     <View style={[styles.webSyncOptionIconContainer, { backgroundColor: `${CARNIVAL_RED}20` }]}>
                       <Download size={24} color={CARNIVAL_RED} />
                     </View>
                     <View style={styles.webSyncOptionContent}>
-                      <Text style={styles.webSyncOptionTitle}>Browser Extension</Text>
+                      <Text style={styles.webSyncOptionTitle}>Desktop Browser Sync</Text>
                       <Text style={styles.webSyncOptionDesc}>
-                        Install the Easy Seas™ Chrome Extension to scrape data from carnival.com.
+                        Download the Easy Seas extension and run Carnival sync directly on carnival.com from your desktop browser.
                       </Text>
                       <Pressable
-                        style={[styles.webSyncButton, { marginTop: 12, backgroundColor: CARNIVAL_RED }]}
+                        style={[styles.webSyncButton, { marginTop: 12, backgroundColor: CARNIVAL_RED }, isDownloadingExtension && styles.buttonDisabled]}
+                        onPress={() => { void handleDownloadExtension(); }}
+                        disabled={isDownloadingExtension}
+                        testID="carnival-download-extension-card-button"
+                      >
+                        {isDownloadingExtension ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Download size={18} color="#fff" />
+                        )}
+                        <Text style={styles.webSyncButtonText}>
+                          {isDownloadingExtension ? 'Preparing Extension...' : 'Download Extension'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  <View style={[styles.webSyncOptionCard, isCompactWindow && styles.webSyncOptionCardCompact]}>
+                    <View style={[styles.webSyncOptionIconContainer, { backgroundColor: '#10b98120' }]}>
+                      <ExternalLink size={24} color="#10b981" />
+                    </View>
+                    <View style={styles.webSyncOptionContent}>
+                      <Text style={styles.webSyncOptionTitle}>Open Carnival in a New Tab</Text>
+                      <Text style={styles.webSyncOptionDesc}>
+                        Open Carnival, sign in, and keep that tab ready for the browser-assisted sync flow.
+                      </Text>
+                      <Pressable
+                        style={[styles.webSyncButton, { marginTop: 12, backgroundColor: '#0f766e' }]}
                         onPress={() => Linking.openURL('https://www.carnival.com/cruise-deals')}
+                        testID="carnival-open-website-card-button"
                       >
                         <ExternalLink size={18} color="#fff" />
                         <Text style={styles.webSyncButtonText}>Open Carnival Website</Text>
@@ -481,15 +564,23 @@ function CarnivalSyncScreen() {
                     </View>
                   </View>
 
-                  <View style={styles.webSyncOptionCard}>
-                    <View style={[styles.webSyncOptionIconContainer, { backgroundColor: '#10b98120' }]}>
-                      <ExternalLink size={24} color="#10b981" />
+                  <View style={[styles.webSyncOptionCard, isCompactWindow && styles.webSyncOptionCardCompact]}>
+                    <View style={[styles.webSyncOptionIconContainer, { backgroundColor: '#8b5cf620' }]}>
+                      <Cookie size={24} color="#8b5cf6" />
                     </View>
                     <View style={styles.webSyncOptionContent}>
-                      <Text style={styles.webSyncOptionTitle}>Mobile App</Text>
+                      <Text style={styles.webSyncOptionTitle}>Advanced Cookie Tools</Text>
                       <Text style={styles.webSyncOptionDesc}>
-                        Use the Easy Seas™ mobile app to sync via the in-app browser. Download from the App Store.
+                        If cookie sync is enabled for this deployment later, you can paste a valid Carnival session here without changing the mobile flow.
                       </Text>
+                      <Pressable
+                        style={[styles.webSyncButton, { marginTop: 12, backgroundColor: '#8b5cf6' }]}
+                        onPress={() => setShowCookieModal(true)}
+                        testID="carnival-cookie-sync-button"
+                      >
+                        <Cookie size={18} color="#fff" />
+                        <Text style={styles.webSyncButtonText}>Open Cookie Tools</Text>
+                      </Pressable>
                     </View>
                   </View>
                 </View>
@@ -725,6 +816,7 @@ function CarnivalSyncScreen() {
               </Text>
             </Pressable>
           )}
+          </View>
 
           <WebSyncCredentialsModal
             visible={showCredentialsModal}
@@ -759,6 +851,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 120,
+  },
+  contentColumn: {
+    width: '100%',
+    alignSelf: 'center' as const,
+  },
+  contentColumnWeb: {
+    maxWidth: 860,
   },
   brandBanner: {
     flexDirection: 'row' as const,
@@ -798,6 +897,10 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 12,
     marginBottom: 4,
+    flexWrap: 'wrap' as const,
+  },
+  pillRowCompact: {
+    gap: 6,
   },
   pill: {
     flexDirection: 'row' as const,
@@ -827,6 +930,11 @@ const styles = StyleSheet.create({
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: CARNIVAL_BORDER,
+    gap: 10,
+  },
+  logsHeaderRowCompact: {
+    flexDirection: 'column' as const,
+    alignItems: 'flex-start' as const,
   },
   logsScrollTop: {
     maxHeight: 60,
@@ -839,6 +947,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 10,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  statusBadgeCompact: {
+    alignSelf: 'flex-start' as const,
   },
   statusBadgeText: {
     color: '#fff',
@@ -896,9 +1009,16 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const,
   },
   webViewContainer: {
-    height: 300,
-    borderBottomWidth: 1,
-    borderBottomColor: CARNIVAL_CARD,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    backgroundColor: CARNIVAL_CARD,
+    borderRadius: 16,
+    overflow: 'hidden' as const,
+    borderWidth: 1,
+    borderColor: CARNIVAL_BORDER,
+  },
+  webViewContainerCompact: {
+    marginHorizontal: 12,
   },
   webView: {
     flex: 1,
@@ -922,23 +1042,113 @@ const styles = StyleSheet.create({
     textAlign: 'center' as const,
     lineHeight: 20,
   },
+  webWorkspace: {
+    flex: 1,
+    padding: 18,
+    justifyContent: 'space-between' as const,
+    gap: 14,
+    backgroundColor: '#101a27',
+  },
+  webWorkspaceCompact: {
+    padding: 16,
+  },
+  webWorkspaceHero: {
+    gap: 10,
+  },
+  webWorkspaceBadge: {
+    alignSelf: 'flex-start' as const,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: `${CARNIVAL_RED}18`,
+    borderWidth: 1,
+    borderColor: `${CARNIVAL_RED}35`,
+  },
+  webWorkspaceBadgeText: {
+    color: '#fecaca',
+    fontSize: 11,
+    fontWeight: '700' as const,
+  },
+  webWorkspaceTitle: {
+    color: '#f8fafc',
+    fontSize: 20,
+    fontWeight: '800' as const,
+    lineHeight: 24,
+  },
+  webWorkspaceText: {
+    color: '#94a3b8',
+    fontSize: 13,
+    lineHeight: 19,
+    maxWidth: 640,
+  },
+  webWorkspaceButtonRow: {
+    flexDirection: 'row' as const,
+    gap: 10,
+  },
+  webWorkspaceButtonRowCompact: {
+    flexDirection: 'column' as const,
+  },
+  webWorkspaceFootnote: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 17,
+  },
   webOpenButton: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     gap: 8,
     backgroundColor: CARNIVAL_RED,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 16,
+    borderRadius: 12,
+    minHeight: 48,
+  },
+  webSecondaryButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    minHeight: 48,
+    backgroundColor: '#182334',
+    borderWidth: 1,
+    borderColor: CARNIVAL_BORDER,
   },
   webOpenButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600' as const,
   },
+  webSecondaryButtonText: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '600' as const,
+  },
   actionsContainer: {
     padding: 12,
+  },
+  webInlineError: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: 8,
+    backgroundColor: '#7f1d1d40',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  webInlineErrorText: {
+    flex: 1,
+    color: '#fecaca',
+    fontSize: 12,
+    lineHeight: 17,
   },
   quickActionsGrid: {
     flexDirection: 'row' as const,
@@ -1302,6 +1512,9 @@ const styles = StyleSheet.create({
     gap: 12,
     borderWidth: 1,
     borderColor: CARNIVAL_BORDER,
+  },
+  webSyncOptionCardCompact: {
+    flexDirection: 'column' as const,
   },
   webSyncOptionIconContainer: {
     width: 46,
