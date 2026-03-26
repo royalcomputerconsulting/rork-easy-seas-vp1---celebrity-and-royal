@@ -48,7 +48,7 @@ export const CRUISE_LINE_CONFIG = {
   carnival: {
     name: 'Carnival Cruise Line',
     loginUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
-    offersUrl: 'https://www.carnival.com/cruise-deals',
+    offersUrl: 'https://www.carnival.com/cruise-deals-2025',
     upcomingUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     holdsUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     loyaltyClubName: 'VIFP Club',
@@ -97,6 +97,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const offerSailingsResolver = useRef<((sailings: OfferRow[]) => void) | null>(null);
   const carnivalPageCheckResolver = useRef<((onOffers: boolean) => void) | null>(null);
   const carnivalTgoDataResolver = useRef<((data: { fullUrl: string; tgo: string; vifp: string; tierCode: string; tierName: string; rateCodes: Array<{ code: string; startDate: string; endDate: string }> }) => void) | null>(null);
+  const carnivalOffersLinkResolver = useRef<((url: string) => void) | null>(null);
   const navigationRequestIdRef = useRef<number>(0);
   const pendingNavigationTargetRef = useRef<string | null>(null);
   
@@ -1089,6 +1090,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
       }
 
+      case 'carnival_offers_link': {
+        const linkMsg = msg as { url: string };
+        console.log('[CarnivalSync] Personalized offers link found:', linkMsg.url || '(none)');
+        if (carnivalOffersLinkResolver.current) {
+          carnivalOffersLinkResolver.current(linkMsg.url || '');
+          carnivalOffersLinkResolver.current = null;
+        }
+        break;
+      }
+
       case 'carnival_page_check': {
         const checkMsg = msg;
         console.log('[CarnivalSync] Page check result:', checkMsg.onOffers, checkMsg.url);
@@ -1126,10 +1137,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         if (userData) {
           const tierMap: Record<string, string> = { '01': 'Red', '02': 'Gold', '03': 'Platinum', '04': 'Diamond' };
           const tierName = tierMap[userData.TierCode] || userData.TierCode || 'Unknown';
-          const points = stringifyValue(userData.Points || userData.TotalPoints || userData.VifpPoints || '');
-          console.log('[CarnivalSync] User data captured:', userData.FirstName, userData.LastName, 'VIFP#', userData.PastGuestNumber, 'Tier:', tierName, 'Points:', points || 'N/A');
+          const vifpNumber = stringifyValue(userData.PastGuestNumber || '');
+          const vifpPoints = stringifyValue(
+            userData.Points || userData.TotalPoints || userData.VifpPoints ||
+            userData.CruiseDays || userData.cruiseDays || ''
+          );
+          console.log('[CarnivalSync] User data captured:', userData.FirstName, userData.LastName, 'VIFP#', vifpNumber, 'Tier:', tierName, 'Points:', vifpPoints || 'N/A');
           carnivalUserDataRef.current = {
-            vifpNumber: userData.PastGuestNumber || '',
+            vifpNumber,
             vifpTier: tierName,
             firstName: userData.FirstName || '',
             lastName: userData.LastName || '',
@@ -1140,10 +1155,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             loyaltyData: {
               ...(prev.loyaltyData ?? {}),
               crownAndAnchorLevel: tierName,
-              crownAndAnchorPoints: points || (prev.loyaltyData?.crownAndAnchorPoints ?? ''),
+              crownAndAnchorPoints: vifpPoints || (prev.loyaltyData?.crownAndAnchorPoints ?? ''),
             }
           }));
-          addLog(`✅ Carnival VIFP: ${tierName} tier (VIFP# ${userData.PastGuestNumber || 'N/A'}${points ? ` • ${points} points` : ''})`, 'success');
+          addLog(`✅ Carnival VIFP: ${tierName} tier (VIFP# ${vifpNumber || 'N/A'}${vifpPoints ? ` • ${vifpPoints} pts` : ''})`, 'success');
         }
         break;
       }
@@ -1289,11 +1304,74 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       let tgoData: TgoData | null = null;
 
       if (isCarnivalMode) {
-        addLog('🎪 Carnival — navigating to personalized offers page...', 'info');
+        addLog('🎪 Carnival — scanning profile page for personalized offers link...', 'info');
         await navigateToPage('about:blank', 3000);
         await delay(500);
-        await navigateToPage(config.offersUrl, 20000);
-        addLog('⏳ Waiting for Carnival offers page to fully render and redirect to personalized URL...', 'info');
+        await navigateToPage('https://www.carnival.com/profilemanagement/profiles', 18000);
+        await delay(3000);
+
+        const findOffersLink = (timeoutMs: number): Promise<string> => new Promise<string>((resolve) => {
+          carnivalOffersLinkResolver.current = null;
+          const t = setTimeout(() => {
+            carnivalOffersLinkResolver.current = null;
+            resolve('');
+          }, timeoutMs);
+          carnivalOffersLinkResolver.current = (url: string) => {
+            clearTimeout(t);
+            resolve(url);
+          };
+          webViewRef.current?.injectJavaScript(`
+            (function() {
+              function post(type, payload) {
+                try { window.ReactNativeWebView.postMessage(JSON.stringify(Object.assign({ type: type }, payload || {}))); } catch(e) {}
+              }
+              try {
+                var links = document.querySelectorAll('a[href]');
+                var best = '';
+                for (var i = 0; i < links.length; i++) {
+                  var href = links[i].href || '';
+                  var raw = links[i].getAttribute('href') || '';
+                  var full = href || (raw.startsWith('http') ? raw : ('https://www.carnival.com' + (raw.startsWith('/') ? '' : '/') + raw));
+                  if (full && (full.includes('tgo=') || (full.includes('cruise-deals-') && full.includes('vifp=')))) {
+                    best = full;
+                    break;
+                  }
+                }
+                if (!best) {
+                  var bodyHtml = document.body ? document.body.innerHTML : '';
+                  var tgoMatch = bodyHtml.match(/href=["']([^"']*tgo=[^"']*)["']/i);
+                  if (tgoMatch) {
+                    var rawHref = tgoMatch[1];
+                    best = rawHref.startsWith('http') ? rawHref : ('https://www.carnival.com' + (rawHref.startsWith('/') ? '' : '/') + rawHref);
+                  }
+                }
+                post('carnival_offers_link', { url: best });
+              } catch(e) {
+                post('carnival_offers_link', { url: '' });
+              }
+            })();
+            true;
+          `);
+        });
+
+        let personalizedOffersUrl = await findOffersLink(8000);
+
+        if (!personalizedOffersUrl) {
+          addLog('ℹ️ Profile page: no TGO link found — trying carnival.com home...', 'info');
+          await navigateToPage('https://www.carnival.com', 15000);
+          await delay(3000);
+          personalizedOffersUrl = await findOffersLink(6000);
+        }
+
+        if (personalizedOffersUrl) {
+          addLog('✅ Found personalized offers URL with TGO parameters — navigating...', 'success');
+          await navigateToPage(personalizedOffersUrl, 22000);
+        } else {
+          addLog('ℹ️ No personalized TGO URL found — navigating to cruise-deals directly', 'info');
+          await navigateToPage(config.offersUrl, 22000);
+        }
+
+        addLog('⏳ Waiting for Carnival offers page to fully render...', 'info');
         await delay(6000);
 
         addLog('🔍 Extracting TGO rate codes from personalized offers URL...', 'info');
@@ -1368,7 +1446,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           tgoData.rateCodes.forEach((entry: TgoData['rateCodes'][number]) => {
             if (!seenCodes.has(entry.code)) {
               seenCodes.add(entry.code);
-              const searchUrl = `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&ratecodes=${entry.code}&pagesize=50&sort=fromprice&showBest=true&tierCode=${tier}&tgo=${encodeURIComponent(tgoParam)}&pastGuest=true&currency=USD&locality=1&cruisedeals=jackpot`;
+              const searchUrl = `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&ratecodes=${entry.code}&pagesize=50&sort=fromprice&showBest=true&tierCode=${tier}&tgo=${encodeURIComponent(tgoParam)}&pastGuest=true&pastguest=true&async=true&currency=USD&locality=1&cruisedeals=jackpot`;
               offersToEnrich.push({
                 offerName: `Rate Code ${entry.code}`,
                 offerCode: entry.code,
@@ -1397,7 +1475,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             if (!fullLink && code) {
               const tgoParam2 = tgoData?.tgo || '';
               const tier2 = tgoData?.tierCode || '01';
-              fullLink = `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&ratecodes=${code}&pagesize=50&sort=fromprice&showBest=true&tierCode=${tier2}${tgoParam2 ? '&tgo=' + encodeURIComponent(tgoParam2) : ''}&pastGuest=true&currency=USD`;
+              fullLink = `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&ratecodes=${code}&pagesize=50&sort=fromprice&showBest=true&tierCode=${tier2}${tgoParam2 ? '&tgo=' + encodeURIComponent(tgoParam2) : ''}&pastGuest=true&pastguest=true&async=true&currency=USD&locality=1&cruisedeals=jackpot`;
             }
             if (fullLink) {
               offersToEnrich.push({

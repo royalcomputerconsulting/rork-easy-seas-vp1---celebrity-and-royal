@@ -1298,16 +1298,17 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'carnival_user_data', data: userCookie
       }));
+      var vifpActualPoints = String(userCookie.Points || userCookie.TotalPoints || userCookie.VifpPoints || userCookie.CruiseDays || userCookie.cruiseDays || 0);
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'loyalty_data',
         data: {
           crownAndAnchorLevel: tierName,
-          crownAndAnchorPoints: userCookie.PastGuestNumber || '',
+          crownAndAnchorPoints: vifpActualPoints,
           clubRoyaleTier: tierName,
           clubRoyalePoints: ''
         }
       }));
-      log('VIFP loyalty: ' + tierName + ' (VIFP# ' + (userCookie.PastGuestNumber || 'N/A') + ')', 'success');
+      log('VIFP loyalty: ' + tierName + ' (VIFP# ' + (userCookie.PastGuestNumber || 'N/A') + ', ' + vifpActualPoints + ' pts)', 'success');
     }
 
     try {
