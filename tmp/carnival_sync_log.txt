@@ -1,0 +1,44 @@
+CARNIVAL CRUISE LINE - SYNC LOG
+Generated: 3/23/2026, 7:03:37 AM
+Status: running_step_2
+
+--- DETAILED LOG ---
+03/23/2026, 07:00:21 [OK] Carnival page loaded: logged in (no password form)
+03/23/2026, 07:00:21 [OK] Carnival page loaded: logged in (no password form)
+03/23/2026, 07:00:55 [OK] ✅ Captured 1 booking(s) from Royal Caribbean API
+03/23/2026, 07:00:55 [OK] ✅ Captured booking: PO of the Seas - 2023-09-02T00:00:00Z -  GTY (0 nights)
+03/23/2026, 07:00:55 [OK] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+03/23/2026, 07:00:55 [OK] Carnival page loaded: logged in (no password form)
+03/23/2026, 07:01:05 [OK] ✅ Captured 1 booking(s) from Royal Caribbean API
+03/23/2026, 07:01:05 [OK] ✅ Captured booking: PO of the Seas - 2023-09-02T00:00:00Z -  GTY (0 nights)
+03/23/2026, 07:01:05 [OK] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+03/23/2026, 07:01:05 [OK] Carnival page loaded: logged in (no password form)
+03/23/2026, 07:01:12 [OK] Extraction running on: https://www.carnival.com/profilemanagement/profiles/offers
+03/23/2026, 07:01:44 [OK] Step 1 completed with 0 items
+03/23/2026, 07:01:44 [OK] ✅ STEP 1 COMPLETE: Captured 0 casino offer(s) with 0 total sailing(s)
+03/23/2026, 07:01:45 [OK] Carnival page loaded: logged in (no password form)
+03/23/2026, 07:01:45 [OK] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+03/23/2026, 07:01:56 [OK] Captured 1 booking(s) from network capture
+03/23/2026, 07:01:56 [OK] Total: 1 Carnival booking(s) captured
+03/23/2026, 07:01:56 [OK] Step 2 completed with 1 items
+03/23/2026, 07:01:56 [OK] ✅ Captured 1 cruise booking(s)
+03/23/2026, 07:01:56 [OK]    🚢 Cruise 1: CARNIVAL PANORAMA - 2023-09-02T00:00:00Z ( nights) - Cabin GTY [Upcoming]
+03/23/2026, 07:01:57 [OK] ✅ Captured 1 cruise booking(s)
+03/23/2026, 07:01:57 [OK]    🚢 Cruise 1: CARNIVAL PANORAMA - 2023-09-02T00:00:00Z ( nights) - Cabin GTY [Upcoming]
+03/23/2026, 07:02:02 [OK] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+03/23/2026, 07:02:02 [OK] Carnival page loaded: logged in (no password form)
+03/23/2026, 07:02:20 [OK] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+03/23/2026, 07:02:20 [OK] Carnival page loaded: logged in (no password form)
+03/23/2026, 07:02:59 [OK] Captured 1 booking(s) from network capture
+03/23/2026, 07:02:59 [OK] Total: 1 Carnival booking(s) captured
+03/23/2026, 07:02:59 [OK] Step 2 completed with 1 items
+03/23/2026, 07:02:59 [OK] ✅ Captured 1 cruise booking(s)
+03/23/2026, 07:02:59 [OK]    🚢 Cruise 1: CARNIVAL PANORAMA - 2023-09-02T00:00:00Z ( nights) - Cabin GTY [Upcoming]
+03/23/2026, 07:02:59 [OK] ✅ Captured 1 cruise booking(s)
+03/23/2026, 07:02:59 [OK]    🚢 Cruise 1: CARNIVAL PANORAMA - 2023-09-02T00:00:00Z ( nights) - Cabin GTY [Upcoming]
+03/23/2026, 07:03:06 [OK] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+03/23/2026, 07:03:06 [OK] Carnival page loaded: logged in (no password form)
+03/23/2026, 07:03:22 [OK] Carnival page loaded: logged in (no password form)
+03/23/2026, 07:03:24 [OK] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+
+--- END OF LOG ---
