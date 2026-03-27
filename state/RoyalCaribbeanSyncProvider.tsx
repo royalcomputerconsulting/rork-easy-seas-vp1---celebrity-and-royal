@@ -116,11 +116,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const processedPayloads = useRef<Set<string>>(new Set());
   const capturedSections = useRef({ offers: false, bookings: false, loyalty: false });
   const pageLoadResolver = useRef<((loadedUrl?: string) => void) | null>(null);
-  const offerSailingsResolver = useRef<((sailings: OfferRow[]) => void) | null>(null);
+  const offerSailingsResolver = useRef<{
+    offerCode: string;
+    requestId: number;
+    resolve: (sailings: OfferRow[]) => void;
+  } | null>(null);
   const carnivalPageCheckResolver = useRef<((onOffers: boolean) => void) | null>(null);
   const carnivalTgoDataResolver = useRef<((data: { fullUrl: string; tgo: string; vifp: string; tierCode: string; tierName: string; rateCodes: Array<{ code: string; startDate: string; endDate: string }> }) => void) | null>(null);
   const carnivalOffersLinkResolver = useRef<((url: string) => void) | null>(null);
   const navigationRequestIdRef = useRef<number>(0);
+  const offerSailingsRequestIdRef = useRef<number>(0);
   const pendingNavigationTargetRef = useRef<string | null>(null);
   const syncToAppInFlightRef = useRef<boolean>(false);
   
@@ -675,12 +680,28 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
 
       case 'offer_sailings_result': {
-        const sailingsMsg = message as any;
+        const sailingsMsg = message as { offerCode?: string; offerName?: string; sailings?: unknown; requestId?: number };
         const sailingsData = normalizeOfferRows(sailingsMsg.sailings);
-        console.log(`[CarnivalSync] offer_sailings_result: ${sailingsData.length} sailings for ${sailingsMsg.offerName} (${sailingsMsg.offerCode})`);
-        if (offerSailingsResolver.current) {
-          offerSailingsResolver.current(sailingsData);
-          offerSailingsResolver.current = null;
+        const pendingResolver = offerSailingsResolver.current;
+        console.log(
+          `[CarnivalSync] offer_sailings_result: ${sailingsData.length} sailings for ${sailingsMsg.offerName} (${sailingsMsg.offerCode}) request=${String(sailingsMsg.requestId ?? 'n/a')}`
+        );
+        if (pendingResolver) {
+          const pendingOfferCode = pendingResolver.offerCode.trim().toUpperCase();
+          const incomingOfferCode = stringifyValue(sailingsMsg.offerCode).trim().toUpperCase();
+          const requestMatches = typeof sailingsMsg.requestId === 'number'
+            ? sailingsMsg.requestId === pendingResolver.requestId
+            : pendingOfferCode.length === 0 || incomingOfferCode.length === 0 || pendingOfferCode === incomingOfferCode;
+          const codeMatches = pendingOfferCode.length === 0 || incomingOfferCode.length === 0 || pendingOfferCode === incomingOfferCode;
+
+          if (requestMatches && codeMatches) {
+            pendingResolver.resolve(sailingsData);
+            offerSailingsResolver.current = null;
+          } else {
+            console.log(
+              `[CarnivalSync] Ignored stale offer_sailings_result for ${incomingOfferCode || 'unknown'} while waiting for ${pendingOfferCode || 'unknown'} request=${pendingResolver.requestId}`
+            );
+          }
         }
         break;
       }
@@ -1627,17 +1648,29 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           addLog(`🎯 Prepared ${offersToEnrich.length} Carnival rate code(s) for detailed sailing/pricing fetch`, 'success');
         }
 
-        const waitForOfferSailings = (timeoutMs: number = 35000): Promise<OfferRow[]> => {
-          return new Promise((resolve) => {
+        const waitForOfferSailings = (
+          offerCode: string,
+          timeoutMs: number = 35000
+        ): { requestId: number; promise: Promise<OfferRow[]> } => {
+          offerSailingsRequestIdRef.current += 1;
+          const requestId = offerSailingsRequestIdRef.current;
+          const promise = new Promise<OfferRow[]>((resolve) => {
             const timeout = setTimeout(() => {
-              offerSailingsResolver.current = null;
+              if (offerSailingsResolver.current?.requestId === requestId) {
+                offerSailingsResolver.current = null;
+              }
               resolve([]);
             }, timeoutMs);
-            offerSailingsResolver.current = (sailings: OfferRow[]) => {
-              clearTimeout(timeout);
-              resolve(sailings);
+            offerSailingsResolver.current = {
+              offerCode,
+              requestId,
+              resolve: (sailings: OfferRow[]) => {
+                clearTimeout(timeout);
+                resolve(sailings);
+              }
             };
           });
+          return { requestId, promise };
         };
 
         if (offersToEnrich.length > 0) {
@@ -1652,13 +1685,21 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             await navigateToPage(offer.bookingLink, 25000);
             await delay(5000);
 
+            const pendingSailingsRequest = waitForOfferSailings(offer.offerCode, 40000);
+
             if (webViewRef.current) {
               webViewRef.current.injectJavaScript(
-                injectCarnivalCruiseSearchScrape(offer.offerName, offer.offerCode, offer.offerExpiry, offer.perks)
+                injectCarnivalCruiseSearchScrape(
+                  offer.offerName,
+                  offer.offerCode,
+                  offer.offerExpiry,
+                  offer.perks,
+                  pendingSailingsRequest.requestId
+                )
               );
             }
 
-            const sailings = await waitForOfferSailings(40000);
+            const sailings = await pendingSailingsRequest.promise;
 
             if (sailings.length > 0) {
               totalEnrichedSailings += sailings.length;

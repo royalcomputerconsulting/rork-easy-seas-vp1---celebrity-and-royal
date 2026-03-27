@@ -1403,6 +1403,15 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
     }
   }
 
+  function getOfferRequestId() {
+    try {
+      var requestId = Number(window.__enrichOfferRequestId || 0);
+      return isFinite(requestId) ? requestId : 0;
+    } catch(e) {
+      return 0;
+    }
+  }
+
   function isSailingLikeArray(value) {
     return Array.isArray(value) && value.length > 0 && value[0] && (
       value[0].shipName || value[0].ship || value[0].sailDate || value[0].departureDate || value[0].startDate || value[0].embarkDate || value[0].price || value[0].startingPrice
@@ -1641,6 +1650,45 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
     return deduped;
   }
 
+  function extractSailingsFromInlineJsonScripts() {
+    try {
+      var scripts = document.querySelectorAll('script[type="application/json"], script[type="application/ld+json"], script#__NEXT_DATA__, script:not([src])');
+      var foundArrays = [];
+      for (var si = 0; si < scripts.length; si++) {
+        var text = scripts[si].textContent || '';
+        if (!text || text.length < 50 || text.length > 900000) {
+          continue;
+        }
+        var trimmed = text.trim();
+        if (!trimmed || (trimmed.charAt(0) !== '{' && trimmed.charAt(0) !== '[')) {
+          continue;
+        }
+        if (
+          trimmed.indexOf('shipName') === -1 &&
+          trimmed.indexOf('departureDate') === -1 &&
+          trimmed.indexOf('sailDate') === -1 &&
+          trimmed.indexOf('embarkDate') === -1 &&
+          trimmed.indexOf('startingPrice') === -1 &&
+          trimmed.indexOf('lowestPrice') === -1
+        ) {
+          continue;
+        }
+        try {
+          var parsed = JSON.parse(trimmed);
+          collectSailingArrays(parsed, 'script[' + si + ']', foundArrays, 0);
+        } catch(parseErr) {}
+      }
+      if (foundArrays.length > 0) {
+        foundArrays.sort(function(a, b) { return b.items.length - a.items.length; });
+        log('Found ' + foundArrays[0].items.length + ' sailings in inline JSON scripts at ' + foundArrays[0].path, 'success');
+        return foundArrays[0].items;
+      }
+    } catch(e) {
+      log('Inline JSON scan failed: ' + (e && e.message ? e.message : e), 'warning');
+    }
+    return null;
+  }
+
   function formatCurrency(value, dollarChar) {
     return value > 0 ? dollarChar + Number(value).toFixed(2) : '';
   }
@@ -1693,56 +1741,89 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
   }
 
   async function tryFetchSailingsAPI(rateCode) {
+    function buildCandidateQueries(page, useSingularRateCode) {
+      var params = new URLSearchParams(window.location.search || '');
+      params.delete('async');
+      params.delete('rateCode');
+      params.delete('ratecode');
+      params.delete('rateCodes');
+      params.delete('ratecodes');
+      params.set('pageNumber', String(page));
+      params.set('pageSize', '50');
+      params.set('pagesize', '50');
+      if (!params.get('sort')) {
+        params.set('sort', 'departureDate');
+      }
+      if (!params.get('sortDirection')) {
+        params.set('sortDirection', 'ASC');
+      }
+      params.set(useSingularRateCode ? 'rateCode' : 'rateCodes', rateCode);
+      return params.toString();
+    }
+
     var endpointTemplates = [
-      '/g/cruise-search/api/search?rateCodes=' + rateCode + '&pageNumber={PAGE}&pageSize=50&sort=departureDate&sortDirection=ASC',
-      '/g/cruise-search/api/search?rateCode=' + rateCode + '&pageNumber={PAGE}&pageSize=50&sort=departureDate&sortDirection=ASC',
-      '/cruise-search/api/search?rateCodes=' + rateCode + '&pageNumber={PAGE}&pageSize=50',
+      '/g/cruise-search/api/search?{QUERY}',
+      '/cruise-search/api/search?{QUERY}',
+      'https://www.carnival.com/g/cruise-search/api/search?{QUERY}'
     ];
-    for (var ei = 0; ei < endpointTemplates.length; ei++) {
+
+    for (var templateIndex = 0; templateIndex < endpointTemplates.length; templateIndex++) {
       var collected = [];
       for (var page = 1; page <= 8; page++) {
-        var endpoint = endpointTemplates[ei].replace('{PAGE}', String(page));
-        try {
-          log('  Trying cruise search API: ' + endpoint, 'info');
-          var controller = new AbortController();
-          var tid = setTimeout(function() { controller.abort(); }, 12000);
-          var response = await fetch(endpoint, {
-            method: 'GET',
-            headers: { 'accept': 'application/json', 'x-requested-with': 'XMLHttpRequest' },
-            credentials: 'include',
-            signal: controller.signal
-          });
-          clearTimeout(tid);
-          log('  API response: ' + response.status + ' (page ' + page + ')', response.ok ? 'info' : 'warning');
-          if (!response.ok) {
-            if (page === 1) {
-              collected = [];
+        var pageSailings = null;
+        var queryVariants = [
+          buildCandidateQueries(page, false),
+          buildCandidateQueries(page, true)
+        ];
+
+        for (var queryIndex = 0; queryIndex < queryVariants.length; queryIndex++) {
+          var endpoint = endpointTemplates[templateIndex].replace('{QUERY}', queryVariants[queryIndex]);
+          try {
+            log('  Trying cruise search API: ' + endpoint, 'info');
+            var controller = new AbortController();
+            var tid = setTimeout(function() { controller.abort(); }, 12000);
+            var response = await fetch(endpoint, {
+              method: 'GET',
+              headers: { 'accept': 'application/json', 'x-requested-with': 'XMLHttpRequest' },
+              credentials: 'include',
+              signal: controller.signal
+            });
+            clearTimeout(tid);
+            log('  API response: ' + response.status + ' (page ' + page + ')', response.ok ? 'info' : 'warning');
+            if (!response.ok) {
+              continue;
             }
-            break;
+            var ct = response.headers.get('content-type') || '';
+            if (!ct.includes('json')) {
+              continue;
+            }
+            var data = await response.json();
+            if (!data) {
+              continue;
+            }
+            var sailings = extractSailingsArrayFromData(data);
+            if (sailings && sailings.length > 0) {
+              pageSailings = sailings;
+              break;
+            }
+          } catch(e) {
+            log('  API error: ' + (e && e.message ? e.message : 'timeout'), 'warning');
           }
-          var ct = response.headers.get('content-type') || '';
-          if (!ct.includes('json')) {
-            break;
-          }
-          var data = await response.json();
-          if (!data) {
-            break;
-          }
-          var sailings = extractSailingsArrayFromData(data);
-          if (!sailings || sailings.length === 0) {
-            break;
-          }
-          for (var si = 0; si < sailings.length; si++) {
-            collected.push(sailings[si]);
-          }
-          if (sailings.length < 50) {
-            break;
-          }
-        } catch(e) {
-          log('  API error: ' + (e && e.message ? e.message : 'timeout'), 'warning');
+        }
+
+        if (!pageSailings || pageSailings.length === 0) {
+          break;
+        }
+
+        for (var si = 0; si < pageSailings.length; si++) {
+          collected.push(pageSailings[si]);
+        }
+
+        if (pageSailings.length < 50) {
           break;
         }
       }
+
       if (collected.length > 0) {
         var deduped = dedupeApiSailings(collected);
         log('Found ' + deduped.length + ' sailings from API for ' + rateCode, 'success');
@@ -1799,6 +1880,15 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
           }
         }
       } catch(e) { log('__NEXT_DATA__ parse error: ' + (e.message || e), 'warning'); }
+    }
+
+    if (sailings.length === 0) {
+      log('Phase 2b: Scanning inline JSON scripts for cruise data...', 'info');
+      var inlineScriptSailings = extractSailingsFromInlineJsonScripts();
+      if (inlineScriptSailings && inlineScriptSailings.length > 0) {
+        sailings = convertApiSailingsToRows(inlineScriptSailings, offerName, offerCode, offerExpiry, offerPerks);
+        log('Inline JSON scripts found ' + sailings.length + ' sailing(s) for ' + offerName, 'success');
+      }
     }
 
     if (sailings.length === 0) {
@@ -2029,7 +2119,8 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
         type: 'offer_sailings_result',
         offerCode: offerCode,
         offerName: offerName,
-        sailings: sailings
+        sailings: sailings,
+        requestId: getOfferRequestId()
       }));
     } catch(e) {}
   }
@@ -2042,13 +2133,14 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
 })();
 `;
 
-export function injectCarnivalCruiseSearchScrape(offerName: string, offerCode: string, offerExpiry: string, offerPerks: string): string {
+export function injectCarnivalCruiseSearchScrape(offerName: string, offerCode: string, offerExpiry: string, offerPerks: string, requestId: number): string {
   const escaped = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
   return `
     window.__enrichOfferName = '${escaped(offerName)}';
     window.__enrichOfferCode = '${escaped(offerCode)}';
     window.__enrichOfferExpiry = '${escaped(offerExpiry)}';
     window.__enrichOfferPerks = '${escaped(offerPerks)}';
+    window.__enrichOfferRequestId = ${String(requestId)};
     ${CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT}
     true;
   `;
