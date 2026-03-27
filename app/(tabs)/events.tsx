@@ -318,20 +318,10 @@ export default function EventsScreen() {
   }, [router]);
 
   const getDayBackgroundColor = useCallback((day: DayData) => {
-    const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
-    if (!hasEvents) return 'transparent';
-    
-    if (day.events.cruise > 0 && day.events.travel > 0) {
-      return 'rgba(34, 197, 94, 0.25)';
-    }
-    if (day.events.cruise > 0) {
-      return 'rgba(34, 197, 94, 0.2)';
-    }
-    if (day.events.travel > 0) {
-      return 'rgba(59, 130, 246, 0.2)';
-    }
-    if (day.events.personal > 0) {
-      return 'rgba(168, 85, 247, 0.15)';
+    if (!day.isCurrentMonth) return 'transparent';
+    const luck = getLuckForDate(formatDateKey(day.date));
+    if (luck) {
+      return `${luck.hex}22`;
     }
     return 'transparent';
   }, []);
@@ -367,11 +357,11 @@ export default function EventsScreen() {
           {day.dayNumber}
         </Text>
         {luck && day.isCurrentMonth ? (
-          <View style={styles.luckIndicatorRow}>
-            <View style={[styles.luckDot, { backgroundColor: luck.hex }]} />
-            {hasEvents ? renderEventDots(day.events) : null}
+          <View style={styles.luckBarContainer}>
+            <View style={[styles.luckBar, { backgroundColor: luck.hex }]} />
           </View>
-        ) : hasEvents ? (
+        ) : null}
+        {hasEvents ? (
           <View style={styles.eventDotsContainer}>
             {renderEventDots(day.events)}
           </View>
@@ -929,20 +919,20 @@ const styles = StyleSheet.create({
   eventDotsContainer: {
     flexDirection: 'row',
     position: 'absolute',
-    bottom: 4,
+    bottom: 8,
     gap: 2,
   },
-  luckIndicatorRow: {
-    flexDirection: 'row',
+  luckBarContainer: {
     position: 'absolute',
-    bottom: 3,
-    gap: 2,
+    bottom: 2,
+    left: 4,
+    right: 4,
     alignItems: 'center',
   },
-  luckDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  luckBar: {
+    width: '100%',
+    height: 4,
+    borderRadius: 2,
   },
   eventDot: {
     width: 5,
