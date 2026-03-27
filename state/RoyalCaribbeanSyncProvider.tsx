@@ -1,6 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useState, useCallback, useRef, useEffect, useContext, createContext, useMemo, ReactNode } from 'react';
 import { WebView } from 'react-native-webview';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -2219,12 +2220,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         URL.revokeObjectURL(url);
         addLog('Offers CSV downloaded successfully', 'success');
       } else {
-        const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
-        const file = new ExpoFile(ExpoPaths.cache, 'offers.csv');
-        file.write(csv);
+        const fileUri = (FileSystem.cacheDirectory || '') + 'offers.csv';
+        await FileSystem.writeAsStringAsync(fileUri, csv);
 
         if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(file.uri, {
+          await Sharing.shareAsync(fileUri, {
             mimeType: 'text/csv',
             dialogTitle: 'Export Offers CSV'
           });
@@ -2252,12 +2252,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         URL.revokeObjectURL(url);
         addLog('Booked Cruises CSV downloaded successfully', 'success');
       } else {
-        const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
-        const file = new ExpoFile(ExpoPaths.cache, 'Booked_Cruises.csv');
-        file.write(csv);
+        const fileUri = (FileSystem.cacheDirectory || '') + 'Booked_Cruises.csv';
+        await FileSystem.writeAsStringAsync(fileUri, csv);
 
         if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(file.uri, {
+          await Sharing.shareAsync(fileUri, {
             mimeType: 'text/csv',
             dialogTitle: 'Export Booked Cruises CSV'
           });
@@ -2285,12 +2284,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         URL.revokeObjectURL(url);
         addLog('Log downloaded successfully', 'success');
       } else {
-        const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
-        const file = new ExpoFile(ExpoPaths.cache, 'last.log');
-        file.write(logText);
+        const fileUri = (FileSystem.cacheDirectory || '') + 'last.log';
+        await FileSystem.writeAsStringAsync(fileUri, logText);
 
         if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(file.uri, {
+          await Sharing.shareAsync(fileUri, {
             mimeType: 'text/plain',
             dialogTitle: 'Export Sync Log'
           });

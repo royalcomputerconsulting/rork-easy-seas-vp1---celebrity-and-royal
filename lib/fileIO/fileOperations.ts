@@ -61,9 +61,7 @@ export async function pickAndReadFile(fileType: 'csv' | 'ics' | 'json'): Promise
       
       console.log('[FileIO] Web file read successfully, length:', content.length);
     } else {
-      const { File: ExpoFile } = await import('expo-file-system');
-      const file = new ExpoFile(asset.uri);
-      content = await file.text();
+      content = await FileSystem.readAsStringAsync(asset.uri);
     }
 
     const contentValidation = validateImportContent(content, fileType);
@@ -120,9 +118,7 @@ export async function downloadFromURL(url: string): Promise<{ content: string; s
     
     // Native: Use FileSystem.downloadAsync which can access device cookies/credentials
     const fileName = `ics_import_${Date.now()}.ics`;
-    const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
-    const tempFile = new ExpoFile(ExpoPaths.cache, fileName);
-    const fileUri = tempFile.uri;
+    const fileUri = FileSystem.cacheDirectory + fileName;
     
     console.log('[FileIO] Native download to:', fileUri);
     
@@ -175,13 +171,12 @@ export async function exportFile(content: string, fileName: string): Promise<boo
       return true;
     }
 
-    const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
-    const file = new ExpoFile(ExpoPaths.cache, fileName);
-    await file.write(content);
+    const fileUri = FileSystem.cacheDirectory + fileName;
+    await FileSystem.writeAsStringAsync(fileUri, content);
 
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
-      await Sharing.shareAsync(file.uri, {
+      await Sharing.shareAsync(fileUri, {
         mimeType: fileName.endsWith('.ics') ? 'text/calendar' : fileName.endsWith('.json') ? 'application/json' : 'text/csv',
         dialogTitle: `Export ${fileName}`,
       });

@@ -11,6 +11,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
@@ -615,12 +616,8 @@ export default function AnalyticsScreen() {
         return;
       }
 
-      const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
-      const directory = ExpoPaths.cache ?? ExpoPaths.document;
-      const file = new ExpoFile(directory, filename);
-      await file.write(csv);
-
-      const fileUri = file.uri;
+      const fileUri = (FileSystem.cacheDirectory || '') + filename;
+      await FileSystem.writeAsStringAsync(fileUri, csv);
 
       const canShare = await Sharing.isAvailableAsync();
       if (!canShare) {
