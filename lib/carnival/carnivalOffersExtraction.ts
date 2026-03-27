@@ -901,16 +901,14 @@ export const CARNIVAL_OFFERS_SCRIPT = `
       }
       if (collectedOffers.length > 0) {
         log('Phase 1 complete: ' + collectedOffers.length + ' offer row(s) collected', 'success');
-        log('Phase 2: Enriching offers with sailing details...', 'info');
-        progress(50, 100, 'Enriching offers with sailing details...');
-        var enrichedOffers = await enrichOffersWithSailings(collectedOffers);
-        log('Enrichment complete: ' + enrichedOffers.length + ' total sailing row(s)', 'success');
-        for (var k = 0; k < enrichedOffers.length; k += BATCH_SIZE) { sendBatch(enrichedOffers.slice(k, k + BATCH_SIZE), false); }
+        log('Skipping per-offer cruise fetch - cruises will open on Carnival.com instead', 'info');
+        progress(90, 100, 'Sending offer data...');
+        for (var k = 0; k < collectedOffers.length; k += BATCH_SIZE) { sendBatch(collectedOffers.slice(k, k + BATCH_SIZE), false); }
         var uniqueOfferCodes = {};
-        for (var ui = 0; ui < enrichedOffers.length; ui++) { var key = enrichedOffers[ui].offerCode || enrichedOffers[ui].offerName || ('offer-' + ui); uniqueOfferCodes[key] = true; }
+        for (var ui = 0; ui < collectedOffers.length; ui++) { var key = collectedOffers[ui].offerCode || collectedOffers[ui].offerName || ('offer-' + ui); uniqueOfferCodes[key] = true; }
         var uniqueCount = Object.keys(uniqueOfferCodes).length;
-        sendBatch([], true, enrichedOffers.length, uniqueCount);
-        log('Sent ' + enrichedOffers.length + ' sailing(s) across ' + uniqueCount + ' offer(s)', 'success');
+        sendBatch([], true, collectedOffers.length, uniqueCount);
+        log('Sent ' + collectedOffers.length + ' offer(s) across ' + uniqueCount + ' unique code(s)', 'success');
       } else {
         log('No Carnival offers found from any source', 'warning');
         sendBatch([], true, 0, 0);

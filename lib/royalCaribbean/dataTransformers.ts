@@ -347,6 +347,7 @@ export function transformOfferRowsToCruisesAndOffers(
         offerExpiryDate: offerExpiryDate,
         status: 'active',
         offerSource: source,
+        bookingLink: offer.bookingLink || undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -366,6 +367,9 @@ export function transformOfferRowsToCruisesAndOffers(
       aggregatedOffer.guests = aggregatedOffer.guests ?? guests;
       aggregatedOffer.ports = aggregatedOffer.ports ?? ports;
       aggregatedOffer.description = aggregatedOffer.description || safePerks || offer.itinerary || undefined;
+      if (!aggregatedOffer.bookingLink && offer.bookingLink) {
+        aggregatedOffer.bookingLink = offer.bookingLink;
+      }
 
       if (interiorPrice !== undefined) {
         aggregatedOffer.interiorPrice = getLowestPositivePrice([aggregatedOffer.interiorPrice, interiorPrice]);

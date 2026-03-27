@@ -260,6 +260,7 @@ export interface CasinoOffer {
   requiresDeposit?: boolean;
   
   offerSource?: 'royal' | 'celebrity' | 'carnival';
+  bookingLink?: string;
   csvRowNumber?: number;
   createdAt?: string;
   updatedAt?: string;

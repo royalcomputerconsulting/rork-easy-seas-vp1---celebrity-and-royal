@@ -1740,56 +1740,40 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         };
 
         if (offersToEnrich.length > 0) {
-          addLog(`🔍 ====== STEP 1.5: FETCHING SAILINGS FOR ${offersToEnrich.length} RATE CODE(S) ======`, 'info');
-          addLog('🚢 Navigating to each cruise search page (pagesize=50 with SHOW DATES expansion)...', 'info');
+          addLog(`✅ STEP 1.5: SKIPPING cruise-by-cruise fetch for ${offersToEnrich.length} rate code(s) — cruises will open on Carnival.com instead`, 'success');
+          addLog(`🔗 Each offer will link directly to its Carnival cruise search page when tapped in the app`, 'info');
 
-          let totalEnrichedSailings = 0;
-          for (let oi = 0; oi < offersToEnrich.length; oi++) {
-            const offer = offersToEnrich[oi];
-            addLog(`🔍 Rate code ${oi + 1}/${offersToEnrich.length}: ${offer.offerCode}`, 'info');
-
-            await navigateToPage(offer.bookingLink, 25000);
-            await delay(5000);
-
-            const pendingSailingsRequest = waitForOfferSailings(offer.offerCode, 40000);
-
-            safeInjectJS(
-              injectCarnivalCruiseSearchScrape(
-                offer.offerName,
-                offer.offerCode,
-                offer.offerExpiry,
-                offer.perks,
-                pendingSailingsRequest.requestId
-              )
-            );
-
-            const sailings = await pendingSailingsRequest.promise;
-
-            if (sailings.length > 0) {
-              totalEnrichedSailings += sailings.length;
-              addLog(`   ✅ ${sailings.length} sailing(s) for ${offer.offerCode}`, 'success');
-              sailings.slice(0, 3).forEach((s, idx) => {
-                if (s.shipName || s.sailingDate) {
-                  addLog(`      🚢 ${idx + 1}: ${s.shipName || 'TBD'} - ${s.sailingDate || 'TBD'}${s.interiorPrice ? ' from ' + s.interiorPrice : ''}`, 'success');
-                }
-              });
-              if (sailings.length > 3) {
-                addLog(`      ➕ ...and ${sailings.length - 3} more`, 'success');
-              }
+          for (const offer of offersToEnrich) {
+            const currentOffers = extractedOffersRef.current;
+            const hasOfferRow = currentOffers.some(o => o.offerCode === offer.offerCode);
+            if (!hasOfferRow) {
+              const offerLevelRow: OfferRow = {
+                sourcePage: 'Offers',
+                offerName: offer.offerName,
+                offerCode: offer.offerCode,
+                offerExpirationDate: offer.offerExpiry || '',
+                offerType: 'VIFP Club',
+                shipName: '',
+                sailingDate: '',
+                itinerary: '',
+                departurePort: '',
+                cabinType: '',
+                numberOfGuests: '2',
+                perks: offer.perks || '',
+                loyaltyLevel: '',
+                loyaltyPoints: '',
+                bookingLink: offer.bookingLink,
+              };
               setState(prev => {
-                const existingWithoutThisOffer = prev.extractedOffers.filter((o) => o.offerCode !== offer.offerCode);
-                const updatedOffers = [...existingWithoutThisOffer, ...sailings];
-                extractedOffersRef.current = updatedOffers;
-                return { ...prev, extractedOffers: updatedOffers };
+                const updated = [...prev.extractedOffers, offerLevelRow];
+                extractedOffersRef.current = updated;
+                return { ...prev, extractedOffers: updated };
               });
-            } else {
-              addLog(`   ⚠️ No sailings found for ${offer.offerCode} — keeping offer-level row`, 'warning');
+              addLog(`   🔗 ${offer.offerCode}: ${offer.offerName} → will open on Carnival.com`, 'success');
             }
-            await delay(800);
           }
-          addLog(`✅ STEP 1.5 COMPLETE: ${totalEnrichedSailings} total sailing(s) from ${offersToEnrich.length} rate code(s)`, 'success');
         } else {
-          addLog('ℹ️ No rate codes to enrich — all offer data already complete or no offers found', 'info');
+          addLog('ℹ️ No rate codes found — all offer data already complete or no offers found', 'info');
         }
       }
 

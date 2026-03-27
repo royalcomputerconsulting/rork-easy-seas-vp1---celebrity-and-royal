@@ -16,10 +16,14 @@ export const CARNIVAL_OFFERS_SCRIPT = `
 
   function wait(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
-  function log(message, type) {
+  function post(type, payload) {
     try {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: message, logType: type || 'info' }));
+      window.ReactNativeWebView.postMessage(JSON.stringify(Object.assign({ type: type }, payload || {})));
     } catch(e) {}
+  }
+
+  function log(message, type) {
+    post('log', { message: message, logType: type || 'info' });
   }
 
   function sendBatch(offers, isFinal, totalCount, offerCount) {
@@ -897,16 +901,14 @@ export const CARNIVAL_OFFERS_SCRIPT = `
       }
       if (collectedOffers.length > 0) {
         log('Phase 1 complete: ' + collectedOffers.length + ' offer row(s) collected', 'success');
-        log('Phase 2: Enriching offers with sailing details...', 'info');
-        progress(50, 100, 'Enriching offers with sailing details...');
-        var enrichedOffers = await enrichOffersWithSailings(collectedOffers);
-        log('Enrichment complete: ' + enrichedOffers.length + ' total sailing row(s)', 'success');
-        for (var k = 0; k < enrichedOffers.length; k += BATCH_SIZE) { sendBatch(enrichedOffers.slice(k, k + BATCH_SIZE), false); }
+        log('Skipping per-offer cruise fetch - cruises will open on Carnival.com instead', 'info');
+        progress(90, 100, 'Sending offer data...');
+        for (var k = 0; k < collectedOffers.length; k += BATCH_SIZE) { sendBatch(collectedOffers.slice(k, k + BATCH_SIZE), false); }
         var uniqueOfferCodes = {};
-        for (var ui = 0; ui < enrichedOffers.length; ui++) { var key = enrichedOffers[ui].offerCode || enrichedOffers[ui].offerName || ('offer-' + ui); uniqueOfferCodes[key] = true; }
+        for (var ui = 0; ui < collectedOffers.length; ui++) { var key = collectedOffers[ui].offerCode || collectedOffers[ui].offerName || ('offer-' + ui); uniqueOfferCodes[key] = true; }
         var uniqueCount = Object.keys(uniqueOfferCodes).length;
-        sendBatch([], true, enrichedOffers.length, uniqueCount);
-        log('Sent ' + enrichedOffers.length + ' sailing(s) across ' + uniqueCount + ' offer(s)', 'success');
+        sendBatch([], true, collectedOffers.length, uniqueCount);
+        log('Sent ' + collectedOffers.length + ' offer(s) across ' + uniqueCount + ' unique code(s)', 'success');
       } else {
         log('No Carnival offers found from any source', 'warning');
         sendBatch([], true, 0, 0);
@@ -989,6 +991,35 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
     return 'Upcoming';
   }
 
+  function truncateField(value, maxLength) {
+    var str = '';
+    if (typeof value === 'string') str = value;
+    else if (typeof value === 'number' || typeof value === 'boolean') str = String(value);
+    else if (value === null || value === undefined) str = '';
+    str = str.replace(/\\s+/g, ' ').trim();
+    if (str.length <= maxLength) return str;
+    return str.substring(0, Math.max(0, maxLength - 1)) + '…';
+  }
+
+  function createBookingSnapshot(booking) {
+    if (!booking || typeof booking !== 'object') return null;
+    return {
+      bookingId: truncateField(booking.bookingId || booking.confirmationNumber || booking.reservationId || '', 40),
+      shipName: truncateField(booking.shipName || booking.ship || '', 80),
+      shipCode: truncateField(booking.shipCode || '', 12),
+      sailDate: truncateField(booking.sailDate || booking.departureDate || booking.startDate || '', 32),
+      returnDate: truncateField(booking.endDate || booking.returnDate || '', 32),
+      bookingStatus: truncateField(booking.bookingStatus || booking.status || '', 32),
+      stateroomNumber: truncateField(booking.stateroomNumber || booking.cabinNumber || '', 24),
+      stateroomType: truncateField(booking.stateroomType || booking.cabinType || booking.categoryType || '', 48),
+      itinerary: truncateField(booking.itinerary || booking.destination || '', 120),
+      departurePort: truncateField(booking.departurePort || booking.homePort || '', 80),
+      numberOfNights: booking.numberOfNights || booking.duration || '',
+      numberOfGuests: booking.guestCount || booking.numberOfGuests || (booking.passengers && booking.passengers.length) || '',
+      balanceDue: booking.balanceDueAmount || booking.balanceDue || booking.amountDue || ''
+    };
+  }
+
   function formatBookingFromAPI(booking, index) {
     var shipName = booking.shipName || booking.ship || '';
     if (!shipName && booking.shipCode) shipName = 'Carnival ' + booking.shipCode;
@@ -997,7 +1028,7 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
     var status = determineCruiseStatus(sailDate, bStatus);
     if (booking.status && /past|completed/i.test(booking.status)) status = 'Completed';
     return {
-      rawBooking: booking,
+      rawBooking: createBookingSnapshot(booking),
       sourcePage: status === 'Completed' ? 'Completed' : 'Upcoming',
       shipName: shipName,
       shipCode: booking.shipCode || '',
@@ -1298,16 +1329,17 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'carnival_user_data', data: userCookie
       }));
+      var vifpActualPoints = String(userCookie.Points || userCookie.TotalPoints || userCookie.VifpPoints || userCookie.CruiseDays || userCookie.cruiseDays || 0);
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'loyalty_data',
         data: {
           crownAndAnchorLevel: tierName,
-          crownAndAnchorPoints: userCookie.PastGuestNumber || '',
+          crownAndAnchorPoints: vifpActualPoints,
           clubRoyaleTier: tierName,
           clubRoyalePoints: ''
         }
       }));
-      log('VIFP loyalty: ' + tierName + ' (VIFP# ' + (userCookie.PastGuestNumber || 'N/A') + ')', 'success');
+      log('VIFP loyalty: ' + tierName + ' (VIFP# ' + (userCookie.PastGuestNumber || 'N/A') + ', ' + vifpActualPoints + ' pts)', 'success');
     }
 
     try {
@@ -1344,10 +1376,14 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
   ];
   var SHIP_PATTERN = new RegExp('(' + CARNIVAL_SHIPS.map(function(s) { return s.replace(/\\s+/g, '\\\\s+'); }).join('|') + ')', 'i');
 
-  function log(message, type) {
+  function post(type, payload) {
     try {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: message, logType: type || 'info' }));
+      window.ReactNativeWebView.postMessage(JSON.stringify(Object.assign({ type: type }, payload || {})));
     } catch(e) {}
+  }
+
+  function log(message, type) {
+    post('log', { message: message, logType: type || 'info' });
   }
 
   function formatSailDate(dateStr) {
@@ -1370,6 +1406,15 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
       return params.get('rateCodes') || params.get('ratecodes') || params.get('rateCode') || params.get('ratecode') || '';
     } catch(e) {
       return '';
+    }
+  }
+
+  function getOfferRequestId() {
+    try {
+      var requestId = Number(window.__enrichOfferRequestId || 0);
+      return isFinite(requestId) ? requestId : 0;
+    } catch(e) {
+      return 0;
     }
   }
 
@@ -1611,6 +1656,45 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
     return deduped;
   }
 
+  function extractSailingsFromInlineJsonScripts() {
+    try {
+      var scripts = document.querySelectorAll('script[type="application/json"], script[type="application/ld+json"], script#__NEXT_DATA__, script:not([src])');
+      var foundArrays = [];
+      for (var si = 0; si < scripts.length; si++) {
+        var text = scripts[si].textContent || '';
+        if (!text || text.length < 50 || text.length > 900000) {
+          continue;
+        }
+        var trimmed = text.trim();
+        if (!trimmed || (trimmed.charAt(0) !== '{' && trimmed.charAt(0) !== '[')) {
+          continue;
+        }
+        if (
+          trimmed.indexOf('shipName') === -1 &&
+          trimmed.indexOf('departureDate') === -1 &&
+          trimmed.indexOf('sailDate') === -1 &&
+          trimmed.indexOf('embarkDate') === -1 &&
+          trimmed.indexOf('startingPrice') === -1 &&
+          trimmed.indexOf('lowestPrice') === -1
+        ) {
+          continue;
+        }
+        try {
+          var parsed = JSON.parse(trimmed);
+          collectSailingArrays(parsed, 'script[' + si + ']', foundArrays, 0);
+        } catch(parseErr) {}
+      }
+      if (foundArrays.length > 0) {
+        foundArrays.sort(function(a, b) { return b.items.length - a.items.length; });
+        log('Found ' + foundArrays[0].items.length + ' sailings in inline JSON scripts at ' + foundArrays[0].path, 'success');
+        return foundArrays[0].items;
+      }
+    } catch(e) {
+      log('Inline JSON scan failed: ' + (e && e.message ? e.message : e), 'warning');
+    }
+    return null;
+  }
+
   function formatCurrency(value, dollarChar) {
     return value > 0 ? dollarChar + Number(value).toFixed(2) : '';
   }
@@ -1663,56 +1747,89 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
   }
 
   async function tryFetchSailingsAPI(rateCode) {
+    function buildCandidateQueries(page, useSingularRateCode) {
+      var params = new URLSearchParams(window.location.search || '');
+      params.delete('async');
+      params.delete('rateCode');
+      params.delete('ratecode');
+      params.delete('rateCodes');
+      params.delete('ratecodes');
+      params.set('pageNumber', String(page));
+      params.set('pageSize', '50');
+      params.set('pagesize', '50');
+      if (!params.get('sort')) {
+        params.set('sort', 'departureDate');
+      }
+      if (!params.get('sortDirection')) {
+        params.set('sortDirection', 'ASC');
+      }
+      params.set(useSingularRateCode ? 'rateCode' : 'rateCodes', rateCode);
+      return params.toString();
+    }
+
     var endpointTemplates = [
-      '/g/cruise-search/api/search?rateCodes=' + rateCode + '&pageNumber={PAGE}&pageSize=50&sort=departureDate&sortDirection=ASC',
-      '/g/cruise-search/api/search?rateCode=' + rateCode + '&pageNumber={PAGE}&pageSize=50&sort=departureDate&sortDirection=ASC',
-      '/cruise-search/api/search?rateCodes=' + rateCode + '&pageNumber={PAGE}&pageSize=50',
+      '/g/cruise-search/api/search?{QUERY}',
+      '/cruise-search/api/search?{QUERY}',
+      'https://www.carnival.com/g/cruise-search/api/search?{QUERY}'
     ];
-    for (var ei = 0; ei < endpointTemplates.length; ei++) {
+
+    for (var templateIndex = 0; templateIndex < endpointTemplates.length; templateIndex++) {
       var collected = [];
       for (var page = 1; page <= 8; page++) {
-        var endpoint = endpointTemplates[ei].replace('{PAGE}', String(page));
-        try {
-          log('  Trying cruise search API: ' + endpoint, 'info');
-          var controller = new AbortController();
-          var tid = setTimeout(function() { controller.abort(); }, 12000);
-          var response = await fetch(endpoint, {
-            method: 'GET',
-            headers: { 'accept': 'application/json', 'x-requested-with': 'XMLHttpRequest' },
-            credentials: 'include',
-            signal: controller.signal
-          });
-          clearTimeout(tid);
-          log('  API response: ' + response.status + ' (page ' + page + ')', response.ok ? 'info' : 'warning');
-          if (!response.ok) {
-            if (page === 1) {
-              collected = [];
+        var pageSailings = null;
+        var queryVariants = [
+          buildCandidateQueries(page, false),
+          buildCandidateQueries(page, true)
+        ];
+
+        for (var queryIndex = 0; queryIndex < queryVariants.length; queryIndex++) {
+          var endpoint = endpointTemplates[templateIndex].replace('{QUERY}', queryVariants[queryIndex]);
+          try {
+            log('  Trying cruise search API: ' + endpoint, 'info');
+            var controller = new AbortController();
+            var tid = setTimeout(function() { controller.abort(); }, 12000);
+            var response = await fetch(endpoint, {
+              method: 'GET',
+              headers: { 'accept': 'application/json', 'x-requested-with': 'XMLHttpRequest' },
+              credentials: 'include',
+              signal: controller.signal
+            });
+            clearTimeout(tid);
+            log('  API response: ' + response.status + ' (page ' + page + ')', response.ok ? 'info' : 'warning');
+            if (!response.ok) {
+              continue;
             }
-            break;
+            var ct = response.headers.get('content-type') || '';
+            if (!ct.includes('json')) {
+              continue;
+            }
+            var data = await response.json();
+            if (!data) {
+              continue;
+            }
+            var sailings = extractSailingsArrayFromData(data);
+            if (sailings && sailings.length > 0) {
+              pageSailings = sailings;
+              break;
+            }
+          } catch(e) {
+            log('  API error: ' + (e && e.message ? e.message : 'timeout'), 'warning');
           }
-          var ct = response.headers.get('content-type') || '';
-          if (!ct.includes('json')) {
-            break;
-          }
-          var data = await response.json();
-          if (!data) {
-            break;
-          }
-          var sailings = extractSailingsArrayFromData(data);
-          if (!sailings || sailings.length === 0) {
-            break;
-          }
-          for (var si = 0; si < sailings.length; si++) {
-            collected.push(sailings[si]);
-          }
-          if (sailings.length < 50) {
-            break;
-          }
-        } catch(e) {
-          log('  API error: ' + (e && e.message ? e.message : 'timeout'), 'warning');
+        }
+
+        if (!pageSailings || pageSailings.length === 0) {
+          break;
+        }
+
+        for (var si = 0; si < pageSailings.length; si++) {
+          collected.push(pageSailings[si]);
+        }
+
+        if (pageSailings.length < 50) {
           break;
         }
       }
+
       if (collected.length > 0) {
         var deduped = dedupeApiSailings(collected);
         log('Found ' + deduped.length + ' sailings from API for ' + rateCode, 'success');
@@ -1769,6 +1886,15 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
           }
         }
       } catch(e) { log('__NEXT_DATA__ parse error: ' + (e.message || e), 'warning'); }
+    }
+
+    if (sailings.length === 0) {
+      log('Phase 2b: Scanning inline JSON scripts for cruise data...', 'info');
+      var inlineScriptSailings = extractSailingsFromInlineJsonScripts();
+      if (inlineScriptSailings && inlineScriptSailings.length > 0) {
+        sailings = convertApiSailingsToRows(inlineScriptSailings, offerName, offerCode, offerExpiry, offerPerks);
+        log('Inline JSON scripts found ' + sailings.length + ' sailing(s) for ' + offerName, 'success');
+      }
     }
 
     if (sailings.length === 0) {
@@ -1994,14 +2120,35 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
 
     log('Total: ' + sailings.length + ' sailing(s) found for ' + offerName + ' (' + offerCode + ')', sailings.length > 0 ? 'success' : 'warning');
 
-    try {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'offer_sailings_result',
+    var requestId = getOfferRequestId();
+    var chunkSize = 15;
+    if (sailings.length === 0) {
+      post('offer_sailings_chunk', {
         offerCode: offerCode,
         offerName: offerName,
-        sailings: sailings
-      }));
-    } catch(e) {}
+        sailings: [],
+        requestId: requestId,
+        chunkIndex: 1,
+        totalChunks: 1,
+        isFinal: true
+      });
+      return;
+    }
+
+    var totalChunks = Math.ceil(sailings.length / chunkSize);
+    for (var chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      var start = chunkIndex * chunkSize;
+      var end = start + chunkSize;
+      post('offer_sailings_chunk', {
+        offerCode: offerCode,
+        offerName: offerName,
+        sailings: sailings.slice(start, end),
+        requestId: requestId,
+        chunkIndex: chunkIndex + 1,
+        totalChunks: totalChunks,
+        isFinal: chunkIndex === totalChunks - 1
+      });
+    }
   }
 
   if (document.readyState === 'loading') {
@@ -2012,13 +2159,14 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
 })();
 `;
 
-export function injectCarnivalCruiseSearchScrape(offerName: string, offerCode: string, offerExpiry: string, offerPerks: string): string {
+export function injectCarnivalCruiseSearchScrape(offerName: string, offerCode: string, offerExpiry: string, offerPerks: string, requestId: number): string {
   const escaped = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
   return `
     window.__enrichOfferName = '${escaped(offerName)}';
     window.__enrichOfferCode = '${escaped(offerCode)}';
     window.__enrichOfferExpiry = '${escaped(offerExpiry)}';
     window.__enrichOfferPerks = '${escaped(offerPerks)}';
+    window.__enrichOfferRequestId = ${String(requestId)};
     ${CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT}
     true;
   `;
