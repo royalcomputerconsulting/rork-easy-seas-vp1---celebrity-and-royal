@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 
 import * as Sharing from 'expo-sharing';
 import { 
@@ -61,9 +62,8 @@ export async function pickAndReadFile(fileType: 'csv' | 'ics' | 'json'): Promise
       
       console.log('[FileIO] Web file read successfully, length:', content.length);
     } else {
-      const { File: ExpoFile } = await import('expo-file-system');
-      const file = new ExpoFile(asset.uri);
-      content = await file.text();
+      const expoFile = new ExpoFile(asset.uri);
+      content = await expoFile.text();
     }
 
     const contentValidation = validateImportContent(content, fileType);
@@ -120,7 +120,6 @@ export async function downloadFromURL(url: string): Promise<{ content: string; s
     
     // Native: Use FileSystem.downloadAsync which can access device cookies/credentials
     const fileName = `ics_import_${Date.now()}.ics`;
-    const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
     const tempFile = new ExpoFile(ExpoPaths.cache, fileName);
     const fileUri = tempFile.uri;
     
@@ -175,13 +174,12 @@ export async function exportFile(content: string, fileName: string): Promise<boo
       return true;
     }
 
-    const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
-    const file = new ExpoFile(ExpoPaths.cache, fileName);
-    await file.write(content);
+    const expoFile = new ExpoFile(ExpoPaths.cache, fileName);
+    await expoFile.write(content);
 
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
-      await Sharing.shareAsync(file.uri, {
+      await Sharing.shareAsync(expoFile.uri, {
         mimeType: fileName.endsWith('.ics') ? 'text/calendar' : fileName.endsWith('.json') ? 'application/json' : 'text/csv',
         dialogTitle: `Export ${fileName}`,
       });

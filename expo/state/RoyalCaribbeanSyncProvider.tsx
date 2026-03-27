@@ -1,6 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useState, useCallback, useRef, useEffect, useContext, createContext, useMemo, ReactNode } from 'react';
 import { WebView } from 'react-native-webview';
+import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -1970,9 +1971,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         URL.revokeObjectURL(url);
         addLog('Offers CSV downloaded successfully', 'success');
       } else {
-        const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
         const file = new ExpoFile(ExpoPaths.cache, 'offers.csv');
-        file.write(csv);
+        await file.write(csv);
 
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(file.uri, {
@@ -2003,9 +2003,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         URL.revokeObjectURL(url);
         addLog('Booked Cruises CSV downloaded successfully', 'success');
       } else {
-        const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
         const file = new ExpoFile(ExpoPaths.cache, 'Booked_Cruises.csv');
-        file.write(csv);
+        await file.write(csv);
 
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(file.uri, {
@@ -2036,9 +2035,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         URL.revokeObjectURL(url);
         addLog('Log downloaded successfully', 'success');
       } else {
-        const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
         const file = new ExpoFile(ExpoPaths.cache, 'last.log');
-        file.write(logText);
+        await file.write(logText);
 
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(file.uri, {

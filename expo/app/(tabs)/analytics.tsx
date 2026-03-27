@@ -11,6 +11,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
@@ -615,9 +616,7 @@ export default function AnalyticsScreen() {
         return;
       }
 
-      const { File: ExpoFile, Paths: ExpoPaths } = await import('expo-file-system');
-      const directory = ExpoPaths.cache ?? ExpoPaths.document;
-      const file = new ExpoFile(directory, filename);
+      const file = new ExpoFile(ExpoPaths.cache, filename);
       await file.write(csv);
 
       const fileUri = file.uri;
