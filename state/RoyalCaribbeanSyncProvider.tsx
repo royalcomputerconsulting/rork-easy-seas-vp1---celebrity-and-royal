@@ -49,7 +49,7 @@ export const CRUISE_LINE_CONFIG = {
   carnival: {
     name: 'Carnival Cruise Line',
     loginUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
-    offersUrl: 'https://www.carnival.com/cruise-deals-2025',
+    offersUrl: 'https://www.carnival.com/cruise-deals',
     upcomingUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     holdsUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     loyaltyClubName: 'VIFP Club',
@@ -1235,7 +1235,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         
         if (endpoint === 'loyalty' && data) {
           addLog('Processing captured Loyalty API payload...', 'info');
-          console.log('[RoyalCaribbeanSync] Loyalty data structure:', JSON.stringify(data).substring(0, 500));
+          let loyaltyPreview = '[unavailable]';
+          try {
+            loyaltyPreview = JSON.stringify(data).substring(0, 500);
+          } catch {
+            loyaltyPreview = '[unserializable loyalty payload]';
+          }
+          console.log('[RoyalCaribbeanSync] Loyalty data structure:', loyaltyPreview);
           
           const loyaltyPayload = data.payload || data;
           const loyaltyInfo = loyaltyPayload.loyaltyInformation || loyaltyPayload;
@@ -1532,7 +1538,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                   var href = links[i].href || '';
                   var raw = links[i].getAttribute('href') || '';
                   var full = href || (raw.startsWith('http') ? raw : ('https://www.carnival.com' + (raw.startsWith('/') ? '' : '/') + raw));
-                  if (full && (full.includes('tgo=') || (full.includes('cruise-deals-') && full.includes('vifp=')))) {
+                  if (full && (full.includes('tgo=') || (full.includes('cruise-deals') && full.includes('vifp=')))) {
                     best = full;
                     break;
                   }
@@ -1640,7 +1646,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         const buildCarnivalSearchUrl = (code: string): string => {
           const tgoParam = tgoData?.tgo || '';
           const tier = tgoData?.tierCode || '01';
-          return `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&ratecodes=${code}&pagesize=50&sort=fromprice&showBest=true&tierCode=${tier}${tgoParam ? '&tgo=' + encodeURIComponent(tgoParam) : ''}&pastGuest=true&pastguest=true&async=true&currency=USD&locality=1&cruisedeals=jackpot`;
+          return `https://www.carnival.com/cruise-search?pageNumber=1&numadults=2&rateCodes=${code}&pageSize=50&sort=fromprice&showBest=true&tierCode=${tier}${tgoParam ? '&tgo=' + encodeURIComponent(tgoParam) : ''}&pastGuest=true&pastguest=true&async=true&currency=USD&locality=1&cruisedeals=jackpot`;
         };
         const upsertEnrichEntry = (entry: EnrichEntry) => {
           if (!entry.offerCode) {
