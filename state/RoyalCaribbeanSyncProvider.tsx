@@ -138,6 +138,78 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     return `${typeof value}:${stringifyValue(value).slice(0, 120)}`;
   }, [getObjectKeys, stringifyValue]);
 
+  const truncateValue = useCallback((value: string, maxLength: number = 160): string => {
+    if (value.length <= maxLength) {
+      return value;
+    }
+    return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
+  }, []);
+
+  const createBookingSnapshot = useCallback((value: unknown): Record<string, string | number> | undefined => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return undefined;
+    }
+
+    const record = value as Record<string, unknown>;
+    const snapshot: Record<string, string | number> = {};
+
+    const setStringField = (key: string, input: unknown) => {
+      const normalized = truncateValue(stringifyValue(input));
+      if (normalized) {
+        snapshot[key] = normalized;
+      }
+    };
+
+    const setNumericField = (key: string, input: unknown) => {
+      if (typeof input === 'number' && Number.isFinite(input)) {
+        snapshot[key] = input;
+        return;
+      }
+      const normalized = truncateValue(stringifyValue(input));
+      if (normalized) {
+        snapshot[key] = normalized;
+      }
+    };
+
+    const passengerCount = Array.isArray(record.passengers)
+      ? record.passengers.length
+      : Array.isArray(record.passengersInStateroom)
+      ? record.passengersInStateroom.length
+      : undefined;
+
+    setStringField('bookingId', record.bookingId ?? record.confirmationNumber ?? record.reservationId);
+    setStringField('shipName', record.shipName ?? record.ship);
+    setStringField('shipCode', record.shipCode);
+    setStringField('sailDate', record.sailDate ?? record.departureDate ?? record.startDate);
+    setStringField('returnDate', record.endDate ?? record.returnDate);
+    setStringField('bookingStatus', record.bookingStatus ?? record.status);
+    setStringField('stateroomNumber', record.stateroomNumber ?? record.cabinNumber);
+    setStringField('stateroomType', record.stateroomType ?? record.cabinType ?? record.categoryType);
+    setStringField('departurePort', record.departurePort ?? record.homePort);
+    setStringField('itinerary', record.itinerary ?? record.destination);
+    setNumericField('numberOfNights', record.numberOfNights ?? record.duration);
+    setNumericField('numberOfGuests', record.guestCount ?? record.numberOfGuests);
+    setNumericField('balanceDue', record.balanceDueAmount ?? record.balanceDue ?? record.amountDue);
+
+    if (typeof passengerCount === 'number' && Number.isFinite(passengerCount)) {
+      snapshot.passengerCount = passengerCount;
+    }
+
+    return Object.keys(snapshot).length > 0 ? snapshot : undefined;
+  }, [stringifyValue, truncateValue]);
+
+  const getBookingDebugPreview = useCallback((value: unknown): string => {
+    const snapshot = createBookingSnapshot(value);
+    if (!snapshot) {
+      return '[no booking snapshot]';
+    }
+    try {
+      return JSON.stringify(snapshot);
+    } catch {
+      return '[booking snapshot unavailable]';
+    }
+  }, [createBookingSnapshot]);
+
   const normalizeOfferRows = useCallback((value: unknown): OfferRow[] => {
     if (!Array.isArray(value)) {
       return [];
@@ -215,7 +287,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       const row = item as Partial<BookedCruiseRow>;
       const bookingId = stringifyValue(row.bookingId) || `booking_${index}`;
       const normalizedRow: BookedCruiseRow = {
-        rawBooking: row.rawBooking,
+        rawBooking: createBookingSnapshot(row.rawBooking),
         sourcePage: stringifyValue(row.sourcePage) || 'Upcoming',
         shipName: stringifyValue(row.shipName) || 'Unknown Ship',
         shipCode: stringifyValue(row.shipCode) || undefined,
@@ -601,7 +673,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             }
             const nights = booking.numberOfNights || booking.duration || 0;
             return {
-              rawBooking: booking,
+              rawBooking: createBookingSnapshot(booking),
               sourcePage: status === 'Completed' ? 'Completed' : 'Upcoming',
               shipName,
               shipCode: booking.shipCode || '',
@@ -770,6 +842,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           return;
         }
         processedPayloads.current.add(payloadKey);
+        if (processedPayloads.current.size > 250) {
+          const oldestPayloadKey = processedPayloads.current.values().next();
+          if (!oldestPayloadKey.done) {
+            processedPayloads.current.delete(oldestPayloadKey.value);
+          }
+        }
         
         console.log(`[RoyalCaribbeanSync] Network payload captured: ${endpoint}`, {
           url,
@@ -824,9 +902,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           
           if (bookings && bookings.length > 0) {
             console.log(`[RoyalCaribbeanSync] Processing ${bookings.length} bookings from enriched API`);
-            console.log(`[RoyalCaribbeanSync] First booking sample:`, JSON.stringify(bookings[0]).substring(0, 300));
-            console.log(`[RoyalCaribbeanSync] First booking FULL:`, JSON.stringify(bookings[0]));
-            console.log(`[RoyalCaribbeanSync] First booking keys:`, Object.keys(bookings[0]));
+            console.log(`[RoyalCaribbeanSync] First booking sample:`, getBookingDebugPreview(bookings[0]));
+            console.log(`[RoyalCaribbeanSync] First booking keys:`, getObjectKeys(bookings[0]).slice(0, 20));
             
             const isCarnivalBooking = cruiseLine === 'carnival' || (typeof url === 'string' && url.includes('carnival.com'));
             
@@ -894,7 +971,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               const status = determineCruiseStatus(sailDate, bookingStatus);
               
               return {
-                rawBooking: booking,
+                rawBooking: createBookingSnapshot(booking),
                 sourcePage: status === 'Completed' ? 'Completed' : 'Upcoming',
                 shipName,
                 shipCode,
@@ -1189,7 +1266,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Message handler error: ${String(handlerError)}`, 'error');
       } catch { /* ignore logging errors */ }
     }
-  }, [addLog, setProgress, cruiseLine, config.name, createPayloadSignature, getObjectKeys, normalizeBookedCruiseRows, normalizeOfferRows, stringifyValue]);
+  }, [addLog, setProgress, cruiseLine, config.name, createBookingSnapshot, createPayloadSignature, getBookingDebugPreview, getObjectKeys, normalizeBookedCruiseRows, normalizeOfferRows, stringifyValue]);
 
   const openLogin = useCallback(() => {
     setWebViewUrl(config.loginUrl);

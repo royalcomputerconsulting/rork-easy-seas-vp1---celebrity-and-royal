@@ -989,6 +989,35 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
     return 'Upcoming';
   }
 
+  function truncateField(value, maxLength) {
+    var str = '';
+    if (typeof value === 'string') str = value;
+    else if (typeof value === 'number' || typeof value === 'boolean') str = String(value);
+    else if (value === null || value === undefined) str = '';
+    str = str.replace(/\s+/g, ' ').trim();
+    if (str.length <= maxLength) return str;
+    return str.substring(0, Math.max(0, maxLength - 1)) + '…';
+  }
+
+  function createBookingSnapshot(booking) {
+    if (!booking || typeof booking !== 'object') return null;
+    return {
+      bookingId: truncateField(booking.bookingId || booking.confirmationNumber || booking.reservationId || '', 40),
+      shipName: truncateField(booking.shipName || booking.ship || '', 80),
+      shipCode: truncateField(booking.shipCode || '', 12),
+      sailDate: truncateField(booking.sailDate || booking.departureDate || booking.startDate || '', 32),
+      returnDate: truncateField(booking.endDate || booking.returnDate || '', 32),
+      bookingStatus: truncateField(booking.bookingStatus || booking.status || '', 32),
+      stateroomNumber: truncateField(booking.stateroomNumber || booking.cabinNumber || '', 24),
+      stateroomType: truncateField(booking.stateroomType || booking.cabinType || booking.categoryType || '', 48),
+      itinerary: truncateField(booking.itinerary || booking.destination || '', 120),
+      departurePort: truncateField(booking.departurePort || booking.homePort || '', 80),
+      numberOfNights: booking.numberOfNights || booking.duration || '',
+      numberOfGuests: booking.guestCount || booking.numberOfGuests || (booking.passengers && booking.passengers.length) || '',
+      balanceDue: booking.balanceDueAmount || booking.balanceDue || booking.amountDue || ''
+    };
+  }
+
   function formatBookingFromAPI(booking, index) {
     var shipName = booking.shipName || booking.ship || '';
     if (!shipName && booking.shipCode) shipName = 'Carnival ' + booking.shipCode;
@@ -997,7 +1026,7 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
     var status = determineCruiseStatus(sailDate, bStatus);
     if (booking.status && /past|completed/i.test(booking.status)) status = 'Completed';
     return {
-      rawBooking: booking,
+      rawBooking: createBookingSnapshot(booking),
       sourcePage: status === 'Completed' ? 'Completed' : 'Upcoming',
       shipName: shipName,
       shipCode: booking.shipCode || '',

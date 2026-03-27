@@ -14,6 +14,95 @@ export const AUTH_DETECTION_SCRIPT = `
     };
   }
 
+  function truncateText(value, maxLength) {
+    var str = '';
+    if (typeof value === 'string') str = value;
+    else if (typeof value === 'number' || typeof value === 'boolean') str = String(value);
+    else if (value === null || value === undefined) str = '';
+    str = str.replace(/\s+/g, ' ').trim();
+    if (str.length <= maxLength) return str;
+    return str.substring(0, Math.max(0, maxLength - 1)) + '…';
+  }
+
+  function extractBookingsFromPayload(data) {
+    if (!data) return null;
+    if (Array.isArray(data)) return data;
+    if (data.bookings && Array.isArray(data.bookings)) return data.bookings;
+    if (data.cruises && Array.isArray(data.cruises)) return data.cruises;
+    if (data.reservations && Array.isArray(data.reservations)) return data.reservations;
+    if (data.upcoming && Array.isArray(data.upcoming)) return data.upcoming;
+    if (data.upcomingCruises && Array.isArray(data.upcomingCruises)) return data.upcomingCruises;
+    if (data.pastCruises && Array.isArray(data.pastCruises)) return data.pastCruises;
+    if (data.profileBookings && Array.isArray(data.profileBookings)) return data.profileBookings;
+    if (data.payload && Array.isArray(data.payload)) return data.payload;
+    if (data.payload && Array.isArray(data.payload.sailingInfo)) return data.payload.sailingInfo;
+    if (data.payload && Array.isArray(data.payload.profileBookings)) return data.payload.profileBookings;
+    if (data.data && Array.isArray(data.data)) return data.data;
+    return null;
+  }
+
+  function createBookingBridgeSummary(booking) {
+    if (!booking || typeof booking !== 'object') return null;
+    return {
+      bookingId: truncateText(booking.bookingId || booking.confirmationNumber || booking.reservationId || '', 40),
+      shipName: truncateText(booking.shipName || booking.ship || '', 80),
+      shipCode: truncateText(booking.shipCode || '', 12),
+      sailDate: truncateText(booking.sailDate || booking.departureDate || booking.startDate || '', 32),
+      returnDate: truncateText(booking.endDate || booking.returnDate || '', 32),
+      bookingStatus: truncateText(booking.bookingStatus || booking.status || '', 32),
+      stateroomNumber: truncateText(booking.stateroomNumber || booking.cabinNumber || '', 24),
+      stateroomType: truncateText(booking.stateroomType || booking.cabinType || booking.categoryType || '', 48),
+      itinerary: truncateText(booking.itinerary || booking.destination || '', 120),
+      departurePort: truncateText(booking.departurePort || booking.homePort || '', 80),
+      numberOfNights: booking.numberOfNights || booking.duration || '',
+      numberOfGuests: booking.guestCount || booking.numberOfGuests || (booking.passengers && booking.passengers.length) || '',
+      balanceDue: booking.balanceDueAmount || booking.balanceDue || booking.amountDue || ''
+    };
+  }
+
+  function createCarnivalLoyaltyBridgeSummary(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+    return {
+      TierCode: truncateText(data.TierCode || data.loyaltyTier || data.loyaltyLevel || '', 32),
+      PastGuestNumber: truncateText(data.PastGuestNumber || data.vifpNumber || '', 40),
+      Points: truncateText(data.Points || data.TotalPoints || data.VifpPoints || data.CruiseDays || data.cruiseDays || '', 32),
+      FirstName: truncateText(data.FirstName || '', 40),
+      LastName: truncateText(data.LastName || '', 40)
+    };
+  }
+
+  function createBridgeSafePayload(endpoint, data, url) {
+    if (endpoint === 'upcomingCruises' || endpoint === 'bookings' || endpoint === 'courtesyHolds') {
+      var bookings = extractBookingsFromPayload(data);
+      if (!bookings) return data;
+      var summaries = [];
+      for (var bi = 0; bi < bookings.length; bi++) {
+        var summary = createBookingBridgeSummary(bookings[bi]);
+        if (summary) summaries.push(summary);
+      }
+      return {
+        bookings: summaries,
+        bookingCount: bookings.length,
+        bridgeSummary: true
+      };
+    }
+    if (typeof url === 'string' && url.indexOf('carnival.com') >= 0 && endpoint === 'loyalty') {
+      return createCarnivalLoyaltyBridgeSummary(data);
+    }
+    return data;
+  }
+
+  function postNetworkPayload(endpoint, data, url) {
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'network_payload',
+        endpoint: endpoint,
+        data: createBridgeSafePayload(endpoint, data, url),
+        url: url
+      }));
+    } catch (e) {}
+  }
+
   function interceptNetworkCalls() {
     if (window.__easySeasNetworkIntercepted) return;
     window.__easySeasNetworkIntercepted = true;
@@ -153,9 +242,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 if (Array.isArray(data) && data.length > 0 && (data[0].bookingId || data[0].confirmationNumber || data[0].shipName)) bookingArr = data;
                 if (Array.isArray(bookingArr) && bookingArr.length > 0 && (bookingArr[0].bookingId || bookingArr[0].confirmationNumber || bookingArr[0].shipName || bookingArr[0].sailDate || bookingArr[0].departureDate)) {
                   window.capturedPayloads.upcomingCruises = data;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'network_payload', endpoint: 'upcomingCruises', data: data, url: url
-                  }));
+                  postNetworkPayload('upcomingCruises', data, url);
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log', message: '📦 Captured Carnival bookings (' + bookingArr.length + ') from ' + url, logType: 'success'
                   }));
@@ -163,9 +250,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 if (data.TierCode || data.PastGuestNumber || data.loyaltyTier || data.vifpNumber || data.loyaltyLevel) {
                   if (!window.capturedPayloads.loyalty) {
                     window.capturedPayloads.loyalty = data;
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'network_payload', endpoint: 'loyalty', data: data, url: url
-                    }));
+                    postNetworkPayload('loyalty', data, url);
                     window.ReactNativeWebView.postMessage(JSON.stringify({
                       type: 'log', message: '📦 Captured Carnival loyalty from profile API', logType: 'success'
                     }));
@@ -231,9 +316,7 @@ export const AUTH_DETECTION_SCRIPT = `
                     if (!autoBookings && Array.isArray(jsonData) && jsonData.length > 0 && (jsonData[0].bookingId || jsonData[0].confirmationNumber || jsonData[0].shipName)) autoBookings = jsonData;
                     if (Array.isArray(autoBookings) && autoBookings.length > 0 && (autoBookings[0].bookingId || autoBookings[0].confirmationNumber || autoBookings[0].shipName)) {
                       window.capturedPayloads.upcomingCruises = jsonData;
-                      window.ReactNativeWebView.postMessage(JSON.stringify({
-                        type: 'network_payload', endpoint: 'upcomingCruises', data: jsonData, url: url
-                      }));
+                      postNetworkPayload('upcomingCruises', jsonData, url);
                       window.ReactNativeWebView.postMessage(JSON.stringify({
                         type: 'log', message: '📦 Auto-captured Carnival bookings (' + autoBookings.length + ') from ' + url, logType: 'success'
                       }));
@@ -381,9 +464,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 if (!xhrBookings && Array.isArray(data) && data.length > 0 && (data[0].bookingId || data[0].confirmationNumber || data[0].shipName)) xhrBookings = data;
                 if (Array.isArray(xhrBookings) && xhrBookings.length > 0 && (xhrBookings[0].bookingId || xhrBookings[0].confirmationNumber || xhrBookings[0].shipName)) {
                   window.capturedPayloads.upcomingCruises = data;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'network_payload', endpoint: 'upcomingCruises', data: data, url: this._url
-                  }));
+                  postNetworkPayload('upcomingCruises', data, this._url);
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log', message: '📦 [XHR] Captured Carnival bookings (' + xhrBookings.length + ')', logType: 'success'
                   }));
@@ -391,9 +472,7 @@ export const AUTH_DETECTION_SCRIPT = `
               }
               if ((data.TierCode || data.PastGuestNumber || data.loyaltyTier) && !window.capturedPayloads.loyalty) {
                 window.capturedPayloads.loyalty = data;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'network_payload', endpoint: 'loyalty', data: data, url: this._url
-                }));
+                postNetworkPayload('loyalty', data, this._url);
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'carnival_user_data', data: data
                 }));
@@ -543,7 +622,7 @@ export const AUTH_DETECTION_SCRIPT = `
     var carnivalVifpEl = document.querySelector('[class*="vifp"], [id*="vifp"], [class*="loyalty"], [data-testid*="loyalty"], [data-testid*="vifp"]');
     var carnivalWelcomeBack = lowerText.includes('welcome back') || lowerHTML.includes('welcome back');
     var carnivalVifpText = lowerHTML.includes('vifp') || lowerText.includes('vifp club') || lowerHTML.includes('players club') || lowerHTML.includes('vifp#');
-    var carnivalMemberNum = /vifp\s*club[\s\S]{0,200}\d{7,}/i.test(pageHTML) || /club#[:\s]*\d{7,}/i.test(pageHTML) || /vifp#[\s]*\d{4,}/i.test(pageHTML);
+    var carnivalMemberNum = /vifp\\s*club[\\s\\S]{0,200}\\d{7,}/i.test(pageHTML) || /club#[:\\s]*\\d{7,}/i.test(pageHTML) || /vifp#[\\s]*\\d{4,}/i.test(pageHTML);
     var carnivalManageBookings = document.querySelector('a[href*="manage-booking"], a[href*="managebooking"], a[href*="my-cruises"]') !== null;
     var carnivalSignedInHeader = lowerHTML.includes('sign out') || lowerHTML.includes('signout') || (isCarnival && (lowerHTML.includes('my profile') || lowerHTML.includes('manage bookings') || lowerHTML.includes('my account') || lowerHTML.includes('hello,') || lowerHTML.includes('my bookings') || lowerHTML.includes('view bookings')));
     var carnivalAccountPageUrl = isCarnival && (url.includes('/account') || url.includes('/profilemanagement') || url.includes('/cruise-deals'));

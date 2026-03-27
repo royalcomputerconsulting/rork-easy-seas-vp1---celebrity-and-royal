@@ -543,7 +543,7 @@ export const AUTH_DETECTION_SCRIPT = `
     var carnivalVifpEl = document.querySelector('[class*="vifp"], [id*="vifp"], [class*="loyalty"], [data-testid*="loyalty"], [data-testid*="vifp"]');
     var carnivalWelcomeBack = lowerText.includes('welcome back') || lowerHTML.includes('welcome back');
     var carnivalVifpText = lowerHTML.includes('vifp') || lowerText.includes('vifp club') || lowerHTML.includes('players club') || lowerHTML.includes('vifp#');
-    var carnivalMemberNum = /vifp\s*club[\s\S]{0,200}\d{7,}/i.test(pageHTML) || /club#[:\s]*\d{7,}/i.test(pageHTML) || /vifp#[\s]*\d{4,}/i.test(pageHTML);
+    var carnivalMemberNum = /vifp\\s*club[\\s\\S]{0,200}\\d{7,}/i.test(pageHTML) || /club#[:\\s]*\\d{7,}/i.test(pageHTML) || /vifp#[\\s]*\\d{4,}/i.test(pageHTML);
     var carnivalManageBookings = document.querySelector('a[href*="manage-booking"], a[href*="managebooking"], a[href*="my-cruises"]') !== null;
     var carnivalSignedInHeader = lowerHTML.includes('sign out') || lowerHTML.includes('signout') || (isCarnival && (lowerHTML.includes('my profile') || lowerHTML.includes('manage bookings') || lowerHTML.includes('my account') || lowerHTML.includes('hello,') || lowerHTML.includes('my bookings') || lowerHTML.includes('view bookings')));
     var carnivalAccountPageUrl = isCarnival && (url.includes('/account') || url.includes('/profilemanagement') || url.includes('/cruise-deals'));

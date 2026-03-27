@@ -4,6 +4,8 @@ type LogType = 'info' | 'success' | 'warning' | 'error';
 
 class RoyalCaribbeanLogger {
   private logs: LogEntry[] = [];
+  private readonly maxLogs = 400;
+  private readonly maxMessageLength = 600;
 
   log(message: string, type: LogType = 'info') {
     const timestamp = new Date().toISOString();
@@ -14,17 +16,25 @@ class RoyalCaribbeanLogger {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hour12: false
+      hour12: false,
     });
+
+    const normalizedMessage = String(message ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, this.maxMessageLength);
 
     const entry: LogEntry = {
       timestamp: formattedTimestamp,
-      message,
-      type
+      message: normalizedMessage,
+      type,
     };
 
     this.logs.push(entry);
-    console.log(`[RC Sync ${type.toUpperCase()}] ${message}`);
+    if (this.logs.length > this.maxLogs) {
+      this.logs = this.logs.slice(-this.maxLogs);
+    }
+    console.log(`[RC Sync ${type.toUpperCase()}] ${normalizedMessage}`);
   }
 
   getLogs(): LogEntry[] {
