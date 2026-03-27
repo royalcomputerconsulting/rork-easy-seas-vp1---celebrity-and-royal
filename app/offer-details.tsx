@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
+  ScrollView,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +23,8 @@ import {
   Archive,
   BedDouble,
   Users,
+  ChevronDown,
+  Filter,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -43,6 +46,10 @@ export default function OfferDetailsScreen() {
   const { cruises: storeCruises, bookedCruises: storeBookedCruises, casinoOffers: storeOffers, updateCasinoOffer, removeCasinoOffer } = useCoreData();
   const { currentUser } = useUser();
   const [sortBy, setSortBy] = useState<SortOption>('soonest');
+  const [filterShip, setFilterShip] = useState<string | null>(null);
+  const [filterGuests, setFilterGuests] = useState<number | null>(null);
+  const [filterRoomType, setFilterRoomType] = useState<string | null>(null);
+  const [showShipPicker, setShowShipPicker] = useState(false);
 
   const playingHoursConfig = useMemo(() => {
     const userPlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
@@ -121,7 +128,20 @@ export default function OfferDetailsScreen() {
       return cruise;
     });
     
-    const cruises = [...enrichedCruises].sort((a, b) => {
+    const filteredCruises = enrichedCruises.filter(cruise => {
+      if (filterShip && cruise.shipName !== filterShip) return false;
+      if (filterGuests) {
+        const cruiseGuests = cruise.guests || 2;
+        if (cruiseGuests !== filterGuests) return false;
+      }
+      if (filterRoomType) {
+        const cabinType = (cruise.cabinType || '').toLowerCase();
+        if (!cabinType.includes(filterRoomType.toLowerCase())) return false;
+      }
+      return true;
+    });
+
+    const cruises = [...filteredCruises].sort((a, b) => {
       switch (sortBy) {
         case 'soonest': {
           const dateA = createDateFromString(a.sailDate).getTime();
@@ -167,7 +187,26 @@ export default function OfferDetailsScreen() {
     });
     
     return { cruises, offer };
-  }, [storeCruises, storeOffers, localData.cruises, localData.offers, offerCode, sortBy]);
+  }, [storeCruises, storeOffers, localData.cruises, localData.offers, offerCode, sortBy, filterShip, filterGuests, filterRoomType]);
+
+  const filterOptions = useMemo(() => {
+    const allCruises = [...(storeCruises || []), ...(localData.cruises || [])].filter(
+      (c: Cruise) => c.offerCode === offerCode
+    );
+    const uniqueCruises = allCruises.filter((cruise, index, self) =>
+      index === self.findIndex(c => c.id === cruise.id)
+    );
+
+    const ships = [...new Set(uniqueCruises.map(c => c.shipName).filter(Boolean))].sort();
+    const guestCounts = [...new Set(uniqueCruises.map(c => c.guests || 2))].sort();
+    const roomTypes = [...new Set(
+      uniqueCruises
+        .map(c => c.cabinType)
+        .filter((t): t is string => !!t)
+    )].sort();
+
+    return { ships, guestCounts, roomTypes };
+  }, [storeCruises, localData.cruises, offerCode]);
 
   const offerInfo = useMemo(() => {
     const { cruises, offer } = offerData;
@@ -647,13 +686,122 @@ export default function OfferDetailsScreen() {
               <Text style={[styles.sortPillMainText, sortBy === 'highest-value' && styles.sortPillMainTextActive]}>Highest Value</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Filter: Ship */}
+          {filterOptions.ships.length > 1 && (
+            <View style={styles.filterRow}>
+              <View style={styles.filterLabelRow}>
+                <Ship size={14} color={COLORS.navyDeep} />
+                <Text style={styles.filterLabel}>Ship</Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollContent}>
+                <TouchableOpacity
+                  style={[styles.filterChip, !filterShip && styles.filterChipActive]}
+                  onPress={() => setFilterShip(null)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterChipText, !filterShip && styles.filterChipTextActive]}>All Ships</Text>
+                </TouchableOpacity>
+                {filterOptions.ships.map(ship => (
+                  <TouchableOpacity
+                    key={ship}
+                    style={[styles.filterChip, filterShip === ship && styles.filterChipActive]}
+                    onPress={() => setFilterShip(filterShip === ship ? null : ship)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.filterChipText, filterShip === ship && styles.filterChipTextActive]} numberOfLines={1}>{ship}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Filter: Guests */}
+          {filterOptions.guestCounts.length > 1 && (
+            <View style={styles.filterRow}>
+              <View style={styles.filterLabelRow}>
+                <Users size={14} color={COLORS.navyDeep} />
+                <Text style={styles.filterLabel}>Guests</Text>
+              </View>
+              <View style={styles.filterChipRow}>
+                <TouchableOpacity
+                  style={[styles.filterChip, !filterGuests && styles.filterChipActive]}
+                  onPress={() => setFilterGuests(null)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterChipText, !filterGuests && styles.filterChipTextActive]}>Any</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.filterChip, filterGuests === 1 && styles.filterChipActive]}
+                  onPress={() => setFilterGuests(filterGuests === 1 ? null : 1)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterChipText, filterGuests === 1 && styles.filterChipTextActive]}>1 Person</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.filterChip, filterGuests === 2 && styles.filterChipActive]}
+                  onPress={() => setFilterGuests(filterGuests === 2 ? null : 2)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterChipText, filterGuests === 2 && styles.filterChipTextActive]}>2 Person</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Filter: Room Type */}
+          {filterOptions.roomTypes.length > 1 && (
+            <View style={styles.filterRow}>
+              <View style={styles.filterLabelRow}>
+                <BedDouble size={14} color={COLORS.navyDeep} />
+                <Text style={styles.filterLabel}>Room</Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollContent}>
+                <TouchableOpacity
+                  style={[styles.filterChip, !filterRoomType && styles.filterChipActive]}
+                  onPress={() => setFilterRoomType(null)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterChipText, !filterRoomType && styles.filterChipTextActive]}>All Rooms</Text>
+                </TouchableOpacity>
+                {filterOptions.roomTypes.map(room => (
+                  <TouchableOpacity
+                    key={room}
+                    style={[styles.filterChip, filterRoomType === room && styles.filterChipActive]}
+                    onPress={() => setFilterRoomType(filterRoomType === room ? null : room)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.filterChipText, filterRoomType === room && styles.filterChipTextActive]}>{room}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Active filter count */}
+          {(filterShip || filterGuests || filterRoomType) && (
+            <View style={styles.activeFilterRow}>
+              <Filter size={13} color="#0EA5E9" />
+              <Text style={styles.activeFilterText}>
+                {offerData.cruises.length} of {filterOptions.ships.length > 0 ? [...(storeCruises || []), ...(localData.cruises || [])].filter(c => c.offerCode === offerCode).length : 0} cruises
+              </Text>
+              <TouchableOpacity
+                style={styles.clearFiltersButton}
+                onPress={() => { setFilterShip(null); setFilterGuests(null); setFilterRoomType(null); }}
+                activeOpacity={0.7}
+              >
+                <X size={12} color="#DC2626" />
+                <Text style={styles.clearFiltersText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         <FlatList
           data={offerData.cruises}
           renderItem={renderCruiseCard}
           keyExtractor={(item) => item.id}
-          extraData={sortBy}
+          extraData={`${sortBy}-${filterShip}-${filterGuests}-${filterRoomType}`}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
@@ -848,6 +996,84 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     marginLeft: 2,
+  },
+  filterRow: {
+    marginTop: SPACING.sm,
+    gap: 6,
+  },
+  filterLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginLeft: 2,
+  },
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+  },
+  filterScroll: {
+    flexGrow: 0,
+  },
+  filterScrollContent: {
+    gap: SPACING.xs,
+    paddingRight: SPACING.md,
+  },
+  filterChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(0, 31, 63, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.12)',
+  },
+  filterChipActive: {
+    backgroundColor: '#0EA5E9',
+    borderColor: '#0EA5E9',
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: COLORS.navyDeep,
+  },
+  filterChipTextActive: {
+    color: COLORS.white,
+  },
+  activeFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: SPACING.sm,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  activeFilterText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#0EA5E9',
+    flex: 1,
+  },
+  clearFiltersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: 'rgba(220, 38, 38, 0.08)',
+  },
+  clearFiltersText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: '#DC2626',
   },
   listContent: {
     padding: SPACING.md,
