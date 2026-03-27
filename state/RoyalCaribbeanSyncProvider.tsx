@@ -364,7 +364,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     });
 
     return normalizedRows;
-  }, [stringifyValue]);
+  }, [createBookingSnapshot, stringifyValue]);
 
   const matchesNavigationTarget = useCallback((loadedUrl: string, targetUrl: string | null): boolean => {
     if (!targetUrl) {

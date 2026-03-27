@@ -994,7 +994,7 @@ export const CARNIVAL_BOOKINGS_SCRAPE_SCRIPT = `
     if (typeof value === 'string') str = value;
     else if (typeof value === 'number' || typeof value === 'boolean') str = String(value);
     else if (value === null || value === undefined) str = '';
-    str = str.replace(/\s+/g, ' ').trim();
+    str = str.replace(/\\s+/g, ' ').trim();
     if (str.length <= maxLength) return str;
     return str.substring(0, Math.max(0, maxLength - 1)) + '…';
   }
