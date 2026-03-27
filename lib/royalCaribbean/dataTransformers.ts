@@ -196,6 +196,7 @@ export function transformOfferRowsToCruisesAndOffers(
     const cruiseId = generateId();
     const sailDate = parseDate(offer.sailingDate);
     const offerExpiryDate = parseDate(offer.offerExpirationDate);
+    const safePerks = typeof offer.perks === 'string' ? offer.perks : '';
     
     // Extract nights from itinerary text (e.g., "12 Night Hawaii Cruise")
     const itineraryNights = extractNightsFromText(offer.itinerary);
@@ -220,9 +221,9 @@ export function transformOfferRowsToCruisesAndOffers(
       guestsInfo: offer.numberOfGuests,
       guests: parseGuestCount(offer.numberOfGuests),
       status: 'available',
-      freePlay: extractFreePlay(offer.perks),
-      freeOBC: extractOBC(offer.perks),
-      perks: offer.perks ? [offer.perks] : [],
+      freePlay: extractFreePlay(safePerks),
+      freeOBC: extractOBC(safePerks),
+      perks: safePerks ? [safePerks] : [],
       cruiseSource: source,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -241,20 +242,213 @@ export function transformOfferRowsToCruisesAndOffers(
         title: displayName,
         offerCode: offer.offerCode || '',
         offerName: displayName,
-        offerType: determineOfferType(offer.perks),
+        offerType: determineOfferType(safePerks),
         category: offer.offerType,
-        perks: offer.perks ? [offer.perks] : [],
+        perks: safePerks ? [safePerks] : [],
         cruiseIds: [],
         expires: offerExpiryDate,
         expiryDate: offerExpiryDate,
         offerExpiryDate: offerExpiryDate,
         status: 'active' as const,
         offerSource: source,
-        freePlay: extractFreePlay(offer.perks),
-        freeplayAmount: extractFreePlay(offer.perks),
-        OBC: extractOBC(offer.perks),
-        obcAmount: extractOBC(offer.perks),
-        tradeInValue: offer.perks.includes('$') ? parseFloat(offer.perks.match(/\$?([\d,]+)/)?.[1]?.replace(/,/g, '') || '0') : undefined,
+        freePlay: extractFreePlay(safePerks),
+        freeplayAmount: extractFreePlay(safePerks),
+        OBC: extractOBC(safePerks),
+        obcAmount: extractOBC(safePerks),
+        tradeInValue: safePerks.includes('        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      offerMap.set(offerKey, casinoOffer);
+      cruiseIdsByOfferKey.set(offerKey, []);
+    }
+
+    cruiseIdsByOfferKey.get(offerKey)?.push(cruiseId);
+  }
+
+  offerMap.forEach((offer, key) => {
+    offer.cruiseIds = cruiseIdsByOfferKey.get(key) || [];
+  });
+
+  return {
+    cruises,
+    offers: Array.from(offerMap.values())
+  };
+}
+
+export function transformOffersToCasinoOffers(
+  offers: OfferRow[], 
+  loyaltyData: LoyaltyData | null,
+  source: SyncDataSource = 'royal'
+): CasinoOffer[] {
+  const { offers: casinoOffers } = transformOfferRowsToCruisesAndOffers(offers, loyaltyData, source);
+  return casinoOffers;
+}
+
+export function transformBookedCruisesToAppFormat(
+  cruises: BookedCruiseRow[],
+  loyaltyData: LoyaltyData | null,
+  source: SyncDataSource = 'royal'
+): BookedCruise[] {
+  return cruises.map(cruise => {
+    const startDate = parseDate(cruise.sailingStartDate);
+    const endDate = parseDate(cruise.sailingEndDate);
+    
+    // PRIORITY 1: If we have both sailDate and returnDate, ALWAYS calculate nights from dates
+    // This is the most reliable method and prevents string concatenation bugs
+    let nights: number = 7; // default fallback
+    let calculationMethod = 'default';
+    
+    if (startDate && endDate) {
+      const dateNights = calculateNightsFromDates(startDate, endDate);
+      if (dateNights !== null && dateNights > 0 && dateNights <= 365) {
+        nights = dateNights;
+        calculationMethod = 'dates';
+        console.log(`[DataTransformer] ✓ Calculated nights from dates for ${cruise.shipName}: ${nights} nights (${startDate} to ${endDate})`);
+      }
+    }
+    
+    // PRIORITY 2: Use API numberOfNights only if date calculation failed
+    if (calculationMethod === 'default') {
+      const rawNights = cruise.numberOfNights;
+      if (rawNights !== undefined && rawNights !== null) {
+        const numValue = typeof rawNights === 'number' ? rawNights : parseInt(String(rawNights), 10);
+        if (!isNaN(numValue) && numValue > 0 && numValue <= 365) {
+          nights = numValue;
+          calculationMethod = 'api';
+          console.log(`[DataTransformer] ✓ Using API nights for ${cruise.shipName}: ${nights}`);
+        }
+      }
+    }
+    
+    // PRIORITY 3: Extract from cruise title/itinerary text
+    if (calculationMethod === 'default') {
+      const titleNights = extractNightsFromText(cruise.cruiseTitle || '');
+      if (titleNights !== null && titleNights > 0 && titleNights <= 365) {
+        nights = titleNights;
+        calculationMethod = 'title';
+        console.log(`[DataTransformer] ✓ Extracted nights from title for ${cruise.shipName}: ${nights}`);
+      } else {
+        const itineraryNights = extractNightsFromText(cruise.itinerary || '');
+        if (itineraryNights !== null && itineraryNights > 0 && itineraryNights <= 365) {
+          nights = itineraryNights;
+          calculationMethod = 'itinerary';
+          console.log(`[DataTransformer] ✓ Extracted nights from itinerary for ${cruise.shipName}: ${nights}`);
+        }
+      }
+    }
+    
+    // Final validation - ensure nights is a number
+    if (typeof nights !== 'number' || isNaN(nights) || nights <= 0 || nights > 365) {
+      console.error(`[DataTransformer] ❌ INVALID nights value for ${cruise.shipName}: ${nights} (type: ${typeof nights}). Using default: 7`);
+      nights = 7;
+      calculationMethod = 'default';
+    }
+    
+    console.log(`[DataTransformer] Final nights for ${cruise.shipName} (${startDate} to ${endDate}): ${nights} (method: ${calculationMethod})`);
+    
+    // Check for courtesy hold - both 'Courtesy Hold' and 'Offer' statuses are courtesy holds
+    const isCourtesyHold = cruise.status === 'Courtesy Hold' || cruise.status === 'Offer';
+    
+    // If we don't have an end date, calculate it from the nights
+    const finalEndDate = endDate || calculateReturnDate(startDate, nights);
+    
+    const bookedCruise: BookedCruise = {
+      sourcePayload: (cruise as any).rawBooking,
+      id: generateId(),
+      shipName: cruise.shipName,
+      sailDate: startDate,
+      returnDate: finalEndDate,
+      departurePort: cruise.departurePort,
+      destination: cruise.itinerary || cruise.cruiseTitle || 'Unknown',
+      nights: nights,
+      
+      cabinType: cruise.cabinType,
+      cabinNumber: cruise.cabinNumberOrGTY && cruise.cabinNumberOrGTY !== 'GTY' ? cruise.cabinNumberOrGTY : undefined,
+      cabinCategory: cruise.cabinCategory || cruise.stateroomCategoryCode,
+      deckNumber: cruise.deckNumber,
+      bookingId: cruise.bookingId,
+      reservationNumber: cruise.bookingId,
+      
+      status: 'booked',
+      completionState: 'upcoming',
+      isCourtesyHold: isCourtesyHold,
+      holdExpiration: cruise.holdExpiration || undefined,
+      notes: isCourtesyHold ? `Courtesy Hold${cruise.holdExpiration ? ` (expires ${cruise.holdExpiration})` : ''}` : undefined,
+      
+      itineraryName: cruise.itinerary,
+      itineraryRaw: cruise.itinerary ? [cruise.itinerary] : [],
+      
+      // New enrichment fields from API
+      bookingStatus: cruise.bookingStatus,
+      packageCode: cruise.packageCode,
+      passengerStatus: cruise.passengerStatus,
+      stateroomNumber: cruise.stateroomNumber,
+      stateroomCategoryCode: cruise.stateroomCategoryCode,
+      stateroomType: cruise.stateroomType,
+      musterStation: cruise.musterStation,
+      
+      cruiseSource: source,
+      
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    return bookedCruise;
+  });
+}
+
+function determineOfferType(perks?: string): 'freeplay' | 'obc' | '2person' | 'discount' | 'package' {
+  const perksLower = (perks ?? '').toLowerCase();
+  
+  if (perksLower.includes('free play') || perksLower.includes('freeplay')) {
+    return 'freeplay';
+  }
+  if (perksLower.includes('obc') || perksLower.includes('onboard credit')) {
+    return 'obc';
+  }
+  if (perksLower.includes('2') || perksLower.includes('two') || perksLower.includes('couple')) {
+    return '2person';
+  }
+  if (perksLower.includes('discount') || perksLower.includes('%') || perksLower.includes('off')) {
+    return 'discount';
+  }
+  
+  return 'package';
+}
+
+function extractFreePlay(perks: string): number | undefined {
+  if (!perks) return undefined;
+  
+  const match = perks.match(/\$?([\d,]+)\s*(free\s*play|freeplay)/i);
+  if (match) {
+    return parseInt(match[1].replace(/,/g, ''), 10);
+  }
+  
+  return undefined;
+}
+
+function extractOBC(perks: string): number | undefined {
+  if (!perks) return undefined;
+  
+  const match = perks.match(/\$?([\d,]+)\s*(obc|onboard\s*credit)/i);
+  if (match) {
+    return parseInt(match[1].replace(/,/g, ''), 10);
+  }
+  
+  return undefined;
+}
+
+function parseGuestCount(guestsInfo: string): number | undefined {
+  if (!guestsInfo) return undefined;
+  
+  const match = guestsInfo.match(/(\d+)/);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  
+  return undefined;
+}
+) ? parseFloat(safePerks.match(/\$?([\d,]+)/)?.[1]?.replace(/,/g, '') || '0') : undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -397,8 +591,8 @@ export function transformBookedCruisesToAppFormat(
   });
 }
 
-function determineOfferType(perks: string): 'freeplay' | 'obc' | '2person' | 'discount' | 'package' {
-  const perksLower = perks.toLowerCase();
+function determineOfferType(perks?: string): 'freeplay' | 'obc' | '2person' | 'discount' | 'package' {
+  const perksLower = (perks ?? '').toLowerCase();
   
   if (perksLower.includes('free play') || perksLower.includes('freeplay')) {
     return 'freeplay';

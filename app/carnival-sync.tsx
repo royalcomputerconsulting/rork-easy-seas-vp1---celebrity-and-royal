@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { exportFile } from '@/lib/importExport';
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -48,6 +48,7 @@ function CarnivalSyncScreen() {
   const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [isExportingLog, setIsExportingLog] = useState(false);
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
+  const [isConfirmingSync, setIsConfirmingSync] = useState(false);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
@@ -264,6 +265,35 @@ function CarnivalSyncScreen() {
   const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
+
+  const handleRunIngestion = useCallback(() => {
+    if (isRunning || !canRunIngestion) {
+      return;
+    }
+
+    void runIngestion().catch((error) => {
+      const errorMessage = error instanceof Error ? error.message : 'Carnival sync could not start';
+      console.error('[CarnivalSync] Failed to start ingestion:', error);
+      addLog(`Unable to start Carnival sync: ${errorMessage}`, 'error');
+    });
+  }, [addLog, canRunIngestion, isRunning, runIngestion]);
+
+  const handleConfirmSync = useCallback(() => {
+    if (isConfirmingSync) {
+      return;
+    }
+
+    setIsConfirmingSync(true);
+    void syncToApp(coreData, loyalty)
+      .catch((error) => {
+        const errorMessage = error instanceof Error ? error.message : 'Carnival sync failed';
+        console.error('[CarnivalSync] Sync-to-app error:', error);
+        addLog(`Unable to finish Carnival sync: ${errorMessage}`, 'error');
+      })
+      .finally(() => {
+        setIsConfirmingSync(false);
+      });
+  }, [addLog, coreData, isConfirmingSync, loyalty, syncToApp]);
 
   const handleOpenImportTools = () => {
     router.push('/settings');
@@ -645,8 +675,9 @@ function CarnivalSyncScreen() {
 
                   <Pressable
                     style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled]}
-                    onPress={runIngestion}
+                    onPress={handleRunIngestion}
                     disabled={!canRunIngestion || isRunning}
+                    testID="carnival-run-ingestion-button"
                   >
                     <RefreshCcw size={20} color="#34d399" />
                     <Text style={styles.quickActionLabel}>SYNC NOW</Text>
@@ -806,10 +837,12 @@ function CarnivalSyncScreen() {
                     <Text style={styles.cancelButtonText}>No</Text>
                   </Pressable>
                   <Pressable
-                    style={[styles.button, styles.confirmButton]}
-                    onPress={() => syncToApp(coreData, loyalty)}
+                    style={[styles.button, styles.confirmButton, isConfirmingSync && styles.buttonDisabled]}
+                    onPress={handleConfirmSync}
+                    disabled={isConfirmingSync}
+                    testID="carnival-confirm-sync-button"
                   >
-                    <Text style={styles.buttonText}>Yes, Sync Now</Text>
+                    <Text style={styles.buttonText}>{isConfirmingSync ? 'Syncing…' : 'Yes, Sync Now'}</Text>
                   </Pressable>
                 </View>
               </View>

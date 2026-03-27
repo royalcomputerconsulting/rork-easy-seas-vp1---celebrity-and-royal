@@ -23,6 +23,7 @@ import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { healImportedData } from '@/lib/dataHealing';
+import type { BookedCruise, CasinoOffer, Cruise } from '@/types/models';
 
 export type CruiseLine = 'royal_caribbean' | 'celebrity' | 'carnival';
 
@@ -74,6 +75,26 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
 const INITIAL_EXTENDED_LOYALTY: ExtendedLoyaltyData | null = null;
 
 const InitialCruiseLineContext = createContext<CruiseLine>('royal_caribbean');
+
+interface SyncCoreDataContext {
+  casinoOffers: CasinoOffer[];
+  cruises: Cruise[];
+  bookedCruises: BookedCruise[];
+  setCasinoOffers: (offers: CasinoOffer[]) => Promise<void>;
+  setCruises: (cruises: Cruise[]) => Promise<void>;
+  setBookedCruises: (cruises: BookedCruise[]) => Promise<void>;
+  syncToBackend?: () => Promise<void>;
+}
+
+interface SyncLoyaltyContext {
+  clubRoyalePoints: number;
+  clubRoyaleTier: string;
+  crownAnchorPoints: number;
+  crownAnchorLevel: string;
+  setManualClubRoyalePoints?: (points: number) => Promise<void>;
+  setManualCrownAnchorPoints?: (points: number) => Promise<void>;
+  setExtendedLoyaltyData?: (data: ExtendedLoyaltyData) => Promise<void>;
+}
 
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
   console.log('[RoyalCaribbeanSync] Provider initializing...');
@@ -461,10 +482,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     rcLogger.log(message, type);
-    // Batch log updates to prevent excessive state updates
     setState(prev => {
       const newLogs = rcLogger.getDisplayLogs();
-      // Only update if logs actually changed
       if (prev.logs.length === newLogs.length) {
         return prev;
       }
@@ -474,6 +493,31 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       };
     });
   }, []);
+
+  const clearPendingSyncWork = useCallback(() => {
+    stepCompleteResolvers.current = {};
+    progressCallbacks.current = {};
+    pageLoadResolver.current = null;
+    offerSailingsResolver.current = null;
+    carnivalPageCheckResolver.current = null;
+    carnivalTgoDataResolver.current = null;
+    carnivalOffersLinkResolver.current = null;
+    pendingNavigationTargetRef.current = null;
+    navigationRequestIdRef.current += 1;
+  }, []);
+
+  const sanitizeSyncArray = useCallback(<T extends Record<string, unknown>,>(value: unknown, label: string): T[] => {
+    if (!Array.isArray(value)) {
+      addLog(`⚠️ ${label} was not an array. Using an empty list instead.`, 'warning');
+      return [];
+    }
+
+    const sanitized = value.filter((item) => item && typeof item === 'object') as T[];
+    if (sanitized.length !== value.length) {
+      addLog(`⚠️ Removed ${value.length - sanitized.length} invalid ${label.toLowerCase()} row(s) before sync`, 'warning');
+    }
+    return sanitized;
+  }, [addLog]);
 
   const toggleStaySignedIn = useCallback(async (enabled: boolean) => {
     try {
@@ -1296,6 +1340,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     capturedSections.current = { offers: false, bookings: false, loyalty: false };
     carnivalUserDataRef.current = null;
     extractedOffersRef.current = [];
+    clearPendingSyncWork();
 
     setState(prev => ({
       ...prev,
@@ -2072,11 +2117,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       });
       
     } catch (error) {
-      addLog(`Ingestion failed: ${String(error)}`, 'error');
-      setState(prev => ({ ...prev, status: 'error', error: String(error) }));
+      clearPendingSyncWork();
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLog(`Ingestion failed: ${errorMessage}`, 'error');
+      setState(prev => ({ ...prev, status: 'error', error: errorMessage }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.status, state.scrapePricingAndItinerary, addLog, config, cruiseLine]);
+  }, [state.status, state.scrapePricingAndItinerary, addLog, clearPendingSyncWork, config, cruiseLine]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
@@ -2178,11 +2225,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, [addLog]);
 
   const resetState = useCallback(() => {
+    clearPendingSyncWork();
     setState(INITIAL_STATE);
     setExtendedLoyaltyData(null);
     hasReceivedApiLoyaltyDataRef.current = false;
+    carnivalUserDataRef.current = null;
+    extractedOffersRef.current = [];
     rcLogger.clear();
-  }, []);
+  }, [clearPendingSyncWork]);
 
   const setExtendedLoyalty = useCallback((data: ExtendedLoyaltyData | null) => {
     setExtendedLoyaltyData(data);
@@ -2201,7 +2251,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
   }, []);
 
-  const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any, providedExtendedLoyalty?: ExtendedLoyaltyData | null) => {
+  const syncToApp = useCallback(async (coreDataContext: SyncCoreDataContext, loyaltyContext: SyncLoyaltyContext, providedExtendedLoyalty?: ExtendedLoyaltyData | null) => {
     const loyaltyToSync = providedExtendedLoyalty ?? extendedLoyaltyData;
     const fallbackExtendedLoyaltyFromState = state.loyaltyData
       ? convertLoyaltyInfoToExtended(state.loyaltyData as unknown as LoyaltyApiInformation)
@@ -2233,11 +2283,25 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     try {
       console.log('[RoyalCaribbeanSync] Step 1: Setting status to syncing...');
-      setState(prev => ({ ...prev, status: 'syncing', syncPreview: null }));
+      setState(prev => ({ ...prev, status: 'syncing', syncPreview: null, error: null }));
       addLog('🚀 Starting sync to app...', 'info');
-      
+
+      if (!coreDataContext || typeof coreDataContext !== 'object') {
+        throw new Error('Core data context was unavailable for Carnival sync.');
+      }
+      if (!loyaltyContext || typeof loyaltyContext !== 'object') {
+        throw new Error('Loyalty context was unavailable for Carnival sync.');
+      }
+      if (typeof coreDataContext.setCasinoOffers !== 'function' || typeof coreDataContext.setCruises !== 'function' || typeof coreDataContext.setBookedCruises !== 'function') {
+        throw new Error('Carnival sync storage handlers were not ready.');
+      }
+
       console.log('[RoyalCaribbeanSync] Step 2: Creating sync preview...');
       addLog('Creating sync preview...', 'info');
+
+      const safeExistingOffers = sanitizeSyncArray<CasinoOffer>(coreDataContext.casinoOffers, 'Existing offers');
+      const safeExistingCruises = sanitizeSyncArray<Cruise>(coreDataContext.cruises, 'Existing cruises');
+      const safeExistingBookedCruises = sanitizeSyncArray<BookedCruise>(coreDataContext.bookedCruises, 'Existing booked cruises');
 
       const currentLoyalty = {
         clubRoyalePoints: loyaltyContext.clubRoyalePoints,
@@ -2249,9 +2313,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       console.log('[RoyalCaribbeanSync] Creating sync preview with:', {
         extractedOffers: state.extractedOffers.length,
         extractedBookedCruises: state.extractedBookedCruises.length,
-        existingOffers: coreDataContext.casinoOffers.length,
-        existingCruises: coreDataContext.cruises.length,
-        existingBookedCruises: coreDataContext.bookedCruises.length
+        existingOffers: safeExistingOffers.length,
+        existingCruises: safeExistingCruises.length,
+        existingBookedCruises: safeExistingBookedCruises.length
       });
 
       const normalizedOffers = normalizeOfferRows(state.extractedOffers);
@@ -2283,9 +2347,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         normalizedOffers,
         normalizedBookedCruises,
         state.loyaltyData,
-        coreDataContext.casinoOffers,
-        coreDataContext.cruises,
-        coreDataContext.bookedCruises,
+        safeExistingOffers,
+        safeExistingCruises,
+        safeExistingBookedCruises,
         currentLoyalty,
         syncSource
       );
@@ -2301,9 +2365,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog('Applying sync...', 'info');
       const { offers: rawOffers, cruises: rawCruises, bookedCruises: finalBookedCruises } = applySyncPreview(
         preview,
-        coreDataContext.casinoOffers,
-        coreDataContext.cruises,
-        coreDataContext.bookedCruises,
+        safeExistingOffers,
+        safeExistingCruises,
+        safeExistingBookedCruises,
         syncSource,
         {
           preserveManagedOffers,
@@ -2509,21 +2573,23 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         console.error('[RoyalCaribbeanSync] Error message:', error.message);
         console.error('[RoyalCaribbeanSync] Error stack:', error.stack);
       }
-      
+
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.log('[RoyalCaribbeanSync] Setting status to error...');
       setState(prev => ({ ...prev, status: 'error', error: errorMessage }));
       addLog(`❌ Sync failed: ${errorMessage}`, 'error');
       addLog('Please try again or contact support if the issue persists', 'error');
     } finally {
+      clearPendingSyncWork();
       syncToAppInFlightRef.current = false;
     }
-  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail, currentUser, updateUserProfile, normalizeBookedCruiseRows, normalizeOfferRows]);
+  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, clearPendingSyncWork, cruiseLine, authenticatedEmail, currentUser, updateUserProfile, normalizeBookedCruiseRows, normalizeOfferRows, sanitizeSyncArray]);
 
   const cancelSync = useCallback(() => {
+    clearPendingSyncWork();
     setState(prev => ({ ...prev, status: 'logged_in', syncCounts: null }));
     addLog('Sync cancelled', 'warning');
-  }, [addLog]);
+  }, [addLog, clearPendingSyncWork]);
 
   
 
