@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { exportFile } from '@/lib/importExport';
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -48,6 +48,7 @@ function CarnivalSyncScreen() {
   const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [isExportingLog, setIsExportingLog] = useState(false);
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
+  const [isConfirmingSync, setIsConfirmingSync] = useState(false);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
@@ -286,6 +287,23 @@ function CarnivalSyncScreen() {
     }
     handleWebViewMessage({ type: 'auth_status', loggedIn: true } as any);
   };
+
+  const handleConfirmSync = useCallback(() => {
+    if (isConfirmingSync) {
+      return;
+    }
+
+    setIsConfirmingSync(true);
+    void syncToApp(coreData, loyalty)
+      .catch((error) => {
+        const errorMessage = error instanceof Error ? error.message : 'Carnival sync failed';
+        console.error('[CarnivalSync] Sync-to-app error:', error);
+        addLog(`Unable to finish Carnival sync: ${errorMessage}`, 'error');
+      })
+      .finally(() => {
+        setIsConfirmingSync(false);
+      });
+  }, [addLog, coreData, isConfirmingSync, loyalty, syncToApp]);
 
   return (
     <>
@@ -806,10 +824,12 @@ function CarnivalSyncScreen() {
                     <Text style={styles.cancelButtonText}>No</Text>
                   </Pressable>
                   <Pressable
-                    style={[styles.button, styles.confirmButton]}
-                    onPress={() => syncToApp(coreData, loyalty)}
+                    style={[styles.button, styles.confirmButton, isConfirmingSync && styles.buttonDisabled]}
+                    onPress={handleConfirmSync}
+                    disabled={isConfirmingSync}
+                    testID="carnival-confirm-sync-button"
                   >
-                    <Text style={styles.buttonText}>Yes, Sync Now</Text>
+                    <Text style={styles.buttonText}>{isConfirmingSync ? 'Syncing…' : 'Yes, Sync Now'}</Text>
                   </Pressable>
                 </View>
               </View>

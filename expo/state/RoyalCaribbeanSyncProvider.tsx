@@ -100,6 +100,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const carnivalTgoDataResolver = useRef<((data: { fullUrl: string; tgo: string; vifp: string; tierCode: string; tierName: string; rateCodes: Array<{ code: string; startDate: string; endDate: string }> }) => void) | null>(null);
   const navigationRequestIdRef = useRef<number>(0);
   const pendingNavigationTargetRef = useRef<string | null>(null);
+  const syncToAppInFlightRef = useRef<boolean>(false);
+  const logFlushScheduledRef = useRef<boolean>(false);
+  const providerMountedRef = useRef<boolean>(true);
   
   const config = CRUISE_LINE_CONFIG[cruiseLine];
   const [webViewUrl, setWebViewUrl] = useState<string>(CRUISE_LINE_CONFIG[initialCruiseLine].loginUrl);
@@ -319,6 +322,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, [cruiseLine]);
 
   useEffect(() => {
+    providerMountedRef.current = true;
+    return () => {
+      providerMountedRef.current = false;
+      logFlushScheduledRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const previousEmail = lastAuthenticatedEmailRef.current;
 
     if (previousEmail === authenticatedEmail) {
@@ -385,13 +396,21 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     pendingNavigationTargetRef.current = null;
   }, [matchesNavigationTarget]);
 
-  const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
-    rcLogger.log(message, type);
-    // Batch log updates to prevent excessive state updates
+  const flushDisplayLogs = useCallback(() => {
+    logFlushScheduledRef.current = false;
+    if (!providerMountedRef.current) {
+      return;
+    }
     setState(prev => {
       const newLogs = rcLogger.getDisplayLogs();
-      // Only update if logs actually changed
-      if (prev.logs.length === newLogs.length) {
+      const previousLastLog = prev.logs[prev.logs.length - 1];
+      const nextLastLog = newLogs[newLogs.length - 1];
+      const logsChanged =
+        prev.logs.length !== newLogs.length ||
+        previousLastLog?.timestamp !== nextLastLog?.timestamp ||
+        previousLastLog?.message !== nextLastLog?.message ||
+        previousLastLog?.type !== nextLastLog?.type;
+      if (!logsChanged) {
         return prev;
       }
       return {
@@ -400,6 +419,22 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       };
     });
   }, []);
+
+  const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    rcLogger.log(message, type);
+    if (logFlushScheduledRef.current) {
+      return;
+    }
+    logFlushScheduledRef.current = true;
+    Promise.resolve()
+      .then(() => {
+        flushDisplayLogs();
+      })
+      .catch((error: unknown) => {
+        logFlushScheduledRef.current = false;
+        console.error('[RoyalCaribbeanSync] Failed to flush logs:', error);
+      });
+  }, [flushDisplayLogs]);
 
   const toggleStaySignedIn = useCallback(async (enabled: boolean) => {
     try {
@@ -1343,7 +1378,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
       
       await waitForStepComplete(1, isCarnivalMode ? 180000 : 900000);
-      capturedSections.current.offers = true;
+      capturedSections.current.offers = extractedOffersRef.current.length > 0;
+      if (!capturedSections.current.offers) {
+        addLog('⚠️ Step 1 finished without any Carnival offer rows - existing Carnival offers will be preserved during sync', 'warning');
+      }
       
       setState(prev => {
         const offersByName = new Map<string, number>();
@@ -2060,11 +2098,21 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     console.log('[RoyalCaribbeanSync] ========================================');
     console.log('[RoyalCaribbeanSync] SYNC TO APP STARTED');
     console.log('[RoyalCaribbeanSync] ========================================');
+
+    if (syncToAppInFlightRef.current) {
+      console.log('[RoyalCaribbeanSync] Sync to app already in progress, ignoring duplicate request');
+      addLog('Sync already in progress...', 'warning');
+      return;
+    }
+
+    syncToAppInFlightRef.current = true;
     
     try {
       console.log('[RoyalCaribbeanSync] Step 1: Setting status to syncing...');
       setState(prev => ({ ...prev, status: 'syncing' }));
       addLog('🚀 Starting sync to app...', 'info');
+
+      const persistenceFailures: string[] = [];
       
       console.log('[RoyalCaribbeanSync] Step 2: Creating sync preview...');
       addLog('Creating sync preview...', 'info');
@@ -2149,8 +2197,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         console.log('[RoyalCaribbeanSync] setCasinoOffers() completed');
         addLog('✅ Offers persisted to storage', 'success');
       } catch (offerError) {
+        const offerErrorMessage = offerError instanceof Error ? offerError.message : String(offerError);
         console.error('[RoyalCaribbeanSync] Error persisting offers:', offerError);
-        addLog(`⚠️ Warning: Failed to persist offers: ${String(offerError)}`, 'warning');
+        persistenceFailures.push(`offers (${offerErrorMessage})`);
+        addLog(`⚠️ Warning: Failed to persist offers: ${offerErrorMessage}`, 'warning');
       }
 
       console.log('[RoyalCaribbeanSync] Step: Persisting available cruises...');
@@ -2161,8 +2211,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         console.log('[RoyalCaribbeanSync] setCruises() completed');
         addLog('✅ Available cruises persisted to storage', 'success');
       } catch (cruiseError) {
+        const cruiseErrorMessage = cruiseError instanceof Error ? cruiseError.message : String(cruiseError);
         console.error('[RoyalCaribbeanSync] Error persisting cruises:', cruiseError);
-        addLog(`⚠️ Warning: Failed to persist cruises: ${String(cruiseError)}`, 'warning');
+        persistenceFailures.push(`available cruises (${cruiseErrorMessage})`);
+        addLog(`⚠️ Warning: Failed to persist cruises: ${cruiseErrorMessage}`, 'warning');
       }
 
       console.log('[RoyalCaribbeanSync] Step: Persisting booked cruises...');
@@ -2173,8 +2225,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         console.log('[RoyalCaribbeanSync] setBookedCruises() completed');
         addLog('✅ Booked cruises persisted to storage', 'success');
       } catch (bookedError) {
+        const bookedErrorMessage = bookedError instanceof Error ? bookedError.message : String(bookedError);
         console.error('[RoyalCaribbeanSync] Error persisting booked cruises:', bookedError);
-        addLog(`⚠️ Warning: Failed to persist booked cruises: ${String(bookedError)}`, 'warning');
+        persistenceFailures.push(`booked cruises (${bookedErrorMessage})`);
+        addLog(`⚠️ Warning: Failed to persist booked cruises: ${bookedErrorMessage}`, 'warning');
+      }
+
+      if (persistenceFailures.length > 0) {
+        throw new Error(`Sync could not persist required data: ${persistenceFailures.join('; ')}`);
       }
 
       if (syncSource !== 'carnival' && preview.loyalty) {
@@ -2327,6 +2385,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState(prev => ({ ...prev, status: 'error', error: errorMessage }));
       addLog(`❌ Sync failed: ${errorMessage}`, 'error');
       addLog('Please try again or contact support if the issue persists', 'error');
+    } finally {
+      syncToAppInFlightRef.current = false;
     }
   }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail, currentUser, updateUserProfile, normalizeBookedCruiseRows, normalizeOfferRows]);
 
