@@ -160,11 +160,11 @@ function TimeZonePickerModal({ visible, onClose, onSelect, title }: TimeZonePick
               onChangeText={setSearch}
               autoCapitalize="none"
             />
-            {search.length > 0 && (
+            {search.length > 0 ? (
               <TouchableOpacity onPress={() => setSearch('')}>
                 <X size={16} color="rgba(255,255,255,0.5)" />
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
 
           <ScrollView style={modalStyles.list} showsVerticalScrollIndicator={false}>

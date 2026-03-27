@@ -443,9 +443,9 @@ export default function EventsScreen() {
             <Text style={styles.eventCardType}>{event.type}</Text>
           </View>
           <Text style={styles.eventCardTitle}>{event.title}</Text>
-          {event.location && (
+          {event.location ? (
             <Text style={styles.eventCardSubtitle}>{event.location}</Text>
-          )}
+          ) : null}
           <Text style={styles.eventCardDate}>
             {item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
           </Text>

@@ -205,7 +205,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         </TouchableOpacity>
       </View>
 
-      {syncProgress && (
+      {syncProgress ? (
         <View style={styles.syncProgressContainer}>
           <View style={styles.syncProgressBar}>
             <View
@@ -219,7 +219,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
             {`Processing ${syncProgress.current} of ${syncProgress.total} rows...`}
           </Text>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.statsRow}>
         {statsLoading ? (
@@ -255,11 +255,11 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
             placeholder="Search crew name..."
             placeholderTextColor={COLORS.textTertiary}
           />
-          {filters.search !== '' && (
+          {filters.search !== '' ? (
             <TouchableOpacity onPress={() => updateFilters({ search: '' })}>
               <X size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
         <TouchableOpacity
           style={[styles.filterButton, showFilters && styles.filterButtonActive]}
@@ -358,12 +358,12 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
             </View>
           </View>
 
-          {activeFilterCount > 0 && (
+          {activeFilterCount > 0 ? (
             <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
               <X size={14} color="#0369A1" />
               <Text style={styles.resetButtonText}>Clear all filters</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
       )}
 
@@ -442,7 +442,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                         {entry.sailEndDate && entry.sailEndDate !== entry.sailStartDate ? ` – ${entry.sailEndDate}` : ''}
                       </Text>
                     </View>
-                    {entry.crewNotes ? (
+                    {entry.crewNotes && String(entry.crewNotes).trim() ? (
                       <Text style={styles.crewCardNotes} numberOfLines={1}>{String(entry.crewNotes)}</Text>
                     ) : null}
                   </View>
