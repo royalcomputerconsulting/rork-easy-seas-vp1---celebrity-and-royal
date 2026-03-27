@@ -2249,6 +2249,21 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`ℹ️ Sanitized ${state.extractedBookedCruises.length - normalizedBookedCruises.length} malformed booked cruise row(s) before sync`, 'info');
       }
 
+      const preserveManagedOffers = syncSource === 'carnival' && (!capturedSections.current.offers || normalizedOffers.length === 0);
+      const preserveManagedCruises = syncSource === 'carnival' && (!capturedSections.current.offers || normalizedOffers.length === 0);
+      const preserveManagedBookedCruises = syncSource === 'carnival' && (!capturedSections.current.bookings || normalizedBookedCruises.length === 0);
+
+      if (syncSource === 'carnival' && normalizedOffers.length === 0 && normalizedBookedCruises.length === 0 && !carnivalUserDataRef.current && !state.loyaltyData) {
+        throw new Error('No Carnival data was captured. Existing app data was left unchanged.');
+      }
+
+      if (preserveManagedOffers) {
+        addLog('⚠️ Carnival offers were not captured in this run, so existing Carnival offers will be preserved', 'warning');
+      }
+      if (preserveManagedBookedCruises) {
+        addLog('⚠️ Carnival bookings were not captured in this run, so existing Carnival bookings will be preserved', 'warning');
+      }
+
       const preview = createSyncPreview(
         normalizedOffers,
         normalizedBookedCruises,
@@ -2274,7 +2289,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         coreDataContext.casinoOffers,
         coreDataContext.cruises,
         coreDataContext.bookedCruises,
-        syncSource
+        syncSource,
+        {
+          preserveManagedOffers,
+          preserveManagedCruises,
+          preserveManagedBookedCruises,
+        }
       );
 
       console.log('[RoyalCaribbeanSync] Running data healing pass...');
