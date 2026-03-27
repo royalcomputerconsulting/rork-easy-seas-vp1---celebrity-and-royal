@@ -369,9 +369,7 @@ export default function EventsScreen() {
         {luck && day.isCurrentMonth ? (
           <View style={styles.luckIndicatorRow}>
             <View style={[styles.luckDot, { backgroundColor: luck.hex }]} />
-            {hasEvents && renderEventDots(day.events).length > 0 && (
-              <>{renderEventDots(day.events)}</>
-            )}
+            {hasEvents ? renderEventDots(day.events) : null}
           </View>
         ) : hasEvents ? (
           <View style={styles.eventDotsContainer}>
