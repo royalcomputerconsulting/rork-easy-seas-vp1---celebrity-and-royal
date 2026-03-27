@@ -100,6 +100,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const carnivalOffersLinkResolver = useRef<((url: string) => void) | null>(null);
   const navigationRequestIdRef = useRef<number>(0);
   const pendingNavigationTargetRef = useRef<string | null>(null);
+  const syncToAppInFlightRef = useRef<boolean>(false);
   
   const config = CRUISE_LINE_CONFIG[cruiseLine];
   const [webViewUrl, setWebViewUrl] = useState<string>(CRUISE_LINE_CONFIG[initialCruiseLine].loginUrl);
@@ -2207,9 +2208,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     console.log('[RoyalCaribbeanSync] SYNC TO APP STARTED');
     console.log('[RoyalCaribbeanSync] ========================================');
     
+    if (syncToAppInFlightRef.current) {
+      console.log('[RoyalCaribbeanSync] Sync to app already in progress, ignoring duplicate request');
+      addLog('Sync already in progress...', 'warning');
+      return;
+    }
+
+    syncToAppInFlightRef.current = true;
+
     try {
       console.log('[RoyalCaribbeanSync] Step 1: Setting status to syncing...');
-      setState(prev => ({ ...prev, status: 'syncing' }));
+      setState(prev => ({ ...prev, status: 'syncing', syncPreview: null }));
       addLog('🚀 Starting sync to app...', 'info');
       
       console.log('[RoyalCaribbeanSync] Step 2: Creating sync preview...');
@@ -2258,8 +2267,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Preview: ${counts.cruisesNew} new available cruises, ${counts.cruisesUpdated} updated available cruises`, 'info');
       addLog(`Preview: ${counts.bookedCruisesNew} new booked cruises, ${counts.bookedCruisesUpdated} updated booked cruises`, 'info');
       addLog(`Preview: ${counts.upcomingCruises} upcoming, ${counts.courtesyHolds} holds`, 'info');
-
-      setState(prev => ({ ...prev, syncPreview: preview }));
 
       addLog('Applying sync...', 'info');
       const { offers: rawOffers, cruises: rawCruises, bookedCruises: finalBookedCruises } = applySyncPreview(
@@ -2473,6 +2480,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState(prev => ({ ...prev, status: 'error', error: errorMessage }));
       addLog(`❌ Sync failed: ${errorMessage}`, 'error');
       addLog('Please try again or contact support if the issue persists', 'error');
+    } finally {
+      syncToAppInFlightRef.current = false;
     }
   }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail, currentUser, updateUserProfile, normalizeBookedCruiseRows, normalizeOfferRows]);
 
