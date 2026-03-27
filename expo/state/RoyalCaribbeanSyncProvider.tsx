@@ -861,9 +861,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           
           if (bookings && bookings.length > 0) {
             console.log(`[RoyalCaribbeanSync] Processing ${bookings.length} bookings from enriched API`);
-            console.log(`[RoyalCaribbeanSync] First booking sample:`, JSON.stringify(bookings[0]).substring(0, 300));
-            console.log(`[RoyalCaribbeanSync] First booking FULL:`, JSON.stringify(bookings[0]));
-            console.log(`[RoyalCaribbeanSync] First booking keys:`, Object.keys(bookings[0]));
+            try {
+              console.log(`[RoyalCaribbeanSync] First booking sample:`, JSON.stringify(bookings[0]).substring(0, 300));
+              console.log(`[RoyalCaribbeanSync] First booking keys:`, Object.keys(bookings[0]));
+            } catch (logErr) {
+              console.log(`[RoyalCaribbeanSync] Could not stringify first booking:`, logErr);
+            }
             
             const isCarnivalBooking = cruiseLine === 'carnival' || (typeof url === 'string' && url.includes('carnival.com'));
             

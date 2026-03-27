@@ -19,6 +19,7 @@ const CARNIVAL_GOLD = '#FFB400';
 const CARNIVAL_DARK = '#0c1520';
 const CARNIVAL_CARD = '#1a2535';
 const CARNIVAL_BORDER = '#2a3a50';
+const MAX_WEBVIEW_MESSAGE_SIZE = 350000;
 
 function CarnivalSyncScreen() {
   const router = useRouter();
@@ -156,6 +157,12 @@ function CarnivalSyncScreen() {
       return;
     }
 
+    if (rawData.length > MAX_WEBVIEW_MESSAGE_SIZE) {
+      console.warn('[CarnivalSync] Ignoring oversized WebView message:', rawData.length);
+      addLog('Ignored an oversized browser message to prevent a crash. Sync will continue with chunked data.', 'warning');
+      return;
+    }
+
     try {
       const parsedMessage = JSON.parse(rawData) as unknown;
       if (!parsedMessage || typeof parsedMessage !== 'object') {
@@ -265,6 +272,18 @@ function CarnivalSyncScreen() {
   const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
+
+  const handleRunIngestion = useCallback(() => {
+    if (isRunning || !canRunIngestion) {
+      return;
+    }
+
+    void runIngestion().catch((error) => {
+      const errorMessage = error instanceof Error ? error.message : 'Carnival sync could not start';
+      console.error('[CarnivalSync] Failed to start ingestion:', error);
+      addLog(`Unable to start Carnival sync: ${errorMessage}`, 'error');
+    });
+  }, [addLog, canRunIngestion, isRunning, runIngestion]);
 
   const handleOpenImportTools = () => {
     router.push('/settings');
@@ -663,8 +682,9 @@ function CarnivalSyncScreen() {
 
                   <Pressable
                     style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled]}
-                    onPress={runIngestion}
+                    onPress={handleRunIngestion}
                     disabled={!canRunIngestion || isRunning}
+                    testID="carnival-run-ingestion-button"
                   >
                     <RefreshCcw size={20} color="#34d399" />
                     <Text style={styles.quickActionLabel}>SYNC NOW</Text>
