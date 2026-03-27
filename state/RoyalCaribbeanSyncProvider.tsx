@@ -555,6 +555,18 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     navigationRequestIdRef.current += 1;
   }, []);
 
+  const safeInjectJS = useCallback((script: string): boolean => {
+    try {
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(script);
+        return true;
+      }
+    } catch (e) {
+      console.warn('[RoyalCaribbeanSync] safeInjectJS failed:', e);
+    }
+    return false;
+  }, []);
+
   const sanitizeSyncArray = useCallback(<T extends Record<string, unknown>,>(value: unknown, label: string): T[] => {
     if (!Array.isArray(value)) {
       addLog(`⚠️ ${label} was not an array. Using an empty list instead.`, 'warning');
@@ -1401,12 +1413,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, [addLog, config]);
 
   const runIngestion = useCallback(async () => {
-    if (state.status !== 'logged_in' && state.status !== 'complete') {
+    const currentStatus = stateRef.current.status;
+    if (currentStatus !== 'logged_in' && currentStatus !== 'complete') {
       addLog('Cannot run ingestion: user not logged in', 'error');
       return;
     }
 
-    if (!webViewRef.current) {
+    if (Platform.OS !== 'web' && !webViewRef.current) {
       addLog('WebView not available', 'error');
       return;
     }
@@ -1615,13 +1628,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         await navigateToPage(config.offersUrl, 20000);
       }
       
-      if (webViewRef.current) {
-        if (isCarnivalMode) {
-          addLog('🎪 Injecting Carnival extraction on offers page...', 'info');
-          webViewRef.current.injectJavaScript(injectCarnivalOffersExtraction() + '; true;');
-        } else {
-          webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
-        }
+      if (isCarnivalMode) {
+        addLog('🎪 Injecting Carnival extraction on offers page...', 'info');
+        safeInjectJS(injectCarnivalOffersExtraction() + '; true;');
+      } else {
+        safeInjectJS(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
       }
       
       await waitForStepComplete(1, isCarnivalMode ? 180000 : 900000);
@@ -1742,17 +1753,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
             const pendingSailingsRequest = waitForOfferSailings(offer.offerCode, 40000);
 
-            if (webViewRef.current) {
-              webViewRef.current.injectJavaScript(
-                injectCarnivalCruiseSearchScrape(
-                  offer.offerName,
-                  offer.offerCode,
-                  offer.offerExpiry,
-                  offer.perks,
-                  pendingSailingsRequest.requestId
-                )
-              );
-            }
+            safeInjectJS(
+              injectCarnivalCruiseSearchScrape(
+                offer.offerName,
+                offer.offerCode,
+                offer.offerExpiry,
+                offer.perks,
+                pendingSailingsRequest.requestId
+              )
+            );
 
             const sailings = await pendingSailingsRequest.promise;
 
@@ -1838,13 +1847,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               await delay(3000);
             }
             
-            if (isCarnivalMode && webViewRef.current) {
+            if (isCarnivalMode) {
               if (page.section === 'bookings') {
                 addLog('🎪 Injecting Carnival bookings scraper...', 'info');
-                webViewRef.current.injectJavaScript(injectCarnivalBookingsScrape() + '; true;');
+                safeInjectJS(injectCarnivalBookingsScrape() + '; true;');
               } else if (page.name === 'Profile Home') {
                 addLog('🎪 Injecting Carnival bookings scraper on profile page...', 'info');
-                webViewRef.current.injectJavaScript(injectCarnivalBookingsScrape() + '; true;');
+                safeInjectJS(injectCarnivalBookingsScrape() + '; true;');
               }
             }
             
@@ -1898,7 +1907,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           addLog(`📡 Connecting to ${isCelebrity ? 'Celebrity' : 'Royal Caribbean'} loyalty API...`, 'info');
           addLog(`⏳ Retrieving ${isCelebrity ? 'Captain\'s Club and Blue Chip' : 'Crown & Anchor and Club Royale'} status...`, 'info');
 
-          webViewRef.current.injectJavaScript(`
+          webViewRef.current?.injectJavaScript(`
             (function() {
               const LOYALTY_URL_TEMPLATE = '${loyaltyUrl}';
               function buildLoyaltyUrl(accountId) {
@@ -2207,7 +2216,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState(prev => ({ ...prev, status: 'error', error: errorMessage }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.status, state.scrapePricingAndItinerary, addLog, clearPendingSyncWork, config, cruiseLine]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status, state.scrapePricingAndItinerary, addLog, clearPendingSyncWork, config, cruiseLine, safeInjectJS]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
