@@ -1487,6 +1487,134 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
     return clickedCount;
   }
 
+  function parsePriceNumber(value, depth) {
+    if (depth === undefined) depth = 0;
+    if (value === null || value === undefined || depth > 4) return 0;
+    if (typeof value === 'number') return isFinite(value) && value > 0 ? value : 0;
+    if (typeof value === 'string') {
+      var cleaned = value.replace(/[^0-9.-]/g, '');
+      var parsed = parseFloat(cleaned);
+      return isFinite(parsed) && parsed > 0 ? parsed : 0;
+    }
+    if (typeof value === 'object') {
+      var directKeys = ['amount', 'value', 'price', 'fromPrice', 'startingPrice', 'lowestPrice', 'leadPrice', 'displayPrice', 'cashPrice', 'basePrice', 'fare', 'farePrice', 'total'];
+      for (var dki = 0; dki < directKeys.length; dki++) {
+        if (value[directKeys[dki]] !== undefined) {
+          var nestedDirect = parsePriceNumber(value[directKeys[dki]], depth + 1);
+          if (nestedDirect > 0) return nestedDirect;
+        }
+      }
+      var nestedKeys = Object.keys(value);
+      for (var nki = 0; nki < nestedKeys.length; nki++) {
+        var nestedVal = value[nestedKeys[nki]];
+        if (nestedVal && typeof nestedVal === 'object') {
+          var nestedPrice = parsePriceNumber(nestedVal, depth + 1);
+          if (nestedPrice > 0) return nestedPrice;
+        }
+      }
+    }
+    return 0;
+  }
+
+  function normalizeCabinKind(label) {
+    var text = (label || '').toLowerCase();
+    if (!text) return '';
+    if (text.indexOf('interior') >= 0 || text.indexOf('inside') >= 0) return 'interior';
+    if (text.indexOf('ocean') >= 0 || text.indexOf('oceanview') >= 0 || text.indexOf('window') >= 0 || text.indexOf('view') >= 0) return 'oceanview';
+    if (text.indexOf('balcony') >= 0 || text.indexOf('veranda') >= 0 || text.indexOf('verandah') >= 0) return 'balcony';
+    if (text.indexOf('suite') >= 0) return 'suite';
+    return '';
+  }
+
+  function collectCabinPrices(value, prices, depth) {
+    if (!value || depth > 5) return;
+    if (Array.isArray(value)) {
+      for (var ai = 0; ai < value.length; ai++) {
+        collectCabinPrices(value[ai], prices, depth + 1);
+      }
+      return;
+    }
+    if (typeof value !== 'object') {
+      return;
+    }
+
+    var label = '';
+    try {
+      label = [value.name, value.type, value.category, value.cabinType, value.roomType, value.stateroomType, value.description, value.title, value.code].join(' ');
+    } catch(e) {}
+    var cabinKind = normalizeCabinKind(label);
+    var priceCandidate = parsePriceNumber(value, 0);
+    if (cabinKind && priceCandidate > 0 && (!prices[cabinKind] || priceCandidate < prices[cabinKind])) {
+      prices[cabinKind] = priceCandidate;
+    }
+
+    var keys = Object.keys(value);
+    for (var ki = 0; ki < keys.length; ki++) {
+      var key = keys[ki];
+      var nested = value[key];
+      var inferredKind = normalizeCabinKind(key);
+      if (inferredKind) {
+        var inferredPrice = parsePriceNumber(nested, 0);
+        if (inferredPrice > 0 && (!prices[inferredKind] || inferredPrice < prices[inferredKind])) {
+          prices[inferredKind] = inferredPrice;
+        }
+      }
+      if (nested && typeof nested === 'object') {
+        collectCabinPrices(nested, prices, depth + 1);
+      }
+    }
+  }
+
+  function extractSailingsArrayFromData(data) {
+    if (!data) return null;
+    var sailings = null;
+    if (data.results && Array.isArray(data.results)) sailings = data.results;
+    else if (data.sailings && Array.isArray(data.sailings)) sailings = data.sailings;
+    else if (data.cruises && Array.isArray(data.cruises)) sailings = data.cruises;
+    else if (data.searchResults && Array.isArray(data.searchResults)) sailings = data.searchResults;
+    else if (data.voyages && Array.isArray(data.voyages)) sailings = data.voyages;
+    else if (data.data && Array.isArray(data.data)) sailings = data.data;
+    else if (Array.isArray(data) && data.length > 0) sailings = data;
+    if (sailings && sailings.length > 0) {
+      return sailings;
+    }
+    if (typeof data === 'object') {
+      var dKeys = Object.keys(data);
+      log('  API keys: ' + dKeys.join(', '), 'info');
+      for (var ki = 0; ki < dKeys.length; ki++) {
+        var val = data[dKeys[ki]];
+        if (Array.isArray(val) && val.length > 0 && val[0] && (val[0].shipName || val[0].ship || val[0].sailDate || val[0].departureDate || val[0].startDate || val[0].embarkDate)) {
+          return val;
+        }
+      }
+    }
+    return null;
+  }
+
+  function dedupeApiSailings(apiSailings) {
+    var deduped = [];
+    var seen = {};
+    for (var i = 0; i < apiSailings.length; i++) {
+      var sailing = apiSailings[i];
+      if (!sailing) continue;
+      var key = [
+        sailing.shipName || sailing.ship || sailing.vesselName || sailing.shipCode || '',
+        sailing.sailDate || sailing.departureDate || sailing.startDate || sailing.embarkDate || '',
+        sailing.itinerary || sailing.itineraryDescription || sailing.destination || sailing.destinationName || '',
+        sailing.code || sailing.id || ''
+      ].join('|');
+      if (!seen[key]) {
+        seen[key] = true;
+        deduped.push(sailing);
+      }
+    }
+    return deduped;
+  }
+
+  function formatCurrency(value, dollarChar) {
+    return value > 0 ? dollarChar + Number(value).toFixed(2) : '';
+  }
+
   function convertApiSailingsToRows(apiSailings, offerName, offerCode, offerExpiry, offerPerks) {
     var rows = [];
     var dollarChar = String.fromCharCode(36);
@@ -1495,27 +1623,38 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
       var shipName = s.shipName || s.ship || s.vesselName || '';
       if (!shipName && s.shipCode) shipName = 'Carnival ' + s.shipCode;
       var sailDate = s.sailDate || s.departureDate || s.startDate || s.embarkDate || '';
-      var nightCount = s.duration || s.nights || s.numberOfNights || s.numNights || null;
+      var nightCountRaw = s.duration || s.nights || s.numberOfNights || s.numNights || s.length || null;
+      var nightCount = nightCountRaw === null || nightCountRaw === undefined ? null : parseInt(String(nightCountRaw), 10);
+      if (!isFinite(nightCount) || nightCount <= 0) nightCount = null;
       var dest = s.itinerary || s.itineraryDescription || s.destination || s.destinationName || '';
       if (!dest && s.sailingType) dest = typeof s.sailingType === 'string' ? s.sailingType : (s.sailingType.name || s.sailingType.description || '');
       var dPort = '';
       if (s.departurePort) dPort = typeof s.departurePort === 'string' ? s.departurePort : (s.departurePort.name || s.departurePort.portName || '');
       else if (s.departurePortName) dPort = s.departurePortName;
       else if (s.homePort) dPort = s.homePort;
-      var rawPrice = s.price || s.startingPrice || s.lowestPrice || s.interiorPrice || s.fromPrice || 0;
-      var priceStr = rawPrice > 0 ? dollarChar + Number(rawPrice).toFixed(2) : '';
+      var prices = {};
+      collectCabinPrices(s, prices, 0);
+      var rawPrice = prices.interior || prices.oceanview || prices.balcony || prices.suite || parsePriceNumber(s.price || s.startingPrice || s.lowestPrice || s.interiorPrice || s.fromPrice || s.cheapestFare || s.leadPrice || s.displayPrice, 0);
+      if (!prices.interior && rawPrice > 0) {
+        prices.interior = rawPrice;
+      }
+      var taxValue = parsePriceNumber(s.taxesAndFees || s.taxes || s.fees || s.tax || s.taxAmount || s.portCharges || s.portTaxes || s.taxAndFees, 0);
       var portList = '';
       if (s.ports && Array.isArray(s.ports)) portList = s.ports.map(function(p) { return typeof p === 'string' ? p : (p.name || p.portName || ''); }).join(', ');
+      var guestCount = s.numberOfGuests || s.guestCount || s.guests || 2;
       rows.push({
         sourcePage: 'Offers', offerName: offerName, offerCode: offerCode,
         offerExpirationDate: offerExpiry, offerType: 'VIFP Club',
         shipName: shipName, shipCode: s.shipCode || '',
         sailingDate: formatSailDate(sailDate),
         itinerary: dest, departurePort: dPort, cabinType: '',
-        numberOfGuests: '2', perks: offerPerks,
+        numberOfGuests: String(guestCount || '2'), perks: offerPerks,
         loyaltyLevel: '', loyaltyPoints: '',
-        interiorPrice: priceStr, oceanviewPrice: '', balconyPrice: '', suitePrice: '',
-        taxesAndFees: '', portList: portList,
+        interiorPrice: formatCurrency(prices.interior || 0, dollarChar),
+        oceanviewPrice: formatCurrency(prices.oceanview || 0, dollarChar),
+        balconyPrice: formatCurrency(prices.balcony || 0, dollarChar),
+        suitePrice: formatCurrency(prices.suite || 0, dollarChar),
+        taxesAndFees: formatCurrency(taxValue, dollarChar), portList: portList,
         dayByDayItinerary: [], destinationName: dest,
         totalNights: nightCount, bookingLink: '/cruise-search?rateCodes=' + offerCode
       });
@@ -1524,56 +1663,60 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
   }
 
   async function tryFetchSailingsAPI(rateCode) {
-    var endpoints = [
-      '/g/cruise-search/api/search?rateCodes=' + rateCode + '&pageNumber=1&pageSize=50&sort=departureDate&sortDirection=ASC',
-      '/g/cruise-search/api/search?rateCode=' + rateCode + '&pageNumber=1&pageSize=50&sort=departureDate&sortDirection=ASC',
-      '/cruise-search/api/search?rateCodes=' + rateCode + '&pageNumber=1&pageSize=50',
+    var endpointTemplates = [
+      '/g/cruise-search/api/search?rateCodes=' + rateCode + '&pageNumber={PAGE}&pageSize=50&sort=departureDate&sortDirection=ASC',
+      '/g/cruise-search/api/search?rateCode=' + rateCode + '&pageNumber={PAGE}&pageSize=50&sort=departureDate&sortDirection=ASC',
+      '/cruise-search/api/search?rateCodes=' + rateCode + '&pageNumber={PAGE}&pageSize=50',
     ];
-    for (var ei = 0; ei < endpoints.length; ei++) {
-      try {
-        log('  Trying cruise search API: ' + endpoints[ei], 'info');
-        var controller = new AbortController();
-        var tid = setTimeout(function() { controller.abort(); }, 12000);
-        var response = await fetch(endpoints[ei], {
-          method: 'GET',
-          headers: { 'accept': 'application/json', 'x-requested-with': 'XMLHttpRequest' },
-          credentials: 'include',
-          signal: controller.signal
-        });
-        clearTimeout(tid);
-        log('  API response: ' + response.status, response.ok ? 'info' : 'warning');
-        if (response.ok) {
-          var ct = response.headers.get('content-type') || '';
-          if (ct.includes('json')) {
-            var data = await response.json();
-            if (!data) continue;
-            var sailings = null;
-            if (data.results && Array.isArray(data.results)) sailings = data.results;
-            else if (data.sailings && Array.isArray(data.sailings)) sailings = data.sailings;
-            else if (data.cruises && Array.isArray(data.cruises)) sailings = data.cruises;
-            else if (data.searchResults && Array.isArray(data.searchResults)) sailings = data.searchResults;
-            else if (data.voyages && Array.isArray(data.voyages)) sailings = data.voyages;
-            else if (data.data && Array.isArray(data.data)) sailings = data.data;
-            else if (Array.isArray(data) && data.length > 0) sailings = data;
-            if (!sailings) {
-              var dKeys = Object.keys(data);
-              log('  API keys: ' + dKeys.join(', '), 'info');
-              for (var ki = 0; ki < dKeys.length; ki++) {
-                var val = data[dKeys[ki]];
-                if (Array.isArray(val) && val.length > 0 && val[0] && (val[0].shipName || val[0].ship || val[0].sailDate || val[0].departureDate)) {
-                  sailings = val;
-                  break;
-                }
-              }
+    for (var ei = 0; ei < endpointTemplates.length; ei++) {
+      var collected = [];
+      for (var page = 1; page <= 8; page++) {
+        var endpoint = endpointTemplates[ei].replace('{PAGE}', String(page));
+        try {
+          log('  Trying cruise search API: ' + endpoint, 'info');
+          var controller = new AbortController();
+          var tid = setTimeout(function() { controller.abort(); }, 12000);
+          var response = await fetch(endpoint, {
+            method: 'GET',
+            headers: { 'accept': 'application/json', 'x-requested-with': 'XMLHttpRequest' },
+            credentials: 'include',
+            signal: controller.signal
+          });
+          clearTimeout(tid);
+          log('  API response: ' + response.status + ' (page ' + page + ')', response.ok ? 'info' : 'warning');
+          if (!response.ok) {
+            if (page === 1) {
+              collected = [];
             }
-            if (sailings && sailings.length > 0) {
-              log('Found ' + sailings.length + ' sailings from API for ' + rateCode, 'success');
-              return sailings;
-            }
+            break;
           }
+          var ct = response.headers.get('content-type') || '';
+          if (!ct.includes('json')) {
+            break;
+          }
+          var data = await response.json();
+          if (!data) {
+            break;
+          }
+          var sailings = extractSailingsArrayFromData(data);
+          if (!sailings || sailings.length === 0) {
+            break;
+          }
+          for (var si = 0; si < sailings.length; si++) {
+            collected.push(sailings[si]);
+          }
+          if (sailings.length < 50) {
+            break;
+          }
+        } catch(e) {
+          log('  API error: ' + (e && e.message ? e.message : 'timeout'), 'warning');
+          break;
         }
-      } catch(e) {
-        log('  API error: ' + (e && e.message ? e.message : 'timeout'), 'warning');
+      }
+      if (collected.length > 0) {
+        var deduped = dedupeApiSailings(collected);
+        log('Found ' + deduped.length + ' sailings from API for ' + rateCode, 'success');
+        return deduped;
       }
     }
     return null;
