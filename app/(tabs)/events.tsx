@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle, Ban } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle, Ban, Sparkles } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -12,6 +12,7 @@ import type { CalendarEvent, BookedCruise } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
+import { getLuckForDate, formatDateKey, LUCK_SCALE, type LuckColor, type LuckInfo } from '@/constants/luckScores';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -335,9 +336,15 @@ export default function EventsScreen() {
     return 'transparent';
   }, []);
 
+  const getLuckColorForDay = useCallback((day: DayData): LuckInfo | null => {
+    const dateKey = formatDateKey(day.date);
+    return getLuckForDate(dateKey);
+  }, []);
+
   const renderDayCell = useCallback((day: DayData) => {
     const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
     const bgColor = getDayBackgroundColor(day);
+    const luck = getLuckColorForDay(day);
     
     return (
       <TouchableOpacity
@@ -359,14 +366,21 @@ export default function EventsScreen() {
         ]}>
           {day.dayNumber}
         </Text>
-        {hasEvents && (
+        {luck && day.isCurrentMonth ? (
+          <View style={styles.luckIndicatorRow}>
+            <View style={[styles.luckDot, { backgroundColor: luck.hex }]} />
+            {hasEvents && renderEventDots(day.events).length > 0 && (
+              <>{renderEventDots(day.events)}</>
+            )}
+          </View>
+        ) : hasEvents ? (
           <View style={styles.eventDotsContainer}>
             {renderEventDots(day.events)}
           </View>
-        )}
+        ) : null}
       </TouchableOpacity>
     );
-  }, [renderEventDots, handleDayPress, getDayBackgroundColor]);
+  }, [renderEventDots, handleDayPress, getDayBackgroundColor, getLuckColorForDay]);
 
   const upcomingEvents = useMemo(() => {
     const today = new Date();
@@ -627,6 +641,28 @@ export default function EventsScreen() {
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.personal }]} />
               <Text style={styles.legendText}>Personal</Text>
+            </View>
+          </View>
+
+          <View style={styles.luckLegendContainer}>
+            <View style={styles.luckLegendHeader}>
+              <Sparkles size={16} color={COLORS.navyDeep} />
+              <Text style={styles.luckLegendTitle}>Earth Rooster Luck</Text>
+            </View>
+            <View style={styles.luckScaleRow}>
+              {(['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Indigo', 'Violet'] as LuckColor[]).map((color) => {
+                const info = LUCK_SCALE[color];
+                return (
+                  <View key={color} style={styles.luckScaleItem}>
+                    <View style={[styles.luckScaleDot, { backgroundColor: info.hex }]} />
+                    <Text style={styles.luckScaleLabel}>{info.score}</Text>
+                  </View>
+                );
+              })}
+            </View>
+            <View style={styles.luckScaleLabels}>
+              <Text style={styles.luckScaleEndLabel}>Rough</Text>
+              <Text style={styles.luckScaleEndLabel}>Extremely Lucky</Text>
             </View>
           </View>
 
@@ -898,6 +934,18 @@ const styles = StyleSheet.create({
     bottom: 4,
     gap: 2,
   },
+  luckIndicatorRow: {
+    flexDirection: 'row',
+    position: 'absolute',
+    bottom: 3,
+    gap: 2,
+    alignItems: 'center',
+  },
+  luckDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   eventDot: {
     width: 5,
     height: 5,
@@ -1101,5 +1149,59 @@ const styles = StyleSheet.create({
   crewSectionContainer: {
     marginHorizontal: SPACING.md,
     marginTop: SPACING.md,
+  },
+  luckLegendContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: BORDER_RADIUS.lg,
+    marginHorizontal: SPACING.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
+    ...SHADOW.sm,
+  },
+  luckLegendHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  luckLegendTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  luckScaleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xs,
+  },
+  luckScaleItem: {
+    alignItems: 'center',
+    gap: 3,
+  },
+  luckScaleDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
+  luckScaleLabel: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
+    opacity: 0.6,
+  },
+  luckScaleLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    paddingHorizontal: SPACING.xs,
+  },
+  luckScaleEndLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.5,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
 });
