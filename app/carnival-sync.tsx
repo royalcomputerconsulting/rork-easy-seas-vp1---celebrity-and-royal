@@ -19,6 +19,7 @@ const CARNIVAL_GOLD = '#FFB400';
 const CARNIVAL_DARK = '#0c1520';
 const CARNIVAL_CARD = '#1a2535';
 const CARNIVAL_BORDER = '#2a3a50';
+const MAX_WEBVIEW_MESSAGE_SIZE = 350000;
 
 function CarnivalSyncScreen() {
   const router = useRouter();
@@ -153,6 +154,12 @@ function CarnivalSyncScreen() {
     const rawData = typeof event?.nativeEvent?.data === 'string' ? event.nativeEvent.data : '';
 
     if (!rawData) {
+      return;
+    }
+
+    if (rawData.length > MAX_WEBVIEW_MESSAGE_SIZE) {
+      console.warn('[CarnivalSync] Ignoring oversized WebView message:', rawData.length);
+      addLog('Ignored an oversized browser message to prevent a crash. Sync will continue with chunked data.', 'warning');
       return;
     }
 

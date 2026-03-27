@@ -16,10 +16,14 @@ export const CARNIVAL_OFFERS_SCRIPT = `
 
   function wait(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
-  function log(message, type) {
+  function post(type, payload) {
     try {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: message, logType: type || 'info' }));
+      window.ReactNativeWebView.postMessage(JSON.stringify(Object.assign({ type: type }, payload || {})));
     } catch(e) {}
+  }
+
+  function log(message, type) {
+    post('log', { message: message, logType: type || 'info' });
   }
 
   function sendBatch(offers, isFinal, totalCount, offerCount) {
@@ -1374,10 +1378,14 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
   ];
   var SHIP_PATTERN = new RegExp('(' + CARNIVAL_SHIPS.map(function(s) { return s.replace(/\\s+/g, '\\\\s+'); }).join('|') + ')', 'i');
 
-  function log(message, type) {
+  function post(type, payload) {
     try {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: message, logType: type || 'info' }));
+      window.ReactNativeWebView.postMessage(JSON.stringify(Object.assign({ type: type }, payload || {})));
     } catch(e) {}
+  }
+
+  function log(message, type) {
+    post('log', { message: message, logType: type || 'info' });
   }
 
   function formatSailDate(dateStr) {
@@ -2114,15 +2122,35 @@ export const CARNIVAL_CRUISE_SEARCH_SCRAPE_SCRIPT = `
 
     log('Total: ' + sailings.length + ' sailing(s) found for ' + offerName + ' (' + offerCode + ')', sailings.length > 0 ? 'success' : 'warning');
 
-    try {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'offer_sailings_result',
+    var requestId = getOfferRequestId();
+    var chunkSize = 15;
+    if (sailings.length === 0) {
+      post('offer_sailings_chunk', {
         offerCode: offerCode,
         offerName: offerName,
-        sailings: sailings,
-        requestId: getOfferRequestId()
-      }));
-    } catch(e) {}
+        sailings: [],
+        requestId: requestId,
+        chunkIndex: 1,
+        totalChunks: 1,
+        isFinal: true
+      });
+      return;
+    }
+
+    var totalChunks = Math.ceil(sailings.length / chunkSize);
+    for (var chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      var start = chunkIndex * chunkSize;
+      var end = start + chunkSize;
+      post('offer_sailings_chunk', {
+        offerCode: offerCode,
+        offerName: offerName,
+        sailings: sailings.slice(start, end),
+        requestId: requestId,
+        chunkIndex: chunkIndex + 1,
+        totalChunks: totalChunks,
+        isFinal: chunkIndex === totalChunks - 1
+      });
+    }
   }
 
   if (document.readyState === 'loading') {
