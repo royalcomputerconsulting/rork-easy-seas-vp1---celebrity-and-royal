@@ -57,7 +57,7 @@ export default function EventsScreen() {
     setRefreshKey(prev => prev + 1);
   }, [calendarEvents.length, bookedCruises.length]);
 
-  const eventCounts = useMemo(() => {
+  const _eventCounts = useMemo(() => {
     let cruise = 0;
     let travel = 0;
     let personal = 0;
@@ -110,7 +110,7 @@ export default function EventsScreen() {
     return count;
   }, [calendarEvents, bookedCruises, currentDate]);
 
-  const isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
+  const _isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
     const start = new Date(startStr);
     const end = new Date(endStr);
     const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -547,12 +547,12 @@ export default function EventsScreen() {
             </View>
           )}
 
-          {totalEventsThisMonth > 10 && viewMode === 'month' && (
+          {totalEventsThisMonth > 10 && viewMode === 'month' ? (
             <View style={styles.alertBadge}>
               <AlertTriangle size={14} color={COLORS.white} />
               <Text style={styles.alertBadgeText}>{totalEventsThisMonth}</Text>
             </View>
-          )}
+          ) : null}
 
           {viewMode === 'month' && (
             <View style={styles.calendarContainer}>
@@ -601,9 +601,9 @@ export default function EventsScreen() {
                         hasEvents && { backgroundColor: `${eventColor}40` },
                       ]}
                     >
-                      {hasEvents && (
+                      {hasEvents ? (
                         <View style={[styles.ninetyDayDot, { backgroundColor: eventColor }]} />
-                      )}
+                      ) : null}
                     </View>
                   );
                 })}
@@ -659,7 +659,9 @@ export default function EventsScreen() {
               <View style={styles.sectionHeader}>
                 <CalendarDays size={20} color={COLORS.navyDeep} />
                 <Text style={styles.sectionTitle}>Upcoming Events</Text>
-                <Text style={styles.eventCountBadge}>{upcomingEvents.length}</Text>
+                <View style={styles.eventCountBadgeContainer}>
+                  <Text style={styles.eventCountBadgeText}>{upcomingEvents.length}</Text>
+                </View>
               </View>
               
               {upcomingEvents.length === 0 ? (
@@ -688,7 +690,7 @@ export default function EventsScreen() {
             </View>
           )}
 
-          {viewMode !== 'events' && upcomingEvents.length > 0 && (
+          {viewMode !== 'events' && upcomingEvents.length > 0 ? (
             <View style={styles.eventsListSection}>
               <View style={styles.sectionHeader}>
                 <CalendarDays size={20} color={COLORS.navyDeep} />
@@ -698,7 +700,7 @@ export default function EventsScreen() {
                 {upcomingEvents.slice(0, 3).map((item, index) => renderEventCard(item, index))}
               </View>
             </View>
-          )}
+          ) : null}
 
           <View style={styles.crewSectionContainer}>
             <TimeZoneConverter />
@@ -1027,15 +1029,17 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
     flex: 1,
   },
-  eventCountBadge: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+  eventCountBadgeContainer: {
     backgroundColor: COLORS.navyDeep,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.round,
     overflow: 'hidden',
+  },
+  eventCountBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
   },
   eventsList: {
     gap: SPACING.sm,
