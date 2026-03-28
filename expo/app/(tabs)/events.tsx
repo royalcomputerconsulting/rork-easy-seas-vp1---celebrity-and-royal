@@ -56,7 +56,7 @@ export default function EventsScreen() {
     setRefreshKey(prev => prev + 1);
   }, [calendarEvents.length, bookedCruises.length]);
 
-  const eventCounts = useMemo(() => {
+  const _eventCounts = useMemo(() => {
     let cruise = 0;
     let travel = 0;
     let personal = 0;
@@ -109,7 +109,7 @@ export default function EventsScreen() {
     return count;
   }, [calendarEvents, bookedCruises, currentDate]);
 
-  const isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
+  const _isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
     const start = new Date(startStr);
     const end = new Date(endStr);
     const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -243,6 +243,7 @@ export default function EventsScreen() {
       });
     }
     return days;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getEventsForDate, refreshKey]);
 
   const next90Days = useMemo(() => {
@@ -262,6 +263,7 @@ export default function EventsScreen() {
       });
     }
     return days;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getEventsForDate, refreshKey]);
 
   const navigateMonth = useCallback((direction: 'prev' | 'next') => {
@@ -650,7 +652,7 @@ export default function EventsScreen() {
               {upcomingEvents.length === 0 ? (
                 <View style={styles.emptyState}>
                   <View style={styles.emptyIconContainer}>
-                    <CalendarDays size={48} color='rgba(255,255,255,0.5)' />
+                    <CalendarDays size={48} color='rgba(255,255,255,0.6)' />
                   </View>
                   <Text style={styles.emptyTitle}>No Upcoming Events</Text>
                   <Text style={styles.emptyText}>
@@ -1056,10 +1058,10 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     paddingVertical: SPACING.xxxl,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   emptyIconContainer: {
     width: 80,
@@ -1079,7 +1081,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
+    textAlign: 'center' as const,
     marginBottom: SPACING.lg,
     paddingHorizontal: SPACING.lg,
   },
