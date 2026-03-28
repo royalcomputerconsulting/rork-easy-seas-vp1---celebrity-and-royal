@@ -162,6 +162,11 @@ export default function SettingsScreen() {
   const { stats: crewStats } = useCrewRecognition();
 
   const normalizedAuthenticatedEmail = useMemo(() => normalizeAccountEmail(authenticatedEmail), [authenticatedEmail]);
+  const canSeeCarnivalSync = useMemo(() => {
+    if (isAdmin) return true;
+    const email = authenticatedEmail?.toLowerCase().trim();
+    return email === 's@a.com' || email === 'scott.merlis1@gmail.com';
+  }, [isAdmin, authenticatedEmail]);
   const normalizedCurrentUserEmail = useMemo(() => normalizeAccountEmail(currentUser?.email), [currentUser?.email]);
   const isProfileIdentityReady = useMemo(() => {
     if (!normalizedAuthenticatedEmail) {
@@ -1672,6 +1677,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
+            {canSeeCarnivalSync && (
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/carnival-sync' as any)}
@@ -1683,6 +1689,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Sync Carnival Cruises</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
+            )}
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/pricing-summary' as any)}

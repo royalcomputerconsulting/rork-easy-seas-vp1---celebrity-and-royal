@@ -9,6 +9,7 @@ import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import type { CalendarEvent, BookedCruise } from '@/types/models';
+import { getLuckForDate, type LuckInfo } from '@/constants/luckScores';
 import { createDateFromString } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
@@ -27,6 +28,7 @@ interface DayData {
     travel: number;
     personal: number;
   };
+  luck: LuckInfo | null;
 }
 
 const EVENT_COLORS = {
@@ -184,6 +186,7 @@ export default function EventsScreen() {
         isCurrentMonth: false,
         isToday: false,
         events: getEventsForDate(prevMonthDay),
+        luck: null,
       });
     }
     
@@ -191,12 +194,14 @@ export default function EventsScreen() {
       const date = new Date(year, month, day);
       const isToday = date.getTime() === today.getTime();
       
+      const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       currentWeek.push({
         date,
         dayNumber: day,
         isCurrentMonth: true,
         isToday,
         events: getEventsForDate(date),
+        luck: getLuckForDate(dateKey),
       });
       
       if (currentWeek.length === 7) {
@@ -215,6 +220,7 @@ export default function EventsScreen() {
           isCurrentMonth: false,
           isToday: false,
           events: getEventsForDate(nextDate),
+          luck: null,
         });
         nextMonthDay++;
       }
@@ -234,12 +240,14 @@ export default function EventsScreen() {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
       const isToday = date.toDateString() === today.toDateString();
+      const dk = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       days.push({
         date,
         dayNumber: date.getDate(),
         isCurrentMonth: true,
         isToday,
         events: getEventsForDate(date),
+        luck: getLuckForDate(dk),
       });
     }
     return days;
@@ -254,12 +262,14 @@ export default function EventsScreen() {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
       const isToday = i === 0;
+      const dk2 = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       days.push({
         date,
         dayNumber: date.getDate(),
         isCurrentMonth: true,
         isToday,
         events: getEventsForDate(date),
+        luck: getLuckForDate(dk2),
       });
     }
     return days;
@@ -327,29 +337,29 @@ export default function EventsScreen() {
     });
   }, [router]);
 
+  const getLuckTextColor = useCallback((day: DayData): string => {
+    if (!day.luck) return COLORS.white;
+    if (day.luck.color === 'Yellow' || day.luck.color === 'Orange') return '#102544';
+    return '#FFFFFF';
+  }, []);
+
   const getDayBackgroundColor = useCallback((day: DayData) => {
+    if (!day.isCurrentMonth) return 'transparent';
+    if (day.luck) return day.luck.hex;
     const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
-    if (!hasEvents) return 'transparent';
-    
-    if (day.events.cruise > 0 && day.events.travel > 0) {
-      return 'rgba(34, 197, 94, 0.25)';
-    }
-    if (day.events.cruise > 0) {
-      return 'rgba(34, 197, 94, 0.2)';
-    }
-    if (day.events.travel > 0) {
-      return 'rgba(59, 130, 246, 0.2)';
-    }
-    if (day.events.personal > 0) {
-      return 'rgba(168, 85, 247, 0.15)';
-    }
+    if (!hasEvents) return 'rgba(255,255,255,0.06)';
+    if (day.events.cruise > 0) return 'rgba(34, 197, 94, 0.35)';
+    if (day.events.travel > 0) return 'rgba(59, 130, 246, 0.3)';
+    if (day.events.personal > 0) return 'rgba(168, 85, 247, 0.25)';
     return 'transparent';
   }, []);
 
   const renderDayCell = useCallback((day: DayData) => {
     const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
     const bgColor = getDayBackgroundColor(day);
-    
+    const textColor = day.isCurrentMonth ? getLuckTextColor(day) : 'rgba(255,255,255,0.28)';
+    const bookedBorder = day.isCurrentMonth && day.events.cruise > 0;
+
     return (
       <TouchableOpacity
         key={day.date.toISOString()}
@@ -358,26 +368,31 @@ export default function EventsScreen() {
           { backgroundColor: bgColor },
           day.isToday && styles.todayCell,
           !day.isCurrentMonth && styles.otherMonthCell,
+          bookedBorder ? styles.bookedCell : null,
         ]}
-        activeOpacity={0.7}
+        activeOpacity={0.75}
         onPress={() => handleDayPress(day)}
       >
-        <Text style={[
-          styles.dayNumber,
-          day.isToday && styles.todayNumber,
-          !day.isCurrentMonth && styles.otherMonthNumber,
-          hasEvents && day.isCurrentMonth && styles.dayNumberWithEvents,
-        ]}>
-          {day.dayNumber}
-        </Text>
-        {hasEvents && (
+        <View style={styles.dayCellTopRow}>
+          <Text style={[styles.dayNumber, { color: textColor }, day.isToday && styles.todayNumber]}>
+            {String(day.dayNumber)}
+          </Text>
+          {day.isCurrentMonth && day.luck ? (
+            <View style={styles.luckScorePill}>
+              <Text style={[styles.luckScoreText, { color: textColor }]}>
+                {String(day.luck.score)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        {hasEvents ? (
           <View style={styles.eventDotsContainer}>
             {renderEventDots(day.events)}
           </View>
-        )}
+        ) : null}
       </TouchableOpacity>
     );
-  }, [renderEventDots, handleDayPress, getDayBackgroundColor]);
+  }, [renderEventDots, handleDayPress, getDayBackgroundColor, getLuckTextColor]);
 
   const upcomingEvents = useMemo(() => {
     const today = new Date();
@@ -525,7 +540,7 @@ export default function EventsScreen() {
                 onPress={() => navigateMonth('prev')}
                 activeOpacity={0.7}
               >
-                <ChevronLeft size={24} color={COLORS.navyDeep} />
+                <ChevronLeft size={24} color="#FFFFFF" />
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -551,7 +566,7 @@ export default function EventsScreen() {
                 onPress={() => navigateMonth('next')}
                 activeOpacity={0.7}
               >
-                <ChevronRight size={24} color={COLORS.navyDeep} />
+                <ChevronRight size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           )}
@@ -564,7 +579,7 @@ export default function EventsScreen() {
           )}
 
           {viewMode === 'month' && (
-            <View style={styles.calendarContainer}>
+            <View key={`cal-${currentDate.getMonth()}-${currentDate.getFullYear()}`} style={styles.calendarContainer}>
               <View style={styles.weekDaysHeader}>
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                   <Text key={day} style={styles.weekDayLabel}>{day}</Text>
@@ -788,16 +803,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginHorizontal: SPACING.md,
     marginBottom: SPACING.sm,
+    backgroundColor: '#0284C7',
+    borderRadius: BORDER_RADIUS.lg,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
   },
   navButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.45)',
   },
   clearEventsButton: {
     width: 34,
@@ -817,11 +836,14 @@ const styles = StyleSheet.create({
   monthYearText: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   eventCountText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
   },
   alertBadge: {
@@ -870,46 +892,68 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     flex: 1,
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    minHeight: 72,
     borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    overflow: 'hidden',
     margin: 2,
+    padding: 4,
+    justifyContent: 'space-between',
   },
   todayCell: {
-    borderWidth: 2,
+    borderWidth: 2.5,
+    borderColor: '#FCD34D',
+  },
+  bookedCell: {
     borderColor: '#F59E0B',
-    backgroundColor: 'transparent',
+    borderWidth: 2,
   },
   otherMonthCell: {
-    opacity: 0.35,
+    opacity: 0.25,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  dayCellTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   dayNumber: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '800' as const,
+    lineHeight: 17,
   },
   todayNumber: {
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#F59E0B',
+    color: '#FCD34D',
   },
-  otherMonthNumber: {
-    color: 'rgba(255,255,255,0.3)',
+  luckScorePill: {
+    minWidth: 16,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    alignItems: 'center',
   },
-  dayNumberWithEvents: {
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+  luckScoreText: {
+    fontSize: 9,
+    fontWeight: '800' as const,
   },
   eventDotsContainer: {
     flexDirection: 'row',
-    position: 'absolute',
-    bottom: 4,
     gap: 2,
+    marginTop: 2,
   },
   eventDot: {
     width: 5,
     height: 5,
     borderRadius: 3,
+  },
+  luckLegendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   legendContainer: {
     flexDirection: 'row',
