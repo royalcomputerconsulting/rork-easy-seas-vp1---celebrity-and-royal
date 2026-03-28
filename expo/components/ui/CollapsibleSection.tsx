@@ -24,6 +24,7 @@ interface CollapsibleSectionProps {
   icon?: React.ReactNode;
   children: React.ReactNode;
   defaultExpanded?: boolean;
+  isExpanded?: boolean;
   headerStyle?: 'default' | 'compact';
   showBorder?: boolean;
   onToggle?: (expanded: boolean) => void;
@@ -35,11 +36,14 @@ export function CollapsibleSection({
   icon,
   children,
   defaultExpanded = true,
+  isExpanded: controlledExpanded,
   headerStyle = 'default',
   showBorder = true,
   onToggle,
 }: CollapsibleSectionProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const isControlled = controlledExpanded !== undefined;
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
+  const expanded = isControlled ? controlledExpanded : internalExpanded;
   const rotateAnim = useRef(new Animated.Value(defaultExpanded ? 1 : 0)).current;
 
   const toggleExpanded = useCallback(() => {
@@ -58,10 +62,12 @@ export function CollapsibleSection({
       useNativeDriver: true,
     }).start();
     
-    setExpanded(newExpanded);
+    if (!isControlled) {
+      setInternalExpanded(newExpanded);
+    }
     onToggle?.(newExpanded);
     console.log('[CollapsibleSection] Toggled:', title, newExpanded);
-  }, [expanded, rotateAnim, title, onToggle]);
+  }, [expanded, rotateAnim, title, onToggle, isControlled]);
 
   const iconRotation = rotateAnim.interpolate({
     inputRange: [0, 1],
