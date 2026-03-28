@@ -26,11 +26,15 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import type { BookedCruise, CalendarEvent } from '@/types/models';
 import { createDateFromString, formatDate } from '@/lib/date';
-import { formatDateKey, getLuckForDate, LUCK_SCALE, type LuckColor, type LuckInfo } from '@/constants/luckScores';
+import { formatDateKey, getLuckForDate, LUCK_SCALE, type LuckColor, type LuckInfo } from '../../constants/luckScores';
 
 const HERO_COLORS = ['#102544', '#1E3A5F', '#2E5077'] as const;
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const LUCK_ORDER = ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Indigo', 'Violet'] as const satisfies readonly LuckColor[];
+const CARD_SURFACE = 'rgba(241, 247, 255, 0.97)';
+const CARD_BORDER = 'rgba(125, 184, 255, 0.26)';
+const INNER_SURFACE = 'rgba(16, 37, 68, 0.06)';
+const INNER_BORDER = 'rgba(30, 58, 95, 0.08)';
 
 type CalendarMode = 'month' | 'agenda';
 type EventCategory = 'cruise' | 'travel' | 'personal';
@@ -339,6 +343,7 @@ export default function EventsScreen() {
       const textColor = getLuckTextColor(day.luck);
       const surfaceColor = getLuckSurface(day.luck, day.inCurrentMonth);
       const hasEvents = day.counts.total > 0;
+      const hasCruise = day.counts.cruise > 0;
 
       return (
         <TouchableOpacity
@@ -350,6 +355,7 @@ export default function EventsScreen() {
             { backgroundColor: surfaceColor },
             !day.inCurrentMonth && styles.dayCellMuted,
             day.isToday && styles.todayDayCell,
+            hasCruise && styles.cruiseDayCell,
           ]}
           testID={`luck-day-${day.key}`}
         >
@@ -382,11 +388,21 @@ export default function EventsScreen() {
 
           <View style={styles.dayFooter}>
             {hasEvents ? (
-              <View style={styles.eventDotsRow}>
-                {day.counts.cruise > 0 ? <View style={[styles.eventDot, styles.cruiseDot]} /> : null}
-                {day.counts.travel > 0 ? <View style={[styles.eventDot, styles.travelDot]} /> : null}
-                {day.counts.personal > 0 ? <View style={[styles.eventDot, styles.personalDot]} /> : null}
-              </View>
+              <>
+                <View style={styles.eventDotsRow}>
+                  {day.counts.cruise > 0 ? <View style={[styles.eventDot, styles.cruiseDot]} /> : null}
+                  {day.counts.travel > 0 ? <View style={[styles.eventDot, styles.travelDot]} /> : null}
+                  {day.counts.personal > 0 ? <View style={[styles.eventDot, styles.personalDot]} /> : null}
+                </View>
+                <View style={[styles.dayEventBadge, hasCruise ? styles.dayEventBadgeCruise : styles.dayEventBadgeNeutral]}>
+                  {hasCruise ? <Ship size={10} color={COLORS.white} /> : null}
+                  <Text style={[styles.dayEventBadgeText, hasCruise ? styles.dayEventBadgeTextCruise : styles.dayEventBadgeTextNeutral]} numberOfLines={1}>
+                    {hasCruise
+                      ? `${day.counts.cruise} cruise${day.counts.cruise === 1 ? '' : 's'}`
+                      : `${day.counts.total} item${day.counts.total === 1 ? '' : 's'}`}
+                  </Text>
+                </View>
+              </>
             ) : null}
           </View>
         </TouchableOpacity>
@@ -712,11 +728,12 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.94)',
+    backgroundColor: CARD_SURFACE,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(229,231,235,0.9)',
+    borderColor: CARD_BORDER,
+    ...SHADOW.sm,
   },
   summaryLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -737,12 +754,12 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   contentCard: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: CARD_SURFACE,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(229,231,235,0.95)',
+    borderColor: CARD_BORDER,
     ...SHADOW.sm,
   },
   calendarHeader: {
@@ -756,7 +773,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.bgSecondary,
+    backgroundColor: INNER_SURFACE,
+    borderWidth: 1,
+    borderColor: INNER_BORDER,
   },
   calendarHeaderCenter: {
     flex: 1,
@@ -805,6 +824,13 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: COLORS.goldDark,
   },
+  cruiseDayCell: {
+    shadowColor: '#16A34A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 3,
+  },
   dayCellHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -839,7 +865,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.45)',
   },
   dayFooter: {
-    minHeight: 10,
+    minHeight: 28,
     justifyContent: 'flex-end',
   },
   eventDotsRow: {
@@ -884,11 +910,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: COLORS.cleanBgSecondary,
+    backgroundColor: INNER_SURFACE,
     marginBottom: SPACING.sm,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.cleanBorderLight,
+    borderColor: INNER_BORDER,
   },
   agendaAccent: {
     width: 5,
@@ -979,7 +1005,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     paddingTop: SPACING.md,
     borderTopWidth: 1,
-    borderTopColor: COLORS.cleanBorderLight,
+    borderTopColor: INNER_BORDER,
   },
   eventLegendItem: {
     flexDirection: 'row',
@@ -990,5 +1016,32 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.textSecondary,
     fontWeight: '700' as const,
+  },
+  dayEventBadge: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    maxWidth: '100%',
+  },
+  dayEventBadgeCruise: {
+    backgroundColor: 'rgba(5, 150, 105, 0.88)',
+  },
+  dayEventBadgeNeutral: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  dayEventBadgeText: {
+    fontSize: 9,
+    fontWeight: '800' as const,
+  },
+  dayEventBadgeTextCruise: {
+    color: COLORS.white,
+  },
+  dayEventBadgeTextNeutral: {
+    color: COLORS.navyDeep,
   },
 });

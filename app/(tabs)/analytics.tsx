@@ -35,6 +35,12 @@ import { calculateCruiseValue, type ValueBreakdown } from '@/lib/valueCalculator
 import { formatCurrency, formatNumber } from '@/lib/format';
 
 const HERO_COLORS = ['#102544', '#1E3A5F', '#2E5077'] as const;
+const CARD_SURFACE = 'rgba(241, 247, 255, 0.97)';
+const CARD_BORDER = 'rgba(125, 184, 255, 0.26)';
+const INNER_SURFACE = 'rgba(16, 37, 68, 0.06)';
+const INNER_BORDER = 'rgba(30, 58, 95, 0.08)';
+const FEATURE_SURFACE = 'rgba(255, 244, 214, 0.96)';
+const FEATURE_BORDER = 'rgba(212,160,10,0.28)';
 
 type MetricTone = 'default' | 'positive' | 'negative';
 
@@ -473,11 +479,11 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     width: '48%',
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: CARD_SURFACE,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(229,231,235,0.95)',
+    borderColor: CARD_BORDER,
     ...SHADOW.sm,
   },
   metricIconWrap: {
@@ -501,12 +507,12 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
   },
   contentCard: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: CARD_SURFACE,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(229,231,235,0.95)',
+    borderColor: CARD_BORDER,
     ...SHADOW.sm,
   },
   sectionHeader: {
@@ -536,9 +542,11 @@ const styles = StyleSheet.create({
   },
   insightItem: {
     width: '48%',
-    backgroundColor: COLORS.cleanBgSecondary,
+    backgroundColor: INNER_SURFACE,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: INNER_BORDER,
   },
   insightLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -554,12 +562,12 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
   },
   featureCard: {
-    backgroundColor: '#FFF8E6',
+    backgroundColor: FEATURE_SURFACE,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(212,160,10,0.25)',
+    borderColor: FEATURE_BORDER,
     ...SHADOW.sm,
   },
   featureHeader: {
@@ -587,9 +595,11 @@ const styles = StyleSheet.create({
   },
   featureStat: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(212,160,10,0.16)',
   },
   featureStatLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -613,7 +623,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.cleanBorderLight,
+    borderBottomColor: INNER_BORDER,
   },
   valueRowLast: {
     borderBottomWidth: 0,
@@ -645,7 +655,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.cleanBorderLight,
+    borderBottomColor: INNER_BORDER,
   },
   cruiseRowMain: {
     flex: 1,
@@ -659,7 +669,9 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.cleanBgSecondary,
+    backgroundColor: INNER_SURFACE,
+    borderWidth: 1,
+    borderColor: INNER_BORDER,
     marginRight: SPACING.sm,
   },
   cruiseRowTextWrap: {

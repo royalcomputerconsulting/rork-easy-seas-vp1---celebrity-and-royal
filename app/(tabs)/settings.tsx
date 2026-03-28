@@ -60,7 +60,6 @@ import {
   parseICSFile, 
   parseBookedCSV,
   generateOffersCSV, 
-  generateCalendarICS,
   generateBookedCSV,
   exportFile,
   downloadFromURL,
@@ -104,7 +103,7 @@ export default function SettingsScreen() {
   const entitlement = useEntitlement();
   const { settings, updateSettings, clearLocalData, setLocalData, localData } = useAppState();
   const coreData = useCoreData();
-  const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers } = coreData;
+  const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers, calendarEvents } = coreData;
   const cruises = coreData.cruises;
   const {
     currentUser,
@@ -438,46 +437,96 @@ export default function SettingsScreen() {
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
+  const existingCalendarFeedQuery = trpc.calendar.getCalendarFeedToken.useQuery(
+    { email: normalizedAuthenticatedEmail ?? '' },
+    { enabled: Boolean(normalizedAuthenticatedEmail), staleTime: 60000 }
+  );
+
+  const calendarFeedTokenStorageKey = useMemo(() => {
+    return getUserScopedKey('easyseas_calendar_feed_token', normalizedAuthenticatedEmail ?? null);
+  }, [normalizedAuthenticatedEmail]);
+
+  const calendarFeedUpdatedStorageKey = useMemo(() => {
+    return getUserScopedKey('easyseas_calendar_feed_updated', normalizedAuthenticatedEmail ?? null);
+  }, [normalizedAuthenticatedEmail]);
 
   useEffect(() => {
     const loadFeedToken = async () => {
       try {
-        const stored = await AsyncStorage.getItem('easyseas_calendar_feed_token');
+        const stored = await AsyncStorage.getItem(calendarFeedTokenStorageKey);
+        const lastUpdate = await AsyncStorage.getItem(calendarFeedUpdatedStorageKey);
+
         if (stored) {
           setCalendarFeedToken(stored);
           setCalendarFeedUrl(`${RENDER_BACKEND_URL}/api/calendar-feed/${stored}`);
-          const lastUpdate = await AsyncStorage.getItem('easyseas_calendar_feed_updated');
-          if (lastUpdate) setFeedLastUpdated(lastUpdate);
+          setFeedLastUpdated(lastUpdate);
           console.log('[Settings] Loaded calendar feed token:', stored.slice(0, 8) + '...');
+          return;
         }
+
+        setCalendarFeedToken(null);
+        setCalendarFeedUrl(null);
+        setFeedLastUpdated(lastUpdate);
       } catch (error) {
         console.error('[Settings] Error loading feed token:', error);
       }
     };
     void loadFeedToken();
-  }, []);
+  }, [calendarFeedTokenStorageKey, calendarFeedUpdatedStorageKey]);
+
+  useEffect(() => {
+    const backendToken = existingCalendarFeedQuery.data?.token;
+    const backendUpdatedAt = existingCalendarFeedQuery.data?.updatedAt ?? null;
+
+    if (!existingCalendarFeedQuery.data?.found || !backendToken) {
+      return;
+    }
+
+    const syncStoredFeed = async () => {
+      try {
+        await AsyncStorage.setItem(calendarFeedTokenStorageKey, backendToken);
+        if (backendUpdatedAt) {
+          await AsyncStorage.setItem(calendarFeedUpdatedStorageKey, backendUpdatedAt);
+        }
+        setCalendarFeedToken(backendToken);
+        setCalendarFeedUrl(`${RENDER_BACKEND_URL}/api/calendar-feed/${backendToken}`);
+        setFeedLastUpdated(backendUpdatedAt);
+        console.log('[Settings] Synced existing backend calendar feed token:', backendToken.slice(0, 8) + '...');
+      } catch (error) {
+        console.error('[Settings] Failed to sync backend feed token locally:', error);
+      }
+    };
+
+    void syncStoredFeed();
+  }, [calendarFeedTokenStorageKey, calendarFeedUpdatedStorageKey, existingCalendarFeedQuery.data]);
 
   const handlePublishCalendarFeed = useCallback(async () => {
-    const email = currentUser?.email;
+    const email = normalizedCurrentUserEmail ?? normalizedAuthenticatedEmail;
     if (!email) {
-      Alert.alert('Profile Required', 'Please set your email in your profile before publishing a calendar feed.');
+      Alert.alert('Profile Required', 'Please sign in or set your email in your profile before publishing a calendar feed.');
       return;
     }
 
     try {
       setIsPublishingFeed(true);
-      console.log('[Settings] Publishing calendar feed...');
+      console.log('[Settings] Publishing calendar feed...', { email });
 
       let token = calendarFeedToken;
       if (!token) {
         token = generateFeedToken();
         setCalendarFeedToken(token);
-        await AsyncStorage.setItem('easyseas_calendar_feed_token', token);
+        await AsyncStorage.setItem(calendarFeedTokenStorageKey, token);
         console.log('[Settings] Generated new feed token:', token.slice(0, 8) + '...');
       }
 
       const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
-      const allEvents = localData.calendar || [];
+      const allEvents = calendarEvents.length > 0 ? calendarEvents : (localData.calendar || []);
+
+      if (allBooked.length === 0 && allEvents.length === 0) {
+        Alert.alert('No Calendar Data', 'Add booked cruises or calendar events before publishing your feed.');
+        return;
+      }
+
       console.log('[Settings] Generating ICS from', allBooked.length, 'cruises and', allEvents.length, 'events');
 
       const icsContent = generateCalendarFeed(allBooked, allEvents);
@@ -492,12 +541,13 @@ export default function SettingsScreen() {
       setCalendarFeedUrl(feedUrl);
       const now = new Date().toISOString();
       setFeedLastUpdated(now);
-      await AsyncStorage.setItem('easyseas_calendar_feed_updated', now);
+      await AsyncStorage.setItem(calendarFeedUpdatedStorageKey, now);
+      await existingCalendarFeedQuery.refetch();
 
       console.log('[Settings] Calendar feed published successfully:', feedUrl);
       Alert.alert(
         'Calendar Feed Published',
-        `Your calendar feed is live with ${allBooked.length} cruises.\n\nYou can now subscribe to this feed from any calendar app (Apple Calendar, Google Calendar, Outlook, etc.).\n\nTap "Copy URL" to copy the feed link.`
+        `Your calendar feed is live with ${allBooked.length} cruises and ${allEvents.length} events.\n\nYou can now subscribe to this feed from any calendar app (Apple Calendar, Google Calendar, Outlook, etc.).\n\nTap "Copy URL" to copy the feed link.`
       );
     } catch (error) {
       console.error('[Settings] Publish feed error:', error);
@@ -505,17 +555,32 @@ export default function SettingsScreen() {
     } finally {
       setIsPublishingFeed(false);
     }
-  }, [calendarFeedToken, currentUser, bookedCruises, localData, saveCalendarFeedMutation]);
+  }, [
+    bookedCruises,
+    calendarEvents,
+    calendarFeedToken,
+    calendarFeedTokenStorageKey,
+    calendarFeedUpdatedStorageKey,
+    existingCalendarFeedQuery,
+    localData.booked,
+    localData.calendar,
+    normalizedAuthenticatedEmail,
+    normalizedCurrentUserEmail,
+    saveCalendarFeedMutation,
+  ]);
 
   const handleCopyFeedUrl = useCallback(async () => {
     if (!calendarFeedUrl) return;
     try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(calendarFeedUrl);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+        console.log('[Settings] Calendar feed URL copied to clipboard');
+        return;
       }
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-      console.log('[Settings] Calendar feed URL copied to clipboard');
+
+      Alert.alert('Feed URL', calendarFeedUrl);
     } catch (error) {
       console.error('[Settings] Copy error:', error);
       Alert.alert('Feed URL', calendarFeedUrl);
@@ -552,15 +617,15 @@ export default function SettingsScreen() {
             setCalendarFeedToken(newToken);
             setCalendarFeedUrl(null);
             setFeedLastUpdated(null);
-            await AsyncStorage.setItem('easyseas_calendar_feed_token', newToken);
-            await AsyncStorage.removeItem('easyseas_calendar_feed_updated');
+            await AsyncStorage.setItem(calendarFeedTokenStorageKey, newToken);
+            await AsyncStorage.removeItem(calendarFeedUpdatedStorageKey);
             console.log('[Settings] Regenerated feed token:', newToken.slice(0, 8) + '...');
             Alert.alert('Token Regenerated', 'Your feed URL has been reset. Tap "Publish Feed" to make it live with the new URL.');
           },
         },
       ]
     );
-  }, []);
+  }, [calendarFeedTokenStorageKey, calendarFeedUpdatedStorageKey]);
 
   const handleImportCalendarFromURL = useCallback(async () => {
     try {
@@ -848,20 +913,21 @@ export default function SettingsScreen() {
       setIsExporting(true);
       console.log('[Settings] Starting calendar ICS export');
       
-      const allEvents = localData.calendar || [];
+      const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
+      const allEvents = calendarEvents.length > 0 ? calendarEvents : (localData.calendar || []);
       
-      if (allEvents.length === 0) {
-        Alert.alert('No Data', 'No calendar events to export. Import events first.');
+      if (allBooked.length === 0 && allEvents.length === 0) {
+        Alert.alert('No Data', 'No cruises or calendar events to export. Import data first.');
         setIsExporting(false);
         return;
       }
 
-      const icsContent = generateCalendarICS(allEvents);
+      const icsContent = generateCalendarFeed(allBooked, allEvents);
       const fileName = `easyseas_calendar_${new Date().toISOString().split('T')[0]}.ics`;
       
       const success = await exportFile(icsContent, fileName);
       if (success) {
-        Alert.alert('Export Successful', `Exported ${allEvents.length} events to ${fileName}`);
+        Alert.alert('Export Successful', `Exported ${allBooked.length} cruises and ${allEvents.length} events to ${fileName}`);
       } else {
         Alert.alert('Export Info', 'File saved but sharing may not be available on this device.');
       }
@@ -872,7 +938,7 @@ export default function SettingsScreen() {
     } finally {
       setIsExporting(false);
     }
-  }, [localData.calendar]);
+  }, [bookedCruises, calendarEvents, localData.booked, localData.calendar]);
 
   const handleClearData = useCallback(() => {
     Alert.alert(
@@ -990,8 +1056,6 @@ export default function SettingsScreen() {
         setIsImportingAll(false);
         return;
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      
       if (result.success && result.imported) {
         const { cruises: importedCruises, bookedCruises: importedBooked, casinoOffers: importedOffers, calendarEvents, casinoSessions: importedSessions, certificates, machines: importedMachines } = result.imported;
         
@@ -1844,7 +1908,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
               <View style={[styles.dataSubsection, styles.calendarFeedBanner]}>
                 <Text style={styles.subsectionLabel}>CALENDAR FEED</Text>
-                <Text style={styles.subsectionHelper}>Publish your cruises as a subscribable calendar feed.</Text>
+                <Text style={styles.subsectionHelper}>Publish your cruises and imported events as a subscribable calendar feed.</Text>
               </View>
               <View style={styles.calendarFeedSection}>
                 <TouchableOpacity
@@ -1919,7 +1983,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
                 {!calendarFeedUrl && (
                   <Text style={styles.feedHelperText}>
-                    Publish your booked cruises and events as an .ics calendar feed that you can subscribe to from Apple Calendar, Google Calendar, Outlook, or any calendar app.
+                    Publish your booked cruises and imported events as an .ics calendar feed that you can subscribe to from Apple Calendar, Google Calendar, Outlook, or any calendar app.
                   </Text>
                 )}
               </View>

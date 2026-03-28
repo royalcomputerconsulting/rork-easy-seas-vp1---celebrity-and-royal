@@ -385,10 +385,48 @@ export const LUCK_DATA_2026: Record<string, LuckColor> = {
   '2026-12-31': 'Yellow',
 };
 
+const LUCK_DATE_KEYS = Object.keys(LUCK_DATA_2026).sort();
+
+function getFallbackLuckColor(date: Date): LuckColor | null {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const sameMonthDayKey = `2026-${month}-${day}`;
+  const sameMonthDayColor = LUCK_DATA_2026[sameMonthDayKey];
+
+  if (sameMonthDayColor) {
+    return sameMonthDayColor;
+  }
+
+  if (LUCK_DATE_KEYS.length === 0) {
+    return null;
+  }
+
+  const startOfYear = Date.UTC(date.getFullYear(), 0, 1);
+  const currentDay = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const dayOfYear = Math.floor((currentDay - startOfYear) / 86400000);
+  const normalizedIndex = ((dayOfYear % LUCK_DATE_KEYS.length) + LUCK_DATE_KEYS.length) % LUCK_DATE_KEYS.length;
+  const fallbackKey = LUCK_DATE_KEYS[normalizedIndex];
+
+  return LUCK_DATA_2026[fallbackKey] ?? null;
+}
+
 export function getLuckForDate(dateStr: string): LuckInfo | null {
-  const color = LUCK_DATA_2026[dateStr];
-  if (!color) return null;
-  return LUCK_SCALE[color];
+  const exactColor = LUCK_DATA_2026[dateStr];
+  if (exactColor) {
+    return LUCK_SCALE[exactColor];
+  }
+
+  const parsedDate = new Date(`${dateStr}T12:00:00`);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return null;
+  }
+
+  const fallbackColor = getFallbackLuckColor(parsedDate);
+  if (!fallbackColor) {
+    return null;
+  }
+
+  return LUCK_SCALE[fallbackColor];
 }
 
 export function formatDateKey(date: Date): string {
