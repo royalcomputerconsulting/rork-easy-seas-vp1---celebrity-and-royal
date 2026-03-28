@@ -608,7 +608,7 @@ function OverviewScreenContent() {
               <Text style={styles.casinoHistoryTitle}>CASINO HISTORY</Text>
             </View>
             <Text style={styles.casinoHistorySubtitle}>
-              {cruisesWithCasinoData.length} cruise{cruisesWithCasinoData.length !== 1 ? 's' : ''} with casino data
+              {`${cruisesWithCasinoData.length} cruise${cruisesWithCasinoData.length !== 1 ? 's' : ''} with casino data`}
             </Text>
           </View>
           {cruisesWithCasinoData.map((cruise: BookedCruise) => {

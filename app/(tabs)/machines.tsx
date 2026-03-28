@@ -382,7 +382,7 @@ export default function AtlasScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>Slot Machine Advantage Players Handbook</Text>
           <Text style={styles.subtitle}>
-            {filteredMachines.length} machine{filteredMachines.length !== 1 ? 's' : ''}
+            {`${filteredMachines.length} machine${filteredMachines.length !== 1 ? 's' : ''}`}
           </Text>
         </View>
 

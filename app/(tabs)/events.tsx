@@ -358,7 +358,7 @@ export default function EventsScreen() {
           <View style={styles.heroRow}>
             <Image source={{ uri: IMAGES.logo }} style={styles.heroLogo} resizeMode="contain" />
             <View style={styles.heroText}>
-              <Text style={styles.heroTitle}>Easy Seas™ Calendar</Text>
+              <Text style={styles.heroTitle}>{'Easy Seas™ Calendar'}</Text>
               <Text style={styles.heroSubtitle}>
                 {'Luck scores, booked cruises & offer sailings in one view'}
               </Text>

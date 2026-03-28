@@ -128,11 +128,11 @@ function RecommendationItem({ recommendation, rank, isHighlight }: Recommendatio
 
   return (
     <View style={[styles.recItem, isHighlight && styles.recItemHighlight]}>
-      {rank && (
+      {rank != null && rank > 0 ? (
         <View style={[styles.rankBadge, rank === 1 && styles.rankBadgeGold]}>
           <Text style={styles.rankText}>{rank}</Text>
         </View>
-      )}
+      ) : null}
       <View style={styles.recContent}>
         <Text style={styles.recMachine}>{formatMachineType(recommendation.machineType)}</Text>
         <Text style={styles.recReason}>{recommendation.reason}</Text>
