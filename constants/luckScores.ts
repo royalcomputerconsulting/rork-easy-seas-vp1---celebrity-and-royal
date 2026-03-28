@@ -10,11 +10,11 @@ export interface LuckInfo {
 export const LUCK_SCALE: Record<LuckColor, LuckInfo> = {
   Red: { color: 'Red', label: 'Rough', score: 1, hex: '#DC2626' },
   Orange: { color: 'Orange', label: 'Challenging', score: 2, hex: '#EA580C' },
-  Yellow: { color: 'Yellow', label: 'Mixed', score: 3, hex: '#CA8A04' },
-  Green: { color: 'Green', label: 'Good', score: 4, hex: '#16A34A' },
-  Blue: { color: 'Blue', label: 'Favorable', score: 5, hex: '#2563EB' },
-  Indigo: { color: 'Indigo', label: 'Very Lucky', score: 6, hex: '#4F46E5' },
-  Violet: { color: 'Violet', label: 'Extremely Lucky', score: 7, hex: '#7C3AED' },
+  Yellow: { color: 'Yellow', label: 'Mixed', score: 4, hex: '#D97706' },
+  Green: { color: 'Green', label: 'Good', score: 5, hex: '#16A34A' },
+  Blue: { color: 'Blue', label: 'Favorable', score: 6, hex: '#2563EB' },
+  Indigo: { color: 'Indigo', label: 'Very Lucky', score: 8, hex: '#4F46E5' },
+  Violet: { color: 'Violet', label: 'Extremely Lucky', score: 9, hex: '#7C3AED' },
 };
 
 export const LUCK_DATA_2026: Record<string, LuckColor> = {

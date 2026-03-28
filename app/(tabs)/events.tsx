@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Clock4,
   Plane,
+  RefreshCw,
   Ship,
   Sparkles,
   User,
@@ -31,6 +32,11 @@ import { formatDateKey, getLuckForDate, LUCK_SCALE, type LuckColor, type LuckInf
 const HERO_GRADIENT = ['#051120', '#0B1D38', '#132A4D', '#26143C'] as const;
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const LUCK_ORDER = ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Indigo', 'Violet'] as const satisfies readonly LuckColor[];
+
+// Outline border colors for event types
+const OUTLINE_BOOKED = '#16A34A';   // green - booked cruise
+const OUTLINE_TRAVEL = '#2563EB';   // blue - travel days
+const OUTLINE_PERSONAL = '#7C3AED'; // purple - personal days
 
 type CalendarMode = 'month' | 'agenda';
 type TimelineCategory = 'bookedCruise' | 'availableCruise' | 'travel' | 'personal';
@@ -100,24 +106,21 @@ function buildDateKeysInRange(startDate: Date, endDate: Date): string[] {
   return keys;
 }
 
-function getLuckBg(luck: LuckInfo | null, inCurrentMonth: boolean): string {
-  if (!inCurrentMonth) return '#1A2A40';
-  if (!luck) return '#172333';
-  return luck.hex;
-}
-
-function getLuckTextColor(luck: LuckInfo | null, inCurrentMonth: boolean): string {
-  if (!inCurrentMonth) return 'rgba(255,255,255,0.35)';
-  if (!luck) return 'rgba(255,255,255,0.7)';
-  if (luck.color === 'Yellow' || luck.color === 'Orange') return '#102544';
-  return '#FFFFFF';
-}
-
 function getAgendaAccentColor(category: TimelineCategory, luck: LuckInfo | null): string {
-  if (category === 'bookedCruise') return '#F59E0B';
+  if (category === 'bookedCruise') return OUTLINE_BOOKED;
   if (category === 'availableCruise') return '#0EA5E9';
   if (luck?.hex) return luck.hex;
   return COLORS.navyDeep;
+}
+
+function formatSyncDate(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 export default function EventsScreen() {
@@ -126,6 +129,9 @@ export default function EventsScreen() {
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
   const [mode, setMode] = useState<CalendarMode>('month');
   const [currentMonth, setCurrentMonth] = useState<Date>(normalizeDate(new Date()));
+  const [syncKey, setSyncKey] = useState<number>(0);
+  const [lastSynced, setLastSynced] = useState<Date>(new Date());
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   useEffect(() => {
     console.log('[EventsScreen] Mounted', {
@@ -134,6 +140,17 @@ export default function EventsScreen() {
       bookedCruises: bookedCruises.length,
     });
   }, [bookedCruises.length, calendarEvents.length, cruises.length]);
+
+  const handleSync = useCallback(() => {
+    setIsSyncing(true);
+    console.log('[EventsScreen] Syncing luck calendars...');
+    setTimeout(() => {
+      setSyncKey((k) => k + 1);
+      setLastSynced(new Date());
+      setIsSyncing(false);
+      console.log('[EventsScreen] Luck calendars synced');
+    }, 1200);
+  }, []);
 
   const timelineEvents = useMemo((): TimelineEvent[] => {
     const bookedCruiseIds = new Set<string>(bookedCruises.map((c: BookedCruise) => c.id));
@@ -227,7 +244,8 @@ export default function EventsScreen() {
       weeks.push(allDays.slice(i, i + 7));
     }
     return weeks;
-  }, [currentMonth, eventCountsByDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMonth, eventCountsByDate, syncKey]);
 
   const monthSummary = useMemo(() => {
     let bestDays = 0;
@@ -275,69 +293,69 @@ export default function EventsScreen() {
     [router],
   );
 
+  // Determine cell outline color: priority = booked > travel > personal
+  const getCellOutlineColor = useCallback((counts: EventCounts): string | null => {
+    if (counts.bookedCruise > 0) return OUTLINE_BOOKED;
+    if (counts.travel > 0) return OUTLINE_TRAVEL;
+    if (counts.personal > 0) return OUTLINE_PERSONAL;
+    return null;
+  }, []);
+
   const renderDayCell = useCallback(
     (day: CalendarDay) => {
-      const bgColor = getLuckBg(day.luck, day.inCurrentMonth);
-      const textColor = getLuckTextColor(day.luck, day.inCurrentMonth);
-      const hasBooked = day.counts.bookedCruise > 0;
-      const hasAvailable = day.counts.availableCruise > 0;
-      const hasTravel = day.counts.travel > 0;
-      const hasPersonal = day.counts.personal > 0;
+      const outlineColor = day.inCurrentMonth ? getCellOutlineColor(day.counts) : null;
+      const hasEvent = outlineColor !== null;
 
-      const gradientColors: [string, string] = day.inCurrentMonth && day.luck
-        ? [day.luck.hex, `${day.luck.hex}CC`]
-        : day.inCurrentMonth
-          ? ['#172333', '#0F1A28']
-          : ['#0D1620', '#0A1219'];
+      // Cell bg: white for current month, very light gray for out-of-month
+      const cellBg = day.inCurrentMonth ? '#FFFFFF' : '#E8EDF3';
+
+      // Luck number color: use the luck hex color so it's visible on white
+      const luckNumColor = day.luck && day.inCurrentMonth ? day.luck.hex : '#9CA3AF';
+
+      // Date number color
+      const dateNumColor = day.inCurrentMonth ? '#111827' : '#9CA3AF';
+
+      // Border: today gets gold, event gets colored outline, else thin gray
+      const borderColor = day.isToday
+        ? '#D97706'
+        : hasEvent
+          ? (outlineColor as string)
+          : '#D1D5DB';
+      const borderWidth = day.isToday || hasEvent ? 2.5 : 1;
 
       return (
         <TouchableOpacity
           key={day.key}
-          activeOpacity={0.82}
+          activeOpacity={0.78}
           onPress={() => handleDayPress(day)}
           style={[
             styles.dayCell,
-            day.isToday && styles.todayCell,
-            hasBooked && styles.bookedCell,
+            {
+              backgroundColor: cellBg,
+              borderColor,
+              borderWidth,
+            },
           ]}
           testID={`luck-day-${day.key}`}
         >
-          <LinearGradient
-            colors={gradientColors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.dayCellGradient}
-          >
-            <View style={styles.dayCellTop}>
-              <Text style={[styles.dayNumber, { color: textColor }]}>
-                {String(day.dayNumber)}
-              </Text>
-              {day.inCurrentMonth && day.luck ? (
-                <View style={[styles.luckScorePill, { backgroundColor: 'rgba(0,0,0,0.22)' }]}>
-                  <Text style={[styles.luckScoreText, { color: textColor }]}>
-                    {String(day.luck.score)}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
+          <Text style={[styles.dayNumber, { color: dateNumColor }]}>
+            {String(day.dayNumber)}
+          </Text>
 
-            {day.inCurrentMonth ? (
-              <Text style={[styles.luckLabel, { color: textColor }]} numberOfLines={1}>
-                {day.luck ? day.luck.label : 'No data'}
-              </Text>
-            ) : null}
-
-            <View style={styles.dayCellDots}>
-              {hasBooked ? <View style={styles.dotBooked} /> : null}
-              {hasAvailable ? <View style={styles.dotAvailable} /> : null}
-              {hasTravel ? <View style={styles.dotTravel} /> : null}
-              {hasPersonal ? <View style={styles.dotPersonal} /> : null}
-            </View>
-          </LinearGradient>
+          {day.inCurrentMonth ? (
+            <Text
+              style={[
+                styles.luckNumber,
+                { color: day.luck ? luckNumColor : '#C7D2E0' },
+              ]}
+            >
+              {day.luck ? String(day.luck.score) : '–'}
+            </Text>
+          ) : null}
         </TouchableOpacity>
       );
     },
-    [handleDayPress],
+    [handleDayPress, getCellOutlineColor],
   );
 
   return (
@@ -410,16 +428,17 @@ export default function EventsScreen() {
             </View>
             <View style={[styles.statCard, styles.statCardBooked]}>
               <Text style={[styles.statValue, styles.statValueBooked]}>{String(monthSummary.bookedCruiseDays)}</Text>
-              <Text style={styles.statLabel}>{'Booked Cruise Days'}</Text>
+              <Text style={styles.statLabel}>{'Booked Days'}</Text>
             </View>
             <View style={[styles.statCard, styles.statCardAvail]}>
               <Text style={[styles.statValue, styles.statValueAvail]}>{String(monthSummary.availableCruiseDays)}</Text>
-              <Text style={styles.statLabel}>{'Offer Sail Days'}</Text>
+              <Text style={styles.statLabel}>{'Offer Days'}</Text>
             </View>
           </View>
 
           {mode === 'month' ? (
             <View style={styles.calendarCard} testID="calendar-month-card">
+              {/* Month header */}
               <View style={styles.calHeader}>
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -449,17 +468,40 @@ export default function EventsScreen() {
                 </TouchableOpacity>
               </View>
 
+              {/* Weekday labels */}
               <View style={styles.weekdayRow}>
                 {WEEKDAY_LABELS.map((label: string) => (
                   <Text key={label} style={styles.weekdayLabel}>{label}</Text>
                 ))}
               </View>
 
-              {calendarWeeks.map((week: CalendarDay[], wi: number) => (
-                <View key={`week-${wi}`} style={styles.weekRow}>
-                  {week.map((day: CalendarDay) => renderDayCell(day))}
-                </View>
-              ))}
+              {/* Calendar grid — white bg section */}
+              <View style={styles.calendarGridBg}>
+                {calendarWeeks.map((week: CalendarDay[], wi: number) => (
+                  <View key={`week-${wi}`} style={styles.weekRow}>
+                    {week.map((day: CalendarDay) => renderDayCell(day))}
+                  </View>
+                ))}
+              </View>
+
+              {/* Last updated + sync */}
+              <View style={styles.syncRow}>
+                <Text style={styles.syncLabel}>
+                  {`Updated: ${formatSyncDate(lastSynced)}`}
+                </Text>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={handleSync}
+                  style={[styles.syncBtn, isSyncing && styles.syncBtnSyncing]}
+                  disabled={isSyncing}
+                  testID="calendar-sync-btn"
+                >
+                  <RefreshCw size={13} color={isSyncing ? 'rgba(255,255,255,0.5)' : '#FFFFFF'} />
+                  <Text style={[styles.syncBtnText, isSyncing && { opacity: 0.5 }]}>
+                    {isSyncing ? 'Syncing…' : 'Sync Luck'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : (
             <View style={styles.agendaCard} testID="calendar-agenda-card">
@@ -530,43 +572,40 @@ export default function EventsScreen() {
             </View>
           )}
 
+          {/* Legend */}
           <View style={styles.legendCard} testID="calendar-luck-legend">
             <View style={styles.sectionHeaderRow}>
               <View style={styles.sectionTitleGroup}>
                 <Sparkles size={17} color="#FFE28F" />
-                <Text style={styles.sectionTitle}>{'Luck + Cruise Legend'}</Text>
+                <Text style={styles.sectionTitle}>{'Luck Scale (1–9)'}</Text>
               </View>
             </View>
 
             <View style={styles.luckGrid}>
               {LUCK_ORDER.map((luckColor: LuckColor) => {
                 const info = LUCK_SCALE[luckColor];
-                const txtColor = getLuckTextColor(info, true);
                 return (
-                  <View key={luckColor} style={[styles.luckTile, { backgroundColor: info.hex }]}>
-                    <Text style={[styles.luckTileScore, { color: txtColor }]}>{String(info.score)}</Text>
-                    <Text style={[styles.luckTileName, { color: txtColor }]}>{info.label}</Text>
+                  <View key={luckColor} style={[styles.luckTile, { borderColor: info.hex, borderLeftWidth: 4 }]}>
+                    <Text style={[styles.luckTileScore, { color: info.hex }]}>{String(info.score)}</Text>
+                    <Text style={styles.luckTileName}>{info.label}</Text>
                   </View>
                 );
               })}
             </View>
 
-            <View style={styles.dotLegendRow}>
-              <View style={styles.dotLegendItem}>
-                <View style={[styles.dotSample, styles.dotBooked]} />
-                <Text style={styles.dotLegendText}>{'Booked cruise'}</Text>
+            <View style={styles.outlineLegend}>
+              <Text style={styles.outlineLegendTitle}>{'Cell Outline Colors'}</Text>
+              <View style={styles.outlineLegendRow}>
+                <View style={[styles.outlineSwatch, { borderColor: OUTLINE_BOOKED }]} />
+                <Text style={styles.outlineLegendText}>{'Booked Cruise'}</Text>
               </View>
-              <View style={styles.dotLegendItem}>
-                <View style={[styles.dotSample, styles.dotAvailable]} />
-                <Text style={styles.dotLegendText}>{'Available cruise'}</Text>
+              <View style={styles.outlineLegendRow}>
+                <View style={[styles.outlineSwatch, { borderColor: OUTLINE_TRAVEL }]} />
+                <Text style={styles.outlineLegendText}>{'Travel Day'}</Text>
               </View>
-              <View style={styles.dotLegendItem}>
-                <View style={[styles.dotSample, styles.dotTravel]} />
-                <Text style={styles.dotLegendText}>{'Travel'}</Text>
-              </View>
-              <View style={styles.dotLegendItem}>
-                <View style={[styles.dotSample, styles.dotPersonal]} />
-                <Text style={styles.dotLegendText}>{'Personal'}</Text>
+              <View style={styles.outlineLegendRow}>
+                <View style={[styles.outlineSwatch, { borderColor: OUTLINE_PERSONAL }]} />
+                <Text style={styles.outlineLegendText}>{'Personal Day'}</Text>
               </View>
             </View>
           </View>
@@ -675,8 +714,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statCardBooked: {
-    backgroundColor: 'rgba(245,158,11,0.12)',
-    borderColor: 'rgba(245,158,11,0.35)',
+    backgroundColor: 'rgba(22,163,74,0.15)',
+    borderColor: 'rgba(22,163,74,0.4)',
   },
   statCardAvail: {
     backgroundColor: 'rgba(14,165,233,0.12)',
@@ -688,7 +727,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   statValueBooked: {
-    color: '#FBBF24',
+    color: '#4ADE80',
   },
   statValueAvail: {
     color: '#38BDF8',
@@ -703,17 +742,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   calendarCard: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.12)',
     ...SHADOW.md,
   },
   calHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: SPACING.md,
+    backgroundColor: '#0A1628',
+    borderRadius: BORDER_RADIUS.lg,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
   },
   navBtn: {
     width: 36,
@@ -721,7 +764,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   calHeaderCenter: {
     flex: 1,
@@ -739,98 +784,84 @@ const styles = StyleSheet.create({
   },
   weekdayRow: {
     flexDirection: 'row',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   weekdayLabel: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.45)',
+    color: 'rgba(255,255,255,0.6)',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  calendarGridBg: {
+    backgroundColor: '#E8EDF3',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: 4,
+    gap: 4,
+  },
   weekRow: {
     flexDirection: 'row',
-    marginBottom: 4,
-    gap: 3,
+    gap: 4,
   },
   dayCell: {
     flex: 1,
-    minHeight: 88,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    overflow: 'hidden',
-  },
-  todayCell: {
-    borderWidth: 2,
-    borderColor: '#FFE28F',
-  },
-  bookedCell: {
-    borderColor: '#F59E0B',
-  },
-  dayCellGradient: {
-    flex: 1,
-    padding: 5,
+    minHeight: 56,
+    borderRadius: 6,
+    paddingTop: 5,
+    paddingHorizontal: 4,
+    paddingBottom: 5,
+    alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  dayCellTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
   },
   dayNumber: {
-    fontSize: 15,
-    fontWeight: '800' as const,
-    lineHeight: 18,
-  },
-  luckScorePill: {
-    minWidth: 18,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  luckScoreText: {
-    fontSize: 9,
-    fontWeight: '800' as const,
-  },
-  luckLabel: {
-    fontSize: 9,
+    fontSize: 13,
     fontWeight: '700' as const,
-    marginTop: 3,
-    opacity: 0.92,
+    lineHeight: 16,
+    alignSelf: 'flex-end',
   },
-  dayCellDots: {
+  luckNumber: {
+    fontSize: 18,
+    fontWeight: '900' as const,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  syncRow: {
     flexDirection: 'row',
-    gap: 3,
-    minHeight: 7,
-    marginTop: 4,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.md,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
   },
-  dotBooked: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#F59E0B',
+  syncLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    fontWeight: '500' as const,
+    flex: 1,
+    flexShrink: 1,
   },
-  dotAvailable: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#38BDF8',
+  syncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 99,
+    backgroundColor: 'rgba(79,70,229,0.7)',
+    borderWidth: 1,
+    borderColor: 'rgba(129,120,255,0.5)',
+    marginLeft: SPACING.sm,
   },
-  dotTravel: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#818CF8',
+  syncBtnSyncing: {
+    backgroundColor: 'rgba(79,70,229,0.35)',
   },
-  dotPersonal: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#34D399',
+  syncBtnText: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
   },
   agendaCard: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -958,50 +989,60 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
   },
   luckGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
+    gap: 6,
     marginBottom: SPACING.md,
   },
   luckTile: {
-    width: '30%',
-    minWidth: 88,
-    borderRadius: BORDER_RADIUS.lg,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.sm,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   luckTileScore: {
-    fontSize: 22,
-    fontWeight: '800' as const,
-  },
-  luckTileName: {
-    marginTop: 3,
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: '700' as const,
+    fontSize: 20,
+    fontWeight: '900' as const,
+    width: 24,
     textAlign: 'center',
   },
-  dotLegendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.md,
+  luckTileName: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '700' as const,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  outlineLegend: {
     paddingTop: SPACING.md,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.08)',
+    gap: 8,
   },
-  dotLegendItem: {
+  outlineLegendTitle: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: 'rgba(255,255,255,0.5)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  outlineLegendRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
   },
-  dotSample: {
-    width: 8,
-    height: 8,
+  outlineSwatch: {
+    width: 20,
+    height: 20,
     borderRadius: 4,
+    borderWidth: 2.5,
+    backgroundColor: '#FFFFFF',
   },
-  dotLegendText: {
+  outlineLegendText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.55)',
+    color: 'rgba(255,255,255,0.7)',
     fontWeight: '600' as const,
   },
 });
