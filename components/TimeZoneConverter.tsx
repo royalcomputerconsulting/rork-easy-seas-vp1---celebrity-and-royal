@@ -395,9 +395,9 @@ export function TimeZoneConverter() {
           <View style={styles.offsetBanner}>
             <Clock size={14} color="#FFFFFF" />
             <Text style={styles.offsetBannerText}>
-              {remoteTz.city} is{' '}
-              <Text style={styles.offsetBannerHighlight}>{offset}</Text> from{' '}
-              {localTz.city}
+              {`${remoteTz.city} is `}
+              <Text style={styles.offsetBannerHighlight}>{offset}</Text>
+              {` from ${localTz.city}`}
             </Text>
           </View>
 
