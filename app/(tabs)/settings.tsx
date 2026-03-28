@@ -1614,7 +1614,12 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      
+      <LinearGradient
+        colors={['#051120', '#0B1D38', '#132A4D', '#26143C']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView 
           showsVerticalScrollIndicator={true}
@@ -1623,14 +1628,14 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         >
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <SettingsIcon size={24} color={COLORS.navyDeep} />
+              <SettingsIcon size={24} color="#FFE28F" />
               <Text style={styles.screenTitle}>Settings</Text>
             </View>
           </View>
 
           <View style={styles.dataOverviewCard}>
             <LinearGradient
-              colors={['#0369A1', '#0284C7'] as [string, string]}
+              colors={['#0F2A4A', '#1A3A5C'] as [string, string]}
               style={styles.dataOverviewHeader}
             >
               <View style={styles.dataOverviewHeaderContent}>
@@ -2460,7 +2465,7 @@ STEP 4: Optional Calendar Import
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#051120',
   },
   safeArea: {
     flex: 1,
@@ -2471,6 +2476,7 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: SPACING.lg,
+    paddingHorizontal: SPACING.xs,
   },
   titleRow: {
     flexDirection: 'row',
@@ -2480,7 +2486,7 @@ const styles = StyleSheet.create({
   screenTitle: {
     fontSize: TYPOGRAPHY.fontSizeHeader,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     letterSpacing: -0.5,
   },
   section: {
@@ -2489,37 +2495,45 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.45)',
     marginBottom: SPACING.sm,
     marginLeft: SPACING.xs,
     letterSpacing: 1.5,
   },
   dangerTitle: {
-    color: COLORS.error,
+    color: '#FFB3C1',
   },
   sectionCard: {
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.2)',
+    borderColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden',
-    ...SHADOW.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
   },
   dangerCard: {
-    borderColor: 'rgba(244, 67, 54, 0.3)',
-    backgroundColor: '#FFF5F5',
+    borderColor: 'rgba(220,38,38,0.4)',
+    backgroundColor: 'rgba(220,38,38,0.08)',
   },
   profileLoadingCard: {
     marginTop: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.2)',
+    borderColor: 'rgba(255,255,255,0.12)',
     padding: SPACING.lg,
-    ...SHADOW.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
   profileLoadingIconWrap: {
     width: 44,
@@ -2527,7 +2541,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   profileLoadingCopy: {
     flex: 1,
@@ -2535,12 +2549,12 @@ const styles = StyleSheet.create({
   profileLoadingTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
   },
   profileLoadingSubtitle: {
     marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.55)',
     lineHeight: 20,
   },
   settingRow: {
@@ -2550,7 +2564,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(3, 105, 161, 0.08)',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   settingLeft: {
     flexDirection: 'row',
@@ -2561,13 +2575,13 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: CLEAN_THEME.text.primary,
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     flexShrink: 1,
     flexWrap: 'wrap',
   },
   dangerLabel: {
-    color: COLORS.error,
+    color: '#FFB3C1',
   },
   settingRight: {
     flexDirection: 'row',
@@ -2576,7 +2590,7 @@ const styles = StyleSheet.create({
   },
   settingValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
+    color: '#9EFDF2',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   footer: {
@@ -2593,18 +2607,17 @@ const styles = StyleSheet.create({
   footerAppName: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   footerTagline: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: SPACING.md,
   },
   footerCopyright: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
-    opacity: 0.7,
+    color: 'rgba(255,255,255,0.35)',
     marginTop: SPACING.md,
   },
 
@@ -2612,7 +2625,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xl,
     paddingTop: SPACING.lg,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(3, 105, 161, 0.15)',
+    borderTopColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: SPACING.md,
   },
   legalDisclaimerTitle: {
@@ -2625,7 +2638,7 @@ const styles = StyleSheet.create({
   },
   legalDisclaimerText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.4)',
     lineHeight: 16,
     textAlign: 'left',
   },
@@ -2633,37 +2646,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  successText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.success,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  countBadge: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(142,242,193,0.15)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.1)',
+    borderColor: 'rgba(142,242,193,0.3)',
+  },
+  successText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#8EF2C1',
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  countBadge: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden' as const,
   },
   backupHint: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.4)',
     marginTop: SPACING.sm,
     marginHorizontal: SPACING.xs,
     fontStyle: 'italic' as const,
   },
   extensionHint: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#5a2ea6',
+    color: '#D8C0FF',
     marginTop: SPACING.xs,
     marginHorizontal: SPACING.xs,
     fontStyle: 'italic' as const,
@@ -2672,39 +2687,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xs,
-    backgroundColor: 'rgba(3, 105, 161, 0.05)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   importBanner: {
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    backgroundColor: 'rgba(168,198,255,0.08)',
   },
   fullBackupBanner: {
-    backgroundColor: 'rgba(3, 105, 161, 0.06)',
+    backgroundColor: 'rgba(142,242,193,0.06)',
+  },
+  calendarFeedBanner: {
+    backgroundColor: 'rgba(216,192,255,0.06)',
   },
   subsectionLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: '#FFE28F',
     letterSpacing: 1.5,
   },
   subsectionHelper: {
     marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.5)',
     letterSpacing: 0.5,
   },
   dataDivider: {
     height: 1,
-    backgroundColor: 'rgba(3, 105, 161, 0.1)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     marginVertical: SPACING.xs,
   },
   dataOverviewCard: {
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.md,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#0D1E33',
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.2)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
   },
   dataOverviewHeader: {
     padding: SPACING.sm,
@@ -2752,20 +2774,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     gap: 3,
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   dataOverviewStatValue: {
     fontSize: 18,
     fontWeight: '700' as const,
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   dataOverviewStatLabel: {
     fontSize: 10,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.5)',
   },
   dataOverviewUpcomingCompletedRow: {
     flexDirection: 'row' as const,
@@ -2774,11 +2796,11 @@ const styles = StyleSheet.create({
   },
   dataOverviewMiniStat: {
     fontSize: 9,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.45)',
   },
   dataOverviewMiniStatDivider: {
     fontSize: 9,
-    color: '#94A3B8',
+    color: 'rgba(255,255,255,0.25)',
   },
   dataOverviewGrid: {
     flexDirection: 'row',
@@ -2787,11 +2809,11 @@ const styles = StyleSheet.create({
   dataOverviewGridCard: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   dataOverviewGridIcon: {
     width: 28,
@@ -2804,38 +2826,40 @@ const styles = StyleSheet.create({
   dataOverviewGridValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '700' as const,
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   dataOverviewGridLabel: {
     fontSize: 10,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.5)',
     marginTop: 2,
     textAlign: 'center' as const,
   },
   quickActionsSection: {
     marginBottom: SPACING.md,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  quickActionsBody: {
+    padding: SPACING.sm,
   },
   quickActionFullWidth: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginBottom: 8,
-    borderWidth: 1.5,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
-    shadowColor: '#0369A1',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   quickActionsRow: {
     flexDirection: 'row',
@@ -2845,17 +2869,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
-    shadowColor: '#0369A1',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   quickActionIconSmall: {
     width: 34,
@@ -2869,25 +2888,25 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '600' as const,
-    color: '#1E293B',
+    color: '#FFFFFF',
     letterSpacing: 0.1,
   },
   adminHeader: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
-    backgroundColor: 'rgba(3, 105, 161, 0.05)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(3, 105, 161, 0.12)',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   adminHeaderText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   adminHeaderSubtext: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.5)',
     lineHeight: 16,
   },
   addEmailContainer: {
@@ -2896,29 +2915,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(3, 105, 161, 0.1)',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   addEmailInput: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: CLEAN_THEME.text.primary,
+    color: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   addEmailButton: {
-    backgroundColor: '#0369A1',
+    backgroundColor: 'rgba(255,226,143,0.2)',
     borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,226,143,0.4)',
   },
   addEmailButtonText: {
-    color: COLORS.white,
+    color: '#FFE28F',
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
@@ -2933,7 +2954,7 @@ const styles = StyleSheet.create({
   whitelistCount: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: SPACING.sm,
   },
   whitelistItem: {
@@ -2942,11 +2963,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: BORDER_RADIUS.md,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.12)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   whitelistItemLeft: {
     flexDirection: 'row',
@@ -2958,40 +2979,48 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: 'rgba(142,242,193,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   whitelistItemEmail: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: CLEAN_THEME.text.primary,
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     flex: 1,
   },
   adminBadge: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(255,226,143,0.2)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,226,143,0.4)',
   },
   adminBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.white,
+    color: '#FFE28F',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   removeButton: {
     padding: SPACING.sm,
-    backgroundColor: 'rgba(244, 67, 54, 0.1)',
+    backgroundColor: 'rgba(220,38,38,0.12)',
     borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(220,38,38,0.25)',
   },
   aboutPromoSection: {
     marginTop: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#0D1E33',
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   aboutBanner: {
     width: '100%',
@@ -3017,12 +3046,12 @@ const styles = StyleSheet.create({
   aboutQrTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   aboutQrSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.55)',
     marginBottom: SPACING.sm,
     lineHeight: 16,
   },
@@ -3030,11 +3059,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(255,226,143,0.2)',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.md,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(255,226,143,0.4)',
   },
   aboutAppStoreText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -3046,11 +3077,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
     padding: SPACING.md,
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: BORDER_RADIUS.md,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.12)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   subscriptionStatusText: {
     flex: 1,
@@ -3058,22 +3089,19 @@ const styles = StyleSheet.create({
   subscriptionStatusTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   subscriptionStatusSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.5)',
   },
   subscriptionHint: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.4)',
     marginTop: SPACING.xs,
     marginHorizontal: SPACING.xs,
     lineHeight: 16,
-  },
-  calendarFeedBanner: {
-    backgroundColor: 'rgba(3, 105, 161, 0.1)',
   },
   calendarFeedSection: {
     paddingHorizontal: SPACING.md,
@@ -3084,7 +3112,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    backgroundColor: '#0369A1',
+    backgroundColor: 'rgba(168,198,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(168,198,255,0.4)',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: 12,
     paddingHorizontal: SPACING.lg,
@@ -3120,18 +3150,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 8,
     marginTop: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.12)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   feedUrlText: {
     flex: 1,
     fontSize: 11,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.5)',
     fontFamily: undefined,
   },
   feedActionsRow: {
@@ -3145,34 +3175,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: 10,
     paddingHorizontal: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.12)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   feedActionButtonActive: {
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    borderColor: 'rgba(76, 175, 80, 0.3)',
+    backgroundColor: 'rgba(142,242,193,0.12)',
+    borderColor: 'rgba(142,242,193,0.3)',
   },
   feedActionText: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.75)',
   },
   feedActionTextActive: {
-    color: COLORS.success,
+    color: '#8EF2C1',
   },
   feedLastUpdated: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.4)',
     marginTop: SPACING.sm,
     textAlign: 'center' as const,
   },
   feedHelperText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.45)',
     marginTop: SPACING.sm,
     lineHeight: 16,
   },
@@ -3206,10 +3236,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: 'rgba(255, 255, 255, 0.9)',
     marginTop: 2,
-  },
-  quickActionsBody: {
-    padding: 12,
-    paddingTop: 14,
-    gap: 0,
   },
 });
