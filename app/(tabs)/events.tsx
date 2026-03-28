@@ -346,14 +346,16 @@ export default function EventsScreen() {
           </Text>
 
           {day.inCurrentMonth ? (
-            <Text
-              style={[
-                styles.luckNumber,
-                { color: day.luck ? luckNumColor : '#C7D2E0' },
-              ]}
-            >
-              {day.luck ? String(day.luck.score) : '–'}
-            </Text>
+            <View style={styles.luckNumberWrap}>
+              <Text
+                style={[
+                  styles.luckNumber,
+                  { color: day.luck ? luckNumColor : '#C7D2E0' },
+                ]}
+              >
+                {day.luck ? String(day.luck.score) : '–'}
+              </Text>
+            </View>
           ) : null}
         </TouchableOpacity>
       );
@@ -812,22 +814,27 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 56,
     borderRadius: 6,
-    paddingTop: 5,
-    paddingHorizontal: 4,
-    paddingBottom: 5,
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingTop: 4,
+    paddingHorizontal: 3,
+    paddingBottom: 4,
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
   },
   dayNumber: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700' as const,
-    lineHeight: 16,
+    lineHeight: 14,
     alignSelf: 'flex-end',
   },
+  luckNumberWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   luckNumber: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900' as const,
-    lineHeight: 22,
+    lineHeight: 24,
     textAlign: 'center',
   },
   syncRow: {
