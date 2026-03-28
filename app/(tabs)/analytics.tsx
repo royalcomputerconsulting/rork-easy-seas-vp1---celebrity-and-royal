@@ -755,12 +755,12 @@ export default function AnalyticsScreen() {
             resizeMode="cover"
             defaultSource={{ uri: DEFAULT_CRUISE_IMAGE }}
           />
-          {earnedPoints > 0 && (
+          {earnedPoints > 0 ? (
             <View style={styles.pointsOverlay}>
               <Award size={14} color={COLORS.white} />
               <Text style={styles.pointsOverlayText}>{formatNumber(earnedPoints)} pts</Text>
             </View>
-          )}
+          ) : null}
         </View>
         <View style={styles.portfolioCardContent}>
           <View style={styles.portfolioCardTopRow}>
@@ -818,17 +818,17 @@ export default function AnalyticsScreen() {
             </View>
           </View>
           
-          {cruise.cabinType && (
+          {cruise.cabinType ? (
             <View style={styles.portfolioCardFooter}>
               <Text style={styles.portfolioCardCabin}>{cruise.cabinType}</Text>
-              {cruise.offerCode && (
+              {cruise.offerCode ? (
                 <View style={styles.portfolioOfferBadge}>
                   <Zap size={10} color={COLORS.goldDark} />
                   <Text style={styles.portfolioOfferCode}>{cruise.offerCode}</Text>
                 </View>
-              )}
+              ) : null}
             </View>
-          )}
+          ) : null}
         </View>
       </TouchableOpacity>
     );
@@ -912,11 +912,11 @@ export default function AnalyticsScreen() {
               <Text style={styles.compactMetricLabel}>Points</Text>
             </View>
           </View>
-          {casinoAnalytics.completedCruisesCount > 0 && (
+          {casinoAnalytics.completedCruisesCount > 0 ? (
             <View style={styles.avgStatsRow}>
               <Text style={styles.avgStatText}>Avg/Cruise: {formatCurrency(casinoAnalytics.avgCoinInPerCruise)} coin-in • {casinoAnalytics.avgWinLossPerCruise >= 0 ? '+' : ''}{formatCurrency(casinoAnalytics.avgWinLossPerCruise)} • {formatNumber(Math.round(casinoAnalytics.avgPointsPerCruise))} pts</Text>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
 
@@ -943,14 +943,14 @@ export default function AnalyticsScreen() {
         {filteredCruises.length > 0 ? (
           <View style={styles.portfolioList}>
             {(showAllCruises ? filteredCruises.slice(0, 25) : filteredCruises.slice(0, 5)).map(renderPortfolioCard)}
-            {showAllCruises && filteredCruises.length > 25 && (
+            {showAllCruises && filteredCruises.length > 25 ? (
               <View style={styles.portfolioLimitNotice}>
                 <Text style={styles.portfolioLimitText}>
                   Showing top 25 of {filteredCruises.length} cruises (sorted by value)
                 </Text>
               </View>
-            )}
-            {filteredCruises.length > 5 && (
+            ) : null}
+            {filteredCruises.length > 5 ? (
               <TouchableOpacity 
                 style={styles.viewMoreButton} 
                 activeOpacity={0.7}
@@ -965,7 +965,7 @@ export default function AnalyticsScreen() {
                   style={{ transform: [{ rotate: showAllCruises ? '180deg' : '0deg' }] }}
                 />
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
         ) : (
           <View style={styles.emptyPortfolio}>
@@ -975,7 +975,7 @@ export default function AnalyticsScreen() {
         )}
       </View>
 
-      {realAnalytics.destinationDistribution.length > 0 && (
+      {realAnalytics.destinationDistribution.length > 0 ? (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MapPin size={16} color={COLORS.navyDeep} />
@@ -1002,7 +1002,7 @@ export default function AnalyticsScreen() {
             ))}
           </View>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.section}>
         <AlertsCard
@@ -1286,7 +1286,7 @@ export default function AnalyticsScreen() {
         </View>
       </View>
 
-      {sessions.length > 0 && (
+      {sessions.length > 0 ? (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Calendar size={16} color={COLORS.navyDeep} />
@@ -1327,17 +1327,17 @@ export default function AnalyticsScreen() {
                       <Text style={styles.recentSessionTime}>
                         {session.startTime} - {session.endTime}
                       </Text>
-                      {session.winLoss !== undefined && (
+                      {session.winLoss !== undefined ? (
                         <Text style={[
                           styles.recentSessionWinLoss,
                           { color: session.winLoss >= 0 ? COLORS.success : COLORS.error }
                         ]}>
                           {session.winLoss >= 0 ? '+' : ''}{formatCurrency(session.winLoss)}
                         </Text>
-                      )}
-                      {session.notes && (
+                      ) : null}
+                      {session.notes ? (
                         <Text style={styles.recentSessionNotes} numberOfLines={2}>{session.notes}</Text>
-                      )}
+                      ) : null}
                     </View>
                     <View style={styles.recentSessionStats}>
                       <View style={styles.recentSessionDuration}>
@@ -1345,25 +1345,25 @@ export default function AnalyticsScreen() {
                           {formatTotalMinutes(session.durationMinutes)}
                         </Text>
                       </View>
-                      {session.pointsEarned !== undefined && session.pointsEarned > 0 && (
+                      {session.pointsEarned !== undefined && session.pointsEarned > 0 ? (
                         <View style={styles.recentSessionPointsContainer}>
                           <Text style={styles.recentSessionPoints}>
                             {formatNumber(session.pointsEarned)} pts
                           </Text>
-                          {sessionPPH > 0 && (
+                          {sessionPPH > 0 ? (
                             <Text style={styles.recentSessionPPH}>
                               {sessionPPH.toFixed(0)} pts/hr
                             </Text>
-                          )}
+                          ) : null}
                         </View>
-                      )}
+                      ) : null}
                     </View>
                   </TouchableOpacity>
                 );
               })}
           </View>
         </View>
-      )}
+      ) : null}
     </View>
   );
 
@@ -1708,7 +1708,7 @@ export default function AnalyticsScreen() {
             </>
           )}
 
-          {realAnalytics.totalCruises === 0 && !storeLoading && (
+          {realAnalytics.totalCruises === 0 && !storeLoading ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconContainer}>
                 <BarChart3 size={56} color={COLORS.navyDeep} />
@@ -1718,7 +1718,7 @@ export default function AnalyticsScreen() {
                 Book and complete cruises to see your{'\n'}personalized statistics here
               </Text>
             </View>
-          )}
+          ) : null}
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
@@ -1732,7 +1732,7 @@ export default function AnalyticsScreen() {
         goldenTimeSlots={goldenTimeSlots}
       />
 
-      {showCelebration && celebrationData && (
+      {showCelebration && celebrationData ? (
         <CelebrationOverlay
           visible={showCelebration}
           onDismiss={() => setShowCelebration(false)}
@@ -1742,14 +1742,14 @@ export default function AnalyticsScreen() {
           iconType="trophy"
           autoHideDuration={4000}
         />
-      )}
+      ) : null}
 
-      {pphAlerts.length > 0 && (
+      {pphAlerts.length > 0 ? (
         <PPHAlertContainer 
           alerts={pphAlerts} 
           onDismissAlert={dismissPPHAlert} 
         />
-      )}
+      ) : null}
     </LinearGradient>
   );
 }

@@ -509,7 +509,7 @@ export default function EventsScreen() {
             ))}
           </View>
 
-          {(viewMode === 'month' || viewMode === 'week') && (
+          {(viewMode === 'month' || viewMode === 'week') ? (
             <View style={styles.monthNavigation}>
               <TouchableOpacity
                 style={styles.navButton}
@@ -545,7 +545,7 @@ export default function EventsScreen() {
                 <ChevronRight size={24} color={COLORS.navyDeep} />
               </TouchableOpacity>
             </View>
-          )}
+          ) : null}
 
           {totalEventsThisMonth > 10 && viewMode === 'month' ? (
             <View style={styles.alertBadge}>
@@ -554,7 +554,7 @@ export default function EventsScreen() {
             </View>
           ) : null}
 
-          {viewMode === 'month' && (
+          {viewMode === 'month' ? (
             <View style={styles.calendarContainer}>
               <View style={styles.weekDaysHeader}>
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -567,9 +567,9 @@ export default function EventsScreen() {
                 </View>
               ))}
             </View>
-          )}
+          ) : null}
 
-          {viewMode === 'week' && (
+          {viewMode === 'week' ? (
             <View style={styles.calendarContainer}>
               <View style={styles.weekDaysHeader}>
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -580,9 +580,9 @@ export default function EventsScreen() {
                 {weekDays.map(day => renderDayCell(day))}
               </View>
             </View>
-          )}
+          ) : null}
 
-          {viewMode === '90days' && (
+          {viewMode === '90days' ? (
             <View style={styles.ninetyDaysContainer}>
               <View style={styles.ninetyDaysGrid}>
                 {next90Days.map((day, index) => {
@@ -615,7 +615,7 @@ export default function EventsScreen() {
                 <Text style={styles.ninetyDaysLabel}>+90</Text>
               </View>
             </View>
-          )}
+          ) : null}
 
           <View style={styles.legendContainer}>
             <View style={styles.legendItem}>
@@ -654,7 +654,7 @@ export default function EventsScreen() {
             </View>
           </View>
 
-          {viewMode === 'events' && (
+          {viewMode === 'events' ? (
             <View style={styles.eventsListSection}>
               <View style={styles.sectionHeader}>
                 <CalendarDays size={20} color={COLORS.navyDeep} />
@@ -688,7 +688,7 @@ export default function EventsScreen() {
                 </View>
               )}
             </View>
-          )}
+          ) : null}
 
           {viewMode !== 'events' && upcomingEvents.length > 0 ? (
             <View style={styles.eventsListSection}>
