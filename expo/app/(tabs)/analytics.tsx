@@ -860,7 +860,7 @@ export default function AnalyticsScreen() {
       <View style={styles.section}>
         <View style={styles.cleanCard}>
           <View style={styles.cleanCardHeader}>
-            <Receipt size={16} color={COLORS.navyDeep} />
+            <Receipt size={16} color='rgba(255,255,255,0.8)' />
             <Text style={styles.cleanCardTitle}>Financial Overview</Text>
           </View>
           <View style={styles.dataGrid}>
@@ -895,7 +895,7 @@ export default function AnalyticsScreen() {
       <View style={styles.section}>
         <View style={styles.cleanCard}>
           <View style={styles.cleanCardHeader}>
-            <PieChart size={16} color={COLORS.goldDark} />
+            <PieChart size={16} color={COLORS.goldLight} />
             <Text style={styles.cleanCardTitle}>Casino Stats</Text>
           </View>
           <View style={styles.compactMetricsGrid}>
@@ -980,7 +980,7 @@ export default function AnalyticsScreen() {
       {realAnalytics.destinationDistribution.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MapPin size={16} color={COLORS.navyDeep} />
+            <MapPin size={16} color='rgba(255,255,255,0.8)' />
             <Text style={styles.sectionTitle}>Top Destinations</Text>
           </View>
           
@@ -1242,7 +1242,7 @@ export default function AnalyticsScreen() {
 
       <View style={styles.sessionStatsSection}>
         <View style={styles.sectionHeader}>
-          <Dices size={16} color={COLORS.navyDeep} />
+          <Dices size={16} color='rgba(255,255,255,0.8)' />
           <Text style={styles.sectionTitle}>Session Summary</Text>
         </View>
         
@@ -1291,7 +1291,7 @@ export default function AnalyticsScreen() {
       {sessions.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Calendar size={16} color={COLORS.navyDeep} />
+            <Calendar size={16} color='rgba(255,255,255,0.8)' />
             <Text style={styles.sectionTitle}>Recent Sessions ({sessions.length} total)</Text>
             <Text style={styles.sortLabelText}>Sorted by Points (High to Low)</Text>
           </View>
@@ -1566,7 +1566,7 @@ export default function AnalyticsScreen() {
       <View style={styles.section}>
         <View style={styles.calcsInsightCard}>
           <View style={styles.calcsInsightHeader}>
-            <Brain size={18} color={COLORS.navyDeep} />
+            <Brain size={18} color='rgba(255,255,255,0.8)' />
             <Text style={styles.calcsInsightTitle}>Calculation Insights</Text>
           </View>
           <Text style={styles.calcsInsightText}>
@@ -1615,7 +1615,7 @@ export default function AnalyticsScreen() {
 
   return (
     <LinearGradient
-      colors={['#E3F2FD', '#90CAF9']}
+      colors={['#0A1628', '#1E3A5F']}
       style={styles.container}
     >
       <Stack.Screen options={{ headerShown: false }} />
@@ -1624,7 +1624,7 @@ export default function AnalyticsScreen() {
         <View style={styles.header}>
           <View style={styles.brandingRow}>
             <View style={styles.titleContainer}>
-              <BarChart3 size={22} color={COLORS.navyDeep} />
+              <BarChart3 size={22} color={COLORS.white} />
               <Text style={styles.appTitle}>Analytics</Text>
             </View>
           </View>
@@ -1644,7 +1644,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('intelligence')}
             activeOpacity={0.7}
           >
-            <Brain size={14} color={activeTab === 'intelligence' ? COLORS.white : CLEAN_THEME.text.secondary} />
+            <Brain size={14} color={activeTab === 'intelligence' ? COLORS.white : 'rgba(255,255,255,0.45)'} />
             <Text style={[styles.tabButtonText, activeTab === 'intelligence' && styles.tabButtonTextActive]}>
               Intelligence
             </Text>
@@ -1655,7 +1655,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('charts')}
             activeOpacity={0.7}
           >
-            <LineChart size={14} color={activeTab === 'charts' ? COLORS.white : CLEAN_THEME.text.secondary} />
+            <LineChart size={14} color={activeTab === 'charts' ? COLORS.white : 'rgba(255,255,255,0.45)'} />
             <Text style={[styles.tabButtonText, activeTab === 'charts' && styles.tabButtonTextActive]}>
               Charts
             </Text>
@@ -1666,7 +1666,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('session')}
             activeOpacity={0.7}
           >
-            <Dices size={14} color={activeTab === 'session' ? COLORS.white : CLEAN_THEME.text.secondary} />
+            <Dices size={14} color={activeTab === 'session' ? COLORS.white : 'rgba(255,255,255,0.45)'} />
             <Text style={[styles.tabButtonText, activeTab === 'session' && styles.tabButtonTextActive]}>
               Session
             </Text>
@@ -1677,7 +1677,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('calcs')}
             activeOpacity={0.7}
           >
-            <Calculator size={14} color={activeTab === 'calcs' ? COLORS.white : CLEAN_THEME.text.secondary} />
+            <Calculator size={14} color={activeTab === 'calcs' ? COLORS.white : 'rgba(255,255,255,0.45)'} />
             <Text style={[styles.tabButtonText, activeTab === 'calcs' && styles.tabButtonTextActive]}>
               Calcs
             </Text>
@@ -1769,12 +1769,12 @@ const styles = StyleSheet.create({
   },
   quickStatsRow: {
     flexDirection: 'row',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
     ...SHADOW.sm,
   },
   quickStatItem: {
@@ -1785,20 +1785,20 @@ const styles = StyleSheet.create({
   quickStatValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     marginTop: 4,
   },
   quickStatLabel: {
     fontSize: 10,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.65)',
     marginTop: 2,
   },
   cleanCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
     ...SHADOW.sm,
   },
   cleanCardHeader: {
@@ -1808,12 +1808,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   cleanCardTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   dataGrid: {
     gap: SPACING.xs,
@@ -1826,23 +1826,23 @@ const styles = StyleSheet.create({
   },
   dataLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.65)',
   },
   dataValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   dataRowTotal: {
     marginTop: SPACING.xs,
     paddingTop: SPACING.sm,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: 'rgba(255,255,255,0.15)',
   },
   dataTotalLabel: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   dataTotalValue: {
     fontSize: TYPOGRAPHY.fontSizeLG,
@@ -1855,29 +1855,29 @@ const styles = StyleSheet.create({
   compactMetric: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
   },
   compactMetricValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   compactMetricLabel: {
     fontSize: 10,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.65)',
     marginTop: 2,
   },
   avgStatsRow: {
     marginTop: SPACING.sm,
     paddingTop: SPACING.sm,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: 'rgba(255,255,255,0.1)',
   },
   avgStatText: {
     fontSize: 11,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.65)',
     textAlign: 'center',
   },
   header: {
@@ -1900,7 +1900,7 @@ const styles = StyleSheet.create({
   appTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: COLORS.white,
     letterSpacing: 0.5,
   },
   tierBadges: {
@@ -1932,10 +1932,10 @@ const styles = StyleSheet.create({
   tabButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#000000',
+    color: 'rgba(255,255,255,0.7)',
   },
   tabButtonTextActive: {
-    color: '#000000',
+    color: COLORS.white,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   tabContent: {
@@ -1993,7 +1993,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#000000',
+    color: COLORS.white,
   },
   statusCard: {
     backgroundColor: COLORS.white,
@@ -2165,7 +2165,7 @@ const styles = StyleSheet.create({
   portfolioTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#000000',
+    color: COLORS.white,
     marginBottom: SPACING.sm,
   },
   filterTabsRow: {
@@ -2189,13 +2189,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(0, 31, 63, 0.04)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.15)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   exportButtonText: {
     fontSize: 12,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.85)',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   filterTab: {
@@ -2204,18 +2204,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     gap: 4,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.15)',
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   filterTabActive: {
-    backgroundColor: COLORS.navyDeep,
-    borderColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(212,165,116,0.3)',
+    borderColor: COLORS.goldDark,
   },
   filterTabText: {
     fontSize: 12,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.8)',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   filterTabTextActive: {
@@ -2258,14 +2258,16 @@ const styles = StyleSheet.create({
     fontStyle: 'italic' as const,
   },
   portfolioCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'stretch',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.3,
     shadowRadius: 3,
     elevation: 2,
   },
@@ -2323,7 +2325,7 @@ const styles = StyleSheet.create({
   portfolioCardShipName: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     flex: 1,
     marginRight: 4,
   },
@@ -2339,12 +2341,12 @@ const styles = StyleSheet.create({
   portfolioCardItinerary: {
     fontSize: 14,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: COLORS.white,
     marginBottom: 2,
   },
   portfolioCardDestination: {
     fontSize: 12,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.75)',
     marginBottom: 4,
   },
   portfolioCardMetaRow: {
@@ -2360,13 +2362,13 @@ const styles = StyleSheet.create({
   },
   portfolioCardMetaText: {
     fontSize: 11,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.75)',
   },
   portfolioCardNights: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    backgroundColor: '#E0F2F1',
+    color: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -2374,7 +2376,7 @@ const styles = StyleSheet.create({
   portfolioCardMetrics: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: CLEAN_THEME.background.tertiary,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.xs,
     paddingHorizontal: SPACING.sm,
@@ -2384,13 +2386,13 @@ const styles = StyleSheet.create({
   },
   portfolioMetricLabel: {
     fontSize: 9,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.6)',
     marginBottom: 1,
   },
   portfolioMetricValue: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   portfolioCardFooter: {
     flexDirection: 'row',
@@ -2426,14 +2428,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: SPACING.xs,
     padding: SPACING.md,
-    backgroundColor: CLEAN_THEME.background.tertiary,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: CLEAN_THEME.border.light,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   viewMoreText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.85)',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   emptyPortfolio: {
@@ -2446,7 +2448,7 @@ const styles = StyleSheet.create({
   },
   emptyPortfolioText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(255,255,255,0.6)',
     marginTop: SPACING.sm,
   },
   destinationsCard: {
@@ -2477,7 +2479,7 @@ const styles = StyleSheet.create({
   rankNumber: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: COLORS.white,
   },
   rankNumberTop: {
     color: COLORS.white,
@@ -2498,12 +2500,12 @@ const styles = StyleSheet.create({
   },
   destinationLabel: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#000000',
+    color: COLORS.white,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   destinationValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#000000',
+    color: 'rgba(255,255,255,0.85)',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   emptyState: {
@@ -2523,12 +2525,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: COLORS.white,
     marginBottom: SPACING.sm,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#000000',
+    color: 'rgba(255,255,255,0.75)',
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -2631,11 +2633,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   sessionHistoryCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
     ...SHADOW.sm,
   },
   sessionHistoryRow: {
@@ -2646,17 +2648,17 @@ const styles = StyleSheet.create({
   },
   sessionHistoryLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#1E293B',
+    color: 'rgba(255,255,255,0.8)',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   sessionHistoryValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E293B',
+    color: COLORS.white,
   },
   sessionHistoryDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     marginVertical: SPACING.xs,
   },
   recentSessionsContainer: {
@@ -2668,21 +2670,20 @@ const styles = StyleSheet.create({
   recentSessionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.xs,
     paddingHorizontal: SPACING.sm,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
     ...SHADOW.sm,
   },
   sortLabelText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.6)',
     marginLeft: 'auto',
-    opacity: 0.7,
   },
   recentSessionIndicator: {
     width: 3,
@@ -2697,16 +2698,16 @@ const styles = StyleSheet.create({
   recentSessionDate: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#1E293B',
+    color: COLORS.white,
   },
   recentSessionTime: {
     fontSize: 10,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.6)',
     marginTop: 1,
   },
   recentSessionNotes: {
     fontSize: 10,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.55)',
     marginTop: 2,
     fontStyle: 'italic' as const,
   },
@@ -2754,16 +2755,16 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.15)',
+    borderColor: 'rgba(255,255,255,0.12)',
     ...SHADOW.sm,
   },
   alertsIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2804,12 +2805,12 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   calcsHeader: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(139,92,246,0.15)',
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 2,
-    borderColor: COLORS.royalPurple,
+    borderColor: 'rgba(139,92,246,0.5)',
     ...SHADOW.md,
   },
   calcsHeaderContent: {
@@ -2830,25 +2831,25 @@ const styles = StyleSheet.create({
   calcsHeaderTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   calcsHeaderSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.65)',
     marginTop: 2,
   },
   calcsGrid: {
     gap: SPACING.sm,
   },
   calcCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
     ...SHADOW.sm,
   },
   calcIconContainer: {
@@ -2864,7 +2865,7 @@ const styles = StyleSheet.create({
   calcLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     marginBottom: 4,
   },
   calcValue: {
@@ -2874,15 +2875,15 @@ const styles = StyleSheet.create({
   },
   calcDescription: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.6)',
     lineHeight: 16,
   },
   calcsInsightCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   calcsInsightHeader: {
     flexDirection: 'row',
@@ -2893,11 +2894,11 @@ const styles = StyleSheet.create({
   calcsInsightTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   calcsInsightText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.65)',
     lineHeight: 20,
   },
 });

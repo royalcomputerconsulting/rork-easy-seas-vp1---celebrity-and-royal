@@ -149,8 +149,17 @@ export default function EventsScreen() {
       }
     });
 
+    bookedCruises.forEach((bc: BookedCruise) => {
+      if (!bc.sailDate) return;
+      const startDate = bc.sailDate.split('T')[0];
+      const endDate = bc.returnDate ? bc.returnDate.split('T')[0] : startDate;
+      if (dateStr >= startDate && dateStr <= endDate) {
+        cruise++;
+      }
+    });
+
     return { cruise, travel, personal };
-  }, [calendarEvents]);
+  }, [calendarEvents, bookedCruises]);
 
   const calendarDays = useMemo((): DayData[][] => {
     console.log('[Events] Recalculating calendar days, refreshKey:', refreshKey);
@@ -633,7 +642,7 @@ export default function EventsScreen() {
           {viewMode === 'events' && (
             <View style={styles.eventsListSection}>
               <View style={styles.sectionHeader}>
-                <CalendarDays size={20} color={COLORS.navyDeep} />
+                <CalendarDays size={20} color={COLORS.white} />
                 <Text style={styles.sectionTitle}>Upcoming Events</Text>
                 <Text style={styles.eventCountBadge}>{upcomingEvents.length}</Text>
               </View>
@@ -641,7 +650,7 @@ export default function EventsScreen() {
               {upcomingEvents.length === 0 ? (
                 <View style={styles.emptyState}>
                   <View style={styles.emptyIconContainer}>
-                    <CalendarDays size={48} color={COLORS.navyDeep} />
+                    <CalendarDays size={48} color='rgba(255,255,255,0.5)' />
                   </View>
                   <Text style={styles.emptyTitle}>No Upcoming Events</Text>
                   <Text style={styles.emptyText}>
@@ -667,7 +676,7 @@ export default function EventsScreen() {
           {viewMode !== 'events' && upcomingEvents.length > 0 && (
             <View style={styles.eventsListSection}>
               <View style={styles.sectionHeader}>
-                <CalendarDays size={20} color={COLORS.navyDeep} />
+                <CalendarDays size={20} color={COLORS.white} />
                 <Text style={styles.sectionTitle}>Next Up</Text>
               </View>
               <View style={styles.eventsList}>
@@ -694,7 +703,7 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E0F2F1',
+    backgroundColor: '#0A1628',
   },
   safeArea: {
     flex: 1,
@@ -744,13 +753,13 @@ const styles = StyleSheet.create({
   },
   viewToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: BORDER_RADIUS.lg,
     padding: 4,
     marginHorizontal: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   viewToggleButton: {
     flex: 1,
@@ -760,12 +769,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   viewToggleButtonActive: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   viewToggleText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.7)',
   },
   viewToggleTextActive: {
     color: COLORS.white,
@@ -782,11 +791,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   clearEventsButton: {
     width: 34,
@@ -806,12 +815,11 @@ const styles = StyleSheet.create({
   monthYearText: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   eventCountText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: 'rgba(255,255,255,0.7)',
     marginTop: 2,
   },
   alertBadge: {
@@ -831,13 +839,13 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   calendarContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: SPACING.md,
     padding: SPACING.sm,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(255,255,255,0.12)',
     ...SHADOW.sm,
   },
   weekDaysHeader: {
@@ -845,15 +853,14 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
     paddingBottom: SPACING.xs,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 31, 63, 0.1)',
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   weekDayLabel: {
     flex: 1,
     textAlign: 'center',
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: 'rgba(255,255,255,0.65)',
     textTransform: 'uppercase',
   },
   weekRow: {
@@ -878,19 +885,18 @@ const styles = StyleSheet.create({
   dayNumber: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   todayNumber: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#F59E0B',
   },
   otherMonthNumber: {
-    color: COLORS.navyDeep,
-    opacity: 0.4,
+    color: 'rgba(255,255,255,0.3)',
   },
   dayNumberWithEvents: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   eventDotsContainer: {
     flexDirection: 'row',
@@ -906,13 +912,13 @@ const styles = StyleSheet.create({
   legendContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: SPACING.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(255,255,255,0.12)',
     gap: SPACING.lg,
     ...SHADOW.sm,
   },
@@ -928,17 +934,17 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   ninetyDaysContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: SPACING.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(255,255,255,0.12)',
     ...SHADOW.sm,
   },
   ninetyDaysGrid: {
@@ -950,7 +956,7 @@ const styles = StyleSheet.create({
     width: Math.floor((SCREEN_WIDTH - SPACING.md * 4 - 28) / 15),
     aspectRatio: 1,
     borderRadius: 3,
-    backgroundColor: 'rgba(0, 31, 63, 0.08)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -971,8 +977,7 @@ const styles = StyleSheet.create({
   },
   ninetyDaysLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: 'rgba(255,255,255,0.65)',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   eventsListSection: {
@@ -988,14 +993,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     flex: 1,
   },
   eventCountBadge: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.white,
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.round,
@@ -1006,11 +1011,11 @@ const styles = StyleSheet.create({
   },
   eventCard: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(255,255,255,0.12)',
     ...SHADOW.sm,
   },
   eventTypeIndicator: {
@@ -1029,25 +1034,23 @@ const styles = StyleSheet.create({
   eventCardType: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: 'rgba(255,255,255,0.65)',
     textTransform: 'uppercase',
   },
   eventCardTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     marginBottom: 2,
   },
   eventCardSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: 'rgba(255,255,255,0.65)',
     marginBottom: SPACING.xs,
   },
   eventCardDate: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.85)',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   emptyState: {
@@ -1070,13 +1073,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     marginBottom: SPACING.xs,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
     marginBottom: SPACING.lg,
     paddingHorizontal: SPACING.lg,
