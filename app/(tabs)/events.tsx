@@ -1,721 +1,613 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, Alert } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle, Ban, Sparkles } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
-import { useAppState } from '@/state/AppStateProvider';
-import { useLoyalty } from '@/state/LoyaltyProvider';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock4,
+  Plane,
+  Ship,
+  Sparkles,
+  User,
+} from 'lucide-react-native';
+import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
+import { IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { TierBadgeGroup } from '@/components/ui/TierBadge';
-import type { CalendarEvent, BookedCruise } from '@/types/models';
-import { createDateFromString } from '@/lib/date';
-import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
-import { TimeZoneConverter } from '@/components/TimeZoneConverter';
-import { getLuckForDate, formatDateKey, LUCK_SCALE, type LuckColor, type LuckInfo } from '@/constants/luckScores';
+import { useLoyalty } from '@/state/LoyaltyProvider';
+import type { BookedCruise, CalendarEvent } from '@/types/models';
+import { createDateFromString, formatDate } from '@/lib/date';
+import { formatDateKey, getLuckForDate, LUCK_SCALE, type LuckColor, type LuckInfo } from '@/constants/luckScores';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const HERO_COLORS = ['#102544', '#1E3A5F', '#2E5077'] as const;
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+const LUCK_ORDER = ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Indigo', 'Violet'] as const satisfies readonly LuckColor[];
 
-type ViewMode = 'events' | 'week' | 'month' | '90days';
+type CalendarMode = 'month' | 'agenda';
+type EventCategory = 'cruise' | 'travel' | 'personal';
 
-interface DayData {
+interface EventCounts {
+  cruise: number;
+  travel: number;
+  personal: number;
+  total: number;
+}
+
+interface TimelineEvent {
+  id: string;
+  title: string;
+  category: EventCategory;
+  startDate: Date;
+  endDate: Date;
+  location?: string;
+  shipName?: string;
+}
+
+interface CalendarDay {
+  key: string;
   date: Date;
   dayNumber: number;
-  isCurrentMonth: boolean;
+  inCurrentMonth: boolean;
   isToday: boolean;
-  events: {
-    cruise: number;
-    travel: number;
-    personal: number;
+  luck: LuckInfo | null;
+  counts: EventCounts;
+}
+
+function normalizeDate(date: Date): Date {
+  const nextDate = new Date(date);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function addDays(date: Date, days: number): Date {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function getEventCategory(type: CalendarEvent['type'] | 'cruise'): EventCategory {
+  if (type === 'cruise') {
+    return 'cruise';
+  }
+
+  if (type === 'travel' || type === 'flight' || type === 'hotel') {
+    return 'travel';
+  }
+
+  return 'personal';
+}
+
+function getEmptyCounts(): EventCounts {
+  return {
+    cruise: 0,
+    travel: 0,
+    personal: 0,
+    total: 0,
   };
 }
 
-const EVENT_COLORS = {
-  cruise: '#22C55E',
-  travel: '#3B82F6', 
-  personal: '#A855F7',
-};
+function getLuckTextColor(luck: LuckInfo | null): string {
+  if (!luck) {
+    return COLORS.navyDeep;
+  }
+
+  if (luck.color === 'Yellow') {
+    return COLORS.navyDeep;
+  }
+
+  return COLORS.white;
+}
+
+function getLuckSurface(luck: LuckInfo | null, inCurrentMonth: boolean): string {
+  if (!inCurrentMonth) {
+    return 'rgba(255,255,255,0.05)';
+  }
+
+  if (!luck) {
+    return 'rgba(255,255,255,0.88)';
+  }
+
+  return luck.hex;
+}
+
+function buildDateKeysInRange(startDate: Date, endDate: Date): string[] {
+  const start = normalizeDate(startDate);
+  const end = normalizeDate(endDate);
+  const orderedStart = start.getTime() <= end.getTime() ? start : end;
+  const orderedEnd = start.getTime() <= end.getTime() ? end : start;
+  const keys: string[] = [];
+  const span = Math.min(120, Math.max(0, Math.round((orderedEnd.getTime() - orderedStart.getTime()) / 86400000)));
+
+  for (let index = 0; index <= span; index += 1) {
+    keys.push(formatDateKey(addDays(orderedStart, index)));
+  }
+
+  return keys;
+}
 
 export default function EventsScreen() {
   const router = useRouter();
-  const { localData } = useAppState();
+  const { calendarEvents, bookedCruises, isLoading } = useCoreData();
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
-  const coreData = useCoreData();
-  const { bookedCruises } = coreData;
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const calendarEvents = useMemo(() => {
-    const events = [...(localData.calendar || []), ...(localData.tripit || [])];
-    console.log('[Events] Calendar events updated:', events.length);
-    return events;
-  }, [localData.calendar, localData.tripit]);
+  const [mode, setMode] = useState<CalendarMode>('month');
+  const [currentMonth, setCurrentMonth] = useState<Date>(normalizeDate(new Date()));
 
   useEffect(() => {
-    console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', bookedCruises.length);
-    setRefreshKey(prev => prev + 1);
-  }, [calendarEvents.length, bookedCruises.length]);
+    console.log('[EventsScreen] Mounted with data', {
+      calendarEvents: calendarEvents.length,
+      bookedCruises: bookedCruises.length,
+      mode,
+    });
+  }, [bookedCruises.length, calendarEvents.length, mode]);
 
-  const _eventCounts = useMemo(() => {
-    let cruise = 0;
-    let travel = 0;
-    let personal = 0;
-    const countedCruiseIds = new Set<string>();
+  const timelineEvents = useMemo((): TimelineEvent[] => {
+    const importedEvents = calendarEvents.map((event: CalendarEvent): TimelineEvent => {
+      const startDate = createDateFromString(event.startDate || event.start || '');
+      const fallbackEndDate = event.endDate || event.end || event.startDate || event.start || '';
+      const endDate = createDateFromString(fallbackEndDate);
 
-    calendarEvents.forEach(event => {
-      if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
-        cruise++;
-        if ((event as any).cruiseId) countedCruiseIds.add((event as any).cruiseId);
-      } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
-        travel++;
-      } else {
-        personal++;
-      }
+      return {
+        id: event.id,
+        title: event.title || 'Untitled event',
+        category: getEventCategory(event.type),
+        startDate,
+        endDate,
+        location: event.location,
+      };
     });
 
-    bookedCruises.forEach((bc) => {
-      if (!countedCruiseIds.has(bc.id)) {
-        cruise++;
-      }
-    });
+    const cruiseEvents = bookedCruises
+      .filter((cruise: BookedCruise) => Boolean(cruise.sailDate))
+      .map((cruise: BookedCruise): TimelineEvent => {
+        const startDate = createDateFromString(cruise.sailDate);
+        const endDate = cruise.returnDate
+          ? createDateFromString(cruise.returnDate)
+          : addDays(startDate, Math.max(0, (cruise.nights || 1) - 1));
 
-    return { cruise, travel, personal };
-  }, [calendarEvents, bookedCruises]);
-
-  const totalEventsThisMonth = useMemo(() => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    let count = 0;
-
-    calendarEvents.forEach(event => {
-      const eventStart = event.startDate || event.start || '';
-      if (eventStart) {
-        const eventDate = new Date(eventStart);
-        if (eventDate.getFullYear() === year && eventDate.getMonth() === month) {
-          count++;
-        }
-      }
-    });
-
-    bookedCruises.forEach((bc: BookedCruise) => {
-      if (bc.sailDate) {
-        const sailDate = new Date(bc.sailDate);
-        if (sailDate.getFullYear() === year && sailDate.getMonth() === month) {
-          count++;
-        }
-      }
-    });
-
-    return count;
-  }, [calendarEvents, bookedCruises, currentDate]);
-
-  const _isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
-    const start = new Date(startStr);
-    const end = new Date(endStr);
-    const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-    return targetDate >= start && targetDate <= end;
-  }, []);
-
-  const getEventsForDate = useCallback((date: Date): { cruise: number; travel: number; personal: number } => {
-    let cruise = 0;
-    let travel = 0;
-    let personal = 0;
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-
-    calendarEvents.forEach(event => {
-      const eventStart = event.startDate || event.start || '';
-      const eventEnd = event.endDate || event.end || eventStart;
-
-      if (!eventStart) return;
-
-      const startDate = eventStart.split('T')[0];
-      const endDate = eventEnd ? eventEnd.split('T')[0] : startDate;
-
-      if (!startDate || !endDate) return;
-
-      if (dateStr >= startDate && dateStr <= endDate) {
-        if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
-          cruise++;
-        } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
-          travel++;
-        } else {
-          personal++;
-        }
-      }
-    });
-
-    return { cruise, travel, personal };
-  }, [calendarEvents]);
-
-  const calendarDays = useMemo((): DayData[][] => {
-    console.log('[Events] Recalculating calendar days, refreshKey:', refreshKey);
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startOffset = firstDay.getDay();
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const weeks: DayData[][] = [];
-    let currentWeek: DayData[] = [];
-    
-    for (let i = 0; i < startOffset; i++) {
-      const prevMonthDay = new Date(year, month, -startOffset + i + 1);
-      currentWeek.push({
-        date: prevMonthDay,
-        dayNumber: prevMonthDay.getDate(),
-        isCurrentMonth: false,
-        isToday: false,
-        events: getEventsForDate(prevMonthDay),
+        return {
+          id: `cruise-${cruise.id}`,
+          title: cruise.shipName || 'Cruise',
+          category: 'cruise',
+          startDate,
+          endDate,
+          location: cruise.destination || cruise.departurePort,
+          shipName: cruise.shipName,
+        };
       });
-    }
-    
-    for (let day = 1; day <= lastDay.getDate(); day++) {
-      const date = new Date(year, month, day);
-      const isToday = date.getTime() === today.getTime();
-      
-      currentWeek.push({
-        date,
-        dayNumber: day,
-        isCurrentMonth: true,
-        isToday,
-        events: getEventsForDate(date),
+
+    const sortedEvents = [...importedEvents, ...cruiseEvents].sort(
+      (left, right) => left.startDate.getTime() - right.startDate.getTime(),
+    );
+
+    console.log('[EventsScreen] Timeline events prepared', { count: sortedEvents.length });
+    return sortedEvents;
+  }, [bookedCruises, calendarEvents]);
+
+  const eventCountsByDate = useMemo(() => {
+    const countsMap = new Map<string, EventCounts>();
+
+    timelineEvents.forEach((event: TimelineEvent) => {
+      const dateKeys = buildDateKeysInRange(event.startDate, event.endDate);
+      dateKeys.forEach((dateKey) => {
+        const currentCounts = countsMap.get(dateKey) ?? getEmptyCounts();
+        const category = event.category;
+        currentCounts[category] = currentCounts[category] + 1;
+        currentCounts.total += 1;
+        countsMap.set(dateKey, currentCounts);
       });
-      
-      if (currentWeek.length === 7) {
-        weeks.push(currentWeek);
-        currentWeek = [];
-      }
+    });
+
+    console.log('[EventsScreen] Event count map ready', { keyedDays: countsMap.size });
+    return countsMap;
+  }, [timelineEvents]);
+
+  const calendarWeeks = useMemo((): CalendarDay[][] => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDayOfMonth = normalizeDate(new Date(year, month, 1));
+    const lastDayOfMonth = normalizeDate(new Date(year, month + 1, 0));
+    const gridStart = addDays(firstDayOfMonth, -firstDayOfMonth.getDay());
+    const gridEnd = addDays(lastDayOfMonth, 6 - lastDayOfMonth.getDay());
+    const todayKey = formatDateKey(new Date());
+
+    const allDays: CalendarDay[] = [];
+    let walker = gridStart;
+
+    while (walker.getTime() <= gridEnd.getTime()) {
+      const key = formatDateKey(walker);
+      allDays.push({
+        key,
+        date: walker,
+        dayNumber: walker.getDate(),
+        inCurrentMonth: walker.getMonth() === month,
+        isToday: key === todayKey,
+        luck: getLuckForDate(key),
+        counts: eventCountsByDate.get(key) ?? getEmptyCounts(),
+      });
+      walker = addDays(walker, 1);
     }
-    
-    if (currentWeek.length > 0) {
-      let nextMonthDay = 1;
-      while (currentWeek.length < 7) {
-        const nextDate = new Date(year, month + 1, nextMonthDay);
-        currentWeek.push({
-          date: nextDate,
-          dayNumber: nextMonthDay,
-          isCurrentMonth: false,
-          isToday: false,
-          events: getEventsForDate(nextDate),
-        });
-        nextMonthDay++;
-      }
-      weeks.push(currentWeek);
+
+    const weeks: CalendarDay[][] = [];
+    for (let index = 0; index < allDays.length; index += 7) {
+      weeks.push(allDays.slice(index, index + 7));
     }
-    
+
+    console.log('[EventsScreen] Calendar grid built', {
+      weeks: weeks.length,
+      month: `${year}-${month + 1}`,
+    });
+
     return weeks;
-  }, [currentDate, getEventsForDate, refreshKey]);
+  }, [currentMonth, eventCountsByDate]);
 
-  const weekDays = useMemo(() => {
-    const today = new Date();
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay());
-    
-    const days: DayData[] = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(startOfWeek);
-      date.setDate(startOfWeek.getDate() + i);
-      const isToday = date.toDateString() === today.toDateString();
-      days.push({
-        date,
-        dayNumber: date.getDate(),
-        isCurrentMonth: true,
-        isToday,
-        events: getEventsForDate(date),
-      });
-    }
-    return days;
-  }, [getEventsForDate, refreshKey]);
+  const monthLuckSummary = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    let bestDays = 0;
+    let cautionDays = 0;
+    let scoredDays = 0;
+    let totalScore = 0;
 
-  const next90Days = useMemo(() => {
-    const today = new Date();
-    const days: DayData[] = [];
-    
-    for (let i = 0; i < 90; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      const isToday = i === 0;
-      days.push({
-        date,
-        dayNumber: date.getDate(),
-        isCurrentMonth: true,
-        isToday,
-        events: getEventsForDate(date),
-      });
-    }
-    return days;
-  }, [getEventsForDate, refreshKey]);
-
-  const navigateMonth = useCallback((direction: 'prev' | 'next') => {
-    setCurrentDate(prev => {
-      const newDate = new Date(prev);
-      if (direction === 'prev') {
-        newDate.setMonth(prev.getMonth() - 1);
-      } else {
-        newDate.setMonth(prev.getMonth() + 1);
+    calendarWeeks.flat().forEach((day) => {
+      if (!day.inCurrentMonth || !day.luck) {
+        return;
       }
-      return newDate;
+
+      scoredDays += 1;
+      totalScore += day.luck.score;
+
+      if (day.luck.score >= 6) {
+        bestDays += 1;
+      }
+
+      if (day.luck.score <= 2) {
+        cautionDays += 1;
+      }
+    });
+
+    const averageScore = scoredDays > 0 ? totalScore / scoredDays : 0;
+
+    console.log('[EventsScreen] Luck summary ready', {
+      year,
+      month: month + 1,
+      bestDays,
+      cautionDays,
+      averageScore,
+    });
+
+    return {
+      bestDays,
+      cautionDays,
+      averageScore,
+    };
+  }, [calendarWeeks, currentMonth]);
+
+  const upcomingEvents = useMemo(() => {
+    const today = normalizeDate(new Date());
+    const list = timelineEvents
+      .filter((event) => normalizeDate(event.endDate).getTime() >= today.getTime())
+      .slice(0, 10);
+
+    console.log('[EventsScreen] Upcoming events ready', { count: list.length });
+    return list;
+  }, [timelineEvents]);
+
+  const navigateMonth = useCallback((direction: 'previous' | 'next') => {
+    setCurrentMonth((previousMonth) => {
+      const nextMonth = new Date(previousMonth);
+      nextMonth.setMonth(previousMonth.getMonth() + (direction === 'next' ? 1 : -1), 1);
+      nextMonth.setHours(0, 0, 0, 0);
+      console.log('[EventsScreen] Navigating month', { direction, nextMonth: formatDateKey(nextMonth) });
+      return nextMonth;
     });
   }, []);
 
   const goToToday = useCallback(() => {
-    setCurrentDate(new Date());
+    const today = normalizeDate(new Date());
+    console.log('[EventsScreen] Returning to today', { today: formatDateKey(today) });
+    setCurrentMonth(today);
   }, []);
 
-  const handleClearEvents = useCallback(() => {
-    Alert.alert(
-      'Clear All Events',
-      'Are you sure you want to clear all calendar events? This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' as const },
-        {
-          text: 'Clear',
-          style: 'destructive' as const,
-          onPress: () => {
-            console.log('[Events] Clearing all calendar events');
-            coreData.setCalendarEvents([]);
-            setRefreshKey(prev => prev + 1);
-          },
-        },
-      ]
-    );
-  }, [coreData]);
+  const handleDayPress = useCallback(
+    (day: CalendarDay) => {
+      console.log('[EventsScreen] Day selected', {
+        date: day.key,
+        score: day.luck?.score ?? null,
+        totalEvents: day.counts.total,
+      });
 
-  const formatMonthYear = useCallback((date: Date): string => {
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-  }, []);
+      router.push({
+        pathname: '/day-agenda' as any,
+        params: { date: day.key },
+      });
+    },
+    [router],
+  );
 
-  const renderEventDots = useCallback((events: { cruise: number; travel: number; personal: number }) => {
-    const dots = [];
-    if (events.cruise > 0) {
-      dots.push(<View key="cruise" style={[styles.eventDot, { backgroundColor: EVENT_COLORS.cruise }]} />);
-    }
-    if (events.travel > 0) {
-      dots.push(<View key="travel" style={[styles.eventDot, { backgroundColor: EVENT_COLORS.travel }]} />);
-    }
-    if (events.personal > 0) {
-      dots.push(<View key="personal" style={[styles.eventDot, { backgroundColor: EVENT_COLORS.personal }]} />);
-    }
-    return dots;
-  }, []);
+  const renderDayCell = useCallback(
+    (day: CalendarDay) => {
+      const textColor = getLuckTextColor(day.luck);
+      const surfaceColor = getLuckSurface(day.luck, day.inCurrentMonth);
+      const hasEvents = day.counts.total > 0;
 
-  const handleDayPress = useCallback((day: DayData) => {
-    const dateStr = `${day.date.getFullYear()}-${String(day.date.getMonth() + 1).padStart(2, '0')}-${String(day.date.getDate()).padStart(2, '0')}`;
-    router.push({
-      pathname: '/day-agenda' as any,
-      params: { date: dateStr },
-    });
-  }, [router]);
-
-  const getDayBackgroundColor = useCallback((day: DayData) => {
-    if (!day.isCurrentMonth) return 'transparent';
-    const luck = getLuckForDate(formatDateKey(day.date));
-    if (luck) {
-      return `${luck.hex}55`;
-    }
-    return 'transparent';
-  }, []);
-
-  const getLuckColorForDay = useCallback((day: DayData): LuckInfo | null => {
-    const dateKey = formatDateKey(day.date);
-    return getLuckForDate(dateKey);
-  }, []);
-
-  const renderDayCell = useCallback((day: DayData) => {
-    const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
-    const bgColor = getDayBackgroundColor(day);
-    const luck = getLuckColorForDay(day);
-    
-    return (
-      <TouchableOpacity
-        key={day.date.toISOString()}
-        style={[
-          styles.dayCell,
-          { backgroundColor: bgColor },
-          day.isToday && styles.todayCell,
-          !day.isCurrentMonth && styles.otherMonthCell,
-        ]}
-        activeOpacity={0.7}
-        onPress={() => handleDayPress(day)}
-      >
-        <Text style={[
-          styles.dayNumber,
-          day.isToday && styles.todayNumber,
-          !day.isCurrentMonth && styles.otherMonthNumber,
-          hasEvents && day.isCurrentMonth && styles.dayNumberWithEvents,
-        ]}>
-          {day.dayNumber}
-        </Text>
-        {luck && day.isCurrentMonth ? (
-          <View style={styles.luckBarContainer}>
-            <View style={[styles.luckBar, { backgroundColor: luck.hex }]} />
-          </View>
-        ) : null}
-        {luck && day.isCurrentMonth ? (
-          <Text style={[styles.luckScoreText, { color: luck.hex }]}>
-            {luck.score}
-          </Text>
-        ) : null}
-        {hasEvents ? (
-          <View style={styles.eventDotsContainer}>
-            {renderEventDots(day.events)}
-          </View>
-        ) : null}
-      </TouchableOpacity>
-    );
-  }, [renderEventDots, handleDayPress, getDayBackgroundColor, getLuckColorForDay]);
-
-  const upcomingEvents = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const allEvents: { event: CalendarEvent | BookedCruise; type: 'calendar' | 'cruise'; date: Date }[] = [];
-    
-    calendarEvents.forEach(event => {
-      const startDate = createDateFromString(event.startDate || event.start || '');
-      if (startDate >= today) {
-        allEvents.push({ event, type: 'calendar', date: startDate });
-      }
-    });
-    
-    bookedCruises.forEach(cruise => {
-      if (cruise.sailDate) {
-        const sailDate = createDateFromString(cruise.sailDate);
-        if (sailDate >= today) {
-          allEvents.push({ event: cruise, type: 'cruise', date: sailDate });
-        }
-      }
-    });
-    
-    return allEvents.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 5);
-  }, [calendarEvents, bookedCruises]);
-
-  const renderEventCard = useCallback((item: { event: CalendarEvent | BookedCruise; type: 'calendar' | 'cruise'; date: Date }, index: number) => {
-    if (item.type === 'cruise') {
-      const cruise = item.event as BookedCruise;
       return (
-        <TouchableOpacity 
-          key={`cruise-${cruise.id}-${index}`}
-          style={styles.eventCard}
-          activeOpacity={0.85}
-          onPress={() => router.push({
-            pathname: '/(tabs)/(overview)/cruise-details' as any,
-            params: { id: cruise.id },
-          })}
+        <TouchableOpacity
+          key={day.key}
+          activeOpacity={0.86}
+          onPress={() => handleDayPress(day)}
+          style={[
+            styles.dayCell,
+            { backgroundColor: surfaceColor },
+            !day.inCurrentMonth && styles.dayCellMuted,
+            day.isToday && styles.todayDayCell,
+          ]}
+          testID={`luck-day-${day.key}`}
         >
-          <View style={[styles.eventTypeIndicator, { backgroundColor: EVENT_COLORS.cruise }]} />
-          <View style={styles.eventCardContent}>
-            <View style={styles.eventCardHeader}>
-              <Ship size={16} color={EVENT_COLORS.cruise} />
-              <Text style={styles.eventCardType}>Cruise</Text>
-            </View>
-            <Text style={styles.eventCardTitle}>{cruise.shipName}</Text>
-            <Text style={styles.eventCardSubtitle}>{cruise.destination}</Text>
-            <Text style={styles.eventCardDate}>
-              {item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
+          <View style={styles.dayCellHeader}>
+            <Text
+              style={[
+                styles.dayNumber,
+                { color: day.inCurrentMonth ? textColor : 'rgba(255,255,255,0.45)' },
+                day.isToday && styles.todayDayNumber,
+              ]}
+            >
+              {day.dayNumber}
             </Text>
+            {day.inCurrentMonth && day.luck ? (
+              <View style={[styles.scorePill, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                <Text style={[styles.scorePillText, { color: textColor }]}>{day.luck.score}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {day.inCurrentMonth && day.luck ? (
+            <Text style={[styles.dayLuckLabel, { color: textColor }]} numberOfLines={1}>
+              {day.luck.label}
+            </Text>
+          ) : (
+            <Text style={styles.dayLuckLabelMuted} numberOfLines={1}>
+              {day.inCurrentMonth ? 'No score' : ''}
+            </Text>
+          )}
+
+          <View style={styles.dayFooter}>
+            {hasEvents ? (
+              <View style={styles.eventDotsRow}>
+                {day.counts.cruise > 0 ? <View style={[styles.eventDot, styles.cruiseDot]} /> : null}
+                {day.counts.travel > 0 ? <View style={[styles.eventDot, styles.travelDot]} /> : null}
+                {day.counts.personal > 0 ? <View style={[styles.eventDot, styles.personalDot]} /> : null}
+              </View>
+            ) : null}
           </View>
         </TouchableOpacity>
       );
-    }
-    
-    const event = item.event as CalendarEvent;
-    const eventColor = event.type === 'cruise' ? EVENT_COLORS.cruise 
-      : (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') ? EVENT_COLORS.travel 
-      : EVENT_COLORS.personal;
-    const EventIcon = event.type === 'cruise' ? Ship 
-      : (event.type === 'travel' || event.type === 'flight') ? Plane 
-      : User;
-    
-    return (
-      <TouchableOpacity 
-        key={`event-${event.id}-${index}`}
-        style={styles.eventCard}
-        activeOpacity={0.85}
-      >
-        <View style={[styles.eventTypeIndicator, { backgroundColor: eventColor }]} />
-        <View style={styles.eventCardContent}>
-          <View style={styles.eventCardHeader}>
-            <EventIcon size={16} color={eventColor} />
-            <Text style={styles.eventCardType}>{event.type}</Text>
-          </View>
-          <Text style={styles.eventCardTitle}>{event.title}</Text>
-          {event.location ? (
-            <Text style={styles.eventCardSubtitle}>{event.location}</Text>
-          ) : null}
-          <Text style={styles.eventCardDate}>
-            {item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    );
-  }, [router]);
+    },
+    [handleDayPress],
+  );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
-      
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <ScrollView 
+        <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          testID="calendar-scroll"
         >
-          <View style={styles.heroHeader}>
-            <View style={styles.heroContent}>
-              <View style={styles.logoSection}>
-                <Image 
-                  source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/m9jyogxgz1j0xb91psbkq' }}
-                  style={styles.logoImage}
-                  resizeMode="cover"
-                />
+          <LinearGradient colors={HERO_COLORS} style={styles.heroCard}>
+            <View style={styles.heroTopRow}>
+              <Image source={{ uri: IMAGES.logo }} style={styles.heroLogo} resizeMode="contain" />
+              <View style={styles.heroTextBlock}>
+                <Text style={styles.heroTitle}>Easy Seas™ Calendar</Text>
+                <Text style={styles.heroSubtitle}>Offers-tab styling with Earth Rooster daily luck colors</Text>
               </View>
-              <View style={styles.heroTextSection}>
-                <Text style={styles.heroTitle}>Easy Seas™</Text>
-                <Text style={styles.heroSubtitle}>Manage Your Nautical Lifestyle</Text>
-                <View style={styles.tierBadgesRow}>
-                  <TierBadgeGroup 
-                    clubRoyaleTier={clubRoyaleTier}
-                    crownAnchorLevel={crownAnchorLevel}
-                    size="small"
-                  />
-                </View>
+            </View>
+            <View style={styles.heroBadgeRow}>
+              <View style={styles.heroBadge}>
+                <Sparkles size={14} color={COLORS.goldLight} />
+                <Text style={styles.heroBadgeText}>{clubRoyaleTier}</Text>
               </View>
+              <View style={styles.heroBadge}>
+                <CalendarDays size={14} color={COLORS.skyBlue} />
+                <Text style={styles.heroBadgeText}>{crownAnchorLevel}</Text>
+              </View>
+              <View style={styles.heroBadge}>
+                <Clock4 size={14} color={COLORS.seafoam} />
+                <Text style={styles.heroBadgeText}>{isLoading ? 'Syncing' : 'Live'}</Text>
+              </View>
+            </View>
+          </LinearGradient>
+
+          <View style={styles.modeRow}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setMode('month')}
+              style={[styles.modeButton, mode === 'month' && styles.modeButtonActive]}
+              testID="calendar-mode-month"
+            >
+              <Text style={[styles.modeButtonText, mode === 'month' && styles.modeButtonTextActive]}>Month</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setMode('agenda')}
+              style={[styles.modeButton, mode === 'agenda' && styles.modeButtonActive]}
+              testID="calendar-mode-agenda"
+            >
+              <Text style={[styles.modeButtonText, mode === 'agenda' && styles.modeButtonTextActive]}>Agenda</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.summaryGrid}>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Best days</Text>
+              <Text style={styles.summaryValue}>{monthLuckSummary.bestDays}</Text>
+              <Text style={styles.summaryCaption}>Score 6 or 7</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Average</Text>
+              <Text style={styles.summaryValue}>{monthLuckSummary.averageScore.toFixed(1)}</Text>
+              <Text style={styles.summaryCaption}>Monthly score</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Caution days</Text>
+              <Text style={styles.summaryValue}>{monthLuckSummary.cautionDays}</Text>
+              <Text style={styles.summaryCaption}>Score 1 or 2</Text>
             </View>
           </View>
 
-          <View style={styles.viewToggleContainer}>
-            {(['events', 'week', 'month', '90days'] as ViewMode[]).map((mode) => (
-              <TouchableOpacity
-                key={mode}
-                style={[
-                  styles.viewToggleButton,
-                  viewMode === mode && styles.viewToggleButtonActive,
-                ]}
-                onPress={() => setViewMode(mode)}
-                activeOpacity={0.7}
-              >
-                <Text style={[
-                  styles.viewToggleText,
-                  viewMode === mode && styles.viewToggleTextActive,
-                ]}>
-                  {mode === 'events' ? 'Events' : mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : '90 Days'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {mode === 'month' ? (
+            <View style={styles.contentCard} testID="calendar-month-card">
+              <View style={styles.calendarHeader}>
+                <TouchableOpacity
+                  activeOpacity={0.82}
+                  onPress={() => navigateMonth('previous')}
+                  style={styles.iconButton}
+                  testID="calendar-prev-month"
+                >
+                  <ChevronLeft size={20} color={COLORS.navyDeep} />
+                </TouchableOpacity>
 
-          {(viewMode === 'month' || viewMode === 'week') ? (
-            <View style={styles.monthNavigation}>
-              <TouchableOpacity
-                style={styles.navButton}
-                onPress={() => navigateMonth('prev')}
-                activeOpacity={0.7}
-              >
-                <ChevronLeft size={24} color={'#E2E8F0'} />
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.monthYearContainer}
-                onPress={goToToday}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.monthYearText}>{formatMonthYear(currentDate)}</Text>
-                <Text style={styles.eventCountText}>{totalEventsThisMonth} events • Tap to go to today</Text>
-              </TouchableOpacity>
+                <TouchableOpacity activeOpacity={0.82} onPress={goToToday} style={styles.calendarHeaderCenter}>
+                  <Text style={styles.monthTitle}>
+                    {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </Text>
+                  <Text style={styles.monthSubtitle}>Tap here to return to today</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.clearEventsButton}
-                onPress={handleClearEvents}
-                activeOpacity={0.7}
-                testID="clear-events-button"
-              >
-                <Ban size={18} color="#DC2626" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.navButton}
-                onPress={() => navigateMonth('next')}
-                activeOpacity={0.7}
-              >
-                <ChevronRight size={24} color={'#E2E8F0'} />
-              </TouchableOpacity>
-            </View>
-          ) : null}
+                <TouchableOpacity
+                  activeOpacity={0.82}
+                  onPress={() => navigateMonth('next')}
+                  style={styles.iconButton}
+                  testID="calendar-next-month"
+                >
+                  <ChevronRight size={20} color={COLORS.navyDeep} />
+                </TouchableOpacity>
+              </View>
 
-          {totalEventsThisMonth > 10 && viewMode === 'month' ? (
-            <View style={styles.alertBadge}>
-              <AlertTriangle size={14} color={COLORS.white} />
-              <Text style={styles.alertBadgeText}>{totalEventsThisMonth}</Text>
-            </View>
-          ) : null}
-
-          {viewMode === 'month' ? (
-            <View style={styles.calendarContainer}>
-              <View style={styles.weekDaysHeader}>
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <Text key={day} style={styles.weekDayLabel}>{day}</Text>
+              <View style={styles.weekdayRow}>
+                {WEEKDAY_LABELS.map((label) => (
+                  <Text key={label} style={styles.weekdayLabel}>
+                    {label}
+                  </Text>
                 ))}
               </View>
-              {calendarDays.map((week, weekIndex) => (
+
+              {calendarWeeks.map((week, weekIndex) => (
                 <View key={`week-${weekIndex}`} style={styles.weekRow}>
-                  {week.map(day => renderDayCell(day))}
+                  {week.map((day) => renderDayCell(day))}
                 </View>
               ))}
             </View>
-          ) : null}
-
-          {viewMode === 'week' ? (
-            <View style={styles.calendarContainer}>
-              <View style={styles.weekDaysHeader}>
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <Text key={day} style={styles.weekDayLabel}>{day}</Text>
-                ))}
+          ) : (
+            <View style={styles.contentCard} testID="calendar-agenda-card">
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <CalendarDays size={18} color={COLORS.navyDeep} />
+                  <Text style={styles.sectionTitle}>Upcoming agenda</Text>
+                </View>
+                <Text style={styles.sectionMeta}>{upcomingEvents.length} items</Text>
               </View>
-              <View style={styles.weekRow}>
-                {weekDays.map(day => renderDayCell(day))}
-              </View>
-            </View>
-          ) : null}
 
-          {viewMode === '90days' ? (
-            <View style={styles.ninetyDaysContainer}>
-              <View style={styles.ninetyDaysGrid}>
-                {next90Days.map((day, index) => {
-                  const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
-                  const eventColor = day.events.cruise > 0 ? EVENT_COLORS.cruise
-                    : day.events.travel > 0 ? EVENT_COLORS.travel
-                    : day.events.personal > 0 ? EVENT_COLORS.personal
-                    : 'transparent';
-                  
+              {upcomingEvents.length > 0 ? (
+                upcomingEvents.map((event) => {
+                  const dateKey = formatDateKey(event.startDate);
+                  const dayLuck = getLuckForDate(dateKey);
+                  const accentColor = dayLuck?.hex ?? COLORS.navyDeep;
+                  const eventIcon = event.category === 'cruise' ? Ship : event.category === 'travel' ? Plane : User;
+                  const EventIcon = eventIcon;
+
                   return (
-                    <View
-                      key={`90day-${index}`}
-                      style={[
-                        styles.ninetyDayCell,
-                        day.isToday && styles.todayNinetyCell,
-                        hasEvents && { backgroundColor: `${eventColor}40` },
-                      ]}
+                    <TouchableOpacity
+                      key={event.id}
+                      activeOpacity={0.86}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/day-agenda' as any,
+                          params: { date: dateKey },
+                        })
+                      }
+                      style={styles.agendaItem}
+                      testID={`agenda-item-${event.id}`}
                     >
-                      {hasEvents ? (
-                        <View style={[styles.ninetyDayDot, { backgroundColor: eventColor }]} />
+                      <View style={[styles.agendaAccent, { backgroundColor: accentColor }]} />
+                      <View style={styles.agendaIconWrap}>
+                        <EventIcon size={18} color={accentColor} />
+                      </View>
+                      <View style={styles.agendaTextWrap}>
+                        <Text style={styles.agendaTitle}>{event.title}</Text>
+                        <Text style={styles.agendaMeta}>
+                          {formatDate(event.startDate, 'long')}
+                        </Text>
+                        <Text style={styles.agendaMeta}>
+                          {event.location ?? event.shipName ?? 'Tap for day details'}
+                        </Text>
+                      </View>
+                      {dayLuck ? (
+                        <View style={[styles.agendaLuckBadge, { backgroundColor: `${accentColor}18`, borderColor: `${accentColor}45` }]}>
+                          <Text style={[styles.agendaLuckScore, { color: accentColor }]}>{dayLuck.score}</Text>
+                          <Text style={[styles.agendaLuckText, { color: accentColor }]}>{dayLuck.label}</Text>
+                        </View>
                       ) : null}
-                    </View>
+                    </TouchableOpacity>
                   );
-                })}
-              </View>
-              <View style={styles.ninetyDaysLabels}>
-                <Text style={styles.ninetyDaysLabel}>Today</Text>
-                <Text style={styles.ninetyDaysLabel}>+30</Text>
-                <Text style={styles.ninetyDaysLabel}>+60</Text>
-                <Text style={styles.ninetyDaysLabel}>+90</Text>
-              </View>
+                })
+              ) : (
+                <View style={styles.emptyState}>
+                  <CalendarDays size={26} color={COLORS.textSecondary} />
+                  <Text style={styles.emptyTitle}>No upcoming events yet</Text>
+                  <Text style={styles.emptyText}>Imported calendar items and booked cruises will appear here.</Text>
+                </View>
+              )}
             </View>
-          ) : null}
+          )}
 
-          <View style={styles.legendContainer}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.cruise }]} />
-              <Text style={styles.legendText}>Easy Seas</Text>
+          <View style={styles.contentCard} testID="calendar-luck-legend">
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <Sparkles size={18} color={COLORS.goldDark} />
+                <Text style={styles.sectionTitle}>Earth Rooster luck scale</Text>
+              </View>
+              <Text style={styles.sectionMeta}>Daily scores are always visible</Text>
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.travel }]} />
-              <Text style={styles.legendText}>Travel</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.personal }]} />
-              <Text style={styles.legendText}>Personal</Text>
-            </View>
-          </View>
 
-          <View style={styles.luckLegendContainer}>
-            <View style={styles.luckLegendHeader}>
-              <Sparkles size={16} color={'#D4A574'} />
-              <Text style={styles.luckLegendTitle}>Earth Rooster Luck</Text>
-            </View>
-            <View style={styles.luckScaleRow}>
-              {(['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Indigo', 'Violet'] as LuckColor[]).map((color) => {
-                const info = LUCK_SCALE[color];
+            <View style={styles.luckLegendGrid}>
+              {LUCK_ORDER.map((luckColor) => {
+                const info = LUCK_SCALE[luckColor];
+                const textColor = getLuckTextColor(info);
                 return (
-                  <View key={color} style={styles.luckScaleItem}>
-                    <View style={[styles.luckScaleDot, { backgroundColor: info.hex }]} />
-                    <Text style={styles.luckScaleLabel}>{info.score}</Text>
+                  <View key={luckColor} style={[styles.luckLegendItem, { backgroundColor: info.hex }]}>
+                    <Text style={[styles.luckLegendScore, { color: textColor }]}>{info.score}</Text>
+                    <Text style={[styles.luckLegendName, { color: textColor }]}>{info.label}</Text>
                   </View>
                 );
               })}
             </View>
-            <View style={styles.luckScaleLabels}>
-              <Text style={styles.luckScaleEndLabel}>Rough</Text>
-              <Text style={styles.luckScaleEndLabel}>Extremely Lucky</Text>
-            </View>
-          </View>
 
-          {viewMode === 'events' ? (
-            <View style={styles.eventsListSection}>
-              <View style={styles.sectionHeader}>
-                <CalendarDays size={20} color={'#D4A574'} />
-                <Text style={styles.sectionTitle}>Upcoming Events</Text>
-                <View style={styles.eventCountBadgeContainer}>
-                  <Text style={styles.eventCountBadgeText}>{upcomingEvents.length}</Text>
-                </View>
+            <View style={styles.eventLegendRow}>
+              <View style={styles.eventLegendItem}>
+                <View style={[styles.eventDot, styles.cruiseDot]} />
+                <Text style={styles.eventLegendText}>Cruise</Text>
               </View>
-              
-              {upcomingEvents.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <View style={styles.emptyIconContainer}>
-                    <CalendarDays size={48} color={'#D4A574'} />
-                  </View>
-                  <Text style={styles.emptyTitle}>No Upcoming Events</Text>
-                  <Text style={styles.emptyText}>
-                    Import calendar events or book a cruise to see them here
-                  </Text>
-                  <TouchableOpacity 
-                    style={styles.addEventButton}
-                    onPress={() => router.push('/(tabs)/settings' as any)}
-                    activeOpacity={0.7}
-                  >
-                    <Plus size={18} color={COLORS.white} />
-                    <Text style={styles.addEventText}>Import Events</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.eventsList}>
-                  {upcomingEvents.map((item, index) => renderEventCard(item, index))}
-                </View>
-              )}
-            </View>
-          ) : null}
-
-          {viewMode !== 'events' && upcomingEvents.length > 0 ? (
-            <View style={styles.eventsListSection}>
-              <View style={styles.sectionHeader}>
-                <CalendarDays size={20} color={'#D4A574'} />
-                <Text style={styles.sectionTitle}>Next Up</Text>
+              <View style={styles.eventLegendItem}>
+                <View style={[styles.eventDot, styles.travelDot]} />
+                <Text style={styles.eventLegendText}>Travel</Text>
               </View>
-              <View style={styles.eventsList}>
-                {upcomingEvents.slice(0, 3).map((item, index) => renderEventCard(item, index))}
+              <View style={styles.eventLegendItem}>
+                <View style={[styles.eventDot, styles.personalDot]} />
+                <Text style={styles.eventLegendText}>Personal</Text>
               </View>
             </View>
-          ) : null}
-
-          <View style={styles.crewSectionContainer}>
-            <TimeZoneConverter />
           </View>
-
-          <View style={styles.crewSectionContainer}>
-            <CrewRecognitionSection />
-          </View>
-          
-          <View style={styles.bottomSpacer} />
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -723,7 +615,7 @@ export default function EventsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
     backgroundColor: '#0A1628',
   },
@@ -731,468 +623,372 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 120,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+    paddingBottom: 140,
   },
-  heroHeader: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+  heroCard: {
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,
-    marginHorizontal: SPACING.md,
     marginBottom: SPACING.md,
-    marginTop: SPACING.xs,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOW.md,
   },
-  heroContent: {
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  logoSection: {
+  heroLogo: {
+    width: 68,
+    height: 68,
     marginRight: SPACING.md,
   },
-  logoImage: {
-    width: 100,
-    height: 120,
-    borderRadius: BORDER_RADIUS.md,
-  },
-  heroTextSection: {
+  heroTextBlock: {
     flex: 1,
   },
   heroTitle: {
-    fontSize: TYPOGRAPHY.fontSizeHeader,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontSize: 24,
+    fontWeight: '800' as const,
     color: COLORS.white,
-    marginBottom: 2,
   },
   heroSubtitle: {
+    marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: SPACING.sm,
+    color: 'rgba(255,255,255,0.78)',
+    lineHeight: 20,
   },
-  tierBadgesRow: {
+  heroBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  heroBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  viewToggleContainer: {
+  heroBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '700' as const,
+    color: COLORS.white,
+  },
+  modeRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  modeButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.lg,
-    padding: 4,
-    marginHorizontal: SPACING.md,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  modeButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderColor: 'rgba(255,255,255,0.94)',
+  },
+  modeButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '700' as const,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  modeButtonTextActive: {
+    color: COLORS.navyDeep,
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(229,231,235,0.9)',
+  },
+  summaryLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: '700' as const,
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  summaryValue: {
+    fontSize: 24,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+    marginTop: 8,
+  },
+  summaryCaption: {
+    marginTop: 4,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+  },
+  contentCard: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(229,231,235,0.95)',
+    ...SHADOW.sm,
   },
-  viewToggleButton: {
-    flex: 1,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
-    borderRadius: BORDER_RADIUS.md,
-    alignItems: 'center',
-  },
-  viewToggleButtonActive: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  viewToggleText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: 'rgba(255,255,255,0.5)',
-  },
-  viewToggleTextActive: {
-    color: COLORS.white,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-  },
-  monthNavigation: {
+  calendarHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: SPACING.md,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
   },
-  navButton: {
+  iconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: COLORS.bgSecondary,
   },
-  clearEventsButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(220, 38, 38, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(220, 38, 38, 0.4)',
-    marginLeft: 6,
-  },
-  monthYearContainer: {
-    alignItems: 'center',
+  calendarHeaderCenter: {
     flex: 1,
-  },
-  monthYearText: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
-  },
-  eventCountText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 2,
-  },
-  alertBadge: {
-    flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: COLORS.error,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.sm,
-    marginBottom: SPACING.sm,
-    gap: 4,
   },
-  alertBadgeText: {
+  monthTitle: {
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+  },
+  monthSubtitle: {
+    marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: COLORS.textSecondary,
   },
-  calendarContainer: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: BORDER_RADIUS.lg,
-    marginHorizontal: SPACING.md,
-    padding: SPACING.sm,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  weekDaysHeader: {
+  weekdayRow: {
     flexDirection: 'row',
-    marginBottom: SPACING.xs,
-    paddingBottom: SPACING.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    marginBottom: SPACING.sm,
   },
-  weekDayLabel: {
+  weekdayLabel: {
     flex: 1,
     textAlign: 'center',
     fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: 'rgba(255,255,255,0.5)',
+    fontWeight: '700' as const,
+    color: COLORS.textSecondary,
     textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   weekRow: {
     flexDirection: 'row',
+    marginBottom: 6,
   },
   dayCell: {
     flex: 1,
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    minHeight: 84,
     borderRadius: BORDER_RADIUS.md,
-    margin: 2,
+    marginHorizontal: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    justifyContent: 'space-between',
   },
-  todayCell: {
-    borderWidth: 2,
-    borderColor: '#F59E0B',
-    backgroundColor: 'transparent',
+  dayCellMuted: {
+    opacity: 0.45,
   },
-  otherMonthCell: {
-    opacity: 0.35,
+  todayDayCell: {
+    borderWidth: 3,
+    borderColor: COLORS.goldDark,
+  },
+  dayCellHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   dayNumber: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#E2E8F0',
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: '800' as const,
   },
-  todayNumber: {
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#F59E0B',
+  todayDayNumber: {
+    textDecorationLine: 'underline',
   },
-  otherMonthNumber: {
-    color: 'rgba(255,255,255,0.25)',
-    opacity: 1,
-  },
-  dayNumberWithEvents: {
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
-  },
-  eventDotsContainer: {
-    flexDirection: 'row',
-    position: 'absolute',
-    bottom: 8,
-    gap: 2,
-  },
-  luckBarContainer: {
-    position: 'absolute',
-    bottom: 2,
-    left: 4,
-    right: 4,
+  scorePill: {
+    minWidth: 22,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.round,
     alignItems: 'center',
   },
-  luckBar: {
-    width: '100%',
-    height: 5,
-    borderRadius: 3,
-  },
-  luckScoreText: {
-    fontSize: 8,
+  scorePillText: {
+    fontSize: 10,
     fontWeight: '800' as const,
-    position: 'absolute',
-    top: 2,
-    right: 3,
+  },
+  dayLuckLabel: {
+    marginTop: 8,
+    fontSize: 10,
+    fontWeight: '700' as const,
+  },
+  dayLuckLabelMuted: {
+    marginTop: 8,
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.45)',
+  },
+  dayFooter: {
+    minHeight: 10,
+    justifyContent: 'flex-end',
+  },
+  eventDotsRow: {
+    flexDirection: 'row',
+    gap: 4,
   },
   eventDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
-  legendContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: BORDER_RADIUS.lg,
-    marginHorizontal: SPACING.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    gap: SPACING.lg,
+  cruiseDot: {
+    backgroundColor: '#059669',
   },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
+  travelDot: {
+    backgroundColor: '#2563EB',
   },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#E2E8F0',
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  ninetyDaysContainer: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: BORDER_RADIUS.lg,
-    marginHorizontal: SPACING.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  ninetyDaysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 2,
-  },
-  ninetyDayCell: {
-    width: Math.floor((SCREEN_WIDTH - SPACING.md * 4 - 28) / 15),
-    aspectRatio: 1,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  todayNinetyCell: {
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-  },
-  ninetyDayDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  ninetyDaysLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
-  },
-  ninetyDaysLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.5)',
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  eventsListSection: {
-    marginTop: SPACING.md,
-    marginHorizontal: SPACING.md,
+  personalDot: {
+    backgroundColor: '#7C3AED',
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    justifyContent: 'space-between',
     marginBottom: SPACING.md,
   },
-  sectionTitle: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FFFFFF',
-    flex: 1,
-  },
-  eventCountBadgeContainer: {
-    backgroundColor: COLORS.navyDeep,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
-    borderRadius: BORDER_RADIUS.round,
-    overflow: 'hidden',
-  },
-  eventCountBadgeText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
-  },
-  eventsList: {
-    gap: SPACING.sm,
-  },
-  eventCard: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: BORDER_RADIUS.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  eventTypeIndicator: {
-    width: 4,
-  },
-  eventCardContent: {
-    flex: 1,
-    padding: SPACING.md,
-  },
-  eventCardHeader: {
+  sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.xs,
+    gap: SPACING.sm,
   },
-  eventCardType: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: 'rgba(255,255,255,0.5)',
-    textTransform: 'uppercase',
-  },
-  eventCardTitle: {
+  sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FFFFFF',
-    marginBottom: 2,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
   },
-  eventCardSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.6)',
-    marginBottom: SPACING.xs,
-  },
-  eventCardDate: {
+  sectionMeta: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#D4A574',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.textSecondary,
+  },
+  agendaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: COLORS.cleanBgSecondary,
+    marginBottom: SPACING.sm,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.cleanBorderLight,
+  },
+  agendaAccent: {
+    width: 5,
+    alignSelf: 'stretch',
+  },
+  agendaIconWrap: {
+    width: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  agendaTextWrap: {
+    flex: 1,
+    paddingVertical: SPACING.sm,
+    paddingRight: SPACING.sm,
+  },
+  agendaTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
+  },
+  agendaMeta: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textSecondary,
+  },
+  agendaLuckBadge: {
+    marginRight: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  agendaLuckScore: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '800' as const,
+  },
+  agendaLuckText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    marginTop: 2,
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: SPACING.xxxl,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  emptyIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
+    paddingVertical: SPACING.huge,
+    paddingHorizontal: SPACING.lg,
   },
   emptyTitle: {
+    marginTop: SPACING.sm,
     fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FFFFFF',
-    marginBottom: SPACING.xs,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
   },
   emptyText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: 'rgba(255,255,255,0.6)',
-    textAlign: 'center',
-    marginBottom: SPACING.lg,
-    paddingHorizontal: SPACING.lg,
-  },
-  addEventButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: COLORS.navyDeep,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.round,
-  },
-  addEventText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
-  },
-  bottomSpacer: {
-    height: 120,
-  },
-  crewSectionContainer: {
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.md,
-  },
-  luckLegendContainer: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: BORDER_RADIUS.lg,
-    marginHorizontal: SPACING.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  luckLegendHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.sm,
-  },
-  luckLegendTitle: {
+    marginTop: 6,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#E2E8F0',
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
-  luckScaleRow: {
+  luckLegendGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  luckLegendItem: {
+    width: '31%',
+    minWidth: 92,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
     alignItems: 'center',
-    paddingHorizontal: SPACING.xs,
   },
-  luckScaleItem: {
-    alignItems: 'center',
-    gap: 3,
+  luckLegendScore: {
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: '800' as const,
   },
-  luckScaleDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  luckScaleLabel: {
-    fontSize: 9,
-    fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.5)',
-  },
-  luckScaleLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  luckLegendName: {
     marginTop: 4,
-    paddingHorizontal: SPACING.xs,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '700' as const,
+    textAlign: 'center',
   },
-  luckScaleEndLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.4)',
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  eventLegendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.cleanBorderLight,
+  },
+  eventLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  eventLegendText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textSecondary,
+    fontWeight: '700' as const,
   },
 });
