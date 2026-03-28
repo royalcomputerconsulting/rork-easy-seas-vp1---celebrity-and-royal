@@ -34,22 +34,22 @@ import { createDateFromString, formatDate } from '@/lib/date';
 import { calculateCruiseValue, type ValueBreakdown } from '@/lib/valueCalculator';
 import { formatCurrency, formatNumber } from '@/lib/format';
 
-const HERO_COLORS = ['#102544', '#1E3A5F', '#2E5077'] as const;
-const CARD_SURFACE = 'rgba(241, 247, 255, 0.97)';
-const CARD_BORDER = 'rgba(125, 184, 255, 0.26)';
-const INNER_SURFACE = 'rgba(16, 37, 68, 0.06)';
-const INNER_BORDER = 'rgba(30, 58, 95, 0.08)';
-const FEATURE_SURFACE = 'rgba(255, 244, 214, 0.96)';
-const FEATURE_BORDER = 'rgba(212,160,10,0.28)';
+const HERO_COLORS = ['#081626', '#123155', '#224975'] as const;
+const CARD_SURFACE = 'rgba(244, 248, 255, 0.97)';
+const CARD_BORDER = 'rgba(111, 167, 230, 0.28)';
+const INNER_SURFACE = 'rgba(10, 28, 52, 0.06)';
+const INNER_BORDER = 'rgba(12, 37, 66, 0.1)';
+const FEATURE_COLORS = ['rgba(255, 233, 179, 0.98)', 'rgba(255, 245, 214, 0.98)'] as const;
+const FEATURE_BORDER = 'rgba(212, 160, 10, 0.26)';
 
-type MetricTone = 'default' | 'positive' | 'negative';
+type MetricTone = 'default' | 'positive' | 'negative' | 'accent';
 
 interface SummaryMetric {
   id: string;
   label: string;
   value: string;
   tone: MetricTone;
-  icon: React.ComponentType<{ size?: number; color?: string }>;
+  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 }
 
 interface CruisePerformance {
@@ -69,7 +69,15 @@ function getMetricColor(tone: MetricTone): string {
     return COLORS.error;
   }
 
+  if (tone === 'accent') {
+    return COLORS.goldDark;
+  }
+
   return COLORS.navyDeep;
+}
+
+function getGlowSurface(color: string): string {
+  return color === COLORS.white ? 'rgba(255,255,255,0.18)' : `${color}18`;
 }
 
 export default function AnalyticsScreen() {
@@ -122,7 +130,7 @@ export default function AnalyticsScreen() {
         id: 'points',
         label: 'Current points',
         value: formatNumber(totalCurrentPoints),
-        tone: 'default',
+        tone: 'accent',
         icon: Award,
       },
       {
@@ -176,6 +184,18 @@ export default function AnalyticsScreen() {
       : 0;
   }, [casinoAnalytics.avgPointsPerCruise, casinoAnalytics.completedCruisesCount]);
 
+  const highestCoinInCruise = useMemo(() => {
+    if (cruisePerformance.length === 0) {
+      return null;
+    }
+
+    return cruisePerformance.reduce((best: CruisePerformance, current: CruisePerformance) => {
+      const bestCoinIn = best.cruise.totalSpend ?? best.cruise.actualSpend ?? 0;
+      const currentCoinIn = current.cruise.totalSpend ?? current.cruise.actualSpend ?? 0;
+      return currentCoinIn > bestCoinIn ? current : best;
+    }, cruisePerformance[0]);
+  }, [cruisePerformance]);
+
   const handleRefresh = useCallback(async () => {
     console.log('[AnalyticsScreen] Manual refresh requested');
     setRefreshing(true);
@@ -221,7 +241,7 @@ export default function AnalyticsScreen() {
               <Image source={{ uri: IMAGES.logo }} style={styles.heroLogo} resizeMode="contain" />
               <View style={styles.heroTextBlock}>
                 <Text style={styles.heroTitle}>Easy Seas™ Casino</Text>
-                <Text style={styles.heroSubtitle}>Offers-tab styling, cleaner stats, and no more broken text nodes.</Text>
+                <Text style={styles.heroSubtitle}>The casino tab now uses the same premium offer surfaces, stronger hierarchy, and hardened JSX structure as the rest of the product.</Text>
               </View>
             </View>
             <View style={styles.heroBadgeRow}>
@@ -247,7 +267,7 @@ export default function AnalyticsScreen() {
 
               return (
                 <View key={metric.id} style={styles.metricCard} testID={`casino-metric-${metric.id}`}>
-                  <View style={[styles.metricIconWrap, { backgroundColor: `${color}15` }]}>
+                  <View style={[styles.metricIconWrap, { backgroundColor: getGlowSurface(color) }]}>
                     <Icon size={18} color={color} />
                   </View>
                   <Text style={styles.metricLabel}>{metric.label}</Text>
@@ -263,7 +283,7 @@ export default function AnalyticsScreen() {
                 <Sparkles size={18} color={COLORS.goldDark} />
                 <Text style={styles.sectionTitle}>Casino pulse</Text>
               </View>
-              <Text style={styles.sectionMeta}>{cruisePerformance.length} tracked sailings</Text>
+              <Text style={styles.sectionMeta}>{`${cruisePerformance.length} tracked sailings`}</Text>
             </View>
 
             <View style={styles.insightGrid}>
@@ -278,7 +298,7 @@ export default function AnalyticsScreen() {
               <View style={styles.insightItem}>
                 <Text style={styles.insightLabel}>Portfolio ROI</Text>
                 <Text style={[styles.insightValue, { color: portfolioMetrics.avgROI >= 0 ? COLORS.success : COLORS.error }]}>
-                  {portfolioMetrics.avgROI.toFixed(0)}%
+                  {`${portfolioMetrics.avgROI.toFixed(0)}%`}
                 </Text>
               </View>
               <View style={styles.insightItem}>
@@ -292,37 +312,40 @@ export default function AnalyticsScreen() {
             <TouchableOpacity
               activeOpacity={0.88}
               onPress={() => handleCruisePress(bestCruise.cruise.id)}
-              style={styles.featureCard}
+              style={styles.featureShell}
               testID="casino-best-cruise"
             >
-              <View style={styles.featureHeader}>
-                <View>
-                  <Text style={styles.featureEyebrow}>Best completed cruise</Text>
-                  <Text style={styles.featureTitle}>{bestCruise.cruise.shipName || 'Cruise highlight'}</Text>
+              <LinearGradient colors={FEATURE_COLORS} style={styles.featureCard}>
+                <View style={styles.featureHeader}>
+                  <View style={styles.featureTitleWrap}>
+                    <Text style={styles.featureEyebrow}>Best completed cruise</Text>
+                    <Text style={styles.featureTitle}>{bestCruise.cruise.shipName || 'Cruise highlight'}</Text>
+                  </View>
+                  <ChevronRight size={18} color={COLORS.navyDeep} />
                 </View>
-                <ChevronRight size={18} color={COLORS.navyDeep} />
-              </View>
 
-              <View style={styles.featureStatsRow}>
-                <View style={styles.featureStat}>
-                  <Text style={styles.featureStatLabel}>Profit</Text>
-                  <Text style={[styles.featureStatValue, { color: bestCruise.breakdown.totalProfit >= 0 ? COLORS.success : COLORS.error }]}>
-                    {formatCurrency(bestCruise.breakdown.totalProfit)}
-                  </Text>
+                <View style={styles.featureStatsRow}>
+                  <View style={styles.featureStat}>
+                    <Text style={styles.featureStatLabel}>Profit</Text>
+                    <Text style={[styles.featureStatValue, { color: bestCruise.breakdown.totalProfit >= 0 ? COLORS.success : COLORS.error }]}>
+                      {formatCurrency(bestCruise.breakdown.totalProfit)}
+                    </Text>
+                  </View>
+                  <View style={styles.featureStat}>
+                    <Text style={styles.featureStatLabel}>Points</Text>
+                    <Text style={styles.featureStatValue}>{formatNumber(bestCruise.points)}</Text>
+                  </View>
+                  <View style={styles.featureStat}>
+                    <Text style={styles.featureStatLabel}>Value per $1</Text>
+                    <Text style={styles.featureStatValue}>{`${bestCruise.breakdown.valuePerDollar.toFixed(2)}x`}</Text>
+                  </View>
                 </View>
-                <View style={styles.featureStat}>
-                  <Text style={styles.featureStatLabel}>Points</Text>
-                  <Text style={styles.featureStatValue}>{formatNumber(bestCruise.points)}</Text>
-                </View>
-                <View style={styles.featureStat}>
-                  <Text style={styles.featureStatLabel}>Value per $1</Text>
-                  <Text style={styles.featureStatValue}>{bestCruise.breakdown.valuePerDollar.toFixed(2)}x</Text>
-                </View>
-              </View>
 
-              <Text style={styles.featureMeta}>
-                {formatDate(bestCruise.cruise.sailDate, 'long')}
-              </Text>
+                <View style={styles.featureMetaRow}>
+                  <Text style={styles.featureMeta}>{formatDate(bestCruise.cruise.sailDate, 'long')}</Text>
+                  <Text style={styles.featureMeta}>{bestCruise.cruise.destination || bestCruise.cruise.itineraryName || 'Tracked sailing'}</Text>
+                </View>
+              </LinearGradient>
             </TouchableOpacity>
           ) : null}
 
@@ -346,10 +369,63 @@ export default function AnalyticsScreen() {
               <Text style={styles.valueLabel}>Comp value</Text>
               <Text style={styles.valueValue}>{formatCurrency(portfolioMetrics.totalCompValue)}</Text>
             </View>
+            <View style={styles.valueRow}>
+              <Text style={styles.valueLabel}>Lifetime tracked points</Text>
+              <Text style={styles.valueValue}>{formatNumber(totalCurrentPoints)}</Text>
+            </View>
             <View style={[styles.valueRow, styles.valueRowLast]}>
               <Text style={styles.valueLabelStrong}>Casino sailings tracked</Text>
               <Text style={styles.valueValueStrong}>{cruisePerformance.length}</Text>
             </View>
+          </View>
+
+          <View style={styles.contentCard} testID="casino-high-roll-card">
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <Coins size={18} color={COLORS.navyDeep} />
+                <Text style={styles.sectionTitle}>High-roll snapshot</Text>
+              </View>
+            </View>
+
+            {highestCoinInCruise ? (
+              <TouchableOpacity
+                activeOpacity={0.86}
+                onPress={() => handleCruisePress(highestCoinInCruise.cruise.id)}
+                style={styles.highRollCard}
+                testID="casino-high-roll-cruise"
+              >
+                <View style={styles.highRollHeader}>
+                  <View style={styles.highRollIconWrap}>
+                    <Coins size={18} color={COLORS.goldDark} />
+                  </View>
+                  <View style={styles.highRollTextWrap}>
+                    <Text style={styles.highRollTitle}>{highestCoinInCruise.cruise.shipName || 'Cruise highlight'}</Text>
+                    <Text style={styles.highRollMeta}>{formatDate(highestCoinInCruise.cruise.sailDate, 'long')}</Text>
+                  </View>
+                  <ChevronRight size={16} color={COLORS.textSecondary} />
+                </View>
+                <View style={styles.highRollStatsRow}>
+                  <View style={styles.highRollStat}>
+                    <Text style={styles.highRollStatLabel}>Spend</Text>
+                    <Text style={styles.highRollStatValue}>{formatCurrency(highestCoinInCruise.cruise.totalSpend ?? highestCoinInCruise.cruise.actualSpend ?? 0)}</Text>
+                  </View>
+                  <View style={styles.highRollStat}>
+                    <Text style={styles.highRollStatLabel}>Net result</Text>
+                    <Text style={[styles.highRollStatValue, { color: highestCoinInCruise.winnings >= 0 ? COLORS.success : COLORS.error }]}>
+                      {formatCurrency(highestCoinInCruise.winnings)}
+                    </Text>
+                  </View>
+                  <View style={styles.highRollStat}>
+                    <Text style={styles.highRollStatLabel}>Points</Text>
+                    <Text style={styles.highRollStatValue}>{formatNumber(highestCoinInCruise.points)}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.emptyStateCompact}>
+                <Text style={styles.emptyStateCompactText}>Once spending data is available, your top gaming cruise will surface here.</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.contentCard} testID="casino-cruise-list">
@@ -358,14 +434,14 @@ export default function AnalyticsScreen() {
                 <Ship size={18} color={COLORS.navyDeep} />
                 <Text style={styles.sectionTitle}>Recent casino cruises</Text>
               </View>
-              <Text style={styles.sectionMeta}>Tap a sailing for details</Text>
+              <Text style={styles.sectionMeta}>Tap any sailing for detail</Text>
             </View>
 
             {cruisePerformance.length > 0 ? (
               cruisePerformance.map((entry: CruisePerformance) => (
                 <TouchableOpacity
                   key={entry.cruise.id}
-                  activeOpacity={0.86}
+                  activeOpacity={0.88}
                   onPress={() => handleCruisePress(entry.cruise.id)}
                   style={styles.cruiseRow}
                   testID={`casino-cruise-${entry.cruise.id}`}
@@ -383,9 +459,8 @@ export default function AnalyticsScreen() {
                       <Text style={styles.cruiseMetaText}>{entry.cruise.destination || entry.cruise.itineraryName || 'Casino sailing'}</Text>
                     </View>
                   </View>
-
                   <View style={styles.cruiseRowStats}>
-                    <Text style={styles.cruiseRowPoints}>{formatNumber(entry.points)} pts</Text>
+                    <Text style={styles.cruiseRowPoints}>{`${formatNumber(entry.points)} pts`}</Text>
                     <Text style={[styles.cruiseRowProfit, { color: entry.winnings >= 0 ? COLORS.success : COLORS.error }]}>
                       {formatCurrency(entry.winnings)}
                     </Text>
@@ -410,7 +485,7 @@ export default function AnalyticsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#0A1628',
+    backgroundColor: '#071221',
   },
   safeArea: {
     flex: 1,
@@ -561,19 +636,25 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
     color: COLORS.navyDeep,
   },
-  featureCard: {
-    backgroundColor: FEATURE_SURFACE,
+  featureShell: {
     borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
     borderColor: FEATURE_BORDER,
+    overflow: 'hidden',
     ...SHADOW.sm,
+  },
+  featureCard: {
+    padding: SPACING.md,
   },
   featureHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  featureTitleWrap: {
+    flex: 1,
+    paddingRight: SPACING.sm,
   },
   featureEyebrow: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -595,7 +676,7 @@ const styles = StyleSheet.create({
   },
   featureStat: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: 'rgba(255,255,255,0.74)',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.sm,
     borderWidth: 1,
@@ -612,8 +693,11 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
     color: COLORS.navyDeep,
   },
-  featureMeta: {
+  featureMetaRow: {
     marginTop: SPACING.sm,
+    gap: 2,
+  },
+  featureMeta: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.textSecondary,
   },
@@ -648,6 +732,72 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: COLORS.navyDeep,
     fontWeight: '800' as const,
+  },
+  highRollCard: {
+    backgroundColor: INNER_SURFACE,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: INNER_BORDER,
+  },
+  highRollHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  highRollIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    marginRight: SPACING.sm,
+  },
+  highRollTextWrap: {
+    flex: 1,
+  },
+  highRollTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+  },
+  highRollMeta: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textSecondary,
+  },
+  highRollStatsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  highRollStat: {
+    flex: 1,
+  },
+  highRollStatLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: '700' as const,
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  highRollStatValue: {
+    marginTop: 6,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+  },
+  emptyStateCompact: {
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    backgroundColor: INNER_SURFACE,
+    borderWidth: 1,
+    borderColor: INNER_BORDER,
+  },
+  emptyStateCompactText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
   },
   cruiseRow: {
     flexDirection: 'row',
