@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -1612,8 +1611,7 @@ export default function AnalyticsScreen() {
   );
 
   return (
-    <LinearGradient
-      colors={['#E3F2FD', '#90CAF9']}
+    <View
       style={styles.container}
     >
       <Stack.Screen options={{ headerShown: false }} />
@@ -1622,7 +1620,7 @@ export default function AnalyticsScreen() {
         <View style={styles.header}>
           <View style={styles.brandingRow}>
             <View style={styles.titleContainer}>
-              <BarChart3 size={22} color={COLORS.navyDeep} />
+              <BarChart3 size={22} color={'#FFFFFF'} />
               <Text style={styles.appTitle}>Analytics</Text>
             </View>
           </View>
@@ -1642,7 +1640,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('intelligence')}
             activeOpacity={0.7}
           >
-            <Brain size={14} color={activeTab === 'intelligence' ? COLORS.white : CLEAN_THEME.text.secondary} />
+            <Brain size={14} color={activeTab === 'intelligence' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
             <Text style={[styles.tabButtonText, activeTab === 'intelligence' && styles.tabButtonTextActive]}>
               Intelligence
             </Text>
@@ -1653,7 +1651,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('charts')}
             activeOpacity={0.7}
           >
-            <LineChart size={14} color={activeTab === 'charts' ? COLORS.white : CLEAN_THEME.text.secondary} />
+            <LineChart size={14} color={activeTab === 'charts' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
             <Text style={[styles.tabButtonText, activeTab === 'charts' && styles.tabButtonTextActive]}>
               Charts
             </Text>
@@ -1664,7 +1662,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('session')}
             activeOpacity={0.7}
           >
-            <Dices size={14} color={activeTab === 'session' ? COLORS.white : CLEAN_THEME.text.secondary} />
+            <Dices size={14} color={activeTab === 'session' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
             <Text style={[styles.tabButtonText, activeTab === 'session' && styles.tabButtonTextActive]}>
               Session
             </Text>
@@ -1675,7 +1673,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('calcs')}
             activeOpacity={0.7}
           >
-            <Calculator size={14} color={activeTab === 'calcs' ? COLORS.white : CLEAN_THEME.text.secondary} />
+            <Calculator size={14} color={activeTab === 'calcs' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'} />
             <Text style={[styles.tabButtonText, activeTab === 'calcs' && styles.tabButtonTextActive]}>
               Calcs
             </Text>
@@ -1750,13 +1748,14 @@ export default function AnalyticsScreen() {
           onDismissAlert={dismissPPHAlert} 
         />
       ) : null}
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0A1628',
   },
   safeArea: {
     flex: 1,
@@ -1898,7 +1897,7 @@ const styles = StyleSheet.create({
   appTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   tierBadges: {
@@ -1919,21 +1918,21 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(212, 165, 116, 0.2)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   tabButtonActive: {
-    backgroundColor: 'rgba(212, 165, 116, 0.15)',
-    borderColor: '#D4A574',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   tabButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#000000',
+    color: 'rgba(255,255,255,0.5)',
   },
   tabButtonTextActive: {
-    color: '#000000',
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   tabContent: {
@@ -1991,7 +1990,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#000000',
+    color: '#E2E8F0',
   },
   statusCard: {
     backgroundColor: COLORS.white,
@@ -2163,7 +2162,7 @@ const styles = StyleSheet.create({
   portfolioTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#000000',
+    color: '#E2E8F0',
     marginBottom: SPACING.sm,
   },
   filterTabsRow: {
@@ -2337,7 +2336,7 @@ const styles = StyleSheet.create({
   portfolioCardItinerary: {
     fontSize: 14,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: '#1E293B',
     marginBottom: 2,
   },
   portfolioCardDestination: {
@@ -2475,7 +2474,7 @@ const styles = StyleSheet.create({
   rankNumber: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: '#E2E8F0',
   },
   rankNumberTop: {
     color: COLORS.white,
@@ -2496,12 +2495,12 @@ const styles = StyleSheet.create({
   },
   destinationLabel: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#000000',
+    color: '#E2E8F0',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   destinationValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#000000',
+    color: '#CBD5E1',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   emptyState: {
@@ -2521,12 +2520,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: SPACING.sm,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#000000',
+    color: '#E2E8F0',
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -2678,9 +2677,8 @@ const styles = StyleSheet.create({
   sortLabelText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.navyDeep,
-    marginLeft: 'auto',
-    opacity: 0.7,
+    color: '#94A3B8',
+    marginLeft: 'auto' as const,
   },
   recentSessionIndicator: {
     width: 3,

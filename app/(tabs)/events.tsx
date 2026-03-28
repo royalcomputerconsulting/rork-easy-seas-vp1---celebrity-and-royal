@@ -321,7 +321,7 @@ export default function EventsScreen() {
     if (!day.isCurrentMonth) return 'transparent';
     const luck = getLuckForDate(formatDateKey(day.date));
     if (luck) {
-      return `${luck.hex}22`;
+      return `${luck.hex}55`;
     }
     return 'transparent';
   }, []);
@@ -360,6 +360,11 @@ export default function EventsScreen() {
           <View style={styles.luckBarContainer}>
             <View style={[styles.luckBar, { backgroundColor: luck.hex }]} />
           </View>
+        ) : null}
+        {luck && day.isCurrentMonth ? (
+          <Text style={[styles.luckScoreText, { color: luck.hex }]}>
+            {luck.score}
+          </Text>
         ) : null}
         {hasEvents ? (
           <View style={styles.eventDotsContainer}>
@@ -930,8 +935,15 @@ const styles = StyleSheet.create({
   },
   luckBar: {
     width: '100%',
-    height: 4,
-    borderRadius: 2,
+    height: 5,
+    borderRadius: 3,
+  },
+  luckScoreText: {
+    fontSize: 8,
+    fontWeight: '800' as const,
+    position: 'absolute',
+    top: 2,
+    right: 3,
   },
   eventDot: {
     width: 5,
