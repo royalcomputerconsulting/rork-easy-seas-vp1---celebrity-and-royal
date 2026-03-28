@@ -6,10 +6,12 @@ import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, Alert
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
+import { useUser } from '@/state/UserProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import type { CalendarEvent, BookedCruise } from '@/types/models';
 import { getLuckForDate, type LuckInfo } from '@/constants/luckScores';
+import { getPersonalizedLuckForDate } from '@/lib/luckCalculator';
 import { createDateFromString } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
@@ -17,6 +19,13 @@ import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type ViewMode = 'events' | 'week' | 'month' | '90days';
+
+interface PersonalizedLuck {
+  score: number;
+  hex: string;
+  label: string;
+  color: string;
+}
 
 interface DayData {
   date: Date;
@@ -29,6 +38,7 @@ interface DayData {
     personal: number;
   };
   luck: LuckInfo | null;
+  personalizedLuck: PersonalizedLuck | null;
 }
 
 const EVENT_COLORS = {
@@ -41,8 +51,10 @@ export default function EventsScreen() {
   const router = useRouter();
   const { localData } = useAppState();
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
+  const { currentUser } = useUser();
   const coreData = useCoreData();
   const { bookedCruises } = coreData;
+  const birthdate = currentUser?.birthdate;
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
@@ -187,6 +199,7 @@ export default function EventsScreen() {
         isToday: false,
         events: getEventsForDate(prevMonthDay),
         luck: null,
+        personalizedLuck: null,
       });
     }
     
@@ -202,6 +215,7 @@ export default function EventsScreen() {
         isToday,
         events: getEventsForDate(date),
         luck: getLuckForDate(dateKey),
+        personalizedLuck: birthdate ? getPersonalizedLuckForDate(birthdate, dateKey) : null,
       });
       
       if (currentWeek.length === 7) {
@@ -221,6 +235,7 @@ export default function EventsScreen() {
           isToday: false,
           events: getEventsForDate(nextDate),
           luck: null,
+          personalizedLuck: null,
         });
         nextMonthDay++;
       }
@@ -228,7 +243,7 @@ export default function EventsScreen() {
     }
     
     return weeks;
-  }, [currentDate, getEventsForDate, refreshKey]);
+  }, [currentDate, getEventsForDate, refreshKey, birthdate]);
 
   const weekDays = useMemo(() => {
     const today = new Date();
@@ -248,11 +263,12 @@ export default function EventsScreen() {
         isToday,
         events: getEventsForDate(date),
         luck: getLuckForDate(dk),
+        personalizedLuck: birthdate ? getPersonalizedLuckForDate(birthdate, dk) : null,
       });
     }
     return days;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getEventsForDate, refreshKey]);
+  }, [getEventsForDate, refreshKey, birthdate]);
 
   const next90Days = useMemo(() => {
     const today = new Date();
@@ -270,11 +286,12 @@ export default function EventsScreen() {
         isToday,
         events: getEventsForDate(date),
         luck: getLuckForDate(dk2),
+        personalizedLuck: birthdate ? getPersonalizedLuckForDate(birthdate, dk2) : null,
       });
     }
     return days;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getEventsForDate, refreshKey]);
+  }, [getEventsForDate, refreshKey, birthdate]);
 
   const navigateMonth = useCallback((direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
@@ -338,14 +355,17 @@ export default function EventsScreen() {
   }, [router]);
 
   const getLuckTextColor = useCallback((day: DayData): string => {
-    if (!day.luck) return COLORS.white;
-    if (day.luck.color === 'Yellow' || day.luck.color === 'Orange') return '#102544';
+    const activeLuck = day.personalizedLuck ?? day.luck;
+    if (!activeLuck) return COLORS.white;
+    const colorName = 'color' in activeLuck ? activeLuck.color : '';
+    if (colorName === 'Yellow' || colorName === 'Amber') return '#102544';
     return '#FFFFFF';
   }, []);
 
   const getDayBackgroundColor = useCallback((day: DayData) => {
     if (!day.isCurrentMonth) return 'transparent';
-    if (day.luck) return day.luck.hex;
+    const activeLuck = day.personalizedLuck ?? day.luck;
+    if (activeLuck) return activeLuck.hex;
     const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
     if (!hasEvents) return 'rgba(255,255,255,0.06)';
     if (day.events.cruise > 0) return 'rgba(34, 197, 94, 0.35)';
@@ -377,10 +397,10 @@ export default function EventsScreen() {
           <Text style={[styles.dayNumber, { color: textColor }, day.isToday && styles.todayNumber]}>
             {String(day.dayNumber)}
           </Text>
-          {day.isCurrentMonth && day.luck ? (
+          {day.isCurrentMonth && (day.personalizedLuck ?? day.luck) ? (
             <View style={styles.luckScorePill}>
               <Text style={[styles.luckScoreText, { color: textColor }]}>
-                {String(day.luck.score)}
+                {String((day.personalizedLuck ?? day.luck)!.score)}
               </Text>
             </View>
           ) : null}
@@ -653,6 +673,39 @@ export default function EventsScreen() {
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.personal }]} />
               <Text style={styles.legendText}>Personal</Text>
+            </View>
+          </View>
+
+          <View style={styles.luckLegendContainer}>
+            <View style={styles.luckLegendHeader}>
+              <Text style={styles.luckLegendTitle}>
+                {birthdate ? '✨ Personalized Luck (1–9)' : '✨ General Luck Scale (1–7)'}
+              </Text>
+              {!birthdate && (
+                <Text style={styles.luckLegendHint}>Add birthdate in Settings for personalized scores</Text>
+              )}
+            </View>
+            <View style={styles.luckSwatchRow}>
+              {[
+                { hex: '#DC2626', label: '1' },
+                { hex: '#EA580C', label: '2' },
+                { hex: '#B45309', label: '3' },
+                { hex: '#CA8A04', label: '4' },
+                { hex: '#4D7C0F', label: '5' },
+                { hex: '#16A34A', label: '6' },
+                { hex: '#2563EB', label: '7' },
+                { hex: '#4F46E5', label: '8' },
+                { hex: '#7C3AED', label: '9' },
+              ].map((item) => (
+                <View key={item.label} style={styles.luckSwatchItem}>
+                  <View style={[styles.luckSwatch, { backgroundColor: item.hex }]} />
+                  <Text style={styles.luckSwatchLabel}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.luckSwatchEnds}>
+              <Text style={styles.luckSwatchEndText}>Bad Luck</Text>
+              <Text style={styles.luckSwatchEndText}>Super Lucky</Text>
             </View>
           </View>
 
@@ -1153,5 +1206,58 @@ const styles = StyleSheet.create({
   crewSectionContainer: {
     marginHorizontal: SPACING.md,
     marginTop: SPACING.md,
+  },
+  luckLegendContainer: {
+    backgroundColor: 'rgba(124,58,237,0.12)',
+    borderRadius: BORDER_RADIUS.lg,
+    marginHorizontal: SPACING.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.35)',
+  },
+  luckLegendHeader: {
+    marginBottom: SPACING.sm,
+  },
+  luckLegendTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#C4B5FD',
+    marginBottom: 2,
+  },
+  luckLegendHint: {
+    fontSize: 10,
+    color: 'rgba(196,181,253,0.7)',
+    fontStyle: 'italic' as const,
+  },
+  luckSwatchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  luckSwatchItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  luckSwatch: {
+    width: '100%',
+    height: 16,
+    borderRadius: 4,
+    marginBottom: 2,
+  },
+  luckSwatchLabel: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  luckSwatchEnds: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  luckSwatchEndText: {
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.55)',
+    fontStyle: 'italic' as const,
   },
 });

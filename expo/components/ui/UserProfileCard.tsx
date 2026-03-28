@@ -33,6 +33,7 @@ interface UserProfileData {
   carnivalVifpTier?: string;
   carnivalPlayersClubTier?: string;
   carnivalPlayersClubPoints?: number;
+  birthdate?: string;
 }
 
 interface EnrichmentData {
@@ -88,6 +89,7 @@ export function UserProfileCard({
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
   const [formData, setFormData] = useState<UserProfileData>(currentValues);
+  const [birthdateInput, setBirthdateInput] = useState<string>(currentValues.birthdate || '');
   const [activeBrand, setActiveBrand] = useState<BrandType>(
     (currentValues.preferredBrand as BrandType) || 'royal'
   );
@@ -95,6 +97,7 @@ export function UserProfileCard({
 
   useEffect(() => {
     setFormData(currentValues);
+    setBirthdateInput(currentValues.birthdate || '');
     setActiveBrand((currentValues.preferredBrand as BrandType) || 'royal');
   }, [currentValues]);
 
@@ -112,6 +115,7 @@ export function UserProfileCard({
   const calculatedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[calculatedCelebrityTier];
 
   const handleSave = () => {
+    const trimmedBirthdate = birthdateInput.trim();
     onSave({
       ...formData,
       clubRoyaleTier: calculatedTier,
@@ -119,6 +123,7 @@ export function UserProfileCard({
       celebrityBlueChipTier: calculatedCelebrityTier,
       celebrityCaptainsClubLevel: calculatedCelebrityLevel,
       preferredBrand: activeBrand,
+      birthdate: trimmedBirthdate || undefined,
     });
     setIsModalVisible(false);
   };
@@ -290,10 +295,28 @@ export function UserProfileCard({
     );
   };
 
+  const birthdateSectionJSX = (
+    <View style={styles.inputGroup}>
+      <Text style={[styles.inputLabel, { color: '#7C3AED' }]}>🎂 Birthdate (for Luck Forecast)</Text>
+      <TextInput
+        style={styles.input}
+        value={birthdateInput}
+        onChangeText={setBirthdateInput}
+        placeholder="MM/DD/YYYY or YYYY-MM-DD"
+        placeholderTextColor="#9CA3AF"
+        keyboardType="numbers-and-punctuation"
+      />
+      <Text style={styles.birthdateHint}>
+        Used to calculate personalized Chinese &amp; Western zodiac luck scores on your calendar
+      </Text>
+    </View>
+  );
+
   const renderEditForm = () => {
     if (activeBrand === 'royal') {
       return (
         <>
+          {birthdateSectionJSX}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Name</Text>
             <TextInput
@@ -920,5 +943,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.white,
+  },
+  birthdateHint: {
+    fontSize: 10,
+    color: '#7C3AED',
+    marginTop: 4,
+    fontStyle: 'italic' as const,
   },
 });

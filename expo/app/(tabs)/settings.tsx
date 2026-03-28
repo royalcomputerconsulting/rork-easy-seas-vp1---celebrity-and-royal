@@ -272,6 +272,7 @@ export default function SettingsScreen() {
     carnivalVifpTier: isProfileDisplayReady ? currentUser?.carnivalVifpTier || '' : '',
     carnivalPlayersClubTier: isProfileDisplayReady ? currentUser?.carnivalPlayersClubTier || '' : '',
     carnivalPlayersClubPoints: isProfileDisplayReady ? currentUser?.carnivalPlayersClubPoints || 0 : 0,
+    birthdate: isProfileDisplayReady ? currentUser?.birthdate || '' : '',
   }), [
     authenticatedEmail,
     currentUser,
@@ -1168,6 +1169,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     carnivalVifpTier?: string;
     carnivalPlayersClubTier?: string;
     carnivalPlayersClubPoints?: number;
+    birthdate?: string;
   }) => {
     if (!isProfileDisplayReady) {
       console.log('[Settings] Blocked profile save while account data is still loading');
@@ -1269,6 +1271,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       carnivalVifpTier?: string;
       carnivalPlayersClubTier?: string;
       carnivalPlayersClubPoints?: number;
+      birthdate?: string;
     },
     oldEmail: string | undefined,
     newEmail: string,
@@ -1293,6 +1296,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           carnivalVifpTier: profileData.carnivalVifpTier,
           carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
           carnivalPlayersClubPoints: profileData.carnivalPlayersClubPoints,
+          birthdate: profileData.birthdate || undefined,
         });
       } else {
         const owner = await ensureOwner();
@@ -1313,6 +1317,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           carnivalVifpTier: profileData.carnivalVifpTier,
           carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
           carnivalPlayersClubPoints: profileData.carnivalPlayersClubPoints,
+          birthdate: profileData.birthdate || undefined,
         });
       }
       

@@ -17,7 +17,7 @@ import {
   RefreshCcw,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
@@ -25,6 +25,7 @@ import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
+import { calculatePersonalizedLuck, type HoroscopeLuckResult } from '@/lib/luckCalculator';
 import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -643,6 +644,11 @@ export default function DayAgendaScreen() {
     return `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
   }, [selectedDate]);
 
+  const horoscopeLuck = useMemo((): HoroscopeLuckResult | null => {
+    if (!currentUser?.birthdate) return null;
+    return calculatePersonalizedLuck(currentUser.birthdate, dateStr);
+  }, [currentUser?.birthdate, dateStr]);
+
   const goldenTimeSlots = useMemo(() => {
     return opportunePlayingTimes.map(t => ({
       id: t.id,
@@ -954,6 +960,57 @@ export default function DayAgendaScreen() {
           <Text style={styles.eventCount}>
             {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
           </Text>
+          {horoscopeLuck && (
+            <View style={styles.luckRow}>
+              <View style={[styles.luckCard, { borderColor: horoscopeLuck.combinedHex + '80' }]}>
+                <View style={[styles.luckScoreBadge, { backgroundColor: horoscopeLuck.combinedHex }]}>
+                  <Text style={styles.luckScoreNum}>{String(horoscopeLuck.combinedScore)}</Text>
+                </View>
+                <View style={styles.luckCardText}>
+                  <Text style={styles.luckCardTitle}>Today&apos;s Luck</Text>
+                  <Text style={[styles.luckCardLabel, { color: horoscopeLuck.combinedHex }]}>{horoscopeLuck.combinedLabel}</Text>
+                </View>
+              </View>
+              <View style={styles.luckSignsRow}>
+                <View style={styles.luckSignChip}>
+                  <Text style={styles.luckSignEmoji}>🐉</Text>
+                  <View>
+                    <Text style={styles.luckSignName}>{horoscopeLuck.chineseAnimal}</Text>
+                    <View style={styles.luckSignScoreRow}>
+                      {Array.from({ length: 9 }).map((_, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.luckDot,
+                            { backgroundColor: i < horoscopeLuck.chineseScore ? '#F59E0B' : 'rgba(255,255,255,0.15)' },
+                          ]}
+                        />
+                      ))}
+                      <Text style={styles.luckDotNum}>{horoscopeLuck.chineseScore}/9</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.luckSignChip}>
+                  <Text style={styles.luckSignEmoji}>⭐</Text>
+                  <View>
+                    <Text style={styles.luckSignName}>{horoscopeLuck.westernSign}</Text>
+                    <View style={styles.luckSignScoreRow}>
+                      {Array.from({ length: 9 }).map((_, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.luckDot,
+                            { backgroundColor: i < horoscopeLuck.westernScore ? '#818CF8' : 'rgba(255,255,255,0.15)' },
+                          ]}
+                        />
+                      ))}
+                      <Text style={styles.luckDotNum}>{horoscopeLuck.westernScore}/9</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
 
         <ScrollView 
@@ -1451,5 +1508,84 @@ const styles = StyleSheet.create({
   },
   timelineSubtitleOpportune: {
     color: '#FFFFFF',
+  },
+  luckRow: {
+    marginTop: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  luckCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    gap: SPACING.sm,
+  },
+  luckScoreBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  luckScoreNum: {
+    fontSize: 18,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  luckCardText: {
+    flex: 1,
+  },
+  luckCardTitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  luckCardLabel: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  luckSignsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  luckSignChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    gap: SPACING.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  luckSignEmoji: {
+    fontSize: 22,
+  },
+  luckSignName: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#FFFFFF',
+    marginBottom: 3,
+  },
+  luckSignScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  luckDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  luckDotNum: {
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.55)',
+    fontWeight: '700' as const,
+    marginLeft: 3,
   },
 });
