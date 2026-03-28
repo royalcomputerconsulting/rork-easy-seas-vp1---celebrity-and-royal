@@ -1574,7 +1574,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         ) : (
           value
         )}
-        {onPress && <ChevronRight size={18} color={isDanger ? COLORS.error : CLEAN_THEME.text.secondary} />}
+        {onPress && <ChevronRight size={18} color={isDanger ? '#FFB3C1' : 'rgba(255,255,255,0.35)'} />}
       </View>
     </TouchableOpacity>
   );
@@ -1583,9 +1583,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     <Switch
       value={value}
       onValueChange={onToggle}
-      trackColor={{ false: '#E5E7EB', true: 'rgba(0, 31, 63, 0.3)' }}
-      thumbColor={value ? COLORS.navyDeep : '#9CA3AF'}
-      ios_backgroundColor="#E5E7EB"
+      trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(168,198,255,0.45)' }}
+      thumbColor={value ? '#A8C6FF' : 'rgba(255,255,255,0.4)'}
+      ios_backgroundColor="rgba(255,255,255,0.1)"
     />
   );
 
@@ -1830,17 +1830,17 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             <View style={styles.sectionCard}>
               {renderSectionHeader(<Moon size={18} color={COLORS.white} />, 'Display Preferences', 'Customize how data appears')}
               {renderSettingRow(
-                <DollarSign size={18} color={COLORS.navyDeep} />,
+                <DollarSign size={18} color='rgba(168,198,255,0.85)' />,
                 'Show Taxes in List',
                 renderToggle(settings.showTaxesInList, (val) => updateSettings({ showTaxesInList: val }))
               )}
               {renderSettingRow(
-                <DollarSign size={18} color={COLORS.navyDeep} />,
+                <DollarSign size={18} color='rgba(168,198,255,0.85)' />,
                 'Price Per Night',
                 renderToggle(settings.showPricePerNight, (val) => updateSettings({ showPricePerNight: val }))
               )}
               {renderSettingRow(
-                <Moon size={18} color={COLORS.navyDeep} />,
+                <Moon size={18} color='rgba(168,198,255,0.85)' />,
                 'Theme',
                 settings.theme === 'dark' ? 'Dark' : settings.theme === 'light' ? 'Light' : 'System'
               )}
@@ -1851,12 +1851,12 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             <View style={styles.sectionCard}>
               {renderSectionHeader(<Bell size={18} color={COLORS.white} />, 'Notifications', 'Alert preferences')}
               {renderSettingRow(
-                <Bell size={18} color={COLORS.navyDeep} />,
+                <Bell size={18} color='rgba(216,192,255,0.85)' />,
                 'Price Drop Alerts',
                 renderToggle(settings.priceDropAlerts, (val) => updateSettings({ priceDropAlerts: val }))
               )}
               {renderSettingRow(
-                <Bell size={18} color={COLORS.navyDeep} />,
+                <Bell size={18} color='rgba(216,192,255,0.85)' />,
                 'Daily Summary',
                 renderToggle(settings.dailySummaryNotifications || false, (val) => updateSettings({ dailySummaryNotifications: val }))
               )}
@@ -1871,10 +1871,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 <Text style={styles.subsectionHelper}>Bring in new CSV manifests, booked logs, or calendar drops.</Text>
               </View>
               {renderSettingRow(
-                <FileSpreadsheet size={18} color={COLORS.navyDeep} />,
+                <FileSpreadsheet size={18} color='rgba(168,198,255,0.85)' />,
                 'Offers CSV',
                 isImporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                  <ActivityIndicator size="small" color='#A8C6FF' />
                 ) : lastImportResult?.type === 'offers' ? (
                   <View style={styles.successBadge}>
                     <CheckCircle size={12} color={COLORS.success} />
@@ -1884,10 +1884,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 handleImportOffersCSV
               )}
               {renderSettingRow(
-                <Ship size={18} color={COLORS.navyDeep} />,
+                <Ship size={18} color='rgba(168,198,255,0.85)' />,
                 'Booked Cruises CSV',
                 isImporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                  <ActivityIndicator size="small" color='#A8C6FF' />
                 ) : lastImportResult?.type === 'booked' ? (
                   <View style={styles.successBadge}>
                     <CheckCircle size={12} color={COLORS.success} />
@@ -1897,10 +1897,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 handleImportBookedCSV
               )}
               {renderSettingRow(
-                <Calendar size={18} color={COLORS.navyDeep} />,
+                <Calendar size={18} color='rgba(168,198,255,0.85)' />,
                 'Calendar (.ics)',
                 isImporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                  <ActivityIndicator size="small" color='#A8C6FF' />
                 ) : lastImportResult?.type === 'calendar' ? (
                   <View style={styles.successBadge}>
                     <CheckCircle size={12} color={COLORS.success} />
@@ -2000,10 +2000,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 <Text style={styles.subsectionHelper}>Export slices or recover your entire vault in one flow.</Text>
               </View>
               {renderSettingRow(
-                <Upload size={18} color={COLORS.navyDeep} />,
+                <Upload size={18} color='rgba(142,242,193,0.85)' />,
                 'Offers CSV',
                 isExporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                  <ActivityIndicator size="small" color='#8EF2C1' />
                 ) : (
                   <Text style={styles.countBadge}>
                     {dataStats.sailings} sailings
@@ -2012,10 +2012,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 handleExportOffersCSV
               )}
               {renderSettingRow(
-                <Ship size={18} color={COLORS.navyDeep} />,
+                <Ship size={18} color='rgba(142,242,193,0.85)' />,
                 'Booked Cruises CSV',
                 isExporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                  <ActivityIndicator size="small" color='#8EF2C1' />
                 ) : (
                   <Text style={styles.countBadge}>
                     {dataStats.booked} booked
@@ -2024,10 +2024,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 handleExportBookedCSV
               )}
               {renderSettingRow(
-                <Download size={18} color={COLORS.navyDeep} />,
+                <Download size={18} color='rgba(142,242,193,0.85)' />,
                 'Calendar (.ics)',
                 isExporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                  <ActivityIndicator size="small" color='#8EF2C1' />
                 ) : (
                   <Text style={styles.countBadge}>
                     {dataStats.events} events
@@ -2039,7 +2039,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 <FolderArchive size={18} color={COLORS.success} />,
                 'Export All App Data',
                 isExportingAll ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                  <ActivityIndicator size="small" color='#8EF2C1' />
                 ) : (
                   <Text style={styles.countBadge}>
                     Complete
@@ -2051,7 +2051,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 <FolderInput size={18} color={COLORS.info} />,
                 'Restore from Backup',
                 isImportingAll ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                  <ActivityIndicator size="small" color='#A8C6FF' />
                 ) : undefined,
                 handleImportAllData
               )}
@@ -2109,7 +2109,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             <View style={styles.sectionCard}>
               {renderSectionHeader(<HelpCircle size={18} color={COLORS.white} />, 'Support', 'Help & resources')}
               {renderSettingRow(
-                <HelpCircle size={18} color={COLORS.navyDeep} />,
+                <HelpCircle size={18} color='rgba(255,226,143,0.85)' />,
                 'Help Center',
                 undefined,
                 () => Alert.alert(
@@ -2159,21 +2159,21 @@ STEP 4: Optional Calendar Import
                 )
               )}
               {renderSettingRow(
-                <BookOpen size={18} color={COLORS.navyDeep} />,
+                <BookOpen size={18} color='rgba(255,226,143,0.85)' />,
                 'User Manual',
-                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                <ChevronRight size={14} color='rgba(255,255,255,0.35)' />,
                 () => setIsUserManualVisible(true)
               )}
               {renderSettingRow(
-                <BookOpen size={18} color={COLORS.navyDeep} />,
+                <BookOpen size={18} color='rgba(255,226,143,0.85)' />,
                 'Purchase "Smooth Sailing (In Rough Waters)" on Amazon',
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => handleOpenLink('https://www.amazon.com/Smooth-Sailing-Rough-Waters-Consistently/dp/B0G4NMSM31/ref=sr_1_1?crid=BWS5ZWAQCC46&dib=eyJ2IjoiMSJ9.pTShQ0uJgtzeHg_EAFai2a6YTAan0h_35hcv7ZH0QKfGjHj071QN20LucGBJIEps.F_tIgnCOSc3EqGF6wUtOWK_hXH-5Ti3Miy6KYQ_JaLY&dib_tag=se&keywords=smooth+sailing+in+rough+waters&qid=1766758613&s=books&sprefix=smooth+sailing+in+rough+water%2Cstripbooks%2C189&sr=1-1')
               )}
               {renderSettingRow(
-                <Star size={18} color={COLORS.navyDeep} />,
+                <Star size={18} color='rgba(255,226,143,0.85)' />,
                 'Rate App',
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => handleOpenLink('https://apps.apple.com/us/app/easy-seas/id6758175890?ppid=9a051237-cab0-4164-9459-4c55a1976721')
               )}
             </View>
@@ -2206,27 +2206,27 @@ STEP 4: Optional Calendar Import
               </View>
               <View style={styles.dataDivider} />
               {renderSettingRow(
-                <RefreshCcw size={18} color={COLORS.navyDeep} />,
+                <RefreshCcw size={18} color='rgba(255,226,143,0.85)' />,
                 'Restore Purchases',
-                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                <ChevronRight size={14} color='rgba(255,255,255,0.35)' />,
                 () => { void entitlement.restore(); }
               )}
               {renderSettingRow(
-                <ExternalLink size={18} color={COLORS.navyDeep} />,
+                <ExternalLink size={18} color='rgba(255,226,143,0.85)' />,
                 'Manage Subscriptions',
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => { void entitlement.openManageSubscription(); }
               )}
               {renderSettingRow(
-                <Calendar size={18} color={COLORS.navyDeep} />,
+                <Calendar size={18} color='rgba(255,226,143,0.85)' />,
                 'Purchase a Monthly Subscription',
-                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                <ChevronRight size={14} color='rgba(255,255,255,0.35)' />,
                 () => router.push('/paywall-monthly' as any)
               )}
               {renderSettingRow(
-                <Crown size={18} color={COLORS.navyDeep} />,
+                <Crown size={18} color='rgba(255,226,143,0.85)' />,
                 'Purchase an Annual Subscription',
-                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                <ChevronRight size={14} color='rgba(255,255,255,0.35)' />,
                 () => router.push('/paywall' as any)
               )}
               <View style={styles.dataDivider} />

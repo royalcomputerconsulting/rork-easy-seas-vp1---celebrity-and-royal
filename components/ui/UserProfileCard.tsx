@@ -677,12 +677,16 @@ export function UserProfileCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.2)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
   },
   header: {
     padding: SPACING.sm,
@@ -753,25 +757,27 @@ const styles = StyleSheet.create({
   valueCard: {
     flex: 1,
     minWidth: '47%',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   valueCardWide: {
     minWidth: '96%',
   },
   valueCardLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: 4,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
   },
   valueCardValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   syncTimestampContainer: {
     paddingHorizontal: SPACING.sm,
@@ -779,7 +785,7 @@ const styles = StyleSheet.create({
   },
   syncTimestampText: {
     fontSize: 10,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.4)',
     fontStyle: 'italic' as const,
     textAlign: 'center',
   },
@@ -791,18 +797,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    backgroundColor: 'rgba(255,226,143,0.1)',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.3)',
+    borderColor: 'rgba(255,226,143,0.35)',
     borderStyle: 'dashed',
     gap: SPACING.xs,
   },
   editButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#FFE28F',
   },
   modalOverlay: {
     flex: 1,
@@ -812,11 +819,13 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
   },
   modalContainer: {
-    backgroundColor: COLORS.white,
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.xl,
     width: '100%',
     maxWidth: 500,
     maxHeight: '90%',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -824,7 +833,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   modalHeaderLeft: {
     flexDirection: 'row',
@@ -834,6 +843,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
   },
   modalCloseButton: {
     padding: SPACING.xs,
@@ -847,18 +857,18 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#1E40AF',
+    color: 'rgba(255,255,255,0.65)',
     marginBottom: SPACING.xs,
   },
   input: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: 'rgba(255,255,255,0.15)',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   levelHint: {
     flexDirection: 'row',
@@ -866,7 +876,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    backgroundColor: 'rgba(168,198,255,0.1)',
     borderRadius: BORDER_RADIUS.sm,
     gap: 6,
   },
@@ -877,7 +887,7 @@ const styles = StyleSheet.create({
   },
   levelHintText: {
     fontSize: 10,
-    color: '#1E40AF',
+    color: '#A8C6FF',
   },
   levelHintLevel: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
@@ -889,20 +899,22 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: COLORS.white,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#0D1E33',
   },
   modalCancelButton: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     paddingVertical: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   modalCancelText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.6)',
   },
   modalSaveButton: {
     flex: 1,

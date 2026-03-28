@@ -427,9 +427,9 @@ export default function AtlasScreen() {
             >
               <Text style={styles.sectionToggleText}>Slot Play Sessions</Text>
               {showSessionsSection ? (
-                <ChevronUp size={20} color={COLORS.navyDeep} />
+                <ChevronUp size={20} color='rgba(255,255,255,0.6)' />
               ) : (
-                <ChevronDown size={20} color={COLORS.navyDeep} />
+                <ChevronDown size={20} color='rgba(255,255,255,0.6)' />
               )}
             </TouchableOpacity>
             <TouchableOpacity
@@ -452,7 +452,7 @@ export default function AtlasScreen() {
 
         {isLoadingIndex && (
           <View style={styles.loadingBanner} testID="machines.loadingIndex">
-            <ActivityIndicator size="small" color={COLORS.navyDeep} />
+            <ActivityIndicator size="small" color='#9EFDF2' />
             <Text style={styles.loadingText}>Building machine index...</Text>
           </View>
         )}

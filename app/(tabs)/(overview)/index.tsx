@@ -766,8 +766,8 @@ function OverviewScreenContent() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={COLORS.navyDeep}
-              colors={[COLORS.navyDeep]}
+              tintColor='#9EFDF2'
+              colors={['#9EFDF2']}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -795,7 +795,7 @@ export default function OverviewScreen() {
   if (coreLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.navyDeep} />
+        <ActivityIndicator size="large" color='#9EFDF2' />
         <Text style={styles.loadingText}>Loading your data...</Text>
       </SafeAreaView>
     );
