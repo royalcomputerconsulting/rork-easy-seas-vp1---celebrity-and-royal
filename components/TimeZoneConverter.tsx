@@ -189,9 +189,9 @@ function TimeZonePickerModal({ visible, onClose, onSelect, title }: TimeZonePick
                 ))}
               </View>
             ))}
-            {filtered.length === 0 && (
+            {filtered.length === 0 ? (
               <Text style={modalStyles.noResults}>No time zones found</Text>
-            )}
+            ) : null}
             <View style={{ height: 40 }} />
           </ScrollView>
         </View>
@@ -334,7 +334,7 @@ export function TimeZoneConverter() {
         </View>
       </TouchableOpacity>
 
-      {!expanded && (
+      {!expanded ? (
         <View style={styles.collapsedPreview}>
           <View style={styles.previewClock}>
             <Text style={styles.previewLabel}>{localTz.city}</Text>
@@ -346,9 +346,9 @@ export function TimeZoneConverter() {
             <Text style={styles.previewTime}>{remoteTime}</Text>
           </View>
         </View>
-      )}
+      ) : null}
 
-      {expanded && (
+      {expanded ? (
         <View style={styles.expandedContent}>
           <View style={styles.dualClockRow}>
             <TouchableOpacity
@@ -464,7 +464,7 @@ export function TimeZoneConverter() {
               </TouchableOpacity>
             </View>
 
-            {convertedMeetingTime !== '' && meetingTimeInput.trim() !== '' && (
+            {convertedMeetingTime !== '' && meetingTimeInput.trim() !== '' ? (
               <View style={styles.meetingResult}>
                 <View style={styles.meetingResultRow}>
                   <View style={styles.meetingResultSide}>
@@ -486,10 +486,10 @@ export function TimeZoneConverter() {
                   </View>
                 </View>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
-      )}
+      ) : null}
 
       <TimeZonePickerModal
         visible={showLocalPicker}

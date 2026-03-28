@@ -183,13 +183,13 @@ export const CasinoMetricsCard = React.memo(function CasinoMetricsCard({
           >
             <Settings size={16} color={CLEAN_THEME.text.secondary} />
           </TouchableOpacity>
-          {!alwaysExpanded && (
+          {!alwaysExpanded ? (
             expanded ? (
               <ChevronUp size={20} color={CLEAN_THEME.text.secondary} />
             ) : (
               <ChevronDown size={20} color={CLEAN_THEME.text.secondary} />
             )
-          )}
+          ) : null}
         </View>
       </TouchableOpacity>
 
@@ -240,7 +240,7 @@ export const CasinoMetricsCard = React.memo(function CasinoMetricsCard({
         </TouchableOpacity>
       </View>
 
-      {expanded && (
+      {expanded ? (
         <View style={styles.expandedContent}>
           <View style={styles.sectionHeader}>
             <Clock size={14} color={COLORS.navyDeep} />
@@ -389,7 +389,7 @@ export const CasinoMetricsCard = React.memo(function CasinoMetricsCard({
             </Text>
           </View>
 
-          {predictiveScore.recommendations.length > 0 && (
+          {predictiveScore.recommendations.length > 0 ? (
             <>
               <View style={styles.divider} />
               <View style={styles.recommendationsSection}>
@@ -402,9 +402,9 @@ export const CasinoMetricsCard = React.memo(function CasinoMetricsCard({
                 ))}
               </View>
             </>
-          )}
+          ) : null}
         </View>
-      )}
+      ) : null}
 
       <Modal
         visible={showSettings}

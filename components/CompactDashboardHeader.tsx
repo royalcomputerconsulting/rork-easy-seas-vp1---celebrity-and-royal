@@ -126,13 +126,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     >
       <View style={styles.topRow}>
         <View style={styles.memberInfoInline}>
-          {!hideLogo && (
+          {!hideLogo ? (
             <Image 
               source={{ uri: IMAGES.logo }}
               style={styles.headerLogo}
               resizeMode="contain"
             />
-          )}
+          ) : null}
           <View style={styles.memberTextInfo}>
             <Text style={styles.memberGreeting}>{displayName}</Text>
             <Text style={styles.memberSubtitle}>{displayNumberLabel} {displayNumber}</Text>
@@ -140,23 +140,23 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </View>
         
         <View style={styles.actionsSection}>
-          {onAlertsPress && (
+          {onAlertsPress ? (
             <TouchableOpacity 
               style={styles.iconBtn} 
               onPress={onAlertsPress}
               activeOpacity={0.7}
             >
               <Bell size={18} color={CLEAN_THEME.text.primary} />
-              {alertCount > 0 && (
+              {alertCount > 0 ? (
                 <View style={styles.alertBadge}>
                   <Text style={styles.alertBadgeText}>
                     {alertCount > 9 ? '9+' : alertCount}
                   </Text>
                 </View>
-              )}
+              ) : null}
             </TouchableOpacity>
-          )}
-          {onLogoutPress && (
+          ) : null}
+          {onLogoutPress ? (
             <TouchableOpacity 
               style={styles.iconBtn} 
               onPress={onLogoutPress}
@@ -164,8 +164,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
             >
               <LogOut size={18} color={CLEAN_THEME.text.primary} />
             </TouchableOpacity>
-          )}
-          {onSettingsPress && (
+          ) : null}
+          {onSettingsPress ? (
             <TouchableOpacity 
               style={styles.iconBtn} 
               onPress={onSettingsPress}
@@ -173,7 +173,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
             >
               <Settings size={18} color={CLEAN_THEME.text.primary} />
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
       </View>
 
@@ -190,12 +190,12 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           <Text style={[styles.tierText, { color: COLORS.navyDeep }]}>{crownAnchorLevel.toUpperCase()}</Text>
         </View>
       </View>
-      {crewMemberCount > 0 && (
+      {crewMemberCount > 0 ? (
         <View style={styles.crewCountRow}>
           <Users size={13} color={CLEAN_THEME.text.secondary} />
           <Text style={styles.crewCountText}>{crewMemberCount} crew members</Text>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.progressGrid}>
         {/* BAR 1: Loyalty Progress (Crown & Anchor) - Always show current → next level */}
@@ -250,7 +250,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 }
               </Text>
 
-              {!isPinnacle && pinnacleProgress.thresholdCrossedShip && pinnacleProgress.thresholdCrossedSailDate && (
+              {!isPinnacle && pinnacleProgress.thresholdCrossedShip && pinnacleProgress.thresholdCrossedSailDate ? (
                 <View style={styles.pinnacleDetailsContainer}>
                   <View style={styles.pinnacleDetailRow}>
                     <View style={styles.pinnacleIconBadge}>
@@ -277,7 +277,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                     </View>
                   </View>
                 </View>
-              )}
+              ) : null}
             </View>
           );
         })()}

@@ -272,7 +272,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         </TouchableOpacity>
       </View>
 
-      {showFilters && (
+      {showFilters ? (
         <View style={styles.filtersPanel}>
           <View style={styles.filterListSection}>
             <Text style={styles.filterLabel}>
@@ -289,7 +289,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                   onPress={() => updateFilters({ shipNames: [] })}
                 >
                   <View style={[styles.filterCheckbox, filters.shipNames.length === 0 && styles.filterCheckboxActive]}>
-                    {filters.shipNames.length === 0 && <Check size={12} color="#fff" />}
+                    {filters.shipNames.length === 0 ? <Check size={12} color="#fff" /> : null}
                   </View>
                   <Text style={[styles.filterRowText, filters.shipNames.length === 0 && styles.filterRowTextActive]}>
                     All Ships
@@ -304,7 +304,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                       onPress={() => toggleShipFilter(ship)}
                     >
                       <View style={[styles.filterCheckbox, isSelected && styles.filterCheckboxActive]}>
-                        {isSelected && <Check size={12} color="#fff" />}
+                        {isSelected ? <Check size={12} color="#fff" /> : null}
                       </View>
                       <Text style={[styles.filterRowText, isSelected && styles.filterRowTextActive]} numberOfLines={1}>
                         {ship}
@@ -331,7 +331,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                   onPress={() => updateFilters({ departments: [] })}
                 >
                   <View style={[styles.filterCheckbox, filters.departments.length === 0 && styles.filterCheckboxActive]}>
-                    {filters.departments.length === 0 && <Check size={12} color="#fff" />}
+                    {filters.departments.length === 0 ? <Check size={12} color="#fff" /> : null}
                   </View>
                   <Text style={[styles.filterRowText, filters.departments.length === 0 && styles.filterRowTextActive]}>
                     All Depts
@@ -346,7 +346,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                       onPress={() => toggleDeptFilter(dept)}
                     >
                       <View style={[styles.filterCheckbox, isSelected && styles.filterCheckboxActive]}>
-                        {isSelected && <Check size={12} color="#fff" />}
+                        {isSelected ? <Check size={12} color="#fff" /> : null}
                       </View>
                       <Text style={[styles.filterRowText, isSelected && styles.filterRowTextActive]} numberOfLines={1}>
                         {dept}
@@ -365,7 +365,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
             </TouchableOpacity>
           ) : null}
         </View>
-      )}
+      ) : null}
 
       <View style={styles.resultsContainer}>
         <Text style={styles.resultsHeader}>
