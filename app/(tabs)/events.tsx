@@ -105,20 +105,20 @@ function getLuckTextColor(luck: LuckInfo | null): string {
     return COLORS.navyDeep;
   }
 
-  if (luck.color === 'Yellow') {
-    return COLORS.navyDeep;
+  if (luck.color === 'Yellow' || luck.color === 'Orange') {
+    return '#1a1a1a';
   }
 
-  return COLORS.white;
+  return '#FFFFFF';
 }
 
 function getLuckSurface(luck: LuckInfo | null, inCurrentMonth: boolean): string {
   if (!inCurrentMonth) {
-    return 'rgba(255,255,255,0.05)';
+    return '#E8EDF3';
   }
 
   if (!luck) {
-    return 'rgba(255,255,255,0.88)';
+    return '#F0F4F8';
   }
 
   return luck.hex;
@@ -352,7 +352,11 @@ export default function EventsScreen() {
           onPress={() => handleDayPress(day)}
           style={[
             styles.dayCell,
-            { backgroundColor: surfaceColor },
+            {
+              backgroundColor: surfaceColor,
+              borderWidth: day.inCurrentMonth && day.luck ? 1.5 : 0,
+              borderColor: day.inCurrentMonth && day.luck ? `${surfaceColor}99` : 'transparent',
+            },
             !day.inCurrentMonth && styles.dayCellMuted,
             day.isToday && styles.todayDayCell,
             hasCruise && styles.cruiseDayCell,
@@ -363,14 +367,14 @@ export default function EventsScreen() {
             <Text
               style={[
                 styles.dayNumber,
-                { color: day.inCurrentMonth ? textColor : 'rgba(255,255,255,0.45)' },
+                { color: day.inCurrentMonth ? textColor : '#B0B8C4' },
                 day.isToday && styles.todayDayNumber,
               ]}
             >
               {day.dayNumber}
             </Text>
             {day.inCurrentMonth && day.luck ? (
-              <View style={[styles.scorePill, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+              <View style={[styles.scorePill, { backgroundColor: day.luck.color === 'Yellow' || day.luck.color === 'Orange' ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.28)' }]}>
                 <Text style={[styles.scorePillText, { color: textColor }]}>{day.luck.score}</Text>
               </View>
             ) : null}
@@ -381,8 +385,8 @@ export default function EventsScreen() {
               {day.luck.label}
             </Text>
           ) : (
-            <Text style={styles.dayLuckLabelMuted} numberOfLines={1}>
-              {day.inCurrentMonth ? 'No score' : ''}
+            <Text style={[styles.dayLuckLabelMuted, { color: day.inCurrentMonth ? COLORS.textSecondary : '#B0B8C4' }]} numberOfLines={1}>
+              {day.inCurrentMonth ? 'No score' : ' '}
             </Text>
           )}
 
@@ -816,9 +820,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 8,
     justifyContent: 'space-between',
+    overflow: 'hidden' as const,
   },
   dayCellMuted: {
-    opacity: 0.45,
+    opacity: 0.5,
   },
   todayDayCell: {
     borderWidth: 3,
@@ -862,7 +867,6 @@ const styles = StyleSheet.create({
   dayLuckLabelMuted: {
     marginTop: 8,
     fontSize: 10,
-    color: 'rgba(255,255,255,0.45)',
   },
   dayFooter: {
     minHeight: 28,
