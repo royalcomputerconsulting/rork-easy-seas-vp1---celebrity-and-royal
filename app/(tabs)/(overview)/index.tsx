@@ -150,6 +150,7 @@ function OverviewScreenContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
+  const [isMachineStrategyExpanded, setIsMachineStrategyExpanded] = useState<boolean>(false);
   const { 
     certificates, 
     addCertificate, 
@@ -592,6 +593,8 @@ function OverviewScreenContent() {
         subtitle="Personalized recommendations"
         icon={<Target size={18} color="#FFFFFF" />}
         defaultExpanded={false}
+        expanded={isMachineStrategyExpanded}
+        onToggle={setIsMachineStrategyExpanded}
         showBorder={false}
       >
         <MachineStrategyCard />
