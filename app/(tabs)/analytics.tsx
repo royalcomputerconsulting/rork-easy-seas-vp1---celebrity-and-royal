@@ -247,7 +247,7 @@ export default function AnalyticsScreen() {
 
               return (
                 <View key={metric.id} style={styles.metricCard} testID={`casino-metric-${metric.id}`}>
-                  <View style={[styles.metricIconWrap, { backgroundColor: `${color}15` }]}> 
+                  <View style={[styles.metricIconWrap, { backgroundColor: `${color}15` }]}>
                     <Icon size={18} color={color} />
                   </View>
                   <Text style={styles.metricLabel}>{metric.label}</Text>
@@ -386,7 +386,7 @@ export default function AnalyticsScreen() {
 
                   <View style={styles.cruiseRowStats}>
                     <Text style={styles.cruiseRowPoints}>{formatNumber(entry.points)} pts</Text>
-                    <Text style={[styles.cruiseRowProfit, { color: entry.winnings >= 0 ? COLORS.success : COLORS.error }]}> 
+                    <Text style={[styles.cruiseRowProfit, { color: entry.winnings >= 0 ? COLORS.success : COLORS.error }]}>
                       {formatCurrency(entry.winnings)}
                     </Text>
                     <ChevronRight size={16} color={COLORS.textSecondary} />
