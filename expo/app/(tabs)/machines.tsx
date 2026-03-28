@@ -604,8 +604,9 @@ export default function AtlasScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient
-          colors={['#1E3A8A', '#60A5FA', '#E8F4FC']}
-          locations={[0, 0.5, 1]}
+          colors={['#051120', '#0B1D38', '#132A4D', '#26143C']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={styles.gradientContainer}
         >
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -791,15 +792,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(10, 31, 68, 0.08)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
 
   scrollThumb: {
     width: 12,
     borderRadius: 999,
-    backgroundColor: 'rgba(10, 31, 68, 0.35)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
 
   alphabetRail: {
@@ -816,16 +817,16 @@ const styles = StyleSheet.create({
   alphabetLetter: {
     fontSize: 10,
     fontWeight: '800' as const,
-    color: 'rgba(10, 31, 68, 0.55)',
+    color: 'rgba(213,224,255,0.45)',
     lineHeight: 12,
   },
 
   alphabetLetterDisabled: {
-    color: 'rgba(10, 31, 68, 0.22)',
+    color: 'rgba(213,224,255,0.18)',
   },
 
   alphabetLetterActive: {
-    color: COLORS.navyDeep,
+    color: '#9EFDF2',
   },
 
   alphaBubble: {
@@ -874,10 +875,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: 'rgba(10,24,47,0.72)',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(151,176,255,0.14)',
   },
   addSessionButton: {
     backgroundColor: COLORS.money,
@@ -901,7 +904,7 @@ const styles = StyleSheet.create({
   sectionToggleText: {
     fontSize: 18,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
   },
   sessionsContent: {
     marginBottom: 16,
@@ -938,20 +941,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 16,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: 'rgba(10,24,47,0.72)',
     borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: 20,
     marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(151,176,255,0.14)',
   },
   title: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
-    color: COLORS.textDarkGrey,
+    color: 'rgba(213,224,255,0.7)',
   },
   searchSection: {
     paddingHorizontal: 20,
@@ -961,16 +966,18 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
   },
   filtersContainer: {
     backgroundColor: 'transparent',
@@ -985,22 +992,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   filterChipActive: {
-    backgroundColor: COLORS.navyDeep,
-    borderColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(245,185,59,0.18)',
+    borderColor: 'rgba(255,214,92,0.55)',
   },
   filterChipText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: COLORS.navyDeep,
+    color: 'rgba(213,224,255,0.8)',
   },
   filterChipTextActive: {
-    color: COLORS.white,
+    color: '#FFE28F',
   },
   clearFilterChip: {
     backgroundColor: COLORS.error,
@@ -1014,14 +1023,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: 'rgba(10,24,47,0.72)',
     borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(151,176,255,0.14)',
   },
   emptyText: {
     marginTop: 16,
     fontSize: 16,
-    color: COLORS.textDarkGrey,
+    color: 'rgba(213,224,255,0.7)',
     textAlign: 'center',
   },
   clearButton: {
@@ -1062,12 +1073,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: 'rgba(10,24,47,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(151,176,255,0.14)',
   },
   initialLoadingText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: COLORS.navyDeep,
+    color: 'rgba(213,224,255,0.8)',
   },
   errorBanner: {
     paddingHorizontal: 16,
@@ -1075,20 +1088,20 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     borderRadius: 14,
-    backgroundColor: '#FFF3F2',
+    backgroundColor: 'rgba(220,38,38,0.15)',
     borderWidth: 1,
-    borderColor: '#FFD4D0',
+    borderColor: 'rgba(255,150,150,0.3)',
   },
   errorTitle: {
     fontSize: 15,
     fontWeight: '800' as const,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   errorBody: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: COLORS.textDarkGrey,
+    color: 'rgba(213,224,255,0.7)',
     lineHeight: 18,
     marginBottom: 12,
   },

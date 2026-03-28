@@ -986,21 +986,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: CLEAN_THEME.background.tertiary,
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
-    borderColor: CLEAN_THEME.border.light,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   cabinChipActive: {
-    backgroundColor: COLORS.navyDeep,
-    borderColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(245,185,59,0.18)',
+    borderColor: 'rgba(255,214,92,0.55)',
   },
   cabinChipText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(213,224,255,0.7)',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   cabinChipTextActive: {
-    color: COLORS.white,
+    color: '#FFE28F',
+    fontWeight: '700' as const,
   },
   conflictToggle: {
     flexDirection: 'row',

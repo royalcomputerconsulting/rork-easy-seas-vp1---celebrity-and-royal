@@ -11,7 +11,6 @@ import {
   Image,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { useDeferredRender } from '@/hooks/useDeferredRender';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Ship,
@@ -442,12 +441,7 @@ export default function BookedScreen() {
 
       {/* Combined Casino Section */}
       <View style={styles.casinoSection}>
-        <LinearGradient
-          colors={['#E0F2FE', '#DBEAFE', '#E0F7FA']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.casinoGradient}
-        >
+        <View style={styles.casinoGradient}>
           <View style={styles.casinoHeader}>
             <View style={styles.casinoIconBadge}>
               <Dice5 size={20} color={COLORS.white} />
@@ -533,7 +527,7 @@ export default function BookedScreen() {
               </View>
             </View>
           )}
-        </LinearGradient>
+        </View>
       </View>
 
       <View style={styles.viewModeRow}>
@@ -602,7 +596,7 @@ export default function BookedScreen() {
             bookedCount={stats.upcoming}
           />
           
-          <View style={styles.cruiseListHeader}>
+          <View style={styles.cruiseListHeaderBooked}>
             <Text style={styles.cruiseListTitle}>MY CRUISES</Text>
             <Text style={styles.cruiseListSubtitle}>
               {filteredCruises.length} {filteredCruises.length === 1 ? 'cruise' : 'cruises'} • Tap to view details
@@ -847,12 +841,15 @@ const styles = StyleSheet.create({
   },
   casinoSection: {
     marginBottom: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: BORDER_RADIUS.xl,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(151,176,255,0.16)',
     ...SHADOW.md,
   },
   casinoGradient: {
     padding: SPACING.md,
+    backgroundColor: 'rgba(8, 20, 40, 0.92)',
   },
   casinoHeader: {
     flexDirection: 'row',
@@ -864,26 +861,30 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(255,226,143,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,214,92,0.3)',
   },
   casinoTitle: {
     fontSize: 20,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     flex: 1,
   },
   casinoTierBadge: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(245,185,59,0.18)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: 'rgba(255,214,92,0.45)',
   },
   casinoTierText: {
     fontSize: 12,
     fontWeight: '700' as const,
-    color: COLORS.white,
+    color: '#FFE28F',
   },
   casinoMetricsGrid: {
     flexDirection: 'row',
@@ -892,10 +893,12 @@ const styles = StyleSheet.create({
   },
   casinoMetricCard: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
   },
   casinoMetricIcon: {
     width: 32,
@@ -908,22 +911,23 @@ const styles = StyleSheet.create({
   casinoMetricValue: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     textAlign: 'center' as const,
   },
   casinoMetricLabel: {
     fontSize: 10,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: 'rgba(213,224,255,0.6)',
     textAlign: 'center' as const,
     marginTop: 2,
   },
   casinoFinancialsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   casinoFinancialItem: {
     flex: 1,
@@ -936,24 +940,25 @@ const styles = StyleSheet.create({
   },
   casinoFinancialLabel: {
     fontSize: 10,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: 'rgba(213,224,255,0.6)',
   },
   casinoFinancialValue: {
     fontSize: 12,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
   },
   casinoFinancialDivider: {
     width: 1,
-    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     marginHorizontal: SPACING.xs,
   },
   casinoAvgRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
   },
   casinoAvgItem: {
     flex: 1,
@@ -961,18 +966,17 @@ const styles = StyleSheet.create({
   },
   casinoAvgLabel: {
     fontSize: 10,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: 'rgba(213,224,255,0.6)',
     marginBottom: 2,
   },
   casinoAvgValue: {
     fontSize: 13,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
   },
   casinoAvgDivider: {
     width: 1,
-    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     marginHorizontal: SPACING.sm,
   },
   cruiseCardWrapper: {
@@ -1061,11 +1065,11 @@ const styles = StyleSheet.create({
   },
   viewModeToggle: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: BORDER_RADIUS.round,
     padding: 4,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   viewModeButton: {
     flexDirection: 'row',
@@ -1076,15 +1080,17 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.round,
   },
   viewModeButtonActive: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(31,212,194,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(90,255,233,0.4)',
   },
   viewModeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
+    color: 'rgba(213,224,255,0.7)',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   viewModeTextActive: {
-    color: COLORS.white,
+    color: '#9EFDF2',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   addCruiseButton: {
@@ -1125,7 +1131,7 @@ const styles = StyleSheet.create({
   timelineSectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
   },
   timelineVerticalList: {
     gap: SPACING.sm,
@@ -1247,7 +1253,7 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
-  cruiseListHeader: {
+  cruiseListHeaderBooked: {
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
     marginBottom: SPACING.xs,

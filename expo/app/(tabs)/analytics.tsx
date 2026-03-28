@@ -1949,12 +1949,12 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.sm) / 2 - SPACING.sm / 2,
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.09)',
     ...SHADOW.sm,
   },
   statCardGradient: {
@@ -1972,13 +1972,13 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   statLabel: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#64748B',
+    color: 'rgba(213,224,255,0.6)',
     textAlign: 'center',
   },
   section: {
@@ -1996,11 +1996,11 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   statusCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(8,20,40,0.88)',
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(151,176,255,0.16)',
     ...SHADOW.md,
   },
   statusCardGradient: {
@@ -2019,27 +2019,27 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#1E293B',
+    color: 'rgba(213,224,255,0.85)',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   progressValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   progressDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     marginVertical: SPACING.md,
   },
   statusStatsRow: {
     flexDirection: 'row',
     marginTop: SPACING.sm,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   statusStat: {
     flex: 1,
@@ -2047,33 +2047,33 @@ const styles = StyleSheet.create({
   },
   statusStatDivider: {
     width: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     marginHorizontal: SPACING.md,
   },
   statusStatValue: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
   },
   statusStatLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: 'rgba(213,224,255,0.6)',
     marginTop: 4,
     textAlign: 'center',
   },
   casinoPerformanceContainer: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(8,20,40,0.88)',
     borderRadius: BORDER_RADIUS.xl,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: COLORS.goldDark,
+    borderWidth: 1,
+    borderColor: 'rgba(212,160,10,0.4)',
     ...SHADOW.md,
   },
   casinoPerformanceHeader: {
-    backgroundColor: '#FFFBEB',
+    backgroundColor: 'rgba(212,160,10,0.15)',
     padding: SPACING.md,
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.goldDark,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(212,160,10,0.3)',
   },
   casinoPerformanceHeaderContent: {
     flexDirection: 'row',
@@ -2090,12 +2090,11 @@ const styles = StyleSheet.create({
   casinoPerformanceTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#92400E',
+    color: '#FFE28F',
   },
   casinoPerformanceSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#92400E',
-    opacity: 0.8,
+    color: 'rgba(255,226,143,0.7)',
   },
   casinoPerformanceContent: {
     padding: SPACING.md,
@@ -2107,12 +2106,12 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.09)',
   },
   metricIconContainer: {
     width: 32,
@@ -2125,22 +2124,22 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E293B',
+    color: '#FFFFFF',
     marginTop: SPACING.xs,
   },
   metricLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: 'rgba(213,224,255,0.6)',
     marginTop: 2,
     textAlign: 'center',
   },
   avgMetricsRow: {
     flexDirection: 'row',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   avgMetric: {
     flex: 1,
@@ -2148,18 +2147,18 @@ const styles = StyleSheet.create({
   },
   avgMetricLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: 'rgba(213,224,255,0.6)',
     marginBottom: 4,
     textAlign: 'center',
   },
   avgMetricValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E293B',
+    color: '#FFFFFF',
   },
   avgMetricDivider: {
     width: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     marginHorizontal: SPACING.md,
   },
   portfolioTitle: {
