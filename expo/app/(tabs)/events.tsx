@@ -41,6 +41,18 @@ interface DayData {
   personalizedLuck: PersonalizedLuck | null;
 }
 
+const LUCK_COLORS: Record<number, string> = {
+  1: '#DC2626',
+  2: '#EA580C',
+  3: '#B45309',
+  4: '#CA8A04',
+  5: '#4D7C0F',
+  6: '#16A34A',
+  7: '#2563EB',
+  8: '#4F46E5',
+  9: '#7C3AED',
+};
+
 const EVENT_COLORS = {
   cruise: '#22C55E',
   travel: '#3B82F6', 
@@ -376,7 +388,7 @@ export default function EventsScreen() {
     const activeLuck = day.isCurrentMonth ? (day.personalizedLuck ?? day.luck) : null;
     const bgColor = day.isCurrentMonth ? '#FFFFFF' : 'transparent';
     const dateColor = day.isCurrentMonth ? '#0A1628' : 'rgba(255,255,255,0.22)';
-    const luckColor = '#0A1628';
+    const luckColor = activeLuck ? (LUCK_COLORS[activeLuck.score] ?? '#0A1628') : '#0A1628';
 
     return (
       <TouchableOpacity
@@ -389,16 +401,16 @@ export default function EventsScreen() {
         activeOpacity={0.75}
         onPress={() => handleDayPress(day)}
       >
-        <View style={styles.dayCellTopRow}>
-          <Text style={[styles.dayNumber, { color: dateColor }]}>
-            {String(day.dayNumber)}
-          </Text>
-          {activeLuck ? (
+        <Text style={[styles.dayNumber, { color: dateColor }]}>
+          {String(day.dayNumber)}
+        </Text>
+        {activeLuck ? (
+          <View style={styles.luckScoreCenter}>
             <Text style={[styles.luckScoreText, { color: luckColor }]}>
               {String(activeLuck.score)}
             </Text>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
       </TouchableOpacity>
     );
   }, [handleDayPress, getDayBorderColor, getDayBorderWidth]);
@@ -938,14 +950,15 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     flex: 1,
-    minHeight: 52,
+    minHeight: 62,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
     borderColor: 'rgba(180,190,210,0.35)',
     overflow: 'hidden',
     margin: 2,
-    padding: 4,
+    padding: 3,
     justifyContent: 'flex-start',
+    alignItems: 'stretch',
   },
   otherMonthCell: {
     opacity: 0.3,
@@ -956,15 +969,23 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   dayNumber: {
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: '700' as const,
-    lineHeight: 16,
+    lineHeight: 13,
     color: '#0A1628',
+    alignSelf: 'flex-start',
+  },
+  luckScoreCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 1,
   },
   luckScoreText: {
-    fontSize: 11,
+    fontSize: 26,
     fontWeight: '900' as const,
-    color: '#0A1628',
+    lineHeight: 30,
+    includeFontPadding: false,
   },
   eventDot: {
     width: 5,
