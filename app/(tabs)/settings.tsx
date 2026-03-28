@@ -1704,11 +1704,11 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               onPress={() => router.push('/royal-caribbean-sync' as any)}
               activeOpacity={0.7}
             >
-              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
-                <Ship size={16} color="#0070C9" />
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(0, 112, 201, 0.15)' }]}>
+                <Ship size={16} color="#60A5FA" />
               </View>
               <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
-              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
+              <ChevronRight size={16} color='rgba(255,255,255,0.35)' />
             </TouchableOpacity>
             {isAdmin && (
             <TouchableOpacity 
@@ -1728,11 +1728,11 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               onPress={() => router.push('/pricing-summary' as any)}
               activeOpacity={0.7}
             >
-              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
-                <TrendingDown size={16} color="#4CAF50" />
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(76, 175, 80, 0.15)' }]}>
+                <TrendingDown size={16} color="#8EF2C1" />
               </View>
               <Text style={styles.quickActionLabelInline}>Pricing Summary & History</Text>
-              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
+              <ChevronRight size={16} color='rgba(255,255,255,0.35)' />
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
@@ -1748,7 +1748,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 )}
               </View>
               <Text style={styles.quickActionLabelInline}>Load Import Offers.CSV</Text>
-              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
+              <ChevronRight size={16} color='rgba(255,255,255,0.35)' />
             </TouchableOpacity>
             <View style={styles.quickActionsRow}>
               <TouchableOpacity 
@@ -2231,15 +2231,15 @@ STEP 4: Optional Calendar Import
               )}
               <View style={styles.dataDivider} />
               {renderSettingRow(
-                <Shield size={18} color={COLORS.navyDeep} />,
+                <Shield size={18} color='rgba(168,198,255,0.85)' />,
                 'Privacy Policy',
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => entitlement.openPrivacyPolicy()
               )}
               {renderSettingRow(
-                <Shield size={18} color={COLORS.navyDeep} />,
+                <Shield size={18} color='rgba(168,198,255,0.85)' />,
                 'Terms of Use (EULA)',
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => entitlement.openTerms()
               )}
             </View>
@@ -2318,10 +2318,10 @@ STEP 4: Optional Calendar Import
                   <Text style={styles.subsectionHelper}>Import CSV files and reset app data.</Text>
                 </View>
                 {renderSettingRow(
-                  <FileSpreadsheet size={18} color={COLORS.navyDeep} />,
+                  <FileSpreadsheet size={18} color='rgba(168,198,255,0.85)' />,
                   'Import Offers CSV',
                   isImporting ? (
-                    <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                    <ActivityIndicator size="small" color='rgba(168,198,255,0.8)' />
                   ) : lastImportResult?.type === 'offers' ? (
                     <View style={styles.successBadge}>
                       <CheckCircle size={12} color={COLORS.success} />
@@ -2342,7 +2342,7 @@ STEP 4: Optional Calendar Import
 
                 {isLoadingWhitelist ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                    <ActivityIndicator size="small" color='rgba(168,198,255,0.8)' />
                   </View>
                 ) : (
                   <View style={styles.whitelistContainer}>
@@ -2423,7 +2423,7 @@ STEP 4: Optional Calendar Import
 
           <View style={styles.footer}>
             <View style={styles.footerLogoRow}>
-              <Ship size={20} color={COLORS.navyDeep} />
+              <Ship size={20} color='rgba(255,255,255,0.7)' />
               <Text style={styles.footerAppName}>EasySeas</Text>
             </View>
             <Text style={styles.footerTagline}>Cruise Point Tracker</Text>

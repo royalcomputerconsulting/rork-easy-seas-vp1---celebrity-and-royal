@@ -24,6 +24,7 @@ import {
 import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
+import { useAppState } from '@/state/AppStateProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import type { BookedCruise, CalendarEvent, Cruise } from '@/types/models';
 import { createDateFromString, formatDate } from '@/lib/date';
@@ -126,7 +127,12 @@ function formatSyncDate(date: Date): string {
 
 export default function EventsScreen() {
   const router = useRouter();
-  const { cruises, calendarEvents, bookedCruises, isLoading } = useCoreData();
+  const { cruises, calendarEvents, bookedCruises: coreBookedCruises, isLoading } = useCoreData();
+  const { localData } = useAppState();
+  const bookedCruises = useMemo(() => {
+    const localBooked = localData.booked || [];
+    return localBooked.length > 0 ? localBooked : (coreBookedCruises || []);
+  }, [localData.booked, coreBookedCruises]);
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
   const { isAdmin, authenticatedEmail } = useAuth();
   const useScottData = isScottUser(isAdmin, authenticatedEmail);
@@ -324,7 +330,7 @@ export default function EventsScreen() {
         : hasEvent
           ? (outlineColor as string)
           : '#D1D5DB';
-      const borderWidth = day.isToday || hasEvent ? 2.5 : 1;
+      const borderWidth = day.isToday ? 7.5 : hasEvent ? 7.5 : 1;
 
       return (
         <TouchableOpacity
@@ -427,8 +433,8 @@ export default function EventsScreen() {
           </View>
 
           <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{String(monthSummary.bestDays)}</Text>
+            <View style={[styles.statCard, styles.statCardLuck]}>
+              <Text style={[styles.statValue, styles.statValueLuck]}>{String(monthSummary.bestDays)}</Text>
               <Text style={styles.statLabel}>{'Best Luck Days'}</Text>
             </View>
             <View style={[styles.statCard, styles.statCardBooked]}>
@@ -461,7 +467,9 @@ export default function EventsScreen() {
                   <Text style={styles.monthTitle}>
                     {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                   </Text>
-                  <Text style={styles.monthHint}>{'Tap to go to today'}</Text>
+                  <Text style={styles.monthHint}>
+                    {`${monthSummary.bookedCruiseDays + monthSummary.availableCruiseDays} events · Tap to go to today`}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -726,6 +734,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(14,165,233,0.12)',
     borderColor: 'rgba(14,165,233,0.35)',
   },
+  statCardLuck: {
+    backgroundColor: 'rgba(255,226,143,0.12)',
+    borderColor: 'rgba(255,226,143,0.4)',
+  },
   statValue: {
     fontSize: 24,
     fontWeight: '800' as const,
@@ -736,6 +748,9 @@ const styles = StyleSheet.create({
   },
   statValueAvail: {
     color: '#38BDF8',
+  },
+  statValueLuck: {
+    color: '#FFE28F',
   },
   statLabel: {
     fontSize: 10,

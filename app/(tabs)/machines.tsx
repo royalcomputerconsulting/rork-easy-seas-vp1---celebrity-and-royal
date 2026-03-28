@@ -500,7 +500,7 @@ export default function AtlasScreen() {
                     activeOpacity={0.7}
                     testID="machines.filter.all"
                   >
-                    <Database size={14} color={activeFilter === 'all' ? COLORS.white : COLORS.navyDeep} />
+                    <Database size={14} color={activeFilter === 'all' ? COLORS.white : 'rgba(255,255,255,0.55)'} />
                     <Text style={[styles.filterChipText, activeFilter === 'all' && styles.filterChipTextActive]}>All</Text>
                   </TouchableOpacity>
                 );
@@ -921,8 +921,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   logoHeaderImage: {
-    width: 160,
-    height: 160,
+    width: 80,
+    height: 80,
   },
   logoHeaderTextContainer: {
     marginLeft: SPACING.md,
@@ -1103,22 +1103,24 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 15,
     fontWeight: '800' as const,
-    color: COLORS.navyDeep,
+    color: '#FFB3C1',
     marginBottom: 4,
   },
   errorBody: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: COLORS.textDarkGrey,
+    color: 'rgba(255,255,255,0.75)',
     lineHeight: 18,
     marginBottom: 12,
   },
   retryButton: {
     alignSelf: 'flex-start',
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(255,179,193,0.2)',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,179,193,0.4)',
   },
   retryButtonText: {
     fontSize: 13,
@@ -1162,12 +1164,14 @@ const styles = StyleSheet.create({
     marginLeft: 0,
   },
   exportAllButton: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(168,198,255,0.2)',
     borderRadius: 20,
     width: 32,
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(168,198,255,0.4)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
