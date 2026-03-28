@@ -714,7 +714,7 @@ export default function BookedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E0F2F1',
+    backgroundColor: '#071223',
   },
   safeArea: {
     flex: 1,
@@ -723,7 +723,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#E0F2F1',
+    backgroundColor: '#071223',
   },
   loadingText: {
     marginTop: SPACING.md,

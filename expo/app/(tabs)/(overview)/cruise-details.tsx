@@ -644,7 +644,7 @@ export default function CruiseDetailsScreen() {
               onPress={openFullEditModal}
               activeOpacity={0.7}
             >
-              <Edit3 size={18} color={COLORS.beigeWarm} />
+              <Edit3 size={18} color={'#FFFFFF'} />
               <Text style={styles.editAllButtonText}>Edit</Text>
             </TouchableOpacity>
             
@@ -664,7 +664,7 @@ export default function CruiseDetailsScreen() {
                 onPress={() => setUnbookModalVisible(true)}
                 testID="unbook-cruise-button"
               >
-                <Trash2 size={16} color={COLORS.error} />
+                <Trash2 size={16} color={'#FFFFFF'} />
               </TouchableOpacity>
             )}
           </View>
@@ -1843,13 +1843,13 @@ const styles = StyleSheet.create({
   editAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(212, 165, 116, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     gap: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(212, 165, 116, 0.4)',
+    borderColor: 'rgba(255,255,255,0.35)',
   },
   bookHeaderButton: {
     flexDirection: 'row',
@@ -1869,17 +1869,17 @@ const styles = StyleSheet.create({
   unbookHeaderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: COLORS.error,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
   editAllButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.beigeWarm,
+    color: '#FFFFFF',
   },
   content: {
     padding: SPACING.lg,

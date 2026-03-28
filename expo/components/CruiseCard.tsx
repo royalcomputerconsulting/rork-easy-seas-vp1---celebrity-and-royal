@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Calendar, ChevronRight, Users, Ship, Sparkles, Ticket } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -203,8 +204,13 @@ export const CruiseCard = React.memo(function CruiseCard({
             </View>
           </View>
 
-          {/* CONTENT */}
-          <View style={styles.uniContent}>
+          {/* CONTENT - marble gradient matches offer card */}
+          <LinearGradient
+            colors={['#EBF4FD', '#D6EAF8', '#AED6F1', '#C8E6F5']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.uniContent}
+          >
             {/* Route */}
             {(cruise.departurePort || cruise.destination) ? (
               <View style={styles.uniRouteRow}>
@@ -401,7 +407,7 @@ export const CruiseCard = React.memo(function CruiseCard({
               <Text style={styles.uniActionButtonText}>{'View Details'}</Text>
               <ChevronRight size={16} color={COLORS.white} />
             </TouchableOpacity>
-          </View>
+          </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
     );
@@ -692,6 +698,7 @@ const styles = StyleSheet.create({
   },
   uniContent: {
     padding: SPACING.md,
+    overflow: 'hidden',
   },
   uniRouteRow: {
     marginBottom: 4,
@@ -699,24 +706,24 @@ const styles = StyleSheet.create({
   uniRouteLabel: {
     fontSize: 10,
     fontWeight: '700' as const,
-    color: '#6B7280',
+    color: '#1E3A5F',
     letterSpacing: 0.5,
     marginBottom: 1,
   },
   uniRouteValue: {
     fontSize: 13,
-    color: '#1F2937',
-    fontWeight: '500' as const,
+    color: '#0D2137',
+    fontWeight: '600' as const,
   },
   uniPortsText: {
     fontSize: 11,
-    color: '#4B5563',
+    color: '#1E3A5F',
     marginBottom: 4,
     lineHeight: 16,
   },
   uniDivider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: 'rgba(30,58,95,0.2)',
     marginVertical: SPACING.sm,
   },
   uniMetaRow: {
@@ -731,8 +738,8 @@ const styles = StyleSheet.create({
   },
   uniMetaText: {
     fontSize: 12,
-    color: '#374151',
-    fontWeight: '500' as const,
+    color: '#1E3A5F',
+    fontWeight: '600' as const,
   },
   uniKeyInfoRow: {
     flexDirection: 'row',
