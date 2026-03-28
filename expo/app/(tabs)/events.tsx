@@ -332,7 +332,7 @@ export default function EventsScreen() {
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
   }, []);
 
-  const renderEventDots = useCallback((events: { cruise: number; travel: number; personal: number }) => {
+  const _renderEventDots = useCallback((events: { cruise: number; travel: number; personal: number }) => {
     const dots = [];
     if (events.cruise > 0) {
       dots.push(<View key="cruise" style={[styles.eventDot, { backgroundColor: EVENT_COLORS.cruise }]} />);
@@ -354,65 +354,54 @@ export default function EventsScreen() {
     });
   }, [router]);
 
-  const getLuckTextColor = useCallback((day: DayData): string => {
-    const activeLuck = day.personalizedLuck ?? day.luck;
-    if (!activeLuck) return COLORS.white;
-    const colorName = 'color' in activeLuck ? activeLuck.color : '';
-    if (colorName === 'Yellow' || colorName === 'Amber') return '#102544';
-    return '#FFFFFF';
+  const getDayBorderColor = useCallback((day: DayData): string => {
+    if (!day.isCurrentMonth) return 'rgba(255,255,255,0.08)';
+    if (day.isToday) return '#FCD34D';
+    if (day.events.cruise > 0) return '#22C55E';
+    if (day.events.travel > 0) return '#3B82F6';
+    if (day.events.personal > 0) return '#A855F7';
+    return 'rgba(180,190,210,0.35)';
   }, []);
 
-  const getDayBackgroundColor = useCallback((day: DayData) => {
-    if (!day.isCurrentMonth) return 'transparent';
-    const activeLuck = day.personalizedLuck ?? day.luck;
-    if (activeLuck) return activeLuck.hex;
-    const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
-    if (!hasEvents) return 'rgba(255,255,255,0.06)';
-    if (day.events.cruise > 0) return 'rgba(34, 197, 94, 0.35)';
-    if (day.events.travel > 0) return 'rgba(59, 130, 246, 0.3)';
-    if (day.events.personal > 0) return 'rgba(168, 85, 247, 0.25)';
-    return 'transparent';
+  const getDayBorderWidth = useCallback((day: DayData): number => {
+    if (!day.isCurrentMonth) return 1;
+    if (day.isToday) return 2.5;
+    if (day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0) return 2.5;
+    return 1;
   }, []);
 
   const renderDayCell = useCallback((day: DayData) => {
-    const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
-    const bgColor = getDayBackgroundColor(day);
-    const textColor = day.isCurrentMonth ? getLuckTextColor(day) : 'rgba(255,255,255,0.28)';
-    const bookedBorder = day.isCurrentMonth && day.events.cruise > 0;
+    const borderColor = getDayBorderColor(day);
+    const borderWidth = getDayBorderWidth(day);
+    const activeLuck = day.isCurrentMonth ? (day.personalizedLuck ?? day.luck) : null;
+    const bgColor = day.isCurrentMonth ? '#FFFFFF' : 'transparent';
+    const dateColor = day.isCurrentMonth ? '#0A1628' : 'rgba(255,255,255,0.22)';
+    const luckColor = '#0A1628';
 
     return (
       <TouchableOpacity
         key={day.date.toISOString()}
         style={[
           styles.dayCell,
-          { backgroundColor: bgColor },
-          day.isToday && styles.todayCell,
+          { backgroundColor: bgColor, borderColor, borderWidth },
           !day.isCurrentMonth && styles.otherMonthCell,
-          bookedBorder ? styles.bookedCell : null,
         ]}
         activeOpacity={0.75}
         onPress={() => handleDayPress(day)}
       >
         <View style={styles.dayCellTopRow}>
-          <Text style={[styles.dayNumber, { color: textColor }, day.isToday && styles.todayNumber]}>
+          <Text style={[styles.dayNumber, { color: dateColor }]}>
             {String(day.dayNumber)}
           </Text>
-          {day.isCurrentMonth && (day.personalizedLuck ?? day.luck) ? (
-            <View style={styles.luckScorePill}>
-              <Text style={[styles.luckScoreText, { color: textColor }]}>
-                {String((day.personalizedLuck ?? day.luck)!.score)}
-              </Text>
-            </View>
+          {activeLuck ? (
+            <Text style={[styles.luckScoreText, { color: luckColor }]}>
+              {String(activeLuck.score)}
+            </Text>
           ) : null}
         </View>
-        {hasEvents ? (
-          <View style={styles.eventDotsContainer}>
-            {renderEventDots(day.events)}
-          </View>
-        ) : null}
       </TouchableOpacity>
     );
-  }, [renderEventDots, handleDayPress, getDayBackgroundColor, getLuckTextColor]);
+  }, [handleDayPress, getDayBorderColor, getDayBorderWidth]);
 
   const upcomingEvents = useMemo(() => {
     const today = new Date();
@@ -663,15 +652,15 @@ export default function EventsScreen() {
 
           <View style={styles.legendContainer}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.cruise }]} />
+              <View style={[styles.legendDot, { borderColor: EVENT_COLORS.cruise }]} />
               <Text style={styles.legendText}>Easy Seas</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.travel }]} />
+              <View style={[styles.legendDot, { borderColor: EVENT_COLORS.travel }]} />
               <Text style={styles.legendText}>Travel</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.personal }]} />
+              <View style={[styles.legendDot, { borderColor: EVENT_COLORS.personal }]} />
               <Text style={styles.legendText}>Personal</Text>
             </View>
           </View>
@@ -949,26 +938,17 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     flex: 1,
-    minHeight: 72,
-    borderRadius: BORDER_RADIUS.md,
+    minHeight: 52,
+    borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(180,190,210,0.35)',
     overflow: 'hidden',
     margin: 2,
     padding: 4,
-    justifyContent: 'space-between',
-  },
-  todayCell: {
-    borderWidth: 2.5,
-    borderColor: '#FCD34D',
-  },
-  bookedCell: {
-    borderColor: '#F59E0B',
-    borderWidth: 2,
+    justifyContent: 'flex-start',
   },
   otherMonthCell: {
-    opacity: 0.25,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    opacity: 0.3,
   },
   dayCellTopRow: {
     flexDirection: 'row',
@@ -976,29 +956,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   dayNumber: {
-    fontSize: 14,
-    fontWeight: '800' as const,
-    lineHeight: 17,
-  },
-  todayNumber: {
-    color: '#FCD34D',
-  },
-  luckScorePill: {
-    minWidth: 16,
-    paddingHorizontal: 3,
-    paddingVertical: 1,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    alignItems: 'center',
+    fontSize: 13,
+    fontWeight: '700' as const,
+    lineHeight: 16,
+    color: '#0A1628',
   },
   luckScoreText: {
-    fontSize: 9,
-    fontWeight: '800' as const,
-  },
-  eventDotsContainer: {
-    flexDirection: 'row',
-    gap: 2,
-    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '900' as const,
+    color: '#0A1628',
   },
   eventDot: {
     width: 5,
@@ -1031,9 +997,11 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 2.5,
+    backgroundColor: 'transparent',
   },
   legendText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
