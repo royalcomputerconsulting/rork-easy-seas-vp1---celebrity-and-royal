@@ -27,7 +27,8 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import type { BookedCruise, CalendarEvent, Cruise } from '@/types/models';
 import { createDateFromString, formatDate } from '@/lib/date';
-import { formatDateKey, getLuckForDate, LUCK_SCALE, type LuckColor, type LuckInfo } from '../../constants/luckScores';
+import { formatDateKey, getLuckForDatePersonalized, isScottUser, LUCK_SCALE, type LuckColor, type LuckInfo } from '../../constants/luckScores';
+import { useAuth } from '@/state/AuthProvider';
 
 const HERO_GRADIENT = ['#051120', '#0B1D38', '#132A4D', '#26143C'] as const;
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
@@ -127,6 +128,8 @@ export default function EventsScreen() {
   const router = useRouter();
   const { cruises, calendarEvents, bookedCruises, isLoading } = useCoreData();
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
+  const { isAdmin, authenticatedEmail } = useAuth();
+  const useScottData = isScottUser(isAdmin, authenticatedEmail);
   const [mode, setMode] = useState<CalendarMode>('month');
   const [currentMonth, setCurrentMonth] = useState<Date>(normalizeDate(new Date()));
   const [syncKey, setSyncKey] = useState<number>(0);
@@ -233,7 +236,7 @@ export default function EventsScreen() {
         dayNumber: walker.getDate(),
         inCurrentMonth: walker.getMonth() === month,
         isToday: key === todayKey,
-        luck: getLuckForDate(key),
+        luck: getLuckForDatePersonalized(key, useScottData),
         counts: eventCountsByDate.get(key) ?? getEmptyCounts(),
       });
       walker = addDays(walker, 1);
@@ -516,7 +519,7 @@ export default function EventsScreen() {
               {upcomingEvents.length > 0 ? (
                 upcomingEvents.map((ev: TimelineEvent) => {
                   const dateKey = formatDateKey(ev.startDate);
-                  const dayLuck = getLuckForDate(dateKey);
+                  const dayLuck = getLuckForDatePersonalized(dateKey, useScottData);
                   const accentColor = getAgendaAccentColor(ev.category, dayLuck);
                   const EventIcon = ev.category === 'travel' ? Plane : ev.category === 'personal' ? User : Ship;
                   const badgeLabel = ev.category === 'bookedCruise'

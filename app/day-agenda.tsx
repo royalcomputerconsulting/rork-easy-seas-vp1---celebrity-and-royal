@@ -25,6 +25,8 @@ import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
+import { getLuckForDatePersonalized, isScottUser } from '@/constants/luckScores';
+import { useAuth } from '@/state/AuthProvider';
 import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -97,6 +99,8 @@ export default function DayAgendaScreen() {
   const { bookedCruises } = coreData;
 
   const playingHours: PlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
+  const { isAdmin, authenticatedEmail } = useAuth();
+  const useScottData = isScottUser(isAdmin, authenticatedEmail);
   const { getSessionsForDate, getDailySummary, addSession, removeSession } = useCasinoSessions();
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -643,6 +647,8 @@ export default function DayAgendaScreen() {
     return `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
   }, [selectedDate]);
 
+  const dayLuck = useMemo(() => getLuckForDatePersonalized(dateStr, useScottData), [dateStr, useScottData]);
+
   const goldenTimeSlots = useMemo(() => {
     return opportunePlayingTimes.map(t => ({
       id: t.id,
@@ -951,9 +957,17 @@ export default function DayAgendaScreen() {
 
         <View style={styles.dateHeader}>
           <Text style={styles.dateText}>{formattedDate}</Text>
-          <Text style={styles.eventCount}>
-            {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
-          </Text>
+          <View style={styles.dateSubRow}>
+            <Text style={styles.eventCount}>
+              {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
+            </Text>
+            {dayLuck ? (
+              <View style={[styles.luckBadge, { backgroundColor: `${dayLuck.hex}22`, borderColor: `${dayLuck.hex}55` }]}>
+                <Text style={[styles.luckBadgeScore, { color: dayLuck.hex }]}>{String(dayLuck.score)}</Text>
+                <Text style={[styles.luckBadgeLabel, { color: dayLuck.hex }]}>{dayLuck.label}</Text>
+              </View>
+            ) : null}
+          </View>
         </View>
 
         <ScrollView 
@@ -1085,11 +1099,36 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  dateSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   eventCount: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: '#FFFFFF',
+  },
+  luckBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 99,
+    borderWidth: 1,
+  },
+  luckBadgeScore: {
+    fontSize: 15,
+    fontWeight: '900' as const,
+    lineHeight: 18,
+  },
+  luckBadgeLabel: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.4,
   },
   scrollView: {
     flex: 1,
