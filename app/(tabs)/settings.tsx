@@ -1980,7 +1980,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                     </View>
                     {feedLastUpdated && (
                       <Text style={styles.feedLastUpdated}>
-                        Last published: {new Date(feedLastUpdated).toLocaleDateString()} at {new Date(feedLastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {`Last published: ${new Date(feedLastUpdated).toLocaleDateString()} at ${new Date(feedLastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
                       </Text>
                     )}
                   </>

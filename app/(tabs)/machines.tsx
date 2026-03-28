@@ -525,7 +525,7 @@ export default function AtlasScreen() {
                         fill={activeFilter === 'favorites' ? COLORS.white : 'none'}
                       />
                       <Text style={[styles.filterChipText, activeFilter === 'favorites' && styles.filterChipTextActive]}>
-                        Favorites ({favoriteMachines.length})
+                        {`Favorites (${favoriteMachines.length})`}
                       </Text>
                     </TouchableOpacity>
                     {favoriteMachines.length > 0 && (

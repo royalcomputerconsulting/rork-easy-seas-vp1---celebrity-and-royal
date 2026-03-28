@@ -175,17 +175,29 @@ export default function EventsScreen() {
 
     const bookedCruiseEvents = bookedCruises
       .filter((c: BookedCruise) => Boolean(c.sailDate))
-      .map((c: BookedCruise): TimelineEvent => ({
-        id: `booked-${c.id}`,
-        title: c.shipName || 'Booked cruise',
-        category: 'bookedCruise',
-        startDate: createDateFromString(c.sailDate),
-        endDate: c.returnDate
-          ? createDateFromString(c.returnDate)
-          : addDays(createDateFromString(c.sailDate), Math.max(0, (c.nights || 1) - 1)),
-        location: c.destination || c.itineraryName || c.departurePort,
-        shipName: c.shipName,
-      }));
+      .map((c: BookedCruise): TimelineEvent => {
+        const sailDate = createDateFromString(c.sailDate);
+        let endDate: Date;
+        if (c.returnDate && c.returnDate.trim() !== '') {
+          endDate = createDateFromString(c.returnDate);
+        } else {
+          const nights = c.nights && c.nights > 0 ? c.nights : 7;
+          endDate = addDays(sailDate, nights);
+        }
+        if (endDate.getTime() <= sailDate.getTime()) {
+          endDate = addDays(sailDate, 7);
+        }
+        console.log(`[Calendar] Booked cruise ${c.shipName}: ${c.sailDate} → ${formatDateKey(endDate)} (nights=${c.nights}, returnDate=${c.returnDate})`);
+        return {
+          id: `booked-${c.id}`,
+          title: c.shipName || 'Booked cruise',
+          category: 'bookedCruise',
+          startDate: sailDate,
+          endDate,
+          location: c.destination || c.itineraryName || c.departurePort,
+          shipName: c.shipName,
+        };
+      });
 
     const availableCruiseEvents = cruises
       .filter((c: Cruise) => {
@@ -330,7 +342,7 @@ export default function EventsScreen() {
         : hasEvent
           ? (outlineColor as string)
           : '#D1D5DB';
-      const borderWidth = day.isToday ? 7.5 : hasEvent ? 7.5 : 1;
+      const borderWidth = day.isToday ? 9 : hasEvent ? 9 : 1;
 
       return (
         <TouchableOpacity
