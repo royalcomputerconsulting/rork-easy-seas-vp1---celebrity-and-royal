@@ -16,12 +16,10 @@ import {
   Dices,
   RefreshCcw,
   Sparkles,
-  Star,
-  Compass,
   ShieldAlert,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { COLORS, DS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
@@ -30,6 +28,12 @@ import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
 import { calculatePersonalizedLuck, type HoroscopeLuckResult } from '@/lib/luckCalculator';
+import {
+  buildDailyIntelligenceReading,
+  type BestMoveType,
+  type DailyIntelligenceReading,
+  type MomentumLevel,
+} from '@/lib/dailyIntelligence';
 import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -142,104 +146,91 @@ function getSyntheticItineraryDay(cruise: MergedCruiseData, dayNum: number): Iti
   return undefined;
 }
 
-interface DailyHoroscopeReading {
-  overall: string;
-  western: string;
-  chinese: string;
-  focus: string;
-  caution: string;
-  powerColor: string;
-  powerWindow: string;
-  ritual: string;
+interface ScoreDotsProps {
+  score: number;
+  activeColor: string;
+  inactiveColor?: string;
+  testID?: string;
 }
 
-function getHoroscopeTone(score: number): 'low' | 'steady' | 'high' {
-  if (score >= 7) {
-    return 'high';
+const ScoreDots = React.memo(function ScoreDots({
+  score,
+  activeColor,
+  inactiveColor = 'rgba(255,255,255,0.12)',
+  testID,
+}: ScoreDotsProps) {
+  return (
+    <View style={styles.intelligenceScoreMeter} testID={testID}>
+      {Array.from({ length: 9 }).map((_, index) => (
+        <View
+          key={`score-dot-${index}`}
+          style={[
+            styles.intelligenceScoreDot,
+            { backgroundColor: index < score ? activeColor : inactiveColor },
+          ]}
+        />
+      ))}
+    </View>
+  );
+});
+
+function getMomentumLabel(momentumLevel: MomentumLevel): string {
+  if (momentumLevel === 'explosive') {
+    return 'Explosive';
   }
 
-  if (score <= 3) {
-    return 'low';
+  if (momentumLevel === 'slow') {
+    return 'Slow';
   }
 
-  return 'steady';
+  return 'Steady';
 }
 
-function formatHoroscopeHourLabel(hour24: number): string {
-  const normalizedHour = ((hour24 % 24) + 24) % 24;
-  const period = normalizedHour >= 12 ? 'PM' : 'AM';
-  const displayHour = normalizedHour % 12 === 0 ? 12 : normalizedHour % 12;
-  return `${displayHour} ${period}`;
+function getMomentumColor(momentumLevel: MomentumLevel): string {
+  if (momentumLevel === 'explosive') {
+    return '#A78BFA';
+  }
+
+  if (momentumLevel === 'slow') {
+    return '#FCA5A5';
+  }
+
+  return '#93C5FD';
 }
 
-function buildDailyHoroscopeReading(horoscopeLuck: HoroscopeLuckResult, targetDate: Date): DailyHoroscopeReading {
-  const weekdayName = targetDate.toLocaleDateString('en-US', { weekday: 'long' });
-  const focusThemes = [
-    'emotional reset and softer pacing',
-    'fresh starts and practical planning',
-    'communication and quick follow-through',
-    'discipline and better boundaries',
-    'visibility and confident asks',
-    'pleasure, romance, and creative flow',
-    'rest, reflection, and energy repair',
-  ] as const;
-  const powerColors = ['Ruby', 'Amber', 'Gold', 'Emerald', 'Teal', 'Sapphire', 'Indigo', 'Violet', 'Rose'] as const;
-  const focusTheme = focusThemes[targetDate.getDay()] ?? 'clarity and inner balance';
-  const powerColor = powerColors[horoscopeLuck.combinedScore - 1] ?? 'Emerald';
-  const powerStartHour = ((horoscopeLuck.westernScore * 2 + targetDate.getDate()) % 11) + 8;
-  const powerWindow = `${formatHoroscopeHourLabel(powerStartHour)} - ${formatHoroscopeHourLabel(powerStartHour + 2)}`;
-  const overallTone = getHoroscopeTone(horoscopeLuck.combinedScore);
-  const westernTone = getHoroscopeTone(horoscopeLuck.westernScore);
-  const chineseTone = getHoroscopeTone(horoscopeLuck.chineseScore);
+function getBestMoveColors(bestMoveType: BestMoveType): {
+  backgroundColor: string;
+  borderColor: string;
+  textColor: string;
+} {
+  if (bestMoveType === 'Execute') {
+    return {
+      backgroundColor: 'rgba(16,185,129,0.14)',
+      borderColor: 'rgba(16,185,129,0.38)',
+      textColor: '#6EE7B7',
+    };
+  }
 
-  const overall = overallTone === 'high'
-    ? `${weekdayName} carries strong forward motion. Your Western ${horoscopeLuck.westernSign} instincts and Chinese ${horoscopeLuck.chineseAnimal} energy are both backing visible moves, fast alignment, and bold but clean decisions.`
-    : overallTone === 'low'
-      ? `${weekdayName} works best when you keep life lighter. Let the day be selective instead of packed, protect your peace, and choose the option that feels calm rather than urgent.`
-      : `${weekdayName} is balanced and responsive. You do not need to force luck today; steady timing, graceful pivots, and thoughtful choices will open the right doors.`;
+  if (bestMoveType === 'Wait') {
+    return {
+      backgroundColor: 'rgba(245,158,11,0.14)',
+      borderColor: 'rgba(245,158,11,0.38)',
+      textColor: '#FCD34D',
+    };
+  }
 
-  const western = westernTone === 'high'
-    ? `${horoscopeLuck.westernSign} energy is amplified today. Trust your natural style, speak clearly, and act before overthinking drains the moment.`
-    : westernTone === 'low'
-      ? `${horoscopeLuck.westernSign} energy wants gentleness. Keep expectations realistic, simplify your plans, and give yourself extra space before reacting.`
-      : `${horoscopeLuck.westernSign} energy is steady. Lead with calm confidence and choose progress over perfection.`;
-
-  const chinese = chineseTone === 'high'
-    ? `Your ${horoscopeLuck.chineseAnimal} sign is in rhythm with the day. Favor proven people, practical action, and the opportunity that already feels trustworthy.`
-    : chineseTone === 'low'
-      ? `Your ${horoscopeLuck.chineseAnimal} sign is asking for patience. Stay away from messy dynamics, hold your standards, and let others reveal their intentions before you commit.`
-      : `Your ${horoscopeLuck.chineseAnimal} sign is balanced today. Small, well-timed moves will outperform dramatic ones.`;
-
-  const focus = `Best focus for today: ${focusTheme}. Put decisions, outreach, reservations, or money moves into your strongest window around ${powerWindow}.`;
-
-  const caution = overallTone === 'high'
-    ? 'Watch the tendency to say yes to too many things at once. Strong luck works best when it has one clear target.'
-    : overallTone === 'low'
-      ? 'Avoid impulse spending, emotional overpromising, and trying to fix everything in one pass. Protect your bandwidth.'
-      : 'Avoid mixed signals and half-decisions. If something matters, give it a direct answer and a clean next step.';
-
-  const ritual = `Lucky cue: lean into ${powerColor.toLowerCase()} tones, keep your first hour intentional, and end the day with less noise than usual.`;
-
-  console.log('[DayAgenda] Built daily horoscope reading', {
-    date: formatAgendaDateKey(targetDate),
-    weekdayName,
-    westernSign: horoscopeLuck.westernSign,
-    westernScore: horoscopeLuck.westernScore,
-    chineseAnimal: horoscopeLuck.chineseAnimal,
-    chineseScore: horoscopeLuck.chineseScore,
-    combinedScore: horoscopeLuck.combinedScore,
-    powerWindow,
-  });
+  if (bestMoveType === 'Exit') {
+    return {
+      backgroundColor: 'rgba(248,113,113,0.14)',
+      borderColor: 'rgba(248,113,113,0.38)',
+      textColor: '#FCA5A5',
+    };
+  }
 
   return {
-    overall,
-    western,
-    chinese,
-    focus,
-    caution,
-    powerColor,
-    powerWindow,
-    ritual,
+    backgroundColor: 'rgba(96,165,250,0.14)',
+    borderColor: 'rgba(96,165,250,0.38)',
+    textColor: '#93C5FD',
   };
 }
 
@@ -843,13 +834,25 @@ export default function DayAgendaScreen() {
     return calculatePersonalizedLuck(currentUser.birthdate, dateStr);
   }, [currentUser?.birthdate, dateStr]);
 
-  const dailyHoroscope = useMemo((): DailyHoroscopeReading | null => {
-    if (!horoscopeLuck) {
+  const dailyIntelligence = useMemo((): DailyIntelligenceReading | null => {
+    if (!horoscopeLuck || !currentUser?.birthdate) {
       return null;
     }
 
-    return buildDailyHoroscopeReading(horoscopeLuck, selectedDate);
-  }, [horoscopeLuck, selectedDate]);
+    return buildDailyIntelligenceReading(currentUser.birthdate, selectedDate, horoscopeLuck);
+  }, [currentUser?.birthdate, horoscopeLuck, selectedDate]);
+
+  const bestMoveColors = useMemo(() => {
+    return getBestMoveColors(dailyIntelligence?.alignment.bestMoveType ?? 'Explore');
+  }, [dailyIntelligence?.alignment.bestMoveType]);
+
+  const westernMomentumColor = useMemo(() => {
+    return getMomentumColor(dailyIntelligence?.western.momentumLevel ?? 'steady');
+  }, [dailyIntelligence?.western.momentumLevel]);
+
+  const westernMomentumLabel = useMemo(() => {
+    return getMomentumLabel(dailyIntelligence?.western.momentumLevel ?? 'steady');
+  }, [dailyIntelligence?.western.momentumLevel]);
 
   const goldenTimeSlots = useMemo(() => {
     return opportunePlayingTimes.map(t => ({
@@ -1285,90 +1288,223 @@ export default function DayAgendaScreen() {
           </View>
 
           <View style={styles.sectionContainer} testID="day-agenda-horoscope-section">
-            <Text style={styles.sectionTitle}>Daily Horoscope</Text>
-            {horoscopeLuck && dailyHoroscope ? (
-              <>
-                <View style={styles.horoscopeHeroCard}>
-                  <LinearGradient
-                    colors={['rgba(255,255,255,0.08)', `${horoscopeLuck.combinedHex}22`, 'rgba(7,12,24,0.92)']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={[styles.horoscopeHeroGradient, { borderColor: `${horoscopeLuck.combinedHex}55` }]}
-                  >
-                    <View style={styles.horoscopeHeroHeader}>
-                      <View style={styles.horoscopeHeroTitleWrap}>
-                        <Text style={styles.horoscopeEyebrow}>Chinese + Western Reading</Text>
-                        <Text style={styles.horoscopeHeroTitle}>{horoscopeLuck.combinedLabel}</Text>
-                      </View>
-                      <View style={[styles.horoscopeScorePill, { backgroundColor: horoscopeLuck.combinedHex }]}>
-                        <Text style={styles.horoscopeScorePillText}>{String(horoscopeLuck.combinedScore)}</Text>
-                      </View>
+            <Text style={styles.intelligenceSectionEyebrow}>Premium Intelligence Briefing</Text>
+            <Text style={styles.intelligenceSectionTitle}>Daily Intelligence Reading</Text>
+            {horoscopeLuck && dailyIntelligence ? (
+              <View style={styles.intelligenceCardsColumn}>
+                <LinearGradient
+                  colors={['rgba(245,158,11,0.20)', 'rgba(23,37,84,0.94)', 'rgba(6,10,18,0.98)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.intelligenceCard, { borderColor: 'rgba(245,158,11,0.34)' }]}
+                  testID="day-agenda-chinese-horoscope-card"
+                >
+                  <View style={styles.intelligenceCardHeader}>
+                    <View style={styles.intelligenceTitleLockup}>
+                      <Text style={styles.intelligenceCardTitle}>{dailyIntelligence.chinese.title}</Text>
+                      <Text style={styles.intelligenceCardSubtitle}>{dailyIntelligence.chinese.sign}</Text>
                     </View>
-                    <Text style={styles.horoscopeHeroText}>{dailyHoroscope.overall}</Text>
-                    <View style={styles.horoscopeStatRow}>
-                      <View style={styles.horoscopeStatCard}>
-                        <Text style={styles.horoscopeStatLabel}>Power Window</Text>
-                        <Text style={styles.horoscopeStatValue}>{dailyHoroscope.powerWindow}</Text>
-                      </View>
-                      <View style={styles.horoscopeStatCard}>
-                        <Text style={styles.horoscopeStatLabel}>Lucky Color</Text>
-                        <Text style={[styles.horoscopeStatValue, { color: horoscopeLuck.combinedHex }]}>{dailyHoroscope.powerColor}</Text>
-                      </View>
+                    <View style={styles.intelligenceScoreStack}>
+                      <Text style={styles.intelligenceScoreLabel}>Energy Score</Text>
+                      <Text style={styles.intelligenceScoreValue}>{dailyIntelligence.chinese.scoreText}</Text>
                     </View>
-                    <Text style={styles.horoscopeRitualText}>{dailyHoroscope.ritual}</Text>
-                  </LinearGradient>
-                </View>
-
-                <View style={styles.horoscopeInsightsColumn}>
-                  <View style={styles.horoscopeInsightCard} testID="day-agenda-western-horoscope-card">
-                    <View style={styles.horoscopeInsightHeader}>
-                      <View style={styles.horoscopeIconBadge}>
-                        <Star size={16} color="#A5B4FC" />
-                      </View>
-                      <View style={styles.horoscopeInsightTitleWrap}>
-                        <Text style={styles.horoscopeInsightEyebrow}>Western Zodiac</Text>
-                        <Text style={styles.horoscopeInsightTitle}>{horoscopeLuck.westernSign}</Text>
-                      </View>
-                      <Text style={styles.horoscopeInsightScore}>{horoscopeLuck.westernScore}/9</Text>
-                    </View>
-                    <Text style={styles.horoscopeInsightSubtitle}>{horoscopeLuck.westernDescription}</Text>
-                    <Text style={styles.horoscopeInsightText}>{dailyHoroscope.western}</Text>
                   </View>
+                  <ScoreDots
+                    score={dailyIntelligence.chinese.score}
+                    activeColor="#F59E0B"
+                    testID="day-agenda-chinese-score-meter"
+                  />
+                  <View style={styles.intelligenceInfoBlock}>
+                    <Text style={styles.intelligenceInfoLabel}>Personality Alignment</Text>
+                    <Text style={styles.intelligenceBodyText}>{dailyIntelligence.chinese.personalityAlignment}</Text>
+                  </View>
+                  <View style={styles.intelligenceInfoBlock}>
+                    <Text style={styles.intelligenceInfoLabel}>Tactical Guidance</Text>
+                    <Text style={styles.intelligenceBodyText}>{dailyIntelligence.chinese.tacticalGuidance}</Text>
+                  </View>
+                  <View style={styles.intelligenceMiniColumn}>
+                    <View style={styles.intelligenceMiniCard}>
+                      <Text style={styles.intelligenceMiniLabel}>Strength Zone</Text>
+                      <Text style={styles.intelligenceMiniValue}>{dailyIntelligence.chinese.strengthZone}</Text>
+                    </View>
+                    <View style={styles.intelligenceMiniCard}>
+                      <Text style={styles.intelligenceMiniLabel}>Weakness Zone</Text>
+                      <Text style={styles.intelligenceMiniValue}>{dailyIntelligence.chinese.weaknessZone}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.intelligenceSummaryCard}>
+                    <Text style={styles.intelligenceSummaryLabel}>Summary</Text>
+                    <Text style={styles.intelligenceSummaryText}>{dailyIntelligence.chinese.summary}</Text>
+                  </View>
+                </LinearGradient>
 
-                  <View style={styles.horoscopeInsightCard} testID="day-agenda-chinese-horoscope-card">
-                    <View style={styles.horoscopeInsightHeader}>
-                      <View style={styles.horoscopeIconBadge}>
-                        <Sparkles size={16} color="#FBBF24" />
+                <LinearGradient
+                  colors={['rgba(99,102,241,0.22)', 'rgba(30,41,59,0.95)', 'rgba(7,12,24,0.98)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.intelligenceCard, { borderColor: 'rgba(129,140,248,0.34)' }]}
+                  testID="day-agenda-western-horoscope-card"
+                >
+                  <View style={styles.intelligenceCardHeader}>
+                    <View style={styles.intelligenceTitleLockup}>
+                      <Text style={styles.intelligenceCardTitle}>{dailyIntelligence.western.title}</Text>
+                      <Text style={styles.intelligenceCardSubtitle}>{dailyIntelligence.western.sign}</Text>
+                    </View>
+                    <View style={styles.intelligenceScoreStack}>
+                      <Text style={styles.intelligenceScoreLabel}>Energy Score</Text>
+                      <Text style={styles.intelligenceScoreValue}>{dailyIntelligence.western.scoreText}</Text>
+                    </View>
+                  </View>
+                  <ScoreDots
+                    score={dailyIntelligence.western.score}
+                    activeColor="#818CF8"
+                    testID="day-agenda-western-score-meter"
+                  />
+                  <View style={styles.intelligenceTagRow}>
+                    <View
+                      style={[
+                        styles.intelligenceTagPill,
+                        {
+                          backgroundColor: `${westernMomentumColor}22`,
+                          borderColor: `${westernMomentumColor}55`,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.intelligenceTagText, { color: westernMomentumColor }]}>Momentum {westernMomentumLabel}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.intelligenceInfoBlock}>
+                    <Text style={styles.intelligenceInfoLabel}>Emotional + Behavioral State</Text>
+                    <Text style={styles.intelligenceBodyText}>{dailyIntelligence.western.emotionalState}</Text>
+                  </View>
+                  <View style={styles.intelligenceInfoBlock}>
+                    <Text style={styles.intelligenceInfoLabel}>Decision-Making Guidance</Text>
+                    <Text style={styles.intelligenceBodyText}>{dailyIntelligence.western.decisionGuidance}</Text>
+                  </View>
+                  <View style={styles.intelligenceInfoBlock}>
+                    <Text style={styles.intelligenceInfoLabel}>Communication Style Advice</Text>
+                    <Text style={styles.intelligenceBodyText}>{dailyIntelligence.western.communicationAdvice}</Text>
+                  </View>
+                  <View style={styles.intelligenceSummaryCard}>
+                    <Text style={styles.intelligenceSummaryLabel}>Summary</Text>
+                    <Text style={styles.intelligenceSummaryText}>{dailyIntelligence.western.summary}</Text>
+                  </View>
+                </LinearGradient>
+
+                <LinearGradient
+                  colors={['rgba(124,58,237,0.24)', 'rgba(37,99,235,0.18)', 'rgba(7,12,24,0.98)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.intelligenceCard, { borderColor: `${horoscopeLuck.combinedHex}55` }]}
+                  testID="day-agenda-alignment-card"
+                >
+                  <Text style={styles.intelligenceCardTitle}>{dailyIntelligence.alignment.title}</Text>
+                  <View style={styles.alignmentScoreHero}>
+                    <Text style={styles.alignmentScoreNumber}>{String(dailyIntelligence.alignment.score)}</Text>
+                    <Text style={[styles.alignmentScoreDescriptor, { color: horoscopeLuck.combinedHex }]}>
+                      {dailyIntelligence.alignment.label}
+                    </Text>
+                  </View>
+                  <Text style={styles.alignmentReasonText}>{dailyIntelligence.alignment.whyRated}</Text>
+                  <View style={styles.intelligenceMiniColumn}>
+                    <View style={styles.intelligenceMiniCard}>
+                      <Text style={styles.intelligenceMiniLabel}>Numerology Meaning</Text>
+                      <Text style={styles.intelligenceMiniValue}>Day {dailyIntelligence.alignment.numerologyDay}</Text>
+                      <Text style={styles.intelligenceMiniText}>{dailyIntelligence.alignment.numerologyMeaning}</Text>
+                    </View>
+                    <View style={styles.intelligenceMiniCard}>
+                      <Text style={styles.intelligenceMiniLabel}>Tarot Interpretation</Text>
+                      <Text style={styles.intelligenceMiniValue}>{dailyIntelligence.alignment.tarotCard}</Text>
+                      <Text style={styles.intelligenceMiniText}>{dailyIntelligence.alignment.tarotInterpretation}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.intelligenceInfoBlock}>
+                    <Text style={styles.intelligenceInfoLabel}>Combined System Synthesis</Text>
+                    <Text style={styles.intelligenceBodyText}>{dailyIntelligence.alignment.combinedSystemSynthesis}</Text>
+                  </View>
+                  <View style={styles.intelligenceStatGrid}>
+                    <View style={styles.intelligenceStatChip}>
+                      <Text style={styles.intelligenceStatLabel}>Power Window</Text>
+                      <Text style={styles.intelligenceStatValue}>{dailyIntelligence.alignment.powerWindow}</Text>
+                    </View>
+                    <View style={styles.intelligenceStatChip}>
+                      <Text style={styles.intelligenceStatLabel}>Lucky Color</Text>
+                      <Text style={styles.intelligenceStatValue}>{dailyIntelligence.alignment.luckyColor}</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.intelligenceStatChip,
+                        {
+                          backgroundColor: bestMoveColors.backgroundColor,
+                          borderColor: bestMoveColors.borderColor,
+                        },
+                      ]}
+                    >
+                      <Text style={styles.intelligenceStatLabel}>Best Move Type</Text>
+                      <Text style={[styles.intelligenceStatValue, { color: bestMoveColors.textColor }]}>
+                        {dailyIntelligence.alignment.bestMoveType}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.intelligenceDangerCard}>
+                    <ShieldAlert size={16} color="#FCA5A5" />
+                    <View style={styles.intelligenceDangerTextWrap}>
+                      <Text style={styles.intelligenceDangerLabel}>Danger Zone</Text>
+                      <Text style={styles.intelligenceDangerText}>{dailyIntelligence.alignment.dangerZone}</Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+
+                <LinearGradient
+                  colors={['rgba(20,184,166,0.18)', 'rgba(217,119,6,0.14)', 'rgba(7,12,24,0.98)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.intelligenceCard, { borderColor: 'rgba(94,234,212,0.28)' }]}
+                  testID="day-agenda-ai-synthesis-card"
+                >
+                  <View style={styles.intelligenceCardHeader}>
+                    <View style={styles.intelligenceTitleLockup}>
+                      <Text style={styles.intelligenceCardTitle}>{dailyIntelligence.synthesis.title}</Text>
+                    </View>
+                    <View style={styles.intelligenceScoreStack}>
+                      <Text style={styles.intelligenceScoreLabel}>Overall Stance</Text>
+                      <Text style={styles.intelligenceScoreValue}>{dailyIntelligence.alignment.bestMoveType}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.intelligenceStatGrid}>
+                    <View style={styles.intelligenceStatChip}>
+                      <Text style={styles.intelligenceStatLabel}>Risk Tolerance</Text>
+                      <Text style={styles.intelligenceStatValue}>{dailyIntelligence.synthesis.riskTolerance}</Text>
+                    </View>
+                    <View style={styles.intelligenceStatChip}>
+                      <Text style={styles.intelligenceStatLabel}>Focus Strategy</Text>
+                      <Text style={styles.intelligenceStatValue}>{dailyIntelligence.synthesis.focusStrategy}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.intelligenceInfoBlock}>
+                    <Text style={styles.intelligenceInfoLabel}>Financial Behavior Guidance</Text>
+                    <Text style={styles.intelligenceBodyText}>{dailyIntelligence.synthesis.financialBehavior}</Text>
+                  </View>
+                  <View style={styles.intelligenceInfoBlock}>
+                    <Text style={styles.intelligenceInfoLabel}>Decision-Making Style</Text>
+                    <Text style={styles.intelligenceBodyText}>{dailyIntelligence.synthesis.decisionMakingStyle}</Text>
+                  </View>
+                  <View style={styles.intelligenceActionList}>
+                    {dailyIntelligence.synthesis.actionSteps.map((step, index) => (
+                      <View key={`daily-intelligence-step-${index}`} style={styles.intelligenceActionRow}>
+                        <View style={styles.intelligenceActionBullet}>
+                          <Text style={styles.intelligenceActionBulletText}>{String(index + 1)}</Text>
+                        </View>
+                        <Text style={styles.intelligenceActionText}>{step}</Text>
                       </View>
-                      <View style={styles.horoscopeInsightTitleWrap}>
-                        <Text style={styles.horoscopeInsightEyebrow}>Chinese Zodiac</Text>
-                        <Text style={styles.horoscopeInsightTitle}>{horoscopeLuck.chineseAnimal}</Text>
-                      </View>
-                      <Text style={styles.horoscopeInsightScore}>{horoscopeLuck.chineseScore}/9</Text>
-                    </View>
-                    <Text style={styles.horoscopeInsightSubtitle}>{horoscopeLuck.chineseDescription}</Text>
-                    <Text style={styles.horoscopeInsightText}>{dailyHoroscope.chinese}</Text>
+                    ))}
                   </View>
-                </View>
-
-                <View style={styles.horoscopeGuidanceColumn}>
-                  <View style={styles.horoscopeGuidanceCard}>
-                    <View style={styles.horoscopeGuidanceHeader}>
-                      <Compass size={16} color="#7DD3FC" />
-                      <Text style={styles.horoscopeGuidanceTitle}>Today&apos;s Focus</Text>
-                    </View>
-                    <Text style={styles.horoscopeGuidanceText}>{dailyHoroscope.focus}</Text>
+                  <View style={styles.intelligenceSummaryCard}>
+                    <Text style={styles.intelligenceSummaryLabel}>Bottom Line</Text>
+                    <Text style={styles.intelligenceSummaryText}>{dailyIntelligence.synthesis.summary}</Text>
                   </View>
-
-                  <View style={styles.horoscopeGuidanceCard}>
-                    <View style={styles.horoscopeGuidanceHeader}>
-                      <ShieldAlert size={16} color="#FCA5A5" />
-                      <Text style={styles.horoscopeGuidanceTitle}>Watch-outs</Text>
-                    </View>
-                    <Text style={styles.horoscopeGuidanceText}>{dailyHoroscope.caution}</Text>
-                  </View>
-                </View>
-              </>
+                </LinearGradient>
+              </View>
             ) : (
               <View style={styles.horoscopeEmptyCard} testID="day-agenda-horoscope-empty">
                 <View style={styles.horoscopeEmptyIconWrap}>
@@ -1377,7 +1513,7 @@ export default function DayAgendaScreen() {
                 <View style={styles.horoscopeEmptyTextWrap}>
                   <Text style={styles.horoscopeEmptyTitle}>Add your birthdate for a personalized reading</Text>
                   <Text style={styles.horoscopeEmptyText}>
-                    Open Settings and add your birthdate to unlock a full Chinese and Western horoscope for each day.
+                    Open Settings and add your birthdate to unlock a full Chinese zodiac, Western zodiac, numerology, tarot, and AI synthesis briefing for each day.
                   </Text>
                 </View>
               </View>
@@ -1894,165 +2030,281 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     marginLeft: 3,
   },
-  horoscopeHeroCard: {
-    marginBottom: SPACING.md,
+  intelligenceSectionEyebrow: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.58)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 1.2,
+    marginBottom: 6,
+    fontFamily: DS.font.system,
   },
-  horoscopeHeroGradient: {
+  intelligenceSectionTitle: {
+    fontSize: 28,
+    color: '#FFFFFF',
+    marginBottom: SPACING.md,
+    fontFamily: DS.font.lobster,
+  },
+  intelligenceCardsColumn: {
+    gap: SPACING.md,
+  },
+  intelligenceCard: {
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     borderWidth: 1,
+    overflow: 'hidden',
   },
-  horoscopeHeroHeader: {
+  intelligenceCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
+    alignItems: 'flex-start',
     gap: SPACING.sm,
+    marginBottom: SPACING.sm,
   },
-  horoscopeHeroTitleWrap: {
+  intelligenceTitleLockup: {
     flex: 1,
   },
-  horoscopeEyebrow: {
+  intelligenceCardTitle: {
+    fontSize: 24,
+    color: '#FFFFFF',
+    fontFamily: DS.font.lobster,
+  },
+  intelligenceCardSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255,255,255,0.72)',
+    marginTop: 4,
+    fontFamily: DS.font.system,
+  },
+  intelligenceScoreStack: {
+    alignItems: 'flex-end',
+    minWidth: 78,
+  },
+  intelligenceScoreLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.58)',
     textTransform: 'uppercase' as const,
-    letterSpacing: 1,
-    marginBottom: 4,
+    letterSpacing: 0.8,
+    fontFamily: DS.font.system,
   },
-  horoscopeHeroTitle: {
+  intelligenceScoreValue: {
     fontSize: TYPOGRAPHY.fontSizeLG,
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    marginTop: 2,
+    fontFamily: DS.font.system,
   },
-  horoscopeScorePill: {
-    minWidth: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
+  intelligenceScoreMeter: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: SPACING.md,
+  },
+  intelligenceScoreDot: {
+    flex: 1,
+    height: 6,
+    borderRadius: 999,
+  },
+  intelligenceTagRow: {
+    flexDirection: 'row',
+    marginBottom: SPACING.md,
+  },
+  intelligenceTagPill: {
     paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
   },
-  horoscopeScorePillText: {
-    fontSize: 20,
-    fontWeight: '900' as const,
-    color: '#FFFFFF',
+  intelligenceTagText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontFamily: DS.font.system,
   },
-  horoscopeHeroText: {
+  intelligenceInfoBlock: {
+    marginBottom: SPACING.md,
+  },
+  intelligenceInfoLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.62)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    fontFamily: DS.font.system,
+  },
+  intelligenceBodyText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: '#FFFFFF',
     lineHeight: 22,
+    fontFamily: DS.font.system,
+  },
+  intelligenceMiniColumn: {
+    gap: SPACING.sm,
     marginBottom: SPACING.md,
   },
-  horoscopeStatRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  horoscopeStatCard: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+  intelligenceMiniCard: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
-  horoscopeStatLabel: {
+  intelligenceMiniLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.62)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.7,
+    marginBottom: 4,
+    fontFamily: DS.font.system,
+  },
+  intelligenceMiniValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#FFFFFF',
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    lineHeight: 20,
+    marginBottom: 4,
+    fontFamily: DS.font.system,
+  },
+  intelligenceMiniText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255,255,255,0.84)',
+    lineHeight: 20,
+    fontFamily: DS.font.system,
+  },
+  intelligenceSummaryCard: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  intelligenceSummaryLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: 'rgba(255,255,255,0.6)',
     textTransform: 'uppercase' as const,
-    letterSpacing: 0.6,
-    marginBottom: 4,
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    fontFamily: DS.font.system,
   },
-  horoscopeStatValue: {
+  intelligenceSummaryText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#FFFFFF',
+    lineHeight: 22,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontFamily: DS.font.system,
   },
-  horoscopeRitualText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.72)',
-    lineHeight: 18,
+  alignmentScoreHero: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.md,
+    marginBottom: SPACING.sm,
   },
-  horoscopeInsightsColumn: {
+  alignmentScoreNumber: {
+    fontSize: 56,
+    color: '#FFFFFF',
+    fontWeight: '900' as const,
+    lineHeight: 60,
+    fontFamily: DS.font.system,
+  },
+  alignmentScoreDescriptor: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    marginTop: 6,
+    fontFamily: DS.font.system,
+  },
+  alignmentReasonText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#FFFFFF',
+    lineHeight: 22,
+    textAlign: 'center' as const,
+    marginBottom: SPACING.md,
+    fontFamily: DS.font.system,
+  },
+  intelligenceStatGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap' as const,
     gap: SPACING.sm,
     marginBottom: SPACING.md,
   },
-  horoscopeInsightCard: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
+  intelligenceStatChip: {
+    flexGrow: 1,
+    flexBasis: '48%',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
-  horoscopeInsightHeader: {
+  intelligenceStatLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.62)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.7,
+    marginBottom: 4,
+    fontFamily: DS.font.system,
+  },
+  intelligenceStatValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#FFFFFF',
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    lineHeight: 20,
+    fontFamily: DS.font.system,
+  },
+  intelligenceDangerCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: SPACING.sm,
-    marginBottom: SPACING.xs,
+    backgroundColor: 'rgba(239,68,68,0.10)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.20)',
   },
-  horoscopeIconBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  horoscopeInsightTitleWrap: {
+  intelligenceDangerTextWrap: {
     flex: 1,
   },
-  horoscopeInsightEyebrow: {
+  intelligenceDangerLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.55)',
+    color: '#FCA5A5',
     textTransform: 'uppercase' as const,
-    letterSpacing: 0.6,
-    marginBottom: 2,
+    letterSpacing: 0.7,
+    marginBottom: 4,
+    fontFamily: DS.font.system,
   },
-  horoscopeInsightTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
-  },
-  horoscopeInsightScore: {
+  intelligenceDangerText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#FEE2E2',
+    lineHeight: 20,
+    fontFamily: DS.font.system,
   },
-  horoscopeInsightSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.6)',
-    marginBottom: SPACING.xs,
+  intelligenceActionList: {
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
   },
-  horoscopeInsightText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#FFFFFF',
-    lineHeight: 21,
-  },
-  horoscopeGuidanceColumn: {
+  intelligenceActionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: SPACING.sm,
   },
-  horoscopeGuidanceCard: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
+  intelligenceActionBullet: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  horoscopeGuidanceHeader: {
-    flexDirection: 'row',
+    borderColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.xs,
+    justifyContent: 'center',
+    marginTop: 1,
   },
-  horoscopeGuidanceTitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+  intelligenceActionBulletText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
     color: '#FFFFFF',
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontFamily: DS.font.system,
   },
-  horoscopeGuidanceText: {
+  intelligenceActionText: {
+    flex: 1,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.9)',
+    color: '#FFFFFF',
     lineHeight: 21,
+    fontFamily: DS.font.system,
   },
   horoscopeEmptyCard: {
     flexDirection: 'row',
@@ -2080,10 +2332,12 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#FFFFFF',
     marginBottom: 4,
+    fontFamily: DS.font.system,
   },
   horoscopeEmptyText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: 'rgba(255,255,255,0.72)',
     lineHeight: 20,
+    fontFamily: DS.font.system,
   },
 });
