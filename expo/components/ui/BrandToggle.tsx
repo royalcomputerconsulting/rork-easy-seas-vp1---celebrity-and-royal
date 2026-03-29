@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { SETTINGS_GLASS_THEME } from '@/constants/settingsGlassTheme';
 
 export type BrandType = 'royal' | 'celebrity' | 'silversea' | 'carnival';
 
@@ -82,7 +83,7 @@ export function BrandToggle({ activeBrand, onToggle, showSilversea = true, showC
             style={[
               styles.toggleButton,
               styles.rightButton,
-              activeBrand === 'carnival' && styles.carnivalActiveButton,
+              activeBrand === 'carnival' && styles.activeButton,
             ]}
             onPress={() => onToggle('carnival')}
             activeOpacity={0.7}
@@ -110,11 +111,11 @@ const styles = StyleSheet.create({
   },
   toggleContainer: {
     flexDirection: 'row',
-    backgroundColor: COLORS.bgSecondary,
+    backgroundColor: SETTINGS_GLASS_THEME.surfaceMuted,
     borderRadius: BORDER_RADIUS.lg,
     padding: 4,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor: SETTINGS_GLASS_THEME.border,
   },
   toggleButton: {
     flex: 1,
@@ -134,17 +135,14 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   activeButton: {
-    backgroundColor: COLORS.textNavy,
-  },
-  carnivalActiveButton: {
-    backgroundColor: '#CC2232',
+    backgroundColor: SETTINGS_GLASS_THEME.buttonPrimaryBackground,
   },
   toggleText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.textDarkGrey,
+    color: SETTINGS_GLASS_THEME.textSecondary,
   },
   activeText: {
-    color: COLORS.white,
+    color: SETTINGS_GLASS_THEME.buttonPrimaryText,
   },
 });
