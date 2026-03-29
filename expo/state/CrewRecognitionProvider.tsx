@@ -3,9 +3,11 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/state/AuthProvider';
+import { useCoreData } from '@/state/CoreDataProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
 
 import type { RecognitionEntryWithCrew, Sailing, Department } from '@/types/crew-recognition';
+import type { BookedCruise } from '@/types/models';
 import { CREW_RECOGNITION_CSV } from '@/constants/crew-recognition-csv';
 
 const BASE_STORAGE_KEY_ENTRIES = 'crew_recognition_entries_v2';
@@ -119,8 +121,178 @@ function parseCSVToEntries(csvText: string): { entries: RecognitionEntryWithCrew
   };
 }
 
+function createSailingStorageKey(shipName: string, sailStartDate: string, sailEndDate: string): string {
+  return `${shipName.toLowerCase()}|${sailStartDate}|${sailEndDate}`;
+}
+
+function normalizeShipName(rawShipName: string): string {
+  const trimmed = rawShipName.trim().replace(/\s+/g, ' ');
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  const lower = trimmed.toLowerCase();
+  const aliases: Record<string, string> = {
+    navigator: 'Navigator of the Seas',
+    'navigator of the seas': 'Navigator of the Seas',
+    equinox: 'Celebrity Equinox',
+    'celebrity equinox': 'Celebrity Equinox',
+  };
+
+  return aliases[lower] || trimmed;
+}
+
+function buildIsoDate(month: number, day: number, year: number): string {
+  return `${String(year)}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function parseHeadingDateRange(rawLine: string, defaultYear: number): { startDate: string; endDate: string } | null {
+  const match = rawLine.match(/(\d{1,2})\/(\d{1,2})(?:\s*[-–]\s*(\d{1,2})(?:\/(\d{1,2}))?)?/);
+  if (!match) {
+    return null;
+  }
+
+  const startMonth = Number.parseInt(match[1], 10);
+  const startDay = Number.parseInt(match[2], 10);
+  const endMonth = match[4] ? Number.parseInt(match[4], 10) : startMonth;
+  const endDay = match[3] ? Number.parseInt(match[3], 10) : startDay;
+
+  return {
+    startDate: buildIsoDate(startMonth, startDay, defaultYear),
+    endDate: buildIsoDate(endMonth, endDay, defaultYear),
+  };
+}
+
+function inferDepartmentFromRole(roleText: string): Department {
+  const normalizedRole = roleText.toLowerCase();
+
+  if (normalizedRole.includes('windjammer')) return 'Dining';
+  if (normalizedRole.includes('casino')) return 'Casino';
+  if (normalizedRole.includes('spa')) return 'Spa';
+  if (normalizedRole.includes('front desk') || normalizedRole.includes('guest service')) return 'Guest Relations';
+  if (normalizedRole.includes('activity')) return 'Activities';
+  if (normalizedRole.includes('public area')) return 'Public Areas';
+  if (normalizedRole.includes('loyalty')) return 'Loyalty';
+  if (normalizedRole.includes('stateroom') || normalizedRole.includes('housekeeping')) return 'Housekeeping';
+  if (normalizedRole.includes('bar') || normalizedRole.includes('bartender') || normalizedRole.includes('server')) return 'Beverage';
+  if (normalizedRole.includes('waiter') || normalizedRole.includes('hostess') || normalizedRole.includes('host') || normalizedRole.includes('restaurant')) return 'Dining';
+  return 'Other';
+}
+
+function buildSailingFromCruise(cruise: BookedCruise, userId: string): Sailing {
+  return {
+    id: `local_sailing_${cruise.id}`,
+    shipName: cruise.shipName,
+    sailStartDate: cruise.sailDate,
+    sailEndDate: cruise.returnDate || cruise.sailDate,
+    nights: cruise.nights,
+    userId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function parseCrewManifestText(
+  manifestText: string,
+  bookedCruises: BookedCruise[],
+  existingSailings: Sailing[],
+  userId: string,
+): { entries: RecognitionEntryWithCrew[]; sailings: Sailing[]; totalRows: number } {
+  const rawLines = manifestText.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const now = new Date().toISOString();
+  const sailingsMap = new Map<string, Sailing>();
+  const entries: RecognitionEntryWithCrew[] = [];
+
+  existingSailings.forEach((sailing) => {
+    sailingsMap.set(createSailingStorageKey(sailing.shipName, sailing.sailStartDate, sailing.sailEndDate), sailing);
+  });
+
+  let currentSailing: Sailing | null = null;
+
+  rawLines.forEach((line, index) => {
+    const looksLikeHeading = !line.includes(' - ') && !line.includes('–') && /\d{1,2}\/\d{1,2}/.test(line);
+    if (looksLikeHeading) {
+      const dateRange = parseHeadingDateRange(line, 2026);
+      if (!dateRange) {
+        return;
+      }
+
+      const shipName = normalizeShipName(line.replace(/\d{1,2}\/\d{1,2}(?:\s*[-–]\s*\d{1,2}(?:\/\d{1,2})?)?.*$/, '').trim());
+      const matchedCruise = bookedCruises.find((cruise) => {
+        const normalizedCruiseName = normalizeShipName(cruise.shipName || '');
+        return normalizedCruiseName.toLowerCase() === shipName.toLowerCase() && cruise.sailDate === dateRange.startDate;
+      });
+
+      const matchedSailing = existingSailings.find((sailing) => {
+        const normalizedSailingName = normalizeShipName(sailing.shipName || '');
+        return normalizedSailingName.toLowerCase() === shipName.toLowerCase() && sailing.sailStartDate === dateRange.startDate;
+      });
+
+      const resolvedSailing = matchedSailing
+        || (matchedCruise ? buildSailingFromCruise(matchedCruise, userId) : null)
+        || {
+          id: `local_sailing_import_${shipName.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${dateRange.startDate}`,
+          shipName,
+          sailStartDate: dateRange.startDate,
+          sailEndDate: dateRange.endDate,
+          userId,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+      sailingsMap.set(
+        createSailingStorageKey(resolvedSailing.shipName, resolvedSailing.sailStartDate, resolvedSailing.sailEndDate),
+        resolvedSailing,
+      );
+      currentSailing = resolvedSailing;
+      return;
+    }
+
+    const entryMatch = line.match(/^([^–-]+)[–-]\s*(.+)$/);
+    if (!entryMatch) {
+      return;
+    }
+
+    const fullName = entryMatch[1].trim();
+    const roleText = entryMatch[2].trim();
+    if (!fullName || !roleText) {
+      return;
+    }
+
+    const department = inferDepartmentFromRole(roleText);
+    const sailStartDate = currentSailing?.sailStartDate || '';
+    const sailEndDate = currentSailing?.sailEndDate || sailStartDate;
+
+    entries.push({
+      id: `local_entry_import_${index}_${Date.now()}`,
+      crewMemberId: `local_crew_import_${fullName.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${index}`,
+      sailingId: currentSailing?.id || '',
+      shipName: currentSailing?.shipName || '',
+      sailStartDate,
+      sailEndDate,
+      sailingMonth: sailStartDate ? sailStartDate.substring(0, 7) : '',
+      sailingYear: sailStartDate ? Number.parseInt(sailStartDate.substring(0, 4), 10) : 0,
+      department,
+      roleTitle: roleText,
+      sourceText: 'Imported from crew file',
+      userId,
+      createdAt: now,
+      updatedAt: now,
+      fullName,
+      crewNotes: roleText,
+    });
+  });
+
+  return {
+    entries,
+    sailings: Array.from(sailingsMap.values()),
+    totalRows: rawLines.length,
+  };
+}
+
 export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook(() => {
   const auth = useAuth();
+  const { bookedCruises } = useCoreData();
   const userId = auth.authenticatedEmail || 'guest';
 
   const skEntriesRef = useRef(getUserScopedKey(BASE_STORAGE_KEY_ENTRIES, auth.authenticatedEmail));
@@ -508,6 +680,56 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     return { importedCount: parsedEntries.length, totalRows: parsedEntries.length };
   }, []);
 
+  const importCrewManifestText = useCallback(async (manifestText: string) => {
+    console.log('[CrewRecognition] Importing crew manifest text...');
+    const parsedManifest = parseCrewManifestText(
+      manifestText,
+      bookedCruises,
+      [...localSailings, ...(sailingsQuery.data || [])],
+      userId,
+    );
+
+    const mergedSailingsMap = new Map<string, Sailing>();
+    [...localSailings, ...parsedManifest.sailings].forEach((sailing) => {
+      mergedSailingsMap.set(createSailingStorageKey(sailing.shipName, sailing.sailStartDate, sailing.sailEndDate), sailing);
+    });
+
+    const mergedEntriesMap = new Map<string, RecognitionEntryWithCrew>();
+    [...localEntries, ...parsedManifest.entries].forEach((entry) => {
+      const key = [
+        entry.fullName.toLowerCase(),
+        entry.shipName.toLowerCase(),
+        entry.sailStartDate,
+        (entry.roleTitle || '').toLowerCase(),
+      ].join('|');
+      mergedEntriesMap.set(key, entry);
+    });
+
+    const mergedSailings = Array.from(mergedSailingsMap.values()).sort((a, b) => (b.sailStartDate || '').localeCompare(a.sailStartDate || ''));
+    const mergedEntries = Array.from(mergedEntriesMap.values()).sort((a, b) => (b.sailStartDate || '').localeCompare(a.sailStartDate || ''));
+
+    setLocalSailings(mergedSailings);
+    setLocalEntries(mergedEntries);
+    setIsOfflineMode(true);
+
+    await Promise.all([
+      AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(mergedEntries)),
+      AsyncStorage.setItem(skSailingsRef.current, JSON.stringify(mergedSailings)),
+    ]);
+
+    console.log('[CrewRecognition] Imported crew manifest text:', {
+      importedEntries: parsedManifest.entries.length,
+      totalEntries: mergedEntries.length,
+      totalSailings: mergedSailings.length,
+    });
+
+    return {
+      importedCount: parsedManifest.entries.length,
+      totalRows: parsedManifest.totalRows,
+      sailingsCount: parsedManifest.sailings.length,
+    };
+  }, [bookedCruises, localEntries, localSailings, sailingsQuery.data, userId]);
+
   const updateFilters = useCallback((newFilters: Partial<CrewRecognitionFilters>) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
     setPage(1);
@@ -562,6 +784,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     sailingsLoading: !useLocal && sailingsQuery.isLoading,
     isOfflineMode: useLocal,
     syncFromCSVLocally,
+    importCrewManifestText,
     createCrewMember: addCrewMemberWithFallback,
     updateCrewMember: updateCrewMemberMutation.mutateAsync,
     deleteCrewMember: deleteCrewMemberWithFallback,
@@ -575,7 +798,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     userId, filters, updateFilters, resetFilters, page, pageSize, nextPage, previousPage, goToPage,
     useLocal, localStats, statsQuery.data, statsQuery.isLoading, filteredLocalEntries, backendEntries, backendTotal,
     entriesQuery.isLoading, localSailings, sailingsQuery.data, sailingsQuery.isLoading,
-    syncFromCSVLocally, addCrewMemberWithFallback, updateCrewMemberMutation.mutateAsync,
+    syncFromCSVLocally, importCrewManifestText, addCrewMemberWithFallback, updateCrewMemberMutation.mutateAsync,
     deleteCrewMemberWithFallback, createRecognitionEntryMutation.mutateAsync,
     updateRecognitionEntryWithFallback, deleteRecognitionEntryWithFallback,
     createSailingMutation.mutateAsync, clearCrewData, refetch,

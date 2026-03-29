@@ -899,8 +899,8 @@ const styles = StyleSheet.create({
     }),
   },
   sectionToggleText: {
-    fontSize: 20,
-    fontFamily: DS.font.lobster,
+    fontSize: 18,
+    fontWeight: '800' as const,
     color: DS.text.primary,
   },
   sessionsContent: {

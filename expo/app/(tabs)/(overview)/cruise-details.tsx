@@ -2318,8 +2318,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   sectionTitle: {
-    fontSize: 24,
-    fontFamily: DS.font.lobster,
+    fontSize: 20,
+    fontWeight: '800' as const,
     color: DS.text.primary,
     letterSpacing: 0.2,
   },

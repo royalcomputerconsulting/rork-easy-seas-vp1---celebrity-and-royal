@@ -2467,8 +2467,8 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   screenTitle: {
-    fontSize: 32,
-    fontFamily: DS.font.lobster,
+    fontSize: 30,
+    fontWeight: '800' as const,
     color: DS.text.primary,
     letterSpacing: 0.2,
   },
@@ -2580,8 +2580,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   footerAppName: {
-    fontSize: 22,
-    fontFamily: DS.font.lobster,
+    fontSize: 20,
+    fontWeight: '800' as const,
     color: DS.text.primary,
     letterSpacing: 0.3,
   },
@@ -2720,8 +2720,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dataOverviewTitle: {
-    fontSize: 20,
-    fontFamily: DS.font.lobster,
+    fontSize: 18,
+    fontWeight: '800' as const,
     color: DS.text.primary,
     letterSpacing: 0.2,
   },

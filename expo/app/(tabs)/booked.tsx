@@ -868,8 +868,8 @@ const styles = StyleSheet.create({
     borderColor: DS.accent.warning,
   },
   casinoTitle: {
-    fontSize: 22,
-    fontFamily: DS.font.lobster,
+    fontSize: 18,
+    fontWeight: '800' as const,
     color: DS.text.primary,
     flex: 1,
   },

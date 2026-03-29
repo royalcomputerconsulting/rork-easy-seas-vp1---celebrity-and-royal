@@ -19,6 +19,7 @@ import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type ViewMode = 'events' | 'week' | 'month' | '90days';
+type UpcomingDisplayFilter = 'all' | '3' | '10';
 
 interface PersonalizedLuck {
   score: number;
@@ -88,6 +89,117 @@ function overlapsMonthRange(startDate: Date, endDate: Date, year: number, month:
   return startDate <= monthEnd && endDate >= monthStart;
 }
 
+function addDays(date: Date, days: number): Date {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function getCruiseMergeKey(cruise: BookedCruise): string {
+  return cruise.id || `${cruise.shipName ?? 'ship'}-${cruise.sailDate ?? 'sail'}-${cruise.returnDate ?? 'return'}`;
+}
+
+function getCruiseCompletenessScore(cruise: BookedCruise): number {
+  let score = 0;
+  if (cruise.sailDate) score += 4;
+  if (cruise.returnDate) score += 8;
+  if ((cruise.nights ?? 0) > 0) score += 3;
+  if (cruise.destination) score += 2;
+  if (cruise.itineraryName) score += 2;
+  if (cruise.departurePort) score += 2;
+  if ((cruise.ports?.length ?? 0) > 0) score += 2;
+  if ((cruise.guestNames?.length ?? 0) > 0) score += 1;
+  return score;
+}
+
+function mergeBookedCruiseRecords(primary: BookedCruise, candidate: BookedCruise): BookedCruise {
+  const candidateWins = getCruiseCompletenessScore(candidate) >= getCruiseCompletenessScore(primary);
+  const preferred = candidateWins ? candidate : primary;
+  const fallback = candidateWins ? primary : candidate;
+
+  return {
+    ...fallback,
+    ...preferred,
+    sailDate: preferred.sailDate || fallback.sailDate,
+    returnDate: preferred.returnDate || fallback.returnDate,
+    destination: preferred.destination || fallback.destination,
+    itineraryName: preferred.itineraryName || fallback.itineraryName,
+    departurePort: preferred.departurePort || fallback.departurePort,
+    cabinType: preferred.cabinType || fallback.cabinType,
+    cabinNumber: preferred.cabinNumber || fallback.cabinNumber,
+    nights: preferred.nights || fallback.nights,
+    ports: (preferred.ports?.length ?? 0) > 0 ? preferred.ports : fallback.ports,
+    guestNames: (preferred.guestNames?.length ?? 0) > 0 ? preferred.guestNames : fallback.guestNames,
+  };
+}
+
+function getBookedCruiseDateRange(cruise: BookedCruise): { startDate: Date; endDate: Date } | null {
+  if (!cruise.sailDate) {
+    return null;
+  }
+
+  const startDate = createDateFromString(cruise.sailDate);
+  if (Number.isNaN(startDate.getTime())) {
+    return null;
+  }
+
+  const explicitEndDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
+  const fallbackEndDate = addDays(startDate, Math.max(cruise.nights ?? 0, 0));
+  const endDate = explicitEndDate && !Number.isNaN(explicitEndDate.getTime())
+    ? explicitEndDate
+    : fallbackEndDate;
+
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(0, 0, 0, 0);
+
+  return {
+    startDate,
+    endDate: endDate >= startDate ? endDate : startDate,
+  };
+}
+
+function getDerivedTravelDayKeys(cruise: BookedCruise): string[] {
+  const range = getBookedCruiseDateRange(cruise);
+  if (!range) {
+    return [];
+  }
+
+  return [
+    formatDateKey(addDays(range.startDate, -1)),
+    formatDateKey(addDays(range.endDate, 1)),
+  ];
+}
+
+const SPECIAL_CALENDAR_EVENTS: CalendarEvent[] = [
+  {
+    id: 'manual-barcelona-travel-2026',
+    title: 'Travel to Barcelona',
+    startDate: '2026-08-03',
+    endDate: '2026-08-04',
+    type: 'travel',
+    sourceType: 'personal',
+    location: 'Barcelona, Spain',
+    source: 'manual',
+  },
+  {
+    id: 'manual-celeb-equinox-2026',
+    title: 'Celebrity Equinox Personal Cruise',
+    startDate: '2026-08-05',
+    endDate: '2026-08-15',
+    type: 'cruise',
+    sourceType: 'personal',
+    location: 'Barcelona, Spain',
+    source: 'manual',
+  },
+];
+
+const UPCOMING_FILTER_OPTIONS: { value: UpcomingDisplayFilter; label: string }[] = [
+  { value: 'all', label: 'All Upcoming' },
+  { value: '3', label: '3 Upcoming' },
+  { value: '10', label: '10 Upcoming' },
+];
+
 export default function EventsScreen() {
   const router = useRouter();
   const { localData } = useAppState();
@@ -99,25 +211,29 @@ export default function EventsScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [upcomingFilter, setUpcomingFilter] = useState<UpcomingDisplayFilter>('3');
 
   const calendarEvents = useMemo(() => {
-    const events = [...(localData.calendar || []), ...(localData.tripit || [])];
+    const events = [...(localData.calendar || []), ...(localData.tripit || []), ...SPECIAL_CALENDAR_EVENTS];
     console.log('[Events] Calendar events updated:', events.length);
     return events;
   }, [localData.calendar, localData.tripit]);
 
   const bookedCruises = useMemo(() => {
     const combined = [...(localData.booked || []), ...storedBookedCruises];
-    const seen = new Set<string>();
+    const mergedCruises = new Map<string, BookedCruise>();
 
-    return combined.filter((cruise) => {
-      const key = cruise.id || `${cruise.shipName ?? 'ship'}-${cruise.sailDate ?? 'sail'}-${cruise.returnDate ?? 'return'}`;
-      if (seen.has(key)) {
-        return false;
+    combined.forEach((cruise) => {
+      const key = getCruiseMergeKey(cruise);
+      const existingCruise = mergedCruises.get(key);
+      if (existingCruise) {
+        mergedCruises.set(key, mergeBookedCruiseRecords(existingCruise, cruise));
+        return;
       }
-      seen.add(key);
-      return true;
+      mergedCruises.set(key, cruise);
     });
+
+    return Array.from(mergedCruises.values());
   }, [localData.booked, storedBookedCruises]);
 
   useEffect(() => {
@@ -179,13 +295,12 @@ export default function EventsScreen() {
         return;
       }
 
-      const sailDate = createDateFromString(bc.sailDate);
-      const returnDate = createDateFromString(bc.returnDate || bc.sailDate);
-      if (Number.isNaN(sailDate.getTime()) || Number.isNaN(returnDate.getTime())) {
+      const range = getBookedCruiseDateRange(bc);
+      if (!range) {
         return;
       }
 
-      if (overlapsMonthRange(sailDate, returnDate, year, month)) {
+      if (overlapsMonthRange(range.startDate, range.endDate, year, month)) {
         count++;
       }
     });
@@ -235,18 +350,19 @@ export default function EventsScreen() {
     });
 
     bookedCruises.forEach((bc: BookedCruise) => {
-      if (!bc.sailDate) {
+      const range = getBookedCruiseDateRange(bc);
+      if (!range) {
         return;
       }
 
-      const startDate = normalizeDateKey(bc.sailDate);
-      const endDate = normalizeDateKey(bc.returnDate || bc.sailDate);
-      if (!startDate || !endDate) {
-        return;
-      }
-
+      const startDate = formatDateKey(range.startDate);
+      const endDate = formatDateKey(range.endDate);
       if (dateStr >= startDate && dateStr <= endDate) {
         cruise++;
+      }
+
+      if (getDerivedTravelDayKeys(bc).includes(dateStr)) {
+        travel++;
       }
     });
 
@@ -484,27 +600,33 @@ export default function EventsScreen() {
   const upcomingEvents = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const allEvents: { event: CalendarEvent | BookedCruise; type: 'calendar' | 'cruise'; date: Date }[] = [];
-    
+
     calendarEvents.forEach(event => {
       const startDate = createDateFromString(event.startDate || event.start || '');
       if (startDate >= today) {
         allEvents.push({ event, type: 'calendar', date: startDate });
       }
     });
-    
+
     bookedCruises.forEach(cruise => {
-      if (cruise.sailDate) {
-        const sailDate = createDateFromString(cruise.sailDate);
-        if (sailDate >= today) {
-          allEvents.push({ event: cruise, type: 'cruise', date: sailDate });
-        }
+      const range = getBookedCruiseDateRange(cruise);
+      if (range && range.startDate >= today) {
+        allEvents.push({ event: cruise, type: 'cruise', date: range.startDate });
       }
     });
-    
-    return allEvents.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 5);
+
+    return allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [calendarEvents, bookedCruises]);
+
+  const displayedUpcomingEvents = useMemo(() => {
+    if (upcomingFilter === 'all') {
+      return upcomingEvents;
+    }
+
+    return upcomingEvents.slice(0, Number.parseInt(upcomingFilter, 10));
+  }, [upcomingEvents, upcomingFilter]);
 
   const renderEventCard = useCallback((item: { event: CalendarEvent | BookedCruise; type: 'calendar' | 'cruise'; date: Date }, index: number) => {
     if (item.type === 'cruise') {
@@ -779,9 +901,25 @@ export default function EventsScreen() {
           {viewMode === 'events' && (
             <View style={styles.eventsListSection}>
               <View style={styles.sectionHeader}>
-                <CalendarDays size={20} color={COLORS.white} />
+                <CalendarDays size={20} color={DS.text.primary} />
                 <Text style={styles.sectionTitle}>Upcoming Events</Text>
-                <Text style={styles.eventCountBadge}>{upcomingEvents.length}</Text>
+                <Text style={styles.eventCountBadge}>{`${displayedUpcomingEvents.length}/${upcomingEvents.length}`}</Text>
+              </View>
+              <View style={styles.upcomingFilterRow}>
+                {UPCOMING_FILTER_OPTIONS.map((option) => {
+                  const isActive = upcomingFilter === option.value;
+                  return (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[styles.upcomingFilterChip, isActive && styles.upcomingFilterChipActive]}
+                      onPress={() => setUpcomingFilter(option.value)}
+                      activeOpacity={0.8}
+                      testID={`calendar-upcoming-filter-${option.value}`}
+                    >
+                      <Text style={[styles.upcomingFilterChipText, isActive && styles.upcomingFilterChipTextActive]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
               
               {upcomingEvents.length === 0 ? (
@@ -804,7 +942,7 @@ export default function EventsScreen() {
                 </View>
               ) : (
                 <View style={styles.eventsList}>
-                  {upcomingEvents.map((item, index) => renderEventCard(item, index))}
+                  {displayedUpcomingEvents.map((item, index) => renderEventCard(item, index))}
                 </View>
               )}
             </View>
@@ -813,11 +951,28 @@ export default function EventsScreen() {
           {viewMode !== 'events' && upcomingEvents.length > 0 && (
             <View style={styles.eventsListSection}>
               <View style={styles.sectionHeader}>
-                <CalendarDays size={20} color={COLORS.white} />
+                <CalendarDays size={20} color={DS.text.primary} />
                 <Text style={styles.sectionTitle}>Next Up</Text>
+                <Text style={styles.eventCountBadge}>{`${displayedUpcomingEvents.length}/${upcomingEvents.length}`}</Text>
+              </View>
+              <View style={styles.upcomingFilterRow}>
+                {UPCOMING_FILTER_OPTIONS.map((option) => {
+                  const isActive = upcomingFilter === option.value;
+                  return (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[styles.upcomingFilterChip, isActive && styles.upcomingFilterChipActive]}
+                      onPress={() => setUpcomingFilter(option.value)}
+                      activeOpacity={0.8}
+                      testID={`calendar-next-up-filter-${option.value}`}
+                    >
+                      <Text style={[styles.upcomingFilterChipText, isActive && styles.upcomingFilterChipTextActive]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
               <View style={styles.eventsList}>
-                {upcomingEvents.slice(0, 3).map((item, index) => renderEventCard(item, index))}
+                {displayedUpcomingEvents.map((item, index) => renderEventCard(item, index))}
               </View>
             </View>
           )}
@@ -849,14 +1004,14 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   heroHeader: {
-    backgroundColor: DS.bg.card,
+    backgroundColor: '#05070A',
     borderRadius: DS.radius.xl,
     padding: SPACING.lg,
     marginHorizontal: SPACING.md,
     marginBottom: SPACING.md,
     marginTop: SPACING.xs,
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: '#1F2937',
     ...SHADOW.sm,
   },
   heroContent: {
@@ -877,12 +1032,12 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 28,
     fontFamily: DS.font.lobster,
-    color: DS.text.primary,
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   heroSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: DS.text.secondary,
+    color: 'rgba(255,255,255,0.74)',
     marginBottom: SPACING.sm,
   },
   tierBadgesRow: {
@@ -960,7 +1115,7 @@ const styles = StyleSheet.create({
   },
   monthYearText: {
     fontSize: 22,
-    fontFamily: DS.font.lobster,
+    fontWeight: '800' as const,
     color: DS.text.primary,
   },
   eventCountText: {
@@ -1147,8 +1302,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontFamily: DS.font.lobster,
+    fontSize: 18,
+    fontWeight: '800' as const,
     color: DS.text.primary,
     flex: 1,
   },
@@ -1161,6 +1316,32 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: DS.radius.pill,
     overflow: 'hidden',
+  },
+  upcomingFilterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  upcomingFilterChip: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    borderRadius: DS.radius.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: DS.border.default,
+  },
+  upcomingFilterChipActive: {
+    backgroundColor: DS.text.primary,
+    borderColor: DS.text.primary,
+  },
+  upcomingFilterChipText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: '700' as const,
+    color: DS.text.primary,
+  },
+  upcomingFilterChipTextActive: {
+    color: '#FFFFFF',
   },
   eventsList: {
     gap: SPACING.sm,

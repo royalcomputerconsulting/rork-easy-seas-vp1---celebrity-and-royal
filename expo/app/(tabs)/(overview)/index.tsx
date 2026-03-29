@@ -894,9 +894,15 @@ const styles = StyleSheet.create({
   logoHeaderContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
     marginTop: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderRadius: DS.radius.xl,
+    backgroundColor: '#05070A',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    ...SHADOW.sm,
   },
   logoHeaderImage: {
     width: 80,
@@ -909,13 +915,13 @@ const styles = StyleSheet.create({
   logoHeaderTitle: {
     fontSize: 28,
     fontFamily: DS.font.lobster,
-    color: DS.text.primary,
+    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
   logoHeaderSubtitle: {
     fontSize: 13,
     fontWeight: '500' as const,
-    color: DS.text.secondary,
+    color: 'rgba(255,255,255,0.74)',
     marginTop: 2,
     letterSpacing: 0.2,
   },
@@ -937,10 +943,10 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontFamily: DS.font.lobster,
+    fontSize: 18,
+    fontWeight: '800' as const,
     color: DS.text.primary,
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
   },
   progressSection: {
     marginBottom: SPACING.md,

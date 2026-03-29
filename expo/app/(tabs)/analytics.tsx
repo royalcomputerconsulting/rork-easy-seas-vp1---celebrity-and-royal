@@ -1876,8 +1876,8 @@ const styles = StyleSheet.create({
     borderBottomColor: DS.border.divider,
   },
   cleanCardTitle: {
-    fontSize: 20,
-    fontFamily: DS.font.lobster,
+    fontSize: 18,
+    fontWeight: '800' as const,
     color: DS.text.primary,
   },
   dataGrid: {
@@ -2058,8 +2058,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontFamily: DS.font.lobster,
+    fontSize: 18,
+    fontWeight: '800' as const,
     color: DS.text.primary,
   },
   statusCard: {
