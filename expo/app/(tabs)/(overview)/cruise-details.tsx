@@ -12,7 +12,7 @@ import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 
-import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
+import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, getResolvedCruiseItinerary, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 
 type CompactFactProps = {
@@ -24,6 +24,26 @@ type CompactFactProps = {
 const PAGE_MARBLE_COLORS = ['#FCFEFF', '#EEF7FF', '#DDEEFF', '#CAE3F8'] as const;
 const PAGE_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.98)', 'rgba(188,216,241,0.3)', 'rgba(255,255,255,0.18)', 'rgba(142,182,221,0.24)'] as const;
 const PAGE_MARBLE_LOCATIONS = [0, 0.22, 0.72, 1] as const;
+
+function getItineraryMetaText(day: ItineraryDay): string {
+  if (day.isSeaDay) {
+    return 'Sea day';
+  }
+
+  if (day.arrival && day.departure) {
+    return `${day.arrival} - ${day.departure}`;
+  }
+
+  if (day.arrival) {
+    return `From ${day.arrival} • Overnight`;
+  }
+
+  if (day.departure) {
+    return `Until ${day.departure}`;
+  }
+
+  return day.notes || 'Port window inferred';
+}
 
 const CompactFact = memo(function CompactFact({ icon: Icon, value, label }: CompactFactProps) {
   return (
@@ -410,6 +430,14 @@ export default function CruiseDetailsScreen() {
     if (!cruise) return null;
     return getCruiseCasinoAvailability(cruise);
   }, [cruise, getCruiseCasinoAvailability]);
+
+  const itineraryDays = useMemo((): ItineraryDay[] => {
+    if (!cruise) {
+      return [];
+    }
+
+    return getResolvedCruiseItinerary(cruise, [...(storeOffers || []), ...(localData.offers || [])]);
+  }, [cruise, storeOffers, localData.offers]);
 
   const _casinoStatusBadge = useMemo(() => {
     if (!casinoAvailability) return null;
@@ -1231,18 +1259,28 @@ export default function CruiseDetailsScreen() {
               </View>
 
               <View style={styles.itineraryCompactList}>
-                {casinoAvailability.dailyAvailability.slice(0, 3).map((day, index) => (
-                  <View key={index} style={styles.itineraryDayCompact}>
-                    <Text style={styles.itineraryDayNumber}>D{day.day}</Text>
-                    <Text style={styles.itineraryDayPortCompact} numberOfLines={1}>
-                      {day.isSeaDay ? 'At Sea' : day.port}
-                    </Text>
-                    <View style={[styles.casinoDotIndicator, { backgroundColor: day.casinoOpen ? COLORS.success : COLORS.error }]} />
-                  </View>
-                ))}
-                {casinoAvailability.dailyAvailability.length > 3 && (
-                  <Text style={styles.itineraryMoreText}>+{casinoAvailability.dailyAvailability.length - 3} more days</Text>
-                )}
+                {itineraryDays.map((day) => {
+                  const availability = casinoAvailability.dailyAvailability.find((entry) => entry.day === day.day);
+                  const casinoOpen = availability?.casinoOpen ?? day.isSeaDay;
+
+                  return (
+                    <View key={`${day.day}-${day.port}`} style={styles.itineraryDayCompact}>
+                      <Text style={styles.itineraryDayNumber}>D{day.day}</Text>
+                      <View style={styles.itineraryCompactDayContent}>
+                        <Text style={styles.itineraryDayPortCompact} numberOfLines={1}>
+                          {day.isSeaDay ? 'At Sea' : day.port}
+                        </Text>
+                        <Text style={styles.itineraryDayMeta} numberOfLines={1}>
+                          {getItineraryMetaText(day)}
+                        </Text>
+                      </View>
+                      <View style={styles.itineraryDayStatus}>
+                        <View style={[styles.casinoDotIndicator, { backgroundColor: casinoOpen ? COLORS.success : COLORS.error }]} />
+                        <Text style={styles.itineraryDayStatusText}>{casinoOpen ? 'Open' : 'Closed'}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             </LinearGradient>
           )}
@@ -3636,6 +3674,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(223, 214, 206, 0.88)',
   },
+  itineraryCompactDayContent: {
+    flex: 1,
+    gap: 2,
+  },
   itineraryDayNumber: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
@@ -3646,12 +3688,25 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     color: DS.text.primary,
-    flex: 1,
+  },
+  itineraryDayMeta: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
   },
   casinoDotIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  itineraryDayStatus: {
+    minWidth: 42,
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  itineraryDayStatusText: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   itineraryMoreText: {
     fontSize: TYPOGRAPHY.fontSizeXS,

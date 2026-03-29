@@ -34,7 +34,7 @@ import {
   type DailyIntelligenceReading,
   type MomentumLevel,
 } from '@/lib/dailyIntelligence';
-import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
+import { determineCasinoHoursWithContext, determineSeaDay, getResolvedCruiseItinerary, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
@@ -121,29 +121,24 @@ function getCruiseRangeEndDate(sailDate: string, returnDate: string | undefined,
   return computedReturnDate;
 }
 
-function getSyntheticItineraryDay(cruise: MergedCruiseData, dayNum: number): ItineraryDay | undefined {
-  const fallbackPort = cruise.ports?.[dayNum - 1]?.trim();
-
-  if (fallbackPort && fallbackPort.length > 0) {
-    return {
-      day: dayNum,
-      port: fallbackPort,
-      isSeaDay: determineSeaDay(fallbackPort),
-    };
+function getItineraryWindowText(itineraryDay: ItineraryDay | undefined | null): string | undefined {
+  if (!itineraryDay || itineraryDay.isSeaDay) {
+    return undefined;
   }
 
-  const totalDays = Math.max(1, cruise.nights + 1);
-  const terminalPort = cruise.departurePort?.trim();
-
-  if (terminalPort && (dayNum === 1 || dayNum === totalDays)) {
-    return {
-      day: dayNum,
-      port: terminalPort,
-      isSeaDay: false,
-    };
+  if (itineraryDay.arrival && itineraryDay.departure) {
+    return `${itineraryDay.arrival} - ${itineraryDay.departure}`;
   }
 
-  return undefined;
+  if (itineraryDay.arrival) {
+    return `From ${itineraryDay.arrival} • Overnight`;
+  }
+
+  if (itineraryDay.departure) {
+    return `Until ${itineraryDay.departure}`;
+  }
+
+  return itineraryDay.notes || 'Port day';
 }
 
 interface ScoreDotsProps {
@@ -338,7 +333,7 @@ export default function DayAgendaScreen() {
           itineraryName: cruise.itineraryName,
           departurePort: cruise.departurePort,
           nights: cruise.nights || 0,
-          itinerary: cruise.itinerary,
+          itinerary: getResolvedCruiseItinerary(cruise),
           ports: cruise.ports,
           bookings: [{
             reservationNumber: cruise.reservationNumber,
@@ -365,14 +360,7 @@ export default function DayAgendaScreen() {
   }, [selectedDate]);
 
   const getItineraryForDay = useCallback((cruise: MergedCruiseData, dayNum: number): ItineraryDay | undefined => {
-    if (cruise.itinerary && cruise.itinerary.length > 0) {
-      const itineraryDay = cruise.itinerary.find((day) => day.day === dayNum);
-      if (itineraryDay) {
-        return itineraryDay;
-      }
-    }
-
-    return getSyntheticItineraryDay(cruise, dayNum);
+    return cruise.itinerary?.find((day) => day.day === dayNum);
   }, []);
 
   const getCasinoContext = useCallback((cruise: MergedCruiseData, dayNum: number): CasinoDayContext => {
@@ -454,6 +442,22 @@ export default function DayAgendaScreen() {
             });
           }
         } else {
+          const portWindowText = getItineraryWindowText(itineraryDay);
+
+          if (itineraryDay.arrival || itineraryDay.departure) {
+            events.push({
+              id: `port-window-${cruise.id}`,
+              type: 'port',
+              title: `In Port: ${itineraryDay.port}`,
+              subtitle: portWindowText || 'Port window',
+              startTime: itineraryDay.arrival || '00:00',
+              endTime: itineraryDay.departure || (itineraryDay.arrival ? '23:59' : undefined),
+              color: '#FFFFFF',
+              icon: 'port',
+              notes: itineraryDay.notes,
+            });
+          }
+
           if (itineraryDay.arrival) {
             events.push({
               id: `arrival-${cruise.id}`,
@@ -670,12 +674,20 @@ export default function DayAgendaScreen() {
     });
 
     mergedCruiseBookings.forEach((cruise) => {
+      const dayNum = getDayOfCruise(cruise);
+      const itineraryDay = getItineraryForDay(cruise, dayNum);
+      const itineraryWindow = getItineraryWindowText(itineraryDay);
+
       items.push({
         id: `cruise-${cruise.id}`,
         type: 'cruise',
         title: cruise.shipName,
-        subtitle: cruise.destination || cruise.itineraryName,
-        location: cruise.departurePort,
+        subtitle: itineraryDay
+          ? itineraryDay.isSeaDay
+            ? `At Sea • ${cruise.destination || cruise.itineraryName || 'Cruise day'}`
+            : `${itineraryDay.port}${itineraryWindow ? ` • ${itineraryWindow}` : ''}`
+          : cruise.destination || cruise.itineraryName,
+        location: itineraryDay && !itineraryDay.isSeaDay ? itineraryDay.port : cruise.departurePort,
         isAllDay: true,
         color: EVENT_COLORS.cruise,
         data: cruise,
@@ -691,7 +703,7 @@ export default function DayAgendaScreen() {
     });
 
     return items;
-  }, [selectedDate, calendarEvents, mergedCruiseBookingIds, mergedCruiseBookings, getDayStatus]);
+  }, [selectedDate, calendarEvents, mergedCruiseBookingIds, mergedCruiseBookings, getDayOfCruise, getDayStatus, getItineraryForDay]);
 
   const handleItemPress = useCallback((item: AgendaItem) => {
     if (item.type === 'cruise' && 'sailDate' in item.data) {
@@ -1073,9 +1085,9 @@ export default function DayAgendaScreen() {
                     <View style={styles.portDayBadge}>
                       <Anchor size={14} color={EVENT_COLORS.port} />
                       <Text style={styles.portDayText}>{itineraryDay.port}</Text>
-                      {itineraryDay.arrival && itineraryDay.departure && (
+                      {getItineraryWindowText(itineraryDay) && (
                         <Text style={styles.portTimes}>
-                          {itineraryDay.arrival} - {itineraryDay.departure}
+                          {getItineraryWindowText(itineraryDay)}
                         </Text>
                       )}
                     </View>

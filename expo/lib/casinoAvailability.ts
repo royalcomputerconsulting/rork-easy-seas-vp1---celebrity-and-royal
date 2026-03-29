@@ -456,7 +456,7 @@ export function determineCasinoHoursWithContext(context: CasinoDayContext): Casi
   };
 }
 
-function parsePortsAndTimes(portsAndTimesStr: string): ItineraryDay[] {
+export function parsePortsAndTimes(portsAndTimesStr: string): ItineraryDay[] {
   if (!portsAndTimesStr || typeof portsAndTimesStr !== 'string') {
     return [];
   }
@@ -489,6 +489,394 @@ function parsePortsAndTimes(portsAndTimesStr: string): ItineraryDay[] {
   return result;
 }
 
+export interface CruiseItinerarySource {
+  id?: string;
+  shipName?: string;
+  sailDate?: string;
+  returnDate?: string;
+  departurePort?: string;
+  nights?: number;
+  itinerary?: ItineraryDay[];
+  itineraryRaw?: string[];
+  ports?: string[];
+  portsAndTimes?: string;
+  itineraryName?: string;
+  destination?: string;
+  reservationNumber?: string;
+  offerCode?: string;
+}
+
+interface PortTimingProfile {
+  arrival: string;
+  departure: string;
+  overnightArrival: string;
+  overnightDeparture: string;
+}
+
+function normalizePortName(portName: string | undefined): string {
+  return (portName ?? '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function portsMatch(left: string | undefined, right: string | undefined): boolean {
+  const normalizedLeft = normalizePortName(left);
+  const normalizedRight = normalizePortName(right);
+
+  if (!normalizedLeft || !normalizedRight) {
+    return false;
+  }
+
+  return normalizedLeft === normalizedRight
+    || normalizedLeft.includes(normalizedRight)
+    || normalizedRight.includes(normalizedLeft);
+}
+
+function getPortTimingProfile(port: string): PortTimingProfile {
+  const normalizedPort = normalizePortName(port);
+
+  if (normalizedPort.includes('cabo')) {
+    return {
+      arrival: '12:00',
+      departure: '15:00',
+      overnightArrival: '12:00',
+      overnightDeparture: '15:00',
+    };
+  }
+
+  if (normalizedPort.includes('ensenada') || normalizedPort.includes('catalina')) {
+    return {
+      arrival: '08:00',
+      departure: '18:00',
+      overnightArrival: '08:00',
+      overnightDeparture: '18:00',
+    };
+  }
+
+  if (
+    normalizedPort.includes('mazatlan')
+    || normalizedPort.includes('puerto vallarta')
+    || normalizedPort.includes('roatan')
+    || normalizedPort.includes('cozumel')
+    || normalizedPort.includes('costa maya')
+  ) {
+    return {
+      arrival: '07:00',
+      departure: '17:00',
+      overnightArrival: '07:00',
+      overnightDeparture: '17:00',
+    };
+  }
+
+  return {
+    arrival: '08:00',
+    departure: '17:00',
+    overnightArrival: '08:00',
+    overnightDeparture: '17:00',
+  };
+}
+
+function buildSeaDay(day: number): ItineraryDay {
+  return {
+    day,
+    port: 'At Sea',
+    isSeaDay: true,
+    casinoOpen: true,
+  };
+}
+
+function buildPortDay(
+  port: string,
+  occurrenceIndex: number,
+  occurrenceCount: number,
+  day: number,
+  totalDays: number,
+  departurePort?: string,
+): ItineraryDay {
+  if (day === 1) {
+    return {
+      day,
+      port: departurePort || port || 'Departure Port',
+      departure: '16:00',
+      isSeaDay: false,
+      notes: 'Embarkation day',
+    };
+  }
+
+  if (day === totalDays) {
+    return {
+      day,
+      port: departurePort || port || 'Return Port',
+      arrival: '07:00',
+      isSeaDay: false,
+      notes: 'Return to home port',
+    };
+  }
+
+  const timing = getPortTimingProfile(port);
+
+  if (occurrenceCount > 1) {
+    if (occurrenceIndex === 0) {
+      return {
+        day,
+        port,
+        arrival: timing.overnightArrival,
+        isSeaDay: false,
+        notes: 'Overnight stay begins',
+      };
+    }
+
+    if (occurrenceIndex === occurrenceCount - 1) {
+      return {
+        day,
+        port,
+        departure: timing.overnightDeparture,
+        isSeaDay: false,
+        notes: 'Overnight stay ends',
+      };
+    }
+
+    return {
+      day,
+      port,
+      isSeaDay: false,
+      notes: 'Full day in port',
+    };
+  }
+
+  return {
+    day,
+    port,
+    arrival: timing.arrival,
+    departure: timing.departure,
+    isSeaDay: false,
+  };
+}
+
+function groupConsecutivePorts(ports: string[]): Array<{ port: string; count: number }> {
+  return ports.reduce<Array<{ port: string; count: number }>>((groups, port) => {
+    const trimmedPort = port.trim();
+
+    if (trimmedPort.length === 0) {
+      return groups;
+    }
+
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup && portsMatch(lastGroup.port, trimmedPort)) {
+      lastGroup.count += 1;
+      return groups;
+    }
+
+    groups.push({ port: trimmedPort, count: 1 });
+    return groups;
+  }, []);
+}
+
+function distributeSeaDays(seaDayCount: number, groupCount: number): number[] {
+  const gaps = Array(Math.max(1, groupCount + 1)).fill(0);
+  let remainingSeaDays = Math.max(0, seaDayCount);
+
+  if (groupCount > 0 && remainingSeaDays > 0) {
+    gaps[0] += 1;
+    remainingSeaDays -= 1;
+  }
+
+  let pointer = groupCount <= 1 ? gaps.length - 1 : 1;
+
+  while (remainingSeaDays > 0) {
+    gaps[pointer] += 1;
+    remainingSeaDays -= 1;
+    pointer += 1;
+
+    if (pointer >= gaps.length) {
+      pointer = gaps.length > 2 ? 1 : Math.max(0, gaps.length - 1);
+    }
+  }
+
+  return gaps;
+}
+
+function buildSyntheticItineraryFromPorts(
+  cruise: CruiseItinerarySource,
+  totalDays: number,
+  sourcePorts?: string[],
+): ItineraryDay[] {
+  if (totalDays <= 0) {
+    return [];
+  }
+
+  const rawPorts = (sourcePorts ?? cruise.ports ?? cruise.itineraryRaw ?? [])
+    .map((port) => port.trim())
+    .filter((port) => port.length > 0);
+
+  const departurePort = cruise.departurePort?.trim() || rawPorts[0] || 'Departure Port';
+
+  let intermediatePorts = [...rawPorts];
+  if (intermediatePorts[0] && portsMatch(intermediatePorts[0], departurePort)) {
+    intermediatePorts = intermediatePorts.slice(1);
+  }
+  if (intermediatePorts.length > 0 && portsMatch(intermediatePorts[intermediatePorts.length - 1], departurePort)) {
+    intermediatePorts = intermediatePorts.slice(0, -1);
+  }
+
+  const middleDayCount = Math.max(0, totalDays - 2);
+  if (intermediatePorts.length > middleDayCount) {
+    intermediatePorts = intermediatePorts.slice(0, middleDayCount);
+  }
+
+  const groupedPorts = groupConsecutivePorts(intermediatePorts);
+  const seaDayDistribution = distributeSeaDays(middleDayCount - intermediatePorts.length, groupedPorts.length);
+  const itinerary: ItineraryDay[] = [];
+  let currentDay = 1;
+
+  itinerary.push(buildPortDay(departurePort, 0, 1, currentDay, totalDays, departurePort));
+  currentDay += 1;
+
+  for (let seaIndex = 0; seaIndex < (seaDayDistribution[0] ?? 0) && currentDay < totalDays; seaIndex += 1) {
+    itinerary.push(buildSeaDay(currentDay));
+    currentDay += 1;
+  }
+
+  groupedPorts.forEach((group, groupIndex) => {
+    for (let occurrenceIndex = 0; occurrenceIndex < group.count && currentDay < totalDays; occurrenceIndex += 1) {
+      itinerary.push(buildPortDay(group.port, occurrenceIndex, group.count, currentDay, totalDays, departurePort));
+      currentDay += 1;
+    }
+
+    const gapSeaDays = seaDayDistribution[groupIndex + 1] ?? 0;
+    for (let seaIndex = 0; seaIndex < gapSeaDays && currentDay < totalDays; seaIndex += 1) {
+      itinerary.push(buildSeaDay(currentDay));
+      currentDay += 1;
+    }
+  });
+
+  while (currentDay < totalDays) {
+    itinerary.push(buildSeaDay(currentDay));
+    currentDay += 1;
+  }
+
+  if (totalDays > 1) {
+    itinerary.push(buildPortDay(departurePort, 0, 1, totalDays, totalDays, departurePort));
+  }
+
+  return itinerary
+    .filter((day) => day.day >= 1 && day.day <= totalDays)
+    .sort((left, right) => left.day - right.day);
+}
+
+function mergeItineraryDays(baseDays: ItineraryDay[], overlayDays: ItineraryDay[], totalDays: number): ItineraryDay[] {
+  const dayMap = new Map<number, ItineraryDay>();
+
+  baseDays.forEach((day) => {
+    dayMap.set(day.day, { ...day });
+  });
+
+  overlayDays.forEach((day) => {
+    if (!Number.isFinite(day.day)) {
+      return;
+    }
+
+    const existingDay = dayMap.get(day.day);
+    const resolvedPort = day.port || existingDay?.port || 'Port of Call';
+
+    dayMap.set(day.day, {
+      ...existingDay,
+      ...day,
+      day: day.day,
+      port: resolvedPort,
+      isSeaDay: day.isSeaDay ?? existingDay?.isSeaDay ?? determineSeaDay(resolvedPort),
+      casinoOpen: day.casinoOpen ?? existingDay?.casinoOpen ?? determineSeaDay(resolvedPort),
+    });
+  });
+
+  return Array.from(dayMap.values())
+    .filter((day) => day.day >= 1 && day.day <= totalDays)
+    .sort((left, right) => left.day - right.day);
+}
+
+export function getCruiseTotalDays(cruise: CruiseItinerarySource): number {
+  let accurateNights = cruise.nights || 0;
+
+  if (cruise.sailDate && cruise.returnDate) {
+    const sailDate = safeParseSailDate(cruise.sailDate);
+    const returnDate = safeParseSailDate(cruise.returnDate);
+    const daysBetween = Math.round((returnDate.getTime() - sailDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysBetween > 0 && daysBetween < 365) {
+      accurateNights = daysBetween;
+    }
+  }
+
+  return Math.max(1, accurateNights + 1);
+}
+
+export function getResolvedCruiseItinerary(
+  cruise: CruiseItinerarySource,
+  offers?: { offerCode?: string; portsAndTimes?: string; ports?: string[] }[],
+): ItineraryDay[] {
+  const totalDays = getCruiseTotalDays(cruise);
+  const bookedCruise = cruise as BookedCruise;
+
+  const mockMatch = BOOKED_CRUISES_DATA.find((mockCruise) => (
+    mockCruise.id === cruise.id
+    || mockCruise.reservationNumber === bookedCruise.reservationNumber
+    || (mockCruise.shipName === cruise.shipName && mockCruise.sailDate === cruise.sailDate)
+  ));
+
+  const linkedOffer = offers?.find((offer) => (
+    offer.offerCode === cruise.offerCode
+    || offer.offerCode === cruise.id
+  ));
+
+  let explicitItinerary: ItineraryDay[] = [];
+  let sourcePorts: string[] = [];
+
+  if (cruise.itinerary && cruise.itinerary.length > 0) {
+    explicitItinerary = cruise.itinerary;
+    sourcePorts = cruise.itinerary.map((day) => day.port);
+  } else if (mockMatch?.itinerary && mockMatch.itinerary.length > 0) {
+    explicitItinerary = mockMatch.itinerary;
+    sourcePorts = mockMatch.itinerary.map((day) => day.port);
+  } else if (cruise.portsAndTimes) {
+    explicitItinerary = parsePortsAndTimes(cruise.portsAndTimes);
+    sourcePorts = explicitItinerary.map((day) => day.port);
+  } else if (linkedOffer?.portsAndTimes) {
+    explicitItinerary = parsePortsAndTimes(linkedOffer.portsAndTimes);
+    sourcePorts = explicitItinerary.map((day) => day.port);
+  }
+
+  if (sourcePorts.length === 0 && cruise.ports && cruise.ports.length > 0) {
+    sourcePorts = cruise.ports;
+  } else if (sourcePorts.length === 0 && mockMatch?.ports && mockMatch.ports.length > 0) {
+    sourcePorts = mockMatch.ports;
+  } else if (sourcePorts.length === 0 && cruise.itineraryRaw && cruise.itineraryRaw.length > 0) {
+    sourcePorts = cruise.itineraryRaw;
+  } else if (sourcePorts.length === 0 && linkedOffer?.ports && linkedOffer.ports.length > 0) {
+    sourcePorts = linkedOffer.ports;
+  }
+
+  const syntheticItinerary = buildSyntheticItineraryFromPorts(cruise, totalDays, sourcePorts);
+  const mergedItinerary = mergeItineraryDays(syntheticItinerary, explicitItinerary, totalDays);
+
+  console.log('[CasinoAvailability] Resolved cruise itinerary:', {
+    cruiseId: cruise.id,
+    shipName: cruise.shipName,
+    sailDate: cruise.sailDate,
+    totalDays,
+    explicitDays: explicitItinerary.length,
+    syntheticDays: syntheticItinerary.length,
+    finalDays: mergedItinerary.length,
+  });
+
+  if (mergedItinerary.length > 0) {
+    return mergedItinerary;
+  }
+
+  return syntheticItinerary;
+}
+
 export function calculateCasinoAvailabilityForCruise(
   cruise: Cruise | BookedCruise,
   offers?: { offerCode?: string; portsAndTimes?: string; ports?: string[] }[]
@@ -507,67 +895,9 @@ export function calculateCasinoAvailabilityForCruise(
     }
   }
   
-  let itineraryToUse: ItineraryDay[] = [];
-  
-  if (cruise.itinerary && cruise.itinerary.length > 0) {
-    itineraryToUse = cruise.itinerary;
-    console.log('[CasinoAvailability] Using cruise.itinerary:', itineraryToUse.length, 'days');
-  } else {
-    // Try to find matching cruise in BOOKED_CRUISES_DATA for accurate itinerary
-    const bookedCruise = cruise as BookedCruise;
-    const mockMatch = BOOKED_CRUISES_DATA.find(mc => 
-      mc.id === cruise.id || 
-      mc.reservationNumber === bookedCruise.reservationNumber ||
-      (mc.shipName === cruise.shipName && mc.sailDate === cruise.sailDate)
-    );
-    
-    if (mockMatch?.itinerary && mockMatch.itinerary.length > 0) {
-      itineraryToUse = mockMatch.itinerary;
-      console.log('[CasinoAvailability] Using BOOKED_CRUISES_DATA mock itinerary for:', mockMatch.id, mockMatch.itinerary.length, 'days');
-    } else if ((cruise as any).portsAndTimes) {
-      itineraryToUse = parsePortsAndTimes((cruise as any).portsAndTimes);
-      console.log('[CasinoAvailability] Parsed from cruise.portsAndTimes field');
-    } else if (offers && offers.length > 0 && (cruise as any).offerCode) {
-      // Try to find linked offer with itinerary data from CruiseStore
-      const linkedOffer = offers.find(o => 
-        o.offerCode === (cruise as any).offerCode ||
-        o.offerCode === cruise.id
-      );
-      
-      if (linkedOffer?.portsAndTimes) {
-        itineraryToUse = parsePortsAndTimes(linkedOffer.portsAndTimes);
-        console.log('[CasinoAvailability] Parsed from linkedOffer.portsAndTimes:', (cruise as any).offerCode);
-      } else if (linkedOffer?.ports && linkedOffer.ports.length > 0) {
-        itineraryToUse = linkedOffer.ports.map((port, index) => ({
-          day: index + 1,
-          port,
-          isSeaDay: determineSeaDay(port),
-        }));
-        console.log('[CasinoAvailability] Using linkedOffer.ports:', (cruise as any).offerCode);
-      }
-    }
-    
-    // If still no itinerary, check itineraryRaw
-    if (itineraryToUse.length === 0 && cruise.itineraryRaw && cruise.itineraryRaw.length > 0) {
-      itineraryToUse = cruise.itineraryRaw.map((port, index) => ({
-        day: index + 1,
-        port: port.trim(),
-        isSeaDay: determineSeaDay(port),
-      }));
-      console.log('[CasinoAvailability] Using cruise.itineraryRaw');
-    } 
-    
-    // If still no itinerary, check ports array
-    if (itineraryToUse.length === 0 && cruise.ports && cruise.ports.length > 0) {
-      itineraryToUse = cruise.ports.map((port, index) => ({
-        day: index + 1,
-        port,
-        isSeaDay: determineSeaDay(port),
-      }));
-      console.log('[CasinoAvailability] Using cruise.ports');
-    }
-  }
-  
+  const itineraryToUse = getResolvedCruiseItinerary(cruise, offers);
+  console.log('[CasinoAvailability] Using resolved itinerary:', itineraryToUse.length, 'days');
+
   const expectedDays = accurateNights + 1;
   
   if (itineraryToUse.length > 0) {
