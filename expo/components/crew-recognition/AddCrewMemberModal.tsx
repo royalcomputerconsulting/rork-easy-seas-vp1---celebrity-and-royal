@@ -326,7 +326,7 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, onImportManifes
                 <View style={styles.importInfoCard}>
                   <Text style={styles.importInfoTitle}>Import a crew roster</Text>
                   <Text style={styles.importInfoText}>
-                    Paste a crew list or import a text file. Use sailing headings like “Navigator of the Seas 3/9” followed by crew lines like “Chirmi - windjammer waitress”.
+                    Start each sailing section with a heading like “Harmony 3/1-8”, “Harmony 3/1”, or “Navigator of the Seas 3/9”, then list crew lines like “Chirmi - windjammer waitress”.
                   </Text>
                 </View>
 
@@ -346,7 +346,7 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, onImportManifes
                     style={[styles.input, styles.importTextArea]}
                     value={importText}
                     onChangeText={setImportText}
-                    placeholder="Paste your crew file contents here"
+                    placeholder="First line: Harmony 3/1-8\nChirmi - windjammer waitress"
                     placeholderTextColor={COLORS.textTertiary}
                     multiline
                     numberOfLines={12}
