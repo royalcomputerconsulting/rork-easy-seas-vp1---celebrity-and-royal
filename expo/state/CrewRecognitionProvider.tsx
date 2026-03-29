@@ -146,6 +146,8 @@ function buildIsoDate(month: number, day: number, year: number): string {
   return `${String(year)}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+const MANIFEST_HEADING_PATTERN = /^[\p{L}\d'&().,\s]+?\s+\d{1,2}\/\d{1,2}(?:\s*[-–]\s*\d{1,2}(?:\/\d{1,2})?)?\s*$/u;
+
 function parseHeadingDateRange(rawLine: string, defaultYear: number): { startDate: string; endDate: string } | null {
   const match = rawLine.match(/(\d{1,2})\/(\d{1,2})(?:\s*[-–]\s*(\d{1,2})(?:\/(\d{1,2}))?)?/);
   if (!match) {
@@ -200,17 +202,13 @@ function parseCrewManifestText(
 ): { entries: RecognitionEntryWithCrew[]; sailings: Sailing[]; totalRows: number } {
   const rawLines = manifestText.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   const now = new Date().toISOString();
-  const sailingsMap = new Map<string, Sailing>();
+  const manifestSailingsMap = new Map<string, Sailing>();
   const entries: RecognitionEntryWithCrew[] = [];
-
-  existingSailings.forEach((sailing) => {
-    sailingsMap.set(createSailingStorageKey(sailing.shipName, sailing.sailStartDate, sailing.sailEndDate), sailing);
-  });
 
   let currentSailing: Sailing | null = null;
 
   rawLines.forEach((line, index) => {
-    const looksLikeHeading = !line.includes(' - ') && !line.includes('–') && /\d{1,2}\/\d{1,2}/.test(line);
+    const looksLikeHeading = MANIFEST_HEADING_PATTERN.test(line);
     if (looksLikeHeading) {
       const dateRange = parseHeadingDateRange(line, 2026);
       if (!dateRange) {
@@ -218,6 +216,10 @@ function parseCrewManifestText(
       }
 
       const shipName = normalizeShipName(line.replace(/\d{1,2}\/\d{1,2}(?:\s*[-–]\s*\d{1,2}(?:\/\d{1,2})?)?.*$/, '').trim());
+      if (!shipName) {
+        return;
+      }
+
       const matchedCruise = bookedCruises.find((cruise) => {
         const normalizedCruiseName = normalizeShipName(cruise.shipName || '');
         return normalizedCruiseName.toLowerCase() === shipName.toLowerCase() && cruise.sailDate === dateRange.startDate;
@@ -240,11 +242,20 @@ function parseCrewManifestText(
           updatedAt: now,
         };
 
-      sailingsMap.set(
-        createSailingStorageKey(resolvedSailing.shipName, resolvedSailing.sailStartDate, resolvedSailing.sailEndDate),
-        resolvedSailing,
+      const sailingStorageKey = createSailingStorageKey(
+        resolvedSailing.shipName,
+        resolvedSailing.sailStartDate,
+        resolvedSailing.sailEndDate,
       );
+
+      manifestSailingsMap.set(sailingStorageKey, resolvedSailing);
       currentSailing = resolvedSailing;
+      console.log('[CrewRecognition] Parsed manifest sailing heading:', {
+        line,
+        shipName: resolvedSailing.shipName,
+        sailStartDate: resolvedSailing.sailStartDate,
+        sailEndDate: resolvedSailing.sailEndDate,
+      });
       return;
     }
 
@@ -285,7 +296,7 @@ function parseCrewManifestText(
 
   return {
     entries,
-    sailings: Array.from(sailingsMap.values()),
+    sailings: Array.from(manifestSailingsMap.values()),
     totalRows: rawLines.length,
   };
 }
