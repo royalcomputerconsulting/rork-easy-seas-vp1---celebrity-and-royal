@@ -36,6 +36,10 @@ import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 
 type SortOption = 'soonest' | 'highest-value' | 'lowest-price' | 'longest' | 'shortest';
 
+const PAGE_MARBLE_COLORS = ['#FFFFFF', '#F8F4EF', '#F1EBE5', '#FBFAF8'] as const;
+const PAGE_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.95)', 'rgba(231,224,216,0.26)', 'rgba(255,255,255,0.14)', 'rgba(214,206,198,0.3)'] as const;
+const PAGE_MARBLE_LOCATIONS = [0, 0.24, 0.72, 1] as const;
+
 export default function OfferDetailsScreen() {
   const router = useRouter();
   const { offerCode } = useLocalSearchParams<{ offerCode: string }>();
@@ -364,9 +368,17 @@ export default function OfferDetailsScreen() {
         activeOpacity={0.85}
       >
         <LinearGradient
-          colors={isBooked ? ['rgba(93, 170, 138, 0.12)', '#FFFFFF', '#FAFAFA'] : DS.bg.marbleShell}
+          colors={isBooked ? ['rgba(93, 170, 138, 0.16)', '#FBF8F4', '#F3ECE5'] : PAGE_MARBLE_COLORS}
+          locations={PAGE_MARBLE_LOCATIONS}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <LinearGradient
+          colors={PAGE_MARBLE_VEIN_COLORS}
+          locations={PAGE_MARBLE_LOCATIONS}
+          start={{ x: 0.12, y: 0 }}
+          end={{ x: 0.88, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
 
@@ -500,6 +512,20 @@ export default function OfferDetailsScreen() {
 
   return (
     <View style={styles.container}>
+      <LinearGradient
+        colors={PAGE_MARBLE_COLORS}
+        locations={PAGE_MARBLE_LOCATIONS}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <LinearGradient
+        colors={PAGE_MARBLE_VEIN_COLORS}
+        locations={PAGE_MARBLE_LOCATIONS}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <Stack.Screen 
         options={{ 
           headerShown: false,
@@ -515,6 +541,13 @@ export default function OfferDetailsScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.mergedHeader}
         >
+          <LinearGradient
+            colors={PAGE_MARBLE_VEIN_COLORS}
+            locations={PAGE_MARBLE_LOCATIONS}
+            start={{ x: 0.1, y: 0 }}
+            end={{ x: 0.9, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
           {/* Close Button */}
           <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
             <X size={24} color={COLORS.navyDeep} />
@@ -704,9 +737,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: DS.bg.card,
+    backgroundColor: 'rgba(255,255,255,0.72)',
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(231,231,231,0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
@@ -778,13 +811,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'flex-start',
-    backgroundColor: DS.bg.card,
+    backgroundColor: 'rgba(255,255,255,0.68)',
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     marginTop: SPACING.xs,
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(231,231,231,0.94)',
   },
   statItem: {
     flexDirection: 'row',
@@ -821,8 +854,16 @@ const styles = StyleSheet.create({
   },
   sortSection: {
     marginHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
     gap: SPACING.xs,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(231,231,231,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.68)',
+    ...DS.shadow.sm,
   },
   sortRowCentered: {
     flexDirection: 'row',
@@ -863,13 +904,13 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   cruiseCard: {
-    backgroundColor: DS.bg.card,
+    backgroundColor: 'rgba(255,255,255,0.68)',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(231,231,231,0.94)',
     ...DS.shadow.md,
   },
   bookedCard: {
@@ -942,7 +983,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    backgroundColor: 'rgba(255, 255, 255, 0.76)',
     marginHorizontal: -SPACING.md,
     marginTop: -SPACING.md,
     marginBottom: 0,
@@ -958,10 +999,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.xs,
-    backgroundColor: DS.bg.secondary,
+    backgroundColor: 'rgba(250,248,245,0.84)',
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: DS.border.divider,
+    borderColor: 'rgba(236,236,236,0.92)',
     gap: 2,
   },
   summaryStatBoxMoney: {
@@ -985,12 +1026,12 @@ const styles = StyleSheet.create({
     textAlign: 'center' as const,
   },
   cardHeaderWhite: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: 'rgba(255, 255, 255, 0.74)',
     marginHorizontal: -SPACING.md,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     borderTopWidth: 1,
-    borderTopColor: DS.border.divider,
+    borderTopColor: 'rgba(236,236,236,0.9)',
   },
   headerLine1: {
     flexDirection: 'row',
@@ -1035,12 +1076,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center',
     gap: 4,
-    backgroundColor: DS.bg.secondary,
+    backgroundColor: 'rgba(250,248,245,0.84)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(231,231,231,0.92)',
   },
   cabinBadgeText: {
     fontSize: 12,
@@ -1051,12 +1092,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center',
     gap: 4,
-    backgroundColor: DS.bg.secondary,
+    backgroundColor: 'rgba(250,248,245,0.84)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(231,231,231,0.92)',
   },
   guestBadgeText: {
     fontSize: 12,

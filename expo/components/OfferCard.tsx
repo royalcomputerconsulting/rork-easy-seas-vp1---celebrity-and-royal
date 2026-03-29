@@ -26,9 +26,9 @@ interface OfferCardProps {
   showValueBreakdown?: boolean;
 }
 
-const OFFER_MARBLE_COLORS = ['#FFFFFF', '#F5F1ED', '#ECE7E2', '#F8F6F3'] as const;
-const OFFER_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.72)', 'rgba(255,255,255,0.08)', 'rgba(214,211,209,0.32)'] as const;
-const OFFER_MARBLE_LOCATIONS = [0, 0.26, 0.7, 1] as const;
+const OFFER_MARBLE_COLORS = ['#FFFFFF', '#F7F3EF', '#EDE6DE', '#FBF9F6'] as const;
+const OFFER_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.92)', 'rgba(230,224,217,0.28)', 'rgba(255,255,255,0.22)', 'rgba(214,211,209,0.34)'] as const;
+const OFFER_MARBLE_LOCATIONS = [0, 0.24, 0.72, 1] as const;
 
 function getOfferImage(offer: Cruise): string {
   if (offer.imageUrl) return offer.imageUrl;
@@ -212,43 +212,58 @@ export const OfferCard = React.memo(function OfferCard({
         activeOpacity={0.7}
         testID="offer-card-compact"
       >
-        <View style={styles.compactContent}>
-          <View style={styles.compactLeft}>
-            <View style={styles.compactShipRow}>
-              <Ship size={12} color={COLORS.navyDeep} />
-              <Text style={styles.compactShipName} numberOfLines={1}>
-                {offer.shipName}
-              </Text>
-            </View>
-            <Text style={styles.compactDestination} numberOfLines={1}>
-              {offer.destination}
-            </Text>
-            <View style={styles.compactDetails}>
-              <Text style={styles.compactDate}>
-                {createDateFromString(offer.sailDate).toLocaleDateString('en-US', {
-                  timeZone: 'UTC',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </Text>
-              <View style={styles.compactDot} />
-              <Text style={styles.compactNights}>{offer.nights} nights</Text>
-            </View>
-          </View>
-
-          <View style={styles.compactRight}>
-            {offer.price !== undefined && (
-              <Text style={styles.compactPrice}>{formatCurrency(offer.price)}</Text>
-            )}
-            {isBooked && (
-              <View style={styles.compactBookedBadge}>
-                <CheckCircle size={10} color={COLORS.white} />
-                <Text style={styles.compactBookedText}>Booked</Text>
+        <LinearGradient
+          colors={OFFER_MARBLE_COLORS}
+          locations={OFFER_MARBLE_LOCATIONS}
+          start={{ x: 0.02, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.compactMarbleBackground}
+        >
+          <LinearGradient
+            colors={OFFER_MARBLE_VEIN_COLORS}
+            locations={OFFER_MARBLE_LOCATIONS}
+            start={{ x: 0.14, y: 0 }}
+            end={{ x: 0.86, y: 1 }}
+            style={styles.compactMarbleVein}
+          />
+          <View style={styles.compactContent}>
+            <View style={styles.compactLeft}>
+              <View style={styles.compactShipRow}>
+                <Ship size={12} color={COLORS.navyDeep} />
+                <Text style={styles.compactShipName} numberOfLines={1}>
+                  {offer.shipName}
+                </Text>
               </View>
-            )}
-            <ChevronRight size={16} color={COLORS.navyDeep} />
+              <Text style={styles.compactDestination} numberOfLines={1}>
+                {offer.destination}
+              </Text>
+              <View style={styles.compactDetails}>
+                <Text style={styles.compactDate}>
+                  {createDateFromString(offer.sailDate).toLocaleDateString('en-US', {
+                    timeZone: 'UTC',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </Text>
+                <View style={styles.compactDot} />
+                <Text style={styles.compactNights}>{offer.nights} nights</Text>
+              </View>
+            </View>
+
+            <View style={styles.compactRight}>
+              {offer.price !== undefined && (
+                <Text style={styles.compactPrice}>{formatCurrency(offer.price)}</Text>
+              )}
+              {isBooked && (
+                <View style={styles.compactBookedBadge}>
+                  <CheckCircle size={10} color={COLORS.white} />
+                  <Text style={styles.compactBookedText}>Booked</Text>
+                </View>
+              )}
+              <ChevronRight size={16} color={COLORS.navyDeep} />
+            </View>
           </View>
-        </View>
+        </LinearGradient>
       </TouchableOpacity>
     );
   }
@@ -763,7 +778,17 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E4DDD6',
     ...SHADOW.sm,
+  },
+  compactMarbleBackground: {
+    borderRadius: BORDER_RADIUS.md,
+    position: 'relative',
+  },
+  compactMarbleVein: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.84,
   },
   compactBooked: {
     borderWidth: 1,
@@ -774,6 +799,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: SPACING.md,
+    backgroundColor: 'rgba(255,255,255,0.64)',
   },
   compactLeft: {
     flex: 1,
