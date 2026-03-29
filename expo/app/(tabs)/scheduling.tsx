@@ -31,7 +31,7 @@ import { useUser } from '@/state/UserProvider';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
 import { isDateInPast, getDaysUntil, createDateFromString } from '@/lib/date';
-import { CruiseCard } from '@/components/CruiseCard';
+import { PremiumCruiseMiniCard } from '@/components/PremiumCruiseMiniCard';
 import type { Cruise, BookedCruise } from '@/types/models';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { useAgentX } from '@/state/AgentXProvider';
@@ -381,11 +381,10 @@ export default function SchedulingScreen() {
     const isBooked = bookedIds.has(item.id) || activeTab === 'booked';
     
     return (
-      <CruiseCard
+      <PremiumCruiseMiniCard
         cruise={item}
         onPress={() => handleCruisePress(item)}
         variant={isBooked ? 'booked' : 'available'}
-        mini={true}
       />
     );
   }, [bookedIds, handleCruisePress, activeTab]);

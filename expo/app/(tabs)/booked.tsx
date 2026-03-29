@@ -38,7 +38,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
 import { isDateInPast, createDateFromString } from '@/lib/date';
-import { CruiseCard } from '@/components/CruiseCard';
+import { PremiumCruiseMiniCard } from '@/components/PremiumCruiseMiniCard';
 import type { BookedCruise } from '@/types/models';
 import { AddBookedCruiseModal } from '@/components/AddBookedCruiseModal';
 
@@ -269,11 +269,10 @@ export default function BookedScreen() {
     const isPast = isDateInPast(item.returnDate);
     
     return (
-      <CruiseCard
+      <PremiumCruiseMiniCard
         cruise={item}
         onPress={() => handleCruisePress(item)}
         variant={isPast ? 'completed' : 'booked'}
-        mini={true}
       />
     );
   }, [handleCruisePress]);
@@ -315,11 +314,10 @@ export default function BookedScreen() {
                       </View>
                     )}
                     <View style={styles.timelineCardWrapper}>
-                      <CruiseCard
+                      <PremiumCruiseMiniCard
                         cruise={cruise}
                         onPress={() => handleCruisePress(cruise)}
                         variant="booked"
-                        mini={true}
                       />
                     </View>
                   </View>
@@ -356,11 +354,10 @@ export default function BookedScreen() {
                       </View>
                     )}
                     <View style={styles.timelineCardWrapper}>
-                      <CruiseCard
+                      <PremiumCruiseMiniCard
                         cruise={cruise}
                         onPress={() => handleCruisePress(cruise)}
                         variant="completed"
-                        mini={true}
                       />
                     </View>
                   </View>

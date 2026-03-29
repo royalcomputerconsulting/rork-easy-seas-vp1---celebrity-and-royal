@@ -9,7 +9,7 @@ import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
-import { CruiseCard } from '@/components/CruiseCard';
+import { PremiumCruiseMiniCard } from '@/components/PremiumCruiseMiniCard';
 import type { CalendarEvent, BookedCruise } from '@/types/models';
 import { getLuckForDate, type LuckInfo } from '@/constants/luckScores';
 import { getPersonalizedLuckForDate } from '@/lib/luckCalculator';
@@ -642,14 +642,13 @@ export default function EventsScreen() {
       const cruise = item.event as BookedCruise;
       return (
         <View key={`cruise-${cruise.id}-${index}`} testID="calendar-next-up-cruise-card">
-          <CruiseCard
+          <PremiumCruiseMiniCard
             cruise={cruise}
             onPress={() => router.push({
               pathname: '/(tabs)/(overview)/cruise-details' as any,
               params: { id: cruise.id },
             })}
             variant="booked"
-            mini={true}
           />
         </View>
       );
