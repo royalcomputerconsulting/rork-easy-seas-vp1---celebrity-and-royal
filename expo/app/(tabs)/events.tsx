@@ -61,6 +61,8 @@ const EVENT_COLORS = {
   personal: '#A855F7',
 };
 
+const OPEN_UNBOOKED_DAY_COLOR = '#DCFCE7';
+
 function formatDateKey(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -569,7 +571,12 @@ export default function EventsScreen() {
     const borderColor = getDayBorderColor(day);
     const borderWidth = getDayBorderWidth(day);
     const activeLuck = day.isCurrentMonth ? (day.personalizedLuck ?? day.luck) : null;
-    const bgColor = day.isCurrentMonth ? '#FFFFFF' : 'rgba(250,250,250,0.68)';
+    const isOpenUnbookedDay = day.isCurrentMonth && day.events.cruise === 0 && day.events.travel === 0 && day.events.personal === 0;
+    const bgColor = !day.isCurrentMonth
+      ? 'rgba(250,250,250,0.68)'
+      : isOpenUnbookedDay
+        ? OPEN_UNBOOKED_DAY_COLOR
+        : '#FFFFFF';
     const dateColor = day.isCurrentMonth ? '#0A1628' : 'rgba(17,17,17,0.36)';
     const luckColor = activeLuck ? (LUCK_COLORS[activeLuck.score] ?? '#0A1628') : '#0A1628';
 
@@ -583,6 +590,7 @@ export default function EventsScreen() {
         ]}
         activeOpacity={0.75}
         onPress={() => handleDayPress(day)}
+        testID={isOpenUnbookedDay ? 'calendar-open-unbooked-day' : 'calendar-day'}
       >
         <Text style={[styles.dayNumber, { color: dateColor }]}>
           {String(day.dayNumber)}
@@ -821,7 +829,7 @@ export default function EventsScreen() {
                       style={[
                         styles.ninetyDayCell,
                         day.isToday && styles.todayNinetyCell,
-                        hasEvents && { backgroundColor: `${eventColor}40` },
+                        { backgroundColor: hasEvents ? `${eventColor}40` : OPEN_UNBOOKED_DAY_COLOR },
                       ]}
                     >
                       {hasEvents && (
@@ -841,6 +849,10 @@ export default function EventsScreen() {
           )}
 
           <View style={styles.legendContainer}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { borderColor: '#86EFAC', backgroundColor: OPEN_UNBOOKED_DAY_COLOR }]} />
+              <Text style={styles.legendText}>Open / Unbooked</Text>
+            </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { borderColor: EVENT_COLORS.cruise }]} />
               <Text style={styles.legendText}>Easy Seas</Text>
@@ -886,6 +898,10 @@ export default function EventsScreen() {
               <Text style={styles.luckSwatchEndText}>Bad Luck</Text>
               <Text style={styles.luckSwatchEndText}>Super Lucky</Text>
             </View>
+          </View>
+
+          <View style={styles.crewSectionContainer} testID="calendar-time-zone-section">
+            <TimeZoneConverter />
           </View>
 
           {viewMode === 'events' && (
@@ -966,10 +982,6 @@ export default function EventsScreen() {
               </View>
             </View>
           )}
-
-          <View style={styles.crewSectionContainer}>
-            <TimeZoneConverter />
-          </View>
 
           <View style={styles.crewSectionContainer}>
             <CrewRecognitionSection />
