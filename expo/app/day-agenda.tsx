@@ -15,6 +15,10 @@ import {
   Users,
   Dices,
   RefreshCcw,
+  Sparkles,
+  Star,
+  Compass,
+  ShieldAlert,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
@@ -29,7 +33,6 @@ import { calculatePersonalizedLuck, type HoroscopeLuckResult } from '@/lib/luckC
 import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 
 const EVENT_COLORS = {
@@ -137,6 +140,107 @@ function getSyntheticItineraryDay(cruise: MergedCruiseData, dayNum: number): Iti
   }
 
   return undefined;
+}
+
+interface DailyHoroscopeReading {
+  overall: string;
+  western: string;
+  chinese: string;
+  focus: string;
+  caution: string;
+  powerColor: string;
+  powerWindow: string;
+  ritual: string;
+}
+
+function getHoroscopeTone(score: number): 'low' | 'steady' | 'high' {
+  if (score >= 7) {
+    return 'high';
+  }
+
+  if (score <= 3) {
+    return 'low';
+  }
+
+  return 'steady';
+}
+
+function formatHoroscopeHourLabel(hour24: number): string {
+  const normalizedHour = ((hour24 % 24) + 24) % 24;
+  const period = normalizedHour >= 12 ? 'PM' : 'AM';
+  const displayHour = normalizedHour % 12 === 0 ? 12 : normalizedHour % 12;
+  return `${displayHour} ${period}`;
+}
+
+function buildDailyHoroscopeReading(horoscopeLuck: HoroscopeLuckResult, targetDate: Date): DailyHoroscopeReading {
+  const weekdayName = targetDate.toLocaleDateString('en-US', { weekday: 'long' });
+  const focusThemes = [
+    'emotional reset and softer pacing',
+    'fresh starts and practical planning',
+    'communication and quick follow-through',
+    'discipline and better boundaries',
+    'visibility and confident asks',
+    'pleasure, romance, and creative flow',
+    'rest, reflection, and energy repair',
+  ] as const;
+  const powerColors = ['Ruby', 'Amber', 'Gold', 'Emerald', 'Teal', 'Sapphire', 'Indigo', 'Violet', 'Rose'] as const;
+  const focusTheme = focusThemes[targetDate.getDay()] ?? 'clarity and inner balance';
+  const powerColor = powerColors[horoscopeLuck.combinedScore - 1] ?? 'Emerald';
+  const powerStartHour = ((horoscopeLuck.westernScore * 2 + targetDate.getDate()) % 11) + 8;
+  const powerWindow = `${formatHoroscopeHourLabel(powerStartHour)} - ${formatHoroscopeHourLabel(powerStartHour + 2)}`;
+  const overallTone = getHoroscopeTone(horoscopeLuck.combinedScore);
+  const westernTone = getHoroscopeTone(horoscopeLuck.westernScore);
+  const chineseTone = getHoroscopeTone(horoscopeLuck.chineseScore);
+
+  const overall = overallTone === 'high'
+    ? `${weekdayName} carries strong forward motion. Your Western ${horoscopeLuck.westernSign} instincts and Chinese ${horoscopeLuck.chineseAnimal} energy are both backing visible moves, fast alignment, and bold but clean decisions.`
+    : overallTone === 'low'
+      ? `${weekdayName} works best when you keep life lighter. Let the day be selective instead of packed, protect your peace, and choose the option that feels calm rather than urgent.`
+      : `${weekdayName} is balanced and responsive. You do not need to force luck today; steady timing, graceful pivots, and thoughtful choices will open the right doors.`;
+
+  const western = westernTone === 'high'
+    ? `${horoscopeLuck.westernSign} energy is amplified today. Trust your natural style, speak clearly, and act before overthinking drains the moment.`
+    : westernTone === 'low'
+      ? `${horoscopeLuck.westernSign} energy wants gentleness. Keep expectations realistic, simplify your plans, and give yourself extra space before reacting.`
+      : `${horoscopeLuck.westernSign} energy is steady. Lead with calm confidence and choose progress over perfection.`;
+
+  const chinese = chineseTone === 'high'
+    ? `Your ${horoscopeLuck.chineseAnimal} sign is in rhythm with the day. Favor proven people, practical action, and the opportunity that already feels trustworthy.`
+    : chineseTone === 'low'
+      ? `Your ${horoscopeLuck.chineseAnimal} sign is asking for patience. Stay away from messy dynamics, hold your standards, and let others reveal their intentions before you commit.`
+      : `Your ${horoscopeLuck.chineseAnimal} sign is balanced today. Small, well-timed moves will outperform dramatic ones.`;
+
+  const focus = `Best focus for today: ${focusTheme}. Put decisions, outreach, reservations, or money moves into your strongest window around ${powerWindow}.`;
+
+  const caution = overallTone === 'high'
+    ? 'Watch the tendency to say yes to too many things at once. Strong luck works best when it has one clear target.'
+    : overallTone === 'low'
+      ? 'Avoid impulse spending, emotional overpromising, and trying to fix everything in one pass. Protect your bandwidth.'
+      : 'Avoid mixed signals and half-decisions. If something matters, give it a direct answer and a clean next step.';
+
+  const ritual = `Lucky cue: lean into ${powerColor.toLowerCase()} tones, keep your first hour intentional, and end the day with less noise than usual.`;
+
+  console.log('[DayAgenda] Built daily horoscope reading', {
+    date: formatAgendaDateKey(targetDate),
+    weekdayName,
+    westernSign: horoscopeLuck.westernSign,
+    westernScore: horoscopeLuck.westernScore,
+    chineseAnimal: horoscopeLuck.chineseAnimal,
+    chineseScore: horoscopeLuck.chineseScore,
+    combinedScore: horoscopeLuck.combinedScore,
+    powerWindow,
+  });
+
+  return {
+    overall,
+    western,
+    chinese,
+    focus,
+    caution,
+    powerColor,
+    powerWindow,
+    ritual,
+  };
 }
 
 export default function DayAgendaScreen() {
@@ -739,6 +843,14 @@ export default function DayAgendaScreen() {
     return calculatePersonalizedLuck(currentUser.birthdate, dateStr);
   }, [currentUser?.birthdate, dateStr]);
 
+  const dailyHoroscope = useMemo((): DailyHoroscopeReading | null => {
+    if (!horoscopeLuck) {
+      return null;
+    }
+
+    return buildDailyHoroscopeReading(horoscopeLuck, selectedDate);
+  }, [horoscopeLuck, selectedDate]);
+
   const goldenTimeSlots = useMemo(() => {
     return opportunePlayingTimes.map(t => ({
       id: t.id,
@@ -1172,7 +1284,105 @@ export default function DayAgendaScreen() {
             <TimeZoneConverter />
           </View>
 
-          <CrewRecognitionSection />
+          <View style={styles.sectionContainer} testID="day-agenda-horoscope-section">
+            <Text style={styles.sectionTitle}>Daily Horoscope</Text>
+            {horoscopeLuck && dailyHoroscope ? (
+              <>
+                <View style={styles.horoscopeHeroCard}>
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.08)', `${horoscopeLuck.combinedHex}22`, 'rgba(7,12,24,0.92)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.horoscopeHeroGradient, { borderColor: `${horoscopeLuck.combinedHex}55` }]}
+                  >
+                    <View style={styles.horoscopeHeroHeader}>
+                      <View style={styles.horoscopeHeroTitleWrap}>
+                        <Text style={styles.horoscopeEyebrow}>Chinese + Western Reading</Text>
+                        <Text style={styles.horoscopeHeroTitle}>{horoscopeLuck.combinedLabel}</Text>
+                      </View>
+                      <View style={[styles.horoscopeScorePill, { backgroundColor: horoscopeLuck.combinedHex }]}>
+                        <Text style={styles.horoscopeScorePillText}>{String(horoscopeLuck.combinedScore)}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.horoscopeHeroText}>{dailyHoroscope.overall}</Text>
+                    <View style={styles.horoscopeStatRow}>
+                      <View style={styles.horoscopeStatCard}>
+                        <Text style={styles.horoscopeStatLabel}>Power Window</Text>
+                        <Text style={styles.horoscopeStatValue}>{dailyHoroscope.powerWindow}</Text>
+                      </View>
+                      <View style={styles.horoscopeStatCard}>
+                        <Text style={styles.horoscopeStatLabel}>Lucky Color</Text>
+                        <Text style={[styles.horoscopeStatValue, { color: horoscopeLuck.combinedHex }]}>{dailyHoroscope.powerColor}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.horoscopeRitualText}>{dailyHoroscope.ritual}</Text>
+                  </LinearGradient>
+                </View>
+
+                <View style={styles.horoscopeInsightsColumn}>
+                  <View style={styles.horoscopeInsightCard} testID="day-agenda-western-horoscope-card">
+                    <View style={styles.horoscopeInsightHeader}>
+                      <View style={styles.horoscopeIconBadge}>
+                        <Star size={16} color="#A5B4FC" />
+                      </View>
+                      <View style={styles.horoscopeInsightTitleWrap}>
+                        <Text style={styles.horoscopeInsightEyebrow}>Western Zodiac</Text>
+                        <Text style={styles.horoscopeInsightTitle}>{horoscopeLuck.westernSign}</Text>
+                      </View>
+                      <Text style={styles.horoscopeInsightScore}>{horoscopeLuck.westernScore}/9</Text>
+                    </View>
+                    <Text style={styles.horoscopeInsightSubtitle}>{horoscopeLuck.westernDescription}</Text>
+                    <Text style={styles.horoscopeInsightText}>{dailyHoroscope.western}</Text>
+                  </View>
+
+                  <View style={styles.horoscopeInsightCard} testID="day-agenda-chinese-horoscope-card">
+                    <View style={styles.horoscopeInsightHeader}>
+                      <View style={styles.horoscopeIconBadge}>
+                        <Sparkles size={16} color="#FBBF24" />
+                      </View>
+                      <View style={styles.horoscopeInsightTitleWrap}>
+                        <Text style={styles.horoscopeInsightEyebrow}>Chinese Zodiac</Text>
+                        <Text style={styles.horoscopeInsightTitle}>{horoscopeLuck.chineseAnimal}</Text>
+                      </View>
+                      <Text style={styles.horoscopeInsightScore}>{horoscopeLuck.chineseScore}/9</Text>
+                    </View>
+                    <Text style={styles.horoscopeInsightSubtitle}>{horoscopeLuck.chineseDescription}</Text>
+                    <Text style={styles.horoscopeInsightText}>{dailyHoroscope.chinese}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.horoscopeGuidanceColumn}>
+                  <View style={styles.horoscopeGuidanceCard}>
+                    <View style={styles.horoscopeGuidanceHeader}>
+                      <Compass size={16} color="#7DD3FC" />
+                      <Text style={styles.horoscopeGuidanceTitle}>Today&apos;s Focus</Text>
+                    </View>
+                    <Text style={styles.horoscopeGuidanceText}>{dailyHoroscope.focus}</Text>
+                  </View>
+
+                  <View style={styles.horoscopeGuidanceCard}>
+                    <View style={styles.horoscopeGuidanceHeader}>
+                      <ShieldAlert size={16} color="#FCA5A5" />
+                      <Text style={styles.horoscopeGuidanceTitle}>Watch-outs</Text>
+                    </View>
+                    <Text style={styles.horoscopeGuidanceText}>{dailyHoroscope.caution}</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={styles.horoscopeEmptyCard} testID="day-agenda-horoscope-empty">
+                <View style={styles.horoscopeEmptyIconWrap}>
+                  <Sparkles size={18} color="#FBBF24" />
+                </View>
+                <View style={styles.horoscopeEmptyTextWrap}>
+                  <Text style={styles.horoscopeEmptyTitle}>Add your birthdate for a personalized reading</Text>
+                  <Text style={styles.horoscopeEmptyText}>
+                    Open Settings and add your birthdate to unlock a full Chinese and Western horoscope for each day.
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
         </ScrollView>
       </SafeAreaView>
       
@@ -1683,5 +1893,197 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.55)',
     fontWeight: '700' as const,
     marginLeft: 3,
+  },
+  horoscopeHeroCard: {
+    marginBottom: SPACING.md,
+  },
+  horoscopeHeroGradient: {
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+  },
+  horoscopeHeroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  horoscopeHeroTitleWrap: {
+    flex: 1,
+  },
+  horoscopeEyebrow: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.6)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  horoscopeHeroTitle: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+  },
+  horoscopeScorePill: {
+    minWidth: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.sm,
+  },
+  horoscopeScorePillText: {
+    fontSize: 20,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  horoscopeHeroText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#FFFFFF',
+    lineHeight: 22,
+    marginBottom: SPACING.md,
+  },
+  horoscopeStatRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  horoscopeStatCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  horoscopeStatLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.6)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  horoscopeStatValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+  },
+  horoscopeRitualText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.72)',
+    lineHeight: 18,
+  },
+  horoscopeInsightsColumn: {
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  horoscopeInsightCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  horoscopeInsightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  horoscopeIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  horoscopeInsightTitleWrap: {
+    flex: 1,
+  },
+  horoscopeInsightEyebrow: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.55)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  horoscopeInsightTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+  },
+  horoscopeInsightScore: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+  },
+  horoscopeInsightSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: SPACING.xs,
+  },
+  horoscopeInsightText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#FFFFFF',
+    lineHeight: 21,
+  },
+  horoscopeGuidanceColumn: {
+    gap: SPACING.sm,
+  },
+  horoscopeGuidanceCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  horoscopeGuidanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.xs,
+  },
+  horoscopeGuidanceTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+  },
+  horoscopeGuidanceText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255,255,255,0.9)',
+    lineHeight: 21,
+  },
+  horoscopeEmptyCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  horoscopeEmptyIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(251,191,36,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  horoscopeEmptyTextWrap: {
+    flex: 1,
+  },
+  horoscopeEmptyTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  horoscopeEmptyText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255,255,255,0.72)',
+    lineHeight: 20,
   },
 });
