@@ -1570,7 +1570,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     icon: React.ReactNode,
     title: string,
     subtitle: string,
-    gradientColors: [string, string] = ['#0369A1', '#0284C7']
+    gradientColors: [string, string] = ['#1E3A5F', '#7B2D8E']
   ) => (
     <LinearGradient
       colors={gradientColors}
@@ -1607,7 +1607,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.dataOverviewCard}>
             <LinearGradient
-              colors={['#0369A1', '#0284C7'] as [string, string]}
+              colors={['#1E3A5F', '#7B2D8E'] as [string, string]}
               style={styles.dataOverviewHeader}
             >
               <View style={styles.dataOverviewHeaderContent}>
@@ -1800,7 +1800,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Moon size={18} color={COLORS.white} />, 'Display Preferences', 'Customize how data appears')}
+              {renderSectionHeader(<Moon size={18} color={COLORS.white} />, 'Display Preferences', 'Customize how data appears', ['#1A2560', '#6B21A8'])}
               {renderSettingRow(
                 <DollarSign size={18} color={COLORS.navyDeep} />,
                 'Show Taxes in List',
@@ -1821,7 +1821,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Bell size={18} color={COLORS.white} />, 'Notifications', 'Alert preferences')}
+              {renderSectionHeader(<Bell size={18} color={COLORS.white} />, 'Notifications', 'Alert preferences', ['#162B3D', '#5B21B6'])}
               {renderSettingRow(
                 <Bell size={18} color={COLORS.navyDeep} />,
                 'Price Drop Alerts',
@@ -1837,7 +1837,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Database size={18} color={COLORS.white} />, 'Data Management', 'Import, export & backup your data')}
+              {renderSectionHeader(<Database size={18} color={COLORS.white} />, 'Data Management', 'Import, export & backup your data', ['#1C1650', '#7C3AED'])}
               <View style={[styles.dataSubsection, styles.importBanner]}>
                 <Text style={styles.subsectionLabel}>IMPORT</Text>
                 <Text style={styles.subsectionHelper}>Bring in new CSV manifests, booked logs, or calendar drops.</Text>
@@ -1882,6 +1882,49 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 handleImportCalendarICS
               )}
 <View style={styles.dataDivider} />
+              
+              <View style={[styles.dataSubsection, styles.fullBackupBanner]}>
+                <Text style={styles.subsectionLabel}>FULL BACKUP</Text>
+                <Text style={styles.subsectionHelper}>Export slices or recover your entire vault in one flow.</Text>
+              </View>
+              {renderSettingRow(
+                <Upload size={18} color={COLORS.navyDeep} />,
+                'Offers CSV',
+                isExporting ? (
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                ) : (
+                  <Text style={styles.countBadge}>
+                    {dataStats.sailings} sailings
+                  </Text>
+                ),
+                handleExportOffersCSV
+              )}
+              {renderSettingRow(
+                <Ship size={18} color={COLORS.navyDeep} />,
+                'Booked Cruises CSV',
+                isExporting ? (
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                ) : (
+                  <Text style={styles.countBadge}>
+                    {dataStats.booked} booked
+                  </Text>
+                ),
+                handleExportBookedCSV
+              )}
+              {renderSettingRow(
+                <Download size={18} color={COLORS.navyDeep} />,
+                'Calendar (.ics)',
+                isExporting ? (
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                ) : (
+                  <Text style={styles.countBadge}>
+                    {dataStats.events} events
+                  </Text>
+                ),
+                handleExportCalendarICS
+              )}
+
+              <View style={styles.dataDivider} />
 
               <View style={[styles.dataSubsection, styles.calendarFeedBanner]}>
                 <Text style={styles.subsectionLabel}>CALENDAR FEED</Text>
@@ -1966,47 +2009,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               </View>
 
               <View style={styles.dataDivider} />
-              
-              <View style={[styles.dataSubsection, styles.fullBackupBanner]}>
-                <Text style={styles.subsectionLabel}>FULL BACKUP</Text>
-                <Text style={styles.subsectionHelper}>Export slices or recover your entire vault in one flow.</Text>
-              </View>
-              {renderSettingRow(
-                <Upload size={18} color={COLORS.navyDeep} />,
-                'Offers CSV',
-                isExporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    {dataStats.sailings} sailings
-                  </Text>
-                ),
-                handleExportOffersCSV
-              )}
-              {renderSettingRow(
-                <Ship size={18} color={COLORS.navyDeep} />,
-                'Booked Cruises CSV',
-                isExporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    {dataStats.booked} booked
-                  </Text>
-                ),
-                handleExportBookedCSV
-              )}
-              {renderSettingRow(
-                <Download size={18} color={COLORS.navyDeep} />,
-                'Calendar (.ics)',
-                isExporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    {dataStats.events} events
-                  </Text>
-                ),
-                handleExportCalendarICS
-              )}
+
 {renderSettingRow(
                 <FolderArchive size={18} color={COLORS.success} />,
                 'Export All App Data',
@@ -2079,7 +2082,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<HelpCircle size={18} color={COLORS.white} />, 'Support', 'Help & resources')}
+              {renderSectionHeader(<HelpCircle size={18} color={COLORS.white} />, 'Support', 'Help & resources', ['#1E3A5F', '#9333EA'])}
               {renderSettingRow(
                 <HelpCircle size={18} color={COLORS.navyDeep} />,
                 'Help Center',
@@ -2153,7 +2156,7 @@ STEP 4: Optional Calendar Import
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan')}
+              {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan', ['#1B2550', '#6D28D9'])}
               <View style={styles.subscriptionStatusBanner}>
                 <Crown size={18} color={
                   entitlement.subscriptionDisplayStatus === 'annual' ? '#10B981' :
@@ -2223,7 +2226,7 @@ STEP 4: Optional Calendar Import
           {isAdmin && (
             <View style={styles.section}>
               <View style={styles.sectionCard}>
-                {renderSectionHeader(<Shield size={18} color={COLORS.white} />, 'Admin', 'Email whitelist & data tools')}
+                {renderSectionHeader(<Shield size={18} color={COLORS.white} />, 'Admin', 'Email whitelist & data tools', ['#1B2040', '#8B5CF6'])}
                 <View style={styles.adminHeader}>
                   <Text style={styles.adminHeaderText}>Manage user access</Text>
                   <Text style={styles.adminHeaderSubtext}>

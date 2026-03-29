@@ -848,7 +848,7 @@ export default function AnalyticsScreen() {
         ))}
       </View>
 
-      <View style={styles.section} testID="casino-player-loyalty-section">
+      <View style={[styles.section, styles.sectionAccentEmerald]} testID="casino-player-loyalty-section">
         <CompactDashboardHeader
           hideLogo={true}
           memberName={clubRoyaleProfile?.memberName || 'Player'}
@@ -893,7 +893,7 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
-        <View style={styles.cleanCard}>
+        <View style={[styles.cleanCard, styles.cleanCardGold]}>
           <View style={styles.cleanCardHeader}>
             <PieChart size={16} color={COLORS.goldLight} />
             <Text style={styles.cleanCardTitle}>Casino Stats</Text>
@@ -922,7 +922,7 @@ export default function AnalyticsScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentPurple]}>
         <CasinoMetricsCard
           completedCruises={bookedCruises.filter(c => {
             if (c.completionState === 'completed' || c.status === 'completed') return true;
@@ -1006,7 +1006,7 @@ export default function AnalyticsScreen() {
         </View>
       )}
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentRose]}>
         <AlertsCard
           alerts={activeAlerts}
           insights={insights}
@@ -1019,7 +1019,7 @@ export default function AnalyticsScreen() {
         />
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentOrange]}>
         <W2GTracker
           records={w2gRecords}
           onAddRecord={addW2GRecord}
@@ -1027,7 +1027,7 @@ export default function AnalyticsScreen() {
         />
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentCyan]}>
         <CompValueCalculator
           initialItems={compItems}
           onCompValueChange={(totalValue) => {
@@ -1127,13 +1127,13 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
-        <View style={[styles.alertsBanner, { backgroundColor: 'rgba(0, 31, 63, 0.05)' }]}>
-          <View style={styles.alertsIconContainer}>
-            <Calendar size={20} color={COLORS.navyDeep} />
+        <View style={[styles.alertsBanner, { backgroundColor: 'rgba(0,80,50,0.2)', borderColor: 'rgba(16,185,129,0.4)', borderWidth: 1 }]}>
+          <View style={[styles.alertsIconContainer, { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
+            <Calendar size={20} color="#10B981" />
           </View>
           <View style={styles.alertsContent}>
-            <Text style={[styles.alertsTitle, { color: COLORS.navyDeep }]}>Calculate Past Sessions</Text>
-            <Text style={[styles.alertsDescription, { color: COLORS.navyDeep, opacity: 0.7 }]}>
+            <Text style={[styles.alertsTitle, { color: '#10B981' }]}>Calculate Past Sessions</Text>
+            <Text style={[styles.alertsDescription, { color: 'rgba(255,255,255,0.75)' }]}>
               Generate session history from completed cruises with points earned
             </Text>
           </View>
@@ -1160,7 +1160,7 @@ export default function AnalyticsScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentGold]}>
         <LivePPHTracker
           targetPPH={targetPPH}
           onSessionComplete={handleLiveSessionComplete}
@@ -1168,7 +1168,7 @@ export default function AnalyticsScreen() {
         />
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentPurple]}>
         <PPHGoalsCard
           analytics={sessionAnalytics}
           sessions={sessions}
@@ -1177,26 +1177,26 @@ export default function AnalyticsScreen() {
         />
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentEmerald]}>
         <PointsPerHourCard 
           analytics={sessionAnalytics} 
           sessions={sessions}
         />
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentGold]}>
         <PPHHistoryChart sessions={sessions} maxDataPoints={10} />
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentRose]}>
         <PPHSessionComparison sessions={sessions} />
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentCyan]}>
         <PPHLeaderboard sessions={sessions} maxEntries={5} />
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentEmerald]}>
         <WeeklyGoalsCard
           compact={true}
           onGoalComplete={(goal) => {
@@ -1211,11 +1211,11 @@ export default function AnalyticsScreen() {
         />
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentGold]}>
         <GamificationCard compact={false} showAchievements={false} />
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentPurple]}>
         <CasinoSessionTracker
           date={todayDateString}
           goldenTimeSlots={goldenTimeSlots}
@@ -1226,7 +1226,7 @@ export default function AnalyticsScreen() {
         />
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionAccentOrange]}>
         <CasinoIntelligenceCard 
           analytics={sessionAnalytics} 
           completedCruises={bookedCruises.filter(c => {
@@ -1800,6 +1800,58 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(32,178,170,0.38)',
     ...SHADOW.sm,
+  },
+  cleanCardGold: {
+    backgroundColor: 'rgba(70,45,0,0.55)',
+    borderColor: 'rgba(212,160,10,0.52)',
+  },
+  cleanCardEmerald: {
+    backgroundColor: 'rgba(0,65,45,0.55)',
+    borderColor: 'rgba(16,185,129,0.48)',
+  },
+  cleanCardPurple: {
+    backgroundColor: 'rgba(55,0,90,0.55)',
+    borderColor: 'rgba(139,92,246,0.48)',
+  },
+  cleanCardRose: {
+    backgroundColor: 'rgba(90,0,30,0.55)',
+    borderColor: 'rgba(244,63,94,0.48)',
+  },
+  sectionAccentGold: {
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(212,160,10,0.65)',
+    paddingLeft: 6,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  sectionAccentEmerald: {
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(16,185,129,0.65)',
+    paddingLeft: 6,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  sectionAccentPurple: {
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(139,92,246,0.65)',
+    paddingLeft: 6,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  sectionAccentRose: {
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(244,63,94,0.65)',
+    paddingLeft: 6,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  sectionAccentOrange: {
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(249,115,22,0.65)',
+    paddingLeft: 6,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  sectionAccentCyan: {
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(6,182,212,0.65)',
+    paddingLeft: 6,
+    borderRadius: BORDER_RADIUS.sm,
   },
   cleanCardHeader: {
     flexDirection: 'row',
