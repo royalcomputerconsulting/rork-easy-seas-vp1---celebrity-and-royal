@@ -143,8 +143,8 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
 export const JackpotDealsCard = OfferSummaryCard;
 
 const JACKPOT_BG = 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=600&q=80';
-const OFFER_CARD_MARBLE_COLORS = ['#FFFFFF', '#F2F8FF', '#E3F0FB', '#F8FCFF'] as const;
-const OFFER_CARD_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.96)', 'rgba(190,214,235,0.22)', 'rgba(255,255,255,0.14)', 'rgba(145,181,218,0.22)'] as const;
+const OFFER_CARD_MARBLE_COLORS = ['#FCFEFF', '#EEF7FF', '#DDEEFF', '#CAE3F8'] as const;
+const OFFER_CARD_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.98)', 'rgba(188,216,241,0.28)', 'rgba(255,255,255,0.18)', 'rgba(142,182,221,0.24)'] as const;
 const OFFER_CARD_MARBLE_LOCATIONS = [0, 0.26, 0.7, 1] as const;
 
 const summaryStyles = StyleSheet.create({

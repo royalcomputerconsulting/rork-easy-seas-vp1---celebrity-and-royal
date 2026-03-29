@@ -115,16 +115,16 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F2F8FF', '#F8FCFF']}
-      locations={[0, 0.48, 1]}
+      colors={['#FCFEFF', '#EEF7FF', '#DDEEFF']}
+      locations={[0, 0.42, 1]}
       start={{ x: 0.02, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
       <LinearGradient
         pointerEvents="none"
-        colors={['rgba(255,255,255,0.96)', 'rgba(190,214,235,0.24)', 'rgba(255,255,255,0.14)', 'rgba(145,181,218,0.22)']}
-        locations={[0, 0.24, 0.72, 1]}
+        colors={['rgba(255,255,255,0.98)', 'rgba(188,216,241,0.3)', 'rgba(255,255,255,0.18)', 'rgba(142,182,221,0.24)']}
+        locations={[0, 0.22, 0.72, 1]}
         start={{ x: 0.12, y: 0 }}
         end={{ x: 0.88, y: 1 }}
         style={styles.marbleVeinOverlay}

@@ -435,8 +435,8 @@ export const DS = {
     secondary: '#FAFAFA',
     card: '#FFFFFF',
     cardAlt: '#F7F7F7',
-    marble: ['#FFFFFF', '#F2F8FF', '#E3F0FB', '#F8FCFF'] as const,
-    marbleShell: ['#F8FCFF', '#ECF6FF', '#DDEEFF', '#F4FAFF'] as const,
+    marble: ['#FCFEFF', '#EEF7FF', '#DDEEFF', '#CAE3F8'] as const,
+    marbleShell: ['#F6FBFF', '#E7F3FF', '#D5E9FD', '#BEDCF7'] as const,
   },
   text: {
     primary: '#111111',

@@ -15,9 +15,9 @@ const INNER_BORDER = 'rgba(204,221,237,0.92)' as const;
 const TEXT_PRIMARY = '#111111' as const;
 const TEXT_SECONDARY = '#666666' as const;
 const TEXT_MUTED = '#999999' as const;
-const DARK_MARBLE_COLORS = ['#FFFFFF', '#F2F8FF', '#E3F0FB', '#F8FCFF'] as const;
-const DARK_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.96)', 'rgba(190,214,235,0.24)', 'rgba(255,255,255,0.16)', 'rgba(145,181,218,0.22)'] as const;
-const DARK_MARBLE_LOCATIONS = [0, 0.24, 0.72, 1] as const;
+const DARK_MARBLE_COLORS = ['#FCFEFF', '#EEF7FF', '#DDEEFF', '#CAE3F8'] as const;
+const DARK_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.98)', 'rgba(188,216,241,0.3)', 'rgba(255,255,255,0.18)', 'rgba(142,182,221,0.24)'] as const;
+const DARK_MARBLE_LOCATIONS = [0, 0.22, 0.72, 1] as const;
 
 interface CruiseCardProps {
   cruise: Cruise | BookedCruise;
