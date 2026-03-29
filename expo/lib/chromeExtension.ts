@@ -1016,9 +1016,18 @@ function getContentJS(): string {
     });
   }
 
+  function getCruiseSiteBaseUrl() {
+    return capturedData.cruiseLine === 'celebrity'
+      ? 'https://www.celebritycruises.com'
+      : 'https://www.royalcaribbean.com';
+  }
+
   function buildHeaders() {
     var headers = {
       accept: 'application/json',
+      'accept-language': 'en-US,en;q=0.9',
+      'cache-control': 'no-cache',
+      pragma: 'no-cache',
       'content-type': 'application/json'
     };
     if (authContext && authContext.accountId) headers['account-id'] = authContext.accountId;
@@ -1028,6 +1037,32 @@ function getContentJS(): string {
       headers['x-api-key'] = authContext.appKey;
     }
     return headers;
+  }
+
+  function hasBookingsPayload(data) {
+    return !!(
+      data && (
+        (data.payload && (Array.isArray(data.payload.profileBookings) || Array.isArray(data.payload.sailingInfo))) ||
+        Array.isArray(data.profileBookings) ||
+        Array.isArray(data.sailingInfo) ||
+        Array.isArray(data.bookings) ||
+        Array.isArray(data.cruises) ||
+        Array.isArray(data)
+      )
+    );
+  }
+
+  function hasDetailedBookings(bookings) {
+    return !!(bookings && bookings.length && bookings[0] && (
+      bookings[0].bookingId ||
+      bookings[0].masterBookingId ||
+      bookings[0].bookingStatus ||
+      bookings[0].stateroomNumber
+    ));
+  }
+
+  function hasOfferPayload(data) {
+    return !!(data && Array.isArray(data.offers));
   }
 
   async function fetchWithRetry(url, options, retries) {
@@ -1042,23 +1077,174 @@ function getContentJS(): string {
     return null;
   }
 
+  async function fetchJsonWithRetry(url, options, retries) {
+    var response = await fetchWithRetry(url, options, retries);
+    if (!response) return null;
+    try {
+      return await response.clone().json();
+    } catch (error) {
+      try {
+        var text = await response.text();
+        return text ? JSON.parse(text) : {};
+      } catch (innerError) {
+        return null;
+      }
+    }
+  }
+
+  function buildOffersRequestBody(offerCode) {
+    return {
+      cruiseLoyaltyId: authContext && authContext.loyaltyId ? authContext.loyaltyId : '',
+      offerCode: offerCode || '',
+      brand: capturedData.cruiseLine === 'celebrity' ? 'C' : 'R'
+    };
+  }
+
+  function offerHasSailings(entry) {
+    var offer = entry && (entry.campaignOffer || entry);
+    if (!offer || !Array.isArray(offer.sailings) || offer.sailings.length === 0) return false;
+    for (var i = 0; i < offer.sailings.length; i++) {
+      var sailing = offer.sailings[i];
+      if (sailing && (sailing.shipCode || sailing.sailDate || sailing.itineraryCode)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async function fetchOffersDirect() {
+    if (!authContext || capturedData.cruiseLine === 'carnival') return false;
+    var endpoint = getCruiseSiteBaseUrl() + (capturedData.cruiseLine === 'celebrity' ? '/api/casino/casino-offers/v2' : '/api/casino/casino-offers/v1');
+    var headers = buildHeaders();
+    var data = await fetchJsonWithRetry(endpoint, {
+      method: 'POST',
+      headers: headers,
+      credentials: 'omit',
+      body: JSON.stringify(buildOffersRequestBody(''))
+    }, 1);
+    if (!hasOfferPayload(data)) return false;
+
+    var offers = Array.isArray(data.offers) ? data.offers.slice() : [];
+    addLog('Direct offers API returned ' + offers.length + ' offer(s)', offers.length > 0 ? 'success' : 'info');
+
+    for (var i = 0; i < offers.length; i++) {
+      var campaignOffer = offers[i] && (offers[i].campaignOffer || offers[i]);
+      var code = campaignOffer && campaignOffer.offerCode ? String(campaignOffer.offerCode).trim() : '';
+      if (!code || offerHasSailings(offers[i])) continue;
+
+      var refetched = await fetchJsonWithRetry(endpoint, {
+        method: 'POST',
+        headers: headers,
+        credentials: 'omit',
+        body: JSON.stringify(buildOffersRequestBody(code))
+      }, 1);
+
+      if (hasOfferPayload(refetched) && Array.isArray(refetched.offers)) {
+        for (var j = 0; j < refetched.offers.length; j++) {
+          var candidate = refetched.offers[j] && (refetched.offers[j].campaignOffer || refetched.offers[j]);
+          var candidateCode = candidate && candidate.offerCode ? String(candidate.offerCode).trim() : '';
+          if (candidateCode === code) {
+            offers[i] = refetched.offers[j];
+            break;
+          }
+        }
+      }
+    }
+
+    data.offers = offers;
+    capturedData.offers = data;
+    storeCapturedData('offers', data);
+    updateUI();
+    return true;
+  }
+
+  async function fetchUpcomingCruisesDirect() {
+    if (!authContext || capturedData.cruiseLine === 'carnival') return false;
+    var baseUrl = getCruiseSiteBaseUrl();
+    var headers = buildHeaders();
+    var endpoints = [
+      baseUrl + '/api/profile/bookings',
+      baseUrl + '/api/account/upcoming-cruises'
+    ];
+    var bestData = null;
+    var bestBookings = [];
+
+    for (var i = 0; i < endpoints.length; i++) {
+      var data = await fetchJsonWithRetry(endpoints[i], {
+        method: 'GET',
+        headers: headers,
+        credentials: 'omit'
+      }, 1);
+      if (!hasBookingsPayload(data)) continue;
+      var bookings = extractBookings(data);
+      if (!bestData || hasDetailedBookings(bookings) || bookings.length > bestBookings.length) {
+        bestData = data;
+        bestBookings = bookings;
+      }
+      if (hasDetailedBookings(bookings)) {
+        break;
+      }
+    }
+
+    if (!bestData) return false;
+    capturedData.upcomingCruises = bestData;
+    storeCapturedData('upcomingCruises', bestData);
+    addLog('Direct bookings API captured ' + bestBookings.length + ' cruise booking(s)', bestBookings.length > 0 ? 'success' : 'info');
+    updateUI();
+    return true;
+  }
+
+  async function fetchCourtesyHoldsDirect() {
+    if (!authContext || capturedData.cruiseLine === 'carnival') return false;
+    var baseUrl = getCruiseSiteBaseUrl();
+    var data = await fetchJsonWithRetry(baseUrl + '/api/account/courtesy-holds', {
+      method: 'GET',
+      headers: buildHeaders(),
+      credentials: 'omit'
+    }, 1);
+    if (!data || (!hasBookingsPayload(data) && !data.payload)) return false;
+    capturedData.courtesyHolds = data;
+    storeCapturedData('courtesyHolds', data);
+    addLog('Direct courtesy holds API captured ' + extractBookings(data).length + ' hold(s)', 'info');
+    updateUI();
+    return true;
+  }
+
   async function fetchLoyaltyDirect() {
     if (!authContext || capturedData.cruiseLine === 'carnival') return false;
     var headers = buildHeaders();
-    var url = capturedData.cruiseLine === 'celebrity'
-      ? 'https://aws-prd.api.rccl.com/en/celebrity/web/v3/guestAccounts/' + encodeURIComponent(authContext.accountId)
-      : 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info';
-    var response = await fetchWithRetry(url, { method: 'GET', headers: headers, credentials: 'omit' }, 1);
-    if (!response) return false;
-    try {
-      capturedData.loyalty = await response.json();
-      storeCapturedData('loyalty', capturedData.loyalty);
+    var endpoints = capturedData.cruiseLine === 'celebrity'
+      ? [
+          {
+            url: 'https://aws-prd.api.rccl.com/en/celebrity/web/v3/guestAccounts/' + encodeURIComponent(authContext.accountId),
+            options: { method: 'GET', headers: headers, credentials: 'omit' }
+          },
+          {
+            url: getCruiseSiteBaseUrl() + '/api/account/loyalty-programs',
+            options: { method: 'GET', credentials: 'include', headers: { accept: 'application/json, text/plain, */*' } }
+          }
+        ]
+      : [
+          {
+            url: 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/info',
+            options: { method: 'GET', headers: headers, credentials: 'omit' }
+          },
+          {
+            url: getCruiseSiteBaseUrl() + '/api/account/loyalty-programs',
+            options: { method: 'GET', credentials: 'include', headers: { accept: 'application/json, text/plain, */*' } }
+          }
+        ];
+
+    for (var i = 0; i < endpoints.length; i++) {
+      var data = await fetchJsonWithRetry(endpoints[i].url, endpoints[i].options, 1);
+      if (!data) continue;
+      capturedData.loyalty = data;
+      storeCapturedData('loyalty', data);
       addLog('Captured loyalty data via direct API call', 'success');
       updateUI();
       return true;
-    } catch (error) {
-      return false;
     }
+    return false;
   }
 
   function clearCapturedStorage() {
@@ -1165,6 +1351,13 @@ function getContentJS(): string {
       return;
     }
 
+    updateProgress(1, 3, 'Step 1/3: Fetching offers, cruises, and loyalty...');
+    addLog('Running direct API sync for offers, cruises, courtesy holds, and loyalty...', 'info');
+    await fetchOffersDirect();
+    await fetchUpcomingCruisesDirect();
+    await fetchCourtesyHoldsDirect();
+    await fetchLoyaltyDirect();
+
     var helperUrls = capturedData.cruiseLine === 'celebrity'
       ? [
           'https://www.celebritycruises.com/blue-chip-club/offers',
@@ -1178,17 +1371,21 @@ function getContentJS(): string {
           'https://www.royalcaribbean.com/account/loyalty-programs'
         ];
 
-    updateProgress(1, 3, 'Step 1/3: Opening cruise pages...');
-    addLog('Opening offers and account pages...', 'info');
-    await openRealTabs(helperUrls);
-
-    updateProgress(2, 3, 'Step 2/3: Capturing offers, bookings, and loyalty...');
-    await pollForHelperData(26000);
-
-    updateProgress(3, 3, 'Step 3/3: Finishing sync...');
-    if (!capturedData.loyalty) {
-      await fetchLoyaltyDirect();
+    var needsHelperPass = getOffersCount() === 0 || (capturedData.upcomingCruises === null && capturedData.courtesyHolds === null) || !capturedData.loyalty;
+    if (needsHelperPass) {
+      updateProgress(2, 3, 'Step 2/3: Opening backup sync pages...');
+      addLog('Direct API sync was partial - opening helper pages to capture any missing data...', 'warning');
+      await openRealTabs(helperUrls);
+      await pollForHelperData(26000);
+      if (!capturedData.loyalty) {
+        await fetchLoyaltyDirect();
+      }
+    } else {
+      updateProgress(2, 3, 'Step 2/3: Validating captured data...');
+      addLog('Direct API sync completed without helper tabs', 'success');
     }
+
+    updateProgress(3, 3, 'Step 3/3: Finalizing sync...');
     finishSync();
   }
 
