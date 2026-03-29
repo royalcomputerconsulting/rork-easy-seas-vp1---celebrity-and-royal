@@ -31,6 +31,9 @@ export const CABIN_HIERARCHY: CabinCategory[] = [
   'Penthouse Suite',
 ];
 
+export type CabinTypeValue = CabinCategory | (string & {});
+export type SlotMachineSource = 'global' | 'user' | 'youtube' | (string & {});
+
 export interface Cruise {
   id: string;
   shipName: string;
@@ -42,7 +45,7 @@ export interface Cruise {
   category?: string;
   price?: number;
   pricePerNight?: number;
-  cabinType?: CabinCategory | 'Interior' | 'Oceanview' | 'Balcony' | 'Suite' | string;
+  cabinType?: CabinTypeValue;
   balconyPrice?: number;
   oceanviewPrice?: number;
   interiorPrice?: number;
@@ -80,6 +83,8 @@ export interface Cruise {
   destinationRegion?: string;
   guests?: number;
   guestsInfo?: string;
+  profileName?: string;
+  backToBackCount?: number;
   retailValue?: number;
   compValue?: number;
   totalValue?: number;
@@ -213,9 +218,11 @@ export interface CasinoOffer {
   portsAndTimes?: string;
   itineraryNeedsManualEntry?: boolean;
   
-  roomType?: CabinCategory | string;
+  roomType?: CabinTypeValue;
   guestsInfo?: string;
   guests?: number;
+  profileName?: string;
+  backToBackCount?: number;
   
   value?: number;
   offerValue?: number;
@@ -494,7 +501,7 @@ export interface CasinoPayTable {
   freePlay: number;
   OBC: number;
   cabinValue: number;
-  cabinType: CabinCategory | string;
+  cabinType: CabinTypeValue;
   taxesFees: number;
   retailCabinPrice: number;
   discountValue: number;
@@ -555,7 +562,7 @@ export interface WhatIfScenario {
   hypotheticalCoinIn: number;
   hypotheticalWinLoss: number;
   hypotheticalNights: number;
-  hypotheticalCabinType: CabinCategory | string;
+  hypotheticalCabinType: CabinTypeValue;
   
   projectedPoints: number;
   projectedTierProgress: number;
@@ -606,7 +613,7 @@ export function calculatePointsFromCoinIn(coinIn: number): number {
 
 export function getCabinPriceForType(
   cruise: Cruise | CasinoOffer,
-  cabinType: CabinCategory | string
+  cabinType: CabinTypeValue
 ): number | undefined {
   const typeKey = cabinType.toLowerCase();
   
@@ -1106,7 +1113,7 @@ export interface MachineEncyclopediaEntry {
   
   userNotes?: string;
   
-  source: 'global' | 'user' | 'youtube' | string;
+  source: SlotMachineSource;
   source_verbatim?: string[];
   isInMyAtlas: boolean;
   addedToAtlasAt?: string;

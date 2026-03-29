@@ -17,6 +17,8 @@ export interface ParsedOfferRow {
   offerName: string;
   roomType: string;
   guestsInfo: string;
+  profileName: string;
+  backToBackCount: number;
   perks: string;
   shipClass: string;
   tradeInValue: number;
@@ -66,8 +68,8 @@ function mapOfferType(typeStr: string): CasinoOffer['offerType'] {
 
 function getShipClassFromName(shipName: string): string {
   const name = shipName.toLowerCase();
-  
-  if (name.includes('oasis') || name.includes('wonder') || name.includes('symphony') || 
+
+  if (name.includes('oasis') || name.includes('wonder') || name.includes('symphony') ||
       name.includes('harmony') || name.includes('allure') || name.includes('utopia')) {
     return 'Oasis Class';
   }
@@ -77,7 +79,7 @@ function getShipClassFromName(shipName: string): string {
   if (name.includes('freedom') || name.includes('liberty') || name.includes('independence')) {
     return 'Freedom Class';
   }
-  if (name.includes('voyager') || name.includes('explorer') || name.includes('adventure') || 
+  if (name.includes('voyager') || name.includes('explorer') || name.includes('adventure') ||
       name.includes('navigator') || name.includes('mariner')) {
     return 'Voyager Class';
   }
@@ -87,13 +89,25 @@ function getShipClassFromName(shipName: string): string {
   if (name.includes('icon')) {
     return 'Icon Class';
   }
-  
+
   return 'Unknown Class';
+}
+
+function extractGuestCount(guestsInfo: string): number | undefined {
+  const match = (guestsInfo || '').match(/(\d+)/);
+  if (!match) return undefined;
+
+  const parsedCount = parseInt(match[1], 10);
+  if (Number.isNaN(parsedCount) || parsedCount <= 0) {
+    return undefined;
+  }
+
+  return parsedCount;
 }
 
 export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: CasinoOffer[] } {
   console.log('[OffersParser] Starting to parse offers CSV');
-  
+
   const lines = content.split(/\r?\n/).filter(line => line.trim());
   if (lines.length < 2) {
     console.log('[OffersParser] CSV has no data rows');
@@ -102,41 +116,43 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
 
   const headerLine = lines[0];
   const isTabDelimited = detectDelimiter(headerLine) === 'tab';
-  
+
   console.log('[OffersParser] Detected delimiter:', isTabDelimited ? 'TAB' : 'COMMA');
-  
-  const headers = isTabDelimited 
+
+  const headers = isTabDelimited
     ? headerLine.split('\t').map(h => h.trim().toLowerCase())
     : parseCSVLine(headerLine).map(h => h.trim().toLowerCase());
-  
+
   console.log('[OffersParser] Headers:', headers);
 
   const headerMap = createHeaderMap(headers);
 
   const colIndices = {
+    profileName: getColumnIndex(headerMap, ['profile', 'profile name', 'profilename']),
+    backToBackCount: getColumnIndex(headerMap, ['b2b', 'back to back', 'back-to-back', 'backtoback']),
     shipName: getColumnIndex(headerMap, ['ship name', 'shipname', 'ship']),
     sailingDate: getColumnIndex(headerMap, ['sailing date', 'sailingdate', 'sail date', 'saildate', 'departure date', 'departuredate', 'date']),
     itinerary: getColumnIndex(headerMap, ['itinerary', 'itinerary name', 'itineraryname', 'route', 'destination', 'cruise title']),
     offerCode: getColumnIndex(headerMap, ['offer code', 'offercode', 'promo code', 'promocode', 'promotion code', 'code']),
     offerName: getColumnIndex(headerMap, ['real offer name', 'realoffername', 'offer name', 'offername', 'offer title', 'promotion name', 'promo name', 'name', 'offer']),
-    roomType: getColumnIndex(headerMap, ['room type', 'roomtype', 'cabin type', 'cabintype', 'cabin', 'stateroom type', 'stateroom']),
+    roomType: getColumnIndex(headerMap, ['room type', 'roomtype', 'cabin type', 'cabintype', 'cabin', 'stateroom type', 'stateroom', 'category']),
     guestsInfo: getColumnIndex(headerMap, ['guests info', 'guestsinfo', 'number of guests', 'numberofguests', 'guest count', 'guests', 'pax']),
     perks: getColumnIndex(headerMap, ['perks', 'benefits', 'inclusions', 'included']),
     offerValue: getColumnIndex(headerMap, ['offer value', 'offervalue', 'total value', 'value']),
     shipClass: getColumnIndex(headerMap, ['ship class', 'shipclass', 'class']),
-    tradeInValue: getColumnIndex(headerMap, ['trade-in value', 'tradeinvalue', 'trade in value', 'tradein', 'trade-in']),
+    tradeInValue: getColumnIndex(headerMap, ['trade-in value', 'tradeinvalue', 'trade in value', 'tradein', 'trade-in', 'trade']),
     offerExpiryDateAlt: getColumnIndex(headerMap, ['offer expiry date alt', 'offerexpirydatealt']),
     offerExpiryDate: getColumnIndex(headerMap, ['offer expiry date', 'offerexpirydate', 'offer expiration date', 'offerexpirationdate', 'expiry date', 'expirydate', 'expiration date', 'expirationdate', 'expiry', 'expires', 'expiration']),
     offerReceivedDate: getColumnIndex(headerMap, ['offer received date', 'offerreceiveddate', 'received date', 'receiveddate', 'rcvd', 'received']),
     priceInterior: getColumnIndex(headerMap, ['price interior', 'priceinterior', 'interior price', 'interiorprice', 'interior']),
-    priceOceanView: getColumnIndex(headerMap, ['price ocean view', 'priceoceanview', 'ocean view price', 'oceanviewprice', 'oceanview price', 'oceanview', 'price oceanview']),
+    priceOceanView: getColumnIndex(headerMap, ['price ocean view', 'priceoceanview', 'ocean view price', 'oceanviewprice', 'oceanview price', 'oceanview', 'price oceanview', 'ov']),
     priceBalcony: getColumnIndex(headerMap, ['price balcony', 'pricebalcony', 'balcony price', 'balconyprice', 'balcony']),
     priceSuite: getColumnIndex(headerMap, ['price suite', 'pricesuite', 'suite price', 'suiteprice', 'suite']),
     taxesFees: getColumnIndex(headerMap, ['taxes & fees', 'taxes&fees', 'taxesfees', 'taxes and fees', 'port taxes & fees', 'port taxes and fees', 'port taxes', 'port charges', 'taxes']),
     portsAndTimes: getColumnIndex(headerMap, ['ports & times', 'ports&times', 'portsandtimes', 'port list', 'portlist', 'ports of call', 'ports', 'port schedule']),
-    offerType: getColumnIndex(headerMap, ['offer type / category', 'offer type', 'offertype', 'offer category', 'category', 'type']),
+    offerType: getColumnIndex(headerMap, ['offer type / category', 'offer type', 'offertype', 'offer category', 'offer classification', 'type']),
     nights: getColumnIndex(headerMap, ['nights', 'number of nights', 'total nights', 'duration', 'length']),
-    departurePort: getColumnIndex(headerMap, ['departure port', 'departureport', 'depart port', 'home port', 'embarkation port', 'port']),
+    departurePort: getColumnIndex(headerMap, ['departure port', 'departureport', 'depart port', 'departs', 'home port', 'embarkation port', 'port']),
     sourcePage: getColumnIndex(headerMap, ['source page', 'sourcepage', 'source']),
   };
 
@@ -150,7 +166,7 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     const line = lines[i].trim();
     if (!line) continue;
 
-    const values = isTabDelimited 
+    const values = isTabDelimited
       ? line.split('\t').map(v => v.trim())
       : parseCSVLine(line);
 
@@ -162,17 +178,20 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     const getNumericValue = (idx: number): number => {
       const val = getValue(idx).replace(/[,$]/g, '');
       const num = parseFloat(val);
-      return isNaN(num) ? 0 : num;
+      return Number.isNaN(num) ? 0 : num;
     };
 
+    const profileName = getValue(colIndices.profileName);
+    const backToBackCount = getNumericValue(colIndices.backToBackCount);
     const shipName = getValue(colIndices.shipName);
     const sailingDateRaw = getValue(colIndices.sailingDate);
     const itinerary = getValue(colIndices.itinerary);
-    const offerCode = getValue(colIndices.offerCode);
+    const offerCode = getValue(colIndices.offerCode).trim();
     const offerName = getValue(colIndices.offerName);
-    console.log(`[OffersParser] Row ${i}: offerCode=${offerCode}, offerName=${offerName}`);
+    console.log(`[OffersParser] Row ${i}: offerCode=${offerCode}, offerName=${offerName}, profile=${profileName}, b2b=${backToBackCount}`);
     const roomType = getValue(colIndices.roomType);
     const guestsInfo = getValue(colIndices.guestsInfo);
+    const guests = extractGuestCount(guestsInfo);
     const perks = getValue(colIndices.perks);
     const offerValue = getNumericValue(colIndices.offerValue);
     const shipClass = getValue(colIndices.shipClass);
@@ -202,9 +221,8 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     const sailDate = normalizeDateString(sailingDateRaw);
     const offerExpiryDate = normalizeDateString(offerExpiryDateRaw);
     const offerReceivedDate = normalizeDateString(offerReceivedDateRaw);
-    
     const finalShipClass = shipClass || getShipClassFromName(shipName);
-    
+    const finalRoomType = roomType || 'Balcony';
     const returnDate = calculateReturnDate(sailDate, nights);
 
     const ports = portsAndTimes
@@ -212,7 +230,7 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
       : [];
 
     const cruiseId = `cruise_${shipName.replace(/\s+/g, '_')}_${sailDate}_${Date.now()}_${i}`;
-    
+
     const cruise: Cruise = {
       id: cruiseId,
       shipName,
@@ -221,22 +239,27 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
       departurePort,
       destination: itinerary,
       nights,
-      cabinType: roomType || 'Balcony',
+      cabinType: finalRoomType,
       interiorPrice: priceInterior,
       oceanviewPrice: priceOceanView,
       balconyPrice: priceBalcony,
       suitePrice: priceSuite,
       taxes: taxesFees,
-      totalPrice: getPriceForRoomType(roomType, priceInterior, priceOceanView, priceBalcony, priceSuite),
+      totalPrice: getPriceForRoomType(finalRoomType, priceInterior, priceOceanView, priceBalcony, priceSuite),
       offerCode,
       offerName: offerName || undefined,
       offerValue,
       offerExpiry: offerExpiryDate,
+      offerCategory: offerType || undefined,
       tradeInValue: tradeInValue || undefined,
       itineraryName: itinerary,
       ports,
       portsAndTimes: portsAndTimes || undefined,
       guestsInfo,
+      guests,
+      received: offerReceivedDate || undefined,
+      profileName: profileName || undefined,
+      backToBackCount: backToBackCount || undefined,
       status: 'available',
       category: finalShipClass,
       cruiseSource: parsedSource,
@@ -255,19 +278,27 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
         offerName: finalOfferName,
         title: finalOfferName,
         offerType: mapOfferType(offerType),
+        category: offerType || undefined,
         tradeInValue,
+        value: offerValue,
         offerValue,
         expiryDate: offerExpiryDate,
         offerExpiryDate,
         expires: offerExpiryDate,
-        received: offerReceivedDate,
-        category: offerType,
+        received: offerReceivedDate || undefined,
         perks: perks && perks !== '-' ? perks.split(',').map(p => p.trim()) : [],
         cruiseIds: [cruiseId],
         shipName,
         sailingDate: sailDate,
-        roomType,
+        itineraryName: itinerary || undefined,
+        nights,
+        ports,
+        portsAndTimes: portsAndTimes || undefined,
+        roomType: finalRoomType,
         guestsInfo,
+        guests,
+        profileName: profileName || undefined,
+        backToBackCount: backToBackCount || undefined,
         interiorPrice: priceInterior,
         oceanviewPrice: priceOceanView,
         balconyPrice: priceBalcony,
@@ -346,7 +377,7 @@ export function generateOffersCSV(cruises: Cruise[], offers: CasinoOffer[]): str
 
   for (const cruise of cruises) {
     const offer = offers.find(o => o.offerCode === cruise.offerCode);
-    
+
     const row = [
       escapeCSVField(cruise.shipName || ''),
       formatDateMMDDYYYY(cruise.sailDate),
