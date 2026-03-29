@@ -1,7 +1,170 @@
 import { Platform } from 'react-native';
-import JSZipLib from 'jszip';
 
 const EASY_SEAS_EXTENSION_VERSION = '3.2.0';
+
+type ZipEntry = {
+  name: string;
+  data: Uint8Array;
+};
+
+function encodeZipString(value: string): Uint8Array {
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(value);
+  }
+
+  const encodedValue = unescape(encodeURIComponent(value));
+  const bytes = new Uint8Array(encodedValue.length);
+  for (let index = 0; index < encodedValue.length; index += 1) {
+    bytes[index] = encodedValue.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function concatUint8Arrays(chunks: Uint8Array[]): Uint8Array {
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  return result;
+}
+
+function createCrc32Table(): Uint32Array {
+  const table = new Uint32Array(256);
+
+  for (let index = 0; index < 256; index += 1) {
+    let crc = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc & 1) !== 0 ? (0xedb88320 ^ (crc >>> 1)) : (crc >>> 1);
+    }
+    table[index] = crc >>> 0;
+  }
+
+  return table;
+}
+
+const CRC32_TABLE = createCrc32Table();
+
+function computeCrc32(data: Uint8Array): number {
+  let crc = 0xffffffff;
+
+  for (let index = 0; index < data.length; index += 1) {
+    crc = CRC32_TABLE[(crc ^ data[index]) & 0xff] ^ (crc >>> 8);
+  }
+
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createLittleEndianBytes(value: number, byteLength: number): Uint8Array {
+  const bytes = new Uint8Array(byteLength);
+
+  for (let index = 0; index < byteLength; index += 1) {
+    bytes[index] = (value >>> (index * 8)) & 0xff;
+  }
+
+  return bytes;
+}
+
+function getDosDateTime(date: Date): { dosTime: number; dosDate: number } {
+  const safeYear = Math.max(1980, date.getFullYear());
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const seconds = Math.floor(date.getSeconds() / 2);
+
+  return {
+    dosTime: (hours << 11) | (minutes << 5) | seconds,
+    dosDate: ((safeYear - 1980) << 9) | (month << 5) | day,
+  };
+}
+
+function toSafeBlobBytes(value: Uint8Array): Uint8Array<ArrayBuffer> {
+  const buffer = new ArrayBuffer(value.length);
+  const bytes = new Uint8Array(buffer);
+  bytes.set(value);
+  return bytes;
+}
+
+function buildZipBlob(entries: ZipEntry[]): Blob {
+  const now = getDosDateTime(new Date());
+  const localFileChunks: Uint8Array[] = [];
+  const centralDirectoryChunks: Uint8Array[] = [];
+  let localOffset = 0;
+
+  for (const entry of entries) {
+    const fileNameBytes = encodeZipString(entry.name);
+    const crc32 = computeCrc32(entry.data);
+    const fileSize = entry.data.length;
+
+    const localHeader = concatUint8Arrays([
+      createLittleEndianBytes(0x04034b50, 4),
+      createLittleEndianBytes(20, 2),
+      createLittleEndianBytes(0, 2),
+      createLittleEndianBytes(0, 2),
+      createLittleEndianBytes(now.dosTime, 2),
+      createLittleEndianBytes(now.dosDate, 2),
+      createLittleEndianBytes(crc32, 4),
+      createLittleEndianBytes(fileSize, 4),
+      createLittleEndianBytes(fileSize, 4),
+      createLittleEndianBytes(fileNameBytes.length, 2),
+      createLittleEndianBytes(0, 2),
+      fileNameBytes,
+    ]);
+
+    localFileChunks.push(localHeader, entry.data);
+
+    const centralDirectoryHeader = concatUint8Arrays([
+      createLittleEndianBytes(0x02014b50, 4),
+      createLittleEndianBytes(20, 2),
+      createLittleEndianBytes(20, 2),
+      createLittleEndianBytes(0, 2),
+      createLittleEndianBytes(0, 2),
+      createLittleEndianBytes(now.dosTime, 2),
+      createLittleEndianBytes(now.dosDate, 2),
+      createLittleEndianBytes(crc32, 4),
+      createLittleEndianBytes(fileSize, 4),
+      createLittleEndianBytes(fileSize, 4),
+      createLittleEndianBytes(fileNameBytes.length, 2),
+      createLittleEndianBytes(0, 2),
+      createLittleEndianBytes(0, 2),
+      createLittleEndianBytes(0, 2),
+      createLittleEndianBytes(0, 2),
+      createLittleEndianBytes(0, 4),
+      createLittleEndianBytes(localOffset, 4),
+      fileNameBytes,
+    ]);
+
+    centralDirectoryChunks.push(centralDirectoryHeader);
+    localOffset += localHeader.length + entry.data.length;
+  }
+
+  const localFiles = concatUint8Arrays(localFileChunks);
+  const centralDirectory = concatUint8Arrays(centralDirectoryChunks);
+  const endOfCentralDirectory = concatUint8Arrays([
+    createLittleEndianBytes(0x06054b50, 4),
+    createLittleEndianBytes(0, 2),
+    createLittleEndianBytes(0, 2),
+    createLittleEndianBytes(entries.length, 2),
+    createLittleEndianBytes(entries.length, 2),
+    createLittleEndianBytes(centralDirectory.length, 4),
+    createLittleEndianBytes(localFiles.length, 4),
+    createLittleEndianBytes(0, 2),
+  ]);
+
+  return new Blob(
+    [
+      toSafeBlobBytes(localFiles),
+      toSafeBlobBytes(centralDirectory),
+      toSafeBlobBytes(endOfCentralDirectory),
+    ],
+    { type: 'application/zip' }
+  );
+}
 
 function getEasySeasExtensionFiles(): Record<string, string> {
   const manifestContent = `{
@@ -1327,28 +1490,43 @@ export async function downloadScraperExtension(): Promise<{ success: boolean; er
 
   try {
     console.log(`[ChromeExtension] Creating Easy Seas Sync extension ZIP v${EASY_SEAS_EXTENSION_VERSION}...`);
-    const zip = new JSZipLib();
     const extensionFiles = getEasySeasExtensionFiles();
+    const zipEntries: ZipEntry[] = [];
 
     for (const [filename, content] of Object.entries(extensionFiles)) {
-      zip.file(filename, content);
+      zipEntries.push({
+        name: filename,
+        data: encodeZipString(content),
+      });
       console.log(`[ChromeExtension] Added ${filename}`);
     }
 
-    zip.file('icons/icon16.png', createPlaceholderIcon('ES', '#1d4ed8', 16));
-    zip.file('icons/icon48.png', createPlaceholderIcon('ES', '#1d4ed8', 48));
-    zip.file('icons/icon128.png', createPlaceholderIcon('ES', '#1d4ed8', 128));
+    zipEntries.push({
+      name: 'icons/icon16.png',
+      data: createPlaceholderIcon('ES', '#1d4ed8', 16),
+    });
+    zipEntries.push({
+      name: 'icons/icon48.png',
+      data: createPlaceholderIcon('ES', '#1d4ed8', 48),
+    });
+    zipEntries.push({
+      name: 'icons/icon128.png',
+      data: createPlaceholderIcon('ES', '#1d4ed8', 128),
+    });
 
-    const fileCount = Object.keys(zip.files).length;
-    const blob = await zip.generateAsync({ type: 'blob' });
+    const fileCount = zipEntries.length;
+    const blob = buildZipBlob(zipEntries);
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = `Easy_Seas_Sync_v${EASY_SEAS_EXTENSION_VERSION}.zip`;
+    anchor.style.display = 'none';
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 1000);
 
     console.log(`[ChromeExtension] Easy Seas Sync extension v${EASY_SEAS_EXTENSION_VERSION} download initiated successfully`);
     return { success: true, filesAdded: fileCount };
