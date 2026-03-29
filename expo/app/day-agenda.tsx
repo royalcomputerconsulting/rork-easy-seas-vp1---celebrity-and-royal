@@ -66,6 +66,7 @@ interface MergedCruiseData {
   departurePort?: string;
   nights: number;
   itinerary?: ItineraryDay[];
+  ports?: string[];
   bookings: {
     reservationNumber?: string;
     cabinNumber?: string;
@@ -87,6 +88,55 @@ interface TimelineEvent {
   icon: 'port' | 'sea' | 'ship' | 'casino' | 'calendar' | 'opportune';
   notes?: string;
   isOpportune?: boolean;
+}
+
+function formatAgendaDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function getCruiseRangeEndDate(sailDate: string, returnDate: string | undefined, nights: number | undefined): string {
+  if (returnDate && returnDate.trim().length > 0) {
+    return returnDate;
+  }
+
+  const fallbackEndDate = createDateFromString(sailDate);
+  fallbackEndDate.setHours(0, 0, 0, 0);
+  fallbackEndDate.setDate(fallbackEndDate.getDate() + Math.max(1, nights ?? 0));
+  const computedReturnDate = formatAgendaDateKey(fallbackEndDate);
+
+  console.log('[DayAgenda] Derived fallback return date', {
+    sailDate,
+    returnDate,
+    nights,
+    computedReturnDate,
+  });
+
+  return computedReturnDate;
+}
+
+function getSyntheticItineraryDay(cruise: MergedCruiseData, dayNum: number): ItineraryDay | undefined {
+  const fallbackPort = cruise.ports?.[dayNum - 1]?.trim();
+
+  if (fallbackPort && fallbackPort.length > 0) {
+    return {
+      day: dayNum,
+      port: fallbackPort,
+      isSeaDay: determineSeaDay(fallbackPort),
+    };
+  }
+
+  const totalDays = Math.max(1, cruise.nights + 1);
+  const terminalPort = cruise.departurePort?.trim();
+
+  if (terminalPort && (dayNum === 1 || dayNum === totalDays)) {
+    return {
+      day: dayNum,
+      port: terminalPort,
+      isSeaDay: false,
+    };
+  }
+
+  return undefined;
 }
 
 export default function DayAgendaScreen() {
@@ -152,13 +202,28 @@ export default function DayAgendaScreen() {
 
   const mergedCruiseBookings = useMemo((): MergedCruiseData[] => {
     const cruiseMap = new Map<string, MergedCruiseData>();
-    
+
     bookedCruises.forEach((cruise: BookedCruise) => {
-      if (!cruise.sailDate || !cruise.returnDate) return;
-      if (!isDateInRange(selectedDate, cruise.sailDate, cruise.returnDate)) return;
-      
-      const key = `${cruise.shipName}-${cruise.sailDate}`;
-      
+      if (!cruise.sailDate) {
+        return;
+      }
+
+      const computedReturnDate = getCruiseRangeEndDate(cruise.sailDate, cruise.returnDate, cruise.nights);
+
+      if (!isDateInRange(selectedDate, cruise.sailDate, computedReturnDate)) {
+        return;
+      }
+
+      const key = `${cruise.shipName}-${cruise.sailDate}-${computedReturnDate}`;
+
+      console.log('[DayAgenda] Matching cruise for selected date', {
+        selectedDate: formatAgendaDateKey(selectedDate),
+        shipName: cruise.shipName,
+        sailDate: cruise.sailDate,
+        computedReturnDate,
+        cruiseId: cruise.id,
+      });
+
       if (cruiseMap.has(key)) {
         const existing = cruiseMap.get(key)!;
         existing.bookings.push({
@@ -173,12 +238,13 @@ export default function DayAgendaScreen() {
           id: cruise.id,
           shipName: cruise.shipName || 'Unknown Ship',
           sailDate: cruise.sailDate,
-          returnDate: cruise.returnDate,
+          returnDate: computedReturnDate,
           destination: cruise.destination,
           itineraryName: cruise.itineraryName,
           departurePort: cruise.departurePort,
           nights: cruise.nights || 0,
           itinerary: cruise.itinerary,
+          ports: cruise.ports,
           bookings: [{
             reservationNumber: cruise.reservationNumber,
             cabinNumber: cruise.cabinNumber,
@@ -189,7 +255,7 @@ export default function DayAgendaScreen() {
         });
       }
     });
-    
+
     return Array.from(cruiseMap.values());
   }, [bookedCruises, selectedDate, isDateInRange]);
 
@@ -204,8 +270,14 @@ export default function DayAgendaScreen() {
   }, [selectedDate]);
 
   const getItineraryForDay = useCallback((cruise: MergedCruiseData, dayNum: number): ItineraryDay | undefined => {
-    if (!cruise.itinerary) return undefined;
-    return cruise.itinerary.find(d => d.day === dayNum);
+    if (cruise.itinerary && cruise.itinerary.length > 0) {
+      const itineraryDay = cruise.itinerary.find((day) => day.day === dayNum);
+      if (itineraryDay) {
+        return itineraryDay;
+      }
+    }
+
+    return getSyntheticItineraryDay(cruise, dayNum);
   }, []);
 
   const getCasinoContext = useCallback((cruise: MergedCruiseData, dayNum: number): CasinoDayContext => {
@@ -233,6 +305,10 @@ export default function DayAgendaScreen() {
       port: currentDay?.port || 'Unknown',
     };
   }, []);
+
+  const mergedCruiseBookingIds = useMemo(() => {
+    return new Set<string>(mergedCruiseBookings.map((cruise) => cruise.id));
+  }, [mergedCruiseBookings]);
 
   const timelineEvents = useMemo((): TimelineEvent[] => {
     const events: TimelineEvent[] = [];
@@ -413,8 +489,15 @@ export default function DayAgendaScreen() {
     });
     
     calendarEvents.forEach(event => {
+      if (event.sourceType === 'cruise' && event.cruiseId && mergedCruiseBookingIds.has(event.cruiseId)) {
+        return;
+      }
+
       const eventStart = event.startDate || event.start || '';
-      const eventEnd = event.endDate || event.end || eventStart;
+      const rawEventEnd = event.endDate || event.end;
+      const eventEnd = event.type === 'cruise'
+        ? getCruiseRangeEndDate(eventStart, rawEventEnd, undefined)
+        : (rawEventEnd || eventStart);
       
       if (eventStart) {
         const startDateStr = eventStart.split('T')[0];
@@ -444,15 +527,22 @@ export default function DayAgendaScreen() {
     });
     
     return events;
-  }, [selectedDate, mergedCruiseBookings, calendarEvents, getDayOfCruise, getItineraryForDay, getCasinoContext]);
+  }, [selectedDate, mergedCruiseBookings, mergedCruiseBookingIds, calendarEvents, getDayOfCruise, getItineraryForDay, getCasinoContext]);
 
   const agendaItems = useMemo((): AgendaItem[] => {
     const items: AgendaItem[] = [];
     const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
 
     calendarEvents.forEach(event => {
+      if (event.sourceType === 'cruise' && event.cruiseId && mergedCruiseBookingIds.has(event.cruiseId)) {
+        return;
+      }
+
       const eventStart = event.startDate || event.start || '';
-      const eventEnd = event.endDate || event.end || eventStart;
+      const rawEventEnd = event.endDate || event.end;
+      const eventEnd = event.type === 'cruise'
+        ? getCruiseRangeEndDate(eventStart, rawEventEnd, undefined)
+        : (rawEventEnd || eventStart);
       
       if (eventStart) {
         const startDateStr = eventStart.split('T')[0];
@@ -506,7 +596,7 @@ export default function DayAgendaScreen() {
     });
 
     return items;
-  }, [selectedDate, calendarEvents, mergedCruiseBookings, getDayStatus]);
+  }, [selectedDate, calendarEvents, mergedCruiseBookingIds, mergedCruiseBookings, getDayStatus]);
 
   const handleItemPress = useCallback((item: AgendaItem) => {
     if (item.type === 'cruise' && 'sailDate' in item.data) {
@@ -705,21 +795,27 @@ export default function DayAgendaScreen() {
     try {
       const existingEvents = coreData.calendarEvents.filter(e => e.sourceType !== 'cruise');
       
-      const cruiseEvents: CalendarEvent[] = bookedCruises.map(cruise => ({
-        id: `cruise-event-${cruise.id}`,
-        title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
-        startDate: cruise.sailDate,
-        endDate: cruise.returnDate,
-        start: cruise.sailDate,
-        end: cruise.returnDate,
-        type: 'cruise' as const,
-        sourceType: 'cruise' as const,
-        location: cruise.departurePort,
-        description: `${cruise.nights} night cruise${cruise.reservationNumber ? ` - Res# ${cruise.reservationNumber}` : ''}${cruise.cabinNumber ? ` - Cabin ${cruise.cabinNumber}` : ''}`,
-        cruiseId: cruise.id,
-        allDay: true,
-        source: 'import' as const,
-      }));
+      const cruiseEvents: CalendarEvent[] = bookedCruises
+        .filter((cruise) => Boolean(cruise.sailDate))
+        .map((cruise) => {
+          const computedReturnDate = getCruiseRangeEndDate(cruise.sailDate, cruise.returnDate, cruise.nights);
+
+          return {
+            id: `cruise-event-${cruise.id}`,
+            title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
+            startDate: cruise.sailDate,
+            endDate: computedReturnDate,
+            start: cruise.sailDate,
+            end: computedReturnDate,
+            type: 'cruise' as const,
+            sourceType: 'cruise' as const,
+            location: cruise.departurePort,
+            description: `${cruise.nights} night cruise${cruise.reservationNumber ? ` - Res# ${cruise.reservationNumber}` : ''}${cruise.cabinNumber ? ` - Cabin ${cruise.cabinNumber}` : ''}`,
+            cruiseId: cruise.id,
+            allDay: true,
+            source: 'import' as const,
+          };
+        });
       
       const allEvents = [...existingEvents, ...cruiseEvents];
       coreData.setCalendarEvents(allEvents);
