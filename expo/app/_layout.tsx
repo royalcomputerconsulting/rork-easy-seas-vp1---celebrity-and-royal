@@ -3,6 +3,7 @@ import { trpc, trpcClient } from "@/lib/trpc";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useFonts, Lobster_400Regular } from '@expo-google-fonts/lobster';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StyleSheet, View, Text, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
 import { CoreDataProvider, useCoreData } from "@/state/CoreDataProvider";
@@ -548,6 +549,7 @@ const ServiceProviders = composeProviders(
 );
 
 export default function RootLayout() {
+  const [_fontsLoaded] = useFonts({ Lobster_400Regular });
   const [isStorageReady, setIsStorageReady] = useState<boolean>(false);
   const [storageError, setStorageError] = useState<string | null>(null);
 

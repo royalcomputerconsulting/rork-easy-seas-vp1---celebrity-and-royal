@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
-import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, DS } from '@/constants/theme';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS, LEVEL_ORDER } from '@/constants/crownAnchor';
 import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER, getCelebrityCaptainsClubLevelByPoints } from '@/constants/celebrityCaptainsClub';
@@ -94,8 +93,6 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     return `${mm}-${dd}-${yy}`;
   };
 
-  const marbleConfig = MARBLE_TEXTURES.lightBlue;
-
   const displayName = currentUser?.name || memberName;
   const displayNumber = activeBrand === 'royal' 
     ? (crownAnchorNumber || currentUser?.crownAnchorNumber || '')
@@ -118,8 +115,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
   return (
     <LinearGradient
-      colors={marbleConfig.gradientColors as unknown as [string, string, ...string[]]}
-      locations={marbleConfig.gradientLocations}
+      colors={['#FFFFFF', '#F8F8F8', '#FAFAFA']}
+      locations={[0, 0.5, 1]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
@@ -836,13 +833,17 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: DS.radius.xl,
     padding: SPACING.sm,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.15)',
+    borderColor: DS.border.default,
     marginBottom: SPACING.sm,
-    ...SHADOW.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   topRow: {
     flexDirection: 'row',
@@ -865,24 +866,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   memberGreeting: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: CLEAN_THEME.text.primary,
+    fontSize: 22,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
   },
   memberSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
+    color: DS.text.secondary,
     marginTop: 2,
+    fontWeight: '500' as const,
   },
   actionsSection: {
     flexDirection: 'row',
     gap: SPACING.xs,
   },
   iconBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: CLEAN_THEME.background.tertiary,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F0F0F0',
+    borderWidth: 1,
+    borderColor: DS.border.default,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -925,11 +929,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   progressCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: CLEAN_THEME.border.light,
+    borderColor: DS.border.default,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -939,18 +943,18 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.primary,
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   progressPercent: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.primary,
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   progressBarBg: {
-    height: 4,
-    backgroundColor: CLEAN_THEME.border.light,
-    borderRadius: 2,
+    height: 5,
+    backgroundColor: '#E5E5E5',
+    borderRadius: 3,
     overflow: 'hidden',
   },
   progressBarFill: {
@@ -959,7 +963,7 @@ const styles = StyleSheet.create({
   },
   progressEta: {
     fontSize: 10,
-    color: CLEAN_THEME.text.secondary,
+    color: DS.text.secondary,
     marginTop: 4,
   },
   pinnacleDetailsContainer: {
@@ -1036,12 +1040,12 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: CLEAN_THEME.background.card,
-    borderRadius: BORDER_RADIUS.xs,
-    padding: SPACING.xs,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.sm,
+    padding: SPACING.sm,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: CLEAN_THEME.border.light,
+    borderColor: DS.border.default,
   },
   statItem: {
     flex: 1,
@@ -1049,17 +1053,18 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    backgroundColor: CLEAN_THEME.border.light,
+    backgroundColor: DS.border.divider,
   },
   statValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: CLEAN_THEME.data.value,
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: DS.text.primary,
   },
   statLabel: {
     fontSize: 10,
-    color: CLEAN_THEME.data.label,
-    marginTop: 1,
+    color: DS.text.secondary,
+    marginTop: 2,
+    fontWeight: '500' as const,
   },
   quickStatsPillRow: {
     flexDirection: 'row',
@@ -1069,22 +1074,23 @@ const styles = StyleSheet.create({
   quickStatPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CLEAN_THEME.background.tertiary,
-    borderRadius: BORDER_RADIUS.round,
-    paddingVertical: 4,
-    paddingHorizontal: SPACING.xs,
-    gap: 3,
+    backgroundColor: '#F5F5F5',
+    borderRadius: DS.radius.pill,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.sm,
+    gap: 4,
     borderWidth: 1,
-    borderColor: CLEAN_THEME.border.light,
+    borderColor: DS.border.default,
   },
   quickStatPillValue: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: CLEAN_THEME.data.value,
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: DS.text.primary,
   },
   quickStatPillLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.data.label,
+    fontSize: 12,
+    color: DS.text.secondary,
+    fontWeight: '500' as const,
   },
   crewCountRow: {
     flexDirection: 'row',

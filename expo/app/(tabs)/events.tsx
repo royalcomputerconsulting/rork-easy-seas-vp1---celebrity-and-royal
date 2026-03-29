@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle, Ban } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, DS } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
@@ -774,7 +774,7 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A1628',
+    backgroundColor: DS.bg.page,
   },
   safeArea: {
     flex: 1,
@@ -783,16 +783,15 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   heroHeader: {
-    backgroundColor: 'rgba(0,68,130,0.92)',
-    borderBottomLeftRadius: BORDER_RADIUS.xl,
-    borderBottomRightRadius: BORDER_RADIUS.xl,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
     padding: SPACING.lg,
     marginHorizontal: SPACING.md,
     marginBottom: SPACING.md,
     marginTop: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(32,178,170,0.4)',
-    ...SHADOW.lg,
+    borderColor: DS.border.default,
+    ...SHADOW.sm,
   },
   heroContent: {
     flexDirection: 'row',
@@ -810,14 +809,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   heroTitle: {
-    fontSize: TYPOGRAPHY.fontSizeHeader,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    fontSize: 28,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
     marginBottom: 2,
   },
   heroSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: DS.text.secondary,
     marginBottom: SPACING.sm,
   },
   tierBadgesRow: {
@@ -826,31 +825,33 @@ const styles = StyleSheet.create({
   },
   viewToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: '#F0F0F0',
+    borderRadius: DS.radius.pill,
     padding: 4,
     marginHorizontal: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: DS.border.default,
   },
   viewToggleButton: {
     flex: 1,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.xs,
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: DS.radius.pill,
     alignItems: 'center',
   },
   viewToggleButtonActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: DS.bg.card,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   viewToggleText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: 'rgba(255,255,255,0.7)',
+    color: DS.text.secondary,
   },
   viewToggleTextActive: {
-    color: COLORS.white,
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   monthNavigation: {
@@ -859,22 +860,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginHorizontal: SPACING.md,
     marginBottom: SPACING.sm,
-    backgroundColor: 'rgba(0,97,162,0.88)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.lg,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(32,178,170,0.5)',
+    borderColor: DS.border.default,
   },
   navButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.45)',
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   clearEventsButton: {
     width: 34,
@@ -892,16 +893,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   monthYearText: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    fontSize: 22,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
   },
   eventCountText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.85)',
+    color: DS.text.secondary,
     marginTop: 2,
   },
   alertBadge: {
@@ -921,13 +919,13 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   calendarContainer: {
-    backgroundColor: 'rgba(1,40,90,0.72)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
     marginHorizontal: SPACING.md,
     padding: SPACING.sm,
     marginBottom: SPACING.md,
-    borderWidth: 1.5,
-    borderColor: 'rgba(32,178,170,0.45)',
+    borderWidth: 1,
+    borderColor: DS.border.default,
     ...SHADOW.sm,
   },
   weekDaysHeader: {
@@ -935,14 +933,14 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
     paddingBottom: SPACING.xs,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: DS.border.divider,
   },
   weekDayLabel: {
     flex: 1,
     textAlign: 'center',
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: 'rgba(255,255,255,0.65)',
+    color: DS.text.secondary,
     textTransform: 'uppercase',
   },
   weekRow: {
@@ -951,9 +949,9 @@ const styles = StyleSheet.create({
   dayCell: {
     flex: 1,
     minHeight: 62,
-    borderRadius: BORDER_RADIUS.sm,
+    borderRadius: DS.radius.sm,
     borderWidth: 1,
-    borderColor: 'rgba(180,190,210,0.35)',
+    borderColor: DS.border.default,
     overflow: 'hidden',
     margin: 2,
     padding: 3,
@@ -972,7 +970,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700' as const,
     lineHeight: 13,
-    color: '#0A1628',
+    color: DS.text.primary,
     alignSelf: 'flex-start',
   },
   luckScoreCenter: {
@@ -1002,13 +1000,13 @@ const styles = StyleSheet.create({
   legendContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.lg,
     marginHorizontal: SPACING.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: DS.border.default,
     gap: SPACING.lg,
     ...SHADOW.sm,
   },
@@ -1026,17 +1024,17 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.white,
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   ninetyDaysContainer: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.lg,
     marginHorizontal: SPACING.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: DS.border.default,
     ...SHADOW.sm,
   },
   ninetyDaysGrid: {
@@ -1048,7 +1046,7 @@ const styles = StyleSheet.create({
     width: Math.floor((SCREEN_WIDTH - SPACING.md * 4 - 28) / 15),
     aspectRatio: 1,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#F0F0F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1069,7 +1067,7 @@ const styles = StyleSheet.create({
   },
   ninetyDaysLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.65)',
+    color: DS.text.secondary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   eventsListSection: {
@@ -1083,19 +1081,19 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   sectionTitle: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    fontSize: 22,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
     flex: 1,
   },
   eventCountBadge: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    color: DS.text.primary,
+    backgroundColor: '#F0F0F0',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
-    borderRadius: BORDER_RADIUS.round,
+    borderRadius: DS.radius.pill,
     overflow: 'hidden',
   },
   eventsList: {
@@ -1103,11 +1101,11 @@ const styles = StyleSheet.create({
   },
   eventCard: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,62,124,0.6)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(32,178,170,0.35)',
+    borderColor: DS.border.default,
     ...SHADOW.sm,
   },
   eventTypeIndicator: {
@@ -1126,38 +1124,38 @@ const styles = StyleSheet.create({
   eventCardType: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: 'rgba(255,255,255,0.65)',
+    color: DS.text.secondary,
     textTransform: 'uppercase',
   },
   eventCardTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    color: DS.text.primary,
     marginBottom: 2,
   },
   eventCardSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.65)',
+    color: DS.text.secondary,
     marginBottom: SPACING.xs,
   },
   eventCardDate: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.85)',
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   emptyState: {
     alignItems: 'center',
     paddingVertical: SPACING.xxxl,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: DS.border.default,
   },
   emptyIconContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(14, 165, 233, 0.15)',
+    backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.lg,
@@ -1165,12 +1163,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    color: DS.text.primary,
     marginBottom: SPACING.xs,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: 'rgba(255,255,255,0.7)',
+    color: DS.text.secondary,
     textAlign: 'center' as const,
     marginBottom: SPACING.lg,
     paddingHorizontal: SPACING.lg,
@@ -1179,15 +1177,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: DS.text.primary,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.round,
+    borderRadius: DS.radius.pill,
   },
   addEventText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    color: '#FFFFFF',
   },
   bottomSpacer: {
     height: 120,
@@ -1197,13 +1195,13 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
   },
   luckLegendContainer: {
-    backgroundColor: 'rgba(124,58,237,0.12)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
     marginHorizontal: SPACING.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.35)',
+    borderColor: '#D4B0FF',
   },
   luckLegendHeader: {
     marginBottom: SPACING.sm,
@@ -1211,12 +1209,12 @@ const styles = StyleSheet.create({
   luckLegendTitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#C4B5FD',
+    color: '#7C3AED',
     marginBottom: 2,
   },
   luckLegendHint: {
     fontSize: 10,
-    color: 'rgba(196,181,253,0.7)',
+    color: '#9060C0',
     fontStyle: 'italic' as const,
   },
   luckSwatchRow: {
@@ -1237,7 +1235,7 @@ const styles = StyleSheet.create({
   luckSwatchLabel: {
     fontSize: 9,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.8)',
+    color: DS.text.primary,
   },
   luckSwatchEnds: {
     flexDirection: 'row',
@@ -1246,7 +1244,7 @@ const styles = StyleSheet.create({
   },
   luckSwatchEndText: {
     fontSize: 9,
-    color: 'rgba(255,255,255,0.55)',
+    color: DS.text.secondary,
     fontStyle: 'italic' as const,
   },
 });

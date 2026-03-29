@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download, Crown, RefreshCcw, ExternalLink } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
+import { COLORS, SPACING, DS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions, type CasinoSession } from '@/state/CasinoSessionProvider';
@@ -792,15 +792,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: DS.border.default,
   },
 
   scrollThumb: {
     width: 12,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: DS.text.tertiary,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderColor: DS.border.default,
   },
 
   alphabetRail: {
@@ -817,16 +817,16 @@ const styles = StyleSheet.create({
   alphabetLetter: {
     fontSize: 10,
     fontWeight: '800' as const,
-    color: 'rgba(213,224,255,0.45)',
+    color: DS.text.tertiary,
     lineHeight: 12,
   },
 
   alphabetLetterDisabled: {
-    color: 'rgba(213,224,255,0.18)',
+    color: '#CCCCCC',
   },
 
   alphabetLetterActive: {
-    color: '#9EFDF2',
+    color: DS.text.primary,
   },
 
   alphaBubble: {
@@ -875,12 +875,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(10,24,47,0.72)',
-    borderRadius: 12,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.lg,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: 'rgba(151,176,255,0.14)',
+    borderColor: DS.border.default,
   },
   addSessionButton: {
     backgroundColor: COLORS.money,
@@ -902,9 +902,9 @@ const styles = StyleSheet.create({
     }),
   },
   sectionToggleText: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    color: '#FFFFFF',
+    fontSize: 20,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
   },
   sessionsContent: {
     marginBottom: 16,
@@ -925,38 +925,38 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logoHeaderTitle: {
-    fontSize: 24,
-    fontWeight: '700' as const,
-    color: COLORS.white,
-    letterSpacing: 0.5,
+    fontSize: 26,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
+    letterSpacing: 0.3,
   },
   logoHeaderSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500' as const,
-    color: COLORS.white,
+    color: DS.text.secondary,
     marginTop: 2,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   header: {
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 16,
-    backgroundColor: 'rgba(10,24,47,0.72)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
     marginHorizontal: 20,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(151,176,255,0.14)',
+    borderColor: DS.border.default,
   },
   title: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: DS.text.primary,
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(213,224,255,0.7)',
+    color: DS.text.secondary,
   },
   searchSection: {
     paddingHorizontal: 20,
@@ -966,18 +966,18 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 12,
+    backgroundColor: DS.bg.secondary,
+    borderRadius: DS.radius.md,
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: DS.border.default,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: DS.text.primary,
   },
   filtersContainer: {
     backgroundColor: 'transparent',
@@ -992,24 +992,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: DS.bg.secondary,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: DS.radius.pill,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: DS.border.default,
   },
   filterChipActive: {
-    backgroundColor: 'rgba(245,185,59,0.18)',
-    borderColor: 'rgba(255,214,92,0.55)',
+    backgroundColor: DS.text.primary,
+    borderColor: DS.text.primary,
   },
   filterChipText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: 'rgba(213,224,255,0.8)',
+    color: DS.text.secondary,
   },
   filterChipTextActive: {
-    color: '#FFE28F',
+    color: '#FFFFFF',
   },
   clearFilterChip: {
     backgroundColor: COLORS.error,
@@ -1023,29 +1023,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
-    backgroundColor: 'rgba(10,24,47,0.72)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
     marginHorizontal: 20,
     borderWidth: 1,
-    borderColor: 'rgba(151,176,255,0.14)',
+    borderColor: DS.border.default,
   },
   emptyText: {
     marginTop: 16,
     fontSize: 16,
-    color: 'rgba(213,224,255,0.7)',
+    color: DS.text.secondary,
     textAlign: 'center',
   },
   clearButton: {
     marginTop: 16,
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: DS.text.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: DS.radius.md,
   },
   clearButtonText: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: COLORS.white,
+    color: '#FFFFFF',
   },
   loadingBanner: {
     flexDirection: 'row',

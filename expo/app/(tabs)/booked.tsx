@@ -32,7 +32,7 @@ import {
   Crown,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME, DS } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
@@ -708,7 +708,7 @@ export default function BookedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#071223',
+    backgroundColor: DS.bg.page,
   },
   safeArea: {
     flex: 1,
@@ -717,12 +717,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#071223',
+    backgroundColor: DS.bg.page,
   },
   loadingText: {
     marginTop: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: CLEAN_THEME.text.secondary,
+    color: DS.text.secondary,
   },
   listContent: {
     padding: SPACING.md,
@@ -770,14 +770,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   heroTitle: {
-    fontSize: 24,
-    fontWeight: '700' as const,
+    fontSize: 28,
+    fontFamily: DS.font.lobster,
     color: COLORS.white,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   heroSubtitle: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.85)',
     marginTop: 2,
   },
   nextCruiseCard: {
@@ -841,15 +841,15 @@ const styles = StyleSheet.create({
   },
   casinoSection: {
     marginBottom: SPACING.md,
-    borderRadius: BORDER_RADIUS.xl,
+    borderRadius: DS.radius.xl,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(151,176,255,0.16)',
-    ...SHADOW.md,
+    borderColor: DS.border.default,
+    ...SHADOW.sm,
   },
   casinoGradient: {
     padding: SPACING.md,
-    backgroundColor: 'rgba(8, 20, 40, 0.92)',
+    backgroundColor: DS.bg.card,
   },
   casinoHeader: {
     flexDirection: 'row',
@@ -861,30 +861,30 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,226,143,0.18)',
+    backgroundColor: '#F5F0E0',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,214,92,0.3)',
+    borderColor: DS.accent.warning,
   },
   casinoTitle: {
-    fontSize: 20,
-    fontWeight: '700' as const,
-    color: '#FFFFFF',
+    fontSize: 22,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
     flex: 1,
   },
   casinoTierBadge: {
-    backgroundColor: 'rgba(245,185,59,0.18)',
+    backgroundColor: '#F5F0E0',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.round,
+    borderRadius: DS.radius.pill,
     borderWidth: 1,
-    borderColor: 'rgba(255,214,92,0.45)',
+    borderColor: DS.accent.warning,
   },
   casinoTierText: {
     fontSize: 12,
     fontWeight: '700' as const,
-    color: '#FFE28F',
+    color: DS.text.warning,
   },
   casinoMetricsGrid: {
     flexDirection: 'row',
@@ -893,12 +893,12 @@ const styles = StyleSheet.create({
   },
   casinoMetricCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: DS.bg.secondary,
+    borderRadius: DS.radius.md,
     padding: SPACING.sm,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderColor: DS.border.default,
   },
   casinoMetricIcon: {
     width: 32,
@@ -911,23 +911,23 @@ const styles = StyleSheet.create({
   casinoMetricValue: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: DS.text.primary,
     textAlign: 'center' as const,
   },
   casinoMetricLabel: {
     fontSize: 10,
-    color: 'rgba(213,224,255,0.6)',
+    color: DS.text.secondary,
     textAlign: 'center' as const,
     marginTop: 2,
   },
   casinoFinancialsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: DS.bg.secondary,
+    borderRadius: DS.radius.md,
     padding: SPACING.sm,
     marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: DS.border.default,
   },
   casinoFinancialItem: {
     flex: 1,
@@ -940,25 +940,25 @@ const styles = StyleSheet.create({
   },
   casinoFinancialLabel: {
     fontSize: 10,
-    color: 'rgba(213,224,255,0.6)',
+    color: DS.text.secondary,
   },
   casinoFinancialValue: {
     fontSize: 12,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: DS.text.primary,
   },
   casinoFinancialDivider: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: DS.border.divider,
     marginHorizontal: SPACING.xs,
   },
   casinoAvgRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: DS.bg.secondary,
+    borderRadius: DS.radius.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: DS.border.default,
   },
   casinoAvgItem: {
     flex: 1,
@@ -966,17 +966,17 @@ const styles = StyleSheet.create({
   },
   casinoAvgLabel: {
     fontSize: 10,
-    color: 'rgba(213,224,255,0.6)',
+    color: DS.text.secondary,
     marginBottom: 2,
   },
   casinoAvgValue: {
     fontSize: 13,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: DS.text.primary,
   },
   casinoAvgDivider: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: DS.border.divider,
     marginHorizontal: SPACING.sm,
   },
   cruiseCardWrapper: {
@@ -1065,11 +1065,11 @@ const styles = StyleSheet.create({
   },
   viewModeToggle: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: '#F0F0F0',
+    borderRadius: DS.radius.pill,
     padding: 4,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: DS.border.default,
   },
   viewModeButton: {
     flexDirection: 'row',
@@ -1077,34 +1077,34 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
-    borderRadius: BORDER_RADIUS.round,
+    borderRadius: DS.radius.pill,
   },
   viewModeButtonActive: {
-    backgroundColor: 'rgba(31,212,194,0.25)',
+    backgroundColor: DS.bg.card,
     borderWidth: 1,
-    borderColor: 'rgba(90,255,233,0.4)',
+    borderColor: DS.border.default,
   },
   viewModeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(213,224,255,0.7)',
+    color: DS.text.secondary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   viewModeTextActive: {
-    color: '#9EFDF2',
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   addCruiseButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: DS.text.primary,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
-    borderRadius: BORDER_RADIUS.round,
+    borderRadius: DS.radius.pill,
   },
   addCruiseText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.white,
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   timelineContainer: {
@@ -1131,7 +1131,7 @@ const styles = StyleSheet.create({
   timelineSectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: DS.text.primary,
   },
   timelineVerticalList: {
     gap: SPACING.sm,
@@ -1179,18 +1179,17 @@ const styles = StyleSheet.create({
   },
   timelineEmptyCard: {
     paddingVertical: SPACING.xl,
-    borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: 'rgba(224, 242, 254, 0.5)',
+    borderRadius: DS.radius.lg,
+    backgroundColor: DS.bg.secondary,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: 'rgba(0, 31, 63, 0.2)',
+    borderColor: DS.border.default,
   },
   timelineEmptyText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.navyDeep,
-    opacity: 0.6,
+    color: DS.text.secondary,
     marginTop: SPACING.xs,
     textAlign: 'center' as const,
   },
@@ -1257,14 +1256,16 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
     marginBottom: SPACING.xs,
-    backgroundColor: 'rgba(224, 242, 254, 0.3)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.md,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   cruiseListTitle: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    letterSpacing: 1,
+    fontSize: 22,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
+    letterSpacing: 0.3,
     marginBottom: 4,
   },
   cruiseListSubtitle: {

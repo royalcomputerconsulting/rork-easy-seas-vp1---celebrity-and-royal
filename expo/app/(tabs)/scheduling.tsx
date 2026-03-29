@@ -24,7 +24,7 @@ import {
   Bookmark,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME, DS } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
@@ -927,7 +927,7 @@ export default function SchedulingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#071223',
+    backgroundColor: DS.bg.page,
   },
   safeArea: {
     flex: 1,
@@ -936,12 +936,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#071223',
+    backgroundColor: DS.bg.page,
   },
   loadingText: {
     marginTop: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: CLEAN_THEME.text.secondary,
+    color: DS.text.secondary,
   },
   listContent: {
     padding: SPACING.md,
@@ -955,18 +955,18 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: DS.bg.secondary,
+    borderRadius: DS.radius.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: Platform.OS === 'ios' ? SPACING.sm : 0,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: DS.border.default,
   },
   searchInput: {
     flex: 1,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.textPrimary,
+    color: DS.text.primary,
     marginLeft: SPACING.sm,
     paddingVertical: SPACING.sm,
   },
@@ -985,22 +985,22 @@ const styles = StyleSheet.create({
   cabinChip: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: DS.radius.pill,
+    backgroundColor: DS.bg.secondary,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: DS.border.default,
   },
   cabinChipActive: {
-    backgroundColor: 'rgba(245,185,59,0.18)',
-    borderColor: 'rgba(255,214,92,0.55)',
+    backgroundColor: DS.text.primary,
+    borderColor: DS.text.primary,
   },
   cabinChipText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(213,224,255,0.7)',
+    color: DS.text.secondary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   cabinChipTextActive: {
-    color: '#FFE28F',
+    color: '#FFFFFF',
     fontWeight: '700' as const,
   },
   conflictToggle: {
@@ -1029,10 +1029,12 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   statItem: {
     flex: 1,
@@ -1040,16 +1042,16 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    backgroundColor: 'rgba(212, 165, 116, 0.2)',
+    backgroundColor: DS.border.divider,
   },
   statValue: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.beigeWarm,
+    color: DS.text.primary,
   },
   statLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.white,
+    color: DS.text.secondary,
     marginTop: 2,
   },
   cruiseCard: {
@@ -1107,7 +1109,7 @@ const styles = StyleSheet.create({
   shipName: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    color: DS.text.primary,
   },
   offerBadge: {
     flexDirection: 'row',
@@ -1155,7 +1157,7 @@ const styles = StyleSheet.create({
   },
   destination: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.beigeWarm,
+    color: DS.text.secondary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     flex: 1,
   },
@@ -1179,7 +1181,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     paddingBottom: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(212, 165, 116, 0.15)',
+    borderBottomColor: DS.border.divider,
   },
   detailItem: {
     flexDirection: 'row',
@@ -1188,7 +1190,7 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.white,
+    color: DS.text.secondary,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -1196,19 +1198,21 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   cabinTypeBadge: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: DS.bg.secondary,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
+    borderRadius: DS.radius.sm,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   cabinTypeText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.white,
+    color: DS.text.secondary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   daysUntilText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.white,
+    color: DS.text.secondary,
     flex: 1,
   },
   priceText: {
@@ -1221,17 +1225,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: SPACING.huge,
     paddingHorizontal: SPACING.xl,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
     marginHorizontal: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: DS.border.default,
   },
   emptyIconContainer: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(14, 165, 233, 0.15)',
+    backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.lg,
@@ -1239,13 +1243,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     marginBottom: SPACING.sm,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: DS.text.secondary,
     textAlign: 'center' as const,
     lineHeight: 22,
     marginBottom: SPACING.xl,
@@ -1367,22 +1370,22 @@ const styles = StyleSheet.create({
   sortChip: {
     paddingHorizontal: SPACING.lg,
     paddingVertical: 10,
-    borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    borderRadius: DS.radius.pill,
+    backgroundColor: DS.bg.secondary,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.15)',
+    borderColor: DS.border.default,
   },
   sortChipActive: {
-    backgroundColor: COLORS.navyDeep,
-    borderColor: COLORS.navyDeep,
+    backgroundColor: DS.text.primary,
+    borderColor: DS.text.primary,
   },
   sortChipText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   sortChipTextActive: {
-    color: COLORS.white,
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   filterToggle: {

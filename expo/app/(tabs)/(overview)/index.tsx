@@ -26,7 +26,7 @@ import {
   Coins,
 } from 'lucide-react-native';
 
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME, DS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
@@ -792,7 +792,7 @@ export default function OverviewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A1628',
+    backgroundColor: DS.bg.page,
   },
   safeArea: {
     flex: 1,
@@ -807,12 +807,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A1628',
+    backgroundColor: DS.bg.page,
   },
   loadingText: {
     marginTop: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#E2E8F0',
+    color: DS.text.secondary,
   },
   listContent: {
     paddingHorizontal: SPACING.md,
@@ -901,17 +901,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logoHeaderTitle: {
-    fontSize: 24,
-    fontWeight: '700' as const,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
+    fontSize: 28,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
+    letterSpacing: 0.3,
   },
   logoHeaderSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.8)',
+    color: DS.text.secondary,
     marginTop: 2,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -919,9 +919,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.md,
     marginTop: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: DS.bg.card,
     padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: DS.radius.lg,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -929,10 +931,10 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   sectionTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    letterSpacing: 1,
+    fontSize: 22,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
+    letterSpacing: 0.3,
   },
   progressSection: {
     marginBottom: SPACING.md,
@@ -1121,15 +1123,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: SPACING.huge,
     paddingHorizontal: SPACING.xl,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
+    borderWidth: 1,
+    borderColor: DS.border.default,
     marginTop: SPACING.lg,
   },
   emptyIconContainer: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(30, 58, 95, 0.1)',
+    backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.lg,
@@ -1137,26 +1141,26 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     marginBottom: SPACING.sm,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#4B5563',
+    color: DS.text.secondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: SPACING.xl,
   },
   importButton: {
-    backgroundColor: COLORS.navyDeep,
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: DS.text.primary,
+    borderRadius: DS.radius.md,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xxl,
   },
   importButtonText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    color: '#FFFFFF',
   },
   agentChatOverlay: {
     position: 'absolute',
@@ -1186,10 +1190,12 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   casinoHistorySection: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
     padding: SPACING.md,
     marginTop: SPACING.md,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   casinoHistoryHeader: {
     marginBottom: SPACING.md,
@@ -1200,23 +1206,23 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   casinoHistoryTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    letterSpacing: 1,
+    fontSize: 22,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
+    letterSpacing: 0.3,
   },
   casinoHistorySubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
+    color: DS.text.secondary,
     marginTop: 4,
   },
   casinoHistoryItem: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: DS.bg.secondary,
+    borderRadius: DS.radius.md,
     padding: SPACING.md,
     marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: DS.border.default,
   },
   casinoHistoryItemHeader: {
     flexDirection: 'row',
@@ -1232,7 +1238,7 @@ const styles = StyleSheet.create({
   casinoHistoryShipName: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
   },
   casinoHistoryDateRow: {
     flexDirection: 'row',
@@ -1241,11 +1247,11 @@ const styles = StyleSheet.create({
   },
   casinoHistoryDate: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
+    color: DS.text.secondary,
   },
   casinoHistoryItinerary: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#4B5563',
+    color: DS.text.secondary,
     marginBottom: SPACING.sm,
   },
   casinoHistoryStats: {

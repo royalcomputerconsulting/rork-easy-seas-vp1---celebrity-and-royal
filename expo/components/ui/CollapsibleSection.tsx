@@ -9,10 +9,10 @@ import {
   Platform,
   UIManager,
 } from 'react-native';
-import { ChevronUp } from 'lucide-react-native';
+import { ChevronDown } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
-import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
+import { SPACING } from '@/constants/theme';
+import { DS } from '@/constants/theme';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -48,20 +48,20 @@ export function CollapsibleSection({
 
   const toggleExpanded = useCallback(() => {
     const newExpanded = !expanded;
-    
+
     LayoutAnimation.configureNext({
       duration: 200,
       update: {
         type: LayoutAnimation.Types.easeInEaseOut,
       },
     });
-    
+
     Animated.timing(rotateAnim, {
       toValue: newExpanded ? 1 : 0,
       duration: 200,
       useNativeDriver: true,
     }).start();
-    
+
     if (!isControlled) {
       setInternalExpanded(newExpanded);
     }
@@ -74,13 +74,11 @@ export function CollapsibleSection({
     outputRange: ['0deg', '180deg'],
   });
 
-  const marbleConfig = MARBLE_TEXTURES.navyBlue;
-
   return (
     <View style={[styles.container, showBorder && styles.containerBorder]}>
       <LinearGradient
-        colors={marbleConfig.gradientColors as unknown as [string, string, ...string[]]}
-        locations={marbleConfig.gradientLocations}
+        colors={['#FFFFFF', '#F8F8F8', '#FAFAFA']}
+        locations={[0, 0.5, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerBackground}
@@ -102,13 +100,13 @@ export function CollapsibleSection({
               {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
             </View>
           </View>
-          
+
           <Animated.View style={[styles.chevronContainer, { transform: [{ rotate: iconRotation }] }]}>
-            <ChevronUp size={18} color="#FFFFFF" />
+            <ChevronDown size={16} color={DS.text.secondary} />
           </Animated.View>
         </TouchableOpacity>
       </LinearGradient>
-      
+
       {expanded && <View style={styles.content}>{children}</View>}
     </View>
   );
@@ -117,24 +115,30 @@ export function CollapsibleSection({
 const styles = StyleSheet.create({
   container: {
     marginBottom: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: DS.radius.xl,
     overflow: 'hidden',
+    backgroundColor: DS.bg.card,
   },
   containerBorder: {
-    borderWidth: 0,
-    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: DS.border.default,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   headerBackground: {
-    borderTopLeftRadius: BORDER_RADIUS.lg,
-    borderTopRightRadius: BORDER_RADIUS.lg,
+    borderTopLeftRadius: DS.radius.xl,
+    borderTopRightRadius: DS.radius.xl,
     overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
+    paddingVertical: DS.spacing.md,
+    paddingHorizontal: DS.spacing.md,
   },
   headerCompact: {
     paddingVertical: SPACING.sm,
@@ -146,10 +150,10 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     marginRight: SPACING.sm,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: DS.text.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -157,30 +161,32 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    fontSize: 22,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
+    letterSpacing: 0.2,
   },
   titleCompact: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontSize: 18,
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    color: DS.text.secondary,
     marginTop: 2,
+    fontFamily: DS.font.system,
+    fontWeight: '500' as const,
   },
   content: {
     paddingTop: SPACING.xs,
+    backgroundColor: DS.bg.card,
   },
   chevronContainer: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#F0F0F0',
+    borderWidth: 1,
+    borderColor: DS.border.default,
     justifyContent: 'center',
     alignItems: 'center',
   },
