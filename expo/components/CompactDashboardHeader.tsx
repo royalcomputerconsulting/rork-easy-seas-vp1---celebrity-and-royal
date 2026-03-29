@@ -115,7 +115,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F8F4EF', '#FBFAF8']}
+      colors={['#FFFFFF', '#F2F8FF', '#F8FCFF']}
       locations={[0, 0.48, 1]}
       start={{ x: 0.02, y: 0 }}
       end={{ x: 1, y: 1 }}
@@ -123,7 +123,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     >
       <LinearGradient
         pointerEvents="none"
-        colors={['rgba(255,255,255,0.96)', 'rgba(232,226,220,0.22)', 'rgba(255,255,255,0.14)', 'rgba(214,206,198,0.3)']}
+        colors={['rgba(255,255,255,0.96)', 'rgba(190,214,235,0.24)', 'rgba(255,255,255,0.14)', 'rgba(145,181,218,0.22)']}
         locations={[0, 0.24, 0.72, 1]}
         start={{ x: 0.12, y: 0 }}
         end={{ x: 0.88, y: 1 }}

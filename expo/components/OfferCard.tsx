@@ -26,8 +26,8 @@ interface OfferCardProps {
   showValueBreakdown?: boolean;
 }
 
-const OFFER_MARBLE_COLORS = ['#FFFFFF', '#F7F3EF', '#EDE6DE', '#FBF9F6'] as const;
-const OFFER_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.92)', 'rgba(230,224,217,0.28)', 'rgba(255,255,255,0.22)', 'rgba(214,211,209,0.34)'] as const;
+const OFFER_MARBLE_COLORS = ['#FFFFFF', '#F2F8FF', '#E3F0FB', '#F8FCFF'] as const;
+const OFFER_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.96)', 'rgba(190,214,235,0.24)', 'rgba(255,255,255,0.14)', 'rgba(145,181,218,0.22)'] as const;
 const OFFER_MARBLE_LOCATIONS = [0, 0.24, 0.72, 1] as const;
 
 function getOfferImage(offer: Cruise): string {
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: '#E4DDD6',
+    borderColor: '#D7E6F4',
     backgroundColor: '#FFFFFF',
     ...SHADOW.md,
   },
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     opacity: 0.82,
   },
   offerHeaderSection: {
-    backgroundColor: 'rgba(255,255,255,0.88)',
+    backgroundColor: 'rgba(247,251,255,0.88)',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.sm,
@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     padding: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.74)',
+    backgroundColor: 'rgba(246,250,255,0.78)',
   },
   actionIcons: {
     flexDirection: 'row',
@@ -570,11 +570,11 @@ const styles = StyleSheet.create({
   },
   metaInfoBox: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.68)',
+    backgroundColor: 'rgba(244,249,255,0.76)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E1DAD2',
+    borderColor: '#D5E6F4',
   },
   metaInfoLabel: {
     fontSize: 9,
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E4DDD6',
+    borderColor: '#D7E6F4',
     ...SHADOW.sm,
   },
   compactMarbleBackground: {
@@ -799,7 +799,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.64)',
+    backgroundColor: 'rgba(244,249,255,0.72)',
   },
   compactLeft: {
     flex: 1,

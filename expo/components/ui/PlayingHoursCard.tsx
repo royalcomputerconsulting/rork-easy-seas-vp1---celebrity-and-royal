@@ -145,7 +145,7 @@ export function PlayingHoursCard({
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#FFFFFF', '#F8F4EF', '#FBFAF8']}
+        colors={['#FFFFFF', '#F2F8FF', '#F8FCFF']}
         start={{ x: 0.02, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}

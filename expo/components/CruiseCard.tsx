@@ -9,14 +9,14 @@ import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE }
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 
 const CARD_BG = '#FFFFFF' as const;
-const CARD_BORDER = 'rgba(221, 213, 205, 0.92)' as const;
-const INNER_BG = 'rgba(255,255,255,0.62)' as const;
-const INNER_BORDER = 'rgba(223,214,206,0.92)' as const;
+const CARD_BORDER = 'rgba(207, 224, 239, 0.96)' as const;
+const INNER_BG = 'rgba(246,250,255,0.74)' as const;
+const INNER_BORDER = 'rgba(204,221,237,0.92)' as const;
 const TEXT_PRIMARY = '#111111' as const;
 const TEXT_SECONDARY = '#666666' as const;
 const TEXT_MUTED = '#999999' as const;
-const DARK_MARBLE_COLORS = ['#FFFFFF', '#F7F3EF', '#EDE6DE', '#FBF9F6'] as const;
-const DARK_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.96)', 'rgba(231,224,216,0.24)', 'rgba(255,255,255,0.16)', 'rgba(214,206,198,0.34)'] as const;
+const DARK_MARBLE_COLORS = ['#FFFFFF', '#F2F8FF', '#E3F0FB', '#F8FCFF'] as const;
+const DARK_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.96)', 'rgba(190,214,235,0.24)', 'rgba(255,255,255,0.16)', 'rgba(145,181,218,0.22)'] as const;
 const DARK_MARBLE_LOCATIONS = [0, 0.24, 0.72, 1] as const;
 
 interface CruiseCardProps {
@@ -208,7 +208,7 @@ export const CruiseCard = React.memo(function CruiseCard({
               onError={() => setCompactImageUri(DEFAULT_CRUISE_IMAGE)}
             />
             <LinearGradient
-              colors={['rgba(255,255,255,0.04)', 'rgba(255,250,245,0.48)', 'rgba(248,242,236,0.94)']}
+              colors={['rgba(255,255,255,0.04)', 'rgba(241,248,255,0.48)', 'rgba(228,241,252,0.94)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={StyleSheet.absoluteFill}
@@ -483,13 +483,13 @@ export const CruiseCard = React.memo(function CruiseCard({
               <Text style={styles.compactShipName}>{cruise.shipName}</Text>
               <Text style={styles.compactDestination} numberOfLines={1}>{cruise.destination}</Text>
               <View style={styles.compactMeta}>
-                <Calendar size={12} color="rgba(158,253,242,0.7)" />
+                <Calendar size={12} color="rgba(30,58,95,0.7)" />
                 <Text style={styles.compactDate}>
                   {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
                 </Text>
               </View>
             </View>
-            <ChevronRight size={18} color="rgba(255,255,255,0.3)" style={styles.compactChevron} />
+            <ChevronRight size={18} color="rgba(30,58,95,0.45)" style={styles.compactChevron} />
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
@@ -529,7 +529,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)}
           />
           <LinearGradient
-            colors={['rgba(255,255,255,0.04)', 'rgba(255,250,245,0.52)', 'rgba(248,242,236,0.94)']}
+            colors={['rgba(255,255,255,0.04)', 'rgba(241,248,255,0.52)', 'rgba(228,241,252,0.94)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={StyleSheet.absoluteFill}

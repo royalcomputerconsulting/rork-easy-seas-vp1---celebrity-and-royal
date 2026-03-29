@@ -21,8 +21,8 @@ type CompactFactProps = {
   label?: string;
 };
 
-const PAGE_MARBLE_COLORS = ['#FFFFFF', '#F8F4EF', '#F1EBE5', '#FBFAF8'] as const;
-const PAGE_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.95)', 'rgba(231,224,216,0.26)', 'rgba(255,255,255,0.14)', 'rgba(214,206,198,0.3)'] as const;
+const PAGE_MARBLE_COLORS = ['#FFFFFF', '#F2F8FF', '#E3F0FB', '#F8FCFF'] as const;
+const PAGE_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.96)', 'rgba(190,214,235,0.24)', 'rgba(255,255,255,0.14)', 'rgba(145,181,218,0.22)'] as const;
 const PAGE_MARBLE_LOCATIONS = [0, 0.24, 0.72, 1] as const;
 
 const CompactFact = memo(function CompactFact({ icon: Icon, value, label }: CompactFactProps) {
@@ -658,7 +658,7 @@ export default function CruiseDetailsScreen() {
             onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)}
           />
           <LinearGradient
-            colors={['rgba(255,255,255,0.08)', 'rgba(255,248,242,0.54)']}
+            colors={['rgba(255,255,255,0.08)', 'rgba(240,248,255,0.54)']}
             style={StyleSheet.absoluteFill}
           />
           {isBooked && (

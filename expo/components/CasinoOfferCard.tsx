@@ -143,8 +143,8 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
 export const JackpotDealsCard = OfferSummaryCard;
 
 const JACKPOT_BG = 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=600&q=80';
-const OFFER_CARD_MARBLE_COLORS = ['#FFFFFF', '#F5F1ED', '#ECE7E2', '#F8F6F3'] as const;
-const OFFER_CARD_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.94)', 'rgba(232,226,220,0.22)', 'rgba(255,255,255,0.14)', 'rgba(214,211,209,0.34)'] as const;
+const OFFER_CARD_MARBLE_COLORS = ['#FFFFFF', '#F2F8FF', '#E3F0FB', '#F8FCFF'] as const;
+const OFFER_CARD_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.96)', 'rgba(190,214,235,0.22)', 'rgba(255,255,255,0.14)', 'rgba(145,181,218,0.22)'] as const;
 const OFFER_CARD_MARBLE_LOCATIONS = [0, 0.26, 0.7, 1] as const;
 
 const summaryStyles = StyleSheet.create({
@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: '#E4DDD6',
+    borderColor: '#D7E6F4',
     ...SHADOW.md,
   },
   marbleBackground: {
@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
     opacity: 0.94,
   },
   offerHeaderSection: {
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(247,251,255,0.76)',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.sm,
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     padding: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.58)',
+    backgroundColor: 'rgba(245,250,255,0.66)',
   },
   keyInfoRow: {
     flexDirection: 'row',
@@ -764,12 +764,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   roomTypeBadge: {
-    backgroundColor: 'rgba(255,255,255,0.74)',
+    backgroundColor: 'rgba(246,250,255,0.78)',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#DDD5CD',
+    borderColor: '#D5E6F4',
   },
   roomTypeBadgeLabel: {
     fontSize: 10,
@@ -787,12 +787,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.74)',
+    backgroundColor: 'rgba(246,250,255,0.78)',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#E1DAD2',
+    borderColor: '#D5E6F4',
   },
   expiryBadgeUrgent: {
     backgroundColor: '#FEF2F2',
