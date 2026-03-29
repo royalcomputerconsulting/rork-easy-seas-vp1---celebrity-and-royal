@@ -658,7 +658,7 @@ export default function CruiseDetailsScreen() {
             onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)}
           />
           <LinearGradient
-            colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.72)']}
+            colors={['rgba(255,255,255,0.08)', 'rgba(255,248,242,0.54)']}
             style={StyleSheet.absoluteFill}
           />
           {isBooked && (
@@ -1801,7 +1801,7 @@ export default function CruiseDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: 'transparent',
   },
   notFoundContainer: {
     flex: 1,
@@ -1879,13 +1879,13 @@ const styles = StyleSheet.create({
   editAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     gap: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
   },
   bookHeaderButton: {
     flexDirection: 'row',
@@ -1905,12 +1905,12 @@ const styles = StyleSheet.create({
   unbookHeaderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
   },
   editAllButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -1925,10 +1925,10 @@ const styles = StyleSheet.create({
     marginTop: -DS.spacing.xl,
     marginBottom: SPACING.lg,
     padding: DS.spacing.lg,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     borderRadius: DS.radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
     ...DS.shadow.md,
   },
   shipRow: {
@@ -1951,7 +1951,7 @@ const styles = StyleSheet.create({
   offerNameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(250,248,245,0.84)',
+    backgroundColor: 'rgba(255,249,243,0.58)',
     alignSelf: 'flex-start',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
@@ -1959,7 +1959,7 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
   },
   offerNameText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
@@ -1969,7 +1969,7 @@ const styles = StyleSheet.create({
   offerCodeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(250,248,245,0.84)',
+    backgroundColor: 'rgba(255,249,243,0.58)',
     alignSelf: 'flex-start',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
@@ -1977,7 +1977,7 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
   },
   offerCodeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -1994,12 +1994,12 @@ const styles = StyleSheet.create({
     color: DS.text.secondary,
   },
   factsCard: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
     ...SHADOW.sm,
   },
   factsGrid: {
@@ -2046,12 +2046,12 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
   },
   pricingChipsCard: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
   },
   pricingChipsRow: {
     flexDirection: 'row',
@@ -2111,12 +2111,12 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.sm,
   },
   compactPriceCard: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
   },
   pricingRow: {
     flexDirection: 'row',
@@ -2211,12 +2211,12 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   compactCasinoCard: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
   },
   casinoResultsRow: {
     flexDirection: 'row',
@@ -3288,12 +3288,12 @@ const styles = StyleSheet.create({
     color: '#1E40AF',
   },
   bwoFpObcCard: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
     ...DS.shadow.sm,
   },
   bwoFpObcHeader: {
@@ -3455,8 +3455,8 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderColor: 'rgba(221,213,205,0.92)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     ...DS.shadow.sm,
   },
   payloadDetailsSection: {
@@ -3464,8 +3464,8 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderColor: 'rgba(221,213,205,0.92)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     ...DS.shadow.sm,
   },
   payloadGrid: {
@@ -3502,7 +3502,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.sm,
-    backgroundColor: 'rgba(250,248,245,0.84)',
+    backgroundColor: 'rgba(255,249,243,0.58)',
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
     borderColor: 'rgba(236,236,236,0.94)',
@@ -3518,12 +3518,12 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   pricingCategoryCard: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
     ...DS.shadow.sm,
   },
   pricingCategoryLabel: {
@@ -3540,12 +3540,12 @@ const styles = StyleSheet.create({
     color: DS.text.primary,
   },
   offersSectionCompact: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
     ...DS.shadow.sm,
   },
   sectionHeaderCompact: {
@@ -3568,12 +3568,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(250,248,245,0.84)',
+    backgroundColor: 'rgba(255,249,243,0.58)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.xs,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
   },
   offerTextCompact: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -3581,12 +3581,12 @@ const styles = StyleSheet.create({
     color: DS.text.primary,
   },
   casinoSectionCompact: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(231,231,231,0.94)',
+    borderColor: 'rgba(221,213,205,0.92)',
     ...DS.shadow.sm,
   },
   casinoStatsRow: {

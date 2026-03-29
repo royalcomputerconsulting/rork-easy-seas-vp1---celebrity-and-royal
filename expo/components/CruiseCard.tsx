@@ -8,16 +8,16 @@ import { createDateFromString } from '@/lib/date';
 import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 
-const CARD_BG = 'rgba(8, 20, 40, 0.92)' as const;
-const CARD_BORDER = 'rgba(151, 176, 255, 0.16)' as const;
-const INNER_BG = 'rgba(255,255,255,0.06)' as const;
-const INNER_BORDER = 'rgba(255,255,255,0.09)' as const;
-const TEXT_PRIMARY = '#FFFFFF' as const;
-const TEXT_SECONDARY = 'rgba(213, 224, 255, 0.72)' as const;
-const TEXT_MUTED = 'rgba(180, 195, 240, 0.5)' as const;
-const DARK_MARBLE_COLORS = ['#18222C', '#202A35', '#121B26', '#2A333D'] as const;
-const DARK_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.14)', 'rgba(255,255,255,0.02)', 'rgba(185,196,209,0.12)'] as const;
-const DARK_MARBLE_LOCATIONS = [0, 0.24, 0.68, 1] as const;
+const CARD_BG = '#FFFFFF' as const;
+const CARD_BORDER = 'rgba(221, 213, 205, 0.92)' as const;
+const INNER_BG = 'rgba(255,255,255,0.62)' as const;
+const INNER_BORDER = 'rgba(223,214,206,0.92)' as const;
+const TEXT_PRIMARY = '#111111' as const;
+const TEXT_SECONDARY = '#666666' as const;
+const TEXT_MUTED = '#999999' as const;
+const DARK_MARBLE_COLORS = ['#FFFFFF', '#F7F3EF', '#EDE6DE', '#FBF9F6'] as const;
+const DARK_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.96)', 'rgba(231,224,216,0.24)', 'rgba(255,255,255,0.16)', 'rgba(214,206,198,0.34)'] as const;
+const DARK_MARBLE_LOCATIONS = [0, 0.24, 0.72, 1] as const;
 
 interface CruiseCardProps {
   cruise: Cruise | BookedCruise;
@@ -46,15 +46,15 @@ function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'acti
 function getStatusColors(status: string): { bg: string; text: string; border: string } {
   switch (status) {
     case 'BOOKED':
-      return { bg: 'rgba(31,212,194,0.18)', text: '#9EFDF2', border: 'rgba(90,255,233,0.45)' };
+      return { bg: 'rgba(93,170,138,0.14)', text: '#3D8B6A', border: 'rgba(93,170,138,0.28)' };
     case 'COMPLETED':
-      return { bg: 'rgba(39,210,137,0.18)', text: '#A8F5C7', border: 'rgba(113,255,188,0.45)' };
+      return { bg: 'rgba(93,170,138,0.18)', text: '#2F7258', border: 'rgba(93,170,138,0.32)' };
     case 'ON BOARD':
-      return { bg: 'rgba(245,185,59,0.18)', text: '#FFE18A', border: 'rgba(255,214,92,0.55)' };
+      return { bg: 'rgba(225,182,75,0.16)', text: '#9A7A1E', border: 'rgba(225,182,75,0.3)' };
     case 'AVAILABLE':
-      return { bg: 'rgba(245,185,59,0.18)', text: '#FFE18A', border: 'rgba(255,214,92,0.55)' };
+      return { bg: 'rgba(17,17,17,0.05)', text: '#111111', border: 'rgba(17,17,17,0.08)' };
     default:
-      return { bg: 'rgba(255,255,255,0.12)', text: '#E5ECFF', border: 'rgba(255,255,255,0.18)' };
+      return { bg: 'rgba(17,17,17,0.04)', text: '#666666', border: 'rgba(17,17,17,0.08)' };
   }
 }
 
@@ -208,7 +208,7 @@ export const CruiseCard = React.memo(function CruiseCard({
               onError={() => setCompactImageUri(DEFAULT_CRUISE_IMAGE)}
             />
             <LinearGradient
-              colors={['rgba(6,14,30,0.1)', 'rgba(7,19,40,0.75)', 'rgba(10,26,52,0.96)']}
+              colors={['rgba(255,255,255,0.04)', 'rgba(255,250,245,0.48)', 'rgba(248,242,236,0.94)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={StyleSheet.absoluteFill}
@@ -227,7 +227,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             {/* BOTTOM: ship name + itinerary */}
             <View style={styles.uniImageBottom}>
               <View style={styles.uniShipRow}>
-                <Ship size={13} color="rgba(255,255,255,0.7)" />
+                <Ship size={13} color={COLORS.textSecondary} />
                 <Text style={styles.uniShipName} numberOfLines={1}>{cruise.shipName}</Text>
               </View>
               <Text style={styles.uniItineraryText} numberOfLines={1}>{getItineraryName()}</Text>
@@ -244,7 +244,7 @@ export const CruiseCard = React.memo(function CruiseCard({
                 </View>
               ) : (
                 <View style={styles.uniCasinoBadge}>
-                  <Sparkles size={10} color="#FFE28F" />
+                  <Sparkles size={10} color={COLORS.goldDark} />
                   <Text style={styles.uniCasinoBadgeText}>Casino Offer</Text>
                 </View>
               )}
@@ -267,7 +267,7 @@ export const CruiseCard = React.memo(function CruiseCard({
 
             {miniPorts.length > 0 ? (
               <View style={styles.uniPortsRow}>
-                <MapPin size={11} color="rgba(158,253,242,0.7)" />
+                <MapPin size={11} color={COLORS.textSecondary} />
                 <Text style={styles.uniPortsText} numberOfLines={2}>
                   {miniPorts.join(' · ')}
                 </Text>
@@ -277,28 +277,28 @@ export const CruiseCard = React.memo(function CruiseCard({
             {/* Stats grid */}
             <View style={styles.uniStatsGrid}>
               <View style={styles.uniStatTile}>
-                <Calendar size={12} color="rgba(158,253,242,0.8)" />
+                <Calendar size={12} color={COLORS.textSecondary} />
                 <Text style={styles.uniStatLabel}>SAIL DATE</Text>
                 <Text style={styles.uniStatValue}>
                   {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
                 </Text>
               </View>
               <View style={styles.uniStatTile}>
-                <Users size={12} color="rgba(168,198,255,0.8)" />
+                <Users size={12} color={COLORS.textSecondary} />
                 <Text style={styles.uniStatLabel}>GUESTS</Text>
                 <Text style={styles.uniStatValue}>{String(guestCount)}</Text>
               </View>
               {bookedCruise.cabinType ? (
                 <View style={styles.uniStatTile}>
-                  <Star size={12} color="rgba(255,226,143,0.8)" />
+                  <Star size={12} color={COLORS.goldDark} />
                   <Text style={styles.uniStatLabel}>CABIN</Text>
-                  <Text style={[styles.uniStatValue, { color: '#FFE28F' }]}>{bookedCruise.cabinType}</Text>
+                  <Text style={[styles.uniStatValue, { color: COLORS.goldDark }]}>{bookedCruise.cabinType}</Text>
                 </View>
               ) : null}
               {showRetailValue && retailValue !== null && retailValue > 0 ? (
                 <View style={styles.uniStatTile}>
                   <Text style={styles.uniStatLabel}>VALUE</Text>
-                  <Text style={[styles.uniStatValue, { color: '#A8F5C7' }]}>
+                  <Text style={[styles.uniStatValue, { color: COLORS.moneyDark }]}>
                     {'$' + Math.round(retailValue).toLocaleString()}
                   </Text>
                 </View>
@@ -322,7 +322,7 @@ export const CruiseCard = React.memo(function CruiseCard({
                 ) : null}
                 {bookedCruise.usedNextCruiseCertificate ? (
                   <View style={styles.uniNccBadge}>
-                    <Ticket size={10} color="#D8C0FF" />
+                    <Ticket size={10} color={COLORS.textSecondary} />
                     <Text style={styles.uniNccLabel}>NCC</Text>
                   </View>
                 ) : null}
@@ -332,7 +332,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             {/* Offer name */}
             {(bookedCruise.offerName || cruise.offerName) ? (
               <View style={styles.uniOfferRow}>
-                <Sparkles size={11} color="#FFE28F" />
+                <Sparkles size={11} color={COLORS.goldDark} />
                 <Text style={styles.uniOfferText} numberOfLines={1}>
                   {bookedCruise.offerName || cruise.offerName}
                 </Text>
@@ -394,7 +394,7 @@ export const CruiseCard = React.memo(function CruiseCard({
                     ]}>
                       <Text style={[
                         styles.uniEnrichmentBadgeText,
-                        { color: bookedCruise.bookingStatus === 'BK' ? '#A8F5C7' : '#FFE18A' },
+                        { color: bookedCruise.bookingStatus === 'BK' ? COLORS.moneyDark : COLORS.goldDark },
                       ]}>
                         {bookedCruise.bookingStatus === 'BK' ? 'Confirmed' : bookedCruise.bookingStatus === 'OF' ? 'Offer/Hold' : bookedCruise.bookingStatus}
                       </Text>
@@ -439,7 +439,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             {/* CTA Button */}
             <TouchableOpacity style={styles.uniActionButton} onPress={onPress} activeOpacity={0.85}>
               <Text style={styles.uniActionButtonText}>View Details</Text>
-              <ChevronRight size={15} color="#9EFDF2" />
+              <ChevronRight size={15} color={COLORS.white} />
             </TouchableOpacity>
           </View>
           </LinearGradient>
@@ -529,7 +529,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)}
           />
           <LinearGradient
-            colors={['rgba(6,14,30,0.08)', 'rgba(7,19,40,0.72)', 'rgba(10,26,52,0.96)']}
+            colors={['rgba(255,255,255,0.04)', 'rgba(255,250,245,0.52)', 'rgba(248,242,236,0.94)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={StyleSheet.absoluteFill}
@@ -557,7 +557,7 @@ export const CruiseCard = React.memo(function CruiseCard({
         <View style={styles.contentSection}>
           <View style={styles.headerRow}>
             <View style={styles.shipInfo}>
-              <Ship size={15} color="rgba(158,253,242,0.8)" />
+              <Ship size={15} color={COLORS.textSecondary} />
               <Text style={styles.shipName}>{cruise.shipName}</Text>
               <View style={[styles.inlineStatusBadge, { backgroundColor: statusColors.bg, borderColor: statusColors.border }]}>
                 <Text style={[styles.inlineStatusBadgeText, { color: statusColors.text }]}>{statusBadge.text}</Text>
@@ -588,11 +588,11 @@ export const CruiseCard = React.memo(function CruiseCard({
 
           <View style={styles.dateGuestRow}>
             <View style={styles.dateInfo}>
-              <Calendar size={13} color="rgba(158,253,242,0.7)" />
+              <Calendar size={13} color={COLORS.textSecondary} />
               <Text style={styles.dateText}>{formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}</Text>
             </View>
             <View style={styles.guestInfo}>
-              <Users size={13} color="rgba(168,198,255,0.7)" />
+              <Users size={13} color={COLORS.textSecondary} />
               <Text style={styles.guestText}>{String(bookedCruise.guestNames?.length || bookedCruise.guests || 2) + ' Guests'}</Text>
             </View>
           </View>
@@ -616,12 +616,12 @@ export const CruiseCard = React.memo(function CruiseCard({
 
           <TouchableOpacity style={styles.actionButton} onPress={onPress}>
             <Text style={styles.actionButtonText}>View Details</Text>
-            <ChevronRight size={15} color="#9EFDF2" />
+            <ChevronRight size={15} color={COLORS.white} />
           </TouchableOpacity>
 
           {(bookedCruise.offerName || cruise.offerName || cruise.offerCode) ? (
             <View style={styles.offerSection}>
-              <Sparkles size={13} color="#FFE28F" />
+              <Sparkles size={13} color={COLORS.goldDark} />
               <Text style={styles.offerText}>
                 {bookedCruise.offerName || cruise.offerName || ('Offer ' + cruise.offerCode)}
               </Text>
@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
     borderColor: CARD_BORDER,
     ...SHADOW.lg,
     shadowColor: '#000000',
-    shadowOpacity: 0.28,
+    shadowOpacity: 0.08,
     shadowRadius: 12,
   },
   darkMarbleBackground: {
@@ -708,17 +708,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   uniNightsBadge: {
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(17,17,17,0.08)',
   },
   uniNightsBadgeText: {
     fontSize: 12,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: TEXT_PRIMARY,
   },
   uniImageBottom: {
     position: 'absolute',
@@ -738,13 +738,13 @@ const styles = StyleSheet.create({
   uniShipName: {
     fontSize: 15,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: TEXT_PRIMARY,
     flex: 1,
   },
   uniItineraryText: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: 'rgba(232,240,255,0.85)',
+    color: TEXT_SECONDARY,
     lineHeight: 18,
   },
   uniBody: {
@@ -758,17 +758,17 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   uniCodeBadge: {
-    backgroundColor: 'rgba(30,58,95,0.8)',
+    backgroundColor: 'rgba(17,17,17,0.04)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.xs,
     borderWidth: 1,
-    borderColor: 'rgba(151,176,255,0.3)',
+    borderColor: 'rgba(17,17,17,0.08)',
   },
   uniCodeText: {
     fontSize: 11,
     fontWeight: '700' as const,
-    color: '#A6C6FF',
+    color: TEXT_PRIMARY,
     letterSpacing: 0.4,
   },
   uniCasinoBadge: {
@@ -785,20 +785,20 @@ const styles = StyleSheet.create({
   uniCasinoBadgeText: {
     fontSize: 11,
     fontWeight: '700' as const,
-    color: '#FFE28F',
+    color: COLORS.goldDark,
   },
   uniBookingBadge: {
-    backgroundColor: 'rgba(39,210,137,0.15)',
+    backgroundColor: 'rgba(93,170,138,0.12)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.xs,
     borderWidth: 1,
-    borderColor: 'rgba(113,255,188,0.3)',
+    borderColor: 'rgba(93,170,138,0.24)',
   },
   uniBookingText: {
     fontSize: 11,
     fontWeight: '700' as const,
-    color: '#A8F5C7',
+    color: COLORS.moneyDark,
   },
   uniRouteSection: {
     paddingVertical: 6,
@@ -869,40 +869,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(39,210,137,0.15)',
+    backgroundColor: 'rgba(93,170,138,0.12)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.xs,
     borderWidth: 1,
-    borderColor: 'rgba(113,255,188,0.3)',
+    borderColor: 'rgba(93,170,138,0.24)',
   },
-  uniFpLabel: { fontSize: 10, fontWeight: '700' as const, color: '#A8F5C7' },
-  uniFpValue: { fontSize: 11, fontWeight: '800' as const, color: '#A8F5C7' },
+  uniFpLabel: { fontSize: 10, fontWeight: '700' as const, color: COLORS.moneyDark },
+  uniFpValue: { fontSize: 11, fontWeight: '800' as const, color: COLORS.moneyDark },
   uniObcBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(168,198,255,0.15)',
+    backgroundColor: 'rgba(17,17,17,0.04)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.xs,
     borderWidth: 1,
-    borderColor: 'rgba(168,198,255,0.3)',
+    borderColor: 'rgba(17,17,17,0.08)',
   },
-  uniObcLabel: { fontSize: 10, fontWeight: '700' as const, color: '#A6C6FF' },
-  uniObcValue: { fontSize: 11, fontWeight: '800' as const, color: '#A6C6FF' },
+  uniObcLabel: { fontSize: 10, fontWeight: '700' as const, color: TEXT_PRIMARY },
+  uniObcValue: { fontSize: 11, fontWeight: '800' as const, color: TEXT_PRIMARY },
   uniNccBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(216,192,255,0.15)',
+    backgroundColor: 'rgba(17,17,17,0.04)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.xs,
     borderWidth: 1,
-    borderColor: 'rgba(216,192,255,0.3)',
+    borderColor: 'rgba(17,17,17,0.08)',
   },
-  uniNccLabel: { fontSize: 10, fontWeight: '700' as const, color: '#D8C0FF' },
+  uniNccLabel: { fontSize: 10, fontWeight: '700' as const, color: TEXT_PRIMARY },
   uniOfferRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -917,19 +917,19 @@ const styles = StyleSheet.create({
   },
   uniOfferText: {
     fontSize: 12,
-    color: '#FFE28F',
+    color: COLORS.goldDark,
     fontWeight: '600' as const,
     flex: 1,
   },
   uniOfferValueBadge: {
-    backgroundColor: 'rgba(39,210,137,0.18)',
+    backgroundColor: 'rgba(93,170,138,0.14)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: 'rgba(113,255,188,0.3)',
+    borderColor: 'rgba(93,170,138,0.24)',
   },
-  uniOfferValueText: { fontSize: 11, fontWeight: '700' as const, color: '#A8F5C7' },
+  uniOfferValueText: { fontSize: 11, fontWeight: '700' as const, color: COLORS.moneyDark },
   uniPricingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -943,15 +943,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(168,198,255,0.12)',
+    backgroundColor: 'rgba(17,17,17,0.04)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.xs,
     borderWidth: 1,
-    borderColor: 'rgba(168,198,255,0.25)',
+    borderColor: 'rgba(17,17,17,0.08)',
   },
   uniPricingLabel: { fontSize: 10, color: TEXT_MUTED, fontWeight: '700' as const },
-  uniPricingValue: { fontSize: 11, color: '#A6C6FF', fontWeight: '700' as const },
+  uniPricingValue: { fontSize: 11, color: TEXT_PRIMARY, fontWeight: '700' as const },
   uniTaxesRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -977,15 +977,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: 'rgba(30,58,95,0.7)',
+    backgroundColor: COLORS.navyDeep,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(151,176,255,0.25)',
+    borderColor: 'rgba(17,17,17,0.08)',
     marginTop: SPACING.xs,
   },
-  uniActionButtonText: { fontSize: 13, fontWeight: '700' as const, color: '#9EFDF2' },
+  uniActionButtonText: { fontSize: 13, fontWeight: '700' as const, color: COLORS.white },
 
   // ─── COMPACT ────────────────────────────────────────────────────────
   compactContainer: {
@@ -1042,7 +1042,7 @@ const styles = StyleSheet.create({
     borderColor: CARD_BORDER,
     ...SHADOW.lg,
     shadowColor: '#000000',
-    shadowOpacity: 0.28,
+    shadowOpacity: 0.08,
     shadowRadius: 12,
   },
   imageSection: { height: 200, position: 'relative' },
@@ -1057,12 +1057,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   saleBadge: {
-    backgroundColor: 'rgba(123,45,142,0.85)',
+    backgroundColor: 'rgba(17,17,17,0.72)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 5,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(196,156,255,0.4)',
+    borderColor: 'rgba(17,17,17,0.08)',
   },
   saleBadgeText: { fontSize: TYPOGRAPHY.fontSizeSM, fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.white },
   statusBadgeFull: {
@@ -1077,14 +1077,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   nightsBadge: {
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(17,17,17,0.08)',
   },
-  nightsBadgeText: { fontSize: TYPOGRAPHY.fontSizeSM, fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.white },
+  nightsBadgeText: { fontSize: TYPOGRAPHY.fontSizeSM, fontWeight: TYPOGRAPHY.fontWeightBold, color: TEXT_PRIMARY },
   cruiseNameOverlay: {
     position: 'absolute',
     bottom: 0,
@@ -1093,7 +1093,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
   },
-  cruiseNameText: { fontSize: TYPOGRAPHY.fontSizeXL, fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.white },
+  cruiseNameText: { fontSize: TYPOGRAPHY.fontSizeXL, fontWeight: TYPOGRAPHY.fontWeightBold, color: TEXT_PRIMARY },
   contentSection: { padding: SPACING.lg, gap: SPACING.sm },
   headerRow: {
     flexDirection: 'row',
@@ -1132,22 +1132,22 @@ const styles = StyleSheet.create({
   priceSection: { flex: 1 },
   priceLabel: { fontSize: 9, color: TEXT_MUTED, letterSpacing: 0.8, marginBottom: 2, fontWeight: '700' as const },
   priceRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  priceDollar: { fontSize: TYPOGRAPHY.fontSizeLG, fontWeight: TYPOGRAPHY.fontWeightBold, color: '#A8F5C7', marginTop: 4 },
-  priceValue: { fontSize: TYPOGRAPHY.fontSizeHero, fontWeight: TYPOGRAPHY.fontWeightBold, color: '#A8F5C7' },
+  priceDollar: { fontSize: TYPOGRAPHY.fontSizeLG, fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.moneyDark, marginTop: 4 },
+  priceValue: { fontSize: TYPOGRAPHY.fontSizeHero, fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.moneyDark },
   cabinType: { fontSize: TYPOGRAPHY.fontSizeXS, color: TEXT_MUTED, marginTop: 2 },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: 'rgba(30,58,95,0.7)',
+    backgroundColor: COLORS.navyDeep,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(151,176,255,0.25)',
+    borderColor: 'rgba(17,17,17,0.08)',
   },
-  actionButtonText: { fontSize: TYPOGRAPHY.fontSizeSM, fontWeight: TYPOGRAPHY.fontWeightBold, color: '#9EFDF2' },
+  actionButtonText: { fontSize: TYPOGRAPHY.fontSizeSM, fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.white },
   offerSection: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1159,35 +1159,35 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,214,92,0.25)',
     flexWrap: 'wrap' as const,
   },
-  offerText: { fontSize: TYPOGRAPHY.fontSizeSM, fontWeight: TYPOGRAPHY.fontWeightMedium, color: '#FFE28F', flex: 1 },
+  offerText: { fontSize: TYPOGRAPHY.fontSizeSM, fontWeight: TYPOGRAPHY.fontWeightMedium, color: COLORS.goldDark, flex: 1 },
   offerCodeBadge: {
-    backgroundColor: 'rgba(168,198,255,0.15)',
+    backgroundColor: 'rgba(17,17,17,0.04)',
     paddingHorizontal: SPACING.xs,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.xs,
     borderWidth: 1,
-    borderColor: 'rgba(168,198,255,0.3)',
+    borderColor: 'rgba(17,17,17,0.08)',
   },
-  offerCodeText: { fontSize: TYPOGRAPHY.fontSizeXS, fontWeight: TYPOGRAPHY.fontWeightBold, color: '#A6C6FF' },
+  offerCodeText: { fontSize: TYPOGRAPHY.fontSizeXS, fontWeight: TYPOGRAPHY.fontWeightBold, color: TEXT_PRIMARY },
   fpObcSection: { flexDirection: 'row', gap: SPACING.sm },
   fpContainer: {
     flex: 1,
-    backgroundColor: 'rgba(39,210,137,0.15)',
+    backgroundColor: 'rgba(93,170,138,0.12)',
     padding: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(113,255,188,0.3)',
+    borderColor: 'rgba(93,170,138,0.24)',
   },
-  fpLabel: { fontSize: TYPOGRAPHY.fontSizeXS, fontWeight: TYPOGRAPHY.fontWeightBold, color: '#A8F5C7', letterSpacing: 0.5, marginBottom: 2 },
-  fpValue: { fontSize: TYPOGRAPHY.fontSizeLG, fontWeight: TYPOGRAPHY.fontWeightBold, color: '#A8F5C7' },
+  fpLabel: { fontSize: TYPOGRAPHY.fontSizeXS, fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.moneyDark, letterSpacing: 0.5, marginBottom: 2 },
+  fpValue: { fontSize: TYPOGRAPHY.fontSizeLG, fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.moneyDark },
   obcContainer: {
     flex: 1,
-    backgroundColor: 'rgba(168,198,255,0.15)',
+    backgroundColor: 'rgba(17,17,17,0.04)',
     padding: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(168,198,255,0.3)',
+    borderColor: 'rgba(17,17,17,0.08)',
   },
-  obcLabel: { fontSize: TYPOGRAPHY.fontSizeXS, fontWeight: TYPOGRAPHY.fontWeightBold, color: '#A6C6FF', letterSpacing: 0.5, marginBottom: 2 },
-  obcValue: { fontSize: TYPOGRAPHY.fontSizeLG, fontWeight: TYPOGRAPHY.fontWeightBold, color: '#A6C6FF' },
+  obcLabel: { fontSize: TYPOGRAPHY.fontSizeXS, fontWeight: TYPOGRAPHY.fontWeightBold, color: TEXT_PRIMARY, letterSpacing: 0.5, marginBottom: 2 },
+  obcValue: { fontSize: TYPOGRAPHY.fontSizeLG, fontWeight: TYPOGRAPHY.fontWeightBold, color: TEXT_PRIMARY },
 });
