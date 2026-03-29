@@ -369,7 +369,7 @@ export default function AnalyticsScreen() {
     });
     
     if (unlockedAchievements.length > 0) {
-      haptics.success();
+      void haptics.success();
       setCelebrationData({
         title: 'Achievement Unlocked!',
         subtitle: `You earned: ${unlockedAchievements[0].replace(/_/g, ' ').toUpperCase()}`,
@@ -508,7 +508,13 @@ export default function AnalyticsScreen() {
     console.log('[CasinoCruiseExport] Building CSV...', { cruiseCount: cruises.length });
 
     const escapeCsv = (value: unknown): string => {
-      const str = String(value ?? '');
+      const str = value == null
+        ? ''
+        : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+          ? String(value)
+          : value instanceof Date
+            ? value.toISOString()
+            : JSON.stringify(value);
       const needsQuotes = /[\n\r\t",]/.test(str);
       const escaped = str.replace(/"/g, '""');
       return needsQuotes ? `"${escaped}"` : escaped;
@@ -617,7 +623,7 @@ export default function AnalyticsScreen() {
       }
 
       const file = new ExpoFile(ExpoPaths.cache, filename);
-      await file.write(csv);
+      file.write(csv);
 
       const fileUri = file.uri;
 
@@ -980,11 +986,16 @@ export default function AnalyticsScreen() {
       {realAnalytics.destinationDistribution.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MapPin size={16} color='rgba(255,255,255,0.8)' />
+            <MapPin size={16} color={COLORS.navyDeep} />
             <Text style={styles.sectionTitle}>Top Destinations</Text>
           </View>
           
-          <View style={styles.destinationsCard}>
+          <LinearGradient
+            colors={DS.bg.marbleShell}
+            start={{ x: 0.02, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.destinationsCard}
+          >
             {realAnalytics.destinationDistribution.slice(0, 5).map((item, index) => (
               <View key={index} style={[styles.destinationRow, index === realAnalytics.destinationDistribution.slice(0, 5).length - 1 && { marginBottom: 0 }]}>
                 <View style={[styles.destinationRank, index === 0 && styles.destinationRankTop]}>
@@ -1002,7 +1013,7 @@ export default function AnalyticsScreen() {
                 </View>
               </View>
             ))}
-          </View>
+          </LinearGradient>
         </View>
       )}
 
@@ -1043,7 +1054,7 @@ export default function AnalyticsScreen() {
     pointsEarned: number;
     pph: number;
   }) => {
-    handleAddSession({
+    void handleAddSession({
       startTime: new Date(Date.now() - data.durationMinutes * 60 * 1000).toTimeString().slice(0, 5),
       endTime: new Date().toTimeString().slice(0, 5),
       durationMinutes: data.durationMinutes,
@@ -1099,7 +1110,7 @@ export default function AnalyticsScreen() {
       console.log('[Analytics] Total sessions after generation:', sessions.length + count);
       
       if (count > 0) {
-        haptics.success();
+        void haptics.success();
         setCelebrationData({
           title: forceRegenerate ? 'Sessions Regenerated!' : 'Historical Sessions Generated!',
           subtitle: `Created ${count} session records from ${completedCruises.length} cruises`,
@@ -1200,7 +1211,7 @@ export default function AnalyticsScreen() {
         <WeeklyGoalsCard
           compact={true}
           onGoalComplete={(goal) => {
-            haptics.success();
+            void haptics.success();
             setCelebrationData({
               title: 'Goal Completed!',
               subtitle: `You completed: ${goal.type} goal`,
@@ -1615,7 +1626,9 @@ export default function AnalyticsScreen() {
 
   return (
     <LinearGradient
-      colors={['#0A1628', '#1E3A5F']}
+      colors={DS.bg.marbleShell}
+      start={{ x: 0.02, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={styles.container}
     >
       <Stack.Screen options={{ headerShown: false }} />
@@ -1624,7 +1637,7 @@ export default function AnalyticsScreen() {
         <View style={styles.header}>
           <View style={styles.brandingRow}>
             <View style={styles.titleContainer}>
-              <BarChart3 size={22} color={COLORS.white} />
+              <BarChart3 size={22} color={COLORS.navyDeep} />
               <Text style={styles.appTitle}>Analytics</Text>
             </View>
           </View>
@@ -1644,7 +1657,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('intelligence')}
             activeOpacity={0.7}
           >
-            <Brain size={14} color={activeTab === 'intelligence' ? COLORS.white : 'rgba(255,255,255,0.45)'} />
+            <Brain size={14} color={activeTab === 'intelligence' ? COLORS.white : DS.text.secondary} />
             <Text style={[styles.tabButtonText, activeTab === 'intelligence' && styles.tabButtonTextActive]}>
               Intelligence
             </Text>
@@ -1655,7 +1668,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('charts')}
             activeOpacity={0.7}
           >
-            <LineChart size={14} color={activeTab === 'charts' ? COLORS.white : 'rgba(255,255,255,0.45)'} />
+            <LineChart size={14} color={activeTab === 'charts' ? COLORS.white : DS.text.secondary} />
             <Text style={[styles.tabButtonText, activeTab === 'charts' && styles.tabButtonTextActive]}>
               Charts
             </Text>
@@ -1666,7 +1679,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('session')}
             activeOpacity={0.7}
           >
-            <Dices size={14} color={activeTab === 'session' ? COLORS.white : 'rgba(255,255,255,0.45)'} />
+            <Dices size={14} color={activeTab === 'session' ? COLORS.white : DS.text.secondary} />
             <Text style={[styles.tabButtonText, activeTab === 'session' && styles.tabButtonTextActive]}>
               Session
             </Text>
@@ -1677,7 +1690,7 @@ export default function AnalyticsScreen() {
             onPress={() => setActiveTab('calcs')}
             activeOpacity={0.7}
           >
-            <Calculator size={14} color={activeTab === 'calcs' ? COLORS.white : 'rgba(255,255,255,0.45)'} />
+            <Calculator size={14} color={activeTab === 'calcs' ? COLORS.white : DS.text.secondary} />
             <Text style={[styles.tabButtonText, activeTab === 'calcs' && styles.tabButtonTextActive]}>
               Calcs
             </Text>
@@ -2311,17 +2324,17 @@ const styles = StyleSheet.create({
     fontStyle: 'italic' as const,
   },
   portfolioCard: {
-    backgroundColor: 'rgba(0,50,100,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.84)',
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'stretch',
     borderWidth: 1,
-    borderColor: 'rgba(32,178,170,0.32)',
+    borderColor: 'rgba(223, 214, 206, 0.92)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 2,
   },
   portfolioImageContainer: {
@@ -2378,7 +2391,7 @@ const styles = StyleSheet.create({
   portfolioCardShipName: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    color: DS.text.primary,
     flex: 1,
     marginRight: 4,
   },
@@ -2394,12 +2407,12 @@ const styles = StyleSheet.create({
   portfolioCardItinerary: {
     fontSize: 14,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: DS.text.primary,
     marginBottom: 2,
   },
   portfolioCardDestination: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.75)',
+    color: DS.text.secondary,
     marginBottom: 4,
   },
   portfolioCardMetaRow: {
@@ -2415,37 +2428,41 @@ const styles = StyleSheet.create({
   },
   portfolioCardMetaText: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.75)',
+    color: DS.text.secondary,
   },
   portfolioCardNights: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    color: DS.text.primary,
+    backgroundColor: 'rgba(255,255,255,0.72)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   portfolioCardMetrics: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(250,250,250,0.92)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.xs,
     paddingHorizontal: SPACING.sm,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   portfolioMetric: {
     alignItems: 'center',
   },
   portfolioMetricLabel: {
     fontSize: 9,
-    color: 'rgba(255,255,255,0.6)',
+    color: DS.text.tertiary,
     marginBottom: 1,
   },
   portfolioMetricValue: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    color: DS.text.primary,
   },
   portfolioCardFooter: {
     flexDirection: 'row',
@@ -2481,32 +2498,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: SPACING.xs,
     padding: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: DS.border.default,
   },
   viewMoreText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.85)',
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   emptyPortfolio: {
     alignItems: 'center',
     paddingVertical: SPACING.xl,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: 'rgba(212, 165, 116, 0.15)',
+    borderColor: DS.border.default,
   },
   emptyPortfolioText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.6)',
+    color: DS.text.secondary,
     marginTop: SPACING.sm,
   },
   destinationsCard: {
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(223, 214, 206, 0.92)',
+    backgroundColor: 'rgba(255,255,255,0.84)',
     ...SHADOW.md,
   },
   destinationsCardGradient: {
@@ -2521,7 +2541,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(17,17,17,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING.sm,
@@ -2532,16 +2552,18 @@ const styles = StyleSheet.create({
   rankNumber: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: DS.text.primary,
   },
   rankNumberTop: {
     color: COLORS.white,
   },
   destinationBadge: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   destinationContent: {
     flex: 1,
@@ -2553,12 +2575,12 @@ const styles = StyleSheet.create({
   },
   destinationLabel: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.white,
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   destinationValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.85)',
+    color: DS.text.secondary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   emptyState: {
@@ -2570,20 +2592,22 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: DS.text.primary,
     marginBottom: SPACING.sm,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: 'rgba(255,255,255,0.75)',
+    color: DS.text.secondary,
     textAlign: 'center',
     lineHeight: 22,
   },

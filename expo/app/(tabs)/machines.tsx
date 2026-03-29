@@ -635,8 +635,7 @@ export default function AtlasScreen() {
               return null;
             }
           }}
-          numColumns={2}
-          columnWrapperStyle={styles.gridRow}
+          numColumns={1}
           ListHeaderComponent={listHeader}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -1015,6 +1014,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 20,
+    paddingRight: 46,
     paddingBottom: Platform.OS === 'ios' ? 140 : 110,
   },
   emptyState: {
@@ -1150,6 +1150,7 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     flex: 1,
+    marginBottom: 12,
   },
   gridItemRight: {
     marginLeft: 0,

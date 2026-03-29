@@ -12,6 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { 
   Tag,
@@ -694,7 +695,12 @@ function OverviewScreenContent() {
   const keyExtractor = useCallback((item: CasinoOfferCardData | Cruise) => item.id, []);
 
   return (
-    <View style={styles.container}>
+    <LinearGradient
+      colors={DS.bg.marbleShell}
+      start={{ x: 0.02, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
       <CertificateManagerModal
         visible={showCertificateModal}
         onClose={() => setShowCertificateModal(false)}
@@ -762,7 +768,7 @@ function OverviewScreenContent() {
           windowSize={7}
         />
       </SafeAreaView>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -792,7 +798,7 @@ export default function OverviewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DS.bg.page,
+    backgroundColor: 'transparent',
   },
   safeArea: {
     flex: 1,
@@ -919,11 +925,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.md,
     marginTop: SPACING.md,
-    backgroundColor: DS.bg.card,
+    backgroundColor: 'rgba(255,255,255,0.78)',
     padding: SPACING.md,
     borderRadius: DS.radius.lg,
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(223, 214, 206, 0.9)',
   },
   sectionTitleRow: {
     flexDirection: 'row',

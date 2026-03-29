@@ -145,12 +145,14 @@ export function PlayingHoursCard({
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#0369A1', '#0284C7']}
+        colors={['#FFFFFF', '#F8F4EF', '#FBFAF8']}
+        start={{ x: 0.02, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         <View style={styles.headerContent}>
           <View style={styles.headerIcon}>
-            <Dices size={20} color={COLORS.white} />
+            <Dices size={20} color={COLORS.navyDeep} />
           </View>
           <View style={styles.headerText}>
             <Text style={styles.headerTitle}>My Playing Hours</Text>
@@ -248,7 +250,7 @@ export function PlayingHoursCard({
           disabled={isSaving}
         >
           <LinearGradient
-            colors={['#0369A1', '#0284C7']}
+            colors={['#111111', '#333333']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.saveButtonGradient}
@@ -276,7 +278,7 @@ export function PlayingHoursCard({
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <View style={styles.modalHeaderLeft}>
-                  <Clock size={20} color="#0369A1" />
+                  <Clock size={20} color={COLORS.navyDeep} />
                   <Text style={styles.modalTitle}>
                     {editingSession ? 'Edit' : 'Add'} Playing Session
                   </Text>
@@ -344,7 +346,7 @@ export function PlayingHoursCard({
                   activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={['#0369A1', '#0284C7']}
+                    colors={['#111111', '#333333']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.modalSaveButtonGradient}
@@ -364,11 +366,11 @@ export function PlayingHoursCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F0F9FF',
+    backgroundColor: 'rgba(255,255,255,0.84)',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.2)',
+    borderColor: 'rgba(223, 214, 206, 0.92)',
     ...SHADOW.sm,
     marginTop: SPACING.md,
   },
@@ -387,9 +389,11 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.82)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(223, 214, 206, 0.92)',
   },
   headerText: {
     gap: 2,
@@ -397,11 +401,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: '#111111',
   },
   headerSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: '#666666',
   },
   content: {
     padding: SPACING.sm,
@@ -409,7 +413,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#0369A1',
+    color: '#666666',
     letterSpacing: 1,
     marginBottom: SPACING.xs,
   },
@@ -420,15 +424,15 @@ const styles = StyleSheet.create({
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.78)',
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
+    borderColor: 'rgba(223, 214, 206, 0.92)',
     overflow: 'hidden',
   },
   sessionRowEnabled: {
-    backgroundColor: '#E0F2FE',
-    borderColor: '#0369A1',
+    backgroundColor: 'rgba(17,17,17,0.05)',
+    borderColor: 'rgba(17,17,17,0.12)',
   },
   sessionMainContent: {
     flex: 1,
@@ -450,7 +454,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   sessionDotEnabled: {
-    backgroundColor: '#0369A1',
+    backgroundColor: COLORS.navyDeep,
   },
   sessionDotDisabled: {
     backgroundColor: '#D1D5DB',
@@ -458,7 +462,7 @@ const styles = StyleSheet.create({
   sessionName: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#0C4A6E',
+    color: '#111111',
   },
   sessionNameDisabled: {
     color: '#9CA3AF',
@@ -474,7 +478,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   sessionToggleEnabled: {
-    backgroundColor: '#0369A1',
+    backgroundColor: COLORS.navyDeep,
   },
   sessionToggleText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -515,19 +519,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.3)',
+    borderColor: 'rgba(223, 214, 206, 0.92)',
     borderStyle: 'dashed',
     gap: SPACING.xs,
   },
   addSessionText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#0369A1',
+    color: COLORS.navyDeep,
   },
   modalOverlay: {
     flex: 1,
@@ -559,7 +563,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#0369A1',
+    color: '#111111',
   },
   modalCloseButton: {
     padding: SPACING.xs,
@@ -574,12 +578,12 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#0369A1',
+    color: '#111111',
   },
   textInput: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FAFAFA',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: '#E7E7E7',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,

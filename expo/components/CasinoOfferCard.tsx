@@ -144,7 +144,7 @@ export const JackpotDealsCard = OfferSummaryCard;
 
 const JACKPOT_BG = 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=600&q=80';
 const OFFER_CARD_MARBLE_COLORS = ['#FFFFFF', '#F5F1ED', '#ECE7E2', '#F8F6F3'] as const;
-const OFFER_CARD_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.72)', 'rgba(255,255,255,0.08)', 'rgba(214,211,209,0.32)'] as const;
+const OFFER_CARD_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.94)', 'rgba(232,226,220,0.22)', 'rgba(255,255,255,0.14)', 'rgba(214,211,209,0.34)'] as const;
 const OFFER_CARD_MARBLE_LOCATIONS = [0, 0.26, 0.7, 1] as const;
 
 const summaryStyles = StyleSheet.create({
@@ -658,7 +658,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.92)',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
@@ -672,10 +672,10 @@ const styles = StyleSheet.create({
   },
   marbleVein: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.82,
+    opacity: 0.94,
   },
   offerHeaderSection: {
-    backgroundColor: 'rgba(255,255,255,0.88)',
+    backgroundColor: 'rgba(255,255,255,0.7)',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.sm,
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     padding: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.74)',
+    backgroundColor: 'rgba(255,255,255,0.58)',
   },
   keyInfoRow: {
     flexDirection: 'row',
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   roomTypeBadge: {
-    backgroundColor: 'rgba(255,255,255,0.66)',
+    backgroundColor: 'rgba(255,255,255,0.74)',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.sm,
@@ -787,7 +787,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.66)',
+    backgroundColor: 'rgba(255,255,255,0.74)',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.sm,

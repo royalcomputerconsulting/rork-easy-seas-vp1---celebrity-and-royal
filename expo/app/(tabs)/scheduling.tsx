@@ -813,7 +813,12 @@ export default function SchedulingScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <LinearGradient
+      colors={DS.bg.marbleShell}
+      start={{ x: 0.02, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -920,14 +925,14 @@ export default function SchedulingScreen() {
         visible={showAlertsModal}
         onClose={() => setShowAlertsModal(false)}
       />
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DS.bg.page,
+    backgroundColor: 'transparent',
   },
   safeArea: {
     flex: 1,

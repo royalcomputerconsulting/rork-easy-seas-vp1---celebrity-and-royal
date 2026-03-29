@@ -172,15 +172,15 @@ export function UserProfileCard({
   const getBrandIcon = () => {
     switch (activeBrand) {
       case 'royal':
-        return <Anchor size={20} color={COLORS.white} />;
+        return <Anchor size={20} color={COLORS.navyDeep} />;
       case 'celebrity':
-        return <Star size={20} color={COLORS.white} />;
+        return <Star size={20} color={COLORS.navyDeep} />;
       case 'silversea':
-        return <Ship size={20} color={COLORS.white} />;
+        return <Ship size={20} color={COLORS.navyDeep} />;
       case 'carnival':
-        return <Ship size={20} color={COLORS.white} />;
+        return <Ship size={20} color={COLORS.navyDeep} />;
       default:
-        return <Anchor size={20} color={COLORS.white} />;
+        return <Anchor size={20} color={COLORS.navyDeep} />;
     }
   };
 
@@ -199,7 +199,7 @@ export function UserProfileCard({
     }
   };
 
-  const getBrandGradient = () => {
+  const _getBrandGradient = () => {
     switch (activeBrand) {
       case 'royal':
         return ['#0369A1', '#0284C7'] as [string, string];
@@ -583,7 +583,9 @@ export function UserProfileCard({
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={getBrandGradient()}
+        colors={['#FFFFFF', '#F8F4EF', '#FBFAF8']}
+        start={{ x: 0.02, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         <View style={styles.headerContent}>
@@ -623,8 +625,8 @@ export function UserProfileCard({
           onPress={() => setIsModalVisible(true)}
           activeOpacity={0.7}
         >
-          <Edit2 size={16} color={getBrandGradient()[0]} />
-          <Text style={[styles.editButtonText, { color: getBrandGradient()[0] }]}>Edit Profile</Text>
+          <Edit2 size={16} color={COLORS.navyDeep} />
+          <Text style={[styles.editButtonText, { color: COLORS.navyDeep }]}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
 
@@ -639,8 +641,8 @@ export function UserProfileCard({
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <View style={styles.modalHeaderLeft}>
-                  <User size={20} color={getBrandGradient()[0]} />
-                  <Text style={[styles.modalTitle, { color: getBrandGradient()[0] }]}>
+                  <User size={20} color={COLORS.navyDeep} />
+                  <Text style={[styles.modalTitle, { color: COLORS.navyDeep }]}>
                     Edit {getBrandTitle()}
                   </Text>
                 </View>
@@ -670,7 +672,7 @@ export function UserProfileCard({
                   testID="profile-modal-save-top-button"
                 >
                   <LinearGradient
-                    colors={getBrandGradient()}
+                    colors={['#111111', '#333333']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.modalSaveButtonGradient}
@@ -700,11 +702,11 @@ export function UserProfileCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F0F9FF',
+    backgroundColor: 'rgba(255,255,255,0.84)',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.2)',
+    borderColor: 'rgba(223, 214, 206, 0.92)',
     ...SHADOW.sm,
   },
   header: {
@@ -723,9 +725,11 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.82)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(223, 214, 206, 0.92)',
   },
   headerText: {
     gap: 2,
@@ -733,11 +737,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: '#111111',
   },
   headerSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: '#666666',
   },
   enrichmentBadge: {
     flexDirection: 'row',
@@ -748,15 +752,15 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.xs,
   },
   enrichmentBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(17, 17, 17, 0.08)',
   },
   enrichmentBadgeInactive: {
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    backgroundColor: 'rgba(17, 17, 17, 0.08)',
   },
   enrichmentBadgeText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: '#111111',
     textTransform: 'uppercase' as const,
     letterSpacing: 0.3,
   },
@@ -776,11 +780,11 @@ const styles = StyleSheet.create({
   valueCard: {
     flex: 1,
     minWidth: '47%',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.78)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
+    borderColor: 'rgba(223, 214, 206, 0.92)',
   },
   valueCardWide: {
     minWidth: '96%',
@@ -814,12 +818,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.3)',
+    borderColor: 'rgba(223, 214, 206, 0.92)',
     borderStyle: 'dashed',
     gap: SPACING.xs,
   },
@@ -870,13 +874,13 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#1E40AF',
+    color: '#111111',
     marginBottom: SPACING.xs,
   },
   input: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FAFAFA',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: '#E7E7E7',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
@@ -889,7 +893,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    backgroundColor: 'rgba(17, 17, 17, 0.05)',
     borderRadius: BORDER_RADIUS.sm,
     gap: 6,
   },
@@ -900,7 +904,7 @@ const styles = StyleSheet.create({
   },
   levelHintText: {
     fontSize: 10,
-    color: '#1E40AF',
+    color: '#666666',
   },
   levelHintLevel: {
     fontWeight: TYPOGRAPHY.fontWeightBold,

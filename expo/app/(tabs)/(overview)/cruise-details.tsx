@@ -1203,7 +1203,13 @@ export default function CruiseDetailsScreen() {
           )}
 
           {casinoAvailability && (
-            <View style={styles.casinoSectionCompact}>
+            <LinearGradient
+              colors={PAGE_MARBLE_COLORS}
+              locations={PAGE_MARBLE_LOCATIONS}
+              start={{ x: 0.02, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.casinoSectionCompact}
+            >
               <View style={styles.sectionHeaderCompact}>
                 <MapPin size={16} color={COLORS.beigeWarm} />
                 <Text style={styles.sectionTitleCompact}>Itinerary & Casino</Text>
@@ -1238,7 +1244,7 @@ export default function CruiseDetailsScreen() {
                   <Text style={styles.itineraryMoreText}>+{casinoAvailability.dailyAvailability.length - 3} more days</Text>
                 )}
               </View>
-            </View>
+            </LinearGradient>
           )}
 
           {valueBreakdown && (
@@ -3581,7 +3587,7 @@ const styles = StyleSheet.create({
     color: DS.text.primary,
   },
   casinoSectionCompact: {
-    backgroundColor: 'rgba(255,255,255,0.48)',
+    backgroundColor: 'transparent',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
@@ -3596,12 +3602,12 @@ const styles = StyleSheet.create({
   },
   casinoStatBox: {
     flex: 1,
-    backgroundColor: DS.bg.secondary,
+    backgroundColor: 'rgba(255,255,255,0.74)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: DS.border.divider,
+    borderColor: 'rgba(223, 214, 206, 0.9)',
   },
   casinoStatBoxLabel: {
     fontSize: 10,
@@ -3625,10 +3631,10 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.sm,
-    backgroundColor: DS.bg.secondary,
+    backgroundColor: 'rgba(255,255,255,0.7)',
     borderRadius: BORDER_RADIUS.xs,
     borderWidth: 1,
-    borderColor: DS.border.divider,
+    borderColor: 'rgba(223, 214, 206, 0.88)',
   },
   itineraryDayNumber: {
     fontSize: TYPOGRAPHY.fontSizeXS,

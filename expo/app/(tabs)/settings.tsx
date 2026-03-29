@@ -1570,10 +1570,12 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     icon: React.ReactNode,
     title: string,
     subtitle: string,
-    gradientColors: [string, string] = ['#1E3A5F', '#7B2D8E']
+    _gradientColors: [string, string] = ['#1E3A5F', '#7B2D8E']
   ) => (
     <LinearGradient
-      colors={gradientColors}
+      colors={DS.bg.marbleShell}
+      start={{ x: 0.02, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={styles.sectionGradientHeader}
     >
       <View style={styles.sectionHeaderContent}>
@@ -1589,7 +1591,12 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
   );
 
   return (
-    <View style={styles.container}>
+    <LinearGradient
+      colors={DS.bg.marbleShell}
+      start={{ x: 0.02, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
       <Stack.Screen options={{ headerShown: false }} />
       
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -1607,12 +1614,14 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.dataOverviewCard}>
             <LinearGradient
-              colors={['#1E3A5F', '#7B2D8E'] as [string, string]}
+              colors={DS.bg.marbleShell}
+              start={{ x: 0.02, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={styles.dataOverviewHeader}
             >
               <View style={styles.dataOverviewHeaderContent}>
                 <View style={styles.dataOverviewIconBadge}>
-                  <Anchor size={18} color={COLORS.white} />
+                  <Anchor size={18} color={COLORS.navyDeep} />
                 </View>
                 <View style={styles.dataOverviewTitleGroup}>
                   <Text style={styles.dataOverviewTitle}>Data Overview</Text>
@@ -1669,7 +1678,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           </View>
 
           <View style={[styles.sectionCard, { marginBottom: SPACING.md }]}>
-            {renderSectionHeader(<Ship size={18} color={COLORS.white} />, 'Quick Actions', 'Sync, import & backup shortcuts')}
+            {renderSectionHeader(<Ship size={18} color={COLORS.navyDeep} />, 'Quick Actions', 'Sync, import & backup shortcuts')}
             <View style={styles.quickActionsBody}>
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
@@ -1800,7 +1809,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Moon size={18} color={COLORS.white} />, 'Display Preferences', 'Customize how data appears', ['#1A2560', '#6B21A8'])}
+              {renderSectionHeader(<Moon size={18} color={COLORS.navyDeep} />, 'Display Preferences', 'Customize how data appears', ['#1A2560', '#6B21A8'])}
               {renderSettingRow(
                 <DollarSign size={18} color={COLORS.navyDeep} />,
                 'Show Taxes in List',
@@ -1821,7 +1830,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Bell size={18} color={COLORS.white} />, 'Notifications', 'Alert preferences', ['#162B3D', '#5B21B6'])}
+              {renderSectionHeader(<Bell size={18} color={COLORS.navyDeep} />, 'Notifications', 'Alert preferences', ['#162B3D', '#5B21B6'])}
               {renderSettingRow(
                 <Bell size={18} color={COLORS.navyDeep} />,
                 'Price Drop Alerts',
@@ -1837,7 +1846,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Database size={18} color={COLORS.white} />, 'Data Management', 'Import, export & backup your data', ['#1C1650', '#7C3AED'])}
+              {renderSectionHeader(<Database size={18} color={COLORS.navyDeep} />, 'Data Management', 'Import, export & backup your data', ['#1C1650', '#7C3AED'])}
               <View style={[styles.dataSubsection, styles.importBanner]}>
                 <Text style={styles.subsectionLabel}>IMPORT</Text>
                 <Text style={styles.subsectionHelper}>Bring in new CSV manifests, booked logs, or calendar drops.</Text>
@@ -2082,7 +2091,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<HelpCircle size={18} color={COLORS.white} />, 'Support', 'Help & resources', ['#1E3A5F', '#9333EA'])}
+              {renderSectionHeader(<HelpCircle size={18} color={COLORS.navyDeep} />, 'Support', 'Help & resources', ['#1E3A5F', '#9333EA'])}
               {renderSettingRow(
                 <HelpCircle size={18} color={COLORS.navyDeep} />,
                 'Help Center',
@@ -2156,7 +2165,7 @@ STEP 4: Optional Calendar Import
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan', ['#1B2550', '#6D28D9'])}
+              {renderSectionHeader(<Crown size={18} color={COLORS.navyDeep} />, 'Subscriptions & Purchases', 'Manage your plan', ['#1B2550', '#6D28D9'])}
               <View style={styles.subscriptionStatusBanner}>
                 <Crown size={18} color={
                   entitlement.subscriptionDisplayStatus === 'annual' ? '#10B981' :
@@ -2226,7 +2235,7 @@ STEP 4: Optional Calendar Import
           {isAdmin && (
             <View style={styles.section}>
               <View style={styles.sectionCard}>
-                {renderSectionHeader(<Shield size={18} color={COLORS.white} />, 'Admin', 'Email whitelist & data tools', ['#1B2040', '#8B5CF6'])}
+                {renderSectionHeader(<Shield size={18} color={COLORS.navyDeep} />, 'Admin', 'Email whitelist & data tools', ['#1B2040', '#8B5CF6'])}
                 <View style={styles.adminHeader}>
                   <Text style={styles.adminHeaderText}>Manage user access</Text>
                   <Text style={styles.adminHeaderSubtext}>
@@ -2356,7 +2365,7 @@ STEP 4: Optional Calendar Import
 
           <View style={styles.section}>
             <View style={[styles.sectionCard, styles.dangerCard]}>
-              {renderSectionHeader(<Trash2 size={18} color={COLORS.white} />, 'Danger Zone', 'Irreversible actions', ['#DC2626', '#B91C1C'])}
+              {renderSectionHeader(<Trash2 size={18} color={COLORS.navyDeep} />, 'Danger Zone', 'Irreversible actions', ['#DC2626', '#B91C1C'])}
               {renderSettingRow(
                 <Trash2 size={18} color={COLORS.error} />,
                 'Clear All Data',
@@ -2433,14 +2442,14 @@ STEP 4: Optional Calendar Import
         visible={isUserManualVisible}
         onClose={() => setIsUserManualVisible(false)}
       />
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DS.bg.page,
+    backgroundColor: 'transparent',
   },
   safeArea: {
     flex: 1,
@@ -2478,10 +2487,10 @@ const styles = StyleSheet.create({
     color: COLORS.error,
   },
   sectionCard: {
-    backgroundColor: DS.bg.card,
+    backgroundColor: 'rgba(255,255,255,0.84)',
     borderRadius: DS.radius.xl,
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(223, 214, 206, 0.92)',
     overflow: 'hidden',
     ...SHADOW.sm,
   },
@@ -2654,10 +2663,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(3, 105, 161, 0.05)',
   },
   importBanner: {
-    backgroundColor: '#EBF5FF',
+    backgroundColor: 'rgba(250,250,250,0.9)',
   },
   fullBackupBanner: {
-    backgroundColor: '#F0F8FF',
+    backgroundColor: 'rgba(250,250,250,0.9)',
   },
   subsectionLabel: {
     fontSize: 10,
@@ -2680,9 +2689,9 @@ const styles = StyleSheet.create({
     borderRadius: DS.radius.xl,
     overflow: 'hidden',
     marginBottom: SPACING.md,
-    backgroundColor: DS.bg.card,
+    backgroundColor: 'rgba(255,255,255,0.84)',
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(223, 214, 206, 0.92)',
     ...SHADOW.sm,
   },
   dataOverviewHeader: {
@@ -2701,9 +2710,11 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.82)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(223, 214, 206, 0.92)',
   },
   dataOverviewTitleGroup: {
     flex: 1,
@@ -3042,7 +3053,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   calendarFeedBanner: {
-    backgroundColor: '#EBF5FF',
+    backgroundColor: 'rgba(250,250,250,0.9)',
   },
   calendarFeedSection: {
     paddingHorizontal: SPACING.md,
@@ -3152,6 +3163,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(223, 214, 206, 0.92)',
   },
   sectionHeaderContent: {
     flexDirection: 'row',
@@ -3163,19 +3176,21 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.82)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(223, 214, 206, 0.92)',
   },
   sectionHeaderTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: DS.text.primary,
     letterSpacing: 0.3,
   },
   sectionHeaderSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: DS.text.secondary,
     marginTop: 2,
   },
   quickActionsBody: {

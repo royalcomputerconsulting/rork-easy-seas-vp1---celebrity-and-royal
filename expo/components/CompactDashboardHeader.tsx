@@ -115,12 +115,20 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#F8F8F8', '#FAFAFA']}
-      locations={[0, 0.5, 1]}
-      start={{ x: 0, y: 0 }}
+      colors={['#FFFFFF', '#F8F4EF', '#FBFAF8']}
+      locations={[0, 0.48, 1]}
+      start={{ x: 0.02, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255,255,255,0.96)', 'rgba(232,226,220,0.22)', 'rgba(255,255,255,0.14)', 'rgba(214,206,198,0.3)']}
+        locations={[0, 0.24, 0.72, 1]}
+        start={{ x: 0.12, y: 0 }}
+        end={{ x: 0.88, y: 1 }}
+        style={styles.marbleVeinOverlay}
+      />
       <View style={styles.topRow}>
         <View style={styles.memberInfoInline}>
           {!hideLogo && (
@@ -837,13 +845,18 @@ const styles = StyleSheet.create({
     padding: SPACING.sm,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(223, 214, 206, 0.92)',
     marginBottom: SPACING.sm,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  marbleVeinOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.92,
   },
   topRow: {
     flexDirection: 'row',
@@ -884,9 +897,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: 'rgba(255,255,255,0.82)',
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(223, 214, 206, 0.92)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -929,11 +942,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   progressCard: {
-    backgroundColor: DS.bg.card,
+    backgroundColor: 'rgba(255,255,255,0.72)',
     borderRadius: DS.radius.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(223, 214, 206, 0.9)',
   },
   progressHeader: {
     flexDirection: 'row',
@@ -1040,12 +1053,12 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: DS.bg.card,
+    backgroundColor: 'rgba(255,255,255,0.74)',
     borderRadius: DS.radius.sm,
     padding: SPACING.sm,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(223, 214, 206, 0.9)',
   },
   statItem: {
     flex: 1,
@@ -1074,13 +1087,13 @@ const styles = StyleSheet.create({
   quickStatPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     borderRadius: DS.radius.pill,
     paddingVertical: 6,
     paddingHorizontal: SPACING.sm,
     gap: 4,
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(223, 214, 206, 0.9)',
   },
   quickStatPillValue: {
     fontSize: 13,

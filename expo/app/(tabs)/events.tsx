@@ -59,13 +59,42 @@ const EVENT_COLORS = {
   personal: '#A855F7',
 };
 
+function formatDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeDateKey(rawDate: string | null | undefined): string | null {
+  if (!rawDate) {
+    return null;
+  }
+
+  const parsed = createDateFromString(rawDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  parsed.setHours(0, 0, 0, 0);
+  return formatDateKey(parsed);
+}
+
+function overlapsMonthRange(startDate: Date, endDate: Date, year: number, month: number): boolean {
+  const monthStart = new Date(year, month, 1);
+  monthStart.setHours(0, 0, 0, 0);
+  const monthEnd = new Date(year, month + 1, 0);
+  monthEnd.setHours(23, 59, 59, 999);
+  return startDate <= monthEnd && endDate >= monthStart;
+}
+
 export default function EventsScreen() {
   const router = useRouter();
   const { localData } = useAppState();
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
   const { currentUser } = useUser();
   const coreData = useCoreData();
-  const { bookedCruises } = coreData;
+  const { bookedCruises: storedBookedCruises } = coreData;
   const birthdate = currentUser?.birthdate;
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -76,6 +105,20 @@ export default function EventsScreen() {
     console.log('[Events] Calendar events updated:', events.length);
     return events;
   }, [localData.calendar, localData.tripit]);
+
+  const bookedCruises = useMemo(() => {
+    const combined = [...(localData.booked || []), ...storedBookedCruises];
+    const seen = new Set<string>();
+
+    return combined.filter((cruise) => {
+      const key = cruise.id || `${cruise.shipName ?? 'ship'}-${cruise.sailDate ?? 'sail'}-${cruise.returnDate ?? 'return'}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }, [localData.booked, storedBookedCruises]);
 
   useEffect(() => {
     console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', bookedCruises.length);
@@ -114,21 +157,36 @@ export default function EventsScreen() {
     let count = 0;
 
     calendarEvents.forEach(event => {
-      const eventStart = event.startDate || event.start || '';
-      if (eventStart) {
-        const eventDate = new Date(eventStart);
-        if (eventDate.getFullYear() === year && eventDate.getMonth() === month) {
-          count++;
-        }
+      const eventStartRaw = event.startDate || event.start || '';
+      const eventEndRaw = event.endDate || event.end || eventStartRaw;
+      if (!eventStartRaw) {
+        return;
+      }
+
+      const eventStart = createDateFromString(eventStartRaw);
+      const eventEnd = createDateFromString(eventEndRaw || eventStartRaw);
+      if (Number.isNaN(eventStart.getTime()) || Number.isNaN(eventEnd.getTime())) {
+        return;
+      }
+
+      if (overlapsMonthRange(eventStart, eventEnd, year, month)) {
+        count++;
       }
     });
 
     bookedCruises.forEach((bc: BookedCruise) => {
-      if (bc.sailDate) {
-        const sailDate = new Date(bc.sailDate);
-        if (sailDate.getFullYear() === year && sailDate.getMonth() === month) {
-          count++;
-        }
+      if (!bc.sailDate) {
+        return;
+      }
+
+      const sailDate = createDateFromString(bc.sailDate);
+      const returnDate = createDateFromString(bc.returnDate || bc.sailDate);
+      if (Number.isNaN(sailDate.getTime()) || Number.isNaN(returnDate.getTime())) {
+        return;
+      }
+
+      if (overlapsMonthRange(sailDate, returnDate, year, month)) {
+        count++;
       }
     });
 
@@ -148,21 +206,22 @@ export default function EventsScreen() {
     let cruise = 0;
     let travel = 0;
     let personal = 0;
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
+    const dateStr = formatDateKey(date);
 
     calendarEvents.forEach(event => {
       const eventStart = event.startDate || event.start || '';
       const eventEnd = event.endDate || event.end || eventStart;
 
-      if (!eventStart) return;
+      if (!eventStart) {
+        return;
+      }
 
-      const startDate = eventStart.split('T')[0];
-      const endDate = eventEnd ? eventEnd.split('T')[0] : startDate;
+      const startDate = normalizeDateKey(eventStart);
+      const endDate = normalizeDateKey(eventEnd || eventStart);
 
-      if (!startDate || !endDate) return;
+      if (!startDate || !endDate) {
+        return;
+      }
 
       if (dateStr >= startDate && dateStr <= endDate) {
         if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
@@ -176,9 +235,16 @@ export default function EventsScreen() {
     });
 
     bookedCruises.forEach((bc: BookedCruise) => {
-      if (!bc.sailDate) return;
-      const startDate = bc.sailDate.split('T')[0];
-      const endDate = bc.returnDate ? bc.returnDate.split('T')[0] : startDate;
+      if (!bc.sailDate) {
+        return;
+      }
+
+      const startDate = normalizeDateKey(bc.sailDate);
+      const endDate = normalizeDateKey(bc.returnDate || bc.sailDate);
+      if (!startDate || !endDate) {
+        return;
+      }
+
       if (dateStr >= startDate && dateStr <= endDate) {
         cruise++;
       }
@@ -367,7 +433,7 @@ export default function EventsScreen() {
   }, [router]);
 
   const getDayBorderColor = useCallback((day: DayData): string => {
-    if (!day.isCurrentMonth) return 'rgba(255,255,255,0.08)';
+    if (!day.isCurrentMonth) return 'rgba(180,190,210,0.28)';
     if (day.isToday) return '#FCD34D';
     if (day.events.cruise > 0) return '#22C55E';
     if (day.events.travel > 0) return '#3B82F6';
@@ -386,8 +452,8 @@ export default function EventsScreen() {
     const borderColor = getDayBorderColor(day);
     const borderWidth = getDayBorderWidth(day);
     const activeLuck = day.isCurrentMonth ? (day.personalizedLuck ?? day.luck) : null;
-    const bgColor = day.isCurrentMonth ? '#FFFFFF' : 'transparent';
-    const dateColor = day.isCurrentMonth ? '#0A1628' : 'rgba(255,255,255,0.22)';
+    const bgColor = day.isCurrentMonth ? '#FFFFFF' : 'rgba(250,250,250,0.68)';
+    const dateColor = day.isCurrentMonth ? '#0A1628' : 'rgba(17,17,17,0.36)';
     const luckColor = activeLuck ? (LUCK_COLORS[activeLuck.score] ?? '#0A1628') : '#0A1628';
 
     return (
@@ -561,7 +627,7 @@ export default function EventsScreen() {
                 onPress={() => navigateMonth('prev')}
                 activeOpacity={0.7}
               >
-                <ChevronLeft size={24} color="#FFFFFF" />
+                <ChevronLeft size={24} color={DS.text.primary} />
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -587,7 +653,7 @@ export default function EventsScreen() {
                 onPress={() => navigateMonth('next')}
                 activeOpacity={0.7}
               >
-                <ChevronRight size={24} color="#FFFFFF" />
+                <ChevronRight size={24} color={DS.text.primary} />
               </TouchableOpacity>
             </View>
           )}
@@ -680,7 +746,7 @@ export default function EventsScreen() {
           <View style={styles.luckLegendContainer}>
             <View style={styles.luckLegendHeader}>
               <Text style={styles.luckLegendTitle}>
-                {birthdate ? '✨ Personalized Luck (1–9)' : '✨ General Luck Scale (1–7)'}
+                {birthdate ? '✨ Personalized Luck (1–9)' : '✨ General Luck Scale (1–9)'}
               </Text>
               {!birthdate && (
                 <Text style={styles.luckLegendHint}>Add birthdate in Settings for personalized scores</Text>
@@ -871,7 +937,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: 'rgba(255,255,255,0.92)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
