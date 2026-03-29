@@ -17,7 +17,7 @@ export const MARBLE_TEXTURES = {
     gradientLocations: [0, 0.3, 0.7, 1] as const,
   },
   gold: {
-    gradientColors: ['#FFF9E6', '#FFE9B8', '#FFD89A', '#FFC870'] as const,
+    gradientColors: ['#F8EFD9', '#EFDDB5', '#E3C98E', '#D4B06B'] as const,
     gradientLocations: [0, 0.3, 0.7, 1] as const,
   },
   purple: {
@@ -29,7 +29,7 @@ export const MARBLE_TEXTURES = {
     gradientLocations: [0, 0.3, 0.7, 1] as const,
   },
   white: {
-    gradientColors: ['#FFFFFF', '#F8F9FA', '#F1F3F5', '#E9ECEF'] as const,
+    gradientColors: ['#FBF7EF', '#F1E7D5', '#E7D9BE', '#DCC7A2'] as const,
     gradientLocations: [0, 0.3, 0.7, 1] as const,
   },
   darkBlue: {
