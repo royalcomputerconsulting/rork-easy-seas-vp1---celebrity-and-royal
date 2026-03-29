@@ -1253,7 +1253,7 @@ export default function AnalyticsScreen() {
 
       <View style={styles.sessionStatsSection}>
         <View style={styles.sectionHeader}>
-          <Dices size={16} color='rgba(255,255,255,0.8)' />
+          <Dices size={16} color={COLORS.navyDeep} />
           <Text style={styles.sectionTitle}>Session Summary</Text>
         </View>
         
@@ -1577,7 +1577,7 @@ export default function AnalyticsScreen() {
       <View style={styles.section}>
         <View style={styles.calcsInsightCard}>
           <View style={styles.calcsInsightHeader}>
-            <Brain size={18} color='rgba(255,255,255,0.8)' />
+            <Brain size={18} color={COLORS.navyDeep} />
             <Text style={styles.calcsInsightTitle}>Calculation Insights</Text>
           </View>
           <Text style={styles.calcsInsightText}>
@@ -2710,11 +2710,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   sessionHistoryCard: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.76)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: DS.border.default,
     ...SHADOW.sm,
   },
   sessionHistoryRow: {
@@ -2725,17 +2725,17 @@ const styles = StyleSheet.create({
   },
   sessionHistoryLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.8)',
+    color: DS.text.secondary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   sessionHistoryValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: DS.text.primary,
   },
   sessionHistoryDivider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: DS.border.divider,
     marginVertical: SPACING.xs,
   },
   recentSessionsContainer: {
@@ -2908,25 +2908,25 @@ const styles = StyleSheet.create({
   calcsHeaderTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: DS.text.primary,
   },
   calcsHeaderSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.65)',
+    color: DS.text.secondary,
     marginTop: 2,
   },
   calcsGrid: {
     gap: SPACING.sm,
   },
   calcCard: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: DS.border.default,
     ...SHADOW.sm,
   },
   calcIconContainer: {
@@ -2942,7 +2942,7 @@ const styles = StyleSheet.create({
   calcLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    color: DS.text.primary,
     marginBottom: 4,
   },
   calcValue: {
@@ -2952,15 +2952,15 @@ const styles = StyleSheet.create({
   },
   calcDescription: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.6)',
+    color: DS.text.secondary,
     lineHeight: 16,
   },
   calcsInsightCard: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.76)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: DS.border.default,
   },
   calcsInsightHeader: {
     flexDirection: 'row',
@@ -2971,11 +2971,11 @@ const styles = StyleSheet.create({
   calcsInsightTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    color: DS.text.primary,
   },
   calcsInsightText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.65)',
+    color: DS.text.secondary,
     lineHeight: 20,
   },
 });
