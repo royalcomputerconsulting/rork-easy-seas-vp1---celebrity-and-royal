@@ -2,9 +2,9 @@ import React, { memo, useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ItineraryDay, BookedCruise, CasinoOffer } from '@/types/models';
-import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, TrendingUp, Dice5, AlertCircle, Target, Trash2, Sparkles } from 'lucide-react-native';
+import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, Dice5, AlertCircle, Trash2, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, DS } from '@/constants/theme';
 import { formatCurrency, formatNights } from '@/lib/format';
 import { formatDate, getDaysUntil, createDateFromString } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
@@ -223,7 +223,7 @@ export default function CruiseDetailsScreen() {
     return cruise.nights || 0;
   }, [cruise]);
 
-  const itineraryDisplay = useMemo((): { days: { day: number; port: string; isSeaDay: boolean }[]; needsManualEntry: boolean; source: string } => {
+  const _itineraryDisplay = useMemo((): { days: { day: number; port: string; isSeaDay: boolean }[]; needsManualEntry: boolean; source: string } => {
     if (!cruise) return { days: [], needsManualEntry: true, source: 'none' };
     
     const totalDays = accurateNights + 1;
@@ -407,7 +407,7 @@ export default function CruiseDetailsScreen() {
     return getCruiseCasinoAvailability(cruise);
   }, [cruise, getCruiseCasinoAvailability]);
 
-  const casinoStatusBadge = useMemo(() => {
+  const _casinoStatusBadge = useMemo(() => {
     if (!casinoAvailability) return null;
     return getCasinoStatusBadge(casinoAvailability.casinoOpenDays, casinoAvailability.totalDays);
   }, [casinoAvailability]);
@@ -417,7 +417,7 @@ export default function CruiseDetailsScreen() {
     return calculatePersonalizedPlayEstimate(casinoAvailability, playingHoursConfig);
   }, [casinoAvailability, playingHoursConfig]);
 
-  const expectedPointsCalculation = useMemo(() => {
+  const _expectedPointsCalculation = useMemo(() => {
     if (!cruise || !casinoAvailability || completedCruises.length === 0) {
       return null;
     }
@@ -598,7 +598,7 @@ export default function CruiseDetailsScreen() {
     return (
       <View style={styles.container}>
         <LinearGradient
-          colors={[COLORS.navyDeep, COLORS.navyMedium]}
+          colors={DS.bg.marbleShell}
           style={StyleSheet.absoluteFill}
         />
         <View style={styles.notFoundContainer}>
@@ -630,7 +630,7 @@ export default function CruiseDetailsScreen() {
             onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)}
           />
           <LinearGradient
-            colors={['rgba(0,31,63,0.3)', 'rgba(0,31,63,0.7)']}
+            colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.72)']}
             style={StyleSheet.absoluteFill}
           />
           {isBooked && (
@@ -644,7 +644,7 @@ export default function CruiseDetailsScreen() {
               onPress={openFullEditModal}
               activeOpacity={0.7}
             >
-              <Edit3 size={18} color={'#FFFFFF'} />
+              <Edit3 size={18} color={DS.text.primary} />
               <Text style={styles.editAllButtonText}>Edit</Text>
             </TouchableOpacity>
             
@@ -664,7 +664,7 @@ export default function CruiseDetailsScreen() {
                 onPress={() => setUnbookModalVisible(true)}
                 testID="unbook-cruise-button"
               >
-                <Trash2 size={16} color={'#FFFFFF'} />
+                <Trash2 size={16} color={DS.text.primary} />
               </TouchableOpacity>
             )}
           </View>
@@ -1785,20 +1785,20 @@ const styles = StyleSheet.create({
   notFoundTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     marginTop: SPACING.lg,
     marginBottom: SPACING.sm,
   },
   notFoundText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.textDarkGrey,
+    color: DS.text.secondary,
     textAlign: 'center',
     marginBottom: SPACING.xl,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: DS.text.primary,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDER_RADIUS.md,
@@ -1813,24 +1813,32 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   heroPlaceholder: {
-    width: '100%',
-    height: 200,
+    height: 240,
     justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'stretch',
+    marginTop: SPACING.md,
+    marginHorizontal: SPACING.md,
+    borderRadius: DS.radius.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   bookedBadge: {
     position: 'absolute',
     top: SPACING.lg,
     left: SPACING.lg,
-    backgroundColor: COLORS.success,
+    backgroundColor: 'rgba(93, 170, 138, 0.14)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(93, 170, 138, 0.24)',
   },
   bookedBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: DS.accent.success,
     letterSpacing: 1,
   },
   heroButtonsContainer: {
@@ -1843,49 +1851,57 @@ const styles = StyleSheet.create({
   editAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: DS.bg.card,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     gap: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderColor: DS.border.default,
   },
   bookHeaderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.beigeWarm,
+    backgroundColor: DS.text.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: COLORS.goldDark,
+    borderColor: DS.text.primary,
   },
   bookHeaderButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: DS.text.inverse,
   },
   unbookHeaderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: DS.bg.card,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderColor: DS.border.default,
   },
   editAllButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FFFFFF',
+    color: DS.text.primary,
   },
   content: {
-    padding: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.lg,
   },
   headerSection: {
+    marginTop: -DS.spacing.xl,
     marginBottom: SPACING.lg,
+    padding: DS.spacing.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
+    borderWidth: 1,
+    borderColor: DS.border.default,
+    ...DS.shadow.md,
   },
   shipRow: {
     flexDirection: 'row',
@@ -1896,18 +1912,18 @@ const styles = StyleSheet.create({
   shipName: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
   },
   destination: {
     fontSize: TYPOGRAPHY.fontSizeTitle,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     marginBottom: SPACING.sm,
   },
   offerNameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFBEB',
+    backgroundColor: DS.bg.secondary,
     alignSelf: 'flex-start',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
@@ -1915,27 +1931,29 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.2)',
+    borderColor: DS.border.default,
   },
   offerNameText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#92400E',
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   offerCodeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 151, 167, 0.1)',
+    backgroundColor: DS.bg.secondary,
     alignSelf: 'flex-start',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
     gap: SPACING.xs,
     marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   offerCodeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.points,
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   countdownContainer: {
@@ -1945,7 +1963,7 @@ const styles = StyleSheet.create({
   },
   countdown: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
+    color: DS.text.secondary,
   },
   factsCard: {
     backgroundColor: COLORS.white,
@@ -2266,10 +2284,10 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   sectionTitle: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    letterSpacing: 0.5,
+    fontSize: 24,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
+    letterSpacing: 0.2,
   },
   offersList: {
     gap: SPACING.sm,
@@ -2777,7 +2795,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
   },
   modalCloseButton: {
     padding: SPACING.xs,
@@ -2796,17 +2814,17 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.navyDeep,
+    color: DS.text.secondary,
     marginBottom: SPACING.xs,
   },
   input: {
-    backgroundColor: COLORS.bgSecondary,
+    backgroundColor: DS.bg.secondary,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor: DS.border.default,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
   },
   inputRow: {
     flexDirection: 'row',
@@ -2843,21 +2861,21 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: COLORS.bgTertiary,
+    backgroundColor: DS.bg.secondary,
     paddingVertical: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor: DS.border.default,
   },
   cancelButtonText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.textDarkGrey,
+    color: DS.text.secondary,
   },
   saveButton: {
     flex: 1,
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: DS.text.primary,
     paddingVertical: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
     flexDirection: 'row',
@@ -3118,8 +3136,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexWrap: 'wrap',
-    marginBottom: SPACING.xs,
-    paddingVertical: SPACING.xs,
+    marginBottom: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.lg,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   compactFact: {
     flexDirection: 'row',
@@ -3128,16 +3151,16 @@ const styles = StyleSheet.create({
   },
   compactFactValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textDarkGrey,
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   compactFactLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
+    color: DS.text.secondary,
   },
   factDivider: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
+    color: DS.text.tertiary,
     marginHorizontal: SPACING.sm,
   },
   fpObcHighlight: {
@@ -3237,13 +3260,13 @@ const styles = StyleSheet.create({
     color: '#1E40AF',
   },
   bwoFpObcCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: DS.bg.card,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    ...SHADOW.sm,
+    borderColor: DS.border.default,
+    ...DS.shadow.sm,
   },
   bwoFpObcHeader: {
     flexDirection: 'row',
@@ -3404,18 +3427,18 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    backgroundColor: '#E0F2FE',
-    ...SHADOW.sm,
+    borderColor: DS.border.default,
+    backgroundColor: DS.bg.card,
+    ...DS.shadow.sm,
   },
   payloadDetailsSection: {
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    backgroundColor: '#FEF3C7',
-    ...SHADOW.sm,
+    borderColor: DS.border.default,
+    backgroundColor: DS.bg.card,
+    ...DS.shadow.sm,
   },
   payloadGrid: {
     gap: SPACING.xs,
@@ -3426,19 +3449,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.xs,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 31, 63, 0.05)',
+    borderBottomColor: DS.border.divider,
   },
   payloadLabel: {
     fontSize: 12,
     fontWeight: '600' as const,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: DS.text.secondary,
+    opacity: 0.9,
     flex: 1,
   },
   payloadValue: {
     fontSize: 12,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     flex: 1,
     textAlign: 'right' as const,
   },
@@ -3451,32 +3474,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.sm,
-    backgroundColor: '#DBEAFE',
+    backgroundColor: DS.bg.secondary,
     borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: DS.border.divider,
   },
   detailRowLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textDarkGrey,
+    color: DS.text.secondary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   detailRowValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   pricingCategoryCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: DS.bg.card,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
-    borderWidth: 2,
-    borderColor: '#0EA5E9',
-    ...SHADOW.md,
+    borderWidth: 1,
+    borderColor: DS.border.default,
+    ...DS.shadow.sm,
   },
   pricingCategoryLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.textSecondary,
+    color: DS.text.secondary,
     marginBottom: SPACING.xs,
     textTransform: 'uppercase' as const,
     letterSpacing: 1,
@@ -3484,15 +3509,16 @@ const styles = StyleSheet.create({
   pricingCategoryValue: {
     fontSize: 28,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.money,
+    color: DS.text.primary,
   },
   offersSectionCompact: {
-    backgroundColor: COLORS.white,
+    backgroundColor: DS.bg.card,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.08)',
+    borderColor: DS.border.default,
+    ...DS.shadow.sm,
   },
   sectionHeaderCompact: {
     flexDirection: 'row',
@@ -3501,9 +3527,9 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   sectionTitleCompact: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    fontSize: 20,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
   },
   offersCompactContent: {
     flexDirection: 'row',
@@ -3514,23 +3540,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: DS.bg.secondary,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.xs,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   offerTextCompact: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.success,
+    color: DS.text.primary,
   },
   casinoSectionCompact: {
-    backgroundColor: COLORS.white,
+    backgroundColor: DS.bg.card,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.08)',
+    borderColor: DS.border.default,
+    ...DS.shadow.sm,
   },
   casinoStatsRow: {
     flexDirection: 'row',
@@ -3539,10 +3568,12 @@ const styles = StyleSheet.create({
   },
   casinoStatBox: {
     flex: 1,
-    backgroundColor: 'rgba(0, 151, 167, 0.08)',
+    backgroundColor: DS.bg.secondary,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: DS.border.divider,
   },
   casinoStatBoxLabel: {
     fontSize: 10,
@@ -3555,7 +3586,7 @@ const styles = StyleSheet.create({
   casinoStatBoxValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
   },
   itineraryCompactList: {
     gap: SPACING.xs,
@@ -3566,8 +3597,10 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.sm,
-    backgroundColor: 'rgba(0, 31, 63, 0.02)',
+    backgroundColor: DS.bg.secondary,
     borderRadius: BORDER_RADIUS.xs,
+    borderWidth: 1,
+    borderColor: DS.border.divider,
   },
   itineraryDayNumber: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -3578,7 +3611,7 @@ const styles = StyleSheet.create({
   itineraryDayPortCompact: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     flex: 1,
   },
   casinoDotIndicator: {

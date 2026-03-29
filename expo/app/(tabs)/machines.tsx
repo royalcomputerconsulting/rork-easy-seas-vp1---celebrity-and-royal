@@ -15,7 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download, Crown, RefreshCcw, ExternalLink } from 'lucide-react-native';
+import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
 import { COLORS, SPACING, DS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
@@ -34,8 +34,8 @@ type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 
 export default function AtlasScreen() {
   const router = useRouter();
-  const entitlement = useEntitlement();
-  const auth = useAuth();
+  useEntitlement();
+  useAuth();
 
 
 
@@ -288,7 +288,7 @@ export default function AtlasScreen() {
   }, [router]);
 
   const handleToggleFavorite = useCallback((id: string) => {
-    toggleFavorite(id);
+    void toggleFavorite(id);
   }, [toggleFavorite]);
 
   const handleExportFavorites = useCallback(async () => {
@@ -580,7 +580,6 @@ export default function AtlasScreen() {
     );
   }, [
     activeFilter,
-    entitlement,
     favoriteMachines.length,
     filteredMachines.length,
     handleClearFilters,
@@ -593,7 +592,6 @@ export default function AtlasScreen() {
     isLoadingIndex,
     myAtlasMachines.length,
     reload,
-    router,
     searchQuery,
     sessions,
     showSessionsSection,
@@ -604,7 +602,7 @@ export default function AtlasScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient
-          colors={['#051120', '#0B1D38', '#132A4D', '#26143C']}
+          colors={DS.bg.marbleShell}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.gradientContainer}
@@ -837,7 +835,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: DS.text.primary,
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
@@ -883,7 +881,7 @@ const styles = StyleSheet.create({
     borderColor: DS.border.default,
   },
   addSessionButton: {
-    backgroundColor: COLORS.money,
+    backgroundColor: DS.text.primary,
     borderRadius: 12,
     width: 48,
     height: 48,
@@ -1051,18 +1049,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.goldLight,
+    backgroundColor: 'rgba(225, 182, 75, 0.12)',
     paddingVertical: 12,
     paddingHorizontal: 20,
     gap: 10,
     marginHorizontal: 20,
     marginTop: 8,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(225, 182, 75, 0.22)',
   },
   loadingText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
   },
   initialLoading: {
     flexDirection: 'row',
@@ -1073,14 +1073,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     borderRadius: 12,
-    backgroundColor: 'rgba(10,24,47,0.72)',
+    backgroundColor: DS.bg.card,
     borderWidth: 1,
-    borderColor: 'rgba(151,176,255,0.14)',
+    borderColor: DS.border.default,
+    ...DS.shadow.sm,
   },
   initialLoadingText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: 'rgba(213,224,255,0.8)',
+    color: DS.text.secondary,
   },
   errorBanner: {
     paddingHorizontal: 16,
@@ -1088,26 +1089,26 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     borderRadius: 14,
-    backgroundColor: 'rgba(220,38,38,0.15)',
+    backgroundColor: 'rgba(217, 107, 107, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255,150,150,0.3)',
+    borderColor: 'rgba(217, 107, 107, 0.2)',
   },
   errorTitle: {
     fontSize: 15,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: DS.text.primary,
     marginBottom: 4,
   },
   errorBody: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: 'rgba(213,224,255,0.7)',
+    color: DS.text.secondary,
     lineHeight: 18,
     marginBottom: 12,
   },
   retryButton: {
     alignSelf: 'flex-start',
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: DS.text.primary,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
@@ -1123,7 +1124,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   exportFavoritesButton: {
-    backgroundColor: COLORS.goldDark,
+    backgroundColor: DS.accent.warning,
     borderRadius: 20,
     width: 32,
     height: 32,
@@ -1154,7 +1155,7 @@ const styles = StyleSheet.create({
     marginLeft: 0,
   },
   exportAllButton: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: DS.text.primary,
     borderRadius: 20,
     width: 32,
     height: 32,

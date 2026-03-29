@@ -24,7 +24,7 @@ import {
   Users,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, DS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { useAppState } from '@/state/AppStateProvider';
@@ -364,9 +364,7 @@ export default function OfferDetailsScreen() {
         activeOpacity={0.85}
       >
         <LinearGradient
-          colors={isBooked 
-            ? ['#34D399', '#10B981', '#059669'] 
-            : ['#0EA5E9', '#6366F1', '#8B5CF6']}
+          colors={isBooked ? ['rgba(93, 170, 138, 0.12)', '#FFFFFF', '#FAFAFA'] : DS.bg.marbleShell}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
@@ -382,12 +380,12 @@ export default function OfferDetailsScreen() {
             <Text style={styles.summaryStatLabel}>Casino Days</Text>
           </View>
           <View style={styles.summaryStatBox}>
-            <Star size={16} color={COLORS.goldDark} />
+            <Star size={16} color={DS.text.secondary} />
             <Text style={styles.summaryStatValue}>~{(summary.estimatedPoints / 1000).toFixed(1)}k</Text>
             <Text style={styles.summaryStatLabel}>Est. Points</Text>
           </View>
           <View style={styles.summaryStatBox}>
-            <Clock size={16} color={COLORS.goldDark} />
+            <Clock size={16} color={DS.text.secondary} />
             <Text style={styles.summaryStatValue}>{summary.goldenHours}h</Text>
             <Text style={styles.summaryStatLabel}>Golden</Text>
           </View>
@@ -406,7 +404,7 @@ export default function OfferDetailsScreen() {
         <View style={styles.cardHeaderWhite}>
           {/* Line 1: Ship Icon + Ship Name */}
           <View style={styles.headerLine1}>
-            <Ship size={20} color={COLORS.navyDeep} />
+            <Ship size={20} color={DS.text.primary} />
             <Text style={styles.shipNameNavy} numberOfLines={1}>{item.shipName}</Text>
             {isBooked && (
               <View style={styles.bookedBadgeInline}>
@@ -414,7 +412,7 @@ export default function OfferDetailsScreen() {
                 <Text style={styles.bookedBadgeTextInline}>BOOKED</Text>
               </View>
             )}
-            <ChevronRight size={20} color={COLORS.navyDeep} style={styles.chevronRight} />
+            <ChevronRight size={20} color={DS.text.primary} style={styles.chevronRight} />
           </View>
 
           {/* Line 2: # Nights + Destination */}
@@ -429,13 +427,13 @@ export default function OfferDetailsScreen() {
             <View style={styles.cabinGuestRow}>
               {(item.cabinType || offerData.offer?.roomType) && (
                 <View style={styles.cabinBadge}>
-                  <BedDouble size={13} color="#1E40AF" />
+                  <BedDouble size={13} color={DS.text.secondary} />
                   <Text style={styles.cabinBadgeText}>{item.cabinType || offerData.offer?.roomType}</Text>
                 </View>
               )}
               {(item.guests || item.guestsInfo || offerData.offer?.guestsInfo || offerData.offer?.guests) && (
                 <View style={styles.guestBadge}>
-                  <Users size={13} color="#7C3AED" />
+                  <Users size={13} color={DS.text.secondary} />
                   <Text style={styles.guestBadgeText}>
                     {item.guestsInfo || offerData.offer?.guestsInfo || `${item.guests || offerData.offer?.guests || 2} Guest${(item.guests || offerData.offer?.guests || 2) === 1 ? '' : 's'}`}
                   </Text>
@@ -512,7 +510,7 @@ export default function OfferDetailsScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Merged Header - Offer Name, Code, Expiry, Value, Cruises */}
         <LinearGradient
-          colors={['#E0F2FE', '#DBEAFE', '#E0F7FA']}
+          colors={DS.bg.marbleShell}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.mergedHeader}
@@ -669,15 +667,15 @@ export default function OfferDetailsScreen() {
 }
 
 const THEME = {
-  background: COLORS.white,
-  cardBg: COLORS.white,
-  headerText: COLORS.navyDeep,
-  textWhite: '#FFFFFF',
-  textMuted: COLORS.textDarkGrey,
-  borderColor: COLORS.borderLight,
-  success: COLORS.success,
-  moneyGreen: COLORS.money,
-  pointsTeal: COLORS.points,
+  background: DS.bg.page,
+  cardBg: DS.bg.card,
+  headerText: DS.text.primary,
+  textWhite: DS.text.inverse,
+  textMuted: DS.text.secondary,
+  borderColor: DS.border.default,
+  success: DS.accent.success,
+  moneyGreen: DS.accent.success,
+  pointsTeal: DS.text.primary,
 };
 
 const styles = StyleSheet.create({
@@ -689,11 +687,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mergedHeader: {
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
     paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
+    paddingTop: SPACING.lg,
     paddingBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 31, 63, 0.1)',
+    borderWidth: 1,
+    borderColor: DS.border.default,
+    borderRadius: DS.radius.xl,
+    ...DS.shadow.md,
   },
   closeButton: {
     position: 'absolute' as const,
@@ -702,7 +704,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: DS.bg.card,
+    borderWidth: 1,
+    borderColor: DS.border.default,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
@@ -728,9 +732,9 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   featuredOfferName: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     textAlign: 'left' as const,
     flex: 1,
   },
@@ -738,44 +742,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    backgroundColor: 'rgba(22, 101, 52, 0.1)',
+    backgroundColor: 'rgba(93, 170, 138, 0.12)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    ...SHADOW.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(93, 170, 138, 0.2)',
   },
   totalValueLabel: {
     fontSize: 10,
     fontWeight: '600' as const,
-    color: '#166534',
+    color: DS.accent.success,
     opacity: 0.8,
   },
   totalValueAmount: {
     fontSize: 18,
     fontWeight: '700' as const,
-    color: '#166534',
+    color: DS.text.primary,
   },
   offerCodeBadge: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: DS.bg.secondary,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   offerCodeText: {
     fontSize: 16,
     fontWeight: '700' as const,
-    color: COLORS.white,
+    color: DS.text.primary,
     letterSpacing: 1,
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    backgroundColor: DS.bg.card,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     marginTop: SPACING.xs,
+    borderWidth: 1,
+    borderColor: DS.border.default,
   },
   statItem: {
     flexDirection: 'row',
@@ -794,13 +803,13 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 10,
     fontWeight: '500' as const,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: DS.text.secondary,
+    opacity: 0.9,
   },
   statValue: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
   },
   statValueWarning: {
     color: COLORS.warning,
@@ -826,17 +835,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: 10,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    backgroundColor: DS.bg.secondary,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.15)',
+    borderColor: DS.border.default,
   },
   sortPillMainActive: {
-    backgroundColor: COLORS.navyDeep,
-    borderColor: COLORS.navyDeep,
+    backgroundColor: DS.text.primary,
+    borderColor: DS.text.primary,
   },
   sortPillMainText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   sortPillMainTextActive: {
@@ -845,7 +854,7 @@ const styles = StyleSheet.create({
   },
   sortLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
+    color: DS.text.secondary,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     marginLeft: 2,
   },
@@ -854,17 +863,18 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   cruiseCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: DS.bg.card,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     overflow: 'hidden',
-    borderWidth: 0,
-    ...SHADOW.lg,
+    borderWidth: 1,
+    borderColor: DS.border.default,
+    ...DS.shadow.md,
   },
   bookedCard: {
-    borderColor: COLORS.success,
-    borderWidth: 3,
+    borderColor: DS.accent.success,
+    borderWidth: 2,
   },
   cruiseHeader: {
     flexDirection: 'row',
@@ -948,17 +958,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.xs,
-    backgroundColor: 'rgba(0, 31, 63, 0.04)',
+    backgroundColor: DS.bg.secondary,
     borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: DS.border.divider,
     gap: 2,
   },
   summaryStatBoxMoney: {
-    backgroundColor: 'rgba(22, 101, 52, 0.08)',
+    backgroundColor: 'rgba(93, 170, 138, 0.12)',
+    borderColor: 'rgba(93, 170, 138, 0.18)',
   },
   summaryStatValue: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     textAlign: 'center' as const,
   },
   summaryStatValueMoney: {
@@ -967,8 +980,8 @@ const styles = StyleSheet.create({
   summaryStatLabel: {
     fontSize: 10,
     fontWeight: '500' as const,
-    color: COLORS.navyDeep,
-    opacity: 0.6,
+    color: DS.text.secondary,
+    opacity: 0.9,
     textAlign: 'center' as const,
   },
   cardHeaderWhite: {
@@ -976,6 +989,8 @@ const styles = StyleSheet.create({
     marginHorizontal: -SPACING.md,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: DS.border.divider,
   },
   headerLine1: {
     flexDirection: 'row',
@@ -986,7 +1001,7 @@ const styles = StyleSheet.create({
   shipNameNavy: {
     fontSize: 18,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     flex: 1,
   },
   bookedBadgeInline: {
@@ -1020,38 +1035,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: DS.bg.secondary,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: DS.border.default,
   },
   cabinBadgeText: {
     fontSize: 12,
     fontWeight: '600' as const,
-    color: '#1E40AF',
+    color: DS.text.primary,
   },
   guestBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: DS.bg.secondary,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#DDD6FE',
+    borderColor: DS.border.default,
   },
   guestBadgeText: {
     fontSize: 12,
     fontWeight: '600' as const,
-    color: '#7C3AED',
+    color: DS.text.primary,
   },
   nightsDestinationText: {
     fontSize: 16,
     fontWeight: '600' as const,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
   },
   headerLine3: {
     flexDirection: 'row',
@@ -1067,19 +1082,19 @@ const styles = StyleSheet.create({
   headerDetailLabel: {
     fontSize: 13,
     fontWeight: '500' as const,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: DS.text.secondary,
+    opacity: 0.9,
   },
   headerDetailValue: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
   },
   daysAwayNavy: {
     fontSize: 12,
     fontWeight: '600' as const,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: DS.text.secondary,
+    opacity: 0.9,
     marginTop: SPACING.xs,
   },
   pricingMiniRow: {
@@ -1094,6 +1109,8 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     borderBottomLeftRadius: BORDER_RADIUS.lg,
     borderBottomRightRadius: BORDER_RADIUS.lg,
+    borderTopWidth: 1,
+    borderTopColor: DS.border.divider,
   },
   pricingMiniItem: {
     flexDirection: 'row',
@@ -1103,25 +1120,27 @@ const styles = StyleSheet.create({
   pricingMiniLabel: {
     fontSize: 12,
     fontWeight: '500' as const,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: DS.text.secondary,
+    opacity: 0.9,
   },
   pricingMiniValue: {
     fontSize: 13,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
   },
   coverageBadge: {
     marginLeft: 'auto',
-    backgroundColor: '#D1FAE5',
+    backgroundColor: 'rgba(93, 170, 138, 0.12)',
     paddingHorizontal: SPACING.md,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(93, 170, 138, 0.2)',
   },
   coverageText: {
     fontSize: 13,
     fontWeight: '700' as const,
-    color: '#166534',
+    color: DS.accent.success,
   },
   emptyState: {
     alignItems: 'center',
@@ -1131,7 +1150,7 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
+    color: DS.text.secondary,
   },
   fpObcRow: {
     flexDirection: 'row',
@@ -1141,49 +1160,49 @@ const styles = StyleSheet.create({
   },
   fpBadgeOffer: {
     flex: 1,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: DS.bg.card,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 2,
-    borderColor: '#86EFAC',
+    borderWidth: 1,
+    borderColor: DS.border.default,
     alignItems: 'center',
-    ...SHADOW.sm,
+    ...DS.shadow.sm,
   },
   fpLabelOffer: {
     fontSize: 11,
     fontWeight: '600' as const,
-    color: '#15803D',
+    color: DS.text.secondary,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   fpValueOffer: {
     fontSize: 20,
     fontWeight: '700' as const,
-    color: '#15803D',
+    color: DS.text.primary,
   },
   obcBadgeOffer: {
     flex: 1,
-    backgroundColor: '#DBEAFE',
+    backgroundColor: DS.bg.card,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 2,
-    borderColor: '#93C5FD',
+    borderWidth: 1,
+    borderColor: DS.border.default,
     alignItems: 'center',
-    ...SHADOW.sm,
+    ...DS.shadow.sm,
   },
   obcLabelOffer: {
     fontSize: 11,
     fontWeight: '600' as const,
-    color: '#1E40AF',
+    color: DS.text.secondary,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   obcValueOffer: {
     fontSize: 20,
     fontWeight: '700' as const,
-    color: '#1E40AF',
+    color: DS.text.primary,
   },
   statusActionsRow: {
     flexDirection: 'row',
@@ -1196,14 +1215,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.xs,
-    backgroundColor: '#0EA5E9',
+    backgroundColor: DS.text.primary,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    ...SHADOW.sm,
+    ...DS.shadow.sm,
   },
   statusActionButtonUsed: {
-    backgroundColor: '#DC2626',
+    backgroundColor: DS.accent.alert,
   },
   statusActionText: {
     fontSize: 13,
@@ -1218,14 +1237,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    backgroundColor: '#0EA5E9',
+    backgroundColor: DS.text.primary,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.round,
-    ...SHADOW.sm,
+    ...DS.shadow.sm,
   },
   statusBadgeUsed: {
-    backgroundColor: '#DC2626',
+    backgroundColor: DS.accent.alert,
   },
   statusBadgeText: {
     fontSize: 14,
