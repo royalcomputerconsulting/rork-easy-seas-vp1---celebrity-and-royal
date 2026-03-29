@@ -148,22 +148,36 @@ export function UserProfileCard({
   };
 
   const renderEnrichmentBadge = (hasData: boolean) => (
-    <View style={[styles.enrichmentBadge, hasData ? styles.enrichmentBadgeActive : styles.enrichmentBadgeInactive]}>
+    <View
+      style={[
+        styles.enrichmentBadge,
+        hasData ? styles.enrichmentBadgeActive : styles.enrichmentBadgeInactive,
+        isCarnivalTheme && styles.carnivalEnrichmentBadge,
+        isCarnivalTheme && hasData && styles.carnivalEnrichmentBadgeActive,
+        isCarnivalTheme && !hasData && styles.carnivalEnrichmentBadgeInactive,
+      ]}
+    >
       {hasData ? (
-        <CheckCircle size={10} color={COLORS.white} />
+        <CheckCircle size={10} color={isCarnivalTheme ? '#6E4A12' : '#111111'} />
       ) : (
-        <AlertCircle size={10} color="rgba(255,255,255,0.7)" />
+        <AlertCircle size={10} color={isCarnivalTheme ? 'rgba(110,74,18,0.82)' : 'rgba(17,17,17,0.7)'} />
       )}
-      <Text style={styles.enrichmentBadgeText}>
+      <Text style={[styles.enrichmentBadgeText, isCarnivalTheme && styles.carnivalEnrichmentBadgeText]}>
         {hasData ? 'Synced' : 'Manual'}
       </Text>
     </View>
   );
 
   const renderValueCard = (label: string, value: string | number | undefined, color?: string, wide?: boolean) => (
-    <View style={[styles.valueCard, wide && styles.valueCardWide]}>
-      <Text style={styles.valueCardLabel}>{label}</Text>
-      <Text style={[styles.valueCardValue, color ? { color } : null]}>
+    <View style={[styles.valueCard, wide && styles.valueCardWide, isCarnivalTheme && styles.carnivalValueCard]}>
+      <Text style={[styles.valueCardLabel, isCarnivalTheme && styles.carnivalValueCardLabel]}>{label}</Text>
+      <Text
+        style={[
+          styles.valueCardValue,
+          isCarnivalTheme && styles.carnivalValueCardValue,
+          color ? { color } : null,
+        ]}
+      >
         {value !== undefined && value !== null && value !== '' ? (typeof value === 'number' ? value.toLocaleString() : value) : 'Not set'}
       </Text>
     </View>
@@ -208,11 +222,13 @@ export function UserProfileCard({
       case 'silversea':
         return ['#78350F', '#92400E'] as [string, string];
       case 'carnival':
-        return ['#CC2232', '#E02040'] as [string, string];
+        return ['#8A5A14', '#E1B24D'] as [string, string];
       default:
         return ['#0369A1', '#0284C7'] as [string, string];
     }
   };
+
+  const isCarnivalTheme = activeBrand === 'carnival';
 
   const hasSyncedData = activeBrand === 'royal' 
     ? !!enrichmentData?.crownAndAnchorId 
@@ -286,11 +302,11 @@ export function UserProfileCard({
     return (
       <View style={styles.valuesGrid}>
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
-        {renderValueCard('Name', currentValues.name, undefined, true)}
-        {renderValueCard('VIFP Club #', enrichmentData?.carnivalVifpNumber || currentValues.carnivalVifpNumber, undefined, true)}
-        {renderValueCard('VIFP Tier', enrichmentData?.carnivalVifpTier || currentValues.carnivalVifpTier, '#CC2232')}
-        {renderValueCard('Players Club Tier', enrichmentData?.carnivalPlayersClubTier || currentValues.carnivalPlayersClubTier, '#FFB400')}
-        {renderValueCard('Players Club Points', enrichmentData?.carnivalPlayersClubPoints ?? currentValues.carnivalPlayersClubPoints, COLORS.points)}
+        {renderValueCard('Name', currentValues.name, '#241605', true)}
+        {renderValueCard('VIFP Club #', enrichmentData?.carnivalVifpNumber || currentValues.carnivalVifpNumber, '#241605', true)}
+        {renderValueCard('VIFP Tier', enrichmentData?.carnivalVifpTier || currentValues.carnivalVifpTier, '#C2410C')}
+        {renderValueCard('Players Club Tier', enrichmentData?.carnivalPlayersClubTier || currentValues.carnivalPlayersClubTier, '#A16207')}
+        {renderValueCard('Players Club Points', enrichmentData?.carnivalPlayersClubPoints ?? currentValues.carnivalPlayersClubPoints, '#B45309')}
       </View>
     );
   };
@@ -581,20 +597,20 @@ export function UserProfileCard({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isCarnivalTheme && styles.carnivalContainer]}>
       <LinearGradient
-        colors={['#FFFFFF', '#F2F8FF', '#F8FCFF']}
+        colors={isCarnivalTheme ? ['#FFF8E6', '#F4DE9D', '#E2BC5A'] : ['#FFFFFF', '#F2F8FF', '#F8FCFF']}
         start={{ x: 0.02, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.header}
+        style={[styles.header, isCarnivalTheme && styles.carnivalHeader]}
       >
         <View style={styles.headerContent}>
-          <View style={styles.headerIcon}>
+          <View style={[styles.headerIcon, isCarnivalTheme && styles.carnivalHeaderIcon]}>
             {getBrandIcon()}
           </View>
           <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>{getBrandTitle()}</Text>
-            <Text style={styles.headerSubtitle}>
+            <Text style={[styles.headerTitle, isCarnivalTheme && styles.carnivalHeaderTitle]}>{getBrandTitle()}</Text>
+            <Text style={[styles.headerSubtitle, isCarnivalTheme && styles.carnivalHeaderSubtitle]}>
               {hasSyncedData ? 'Synced with account' : 'Manual entry'}
             </Text>
           </View>
@@ -602,11 +618,11 @@ export function UserProfileCard({
         {renderEnrichmentBadge(hasSyncedData)}
       </LinearGradient>
 
-      <View style={styles.brandToggleContainer}>
+      <View style={[styles.brandToggleContainer, isCarnivalTheme && styles.carnivalBrandToggleContainer]}>
         <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} showSilversea={true} />
       </View>
 
-      <View style={styles.currentValuesSection}>
+      <View style={[styles.currentValuesSection, isCarnivalTheme && styles.carnivalCurrentValuesSection]}>
         {activeBrand === 'royal' && renderRoyalCaribbeanValues()}
         {activeBrand === 'celebrity' && renderCelebrityValues()}
         {activeBrand === 'silversea' && renderSilverseaValues()}
@@ -615,18 +631,18 @@ export function UserProfileCard({
 
       {enrichmentData?.lastSyncTimestamp && (
         <View style={styles.syncTimestampContainer}>
-          <Text style={styles.syncTimestampText}>Last synced: {formatDate(enrichmentData.lastSyncTimestamp)}</Text>
+          <Text style={[styles.syncTimestampText, isCarnivalTheme && styles.carnivalSyncTimestampText]}>Last synced: {formatDate(enrichmentData.lastSyncTimestamp)}</Text>
         </View>
       )}
 
       <View style={styles.editButtonContainer}>
         <TouchableOpacity 
-          style={styles.editButton}
+          style={[styles.editButton, isCarnivalTheme && styles.carnivalEditButton]}
           onPress={() => setIsModalVisible(true)}
           activeOpacity={0.7}
         >
-          <Edit2 size={16} color={COLORS.navyDeep} />
-          <Text style={[styles.editButtonText, { color: COLORS.navyDeep }]}>Edit Profile</Text>
+          <Edit2 size={16} color={isCarnivalTheme ? '#8A5A14' : COLORS.navyDeep} />
+          <Text style={[styles.editButtonText, { color: isCarnivalTheme ? '#8A5A14' : COLORS.navyDeep }]}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
 
@@ -641,8 +657,8 @@ export function UserProfileCard({
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <View style={styles.modalHeaderLeft}>
-                  <User size={20} color={COLORS.navyDeep} />
-                  <Text style={[styles.modalTitle, { color: COLORS.navyDeep }]}>
+                  <User size={20} color={isCarnivalTheme ? '#8A5A14' : COLORS.navyDeep} />
+                  <Text style={[styles.modalTitle, { color: isCarnivalTheme ? '#8A5A14' : COLORS.navyDeep }]}>
                     Edit {getBrandTitle()}
                   </Text>
                 </View>
@@ -672,7 +688,7 @@ export function UserProfileCard({
                   testID="profile-modal-save-top-button"
                 >
                   <LinearGradient
-                    colors={['#111111', '#333333']}
+                    colors={isCarnivalTheme ? ['#8A5A14', '#E1B24D'] : ['#111111', '#333333']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.modalSaveButtonGradient}
@@ -830,6 +846,66 @@ const styles = StyleSheet.create({
   editButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  carnivalContainer: {
+    backgroundColor: 'rgba(255, 249, 233, 0.92)',
+    borderColor: 'rgba(214, 171, 71, 0.48)',
+    shadowColor: '#D6AB47',
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  carnivalHeader: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(161, 98, 7, 0.1)',
+  },
+  carnivalHeaderIcon: {
+    backgroundColor: 'rgba(255, 248, 230, 0.94)',
+    borderColor: 'rgba(214, 171, 71, 0.42)',
+  },
+  carnivalHeaderTitle: {
+    color: '#4A2F0D',
+  },
+  carnivalHeaderSubtitle: {
+    color: '#7C5A1B',
+  },
+  carnivalEnrichmentBadge: {
+    borderWidth: 1,
+    borderColor: 'rgba(161, 98, 7, 0.14)',
+  },
+  carnivalEnrichmentBadgeActive: {
+    backgroundColor: 'rgba(255, 245, 214, 0.88)',
+  },
+  carnivalEnrichmentBadgeInactive: {
+    backgroundColor: 'rgba(255, 248, 230, 0.72)',
+  },
+  carnivalEnrichmentBadgeText: {
+    color: '#6E4A12',
+  },
+  carnivalBrandToggleContainer: {
+    backgroundColor: 'rgba(255, 245, 214, 0.54)',
+  },
+  carnivalCurrentValuesSection: {
+    backgroundColor: 'rgba(255, 250, 239, 0.48)',
+  },
+  carnivalValueCard: {
+    backgroundColor: 'rgba(255, 252, 245, 0.86)',
+    borderColor: 'rgba(214, 171, 71, 0.34)',
+  },
+  carnivalValueCardLabel: {
+    color: '#8A5A14',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.45,
+  },
+  carnivalValueCardValue: {
+    color: '#2B1B06',
+  },
+  carnivalSyncTimestampText: {
+    color: '#8A5A14',
+  },
+  carnivalEditButton: {
+    backgroundColor: 'rgba(255, 247, 224, 0.88)',
+    borderColor: 'rgba(214, 171, 71, 0.46)',
   },
   modalOverlay: {
     flex: 1,

@@ -83,7 +83,10 @@ export function BrandToggle({ activeBrand, onToggle, showSilversea = true, showC
             style={[
               styles.toggleButton,
               styles.rightButton,
-              activeBrand === 'carnival' && styles.activeButton,
+              activeBrand === 'carnival' && styles.carnivalActiveButton,
+              activeBrand !== 'carnival' && activeBrand === 'royal' && styles.activeButton,
+              activeBrand !== 'carnival' && activeBrand === 'celebrity' && styles.activeButton,
+              activeBrand !== 'carnival' && activeBrand === 'silversea' && styles.activeButton,
             ]}
             onPress={() => onToggle('carnival')}
             activeOpacity={0.7}
@@ -136,6 +139,11 @@ const styles = StyleSheet.create({
   },
   activeButton: {
     backgroundColor: SETTINGS_GLASS_THEME.buttonPrimaryBackground,
+  },
+  carnivalActiveButton: {
+    backgroundColor: '#A06B18',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 239, 194, 0.4)',
   },
   toggleText: {
     fontSize: 9,
