@@ -9,6 +9,7 @@ import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
+import { CruiseCard } from '@/components/CruiseCard';
 import type { CalendarEvent, BookedCruise } from '@/types/models';
 import { getLuckForDate, type LuckInfo } from '@/constants/luckScores';
 import { getPersonalizedLuckForDate } from '@/lib/luckCalculator';
@@ -632,28 +633,17 @@ export default function EventsScreen() {
     if (item.type === 'cruise') {
       const cruise = item.event as BookedCruise;
       return (
-        <TouchableOpacity 
-          key={`cruise-${cruise.id}-${index}`}
-          style={styles.eventCard}
-          activeOpacity={0.85}
-          onPress={() => router.push({
-            pathname: '/(tabs)/(overview)/cruise-details' as any,
-            params: { id: cruise.id },
-          })}
-        >
-          <View style={[styles.eventTypeIndicator, { backgroundColor: EVENT_COLORS.cruise }]} />
-          <View style={styles.eventCardContent}>
-            <View style={styles.eventCardHeader}>
-              <Ship size={16} color={EVENT_COLORS.cruise} />
-              <Text style={styles.eventCardType}>Cruise</Text>
-            </View>
-            <Text style={styles.eventCardTitle}>{cruise.shipName}</Text>
-            <Text style={styles.eventCardSubtitle}>{cruise.destination}</Text>
-            <Text style={styles.eventCardDate}>
-              {item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
-            </Text>
-          </View>
-        </TouchableOpacity>
+        <View key={`cruise-${cruise.id}-${index}`} testID="calendar-next-up-cruise-card">
+          <CruiseCard
+            cruise={cruise}
+            onPress={() => router.push({
+              pathname: '/(tabs)/(overview)/cruise-details' as any,
+              params: { id: cruise.id },
+            })}
+            variant="booked"
+            mini={true}
+          />
+        </View>
       );
     }
     

@@ -672,7 +672,7 @@ export default function CruiseDetailsScreen() {
               onPress={openFullEditModal}
               activeOpacity={0.7}
             >
-              <Edit3 size={18} color={DS.text.primary} />
+              <Edit3 size={18} color={COLORS.white} />
               <Text style={styles.editAllButtonText}>Edit</Text>
             </TouchableOpacity>
             
@@ -692,7 +692,7 @@ export default function CruiseDetailsScreen() {
                 onPress={() => setUnbookModalVisible(true)}
                 testID="unbook-cruise-button"
               >
-                <Trash2 size={16} color={DS.text.primary} />
+                <Trash2 size={16} color={COLORS.white} />
               </TouchableOpacity>
             )}
           </View>
@@ -1013,7 +1013,7 @@ export default function CruiseDetailsScreen() {
             <View style={styles.payloadDetailsSection}>
               <View style={styles.sectionHeader}>
                 <Ship size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitle}>Booking Payload Details</Text>
+                <Text style={styles.sectionTitle}>Booking Details</Text>
               </View>
               
               <View style={styles.payloadGrid}>
@@ -1885,13 +1885,13 @@ const styles = StyleSheet.create({
   editAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.48)',
+    backgroundColor: 'rgba(5,7,10,0.58)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     gap: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
+    borderColor: 'rgba(255,255,255,0.28)',
   },
   bookHeaderButton: {
     flexDirection: 'row',
@@ -1911,17 +1911,17 @@ const styles = StyleSheet.create({
   unbookHeaderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.48)',
+    backgroundColor: 'rgba(5,7,10,0.58)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
+    borderColor: 'rgba(255,255,255,0.28)',
   },
   editAllButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: DS.text.primary,
+    color: COLORS.white,
   },
   content: {
     paddingHorizontal: SPACING.lg,
