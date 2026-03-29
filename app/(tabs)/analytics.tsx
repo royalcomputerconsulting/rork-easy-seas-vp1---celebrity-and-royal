@@ -34,11 +34,10 @@ import { createDateFromString, formatDate } from '@/lib/date';
 import { calculateCruiseValue, type ValueBreakdown } from '@/lib/valueCalculator';
 import { formatCurrency, formatNumber } from '@/lib/format';
 
-const PAGE_GRADIENT = ['#051120', '#0B1D38', '#132A4D', '#26143C'] as const;
-const CARD_BG = 'rgba(255,255,255,0.06)';
-const CARD_BORDER = 'rgba(255,255,255,0.1)';
-const INNER_BG = 'rgba(255,255,255,0.04)';
-const INNER_BORDER = 'rgba(255,255,255,0.08)';
+const CARD_BG = '#FFFFFF';
+const CARD_BORDER = '#E2E8F0';
+const INNER_BG = '#F8FAFC';
+const INNER_BORDER = '#E2E8F0';
 
 interface CruisePerformance {
   cruise: BookedCruise;
@@ -137,7 +136,7 @@ export default function AnalyticsScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient
-        colors={PAGE_GRADIENT}
+        colors={['#F0F4F8', '#F0F4F8'] as const}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -420,7 +419,7 @@ export default function AnalyticsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#051120',
+    backgroundColor: '#F0F4F8',
   },
   orbTop: {
     position: 'absolute',
@@ -429,7 +428,7 @@ const styles = StyleSheet.create({
     width: 320,
     height: 320,
     borderRadius: 160,
-    backgroundColor: 'rgba(30,58,95,0.28)',
+    backgroundColor: 'transparent',
   },
   orbBottom: {
     position: 'absolute',
@@ -438,7 +437,7 @@ const styles = StyleSheet.create({
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: 'rgba(38,20,60,0.35)',
+    backgroundColor: 'transparent',
   },
   safeArea: {
     flex: 1,
@@ -464,11 +463,11 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 22,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   heroSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.6)',
+    color: '#6B7280',
     marginTop: 3,
     lineHeight: 18,
   },
@@ -484,14 +483,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 99,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: '#E2E8F0',
   },
   heroBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   metricGrid: {
     flexDirection: 'row',
@@ -517,7 +516,7 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#6B7280',
     fontWeight: '700' as const,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
@@ -526,7 +525,7 @@ const styles = StyleSheet.create({
     marginTop: 7,
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   card: {
     backgroundColor: CARD_BG,
@@ -550,11 +549,11 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   cardMeta: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.4)',
+    color: '#9CA3AF',
   },
   insightGrid: {
     flexDirection: 'row',
@@ -572,7 +571,7 @@ const styles = StyleSheet.create({
   insightLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.45)',
+    color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
@@ -580,12 +579,12 @@ const styles = StyleSheet.create({
     marginTop: 7,
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   featureCard: {
     borderRadius: BORDER_RADIUS.xl,
     borderWidth: 1,
-    borderColor: 'rgba(212,160,10,0.28)',
+    borderColor: 'rgba(212,160,10,0.25)',
     overflow: 'hidden',
     ...SHADOW.sm,
   },
@@ -604,7 +603,7 @@ const styles = StyleSheet.create({
   },
   featureEyebrow: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,226,143,0.7)',
+    color: '#92400E',
     fontWeight: '700' as const,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
@@ -613,7 +612,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   featureStatsRow: {
     flexDirection: 'row',
@@ -622,26 +621,26 @@ const styles = StyleSheet.create({
   },
   featureStat: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#F8FAFC',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(212,160,10,0.16)',
+    borderColor: '#E2E8F0',
   },
   featureStatLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#6B7280',
     fontWeight: '700' as const,
   },
   featureStatValue: {
     marginTop: 5,
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   featureMeta: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#6B7280',
     marginTop: 2,
   },
   valueRow: {
@@ -658,22 +657,22 @@ const styles = StyleSheet.create({
   },
   valueLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.55)',
+    color: '#6B7280',
     fontWeight: '600' as const,
   },
   valueNum: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
     fontWeight: '800' as const,
   },
   valueLabelBold: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
     fontWeight: '800' as const,
   },
   valueNumBold: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#FFE28F',
+    color: '#B8860B',
     fontWeight: '800' as const,
   },
   highRollRow: {
@@ -692,7 +691,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,226,143,0.12)',
+    backgroundColor: 'rgba(212,160,10,0.10)',
   },
   highRollTextBlock: {
     flex: 1,
@@ -700,12 +699,12 @@ const styles = StyleSheet.create({
   highRollTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   highRollMeta: {
     marginTop: 2,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#6B7280',
   },
   highRollStats: {
     alignItems: 'flex-end',
@@ -716,7 +715,7 @@ const styles = StyleSheet.create({
   },
   highRollStatLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.45)',
+    color: '#9CA3AF',
     marginTop: 2,
   },
   cruiseListRow: {
@@ -737,7 +736,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(158,253,242,0.1)',
+    backgroundColor: 'rgba(0,151,167,0.08)',
   },
   cruiseListTextBlock: {
     flex: 1,
@@ -745,7 +744,7 @@ const styles = StyleSheet.create({
   cruiseListTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   cruiseListMetaRow: {
     flexDirection: 'row',
@@ -755,7 +754,7 @@ const styles = StyleSheet.create({
   },
   cruiseListMeta: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.45)',
+    color: '#9CA3AF',
     marginTop: 1,
   },
   cruiseListRight: {
@@ -765,7 +764,7 @@ const styles = StyleSheet.create({
   cruiseListPoints: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '800' as const,
-    color: '#FFE28F',
+    color: '#B8860B',
   },
   cruiseListWinLoss: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -780,7 +779,7 @@ const styles = StyleSheet.create({
   },
   emptyCompactText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.45)',
+    color: '#9CA3AF',
     lineHeight: 20,
   },
   emptyState: {
@@ -791,11 +790,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#6B7280',
   },
   emptyBody: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.35)',
+    color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: SPACING.md,

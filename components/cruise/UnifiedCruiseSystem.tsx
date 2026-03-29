@@ -55,39 +55,39 @@ function getToneStyles(tone: AccentTone = 'slate') {
   switch (tone) {
     case 'gold':
       return {
-        bg: 'rgba(245, 185, 59, 0.18)',
-        border: 'rgba(255, 214, 92, 0.55)',
-        text: '#FFE18A',
+        bg: 'rgba(212, 160, 10, 0.12)',
+        border: 'rgba(212, 160, 10, 0.35)',
+        text: '#92400E',
       };
     case 'teal':
       return {
-        bg: 'rgba(31, 212, 194, 0.18)',
-        border: 'rgba(90, 255, 233, 0.45)',
-        text: '#9EFDF2',
+        bg: 'rgba(0, 151, 167, 0.10)',
+        border: 'rgba(0, 151, 167, 0.35)',
+        text: '#0E7490',
       };
     case 'emerald':
       return {
-        bg: 'rgba(39, 210, 137, 0.18)',
-        border: 'rgba(113, 255, 188, 0.45)',
-        text: '#A8F5C7',
+        bg: 'rgba(5, 150, 105, 0.10)',
+        border: 'rgba(5, 150, 105, 0.35)',
+        text: '#065F46',
       };
     case 'violet':
       return {
-        bg: 'rgba(156, 102, 255, 0.18)',
-        border: 'rgba(197, 156, 255, 0.45)',
-        text: '#D8C0FF',
+        bg: 'rgba(123, 45, 142, 0.10)',
+        border: 'rgba(123, 45, 142, 0.35)',
+        text: '#6B21A8',
       };
     case 'rose':
       return {
-        bg: 'rgba(255, 103, 145, 0.18)',
-        border: 'rgba(255, 167, 189, 0.45)',
-        text: '#FFC6D6',
+        bg: 'rgba(220, 38, 38, 0.08)',
+        border: 'rgba(220, 38, 38, 0.30)',
+        text: '#9F1239',
       };
     default:
       return {
-        bg: 'rgba(255, 255, 255, 0.12)',
-        border: 'rgba(255, 255, 255, 0.18)',
-        text: '#E5ECFF',
+        bg: '#F1F5F9',
+        border: '#E2E8F0',
+        text: '#475569',
       };
   }
 }
@@ -95,30 +95,21 @@ function getToneStyles(tone: AccentTone = 'slate') {
 function getFieldToneColor(tone?: DisplayField['tone']) {
   switch (tone) {
     case 'success':
-      return '#8EF2C1';
+      return '#059669';
     case 'warning':
-      return '#FFD58A';
+      return '#D97706';
     case 'danger':
-      return '#FFB3C1';
+      return '#DC2626';
     case 'accent':
-      return '#A6C6FF';
+      return '#1E3A5F';
     default:
-      return '#FFFFFF';
+      return '#1A2A3D';
   }
 }
 
 export const PremiumPageBackground = memo(function PremiumPageBackground({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.pageBackground}>
-      <LinearGradient
-        colors={['#051120', '#0B1D38', '#132A4D', '#26143C']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.pageOrbTop} />
-      <View style={styles.pageOrbBottom} />
-      <View style={styles.pageNoiseCard} />
       {children}
     </View>
   );
@@ -145,7 +136,7 @@ export const PremiumHeroCard = memo(function PremiumHeroCard({
     <View style={styles.heroShadowWrap}>
       <ImageBackground source={{ uri: imageUri }} style={styles.heroCard} imageStyle={styles.heroImage}>
         <LinearGradient
-          colors={['rgba(6,14,30,0.22)', 'rgba(7,19,40,0.82)', 'rgba(10,26,52,0.96)']}
+          colors={['rgba(6,14,30,0.22)', 'rgba(7,19,40,0.72)', 'rgba(10,26,52,0.92)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.heroOverlay}
@@ -166,9 +157,9 @@ export const PremiumHeroCard = memo(function PremiumHeroCard({
             {pills.map((pill) => {
               const tone = getToneStyles(pill.tone);
               return (
-                <View key={pill.label} style={[styles.summaryPill, { backgroundColor: tone.bg, borderColor: tone.border }]}> 
+                <View key={pill.label} style={[styles.summaryPill, { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.25)' }]}> 
                   <Text style={styles.summaryPillLabel}>{pill.label}</Text>
-                  <Text style={[styles.summaryPillValue, { color: tone.text }]}>{pill.value}</Text>
+                  <Text style={[styles.summaryPillValue, { color: '#FFFFFF' }]}>{pill.value}</Text>
                 </View>
               );
             })}
@@ -224,13 +215,13 @@ export const PremiumChipBar = memo(function PremiumChipBar({ chips }: { chips: C
             style={[
               styles.chip,
               {
-                backgroundColor: chip.active ? tone.bg : 'rgba(255,255,255,0.08)',
-                borderColor: chip.active ? tone.border : 'rgba(255,255,255,0.12)',
+                backgroundColor: chip.active ? tone.bg : '#F1F5F9',
+                borderColor: chip.active ? tone.border : '#E2E8F0',
               },
             ]}
             testID={`chip-${chip.key}`}
           >
-            <Text style={[styles.chipText, { color: chip.active ? tone.text : '#D1DAF3' }]}>{chip.label}</Text>
+            <Text style={[styles.chipText, { color: chip.active ? tone.text : '#64748B' }]}>{chip.label}</Text>
           </TouchableOpacity>
         );
       })}
@@ -277,7 +268,7 @@ export const PremiumDataSection = memo(function PremiumDataSection({
       <TouchableOpacity style={styles.sectionHeaderRow} onPress={() => setExpanded((current) => !current)} activeOpacity={0.82}>
         <Text style={styles.sectionHeading}>{title}</Text>
         <View style={styles.sectionChevronWrap}>
-          {expanded ? <ChevronUp size={18} color="#E4ECFF" /> : <ChevronDown size={18} color="#E4ECFF" />}
+          {expanded ? <ChevronUp size={18} color="#4B5563" /> : <ChevronDown size={18} color="#4B5563" />}
         </View>
       </TouchableOpacity>
       {expanded ? (
@@ -322,7 +313,7 @@ export const PremiumEntityCard = memo(function PremiumEntityCard({
     <TouchableOpacity style={styles.entityCardWrap} activeOpacity={0.92} onPress={onPress} testID="premium-entity-card">
       <ImageBackground source={{ uri: imageUri }} style={styles.entityHeader} imageStyle={styles.entityHeaderImage}>
         <LinearGradient
-          colors={['rgba(8,18,37,0.15)', 'rgba(10,24,49,0.82)', 'rgba(16,18,42,0.96)']}
+          colors={['rgba(8,18,37,0.15)', 'rgba(10,24,49,0.72)', 'rgba(16,18,42,0.92)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.entityHeaderOverlay}
@@ -335,7 +326,7 @@ export const PremiumEntityCard = memo(function PremiumEntityCard({
             ) : <View />}
             {onPress ? (
               <View style={styles.inlineActionBadge}>
-                <ArrowRight size={16} color="#F8FCFF" />
+                <ArrowRight size={16} color="#FFFFFF" />
               </View>
             ) : null}
           </View>
@@ -365,7 +356,7 @@ export const PremiumEntityCard = memo(function PremiumEntityCard({
           <View style={styles.extraBlock}>
             <TouchableOpacity style={styles.moreButton} onPress={() => setExpanded((current) => !current)} activeOpacity={0.85}>
               <Text style={styles.moreButtonText}>{expanded ? 'Hide full data' : 'Show full data'}</Text>
-              {expanded ? <ChevronUp size={16} color="#DCE7FF" /> : <ChevronDown size={16} color="#DCE7FF" />}
+              {expanded ? <ChevronUp size={16} color="#4B5563" /> : <ChevronDown size={16} color="#4B5563" />}
             </TouchableOpacity>
             {expanded ? (
               <View style={styles.fieldStack}>
@@ -395,7 +386,7 @@ export const PremiumEmptyState = memo(function PremiumEmptyState({
   return (
     <View style={styles.emptyCard} testID="premium-empty-state">
       <View style={styles.emptyIconBubble}>
-        <Ship size={26} color="#FFE28F" />
+        <Ship size={26} color="#1E3A5F" />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptySubtitle}>{subtitle}</Text>
@@ -414,7 +405,7 @@ export const PremiumQuickFacts = memo(function PremiumQuickFacts({ fields }: { f
         const Icon = field.key.toLowerCase().includes('date') ? CalendarDays : field.key.toLowerCase().includes('port') ? MapPin : field.key.toLowerCase().includes('value') || field.key.toLowerCase().includes('free') ? Wallet : field.key.toLowerCase().includes('point') ? Coins : field.key.toLowerCase().includes('ship') ? Ship : Star;
         return (
           <View key={field.key} style={styles.quickFactCard}>
-            <Icon size={15} color="#9CB7FF" />
+            <Icon size={15} color="#1E3A5F" />
             <Text style={styles.quickFactLabel}>{field.label}</Text>
             <Text style={[styles.quickFactValue, { color: getFieldToneColor(field.tone) }]}>{field.value}</Text>
           </View>
@@ -427,44 +418,14 @@ export const PremiumQuickFacts = memo(function PremiumQuickFacts({ fields }: { f
 const styles = StyleSheet.create({
   pageBackground: {
     flex: 1,
-    backgroundColor: '#071223',
-  },
-  pageOrbTop: {
-    position: 'absolute',
-    top: -80,
-    right: -40,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(102, 76, 255, 0.15)',
-  },
-  pageOrbBottom: {
-    position: 'absolute',
-    bottom: -60,
-    left: -70,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: 'rgba(32, 204, 182, 0.12)',
-  },
-  pageNoiseCard: {
-    position: 'absolute',
-    top: 180,
-    left: 24,
-    right: 24,
-    height: 220,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.03)',
-    transform: [{ rotate: '-4deg' }],
+    backgroundColor: '#F0F4F8',
   },
   heroShadowWrap: {
     borderRadius: 28,
     overflow: 'hidden',
     ...SHADOW.lg,
     shadowColor: '#000000',
-    shadowOpacity: 0.32,
+    shadowOpacity: 0.12,
   },
   heroCard: {
     minHeight: 248,
@@ -488,9 +449,9 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.20)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -513,7 +474,7 @@ const styles = StyleSheet.create({
   },
   heroSubtitle: {
     marginTop: 8,
-    color: 'rgba(232, 240, 255, 0.84)',
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 14,
     lineHeight: 20,
   },
@@ -531,7 +492,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   summaryPillLabel: {
-    color: 'rgba(236, 243, 255, 0.74)',
+    color: 'rgba(255, 255, 255, 0.75)',
     fontSize: 10,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -575,13 +536,13 @@ const styles = StyleSheet.create({
   surfaceCard: {
     borderRadius: 26,
     padding: SPACING.lg,
-    backgroundColor: 'rgba(10, 24, 47, 0.72)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(152, 178, 255, 0.14)',
-    ...SHADOW.md,
+    borderColor: '#E2E8F0',
+    ...SHADOW.card,
   },
   sectionHeading: {
-    color: '#FFFFFF',
+    color: '#1A2A3D',
     fontSize: 18,
     fontWeight: '800' as const,
     letterSpacing: -0.3,
@@ -597,12 +558,12 @@ const styles = StyleSheet.create({
     minHeight: 92,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: '#E2E8F0',
   },
   statTileLabel: {
-    color: 'rgba(213, 224, 255, 0.72)',
+    color: '#6B7280',
     fontSize: 11,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -610,7 +571,7 @@ const styles = StyleSheet.create({
   },
   statTileValue: {
     marginTop: 8,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
     fontSize: 18,
     fontWeight: '800' as const,
     lineHeight: 24,
@@ -624,7 +585,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -635,10 +596,10 @@ const styles = StyleSheet.create({
   fieldRow: {
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: '#E5E7EB',
   },
   fieldLabel: {
-    color: 'rgba(209, 220, 247, 0.68)',
+    color: '#6B7280',
     fontSize: 12,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -646,7 +607,7 @@ const styles = StyleSheet.create({
   },
   fieldValue: {
     marginTop: 7,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
     fontSize: 15,
     lineHeight: 22,
     fontWeight: '600' as const,
@@ -654,10 +615,11 @@ const styles = StyleSheet.create({
   entityCardWrap: {
     borderRadius: 28,
     overflow: 'hidden',
-    backgroundColor: 'rgba(8, 20, 40, 0.88)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(151, 176, 255, 0.14)',
+    borderColor: '#E2E8F0',
     ...SHADOW.lg,
+    shadowOpacity: 0.08,
   },
   entityHeader: {
     minHeight: 178,
@@ -681,11 +643,11 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.20)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   entityTitle: {
     color: '#FFFFFF',
@@ -695,7 +657,7 @@ const styles = StyleSheet.create({
   },
   entitySubtitle: {
     marginTop: 7,
-    color: 'rgba(228, 236, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 14,
     lineHeight: 20,
   },
@@ -709,12 +671,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   inlineChipText: {
-    color: '#ECF3FF',
+    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700' as const,
   },
@@ -732,12 +694,12 @@ const styles = StyleSheet.create({
     minHeight: 82,
     borderRadius: 18,
     padding: 13,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: '#E2E8F0',
   },
   entityFieldLabel: {
-    color: 'rgba(212, 223, 255, 0.68)',
+    color: '#6B7280',
     fontSize: 11,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -748,7 +710,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   extraBlock: {
     marginTop: 2,
@@ -757,20 +719,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#E2E8F0',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   moreButtonText: {
-    color: '#DCE7FF',
+    color: '#4B5563',
     fontSize: 13,
     fontWeight: '800' as const,
   },
   footerHint: {
-    color: 'rgba(207, 219, 246, 0.72)',
+    color: '#9CA3AF',
     fontSize: 12,
     lineHeight: 18,
   },
@@ -779,9 +741,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.xxl,
     alignItems: 'center',
-    backgroundColor: 'rgba(10, 24, 47, 0.72)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#E2E8F0',
+    ...SHADOW.card,
   },
   emptyIconBubble: {
     width: 60,
@@ -789,19 +752,19 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#F0F4F8',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: '#E2E8F0',
   },
   emptyTitle: {
     marginTop: 16,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
     fontSize: 20,
     fontWeight: '800' as const,
   },
   emptySubtitle: {
     marginTop: 8,
-    color: 'rgba(215, 226, 248, 0.76)',
+    color: '#6B7280',
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
@@ -816,13 +779,14 @@ const styles = StyleSheet.create({
     minWidth: 150,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderColor: '#E2E8F0',
+    ...SHADOW.sm,
   },
   quickFactLabel: {
     marginTop: 10,
-    color: 'rgba(216, 226, 248, 0.68)',
+    color: '#6B7280',
     fontSize: 11,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -830,7 +794,7 @@ const styles = StyleSheet.create({
   },
   quickFactValue: {
     marginTop: 6,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
     fontSize: 17,
     fontWeight: '800' as const,
     lineHeight: 22,
