@@ -154,7 +154,7 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
           )}
         </View>
 
-        {item.notes && (
+        {!!item.notes && (
           <Text style={styles.sessionNotes} numberOfLines={2}>
             {item.notes}
           </Text>
