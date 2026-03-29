@@ -167,6 +167,71 @@ function getLuckDisplay(score: number) {
   return entry ?? LUCK_SCALE_9[4];
 }
 
+function sumDigits(value: number): number {
+  return Math.abs(value)
+    .toString()
+    .split('')
+    .reduce((total, digit) => total + Number(digit), 0);
+}
+
+function reduceToLuckDigit(value: number): number {
+  let reducedValue = Math.abs(value);
+
+  while (reducedValue > 9) {
+    reducedValue = sumDigits(reducedValue);
+  }
+
+  return Math.max(1, reducedValue);
+}
+
+function getDayOfYear(targetDate: Date): number {
+  const startOfYear = Date.UTC(targetDate.getFullYear(), 0, 1);
+  const currentDay = Date.UTC(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+  return Math.floor((currentDay - startOfYear) / 86400000) + 1;
+}
+
+function isValidBirthdate(month: number, day: number, year: number): boolean {
+  const candidateDate = new Date(Date.UTC(year, month - 1, day));
+  return (
+    candidateDate.getUTCFullYear() === year &&
+    candidateDate.getUTCMonth() === month - 1 &&
+    candidateDate.getUTCDate() === day
+  );
+}
+
+function getNumerologyScore(month: number, day: number, year: number, targetDate: Date): number {
+  const birthPath = reduceToLuckDigit(sumDigits(year) + month + day);
+  const universalYear = reduceToLuckDigit(sumDigits(targetDate.getFullYear()));
+  const universalMonth = reduceToLuckDigit(universalYear + targetDate.getMonth() + 1);
+  return reduceToLuckDigit(birthPath + universalMonth + targetDate.getDate());
+}
+
+function getCombinedPersonalizedScore(
+  chineseScore: number,
+  westernScore: number,
+  numerologyScore: number,
+  month: number,
+  day: number,
+  year: number,
+  targetDate: Date,
+): number {
+  const birthSignature = reduceToLuckDigit(month + day + sumDigits(year));
+  const dayOfYear = getDayOfYear(targetDate);
+  const harmonyScore = reduceToLuckDigit(chineseScore + westernScore + numerologyScore);
+  const contrastScore = reduceToLuckDigit(Math.abs(chineseScore - westernScore) + numerologyScore + birthSignature);
+  const resonanceScore = ((
+    (chineseScore * 17) +
+    (westernScore * 13) +
+    (numerologyScore * 11) +
+    dayOfYear +
+    (month * 3) +
+    day +
+    (year % 100)
+  ) % 9) + 1;
+
+  return Math.max(1, Math.min(9, ((harmonyScore + contrastScore + resonanceScore + birthSignature) % 9) + 1));
+}
+
 export function parseBirthdate(birthdate: string): { month: number; day: number; year: number } | null {
   if (!birthdate) return null;
   const trimmed = birthdate.trim();
@@ -189,6 +254,15 @@ export function parseBirthdate(birthdate: string): { month: number; day: number;
     };
   }
 
+  const dashedUsMatch = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dashedUsMatch) {
+    return {
+      month: parseInt(dashedUsMatch[1], 10),
+      day: parseInt(dashedUsMatch[2], 10),
+      year: parseInt(dashedUsMatch[3], 10),
+    };
+  }
+
   return null;
 }
 
@@ -197,18 +271,38 @@ export function calculatePersonalizedLuck(birthdate: string, targetDateStr: stri
   if (!parsed) return null;
 
   const { month, day, year } = parsed;
-  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
+    console.warn('[LuckCalculator] Birthdate is outside supported range:', { birthdate, parsed });
+    return null;
+  }
+
+  if (!isValidBirthdate(month, day, year)) {
+    console.warn('[LuckCalculator] Birthdate is not a real calendar date:', { birthdate, parsed });
+    return null;
+  }
 
   const targetDate = new Date(`${targetDateStr}T12:00:00`);
-  if (isNaN(targetDate.getTime())) return null;
+  if (Number.isNaN(targetDate.getTime())) {
+    console.warn('[LuckCalculator] Target date is invalid:', { targetDateStr });
+    return null;
+  }
 
   const birthAnimal = getChineseAnimal(year);
   const chineseScore = getChineseScore(birthAnimal, targetDate);
 
   const westernSign = getWesternSign(month, day);
   const westernScore = getWesternScore(westernSign, targetDate);
+  const numerologyScore = getNumerologyScore(month, day, year, targetDate);
 
-  const combinedScore = Math.round((chineseScore + westernScore) / 2);
+  const combinedScore = getCombinedPersonalizedScore(
+    chineseScore,
+    westernScore,
+    numerologyScore,
+    month,
+    day,
+    year,
+    targetDate,
+  );
   const display = getLuckDisplay(combinedScore);
 
   const chineseDisplay = getLuckDisplay(chineseScore);
