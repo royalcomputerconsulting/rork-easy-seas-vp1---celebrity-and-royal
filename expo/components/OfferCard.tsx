@@ -8,7 +8,6 @@ import {
   Ship,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
-import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import { formatCurrency } from '@/lib/format';
 import { getDaysUntil, createDateFromString } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
@@ -27,7 +26,9 @@ interface OfferCardProps {
   showValueBreakdown?: boolean;
 }
 
-
+const OFFER_MARBLE_COLORS = ['#FFFFFF', '#F5F1ED', '#ECE7E2', '#F8F6F3'] as const;
+const OFFER_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.72)', 'rgba(255,255,255,0.08)', 'rgba(214,211,209,0.32)'] as const;
+const OFFER_MARBLE_LOCATIONS = [0, 0.26, 0.7, 1] as const;
 
 function getOfferImage(offer: Cruise): string {
   if (offer.imageUrl) return offer.imageUrl;
@@ -260,12 +261,19 @@ export const OfferCard = React.memo(function OfferCard({
       testID="offer-card"
     >
       <LinearGradient
-        colors={MARBLE_TEXTURES.lightBlue.gradientColors}
-        locations={MARBLE_TEXTURES.lightBlue.gradientLocations}
-        start={{ x: 0, y: 0 }}
+        colors={OFFER_MARBLE_COLORS}
+        locations={OFFER_MARBLE_LOCATIONS}
+        start={{ x: 0.02, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.marbleBackground}
       >
+        <LinearGradient
+          colors={OFFER_MARBLE_VEIN_COLORS}
+          locations={OFFER_MARBLE_LOCATIONS}
+          start={{ x: 0.12, y: 0 }}
+          end={{ x: 0.88, y: 1 }}
+          style={styles.marbleVein}
+        />
       {/* OFFER NAME & CODE - BLACK BOLD AT TOP */}
       {(offer.offerName || offer.offerCode) && (
         <View style={styles.offerHeaderSection}>
@@ -379,13 +387,21 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: '#E4DDD6',
+    backgroundColor: '#FFFFFF',
     ...SHADOW.md,
   },
   marbleBackground: {
     borderRadius: BORDER_RADIUS.lg,
+    position: 'relative',
+  },
+  marbleVein: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.82,
   },
   offerHeaderSection: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.88)',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.sm,
@@ -474,6 +490,7 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     padding: SPACING.md,
+    backgroundColor: 'rgba(255,255,255,0.74)',
   },
   actionIcons: {
     flexDirection: 'row',
@@ -538,11 +555,11 @@ const styles = StyleSheet.create({
   },
   metaInfoBox: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.68)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E1DAD2',
   },
   metaInfoLabel: {
     fontSize: 9,

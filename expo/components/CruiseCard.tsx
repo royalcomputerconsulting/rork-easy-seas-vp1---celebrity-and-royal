@@ -15,6 +15,9 @@ const INNER_BORDER = 'rgba(255,255,255,0.09)' as const;
 const TEXT_PRIMARY = '#FFFFFF' as const;
 const TEXT_SECONDARY = 'rgba(213, 224, 255, 0.72)' as const;
 const TEXT_MUTED = 'rgba(180, 195, 240, 0.5)' as const;
+const DARK_MARBLE_COLORS = ['#18222C', '#202A35', '#121B26', '#2A333D'] as const;
+const DARK_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.14)', 'rgba(255,255,255,0.02)', 'rgba(185,196,209,0.12)'] as const;
+const DARK_MARBLE_LOCATIONS = [0, 0.24, 0.68, 1] as const;
 
 interface CruiseCardProps {
   cruise: Cruise | BookedCruise;
@@ -182,6 +185,20 @@ export const CruiseCard = React.memo(function CruiseCard({
           activeOpacity={1}
           testID="cruise-card-mini"
         >
+          <LinearGradient
+            colors={DARK_MARBLE_COLORS}
+            locations={DARK_MARBLE_LOCATIONS}
+            start={{ x: 0.02, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.darkMarbleBackground}
+          >
+            <LinearGradient
+              colors={DARK_MARBLE_VEIN_COLORS}
+              locations={DARK_MARBLE_LOCATIONS}
+              start={{ x: 0.12, y: 0 }}
+              end={{ x: 0.88, y: 1 }}
+              style={styles.darkMarbleVein}
+            />
           {/* HERO IMAGE with gradient overlay */}
           <View style={styles.uniImageWrap}>
             <Image
@@ -425,6 +442,7 @@ export const CruiseCard = React.memo(function CruiseCard({
               <ChevronRight size={15} color="#9EFDF2" />
             </TouchableOpacity>
           </View>
+          </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
     );
@@ -441,23 +459,38 @@ export const CruiseCard = React.memo(function CruiseCard({
           activeOpacity={1}
           testID="cruise-card-compact"
         >
-          <Image
-            source={{ uri: compactImageUri }}
-            style={styles.compactImage}
-            resizeMode="cover"
-            onError={() => setCompactImageUri(DEFAULT_CRUISE_IMAGE)}
-          />
-          <View style={styles.compactContent}>
-            <Text style={styles.compactShipName}>{cruise.shipName}</Text>
-            <Text style={styles.compactDestination} numberOfLines={1}>{cruise.destination}</Text>
-            <View style={styles.compactMeta}>
-              <Calendar size={12} color="rgba(158,253,242,0.7)" />
-              <Text style={styles.compactDate}>
-                {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
-              </Text>
+          <LinearGradient
+            colors={DARK_MARBLE_COLORS}
+            locations={DARK_MARBLE_LOCATIONS}
+            start={{ x: 0.02, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.compactMarbleBackground}
+          >
+            <LinearGradient
+              colors={DARK_MARBLE_VEIN_COLORS}
+              locations={DARK_MARBLE_LOCATIONS}
+              start={{ x: 0.12, y: 0 }}
+              end={{ x: 0.88, y: 1 }}
+              style={styles.darkMarbleVein}
+            />
+            <Image
+              source={{ uri: compactImageUri }}
+              style={styles.compactImage}
+              resizeMode="cover"
+              onError={() => setCompactImageUri(DEFAULT_CRUISE_IMAGE)}
+            />
+            <View style={styles.compactContent}>
+              <Text style={styles.compactShipName}>{cruise.shipName}</Text>
+              <Text style={styles.compactDestination} numberOfLines={1}>{cruise.destination}</Text>
+              <View style={styles.compactMeta}>
+                <Calendar size={12} color="rgba(158,253,242,0.7)" />
+                <Text style={styles.compactDate}>
+                  {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
+                </Text>
+              </View>
             </View>
-          </View>
-          <ChevronRight size={18} color="rgba(255,255,255,0.3)" style={styles.compactChevron} />
+            <ChevronRight size={18} color="rgba(255,255,255,0.3)" style={styles.compactChevron} />
+          </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
     );
@@ -473,6 +506,20 @@ export const CruiseCard = React.memo(function CruiseCard({
         activeOpacity={1}
         testID="cruise-card"
       >
+        <LinearGradient
+          colors={DARK_MARBLE_COLORS}
+          locations={DARK_MARBLE_LOCATIONS}
+          start={{ x: 0.02, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.darkMarbleBackground}
+        >
+          <LinearGradient
+            colors={DARK_MARBLE_VEIN_COLORS}
+            locations={DARK_MARBLE_LOCATIONS}
+            start={{ x: 0.12, y: 0 }}
+            end={{ x: 0.88, y: 1 }}
+            style={styles.darkMarbleVein}
+          />
         {/* Hero image */}
         <View style={styles.imageSection}>
           <Image
@@ -604,6 +651,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             </View>
           ) : null}
         </View>
+        </LinearGradient>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -622,6 +670,14 @@ const styles = StyleSheet.create({
     shadowColor: '#000000',
     shadowOpacity: 0.28,
     shadowRadius: 12,
+  },
+  darkMarbleBackground: {
+    borderRadius: BORDER_RADIUS.xl,
+    position: 'relative',
+  },
+  darkMarbleVein: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.88,
   },
   uniImageWrap: {
     height: 160,
@@ -942,6 +998,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: CARD_BORDER,
     ...SHADOW.sm,
+  },
+  compactMarbleBackground: {
+    borderRadius: BORDER_RADIUS.md,
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   compactImage: {
     width: 80,
