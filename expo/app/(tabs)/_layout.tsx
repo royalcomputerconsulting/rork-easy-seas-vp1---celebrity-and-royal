@@ -12,6 +12,11 @@ import React, { useCallback } from "react";
 import { Platform, View, StyleSheet } from "react-native";
 import { COLORS } from '../../constants/theme';
 import * as Haptics from 'expo-haptics';
+
+const TAB_BG = 'rgba(8, 16, 34, 0.97)';
+const ACTIVE_COLOR = '#FFE28F';
+const INACTIVE_COLOR = 'rgba(200,215,255,0.55)';
+
 export default function TabLayout() {
   const handleTabPress = useCallback(() => {
     if (Platform.OS !== 'web') {
@@ -26,25 +31,25 @@ export default function TabLayout() {
         tabPress: handleTabPress,
       }}
       screenOptions={{
-        tabBarActiveTintColor: COLORS.navyDeep,
-        tabBarInactiveTintColor: COLORS.textDarkGrey,
+        tabBarActiveTintColor: ACTIVE_COLOR,
+        tabBarInactiveTintColor: INACTIVE_COLOR,
         tabBarShowLabel: true,
         tabBarStyle: {
           position: 'absolute',
-          backgroundColor: COLORS.white,
+          backgroundColor: TAB_BG,
           borderTopWidth: 1,
-          borderTopColor: COLORS.borderLight,
-          elevation: 8,
+          borderTopColor: 'rgba(255,255,255,0.08)',
+          elevation: 20,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.45,
+          shadowRadius: 16,
         },
         tabBarLabelStyle: {
           fontSize: 9,
-          fontWeight: '600' as const,
-          marginTop: 2,
-          letterSpacing: 0,
+          fontWeight: '700' as const,
+          marginTop: 1,
+          letterSpacing: 0.3,
         },
         tabBarItemStyle: {
           paddingHorizontal: 0,
@@ -142,11 +147,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: 44,
-    height: 32,
+    height: 30,
     borderRadius: 8,
-    backgroundColor: COLORS.white,
+    backgroundColor: 'transparent',
   },
   activeIconContainer: {
-    backgroundColor: COLORS.gold,
+    backgroundColor: 'rgba(255,226,143,0.14)',
+    borderRadius: 8,
   },
 });

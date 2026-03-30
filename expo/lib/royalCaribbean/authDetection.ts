@@ -14,6 +14,95 @@ export const AUTH_DETECTION_SCRIPT = `
     };
   }
 
+  function truncateText(value, maxLength) {
+    var str = '';
+    if (typeof value === 'string') str = value;
+    else if (typeof value === 'number' || typeof value === 'boolean') str = String(value);
+    else if (value === null || value === undefined) str = '';
+    str = str.replace(/\\s+/g, ' ').trim();
+    if (str.length <= maxLength) return str;
+    return str.substring(0, Math.max(0, maxLength - 1)) + '…';
+  }
+
+  function extractBookingsFromPayload(data) {
+    if (!data) return null;
+    if (Array.isArray(data)) return data;
+    if (data.bookings && Array.isArray(data.bookings)) return data.bookings;
+    if (data.cruises && Array.isArray(data.cruises)) return data.cruises;
+    if (data.reservations && Array.isArray(data.reservations)) return data.reservations;
+    if (data.upcoming && Array.isArray(data.upcoming)) return data.upcoming;
+    if (data.upcomingCruises && Array.isArray(data.upcomingCruises)) return data.upcomingCruises;
+    if (data.pastCruises && Array.isArray(data.pastCruises)) return data.pastCruises;
+    if (data.profileBookings && Array.isArray(data.profileBookings)) return data.profileBookings;
+    if (data.payload && Array.isArray(data.payload)) return data.payload;
+    if (data.payload && Array.isArray(data.payload.sailingInfo)) return data.payload.sailingInfo;
+    if (data.payload && Array.isArray(data.payload.profileBookings)) return data.payload.profileBookings;
+    if (data.data && Array.isArray(data.data)) return data.data;
+    return null;
+  }
+
+  function createBookingBridgeSummary(booking) {
+    if (!booking || typeof booking !== 'object') return null;
+    return {
+      bookingId: truncateText(booking.bookingId || booking.confirmationNumber || booking.reservationId || '', 40),
+      shipName: truncateText(booking.shipName || booking.ship || '', 80),
+      shipCode: truncateText(booking.shipCode || '', 12),
+      sailDate: truncateText(booking.sailDate || booking.departureDate || booking.startDate || '', 32),
+      returnDate: truncateText(booking.endDate || booking.returnDate || '', 32),
+      bookingStatus: truncateText(booking.bookingStatus || booking.status || '', 32),
+      stateroomNumber: truncateText(booking.stateroomNumber || booking.cabinNumber || '', 24),
+      stateroomType: truncateText(booking.stateroomType || booking.cabinType || booking.categoryType || '', 48),
+      itinerary: truncateText(booking.itinerary || booking.destination || '', 120),
+      departurePort: truncateText(booking.departurePort || booking.homePort || '', 80),
+      numberOfNights: booking.numberOfNights || booking.duration || '',
+      numberOfGuests: booking.guestCount || booking.numberOfGuests || (booking.passengers && booking.passengers.length) || '',
+      balanceDue: booking.balanceDueAmount || booking.balanceDue || booking.amountDue || ''
+    };
+  }
+
+  function createCarnivalLoyaltyBridgeSummary(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+    return {
+      TierCode: truncateText(data.TierCode || data.loyaltyTier || data.loyaltyLevel || '', 32),
+      PastGuestNumber: truncateText(data.PastGuestNumber || data.vifpNumber || '', 40),
+      Points: truncateText(data.Points || data.TotalPoints || data.VifpPoints || data.CruiseDays || data.cruiseDays || '', 32),
+      FirstName: truncateText(data.FirstName || '', 40),
+      LastName: truncateText(data.LastName || '', 40)
+    };
+  }
+
+  function createBridgeSafePayload(endpoint, data, url) {
+    if (endpoint === 'upcomingCruises' || endpoint === 'bookings' || endpoint === 'courtesyHolds') {
+      var bookings = extractBookingsFromPayload(data);
+      if (!bookings) return data;
+      var summaries = [];
+      for (var bi = 0; bi < bookings.length; bi++) {
+        var summary = createBookingBridgeSummary(bookings[bi]);
+        if (summary) summaries.push(summary);
+      }
+      return {
+        bookings: summaries,
+        bookingCount: bookings.length,
+        bridgeSummary: true
+      };
+    }
+    if (typeof url === 'string' && url.indexOf('carnival.com') >= 0 && endpoint === 'loyalty') {
+      return createCarnivalLoyaltyBridgeSummary(data);
+    }
+    return data;
+  }
+
+  function postNetworkPayload(endpoint, data, url) {
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'network_payload',
+        endpoint: endpoint,
+        data: createBridgeSafePayload(endpoint, data, url),
+        url: url
+      }));
+    } catch (e) {}
+  }
+
   function interceptNetworkCalls() {
     if (window.__easySeasNetworkIntercepted) return;
     window.__easySeasNetworkIntercepted = true;
@@ -29,12 +118,7 @@ export const AUTH_DETECTION_SCRIPT = `
             if (response.ok && response.status === 200) {
               clonedResponse.json().then(data => {
                 window.capturedPayloads.offers = data;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'network_payload',
-                  endpoint: 'offers',
-                  data: data,
-                  url: url
-                }));
+                postNetworkPayload('offers', data, url);
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'log',
                   message: '📦 Captured Casino Offers API payload with ' + (data?.offers?.length || 0) + ' offers',
@@ -48,12 +132,7 @@ export const AUTH_DETECTION_SCRIPT = `
             if (response.ok && response.status === 200) {
               clonedResponse.json().then(data => {
                 window.capturedPayloads.upcomingCruises = data;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'network_payload',
-                  endpoint: 'upcomingCruises',
-                  data: data,
-                  url: url
-                }));
+                postNetworkPayload('upcomingCruises', data, url);
                 const count = (data?.profileBookings?.length || data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'log',
@@ -68,12 +147,7 @@ export const AUTH_DETECTION_SCRIPT = `
             if (response.ok && response.status === 200) {
               clonedResponse.json().then(data => {
                 window.capturedPayloads.courtesyHolds = data;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'network_payload',
-                  endpoint: 'courtesyHolds',
-                  data: data,
-                  url: url
-                }));
+                postNetworkPayload('courtesyHolds', data, url);
                 const count = (data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'log',
@@ -91,12 +165,7 @@ export const AUTH_DETECTION_SCRIPT = `
                   window.capturedPayloads.voyageEnrichment = {};
                 }
                 window.capturedPayloads.voyageEnrichment = data;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'network_payload',
-                  endpoint: 'voyageEnrichment',
-                  data: data,
-                  url: url
-                }));
+                postNetworkPayload('voyageEnrichment', data, url);
                 const count = Object.keys(data || {}).length;
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'log',
@@ -112,12 +181,7 @@ export const AUTH_DETECTION_SCRIPT = `
               let data = null;
               try { data = JSON.parse(text); } catch (e) { data = { raw: text }; }
               window.capturedPayloads.loyalty = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'loyalty',
-                data: data,
-                url: url
-              }));
+              postNetworkPayload('loyalty', data, url);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '📦 Captured Loyalty API payload (' + response.status + ') from ' + url,
@@ -127,12 +191,7 @@ export const AUTH_DETECTION_SCRIPT = `
           } else if (response.ok && response.status === 200 && (url.includes('/loyalty') || url.includes('/guestAccounts/loyalty') || url.includes('/loyaltyInformation') || url.includes('/loyalty-programs') || url.includes('/profile/loyalty') || url.includes('/account/info'))) {
             clonedResponse.json().then(data => {
               window.capturedPayloads.loyalty = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'loyalty',
-                data: data,
-                url: url
-              }));
+              postNetworkPayload('loyalty', data, url);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '📦 Captured Loyalty API payload from ' + url,
@@ -153,9 +212,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 if (Array.isArray(data) && data.length > 0 && (data[0].bookingId || data[0].confirmationNumber || data[0].shipName)) bookingArr = data;
                 if (Array.isArray(bookingArr) && bookingArr.length > 0 && (bookingArr[0].bookingId || bookingArr[0].confirmationNumber || bookingArr[0].shipName || bookingArr[0].sailDate || bookingArr[0].departureDate)) {
                   window.capturedPayloads.upcomingCruises = data;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'network_payload', endpoint: 'upcomingCruises', data: data, url: url
-                  }));
+                  postNetworkPayload('upcomingCruises', data, url);
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log', message: '📦 Captured Carnival bookings (' + bookingArr.length + ') from ' + url, logType: 'success'
                   }));
@@ -163,15 +220,13 @@ export const AUTH_DETECTION_SCRIPT = `
                 if (data.TierCode || data.PastGuestNumber || data.loyaltyTier || data.vifpNumber || data.loyaltyLevel) {
                   if (!window.capturedPayloads.loyalty) {
                     window.capturedPayloads.loyalty = data;
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'network_payload', endpoint: 'loyalty', data: data, url: url
-                    }));
+                    postNetworkPayload('loyalty', data, url);
                     window.ReactNativeWebView.postMessage(JSON.stringify({
                       type: 'log', message: '📦 Captured Carnival loyalty from profile API', logType: 'success'
                     }));
                   }
                   window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'carnival_user_data', data: data
+                    type: 'carnival_user_data', data: createCarnivalLoyaltyBridgeSummary(data)
                   }));
                 }
               }).catch(function() {});
@@ -181,17 +236,13 @@ export const AUTH_DETECTION_SCRIPT = `
                 if (data && data.Items && Array.isArray(data.Items) && data.Items.length > 0 && data.Items[0].OfferId) {
                   window.capturedPayloads.carnivalVifpOffers = data;
                   window.__carnivalVifpOffers = data;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'network_payload', endpoint: 'carnival_vifp_offers', data: data, url: url
-                  }));
+                  postNetworkPayload('carnival_vifp_offers', data, url);
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log', message: '📦 Captured Carnival VIFP offers (' + data.Items.length + ') from ' + url, logType: 'success'
                   }));
                 }
                 if (data && data.offers && Array.isArray(data.offers) && data.offers.length > 0) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'network_payload', endpoint: 'offers', data: data, url: url
-                  }));
+                  postNetworkPayload('offers', data, url);
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log', message: '📦 Captured Carnival casino offers (' + data.offers.length + ') from ' + url, logType: 'success'
                   }));
@@ -202,9 +253,7 @@ export const AUTH_DETECTION_SCRIPT = `
               clonedResponse.clone().json().then(function(data) {
                 if (data && !window.capturedPayloads.loyalty) {
                   window.capturedPayloads.loyalty = data;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'network_payload', endpoint: 'loyalty', data: data, url: url
-                  }));
+                  postNetworkPayload('loyalty', data, url);
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log', message: '📦 Captured Carnival loyalty API from ' + url, logType: 'success'
                   }));
@@ -219,9 +268,7 @@ export const AUTH_DETECTION_SCRIPT = `
                   if (jsonData.Items && Array.isArray(jsonData.Items) && jsonData.Items.length > 0 && jsonData.Items[0].OfferId && !window.__carnivalVifpOffers) {
                     window.__carnivalVifpOffers = jsonData;
                     window.capturedPayloads.carnivalVifpOffers = jsonData;
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'network_payload', endpoint: 'carnival_vifp_offers', data: jsonData, url: url
-                    }));
+                    postNetworkPayload('carnival_vifp_offers', jsonData, url);
                     window.ReactNativeWebView.postMessage(JSON.stringify({
                       type: 'log', message: '📦 Auto-captured Carnival VIFP offers (' + jsonData.Items.length + ')', logType: 'success'
                     }));
@@ -231,9 +278,7 @@ export const AUTH_DETECTION_SCRIPT = `
                     if (!autoBookings && Array.isArray(jsonData) && jsonData.length > 0 && (jsonData[0].bookingId || jsonData[0].confirmationNumber || jsonData[0].shipName)) autoBookings = jsonData;
                     if (Array.isArray(autoBookings) && autoBookings.length > 0 && (autoBookings[0].bookingId || autoBookings[0].confirmationNumber || autoBookings[0].shipName)) {
                       window.capturedPayloads.upcomingCruises = jsonData;
-                      window.ReactNativeWebView.postMessage(JSON.stringify({
-                        type: 'network_payload', endpoint: 'upcomingCruises', data: jsonData, url: url
-                      }));
+                      postNetworkPayload('upcomingCruises', jsonData, url);
                       window.ReactNativeWebView.postMessage(JSON.stringify({
                         type: 'log', message: '📦 Auto-captured Carnival bookings (' + autoBookings.length + ') from ' + url, logType: 'success'
                       }));
@@ -265,12 +310,7 @@ export const AUTH_DETECTION_SCRIPT = `
             
             if (this._url.includes('/api/casino/casino-offers')) {
               window.capturedPayloads.offers = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'offers',
-                data: data,
-                url: this._url
-              }));
+              postNetworkPayload('offers', data, this._url);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '📦 [XHR] Captured Casino Offers API payload',
@@ -280,12 +320,7 @@ export const AUTH_DETECTION_SCRIPT = `
             
             if (this._url.includes('/profileBookings/enriched') || this._url.includes('/api/account/upcoming-cruises') || this._url.includes('/api/profile/bookings')) {
               window.capturedPayloads.upcomingCruises = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'upcomingCruises',
-                data: data,
-                url: this._url
-              }));
+              postNetworkPayload('upcomingCruises', data, this._url);
               const count = (data?.profileBookings?.length || data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
@@ -296,12 +331,7 @@ export const AUTH_DETECTION_SCRIPT = `
             
             if (this._url.includes('/api/account/courtesy-holds')) {
               window.capturedPayloads.courtesyHolds = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'courtesyHolds',
-                data: data,
-                url: this._url
-              }));
+              postNetworkPayload('courtesyHolds', data, this._url);
               const count = (data?.payload?.sailingInfo?.length || data?.sailingInfo?.length || 0);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
@@ -315,12 +345,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 window.capturedPayloads.voyageEnrichment = {};
               }
               window.capturedPayloads.voyageEnrichment = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'voyageEnrichment',
-                data: data,
-                url: this._url
-              }));
+              postNetworkPayload('voyageEnrichment', data, this._url);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '📦 [XHR] Captured Voyage Enrichment data from ' + this._url,
@@ -330,12 +355,7 @@ export const AUTH_DETECTION_SCRIPT = `
             
             if (this._url.includes('/guestAccounts/loyalty/info') || this._url.includes('/en/celebrity/web/v3/guestAccounts/')) {
               window.capturedPayloads.loyalty = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'loyalty',
-                data: data,
-                url: this._url
-              }));
+              postNetworkPayload('loyalty', data, this._url);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '📦 [XHR] Captured Loyalty API payload (' + this.status + ') from ' + this._url,
@@ -343,12 +363,7 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
             } else if (this.status === 200 && (this._url.includes('/loyalty') || this._url.includes('/guestAccounts/loyalty') || this._url.includes('/loyaltyInformation') || this._url.includes('/loyalty-programs') || this._url.includes('/profile/loyalty') || this._url.includes('/account/info'))) {
               window.capturedPayloads.loyalty = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'loyalty',
-                data: data,
-                url: this._url
-              }));
+              postNetworkPayload('loyalty', data, this._url);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
                 message: '📦 [XHR] Captured Loyalty API payload from ' + this._url,
@@ -361,17 +376,13 @@ export const AUTH_DETECTION_SCRIPT = `
               if (data.Items && Array.isArray(data.Items) && data.Items.length > 0 && data.Items[0].OfferId && !window.__carnivalVifpOffers) {
                 window.__carnivalVifpOffers = data;
                 window.capturedPayloads.carnivalVifpOffers = data;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'network_payload', endpoint: 'carnival_vifp_offers', data: data, url: this._url
-                }));
+                postNetworkPayload('carnival_vifp_offers', data, this._url);
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'log', message: '📦 [XHR] Captured Carnival VIFP offers (' + data.Items.length + ')', logType: 'success'
                 }));
               }
               if (data.offers && Array.isArray(data.offers) && data.offers.length > 0) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'network_payload', endpoint: 'offers', data: data, url: this._url
-                }));
+                postNetworkPayload('offers', data, this._url);
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'log', message: '📦 [XHR] Captured Carnival casino offers (' + data.offers.length + ')', logType: 'success'
                 }));
@@ -381,9 +392,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 if (!xhrBookings && Array.isArray(data) && data.length > 0 && (data[0].bookingId || data[0].confirmationNumber || data[0].shipName)) xhrBookings = data;
                 if (Array.isArray(xhrBookings) && xhrBookings.length > 0 && (xhrBookings[0].bookingId || xhrBookings[0].confirmationNumber || xhrBookings[0].shipName)) {
                   window.capturedPayloads.upcomingCruises = data;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'network_payload', endpoint: 'upcomingCruises', data: data, url: this._url
-                  }));
+                  postNetworkPayload('upcomingCruises', data, this._url);
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log', message: '📦 [XHR] Captured Carnival bookings (' + xhrBookings.length + ')', logType: 'success'
                   }));
@@ -391,11 +400,9 @@ export const AUTH_DETECTION_SCRIPT = `
               }
               if ((data.TierCode || data.PastGuestNumber || data.loyaltyTier) && !window.capturedPayloads.loyalty) {
                 window.capturedPayloads.loyalty = data;
+                postNetworkPayload('loyalty', data, this._url);
                 window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'network_payload', endpoint: 'loyalty', data: data, url: this._url
-                }));
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'carnival_user_data', data: data
+                  type: 'carnival_user_data', data: createCarnivalLoyaltyBridgeSummary(data)
                 }));
               }
             }
