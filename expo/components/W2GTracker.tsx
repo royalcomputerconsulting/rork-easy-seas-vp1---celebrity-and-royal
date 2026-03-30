@@ -110,7 +110,7 @@ export function W2GTracker({ records, onAddRecord, onRemoveRecord }: W2GTrackerP
           </View>
         </View>
 
-        {records.length > 0 && (
+        {records.length > 0 ? (
           <ScrollView style={styles.recordsList} showsVerticalScrollIndicator={false}>
             {records
               .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -131,9 +131,9 @@ export function W2GTracker({ records, onAddRecord, onRemoveRecord }: W2GTrackerP
                   </View>
 
                   <Text style={styles.recordDescription}>{record.description}</Text>
-                  {!!record.cruiseName && (
+                  {record.cruiseName ? (
                     <Text style={styles.recordCruise}>{record.cruiseName}</Text>
-                  )}
+                  ) : null}
 
                   <View style={styles.recordAmounts}>
                     <View style={styles.amountItem}>
@@ -142,7 +142,7 @@ export function W2GTracker({ records, onAddRecord, onRemoveRecord }: W2GTrackerP
                         {formatCurrency(record.amount)}
                       </Text>
                     </View>
-                    {record.withheld > 0 && (
+                    {record.withheld > 0 ? (
                       <>
                         <View style={styles.amountDivider} />
                         <View style={styles.amountItem}>
@@ -152,12 +152,12 @@ export function W2GTracker({ records, onAddRecord, onRemoveRecord }: W2GTrackerP
                           </Text>
                         </View>
                       </>
-                    )}
+                    ) : null}
                   </View>
                 </View>
               ))}
           </ScrollView>
-        )}
+        ) : null}
 
         <TouchableOpacity
           style={styles.addButton}
@@ -168,13 +168,13 @@ export function W2GTracker({ records, onAddRecord, onRemoveRecord }: W2GTrackerP
           <Text style={styles.addButtonText}>Add W-2G Record</Text>
         </TouchableOpacity>
 
-        {records.length === 0 && (
+        {records.length === 0 ? (
           <View style={styles.emptyState}>
             <FileText size={40} color={COLORS.textSecondary} />
             <Text style={styles.emptyText}>No W-2G records yet</Text>
             <Text style={styles.emptySubtext}>Add gambling winnings that require tax reporting</Text>
           </View>
-        )}
+        ) : null}
       </LinearGradient>
 
       <Modal

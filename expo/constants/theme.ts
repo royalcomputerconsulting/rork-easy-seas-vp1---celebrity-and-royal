@@ -196,6 +196,26 @@ export const GRADIENTS = {
   },
 };
 
+export const APP_TEXTURE = {
+  canvasTop: '#F6EEDF',
+  canvasMid: '#EEF3F8',
+  canvasBottom: '#E2EAF3',
+  surface: 'rgba(255,255,255,0.70)',
+  surfaceStrong: 'rgba(255,255,255,0.84)',
+  surfaceMuted: 'rgba(247,250,252,0.62)',
+  border: 'rgba(126, 143, 162, 0.22)',
+  borderStrong: 'rgba(212, 160, 10, 0.28)',
+  goldWash: 'rgba(212,160,10,0.12)',
+  tealWash: 'rgba(0,151,167,0.10)',
+  violetWash: 'rgba(123,45,142,0.08)',
+  ink: '#1A2A3D',
+  inkSoft: '#5B6B80',
+  webBackdrop: '#E6EDF4',
+  frame: '#F8FBFF',
+  tabBar: 'rgba(248, 250, 252, 0.90)',
+  tabBarBorder: 'rgba(126, 143, 162, 0.24)',
+};
+
 export const TYPOGRAPHY = {
   fontFamily: 'System' as const,
   fontFamilyBold: 'System' as const,
@@ -426,78 +446,6 @@ export const SHADOW = {
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 5,
-  },
-};
-
-export const DS = {
-  bg: {
-    page: '#FFFFFF',
-    secondary: '#FAFAFA',
-    card: '#FFFFFF',
-    cardAlt: '#F7F7F7',
-    marble: ['#FCFEFF', '#EEF7FF', '#DDEEFF', '#CAE3F8'] as const,
-    marbleShell: ['#F6FBFF', '#E7F3FF', '#D5E9FD', '#BEDCF7'] as const,
-  },
-  text: {
-    primary: '#111111',
-    secondary: '#666666',
-    tertiary: '#999999',
-    inverse: '#FFFFFF',
-    success: '#3D8B6A',
-    warning: '#9A7A1E',
-    alert: '#A04040',
-  },
-  border: {
-    default: '#E7E7E7',
-    divider: '#ECECEC',
-    focus: '#333333',
-  },
-  accent: {
-    success: '#5DAA8A',
-    warning: '#E1B64B',
-    alert: '#D96B6B',
-  },
-  font: {
-    lobster: 'Lobster_400Regular' as const,
-    system: 'System' as const,
-  },
-  radius: {
-    sm: 10,
-    md: 14,
-    lg: 18,
-    xl: 22,
-    pill: 999,
-  },
-  spacing: {
-    xs: 8,
-    sm: 12,
-    md: 16,
-    lg: 20,
-    xl: 24,
-    xxl: 32,
-  },
-  shadow: {
-    sm: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 4,
-      elevation: 1,
-    },
-    md: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 8,
-      elevation: 2,
-    },
-    lg: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08,
-      shadowRadius: 12,
-      elevation: 3,
-    },
   },
 };
 

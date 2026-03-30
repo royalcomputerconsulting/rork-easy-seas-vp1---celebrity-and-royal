@@ -3,12 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Anchor, Star, TrendingUp, CheckCircle, Clock, Crown } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
-import { createDateFromString, isDateInPast } from '@/lib/date';
+import { createDateFromString } from '@/lib/date';
 import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
 import type { BookedCruise } from '@/types/models';
 
@@ -175,12 +174,11 @@ export function CrownAnchorTimeline({ currentPoints, bookedCruises }: CrownAncho
           <View style={styles.pinnacleAlert}>
             <Crown size={14} color={COLORS.goldAccent} />
             <Text style={styles.pinnacleAlertText}>
-              Threshold crossed on{' '}
+              {'Threshold crossed on '}
               <Text style={{ fontWeight: '700' }}>{pinnacleEntry.cruise.shipName}</Text>
-              {' '}·{' '}
-              {createDateFromString(pinnacleEntry.cruise.sailDate).toLocaleDateString('en-US', {
+              {` · ${createDateFromString(pinnacleEntry.cruise.sailDate).toLocaleDateString('en-US', {
                 month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
-              })}
+              })}`}
             </Text>
           </View>
         )}

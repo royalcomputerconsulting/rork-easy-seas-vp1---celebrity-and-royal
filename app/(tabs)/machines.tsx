@@ -15,7 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download, Crown, RefreshCcw, ExternalLink } from 'lucide-react-native';
+import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
@@ -34,8 +34,8 @@ type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 
 export default function AtlasScreen() {
   const router = useRouter();
-  const entitlement = useEntitlement();
-  const auth = useAuth();
+  useEntitlement();
+  useAuth();
 
 
 
@@ -288,7 +288,7 @@ export default function AtlasScreen() {
   }, [router]);
 
   const handleToggleFavorite = useCallback((id: string) => {
-    toggleFavorite(id);
+    void toggleFavorite(id);
   }, [toggleFavorite]);
 
   const handleExportFavorites = useCallback(async () => {
@@ -580,7 +580,6 @@ export default function AtlasScreen() {
     );
   }, [
     activeFilter,
-    entitlement,
     favoriteMachines.length,
     filteredMachines.length,
     handleClearFilters,
@@ -593,7 +592,6 @@ export default function AtlasScreen() {
     isLoadingIndex,
     myAtlasMachines.length,
     reload,
-    router,
     searchQuery,
     sessions,
     showSessionsSection,

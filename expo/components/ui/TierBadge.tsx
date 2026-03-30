@@ -93,11 +93,11 @@ export const TierBadge = React.memo(function TierBadge({
     return (
       <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
         <View style={styles.container}>
-          {showLabel && (
+          {showLabel ? (
             <Text style={styles.label}>
               {type === 'clubRoyale' ? 'Club Royale' : 'Crown & Anchor'}
             </Text>
-          )}
+          ) : null}
           {content}
         </View>
       </TouchableOpacity>
@@ -106,11 +106,11 @@ export const TierBadge = React.memo(function TierBadge({
 
   return (
     <View style={styles.container}>
-      {showLabel && (
+      {showLabel ? (
         <Text style={styles.label}>
           {type === 'clubRoyale' ? 'Club Royale' : 'Crown & Anchor'}
         </Text>
-      )}
+      ) : null}
       {content}
     </View>
   );

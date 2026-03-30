@@ -24,7 +24,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-react-native';
-import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
+import { BORDER_RADIUS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useCoreData } from '@/state/CoreDataProvider';

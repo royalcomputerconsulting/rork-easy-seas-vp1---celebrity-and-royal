@@ -21,7 +21,6 @@ import {
   BarChart3,
   Zap,
 } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { formatNumber } from '@/lib/format';
@@ -47,7 +46,7 @@ interface PeriodStats {
 }
 
 export const PPHGoalsCard = React.memo(function PPHGoalsCard({
-  analytics,
+  analytics: _analytics,
   sessions,
   targetPPH,
   onTargetChange,
@@ -165,7 +164,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
     if (!isNaN(newTarget) && newTarget > 0) {
       onTargetChange(newTarget);
       if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
     setIsEditingTarget(false);
@@ -173,7 +172,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
 
   const handleSelectPeriod = useCallback((period: TimePeriod) => {
     if (Platform.OS !== 'web') {
-      Haptics.selectionAsync();
+      void Haptics.selectionAsync();
     }
     setSelectedPeriod(period);
   }, []);

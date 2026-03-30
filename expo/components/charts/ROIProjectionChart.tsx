@@ -223,18 +223,18 @@ export function ROIProjectionChart({
         {actualSavings > 0 && (
           <View style={styles.summaryInfo}>
             <Text style={styles.summaryText}>
-              You have saved{' '}
+              {'You have saved '}
               <Text style={{ fontWeight: '700' as const, color: COLORS.success }}>
                 {formatCurrency(actualSavings)}
               </Text>
-              <Text>{' '}off retail prices.</Text>
+              {' off retail prices.'}
               {pointsValue > 0 ? (
                 <Text>
-                  {' '}Your {totalPointsEarned?.toLocaleString() ?? 0} points are worth{' '}
+                  {` Your ${totalPointsEarned?.toLocaleString() ?? 0} points are worth `}
                   <Text style={{ fontWeight: '700' as const, color: COLORS.goldAccent }}>
                     {formatCurrency(pointsValue)}
                   </Text>
-                  <Text>{' '}at $5/point machine play.</Text>
+                  {' at $5/point machine play.'}
                 </Text>
               ) : null}
             </Text>
@@ -244,11 +244,11 @@ export function ROIProjectionChart({
         {actualSavings <= 0 && actualSpent > 0 && (
           <View style={[styles.summaryInfo, { borderLeftColor: COLORS.warning, backgroundColor: '#FEF3C7' }]}>
             <Text style={styles.summaryText}>
-              You paid{' '}
+              {'You paid '}
               <Text style={{ fontWeight: '700' as const, color: COLORS.error }}>
                 {formatCurrency(Math.abs(actualSavings))}
               </Text>
-              {' '}more than retail value. Consider looking for better offers.
+              {' more than retail value. Consider looking for better offers.'}
             </Text>
           </View>
         )}

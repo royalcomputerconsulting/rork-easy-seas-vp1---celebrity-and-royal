@@ -144,16 +144,16 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     }
   }, [filters.departments, updateFilters]);
 
-  const allRoyalShips = useMemo(() => getAllShipNames().sort(), []);
+  const allRoyalShips = useMemo(() => getAllShipNames().sort((a, b) => a.localeCompare(b)), []);
   const sailingShips = useMemo(() => sailings.map(s => s.shipName), [sailings]);
   const uniqueShips = useMemo(
-    () => Array.from(new Set([...allRoyalShips, ...sailingShips])).sort(),
+    () => Array.from(new Set([...allRoyalShips, ...sailingShips])).sort((a, b) => a.localeCompare(b)),
     [allRoyalShips, sailingShips]
   );
 
   const uniqueDepts = useMemo(() => {
     const entryDepts = entries.map(e => e.department);
-    return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort();
+    return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort((a, b) => a.localeCompare(b));
   }, [entries]);
 
   const showMockData = stats.crewMemberCount === 0 && !statsLoading;

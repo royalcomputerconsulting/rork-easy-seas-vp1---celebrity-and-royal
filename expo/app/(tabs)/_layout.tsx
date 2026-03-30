@@ -10,8 +10,13 @@ import {
 } from "lucide-react-native";
 import React, { useCallback } from "react";
 import { Platform, View, StyleSheet } from "react-native";
-import { COLORS } from '../../constants/theme';
+import { APP_TEXTURE } from '../../constants/theme';
 import * as Haptics from 'expo-haptics';
+
+const TAB_BG = APP_TEXTURE.tabBar;
+const ACTIVE_COLOR = '#1E3A5F';
+const INACTIVE_COLOR = '#9CA3AF';
+
 export default function TabLayout() {
   const handleTabPress = useCallback(() => {
     if (Platform.OS !== 'web') {
@@ -26,25 +31,25 @@ export default function TabLayout() {
         tabPress: handleTabPress,
       }}
       screenOptions={{
-        tabBarActiveTintColor: COLORS.navyDeep,
-        tabBarInactiveTintColor: COLORS.textDarkGrey,
+        tabBarActiveTintColor: ACTIVE_COLOR,
+        tabBarInactiveTintColor: INACTIVE_COLOR,
         tabBarShowLabel: true,
         tabBarStyle: {
           position: 'absolute',
-          backgroundColor: COLORS.white,
+          backgroundColor: TAB_BG,
           borderTopWidth: 1,
-          borderTopColor: COLORS.borderLight,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
+          borderTopColor: APP_TEXTURE.tabBarBorder,
+          elevation: 10,
+          shadowColor: '#10223A',
+          shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.08,
-          shadowRadius: 8,
+          shadowRadius: 14,
         },
         tabBarLabelStyle: {
           fontSize: 9,
-          fontWeight: '600' as const,
-          marginTop: 2,
-          letterSpacing: 0,
+          fontWeight: '700' as const,
+          marginTop: 1,
+          letterSpacing: 0.3,
         },
         tabBarItemStyle: {
           paddingHorizontal: 0,
@@ -142,11 +147,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: 44,
-    height: 32,
+    height: 30,
     borderRadius: 8,
-    backgroundColor: COLORS.white,
+    backgroundColor: 'transparent',
   },
   activeIconContainer: {
-    backgroundColor: COLORS.gold,
+    backgroundColor: APP_TEXTURE.goldWash,
+    borderRadius: 8,
   },
 });

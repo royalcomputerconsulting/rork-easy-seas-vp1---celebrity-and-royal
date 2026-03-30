@@ -110,7 +110,7 @@ export const SessionsSummaryCard = React.memo(function SessionsSummaryCard({
             <Text style={[styles.metricValue, { color: pphStatus.color }]}>
               {analytics.pointsPerHour.toFixed(1)}
             </Text>
-            {recentTrend.direction !== 'stable' && (
+            {recentTrend.direction !== 'stable' ? (
               <View style={styles.trendBadge}>
                 {recentTrend.direction === 'up' ? (
                   <TrendingUp size={10} color="#10B981" />
@@ -124,7 +124,7 @@ export const SessionsSummaryCard = React.memo(function SessionsSummaryCard({
                   {recentTrend.change.toFixed(0)}%
                 </Text>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
         
@@ -202,7 +202,7 @@ export const SessionsSummaryCard = React.memo(function SessionsSummaryCard({
           </Text>
         </View>
 
-        {bestSession && (
+        {bestSession ? (
           <>
             <View style={styles.highlightDivider} />
             <View style={styles.highlightSection}>
@@ -241,7 +241,7 @@ export const SessionsSummaryCard = React.memo(function SessionsSummaryCard({
               </View>
             </View>
           </>
-        )}
+        ) : null}
       </View>
     </View>
   );

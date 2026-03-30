@@ -75,7 +75,6 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     updateRecognitionEntry,
     deleteRecognitionEntry,
     syncFromCSVLocally,
-    importCrewManifestText,
   } = useCrewRecognition();
 
   const { bookedCruises } = useCoreData();
@@ -206,7 +205,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         </TouchableOpacity>
       </View>
 
-      {syncProgress && (
+      {syncProgress ? (
         <View style={styles.syncProgressContainer}>
           <View style={styles.syncProgressBar}>
             <View
@@ -220,7 +219,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
             {`Processing ${syncProgress.current} of ${syncProgress.total} rows...`}
           </Text>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.statsRow}>
         {statsLoading ? (
@@ -256,11 +255,11 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
             placeholder="Search crew name..."
             placeholderTextColor={COLORS.textTertiary}
           />
-          {filters.search !== '' && (
+          {filters.search !== '' ? (
             <TouchableOpacity onPress={() => updateFilters({ search: '' })}>
               <X size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
         <TouchableOpacity
           style={[styles.filterButton, showFilters && styles.filterButtonActive]}
@@ -273,7 +272,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         </TouchableOpacity>
       </View>
 
-      {showFilters && (
+      {showFilters ? (
         <View style={styles.filtersPanel}>
           <View style={styles.filterListSection}>
             <Text style={styles.filterLabel}>
@@ -290,7 +289,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                   onPress={() => updateFilters({ shipNames: [] })}
                 >
                   <View style={[styles.filterCheckbox, filters.shipNames.length === 0 && styles.filterCheckboxActive]}>
-                    {filters.shipNames.length === 0 && <Check size={12} color="#fff" />}
+                    {filters.shipNames.length === 0 ? <Check size={12} color="#fff" /> : null}
                   </View>
                   <Text style={[styles.filterRowText, filters.shipNames.length === 0 && styles.filterRowTextActive]}>
                     All Ships
@@ -305,7 +304,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                       onPress={() => toggleShipFilter(ship)}
                     >
                       <View style={[styles.filterCheckbox, isSelected && styles.filterCheckboxActive]}>
-                        {isSelected && <Check size={12} color="#fff" />}
+                        {isSelected ? <Check size={12} color="#fff" /> : null}
                       </View>
                       <Text style={[styles.filterRowText, isSelected && styles.filterRowTextActive]} numberOfLines={1}>
                         {ship}
@@ -332,7 +331,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                   onPress={() => updateFilters({ departments: [] })}
                 >
                   <View style={[styles.filterCheckbox, filters.departments.length === 0 && styles.filterCheckboxActive]}>
-                    {filters.departments.length === 0 && <Check size={12} color="#fff" />}
+                    {filters.departments.length === 0 ? <Check size={12} color="#fff" /> : null}
                   </View>
                   <Text style={[styles.filterRowText, filters.departments.length === 0 && styles.filterRowTextActive]}>
                     All Depts
@@ -347,7 +346,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                       onPress={() => toggleDeptFilter(dept)}
                     >
                       <View style={[styles.filterCheckbox, isSelected && styles.filterCheckboxActive]}>
-                        {isSelected && <Check size={12} color="#fff" />}
+                        {isSelected ? <Check size={12} color="#fff" /> : null}
                       </View>
                       <Text style={[styles.filterRowText, isSelected && styles.filterRowTextActive]} numberOfLines={1}>
                         {dept}
@@ -359,14 +358,14 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
             </View>
           </View>
 
-          {activeFilterCount > 0 && (
+          {activeFilterCount > 0 ? (
             <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
               <X size={14} color="#0369A1" />
               <Text style={styles.resetButtonText}>Clear all filters</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
-      )}
+      ) : null}
 
       <View style={styles.resultsContainer}>
         <Text style={styles.resultsHeader}>
@@ -443,7 +442,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                         {entry.sailEndDate && entry.sailEndDate !== entry.sailStartDate ? ` – ${entry.sailEndDate}` : ''}
                       </Text>
                     </View>
-                    {entry.crewNotes ? (
+                    {entry.crewNotes && String(entry.crewNotes).trim() ? (
                       <Text style={styles.crewCardNotes} numberOfLines={1}>{String(entry.crewNotes)}</Text>
                     ) : null}
                   </View>
@@ -458,10 +457,6 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         onClose={() => setShowAddModal(false)}
         onSubmit={async (data) => {
           await createCrewMember({ ...data, department: data.department as Department, userId });
-        }}
-        onImportManifest={async (manifestText) => {
-          const result = await importCrewManifestText(manifestText);
-          Alert.alert('Success', `Imported ${result.importedCount} crew entries from ${result.sailingsCount} sailing${result.sailingsCount === 1 ? '' : 's'}.`);
         }}
         sailings={sailings}
         bookedCruises={bookedCruises}

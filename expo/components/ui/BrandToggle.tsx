@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
-import { SETTINGS_GLASS_THEME } from '@/constants/settingsGlassTheme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 
 export type BrandType = 'royal' | 'celebrity' | 'silversea' | 'carnival';
 
@@ -84,9 +83,6 @@ export function BrandToggle({ activeBrand, onToggle, showSilversea = true, showC
               styles.toggleButton,
               styles.rightButton,
               activeBrand === 'carnival' && styles.carnivalActiveButton,
-              activeBrand !== 'carnival' && activeBrand === 'royal' && styles.activeButton,
-              activeBrand !== 'carnival' && activeBrand === 'celebrity' && styles.activeButton,
-              activeBrand !== 'carnival' && activeBrand === 'silversea' && styles.activeButton,
             ]}
             onPress={() => onToggle('carnival')}
             activeOpacity={0.7}
@@ -114,11 +110,11 @@ const styles = StyleSheet.create({
   },
   toggleContainer: {
     flexDirection: 'row',
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceMuted,
+    backgroundColor: COLORS.bgSecondary,
     borderRadius: BORDER_RADIUS.lg,
     padding: 4,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: COLORS.borderLight,
   },
   toggleButton: {
     flex: 1,
@@ -138,19 +134,19 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   activeButton: {
-    backgroundColor: SETTINGS_GLASS_THEME.buttonPrimaryBackground,
+    backgroundColor: COLORS.textNavy,
   },
   carnivalActiveButton: {
     backgroundColor: '#A06B18',
     borderWidth: 1,
-    borderColor: 'rgba(255, 239, 194, 0.4)',
+    borderColor: 'rgba(255, 233, 170, 0.35)',
   },
   toggleText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: COLORS.textDarkGrey,
   },
   activeText: {
-    color: SETTINGS_GLASS_THEME.buttonPrimaryText,
+    color: COLORS.white,
   },
 });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { Save, CheckCircle, AlertCircle, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
 import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
@@ -33,7 +33,6 @@ interface UserProfileData {
   carnivalVifpTier?: string;
   carnivalPlayersClubTier?: string;
   carnivalPlayersClubPoints?: number;
-  birthdate?: string;
 }
 
 interface EnrichmentData {
@@ -89,7 +88,6 @@ export function UserProfileCard({
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
   const [formData, setFormData] = useState<UserProfileData>(currentValues);
-  const [birthdateInput, setBirthdateInput] = useState<string>(currentValues.birthdate || '');
   const [activeBrand, setActiveBrand] = useState<BrandType>(
     (currentValues.preferredBrand as BrandType) || 'royal'
   );
@@ -97,7 +95,6 @@ export function UserProfileCard({
 
   useEffect(() => {
     setFormData(currentValues);
-    setBirthdateInput(currentValues.birthdate || '');
     setActiveBrand((currentValues.preferredBrand as BrandType) || 'royal');
   }, [currentValues]);
 
@@ -115,7 +112,6 @@ export function UserProfileCard({
   const calculatedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[calculatedCelebrityTier];
 
   const handleSave = () => {
-    const trimmedBirthdate = birthdateInput.trim();
     onSave({
       ...formData,
       clubRoyaleTier: calculatedTier,
@@ -123,7 +119,6 @@ export function UserProfileCard({
       celebrityBlueChipTier: calculatedCelebrityTier,
       celebrityCaptainsClubLevel: calculatedCelebrityLevel,
       preferredBrand: activeBrand,
-      birthdate: trimmedBirthdate || undefined,
     });
     setIsModalVisible(false);
   };
@@ -158,9 +153,9 @@ export function UserProfileCard({
       ]}
     >
       {hasData ? (
-        <CheckCircle size={10} color={isCarnivalTheme ? '#6E4A12' : '#111111'} />
+        <CheckCircle size={10} color={isCarnivalTheme ? '#FFF7DB' : COLORS.white} />
       ) : (
-        <AlertCircle size={10} color={isCarnivalTheme ? 'rgba(110,74,18,0.82)' : 'rgba(17,17,17,0.7)'} />
+        <AlertCircle size={10} color={isCarnivalTheme ? 'rgba(255,247,219,0.82)' : 'rgba(255,255,255,0.7)'} />
       )}
       <Text style={[styles.enrichmentBadgeText, isCarnivalTheme && styles.carnivalEnrichmentBadgeText]}>
         {hasData ? 'Synced' : 'Manual'}
@@ -186,15 +181,15 @@ export function UserProfileCard({
   const getBrandIcon = () => {
     switch (activeBrand) {
       case 'royal':
-        return <Anchor size={20} color={COLORS.navyDeep} />;
+        return <Anchor size={20} color={COLORS.white} />;
       case 'celebrity':
-        return <Star size={20} color={COLORS.navyDeep} />;
+        return <Star size={20} color={COLORS.white} />;
       case 'silversea':
-        return <Ship size={20} color={COLORS.navyDeep} />;
+        return <Ship size={20} color={COLORS.white} />;
       case 'carnival':
-        return <Ship size={20} color={COLORS.navyDeep} />;
+        return <Ship size={20} color={COLORS.white} />;
       default:
-        return <Anchor size={20} color={COLORS.navyDeep} />;
+        return <Anchor size={20} color={COLORS.white} />;
     }
   };
 
@@ -213,7 +208,7 @@ export function UserProfileCard({
     }
   };
 
-  const _getBrandGradient = () => {
+  const getBrandGradient = () => {
     switch (activeBrand) {
       case 'royal':
         return ['#0369A1', '#0284C7'] as [string, string];
@@ -222,7 +217,7 @@ export function UserProfileCard({
       case 'silversea':
         return ['#78350F', '#92400E'] as [string, string];
       case 'carnival':
-        return ['#8A5A14', '#E1B24D'] as [string, string];
+        return ['#7C5A16', '#D4A63A'] as [string, string];
       default:
         return ['#0369A1', '#0284C7'] as [string, string];
     }
@@ -302,37 +297,19 @@ export function UserProfileCard({
     return (
       <View style={styles.valuesGrid}>
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
-        {renderValueCard('Name', currentValues.name, '#241605', true)}
-        {renderValueCard('VIFP Club #', enrichmentData?.carnivalVifpNumber || currentValues.carnivalVifpNumber, '#241605', true)}
-        {renderValueCard('VIFP Tier', enrichmentData?.carnivalVifpTier || currentValues.carnivalVifpTier, '#C2410C')}
-        {renderValueCard('Players Club Tier', enrichmentData?.carnivalPlayersClubTier || currentValues.carnivalPlayersClubTier, '#A16207')}
-        {renderValueCard('Players Club Points', enrichmentData?.carnivalPlayersClubPoints ?? currentValues.carnivalPlayersClubPoints, '#B45309')}
+        {renderValueCard('Name', currentValues.name, '#FFF7DB', true)}
+        {renderValueCard('VIFP Club #', enrichmentData?.carnivalVifpNumber || currentValues.carnivalVifpNumber, '#FFF7DB', true)}
+        {renderValueCard('VIFP Tier', enrichmentData?.carnivalVifpTier || currentValues.carnivalVifpTier, '#F87171')}
+        {renderValueCard('Players Club Tier', enrichmentData?.carnivalPlayersClubTier || currentValues.carnivalPlayersClubTier, '#F6D878')}
+        {renderValueCard('Players Club Points', enrichmentData?.carnivalPlayersClubPoints ?? currentValues.carnivalPlayersClubPoints, '#FFD166')}
       </View>
     );
   };
-
-  const birthdateSectionJSX = (
-    <View style={styles.inputGroup}>
-      <Text style={[styles.inputLabel, { color: '#7C3AED' }]}>🎂 Birthdate (for Luck Forecast)</Text>
-      <TextInput
-        style={styles.input}
-        value={birthdateInput}
-        onChangeText={setBirthdateInput}
-        placeholder="MM/DD/YYYY or YYYY-MM-DD"
-        placeholderTextColor="#9CA3AF"
-        keyboardType="numbers-and-punctuation"
-      />
-      <Text style={styles.birthdateHint}>
-        Used to calculate personalized Chinese &amp; Western zodiac luck scores on your calendar
-      </Text>
-    </View>
-  );
 
   const renderEditForm = () => {
     if (activeBrand === 'royal') {
       return (
         <>
-          {birthdateSectionJSX}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Name</Text>
             <TextInput
@@ -599,9 +576,7 @@ export function UserProfileCard({
   return (
     <View style={[styles.container, isCarnivalTheme && styles.carnivalContainer]}>
       <LinearGradient
-        colors={isCarnivalTheme ? ['#FFF8E6', '#F4DE9D', '#E2BC5A'] : ['#FFFFFF', '#F2F8FF', '#F8FCFF']}
-        start={{ x: 0.02, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        colors={getBrandGradient()}
         style={[styles.header, isCarnivalTheme && styles.carnivalHeader]}
       >
         <View style={styles.headerContent}>
@@ -641,8 +616,8 @@ export function UserProfileCard({
           onPress={() => setIsModalVisible(true)}
           activeOpacity={0.7}
         >
-          <Edit2 size={16} color={isCarnivalTheme ? '#8A5A14' : COLORS.navyDeep} />
-          <Text style={[styles.editButtonText, { color: isCarnivalTheme ? '#8A5A14' : COLORS.navyDeep }]}>Edit Profile</Text>
+          <Edit2 size={16} color={getBrandGradient()[0]} />
+          <Text style={[styles.editButtonText, { color: getBrandGradient()[0] }]}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
 
@@ -657,8 +632,8 @@ export function UserProfileCard({
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <View style={styles.modalHeaderLeft}>
-                  <User size={20} color={isCarnivalTheme ? '#8A5A14' : COLORS.navyDeep} />
-                  <Text style={[styles.modalTitle, { color: isCarnivalTheme ? '#8A5A14' : COLORS.navyDeep }]}>
+                  <User size={20} color={getBrandGradient()[0]} />
+                  <Text style={[styles.modalTitle, { color: getBrandGradient()[0] }]}>
                     Edit {getBrandTitle()}
                   </Text>
                 </View>
@@ -688,7 +663,7 @@ export function UserProfileCard({
                   testID="profile-modal-save-top-button"
                 >
                   <LinearGradient
-                    colors={isCarnivalTheme ? ['#8A5A14', '#E1B24D'] : ['#111111', '#333333']}
+                    colors={getBrandGradient()}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.modalSaveButtonGradient}
@@ -718,12 +693,16 @@ export function UserProfileCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(255,255,255,0.84)',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(223, 214, 206, 0.92)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
   },
   header: {
     padding: SPACING.sm,
@@ -741,11 +720,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.82)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(223, 214, 206, 0.92)',
   },
   headerText: {
     gap: 2,
@@ -753,11 +730,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#111111',
+    color: COLORS.white,
   },
   headerSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#666666',
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   enrichmentBadge: {
     flexDirection: 'row',
@@ -768,15 +745,15 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.xs,
   },
   enrichmentBadgeActive: {
-    backgroundColor: 'rgba(17, 17, 17, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   enrichmentBadgeInactive: {
-    backgroundColor: 'rgba(17, 17, 17, 0.08)',
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
   },
   enrichmentBadgeText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#111111',
+    color: COLORS.white,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.3,
   },
@@ -796,25 +773,27 @@ const styles = StyleSheet.create({
   valueCard: {
     flex: 1,
     minWidth: '47%',
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(223, 214, 206, 0.92)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   valueCardWide: {
     minWidth: '96%',
   },
   valueCardLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: 4,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
   },
   valueCardValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   syncTimestampContainer: {
     paddingHorizontal: SPACING.sm,
@@ -822,7 +801,7 @@ const styles = StyleSheet.create({
   },
   syncTimestampText: {
     fontSize: 10,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.4)',
     fontStyle: 'italic' as const,
     textAlign: 'center',
   },
@@ -834,78 +813,81 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: 'rgba(255,226,143,0.1)',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(223, 214, 206, 0.92)',
+    borderColor: 'rgba(255,226,143,0.35)',
     borderStyle: 'dashed',
     gap: SPACING.xs,
   },
   editButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#FFE28F',
   },
   carnivalContainer: {
-    backgroundColor: 'rgba(255, 249, 233, 0.92)',
-    borderColor: 'rgba(214, 171, 71, 0.48)',
-    shadowColor: '#D6AB47',
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
-    elevation: 6,
+    backgroundColor: '#16110A',
+    borderColor: 'rgba(233, 196, 106, 0.3)',
+    shadowColor: '#D4A63A',
+    shadowOpacity: 0.18,
   },
   carnivalHeader: {
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(161, 98, 7, 0.1)',
+    borderBottomColor: 'rgba(255, 239, 194, 0.16)',
   },
   carnivalHeaderIcon: {
-    backgroundColor: 'rgba(255, 248, 230, 0.94)',
-    borderColor: 'rgba(214, 171, 71, 0.42)',
+    backgroundColor: 'rgba(255, 247, 219, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 239, 194, 0.24)',
   },
   carnivalHeaderTitle: {
-    color: '#4A2F0D',
+    color: '#FFF7DB',
   },
   carnivalHeaderSubtitle: {
-    color: '#7C5A1B',
+    color: 'rgba(255, 244, 214, 0.82)',
   },
   carnivalEnrichmentBadge: {
     borderWidth: 1,
-    borderColor: 'rgba(161, 98, 7, 0.14)',
+    borderColor: 'rgba(255, 239, 194, 0.22)',
   },
   carnivalEnrichmentBadgeActive: {
-    backgroundColor: 'rgba(255, 245, 214, 0.88)',
+    backgroundColor: 'rgba(255, 247, 219, 0.16)',
   },
   carnivalEnrichmentBadgeInactive: {
-    backgroundColor: 'rgba(255, 248, 230, 0.72)',
+    backgroundColor: 'rgba(255, 247, 219, 0.08)',
   },
   carnivalEnrichmentBadgeText: {
-    color: '#6E4A12',
+    color: '#FFF7DB',
   },
   carnivalBrandToggleContainer: {
-    backgroundColor: 'rgba(255, 245, 214, 0.54)',
+    backgroundColor: 'rgba(255, 224, 151, 0.05)',
   },
   carnivalCurrentValuesSection: {
-    backgroundColor: 'rgba(255, 250, 239, 0.48)',
+    backgroundColor: 'rgba(255, 224, 151, 0.03)',
   },
   carnivalValueCard: {
-    backgroundColor: 'rgba(255, 252, 245, 0.86)',
-    borderColor: 'rgba(214, 171, 71, 0.34)',
+    backgroundColor: 'rgba(255, 248, 224, 0.06)',
+    borderColor: 'rgba(233, 196, 106, 0.22)',
+    shadowColor: '#F2C96D',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
   },
   carnivalValueCardLabel: {
-    color: '#8A5A14',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.45,
+    color: 'rgba(255, 228, 167, 0.72)',
   },
   carnivalValueCardValue: {
-    color: '#2B1B06',
+    color: '#FFF7DB',
   },
   carnivalSyncTimestampText: {
-    color: '#8A5A14',
+    color: 'rgba(255, 236, 181, 0.62)',
   },
   carnivalEditButton: {
-    backgroundColor: 'rgba(255, 247, 224, 0.88)',
-    borderColor: 'rgba(214, 171, 71, 0.46)',
+    backgroundColor: 'rgba(255, 233, 170, 0.08)',
+    borderColor: 'rgba(233, 196, 106, 0.28)',
   },
   modalOverlay: {
     flex: 1,
@@ -915,11 +897,13 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
   },
   modalContainer: {
-    backgroundColor: COLORS.white,
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.xl,
     width: '100%',
     maxWidth: 500,
     maxHeight: '90%',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -927,7 +911,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   modalHeaderLeft: {
     flexDirection: 'row',
@@ -937,6 +921,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
   },
   modalCloseButton: {
     padding: SPACING.xs,
@@ -950,18 +935,18 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#111111',
+    color: 'rgba(255,255,255,0.65)',
     marginBottom: SPACING.xs,
   },
   input: {
-    backgroundColor: '#FAFAFA',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
-    borderColor: '#E7E7E7',
+    borderColor: 'rgba(255,255,255,0.15)',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   levelHint: {
     flexDirection: 'row',
@@ -969,7 +954,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
-    backgroundColor: 'rgba(17, 17, 17, 0.05)',
+    backgroundColor: 'rgba(168,198,255,0.1)',
     borderRadius: BORDER_RADIUS.sm,
     gap: 6,
   },
@@ -980,7 +965,7 @@ const styles = StyleSheet.create({
   },
   levelHintText: {
     fontSize: 10,
-    color: '#666666',
+    color: '#A8C6FF',
   },
   levelHintLevel: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
@@ -992,20 +977,22 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: COLORS.white,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#0D1E33',
   },
   modalCancelButton: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     paddingVertical: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   modalCancelText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.6)',
   },
   modalSaveButton: {
     flex: 1,
@@ -1023,11 +1010,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.white,
-  },
-  birthdateHint: {
-    fontSize: 10,
-    color: '#7C3AED',
-    marginTop: 4,
-    fontStyle: 'italic' as const,
   },
 });

@@ -237,7 +237,7 @@ function VarianceSection({ analytics }: { analytics: SessionAnalytics }) {
         </View>
       </View>
 
-      {streakData.currentStreak > 0 && (
+      {streakData.currentStreak > 0 ? (
         <View style={[
           styles.currentStreakBanner,
           { backgroundColor: streakData.currentStreakType === 'win' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)' }
@@ -250,7 +250,7 @@ function VarianceSection({ analytics }: { analytics: SessionAnalytics }) {
             Current {streakData.currentStreakType === 'win' ? 'Win' : 'Loss'} Streak: {streakData.currentStreak} sessions
           </Text>
         </View>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -304,7 +304,7 @@ function WinRateSection({ analytics }: { analytics: SessionAnalytics }) {
         </View>
       </View>
 
-      {topMachines.length > 0 && (
+      {topMachines.length > 0 ? (
         <View style={styles.machineBreakdown}>
           <Text style={styles.machineTitle}>Performance by Game</Text>
           {topMachines.map(([machineType, data]) => {
@@ -344,16 +344,16 @@ function WinRateSection({ analytics }: { analytics: SessionAnalytics }) {
                   </View>
                 </View>
                 
-                {isBeatingHouse && (
+                {isBeatingHouse ? (
                   <View style={styles.beatingHouseBadge}>
                     <Zap size={10} color="#F59E0B" />
                   </View>
-                )}
+                ) : null}
               </View>
             );
           })}
         </View>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -435,7 +435,7 @@ function PointsEfficiencySection({ analytics, cruiseMetrics }: { analytics: Sess
   );
 }
 
-export function CasinoIntelligenceCard({ analytics, onViewDetails, completedCruises }: CasinoIntelligenceCardProps) {
+export function CasinoIntelligenceCard({ analytics, onViewDetails: _onViewDetails, completedCruises }: CasinoIntelligenceCardProps) {
   const cruiseMetrics = useMemo((): CruiseBasedMetrics | undefined => {
     if (!completedCruises || completedCruises.length === 0) return undefined;
     
@@ -526,7 +526,7 @@ export function CasinoIntelligenceCard({ analytics, onViewDetails, completedCrui
         <WinRateSection analytics={analytics} />
         <PointsEfficiencySection analytics={analytics} cruiseMetrics={cruiseMetrics} />
         
-        {cruiseMetrics && (
+        {cruiseMetrics ? (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={[styles.sectionIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
@@ -565,7 +565,7 @@ export function CasinoIntelligenceCard({ analytics, onViewDetails, completedCrui
               </View>
             </View>
           </View>
-        )}
+        ) : null}
       </View>
     </View>
   );

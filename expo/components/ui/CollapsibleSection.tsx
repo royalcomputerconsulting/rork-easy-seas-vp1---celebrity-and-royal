@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,10 @@ import {
   Platform,
   UIManager,
 } from 'react-native';
-import { ChevronDown } from 'lucide-react-native';
+import { ChevronUp } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SPACING } from '@/constants/theme';
-import { DS } from '@/constants/theme';
+import { SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -24,7 +24,7 @@ interface CollapsibleSectionProps {
   icon?: React.ReactNode;
   children: React.ReactNode;
   defaultExpanded?: boolean;
-  isExpanded?: boolean;
+  expanded?: boolean;
   headerStyle?: 'default' | 'compact';
   showBorder?: boolean;
   onToggle?: (expanded: boolean) => void;
@@ -36,18 +36,26 @@ export function CollapsibleSection({
   icon,
   children,
   defaultExpanded = true,
-  isExpanded: controlledExpanded,
+  expanded,
   headerStyle = 'default',
   showBorder = true,
   onToggle,
 }: CollapsibleSectionProps) {
-  const isControlled = controlledExpanded !== undefined;
-  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
-  const expanded = isControlled ? controlledExpanded : internalExpanded;
-  const rotateAnim = useRef(new Animated.Value(defaultExpanded ? 1 : 0)).current;
+  const [internalExpanded, setInternalExpanded] = useState<boolean>(defaultExpanded);
+  const isControlled = typeof expanded === 'boolean';
+  const currentExpanded = expanded ?? internalExpanded;
+  const rotateAnim = useRef(new Animated.Value(currentExpanded ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(rotateAnim, {
+      toValue: currentExpanded ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [currentExpanded, rotateAnim]);
 
   const toggleExpanded = useCallback(() => {
-    const newExpanded = !expanded;
+    const newExpanded = !currentExpanded;
 
     LayoutAnimation.configureNext({
       duration: 200,
@@ -56,29 +64,26 @@ export function CollapsibleSection({
       },
     });
 
-    Animated.timing(rotateAnim, {
-      toValue: newExpanded ? 1 : 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-
     if (!isControlled) {
       setInternalExpanded(newExpanded);
     }
+
     onToggle?.(newExpanded);
     console.log('[CollapsibleSection] Toggled:', title, newExpanded);
-  }, [expanded, rotateAnim, title, onToggle, isControlled]);
+  }, [currentExpanded, isControlled, onToggle, title]);
 
   const iconRotation = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '180deg'],
   });
 
+  const marbleConfig = MARBLE_TEXTURES.navyBlue;
+
   return (
     <View style={[styles.container, showBorder && styles.containerBorder]}>
       <LinearGradient
-        colors={['#FFFFFF', '#F8F8F8', '#FAFAFA']}
-        locations={[0, 0.5, 1]}
+        colors={marbleConfig.gradientColors as unknown as [string, string, ...string[]]}
+        locations={marbleConfig.gradientLocations}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerBackground}
@@ -100,14 +105,14 @@ export function CollapsibleSection({
               {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
             </View>
           </View>
-
+          
           <Animated.View style={[styles.chevronContainer, { transform: [{ rotate: iconRotation }] }]}>
-            <ChevronDown size={16} color={DS.text.secondary} />
+            <ChevronUp size={18} color="#FFFFFF" />
           </Animated.View>
         </TouchableOpacity>
       </LinearGradient>
-
-      {expanded && <View style={styles.content}>{children}</View>}
+      
+      {currentExpanded && <View style={styles.content}>{children}</View>}
     </View>
   );
 }
@@ -115,30 +120,24 @@ export function CollapsibleSection({
 const styles = StyleSheet.create({
   container: {
     marginBottom: SPACING.md,
-    borderRadius: DS.radius.xl,
+    borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
-    backgroundColor: DS.bg.card,
   },
   containerBorder: {
-    borderWidth: 1,
-    borderColor: DS.border.default,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
   },
   headerBackground: {
-    borderTopLeftRadius: DS.radius.xl,
-    borderTopRightRadius: DS.radius.xl,
+    borderTopLeftRadius: BORDER_RADIUS.lg,
+    borderTopRightRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: DS.spacing.md,
-    paddingHorizontal: DS.spacing.md,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
   },
   headerCompact: {
     paddingVertical: SPACING.sm,
@@ -150,10 +149,10 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     marginRight: SPACING.sm,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: DS.text.primary,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -161,32 +160,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '800' as const,
-    color: DS.text.primary,
-    letterSpacing: 0.2,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   titleCompact: {
-    fontSize: 18,
+    fontSize: TYPOGRAPHY.fontSizeSM,
   },
   subtitle: {
-    fontSize: 13,
-    color: DS.text.secondary,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
-    fontFamily: DS.font.system,
-    fontWeight: '500' as const,
   },
   content: {
     paddingTop: SPACING.xs,
-    backgroundColor: DS.bg.card,
   },
   chevronContainer: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#F0F0F0',
-    borderWidth: 1,
-    borderColor: DS.border.default,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },

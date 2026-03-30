@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { 
   Zap, 
   TrendingUp, 
@@ -9,7 +9,6 @@ import {
   Award,
   Activity,
 } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import type { SessionAnalytics, CasinoSession, MachineType } from '@/state/CasinoSessionProvider';
 import { formatNumber } from '@/lib/format';
@@ -30,7 +29,7 @@ interface MachineTypeStats {
   sessionCount: number;
 }
 
-const MACHINE_TYPE_LABELS: Record<MachineType, string> = {
+const _MACHINE_TYPE_LABELS: Record<MachineType, string> = {
   'penny-slots': 'Penny Slots',
   'nickel-slots': 'Nickel Slots',
   'quarter-slots': 'Quarter Slots',
@@ -50,7 +49,7 @@ export const PointsPerHourCard = React.memo(function PointsPerHourCard({
   sessions,
   compact = false,
 }: PointsPerHourCardProps) {
-  const machineTypeStats = useMemo((): MachineTypeStats[] => {
+  const _machineTypeStats = useMemo((): MachineTypeStats[] => {
     const stats: Record<string, { points: number; minutes: number; count: number }> = {};
     
     sessions.forEach(session => {
@@ -100,7 +99,7 @@ export const PointsPerHourCard = React.memo(function PointsPerHourCard({
     };
   }, [sessions]);
 
-  const bestSession = useMemo(() => {
+  const _bestSession = useMemo(() => {
     const sessionsWithPPH = sessions
       .filter(s => (s.pointsEarned || 0) > 0 && s.durationMinutes > 0)
       .map(s => ({

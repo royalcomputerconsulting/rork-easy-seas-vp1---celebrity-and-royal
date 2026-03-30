@@ -146,25 +146,25 @@ function TimeZonePickerModal({ visible, onClose, onSelect, title }: TimeZonePick
           <View style={modalStyles.header}>
             <Text style={modalStyles.title}>{title}</Text>
             <TouchableOpacity onPress={onClose} style={modalStyles.closeBtn}>
-              <X size={20} color="#111827" />
+              <X size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
           <View style={modalStyles.searchContainer}>
-            <Search size={16} color="#475569" />
+            <Search size={16} color="rgba(255,255,255,0.5)" />
             <TextInput
               style={modalStyles.searchInput}
               placeholder="Search city or region..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="rgba(255,255,255,0.4)"
               value={search}
               onChangeText={setSearch}
               autoCapitalize="none"
             />
-            {search.length > 0 && (
+            {search.length > 0 ? (
               <TouchableOpacity onPress={() => setSearch('')}>
-                <X size={16} color="#475569" />
+                <X size={16} color="rgba(255,255,255,0.5)" />
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
 
           <ScrollView style={modalStyles.list} showsVerticalScrollIndicator={false}>
@@ -182,16 +182,16 @@ function TimeZonePickerModal({ visible, onClose, onSelect, title }: TimeZonePick
                     }}
                     activeOpacity={0.7}
                   >
-                    <MapPin size={14} color="#64748B" />
+                    <MapPin size={14} color="rgba(255,255,255,0.5)" />
                     <Text style={modalStyles.tzLabel}>{tz.label}</Text>
                     <Text style={modalStyles.tzTime}>{getTimeInZone(tz.value)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             ))}
-            {filtered.length === 0 && (
+            {filtered.length === 0 ? (
               <Text style={modalStyles.noResults}>No time zones found</Text>
-            )}
+            ) : null}
             <View style={{ height: 40 }} />
           </ScrollView>
         </View>
@@ -257,7 +257,7 @@ export function TimeZoneConverter() {
       duration: 250,
       useNativeDriver: false,
     }).start();
-  }, [expandAnim, expanded]);
+  }, [expanded, expandAnim]);
 
   const offset = useMemo(
     () => getOffsetDifference(localTz.offset, remoteTz.offset),
@@ -295,7 +295,7 @@ export function TimeZoneConverter() {
     if (meetingTimeInput.trim()) {
       handleConvertMeeting();
     }
-  }, [meetingFrom, localTz, remoteTz, handleConvertMeeting, meetingTimeInput]);
+  }, [meetingFrom, localTz, remoteTz, meetingTimeInput, handleConvertMeeting]);
 
   const toggleExpanded = useCallback(() => {
     setExpanded((prev) => !prev);
@@ -327,28 +327,28 @@ export function TimeZoneConverter() {
             <Text style={styles.offsetChipText}>{offset}</Text>
           </View>
           {expanded ? (
-            <ChevronUp size={18} color="#334155" />
+            <ChevronUp size={18} color="rgba(255,255,255,0.6)" />
           ) : (
-            <ChevronDown size={18} color="#334155" />
+            <ChevronDown size={18} color="rgba(255,255,255,0.6)" />
           )}
         </View>
       </TouchableOpacity>
 
-      {!expanded && (
+      {!expanded ? (
         <View style={styles.collapsedPreview}>
           <View style={styles.previewClock}>
             <Text style={styles.previewLabel}>{localTz.city}</Text>
             <Text style={styles.previewTime}>{localTime}</Text>
           </View>
-          <ArrowRightLeft size={14} color="#64748B" />
+          <ArrowRightLeft size={14} color="rgba(255,255,255,0.3)" />
           <View style={styles.previewClock}>
             <Text style={styles.previewLabel}>{remoteTz.city}</Text>
             <Text style={styles.previewTime}>{remoteTime}</Text>
           </View>
         </View>
-      )}
+      ) : null}
 
-      {expanded && (
+      {expanded ? (
         <View style={styles.expandedContent}>
           <View style={styles.dualClockRow}>
             <TouchableOpacity
@@ -395,9 +395,9 @@ export function TimeZoneConverter() {
           <View style={styles.offsetBanner}>
             <Clock size={14} color="#FFFFFF" />
             <Text style={styles.offsetBannerText}>
-              {remoteTz.city} is{' '}
-              <Text style={styles.offsetBannerHighlight}>{offset}</Text> from{' '}
-              {localTz.city}
+              {`${remoteTz.city} is `}
+              <Text style={styles.offsetBannerHighlight}>{offset}</Text>
+              {` from ${localTz.city}`}
             </Text>
           </View>
 
@@ -411,7 +411,7 @@ export function TimeZoneConverter() {
               <TextInput
                 style={styles.meetingInput}
                 placeholder="e.g. 2:30 PM"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="rgba(255,255,255,0.3)"
                 value={meetingTimeInput}
                 onChangeText={(text) => {
                   setMeetingTimeInput(text);
@@ -464,7 +464,7 @@ export function TimeZoneConverter() {
               </TouchableOpacity>
             </View>
 
-            {convertedMeetingTime !== '' && meetingTimeInput.trim() !== '' && (
+            {convertedMeetingTime !== '' && meetingTimeInput.trim() !== '' ? (
               <View style={styles.meetingResult}>
                 <View style={styles.meetingResultRow}>
                   <View style={styles.meetingResultSide}>
@@ -474,7 +474,7 @@ export function TimeZoneConverter() {
                     <Text style={styles.meetingResultTime}>{meetingTimeInput.trim()}</Text>
                   </View>
                   <View style={styles.meetingResultArrow}>
-                    <ArrowRightLeft size={14} color="#64748B" />
+                    <ArrowRightLeft size={14} color="rgba(255,255,255,0.4)" />
                   </View>
                   <View style={styles.meetingResultSide}>
                     <Text style={styles.meetingResultLabel}>
@@ -486,10 +486,10 @@ export function TimeZoneConverter() {
                   </View>
                 </View>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
-      )}
+      ) : null}
 
       <TimeZonePickerModal
         visible={showLocalPicker}
@@ -509,10 +509,10 @@ export function TimeZoneConverter() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: 'rgba(0, 172, 193, 0.18)',
+    borderColor: 'rgba(0, 172, 193, 0.25)',
     overflow: 'hidden',
   },
   headerRow: {
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#111827',
+    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
   headerRight: {
@@ -570,13 +570,13 @@ const styles = StyleSheet.create({
   },
   previewLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#475569',
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: 2,
   },
   previewTime: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   expandedContent: {
     paddingHorizontal: SPACING.md,
@@ -589,11 +589,11 @@ const styles = StyleSheet.create({
   },
   clockCard: {
     flex: 1,
-    backgroundColor: '#F8FBFF',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#D7E6F4',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   clockLabelRow: {
     flexDirection: 'row',
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
   clockCity: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   clockTime: {
@@ -633,7 +633,7 @@ const styles = StyleSheet.create({
   },
   clockDate: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#475569',
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: 4,
   },
   changeBtnRow: {
@@ -655,7 +655,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#0F172A',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -663,29 +663,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    backgroundColor: '#F8FBFF',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     marginTop: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#D7E6F4',
   },
   offsetBannerText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#111827',
+    color: 'rgba(255,255,255,0.7)',
   },
   offsetBannerHighlight: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   meetingSection: {
     marginTop: SPACING.md,
-    backgroundColor: '#F8FBFF',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#D7E6F4',
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   meetingSectionHeader: {
     flexDirection: 'row',
@@ -696,7 +694,7 @@ const styles = StyleSheet.create({
   meetingSectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   meetingInputRow: {
     flexDirection: 'row',
@@ -706,14 +704,14 @@ const styles = StyleSheet.create({
   },
   meetingInput: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: Platform.OS === 'ios' ? SPACING.md : SPACING.sm,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#111827',
+    color: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#D7E6F4',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   convertBtn: {
     backgroundColor: '#00ACC1',
@@ -734,15 +732,15 @@ const styles = StyleSheet.create({
   },
   meetingFromLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#475569',
+    color: 'rgba(255,255,255,0.5)',
   },
   meetingFromChip: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: '#D7E6F4',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   meetingFromChipActive: {
     backgroundColor: 'rgba(0, 172, 193, 0.2)',
@@ -754,11 +752,11 @@ const styles = StyleSheet.create({
   },
   meetingFromChipText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#334155',
+    color: 'rgba(255,255,255,0.5)',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   meetingFromChipTextActive: {
-    color: '#111827',
+    color: '#FFFFFF',
   },
   meetingResult: {
     marginTop: SPACING.md,
@@ -778,13 +776,13 @@ const styles = StyleSheet.create({
   },
   meetingResultLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#475569',
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: 2,
   },
   meetingResultTime: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   meetingResultArrow: {
     paddingHorizontal: SPACING.sm,
@@ -799,11 +797,11 @@ const styles = StyleSheet.create({
 const modalStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.24)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1A2F4A',
     borderTopLeftRadius: BORDER_RADIUS.xl,
     borderTopRightRadius: BORDER_RADIUS.xl,
     maxHeight: '80%',
@@ -820,33 +818,31 @@ const modalStyles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   closeBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FBFF',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     marginHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     gap: SPACING.sm,
     marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#D7E6F4',
   },
   searchInput: {
     flex: 1,
     paddingVertical: Platform.OS === 'ios' ? SPACING.md : SPACING.sm,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   list: {
     paddingHorizontal: SPACING.lg,
@@ -854,7 +850,7 @@ const modalStyles = StyleSheet.create({
   regionHeader: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.4)',
     letterSpacing: 1,
     textTransform: 'uppercase',
     marginTop: SPACING.md,
@@ -866,21 +862,21 @@ const modalStyles = StyleSheet.create({
     gap: SPACING.sm,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   tzLabel: {
     flex: 1,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   tzTime: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#475569',
+    color: 'rgba(255,255,255,0.5)',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   noResults: {
     textAlign: 'center',
-    color: '#475569',
+    color: 'rgba(255,255,255,0.4)',
     fontSize: TYPOGRAPHY.fontSizeSM,
     paddingVertical: SPACING.xxl,
   },
