@@ -160,11 +160,11 @@ function TimeZonePickerModal({ visible, onClose, onSelect, title }: TimeZonePick
               onChangeText={setSearch}
               autoCapitalize="none"
             />
-            {search.length > 0 ? (
+            {search.length > 0 && (
               <TouchableOpacity onPress={() => setSearch('')}>
                 <X size={16} color="rgba(255,255,255,0.5)" />
               </TouchableOpacity>
-            ) : null}
+            )}
           </View>
 
           <ScrollView style={modalStyles.list} showsVerticalScrollIndicator={false}>
@@ -189,9 +189,9 @@ function TimeZonePickerModal({ visible, onClose, onSelect, title }: TimeZonePick
                 ))}
               </View>
             ))}
-            {filtered.length === 0 ? (
+            {filtered.length === 0 && (
               <Text style={modalStyles.noResults}>No time zones found</Text>
-            ) : null}
+            )}
             <View style={{ height: 40 }} />
           </ScrollView>
         </View>
@@ -236,7 +236,7 @@ export function TimeZoneConverter() {
         console.log('[TimeZone] Error loading saved zones:', e);
       }
     };
-    void loadSaved();
+    loadSaved();
   }, []);
 
   useEffect(() => {
@@ -257,7 +257,7 @@ export function TimeZoneConverter() {
       duration: 250,
       useNativeDriver: false,
     }).start();
-  }, [expandAnim, expanded]);
+  }, [expanded]);
 
   const offset = useMemo(
     () => getOffsetDifference(localTz.offset, remoteTz.offset),
@@ -295,7 +295,7 @@ export function TimeZoneConverter() {
     if (meetingTimeInput.trim()) {
       handleConvertMeeting();
     }
-  }, [meetingFrom, meetingTimeInput, localTz, remoteTz, handleConvertMeeting]);
+  }, [meetingFrom, localTz, remoteTz, handleConvertMeeting]);
 
   const toggleExpanded = useCallback(() => {
     setExpanded((prev) => !prev);
@@ -334,7 +334,7 @@ export function TimeZoneConverter() {
         </View>
       </TouchableOpacity>
 
-      {!expanded ? (
+      {!expanded && (
         <View style={styles.collapsedPreview}>
           <View style={styles.previewClock}>
             <Text style={styles.previewLabel}>{localTz.city}</Text>
@@ -346,9 +346,9 @@ export function TimeZoneConverter() {
             <Text style={styles.previewTime}>{remoteTime}</Text>
           </View>
         </View>
-      ) : null}
+      )}
 
-      {expanded ? (
+      {expanded && (
         <View style={styles.expandedContent}>
           <View style={styles.dualClockRow}>
             <TouchableOpacity
@@ -395,9 +395,9 @@ export function TimeZoneConverter() {
           <View style={styles.offsetBanner}>
             <Clock size={14} color="#FFFFFF" />
             <Text style={styles.offsetBannerText}>
-              {`${remoteTz.city} is `}
-              <Text style={styles.offsetBannerHighlight}>{offset}</Text>
-              {` from ${localTz.city}`}
+              {remoteTz.city} is{' '}
+              <Text style={styles.offsetBannerHighlight}>{offset}</Text> from{' '}
+              {localTz.city}
             </Text>
           </View>
 
@@ -464,7 +464,7 @@ export function TimeZoneConverter() {
               </TouchableOpacity>
             </View>
 
-            {convertedMeetingTime !== '' && meetingTimeInput.trim() !== '' ? (
+            {convertedMeetingTime !== '' && meetingTimeInput.trim() !== '' && (
               <View style={styles.meetingResult}>
                 <View style={styles.meetingResultRow}>
                   <View style={styles.meetingResultSide}>
@@ -486,10 +486,10 @@ export function TimeZoneConverter() {
                   </View>
                 </View>
               </View>
-            ) : null}
+            )}
           </View>
         </View>
-      ) : null}
+      )}
 
       <TimeZonePickerModal
         visible={showLocalPicker}

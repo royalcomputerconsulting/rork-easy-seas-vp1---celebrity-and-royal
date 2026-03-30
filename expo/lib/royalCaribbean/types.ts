@@ -261,7 +261,7 @@ export type WebViewMessage =
   | { type: 'extended_loyalty_data'; data: LoyaltyApiInformation; accountId?: string }
   | { type: 'network_payload'; endpoint: string; data: any; url: string }
   | { type: 'network_capture_headers'; url: string; hasApiKey?: boolean; hasAuthorization?: boolean; hasAccountId?: boolean }
-  | { type: 'offer_sailings_result'; offerCode: string; offerName: string; sailings: OfferRow[]; requestId?: number }
+  | { type: 'offer_sailings_result'; offerCode: string; offerName: string; sailings: OfferRow[] }
   | { type: 'error'; message: string }
   | { type: 'complete' };
 

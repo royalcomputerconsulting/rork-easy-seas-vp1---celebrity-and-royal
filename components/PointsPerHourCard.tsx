@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import React, { useMemo, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
 import { 
   Zap, 
   TrendingUp, 
@@ -9,6 +9,7 @@ import {
   Award,
   Activity,
 } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import type { SessionAnalytics, CasinoSession, MachineType } from '@/state/CasinoSessionProvider';
 import { formatNumber } from '@/lib/format';
@@ -29,7 +30,7 @@ interface MachineTypeStats {
   sessionCount: number;
 }
 
-const _MACHINE_TYPE_LABELS: Record<MachineType, string> = {
+const MACHINE_TYPE_LABELS: Record<MachineType, string> = {
   'penny-slots': 'Penny Slots',
   'nickel-slots': 'Nickel Slots',
   'quarter-slots': 'Quarter Slots',
@@ -49,7 +50,7 @@ export const PointsPerHourCard = React.memo(function PointsPerHourCard({
   sessions,
   compact = false,
 }: PointsPerHourCardProps) {
-  const _machineTypeStats = useMemo((): MachineTypeStats[] => {
+  const machineTypeStats = useMemo((): MachineTypeStats[] => {
     const stats: Record<string, { points: number; minutes: number; count: number }> = {};
     
     sessions.forEach(session => {
@@ -99,7 +100,7 @@ export const PointsPerHourCard = React.memo(function PointsPerHourCard({
     };
   }, [sessions]);
 
-  const _bestSession = useMemo(() => {
+  const bestSession = useMemo(() => {
     const sessionsWithPPH = sessions
       .filter(s => (s.pointsEarned || 0) > 0 && s.durationMinutes > 0)
       .map(s => ({
@@ -125,7 +126,7 @@ export const PointsPerHourCard = React.memo(function PointsPerHourCard({
             {analytics.pointsPerHour.toFixed(1)}
           </Text>
           <Text style={styles.compactUnit}>pts/hr</Text>
-          {trend.direction !== 'none' ? (
+          {trend.direction !== 'none' && (
             <View style={[
               styles.compactTrend,
               { backgroundColor: trend.direction === 'up' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)' }
@@ -142,7 +143,7 @@ export const PointsPerHourCard = React.memo(function PointsPerHourCard({
                 {trend.change.toFixed(0)}%
               </Text>
             </View>
-          ) : null}
+          )}
         </View>
       </View>
     );

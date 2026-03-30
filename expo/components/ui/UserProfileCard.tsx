@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { Save, CheckCircle, AlertCircle, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
 import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
@@ -143,36 +143,22 @@ export function UserProfileCard({
   };
 
   const renderEnrichmentBadge = (hasData: boolean) => (
-    <View
-      style={[
-        styles.enrichmentBadge,
-        hasData ? styles.enrichmentBadgeActive : styles.enrichmentBadgeInactive,
-        isCarnivalTheme && styles.carnivalEnrichmentBadge,
-        isCarnivalTheme && hasData && styles.carnivalEnrichmentBadgeActive,
-        isCarnivalTheme && !hasData && styles.carnivalEnrichmentBadgeInactive,
-      ]}
-    >
+    <View style={[styles.enrichmentBadge, hasData ? styles.enrichmentBadgeActive : styles.enrichmentBadgeInactive]}>
       {hasData ? (
-        <CheckCircle size={10} color={isCarnivalTheme ? '#FFF7DB' : COLORS.white} />
+        <CheckCircle size={10} color={COLORS.white} />
       ) : (
-        <AlertCircle size={10} color={isCarnivalTheme ? 'rgba(255,247,219,0.82)' : 'rgba(255,255,255,0.7)'} />
+        <AlertCircle size={10} color="rgba(255,255,255,0.7)" />
       )}
-      <Text style={[styles.enrichmentBadgeText, isCarnivalTheme && styles.carnivalEnrichmentBadgeText]}>
+      <Text style={styles.enrichmentBadgeText}>
         {hasData ? 'Synced' : 'Manual'}
       </Text>
     </View>
   );
 
   const renderValueCard = (label: string, value: string | number | undefined, color?: string, wide?: boolean) => (
-    <View style={[styles.valueCard, wide && styles.valueCardWide, isCarnivalTheme && styles.carnivalValueCard]}>
-      <Text style={[styles.valueCardLabel, isCarnivalTheme && styles.carnivalValueCardLabel]}>{label}</Text>
-      <Text
-        style={[
-          styles.valueCardValue,
-          isCarnivalTheme && styles.carnivalValueCardValue,
-          color ? { color } : null,
-        ]}
-      >
+    <View style={[styles.valueCard, wide && styles.valueCardWide]}>
+      <Text style={styles.valueCardLabel}>{label}</Text>
+      <Text style={[styles.valueCardValue, color ? { color } : null]}>
         {value !== undefined && value !== null && value !== '' ? (typeof value === 'number' ? value.toLocaleString() : value) : 'Not set'}
       </Text>
     </View>
@@ -217,13 +203,11 @@ export function UserProfileCard({
       case 'silversea':
         return ['#78350F', '#92400E'] as [string, string];
       case 'carnival':
-        return ['#7C5A16', '#D4A63A'] as [string, string];
+        return ['#CC2232', '#E02040'] as [string, string];
       default:
         return ['#0369A1', '#0284C7'] as [string, string];
     }
   };
-
-  const isCarnivalTheme = activeBrand === 'carnival';
 
   const hasSyncedData = activeBrand === 'royal' 
     ? !!enrichmentData?.crownAndAnchorId 
@@ -297,11 +281,11 @@ export function UserProfileCard({
     return (
       <View style={styles.valuesGrid}>
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
-        {renderValueCard('Name', currentValues.name, '#FFF7DB', true)}
-        {renderValueCard('VIFP Club #', enrichmentData?.carnivalVifpNumber || currentValues.carnivalVifpNumber, '#FFF7DB', true)}
-        {renderValueCard('VIFP Tier', enrichmentData?.carnivalVifpTier || currentValues.carnivalVifpTier, '#F87171')}
-        {renderValueCard('Players Club Tier', enrichmentData?.carnivalPlayersClubTier || currentValues.carnivalPlayersClubTier, '#F6D878')}
-        {renderValueCard('Players Club Points', enrichmentData?.carnivalPlayersClubPoints ?? currentValues.carnivalPlayersClubPoints, '#FFD166')}
+        {renderValueCard('Name', currentValues.name, undefined, true)}
+        {renderValueCard('VIFP Club #', enrichmentData?.carnivalVifpNumber || currentValues.carnivalVifpNumber, undefined, true)}
+        {renderValueCard('VIFP Tier', enrichmentData?.carnivalVifpTier || currentValues.carnivalVifpTier, '#CC2232')}
+        {renderValueCard('Players Club Tier', enrichmentData?.carnivalPlayersClubTier || currentValues.carnivalPlayersClubTier, '#FFB400')}
+        {renderValueCard('Players Club Points', enrichmentData?.carnivalPlayersClubPoints ?? currentValues.carnivalPlayersClubPoints, COLORS.points)}
       </View>
     );
   };
@@ -574,18 +558,18 @@ export function UserProfileCard({
   };
 
   return (
-    <View style={[styles.container, isCarnivalTheme && styles.carnivalContainer]}>
+    <View style={styles.container}>
       <LinearGradient
         colors={getBrandGradient()}
-        style={[styles.header, isCarnivalTheme && styles.carnivalHeader]}
+        style={styles.header}
       >
         <View style={styles.headerContent}>
-          <View style={[styles.headerIcon, isCarnivalTheme && styles.carnivalHeaderIcon]}>
+          <View style={styles.headerIcon}>
             {getBrandIcon()}
           </View>
           <View style={styles.headerText}>
-            <Text style={[styles.headerTitle, isCarnivalTheme && styles.carnivalHeaderTitle]}>{getBrandTitle()}</Text>
-            <Text style={[styles.headerSubtitle, isCarnivalTheme && styles.carnivalHeaderSubtitle]}>
+            <Text style={styles.headerTitle}>{getBrandTitle()}</Text>
+            <Text style={styles.headerSubtitle}>
               {hasSyncedData ? 'Synced with account' : 'Manual entry'}
             </Text>
           </View>
@@ -593,11 +577,11 @@ export function UserProfileCard({
         {renderEnrichmentBadge(hasSyncedData)}
       </LinearGradient>
 
-      <View style={[styles.brandToggleContainer, isCarnivalTheme && styles.carnivalBrandToggleContainer]}>
+      <View style={styles.brandToggleContainer}>
         <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} showSilversea={true} />
       </View>
 
-      <View style={[styles.currentValuesSection, isCarnivalTheme && styles.carnivalCurrentValuesSection]}>
+      <View style={styles.currentValuesSection}>
         {activeBrand === 'royal' && renderRoyalCaribbeanValues()}
         {activeBrand === 'celebrity' && renderCelebrityValues()}
         {activeBrand === 'silversea' && renderSilverseaValues()}
@@ -606,13 +590,13 @@ export function UserProfileCard({
 
       {enrichmentData?.lastSyncTimestamp && (
         <View style={styles.syncTimestampContainer}>
-          <Text style={[styles.syncTimestampText, isCarnivalTheme && styles.carnivalSyncTimestampText]}>Last synced: {formatDate(enrichmentData.lastSyncTimestamp)}</Text>
+          <Text style={styles.syncTimestampText}>Last synced: {formatDate(enrichmentData.lastSyncTimestamp)}</Text>
         </View>
       )}
 
       <View style={styles.editButtonContainer}>
         <TouchableOpacity 
-          style={[styles.editButton, isCarnivalTheme && styles.carnivalEditButton]}
+          style={styles.editButton}
           onPress={() => setIsModalVisible(true)}
           activeOpacity={0.7}
         >
@@ -693,16 +677,12 @@ export function UserProfileCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#0D1E33',
+    backgroundColor: '#F0F9FF',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    borderColor: 'rgba(3, 105, 161, 0.2)',
+    ...SHADOW.sm,
   },
   header: {
     padding: SPACING.sm,
@@ -773,27 +753,25 @@ const styles = StyleSheet.create({
   valueCard: {
     flex: 1,
     minWidth: '47%',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(3, 105, 161, 0.15)',
   },
   valueCardWide: {
     minWidth: '96%',
   },
   valueCardLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#64748B',
     marginBottom: 4,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
   },
   valueCardValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FFFFFF',
+    color: '#0F172A',
   },
   syncTimestampContainer: {
     paddingHorizontal: SPACING.sm,
@@ -801,7 +779,7 @@ const styles = StyleSheet.create({
   },
   syncTimestampText: {
     fontSize: 10,
-    color: 'rgba(255,255,255,0.4)',
+    color: '#64748B',
     fontStyle: 'italic' as const,
     textAlign: 'center',
   },
@@ -813,81 +791,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,226,143,0.1)',
+    backgroundColor: 'rgba(3, 105, 161, 0.08)',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,226,143,0.35)',
+    borderColor: 'rgba(3, 105, 161, 0.3)',
     borderStyle: 'dashed',
     gap: SPACING.xs,
   },
   editButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FFE28F',
-  },
-  carnivalContainer: {
-    backgroundColor: '#16110A',
-    borderColor: 'rgba(233, 196, 106, 0.3)',
-    shadowColor: '#D4A63A',
-    shadowOpacity: 0.18,
-  },
-  carnivalHeader: {
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 239, 194, 0.16)',
-  },
-  carnivalHeaderIcon: {
-    backgroundColor: 'rgba(255, 247, 219, 0.16)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 239, 194, 0.24)',
-  },
-  carnivalHeaderTitle: {
-    color: '#FFF7DB',
-  },
-  carnivalHeaderSubtitle: {
-    color: 'rgba(255, 244, 214, 0.82)',
-  },
-  carnivalEnrichmentBadge: {
-    borderWidth: 1,
-    borderColor: 'rgba(255, 239, 194, 0.22)',
-  },
-  carnivalEnrichmentBadgeActive: {
-    backgroundColor: 'rgba(255, 247, 219, 0.16)',
-  },
-  carnivalEnrichmentBadgeInactive: {
-    backgroundColor: 'rgba(255, 247, 219, 0.08)',
-  },
-  carnivalEnrichmentBadgeText: {
-    color: '#FFF7DB',
-  },
-  carnivalBrandToggleContainer: {
-    backgroundColor: 'rgba(255, 224, 151, 0.05)',
-  },
-  carnivalCurrentValuesSection: {
-    backgroundColor: 'rgba(255, 224, 151, 0.03)',
-  },
-  carnivalValueCard: {
-    backgroundColor: 'rgba(255, 248, 224, 0.06)',
-    borderColor: 'rgba(233, 196, 106, 0.22)',
-    shadowColor: '#F2C96D',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  carnivalValueCardLabel: {
-    color: 'rgba(255, 228, 167, 0.72)',
-  },
-  carnivalValueCardValue: {
-    color: '#FFF7DB',
-  },
-  carnivalSyncTimestampText: {
-    color: 'rgba(255, 236, 181, 0.62)',
-  },
-  carnivalEditButton: {
-    backgroundColor: 'rgba(255, 233, 170, 0.08)',
-    borderColor: 'rgba(233, 196, 106, 0.28)',
   },
   modalOverlay: {
     flex: 1,
@@ -897,13 +812,11 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
   },
   modalContainer: {
-    backgroundColor: '#0D1E33',
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.xl,
     width: '100%',
     maxWidth: 500,
     maxHeight: '90%',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -911,7 +824,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: '#E5E7EB',
   },
   modalHeaderLeft: {
     flexDirection: 'row',
@@ -921,7 +834,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
   },
   modalCloseButton: {
     padding: SPACING.xs,
@@ -935,18 +847,18 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: 'rgba(255,255,255,0.65)',
+    color: '#1E40AF',
     marginBottom: SPACING.xs,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: '#F9FAFB',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: '#D1D5DB',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#FFFFFF',
+    color: '#111827',
   },
   levelHint: {
     flexDirection: 'row',
@@ -954,7 +866,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
-    backgroundColor: 'rgba(168,198,255,0.1)',
+    backgroundColor: 'rgba(3, 105, 161, 0.08)',
     borderRadius: BORDER_RADIUS.sm,
     gap: 6,
   },
@@ -965,7 +877,7 @@ const styles = StyleSheet.create({
   },
   levelHintText: {
     fontSize: 10,
-    color: '#A8C6FF',
+    color: '#1E40AF',
   },
   levelHintLevel: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
@@ -977,22 +889,20 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#0D1E33',
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: COLORS.white,
   },
   modalCancelButton: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: '#F3F4F6',
     paddingVertical: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
   },
   modalCancelText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: 'rgba(255,255,255,0.6)',
+    color: '#6B7280',
   },
   modalSaveButton: {
     flex: 1,

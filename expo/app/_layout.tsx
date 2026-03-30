@@ -230,7 +230,7 @@ function WebResponsiveWrapper({ children }: { children: React.ReactNode }) {
         <View style={webStyles.bgPattern} />
         <View style={webStyles.bgAccent} />
       </View>
-      <View style={[webStyles.phoneFrame, { maxHeight: height - 40 }]}>
+      <View style={[webStyles.phoneFrame, { maxHeight: height - 40 }]}> 
         <View style={webStyles.phoneNotch} />
         <View style={webStyles.phoneContent}>
           {children}

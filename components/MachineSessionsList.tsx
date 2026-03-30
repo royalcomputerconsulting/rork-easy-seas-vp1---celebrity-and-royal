@@ -1,12 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { ChevronDown, TrendingUp, TrendingDown, Edit2 } from 'lucide-react-native';
+import { COLORS } from '@/constants/theme';
 import type { CasinoSession } from '@/state/CasinoSessionProvider';
-
-const CARD_BG = 'rgba(255,255,255,0.07)';
-const CARD_BORDER = 'rgba(255,255,255,0.12)';
-const INNER_BG = 'rgba(255,255,255,0.05)';
-const INNER_BORDER = 'rgba(255,255,255,0.08)';
 
 interface MachineSessionsListProps {
   sessions: CasinoSession[];
@@ -21,7 +17,9 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [filterType, setFilterType] = useState<'all' | 'wins' | 'losses'>('all');
 
-  const machineSessionsOnly = useMemo(() => sessions.filter(s => s.machineId), [sessions]);
+  const machineSessionsOnly = useMemo(() => {
+    return sessions.filter(s => s.machineId);
+  }, [sessions]);
 
   const filteredAndSortedSessions = useMemo(() => {
     let filtered = [...machineSessionsOnly];
@@ -33,8 +31,8 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
     }
 
     filtered.sort((a, b) => {
-      let aVal: number | string = 0;
-      let bVal: number | string = 0;
+      let aVal: any;
+      let bVal: any;
 
       switch (sortBy) {
         case 'date':
@@ -53,12 +51,16 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
           aVal = a.durationMinutes;
           bVal = b.durationMinutes;
           break;
+        default:
+          aVal = 0;
+          bVal = 0;
       }
 
       if (sortOrder === 'asc') {
         return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+      } else {
+        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
       }
-      return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
     });
 
     return filtered;
@@ -73,16 +75,17 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
     }
   };
 
-  const formatDateStr = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
-    });
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
   };
 
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    if (hours > 0) return `${hours}h ${mins}m`;
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
     return `${mins}m`;
   };
 
@@ -90,7 +93,6 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
     const winLoss = item.winLoss || 0;
     const isWin = winLoss > 0;
     const isLoss = winLoss < 0;
-    const winLossDisplay = isWin ? `+$${Math.abs(winLoss).toFixed(2)}` : `-$${Math.abs(winLoss).toFixed(2)}`;
 
     return (
       <View style={styles.sessionCard}>
@@ -99,57 +101,64 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
             <Text style={styles.sessionMachine} numberOfLines={1}>
               {item.machineName || 'Unknown Machine'}
             </Text>
-            <Text style={styles.sessionDate}>{formatDateStr(item.date)}</Text>
+            <Text style={styles.sessionDate}>{formatDate(item.date)}</Text>
           </View>
           <TouchableOpacity
             style={styles.editButton}
             onPress={() => onEditSession(item)}
             activeOpacity={0.7}
           >
-            <Edit2 size={15} color="rgba(255,255,255,0.5)" />
+            <Edit2 size={16} color={COLORS.navyDeep} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.sessionDetails}>
           <View style={styles.sessionDetailItem}>
-            <Text style={styles.sessionDetailLabel}>{'Duration'}</Text>
-            <Text style={styles.sessionDetailValue}>{formatDuration(item.durationMinutes)}</Text>
-          </View>
-
-          {item.denomination ? (
-            <View style={styles.sessionDetailItem}>
-              <Text style={styles.sessionDetailLabel}>{'Denom'}</Text>
-              <Text style={styles.sessionDetailValue}>{`$${item.denomination.toFixed(2)}`}</Text>
-            </View>
-          ) : null}
-
-          <View style={[styles.sessionDetailItem, styles.winLossItem]}>
-            <View style={styles.winLossIconRow}>
-              {isWin ? <TrendingUp size={13} color="#8EF2C1" /> : null}
-              {isLoss ? <TrendingDown size={13} color="#FFB3C1" /> : null}
-              <Text style={styles.sessionDetailLabel}>{'W/L'}</Text>
-            </View>
-            <Text style={[
-              styles.winLossValue,
-              isWin ? styles.winValue : isLoss ? styles.lossValue : null,
-            ]}>
-              {winLossDisplay}
+            <Text style={styles.sessionDetailLabel}>Duration</Text>
+            <Text style={styles.sessionDetailValue}>
+              {formatDuration(item.durationMinutes)}
             </Text>
           </View>
 
-          {item.pointsEarned !== undefined && item.pointsEarned > 0 ? (
+          {item.denomination && (
             <View style={styles.sessionDetailItem}>
-              <Text style={styles.sessionDetailLabel}>{'Points'}</Text>
+              <Text style={styles.sessionDetailLabel}>Denom</Text>
+              <Text style={styles.sessionDetailValue}>
+                ${item.denomination.toFixed(2)}
+              </Text>
+            </View>
+          )}
+
+          <View style={[styles.sessionDetailItem, styles.winLossItem]}>
+            <View style={styles.winLossIconRow}>
+              {isWin && <TrendingUp size={14} color={COLORS.success} />}
+              {isLoss && <TrendingDown size={14} color={COLORS.error} />}
+              <Text style={styles.sessionDetailLabel}>W/L</Text>
+            </View>
+            <Text style={[
+              styles.winLossValue,
+              isWin && styles.winValue,
+              isLoss && styles.lossValue,
+            ]}>
+              {isWin && '+'}${Math.abs(winLoss).toFixed(2)}
+            </Text>
+          </View>
+          
+          {item.pointsEarned !== undefined && item.pointsEarned > 0 && (
+            <View style={styles.sessionDetailItem}>
+              <Text style={styles.sessionDetailLabel}>Points</Text>
               <Text style={[styles.sessionDetailValue, styles.pointsValue]}>
                 {item.pointsEarned.toLocaleString()}
               </Text>
             </View>
-          ) : null}
+          )}
         </View>
 
-        {item.notes ? (
-          <Text style={styles.sessionNotes} numberOfLines={2}>{item.notes}</Text>
-        ) : null}
+        {item.notes && (
+          <Text style={styles.sessionNotes} numberOfLines={2}>
+            {item.notes}
+          </Text>
+        )}
       </View>
     );
   };
@@ -157,7 +166,7 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>{`Session Records (${filteredAndSortedSessions.length})`}</Text>
+        <Text style={styles.title}>Session Records ({filteredAndSortedSessions.length})</Text>
       </View>
 
       <View style={styles.controls}>
@@ -168,56 +177,101 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
             activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, filterType === 'all' && styles.filterChipTextActive]}>
-              {'All'}
+              All
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterChip, filterType === 'wins' && styles.filterChipActiveWin]}
+            style={[styles.filterChip, filterType === 'wins' && styles.filterChipActive]}
             onPress={() => setFilterType('wins')}
             activeOpacity={0.7}
           >
-            <TrendingUp size={13} color={filterType === 'wins' ? '#8EF2C1' : 'rgba(255,255,255,0.4)'} />
-            <Text style={[styles.filterChipText, filterType === 'wins' && styles.filterChipTextActiveWin]}>
-              {'Wins'}
+            <TrendingUp size={14} color={filterType === 'wins' ? COLORS.white : COLORS.success} />
+            <Text style={[styles.filterChipText, filterType === 'wins' && styles.filterChipTextActive]}>
+              Wins
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterChip, filterType === 'losses' && styles.filterChipActiveLoss]}
+            style={[styles.filterChip, filterType === 'losses' && styles.filterChipActive]}
             onPress={() => setFilterType('losses')}
             activeOpacity={0.7}
           >
-            <TrendingDown size={13} color={filterType === 'losses' ? '#FFB3C1' : 'rgba(255,255,255,0.4)'} />
-            <Text style={[styles.filterChipText, filterType === 'losses' && styles.filterChipTextActiveLoss]}>
-              {'Losses'}
+            <TrendingDown size={14} color={filterType === 'losses' ? COLORS.white : COLORS.error} />
+            <Text style={[styles.filterChipText, filterType === 'losses' && styles.filterChipTextActive]}>
+              Losses
             </Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.sortRow}>
-          {(['date', 'winLoss', 'machine', 'duration'] as SortBy[]).map((key) => {
-            const labels: Record<SortBy, string> = { date: 'Date', winLoss: 'W/L', machine: 'Machine', duration: 'Time' };
-            return (
-              <TouchableOpacity
-                key={key}
-                style={[styles.sortButton, sortBy === key && styles.sortButtonActive]}
-                onPress={() => handleSort(key)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.sortButtonText, sortBy === key && styles.sortButtonTextActive]}>
-                  {labels[key]}
-                </Text>
-                {sortBy === key ? (
-                  <ChevronDown
-                    size={13}
-                    color="#FFE28F"
-                    style={sortOrder === 'asc' ? styles.chevronUp : undefined}
-                  />
-                ) : null}
-              </TouchableOpacity>
-            );
-          })}
+          <TouchableOpacity
+            style={styles.sortButton}
+            onPress={() => handleSort('date')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.sortButtonText, sortBy === 'date' && styles.sortButtonTextActive]}>
+              Date
+            </Text>
+            {sortBy === 'date' && (
+              <ChevronDown 
+                size={14} 
+                color={COLORS.navyDeep} 
+                style={sortOrder === 'asc' ? styles.chevronUp : undefined}
+              />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.sortButton}
+            onPress={() => handleSort('winLoss')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.sortButtonText, sortBy === 'winLoss' && styles.sortButtonTextActive]}>
+              W/L
+            </Text>
+            {sortBy === 'winLoss' && (
+              <ChevronDown 
+                size={14} 
+                color={COLORS.navyDeep} 
+                style={sortOrder === 'asc' ? styles.chevronUp : undefined}
+              />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.sortButton}
+            onPress={() => handleSort('machine')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.sortButtonText, sortBy === 'machine' && styles.sortButtonTextActive]}>
+              Machine
+            </Text>
+            {sortBy === 'machine' && (
+              <ChevronDown 
+                size={14} 
+                color={COLORS.navyDeep} 
+                style={sortOrder === 'asc' ? styles.chevronUp : undefined}
+              />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.sortButton}
+            onPress={() => handleSort('duration')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.sortButtonText, sortBy === 'duration' && styles.sortButtonTextActive]}>
+              Time
+            </Text>
+            {sortBy === 'duration' && (
+              <ChevronDown 
+                size={14} 
+                color={COLORS.navyDeep} 
+                style={sortOrder === 'asc' ? styles.chevronUp : undefined}
+              />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -227,10 +281,9 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
         renderItem={renderSession}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>{'No machine session records found'}</Text>
+            <Text style={styles.emptyText}>No machine session records found</Text>
           </View>
         }
       />
@@ -240,10 +293,10 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: CARD_BG,
+    backgroundColor: COLORS.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
+    borderColor: COLORS.borderLight,
     marginBottom: 16,
     overflow: 'hidden',
   },
@@ -251,145 +304,125 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: INNER_BORDER,
+    borderBottomColor: COLORS.borderLight,
   },
   title: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: COLORS.navyDeep,
   },
   controls: {
-    padding: 14,
-    backgroundColor: INNER_BG,
-    borderBottomWidth: 1,
-    borderBottomColor: INNER_BORDER,
+    padding: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: COLORS.bgSecondary,
   },
   filterRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    gap: 6,
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: COLORS.borderLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
   },
   filterChipActive: {
-    backgroundColor: 'rgba(255,226,143,0.18)',
-    borderColor: 'rgba(255,226,143,0.5)',
-  },
-  filterChipActiveWin: {
-    backgroundColor: 'rgba(142,242,193,0.15)',
-    borderColor: 'rgba(142,242,193,0.45)',
-  },
-  filterChipActiveLoss: {
-    backgroundColor: 'rgba(255,179,193,0.15)',
-    borderColor: 'rgba(255,179,193,0.45)',
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
   },
   filterChipText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.55)',
+    color: COLORS.navyDeep,
   },
   filterChipTextActive: {
-    color: '#FFE28F',
-  },
-  filterChipTextActiveWin: {
-    color: '#8EF2C1',
-  },
-  filterChipTextActiveLoss: {
-    color: '#FFB3C1',
+    color: COLORS.white,
   },
   sortRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   sortButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    gap: 4,
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: COLORS.borderLight,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 8,
   },
-  sortButtonActive: {
-    backgroundColor: 'rgba(255,226,143,0.12)',
-    borderColor: 'rgba(255,226,143,0.4)',
-  },
   sortButtonText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.45)',
+    color: COLORS.textMuted,
   },
   sortButtonTextActive: {
-    color: '#FFE28F',
+    color: COLORS.navyDeep,
   },
   chevronUp: {
     transform: [{ rotate: '180deg' }],
   },
   listContent: {
-    padding: 14,
+    padding: 16,
   },
   sessionCard: {
-    backgroundColor: INNER_BG,
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: INNER_BORDER,
+    borderColor: COLORS.borderLight,
     borderRadius: 12,
     padding: 12,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   sessionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   sessionHeaderLeft: {
     flex: 1,
     marginRight: 8,
   },
   sessionMachine: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: COLORS.navyDeep,
     marginBottom: 2,
   },
   sessionDate: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.45)',
+    fontSize: 13,
+    color: COLORS.textMuted,
   },
   editButton: {
     padding: 4,
   },
   sessionDetails: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 6,
+    gap: 16,
+    marginBottom: 8,
   },
   sessionDetailItem: {
     flex: 1,
   },
   sessionDetailLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.4)',
+    color: COLORS.textMuted,
     marginBottom: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
   },
   sessionDetailValue: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600' as const,
-    color: '#FFFFFF',
+    color: COLORS.navyDeep,
   },
   winLossItem: {
     alignItems: 'flex-end',
@@ -397,36 +430,35 @@ const styles = StyleSheet.create({
   winLossIconRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
     marginBottom: 2,
   },
   winLossValue: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
   },
   winValue: {
-    color: '#8EF2C1',
+    color: COLORS.success,
   },
   lossValue: {
-    color: '#FFB3C1',
+    color: COLORS.error,
   },
   sessionNotes: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
+    color: COLORS.textDarkGrey,
     fontStyle: 'italic' as const,
     marginTop: 4,
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 36,
+    paddingVertical: 40,
   },
   emptyText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.4)',
+    fontSize: 14,
+    color: COLORS.textMuted,
   },
   pointsValue: {
-    color: '#A8C6FF',
+    color: '#3b82f6',
   },
 });

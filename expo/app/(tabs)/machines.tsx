@@ -11,18 +11,18 @@ import {
   TouchableOpacity,
   View,
   Image,
-  type GestureResponderEvent,
-  type PanResponderGestureState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
+import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download, Crown, RefreshCcw, ExternalLink } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions, type CasinoSession } from '@/state/CasinoSessionProvider';
 import { AtlasCard } from '@/components/AtlasCard';
+import { useEntitlement } from '@/state/EntitlementProvider';
+import { useAuth } from '@/state/AuthProvider';
 import { exportFavoriteMachinesToDocx, exportAllMachinesIncrementallyToDocx } from '@/lib/exportMachinesToDocx';
 import { MachineSessionStats } from '@/components/MachineSessionStats';
 import { MachineSessionsList } from '@/components/MachineSessionsList';
@@ -34,6 +34,10 @@ type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 
 export default function AtlasScreen() {
   const router = useRouter();
+  const entitlement = useEntitlement();
+  const auth = useAuth();
+
+
 
   const listRef = useRef<FlatList<MachineEncyclopediaEntry> | null>(null);
   const scrollOffsetRef = useRef<number>(0);
@@ -123,7 +127,7 @@ export default function AtlasScreen() {
         const ratio = maxScroll > 0 ? scrollOffsetRef.current / maxScroll : 0;
         handlePanState.startThumbY = Math.max(0, Math.min(thumbTravel, ratio * thumbTravel));
       },
-      onPanResponderMove: (_evt: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+      onPanResponderMove: (_evt, gestureState) => {
         const nextThumbY = Math.max(0, Math.min(thumbTravel, handlePanState.startThumbY + gestureState.dy));
         const ratio = thumbTravel > 0 ? nextThumbY / thumbTravel : 0;
         const nextOffset = ratio * maxScroll;
@@ -378,7 +382,7 @@ export default function AtlasScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>Slot Machine Advantage Players Handbook</Text>
           <Text style={styles.subtitle}>
-            {`${filteredMachines.length} machine${filteredMachines.length !== 1 ? 's' : ''}`}
+            {filteredMachines.length} machine{filteredMachines.length !== 1 ? 's' : ''}
           </Text>
         </View>
 
@@ -393,7 +397,7 @@ export default function AtlasScreen() {
               onPress={() => {
                 console.log('[Atlas] Retry pressed');
                 setUiError(null);
-                reload().catch((e: unknown) => {
+                reload().catch((e) => {
                   console.error('[Atlas] Reload failed', e);
                   setUiError(e instanceof Error ? e.message : 'Unknown error');
                 });
@@ -423,9 +427,9 @@ export default function AtlasScreen() {
             >
               <Text style={styles.sectionToggleText}>Slot Play Sessions</Text>
               {showSessionsSection ? (
-                <ChevronUp size={20} color='rgba(255,255,255,0.6)' />
+                <ChevronUp size={20} color={COLORS.navyDeep} />
               ) : (
-                <ChevronDown size={20} color='rgba(255,255,255,0.6)' />
+                <ChevronDown size={20} color={COLORS.navyDeep} />
               )}
             </TouchableOpacity>
             <TouchableOpacity
@@ -448,7 +452,7 @@ export default function AtlasScreen() {
 
         {isLoadingIndex && (
           <View style={styles.loadingBanner} testID="machines.loadingIndex">
-            <ActivityIndicator size="small" color='#9EFDF2' />
+            <ActivityIndicator size="small" color={COLORS.navyDeep} />
             <Text style={styles.loadingText}>Building machine index...</Text>
           </View>
         )}
@@ -496,7 +500,7 @@ export default function AtlasScreen() {
                     activeOpacity={0.7}
                     testID="machines.filter.all"
                   >
-                    <Database size={14} color={activeFilter === 'all' ? COLORS.white : 'rgba(255,255,255,0.55)'} />
+                    <Database size={14} color={activeFilter === 'all' ? COLORS.white : COLORS.navyDeep} />
                     <Text style={[styles.filterChipText, activeFilter === 'all' && styles.filterChipTextActive]}>All</Text>
                   </TouchableOpacity>
                 );
@@ -521,7 +525,7 @@ export default function AtlasScreen() {
                         fill={activeFilter === 'favorites' ? COLORS.white : 'none'}
                       />
                       <Text style={[styles.filterChipText, activeFilter === 'favorites' && styles.filterChipTextActive]}>
-                        {`Favorites (${favoriteMachines.length})`}
+                        Favorites ({favoriteMachines.length})
                       </Text>
                     </TouchableOpacity>
                     {favoriteMachines.length > 0 && (
@@ -576,6 +580,7 @@ export default function AtlasScreen() {
     );
   }, [
     activeFilter,
+    entitlement,
     favoriteMachines.length,
     filteredMachines.length,
     handleClearFilters,
@@ -588,6 +593,7 @@ export default function AtlasScreen() {
     isLoadingIndex,
     myAtlasMachines.length,
     reload,
+    router,
     searchQuery,
     sessions,
     showSessionsSection,
@@ -598,8 +604,8 @@ export default function AtlasScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient
-          colors={['#F0F4F8', '#F0F4F8']}
-          locations={[0, 1]}
+          colors={['#1E3A8A', '#60A5FA', '#E8F4FC']}
+          locations={[0, 0.5, 1]}
           style={styles.gradientContainer}
         >
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -755,7 +761,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 
-
   listShell: {
     flex: 1,
   },
@@ -786,15 +791,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: 'rgba(10, 31, 68, 0.08)',
   },
 
   scrollThumb: {
     width: 12,
     borderRadius: 999,
-    backgroundColor: 'rgba(30,58,95,0.4)',
+    backgroundColor: 'rgba(10, 31, 68, 0.35)',
     borderWidth: 1,
-    borderColor: 'rgba(30,58,95,0.6)',
+    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
 
   alphabetRail: {
@@ -811,16 +816,16 @@ const styles = StyleSheet.create({
   alphabetLetter: {
     fontSize: 10,
     fontWeight: '800' as const,
-    color: '#6B7280',
+    color: 'rgba(10, 31, 68, 0.55)',
     lineHeight: 12,
   },
 
   alphabetLetterDisabled: {
-    color: '#D1D5DB',
+    color: 'rgba(10, 31, 68, 0.22)',
   },
 
   alphabetLetterActive: {
-    color: '#1E3A5F',
+    color: COLORS.navyDeep,
   },
 
   alphaBubble: {
@@ -831,11 +836,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: 'rgba(30,58,95,0.12)',
+    backgroundColor: COLORS.navyDeep,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(30,58,95,0.25)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -851,7 +854,7 @@ const styles = StyleSheet.create({
   },
 
   alphaBubbleText: {
-    color: '#1E3A5F',
+    color: COLORS.white,
     fontSize: 18,
     fontWeight: '900' as const,
   },
@@ -871,22 +874,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   addSessionButton: {
-    backgroundColor: 'rgba(5,150,105,0.10)',
+    backgroundColor: COLORS.money,
     borderRadius: 12,
     width: 48,
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(5,150,105,0.25)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -902,7 +901,7 @@ const styles = StyleSheet.create({
   sectionToggleText: {
     fontSize: 18,
     fontWeight: '700' as const,
-    color: '#1A2A3D',
+    color: COLORS.navyDeep,
   },
   sessionsContent: {
     marginBottom: 16,
@@ -915,8 +914,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   logoHeaderImage: {
-    width: 80,
-    height: 80,
+    width: 160,
+    height: 160,
   },
   logoHeaderTextContainer: {
     marginLeft: SPACING.md,
@@ -925,13 +924,13 @@ const styles = StyleSheet.create({
   logoHeaderTitle: {
     fontSize: 24,
     fontWeight: '700' as const,
-    color: '#1A2A3D',
+    color: COLORS.white,
     letterSpacing: 0.5,
   },
   logoHeaderSubtitle: {
     fontSize: 14,
     fontWeight: '500' as const,
-    color: '#6B7280',
+    color: COLORS.white,
     marginTop: 2,
     letterSpacing: 0.3,
   },
@@ -939,22 +938,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: 20,
     marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   title: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: '#B8860B',
+    color: COLORS.navyDeep,
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
-    color: '#4B5563',
+    color: COLORS.textDarkGrey,
   },
   searchSection: {
     paddingHorizontal: 20,
@@ -964,18 +961,16 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#1A2A3D',
+    color: COLORS.navyDeep,
   },
   filtersContainer: {
     backgroundColor: 'transparent',
@@ -990,28 +985,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   filterChipActive: {
-    backgroundColor: 'rgba(30,58,95,0.08)',
-    borderColor: '#1E3A5F',
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
   },
   filterChipText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: '#6B7280',
+    color: COLORS.navyDeep,
   },
   filterChipTextActive: {
-    color: '#1E3A5F',
+    color: COLORS.white,
   },
   clearFilterChip: {
-    backgroundColor: 'rgba(220,38,38,0.08)',
-    borderColor: 'rgba(220,38,38,0.30)',
+    backgroundColor: COLORS.error,
+    borderColor: COLORS.error,
   },
   listContent: {
     paddingHorizontal: 20,
@@ -1021,50 +1014,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   emptyText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#6B7280',
+    color: COLORS.textDarkGrey,
     textAlign: 'center',
   },
   clearButton: {
     marginTop: 16,
-    backgroundColor: 'rgba(30,58,95,0.08)',
+    backgroundColor: COLORS.navyDeep,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1E3A5F',
   },
   clearButtonText: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: '#1E3A5F',
+    color: COLORS.white,
   },
   loadingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(212,160,10,0.08)',
+    backgroundColor: COLORS.goldLight,
     paddingVertical: 12,
     paddingHorizontal: 20,
     gap: 10,
     marginHorizontal: 20,
     marginTop: 8,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(212,160,10,0.20)',
   },
   loadingText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: '#92400E',
+    color: COLORS.navyDeep,
   },
   initialLoading: {
     flexDirection: 'row',
@@ -1075,14 +1062,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: 'rgba(255,255,255,0.95)',
   },
   initialLoadingText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: '#6B7280',
+    color: COLORS.navyDeep,
   },
   errorBanner: {
     paddingHorizontal: 16,
@@ -1090,36 +1075,34 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     borderRadius: 14,
-    backgroundColor: 'rgba(220,38,38,0.06)',
+    backgroundColor: '#FFF3F2',
     borderWidth: 1,
-    borderColor: 'rgba(220,38,38,0.20)',
+    borderColor: '#FFD4D0',
   },
   errorTitle: {
     fontSize: 15,
     fontWeight: '800' as const,
-    color: '#DC2626',
+    color: COLORS.navyDeep,
     marginBottom: 4,
   },
   errorBody: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: '#4B5563',
+    color: COLORS.textDarkGrey,
     lineHeight: 18,
     marginBottom: 12,
   },
   retryButton: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(220,38,38,0.08)',
+    backgroundColor: COLORS.navyDeep,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(220,38,38,0.20)',
   },
   retryButtonText: {
     fontSize: 13,
     fontWeight: '800' as const,
-    color: '#DC2626',
+    color: COLORS.white,
   },
   favoritesChipContainer: {
     flexDirection: 'row',
@@ -1158,14 +1141,12 @@ const styles = StyleSheet.create({
     marginLeft: 0,
   },
   exportAllButton: {
-    backgroundColor: 'rgba(30,58,95,0.08)',
+    backgroundColor: COLORS.navyDeep,
     borderRadius: 20,
     width: 32,
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(30,58,95,0.20)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1181,6 +1162,6 @@ const styles = StyleSheet.create({
   exportProgressText: {
     fontSize: 8,
     fontWeight: '700' as const,
-    color: '#4B5563',
+    color: COLORS.white,
   },
 });

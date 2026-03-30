@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import type { 
   Cruise, 
@@ -240,12 +240,12 @@ export async function exportSingleFile(
       };
     }
 
-    const fileUri = (FileSystem.cacheDirectory || '') + fileName;
-    await FileSystem.writeAsStringAsync(fileUri, content);
+    const file = new ExpoFile(ExpoPaths.cache, fileName);
+    await file.write(content);
 
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
-      await Sharing.shareAsync(fileUri, {
+      await Sharing.shareAsync(file.uri, {
         mimeType,
         dialogTitle: `Export ${fileName}`,
       });

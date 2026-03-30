@@ -19,7 +19,7 @@ import { RecognitionEntryDetailModal } from './RecognitionEntryDetailModal';
 import { SurveyListModal } from './SurveyListModal';
 import { exportToCSV } from '@/lib/csv-export';
 import { getAllShipNames } from '@/constants/shipInfo';
-import type { RecognitionEntryWithCrew, Department, Sailing } from '@/types/crew-recognition';
+import type { RecognitionEntryWithCrew, Department } from '@/types/crew-recognition';
 
 
 
@@ -129,7 +129,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
   const toggleShipFilter = useCallback((ship: string) => {
     const current = filters.shipNames;
     if (current.includes(ship)) {
-      updateFilters({ shipNames: current.filter((s: string) => s !== ship) });
+      updateFilters({ shipNames: current.filter(s => s !== ship) });
     } else {
       updateFilters({ shipNames: [...current, ship] });
     }
@@ -138,22 +138,22 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
   const toggleDeptFilter = useCallback((dept: string) => {
     const current = filters.departments;
     if (current.includes(dept)) {
-      updateFilters({ departments: current.filter((d: string) => d !== dept) });
+      updateFilters({ departments: current.filter(d => d !== dept) });
     } else {
       updateFilters({ departments: [...current, dept] });
     }
   }, [filters.departments, updateFilters]);
 
-  const allRoyalShips = useMemo(() => getAllShipNames().sort((a, b) => a.localeCompare(b)), []);
-  const sailingShips = useMemo(() => sailings.map((s: Sailing) => s.shipName), [sailings]);
+  const allRoyalShips = useMemo(() => getAllShipNames().sort(), []);
+  const sailingShips = useMemo(() => sailings.map(s => s.shipName), [sailings]);
   const uniqueShips = useMemo(
-    () => Array.from(new Set([...allRoyalShips, ...sailingShips])).sort((a, b) => a.localeCompare(b)),
+    () => Array.from(new Set([...allRoyalShips, ...sailingShips])).sort(),
     [allRoyalShips, sailingShips]
   );
 
   const uniqueDepts = useMemo(() => {
-    const entryDepts = entries.map((e: RecognitionEntryWithCrew) => e.department);
-    return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort((a, b) => a.localeCompare(b));
+    const entryDepts = entries.map(e => e.department);
+    return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort();
   }, [entries]);
 
   const showMockData = stats.crewMemberCount === 0 && !statsLoading;
@@ -272,7 +272,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         </TouchableOpacity>
       </View>
 
-      {showFilters ? (
+      {showFilters && (
         <View style={styles.filtersPanel}>
           <View style={styles.filterListSection}>
             <Text style={styles.filterLabel}>
@@ -289,7 +289,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                   onPress={() => updateFilters({ shipNames: [] })}
                 >
                   <View style={[styles.filterCheckbox, filters.shipNames.length === 0 && styles.filterCheckboxActive]}>
-                    {filters.shipNames.length === 0 ? <Check size={12} color="#fff" /> : null}
+                    {filters.shipNames.length === 0 && <Check size={12} color="#fff" />}
                   </View>
                   <Text style={[styles.filterRowText, filters.shipNames.length === 0 && styles.filterRowTextActive]}>
                     All Ships
@@ -304,7 +304,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                       onPress={() => toggleShipFilter(ship)}
                     >
                       <View style={[styles.filterCheckbox, isSelected && styles.filterCheckboxActive]}>
-                        {isSelected ? <Check size={12} color="#fff" /> : null}
+                        {isSelected && <Check size={12} color="#fff" />}
                       </View>
                       <Text style={[styles.filterRowText, isSelected && styles.filterRowTextActive]} numberOfLines={1}>
                         {ship}
@@ -331,7 +331,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                   onPress={() => updateFilters({ departments: [] })}
                 >
                   <View style={[styles.filterCheckbox, filters.departments.length === 0 && styles.filterCheckboxActive]}>
-                    {filters.departments.length === 0 ? <Check size={12} color="#fff" /> : null}
+                    {filters.departments.length === 0 && <Check size={12} color="#fff" />}
                   </View>
                   <Text style={[styles.filterRowText, filters.departments.length === 0 && styles.filterRowTextActive]}>
                     All Depts
@@ -346,7 +346,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                       onPress={() => toggleDeptFilter(dept)}
                     >
                       <View style={[styles.filterCheckbox, isSelected && styles.filterCheckboxActive]}>
-                        {isSelected ? <Check size={12} color="#fff" /> : null}
+                        {isSelected && <Check size={12} color="#fff" />}
                       </View>
                       <Text style={[styles.filterRowText, isSelected && styles.filterRowTextActive]} numberOfLines={1}>
                         {dept}
@@ -365,7 +365,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
             </TouchableOpacity>
           ) : null}
         </View>
-      ) : null}
+      )}
 
       <View style={styles.resultsContainer}>
         <Text style={styles.resultsHeader}>
@@ -406,7 +406,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
           </View>
         ) : (
           <View style={styles.cardList}>
-              {displayEntries.map((entry: RecognitionEntryWithCrew) => (
+              {displayEntries.map((entry) => (
                 <TouchableOpacity
                   key={entry.id}
                   style={styles.crewCard}

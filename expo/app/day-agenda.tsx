@@ -17,7 +17,7 @@ import {
   RefreshCcw,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
@@ -25,13 +25,11 @@ import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
-import { getLuckForDatePersonalized, isScottUser } from '@/constants/luckScores';
-import { useAuth } from '@/state/AuthProvider';
 import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
+import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
-import { LuckReportSection } from '@/components/LuckReportSection';
 
 const EVENT_COLORS = {
   cruise: '#3B82F6',
@@ -99,8 +97,6 @@ export default function DayAgendaScreen() {
   const { bookedCruises } = coreData;
 
   const playingHours: PlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
-  const { isAdmin, authenticatedEmail } = useAuth();
-  const useScottData = isScottUser(isAdmin, authenticatedEmail);
   const { getSessionsForDate, getDailySummary, addSession, removeSession } = useCasinoSessions();
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -647,8 +643,6 @@ export default function DayAgendaScreen() {
     return `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
   }, [selectedDate]);
 
-  const dayLuck = useMemo(() => getLuckForDatePersonalized(dateStr, useScottData), [dateStr, useScottData]);
-
   const goldenTimeSlots = useMemo(() => {
     return opportunePlayingTimes.map(t => ({
       id: t.id,
@@ -703,9 +697,9 @@ export default function DayAgendaScreen() {
     setIsSyncing(true);
     
     try {
-      const existingEvents = coreData.calendarEvents.filter((e: CalendarEvent) => e.sourceType !== 'cruise');
+      const existingEvents = coreData.calendarEvents.filter(e => e.sourceType !== 'cruise');
       
-      const cruiseEvents: CalendarEvent[] = bookedCruises.map((cruise: BookedCruise) => ({
+      const cruiseEvents: CalendarEvent[] = bookedCruises.map(cruise => ({
         id: `cruise-event-${cruise.id}`,
         title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
         startDate: cruise.sailDate,
@@ -957,17 +951,9 @@ export default function DayAgendaScreen() {
 
         <View style={styles.dateHeader}>
           <Text style={styles.dateText}>{formattedDate}</Text>
-          <View style={styles.dateSubRow}>
-            <Text style={styles.eventCount}>
-              {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
-            </Text>
-            {dayLuck ? (
-              <View style={[styles.luckBadge, { backgroundColor: `${dayLuck.hex}22`, borderColor: `${dayLuck.hex}55` }]}>
-                <Text style={[styles.luckBadgeScore, { color: dayLuck.hex }]}>{String(dayLuck.score)}</Text>
-                <Text style={[styles.luckBadgeLabel, { color: dayLuck.hex }]}>{dayLuck.label}</Text>
-              </View>
-            ) : null}
-          </View>
+          <Text style={styles.eventCount}>
+            {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
+          </Text>
         </View>
 
         <ScrollView 
@@ -1033,14 +1019,7 @@ export default function DayAgendaScreen() {
             <TimeZoneConverter />
           </View>
 
-          <View style={styles.sectionContainer}>
-            <LuckReportSection
-              selectedDate={selectedDate}
-              birthdate={currentUser?.birthdate}
-              name={currentUser?.name}
-              dayLuck={dayLuck}
-            />
-          </View>
+          <CrewRecognitionSection />
         </ScrollView>
       </SafeAreaView>
       
@@ -1106,36 +1085,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#FFFFFF',
-    marginBottom: 6,
-  },
-  dateSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   eventCount: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: '#FFFFFF',
-  },
-  luckBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 99,
-    borderWidth: 1,
-  },
-  luckBadgeScore: {
-    fontSize: 15,
-    fontWeight: '900' as const,
-    lineHeight: 18,
-  },
-  luckBadgeLabel: {
-    fontSize: 11,
-    fontWeight: '700' as const,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.4,
   },
   scrollView: {
     flex: 1,

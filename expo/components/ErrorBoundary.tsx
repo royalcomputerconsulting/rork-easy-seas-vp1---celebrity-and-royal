@@ -4,7 +4,7 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 
 type ErrorBoundaryState = { hasError: boolean; errorMessage: string; errorStack?: string };
 
-class ErrorBoundaryContainer extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false, errorMessage: '', errorStack: '' };
@@ -30,7 +30,7 @@ class ErrorBoundaryContainer extends React.Component<{ children: React.ReactNode
     this.setState({ hasError: false, errorMessage: '' });
   };
 
-  render(): React.JSX.Element {
+  render() {
     if (this.state.hasError) {
       return (
         <View style={styles.container} testID="error-boundary">
@@ -43,12 +43,8 @@ class ErrorBoundaryContainer extends React.Component<{ children: React.ReactNode
       );
     }
 
-    return <>{this.props.children}</>;
+    return this.props.children;
   }
-}
-
-export function ErrorBoundary({ children }: { children: React.ReactNode }) {
-  return <ErrorBoundaryContainer>{children}</ErrorBoundaryContainer>;
 }
 
 const styles = StyleSheet.create({

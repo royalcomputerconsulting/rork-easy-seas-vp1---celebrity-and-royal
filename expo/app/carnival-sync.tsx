@@ -1,14 +1,13 @@
 import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView, useWindowDimensions, ActivityIndicator, Alert } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Stack, useRouter } from 'expo-router';
-import { useAuth } from '@/state/AuthProvider';
 import { WebView } from 'react-native-webview';
 import { useCallback, useMemo, useState } from 'react';
 import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { exportFile } from '@/lib/importExport';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, Download, FileDown, FileText } from 'lucide-react-native';
-import { LogEntry, WebViewMessage } from '@/lib/royalCaribbean/types';
+import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
@@ -250,7 +249,7 @@ function CarnivalSyncScreen() {
         logContent += `Courtesy Holds: ${state.syncCounts.courtesyHolds}\n`;
       }
       logContent += `\n--- DETAILED LOG ---\n`;
-      state.logs.forEach((log: LogEntry) => {
+      state.logs.forEach(log => {
         const typeTag = log.type === 'error' ? '[ERROR]' : log.type === 'success' ? '[OK]' : log.type === 'warning' ? '[WARN]' : '[INFO]';
         logContent += `${log.timestamp} ${typeTag} ${log.message}\n`;
       });
@@ -279,29 +278,12 @@ function CarnivalSyncScreen() {
       return;
     }
 
-    void runIngestion().catch((error: unknown) => {
+    void runIngestion().catch((error) => {
       const errorMessage = error instanceof Error ? error.message : 'Carnival sync could not start';
       console.error('[CarnivalSync] Failed to start ingestion:', error);
       addLog(`Unable to start Carnival sync: ${errorMessage}`, 'error');
     });
   }, [addLog, canRunIngestion, isRunning, runIngestion]);
-
-  const handleConfirmSync = useCallback(() => {
-    if (isConfirmingSync) {
-      return;
-    }
-
-    setIsConfirmingSync(true);
-    void syncToApp(coreData, loyalty)
-      .catch((error: unknown) => {
-        const errorMessage = error instanceof Error ? error.message : 'Carnival sync failed';
-        console.error('[CarnivalSync] Sync-to-app error:', error);
-        addLog(`Unable to finish Carnival sync: ${errorMessage}`, 'error');
-      })
-      .finally(() => {
-        setIsConfirmingSync(false);
-      });
-  }, [addLog, coreData, isConfirmingSync, loyalty, syncToApp]);
 
   const handleOpenImportTools = () => {
     router.push('/settings');
@@ -324,6 +306,23 @@ function CarnivalSyncScreen() {
     }
     handleWebViewMessage({ type: 'auth_status', loggedIn: true } as any);
   };
+
+  const handleConfirmSync = useCallback(() => {
+    if (isConfirmingSync) {
+      return;
+    }
+
+    setIsConfirmingSync(true);
+    void syncToApp(coreData, loyalty)
+      .catch((error) => {
+        const errorMessage = error instanceof Error ? error.message : 'Carnival sync failed';
+        console.error('[CarnivalSync] Sync-to-app error:', error);
+        addLog(`Unable to finish Carnival sync: ${errorMessage}`, 'error');
+      })
+      .finally(() => {
+        setIsConfirmingSync(false);
+      });
+  }, [addLog, coreData, isConfirmingSync, loyalty, syncToApp]);
 
   return (
     <>
@@ -377,7 +376,7 @@ function CarnivalSyncScreen() {
               </View>
             </View>
             <View style={styles.logsScrollTop}>
-              {state.logs.slice(-2).map((log: LogEntry, index: number) => (
+              {state.logs.slice(-2).map((log, index) => (
                 <View key={`${log.timestamp}-${index}`} style={[styles.logEntry, log.type === 'error' && styles.logError]}>
                   <Text style={styles.logTimestamp}>{log.timestamp}</Text>
                   <Text style={[
@@ -1637,68 +1636,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
   },
-  adminGateContainer: {
-    flex: 1,
-    backgroundColor: CARNIVAL_DARK,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    paddingHorizontal: 32,
-    gap: 16,
-  },
-  adminGateTitle: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '700' as const,
-    marginTop: 8,
-  },
-  adminGateText: {
-    color: '#94a3b8',
-    fontSize: 15,
-    textAlign: 'center' as const,
-    lineHeight: 22,
-  },
-  adminGateButton: {
-    marginTop: 12,
-    backgroundColor: CARNIVAL_RED,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  adminGateButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600' as const,
-  },
 });
 
 export default function CarnivalSyncScreenWrapper() {
-  const { isAdmin } = useAuth();
-  const router = useRouter();
-
-  if (!isAdmin) {
-    return (
-      <>
-        <Stack.Screen
-          options={{
-            title: 'Carnival Cruises Sync',
-            headerStyle: { backgroundColor: CARNIVAL_DARK },
-            headerTintColor: '#fff',
-          }}
-        />
-        <View style={styles.adminGateContainer}>
-          <Ship size={48} color={CARNIVAL_RED} />
-          <Text style={styles.adminGateTitle}>Admin Only</Text>
-          <Text style={styles.adminGateText}>
-            Carnival Cruises sync is restricted to admin users. Please contact your administrator for access.
-          </Text>
-          <Pressable style={styles.adminGateButton} onPress={() => router.back()}>
-            <Text style={styles.adminGateButtonText}>Go Back</Text>
-          </Pressable>
-        </View>
-      </>
-    );
-  }
-
   return (
     <ErrorBoundary>
       <CarnivalSyncProvider>

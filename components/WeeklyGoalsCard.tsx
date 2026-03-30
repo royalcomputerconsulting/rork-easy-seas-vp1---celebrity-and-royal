@@ -208,7 +208,7 @@ function GoalProgressRing({
 
   const handlePress = useCallback(() => {
     if (Platform.OS !== 'web') {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     onEdit();
   }, [onEdit]);
@@ -268,12 +268,12 @@ function GoalProgressRing({
         </View>
       )}
       
-      {isCompleted && goal.reward ? (
+      {isCompleted && goal.reward && (
         <View style={[styles.rewardBadge, { backgroundColor: config.lightColor }]}>
           <Star size={10} color={config.color} fill={config.color} />
           <Text style={[styles.rewardText, { color: config.color }]}>{goal.reward}</Text>
         </View>
-      ) : null}
+      )}
     </Animated.View>
   );
 }
@@ -340,12 +340,12 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
   const [editValues, setEditValues] = useState<Record<string, string>>({});
 
   const handleEditGoal = useCallback((goalType: WeeklyGoal['type']) => {
-    const goal = weeklyGoals.find((g: WeeklyGoal) => g.type === goalType);
+    const goal = weeklyGoals.find(g => g.type === goalType);
     if (goal) {
       setEditValues(prev => ({ ...prev, [goalType]: goal.target.toString() }));
       setEditingGoal(goalType);
       if (Platform.OS !== 'web') {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     }
   }, [weeklyGoals]);
@@ -355,7 +355,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
     if (!isNaN(newTarget) && newTarget > 0) {
       console.log('[WeeklyGoalsCard] Would update goal target:', goalType, newTarget);
       if (Platform.OS !== 'web') {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
     setEditingGoal(null);
@@ -366,19 +366,19 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
   }, []);
 
   const completedGoalsCount = useMemo(() => {
-    return weeklyGoals.filter((g: WeeklyGoal) => g.completed).length;
+    return weeklyGoals.filter(g => g.completed).length;
   }, [weeklyGoals]);
 
   useEffect(() => {
-    const newlyCompleted = weeklyGoals.find((g: WeeklyGoal) => g.completed);
+    const newlyCompleted = weeklyGoals.find(g => g.completed);
     if (newlyCompleted && onGoalComplete) {
       onGoalComplete(newlyCompleted);
     }
   }, [completedGoalsCount, weeklyGoals, onGoalComplete]);
 
   if (compact) {
-    const completedCount = weeklyGoals.filter((g: WeeklyGoal) => g.completed).length;
-    const totalProgress = weeklyGoals.reduce((sum: number, g: WeeklyGoal) => 
+    const completedCount = weeklyGoals.filter(g => g.completed).length;
+    const totalProgress = weeklyGoals.reduce((sum, g) => 
       sum + Math.min((g.current / g.target) * 100, 100), 0) / weeklyGoals.length;
 
     return (
@@ -433,7 +433,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.goalsScrollContent}
         >
-          {weeklyGoals.map((goal: WeeklyGoal) => (
+          {weeklyGoals.map((goal) => (
             <GoalProgressRing
               key={goal.id}
               goal={goal}
@@ -447,7 +447,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
         </ScrollView>
 
         <View style={styles.goalsListContainer}>
-          {weeklyGoals.map((goal: WeeklyGoal) => {
+          {weeklyGoals.map((goal) => {
             const config = GOAL_CONFIG[goal.type];
             const progress = Math.min((goal.current / goal.target) * 100, 100);
             const IconComponent = config.icon;
@@ -497,7 +497,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
           })}
         </View>
 
-        {completedGoalsCount === weeklyGoals.length && weeklyGoals.length > 0 ? (
+        {completedGoalsCount === weeklyGoals.length && weeklyGoals.length > 0 && (
           <View style={styles.allCompleteCard}>
             <LinearGradient
               colors={['#10B981', '#059669']}
@@ -516,7 +516,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
               </View>
             </LinearGradient>
           </View>
-        ) : null}
+        )}
 
         <View style={styles.tipsContainer}>
           <View style={styles.tipRow}>

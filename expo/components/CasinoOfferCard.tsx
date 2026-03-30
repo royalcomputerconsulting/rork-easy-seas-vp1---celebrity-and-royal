@@ -31,7 +31,6 @@ interface CasinoOfferCardProps {
   bookedCruiseIds?: Set<string>;
   isActive?: boolean;
   isBestValue?: boolean;
-  offerSource?: 'royal' | 'celebrity' | 'carnival';
 }
 
 interface OfferSummaryCardProps {
@@ -248,11 +247,10 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   obc,
   cruises,
   onPress,
-  onCruisePress: _onCruisePress,
-  bookedCruiseIds: _bookedCruiseIds = new Set(),
+  onCruisePress,
+  bookedCruiseIds = new Set(),
   isActive = true,
   isBestValue = false,
-  offerSource,
 }: CasinoOfferCardProps) {
   const { localData } = useAppState();
   const [showOfferImage, setShowOfferImage] = useState(false);
@@ -532,9 +530,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
         <View style={styles.cruiseCountBadge}>
           <Text style={styles.cruiseCountBadgeText}>
-            {offerSource === 'carnival'
-              ? 'Tap to view cruises on Carnival.com'
-              : `${offerDetails.totalCruises} cruise${offerDetails.totalCruises !== 1 ? 's' : ''} available`}
+            {offerDetails.totalCruises} cruise{offerDetails.totalCruises !== 1 ? 's' : ''} available
           </Text>
         </View>
       </View>
@@ -582,18 +578,9 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
         {/* ACTION ROW */}
         <View style={styles.actionRowLarge}>
-          <TouchableOpacity style={[styles.primaryButtonLarge, offerSource === 'carnival' && styles.carnivalButton]} onPress={onPress}>
-            {offerSource === 'carnival' ? (
-              <>
-                <ExternalLink size={18} color={COLORS.white} />
-                <Text style={styles.primaryButtonTextLarge}>View Cruises on Carnival.com</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.primaryButtonTextLarge}>View All Cruises</Text>
-                <ChevronRight size={18} color={COLORS.white} />
-              </>
-            )}
+          <TouchableOpacity style={styles.primaryButtonLarge} onPress={onPress}>
+            <Text style={styles.primaryButtonTextLarge}>View All Cruises</Text>
+            <ChevronRight size={18} color={COLORS.white} />
           </TouchableOpacity>
         </View>
       </View>
@@ -992,9 +979,6 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.sm,
-  },
-  carnivalButton: {
-    backgroundColor: '#CC2232',
   },
   primaryButtonTextLarge: {
     fontSize: 14,
