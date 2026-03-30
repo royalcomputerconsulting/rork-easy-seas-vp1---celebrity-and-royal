@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Anchor, Star, TrendingUp, CheckCircle, Clock, Crown } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { createDateFromString } from '@/lib/date';
+import { createCruiseListKey } from '@/lib/listKeys';
 import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
 import type { BookedCruise } from '@/types/models';
 
@@ -205,7 +206,7 @@ export function CrownAnchorTimeline({ currentPoints, bookedCruises }: CrownAncho
         });
 
         return (
-          <View key={entry.cruise.id} style={styles.entryRow}>
+          <View key={createCruiseListKey(entry.cruise, idx)} style={styles.entryRow}>
             {/* Left: connector line + dot */}
             <View style={styles.entryLeft}>
               {!isLast && <View style={styles.connectorLine} />}

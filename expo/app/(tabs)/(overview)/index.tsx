@@ -34,6 +34,7 @@ import { useUser } from '@/state/UserProvider';
 import { useAuth } from '@/state/AuthProvider';
 import { useAgentX } from '@/state/AgentXProvider';
 import { usePriceTrackingSync } from '@/lib/usePriceTrackingSync';
+import { createCruiseListKey } from '@/lib/listKeys';
 import { useAlerts } from '@/state/AlertsProvider';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { CasinoCertificatesCard } from '@/components/CasinoCertificatesCard';
@@ -612,7 +613,7 @@ function OverviewScreenContent() {
               {`${cruisesWithCasinoData.length} cruise${cruisesWithCasinoData.length !== 1 ? 's' : ''} with casino data`}
             </Text>
           </View>
-          {cruisesWithCasinoData.map((cruise: BookedCruise) => {
+          {cruisesWithCasinoData.map((cruise: BookedCruise, index: number) => {
             const winnings = cruise.winnings || 0;
             const earnedPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
             const isWin = winnings >= 0;
@@ -620,7 +621,7 @@ function OverviewScreenContent() {
             
             return (
               <TouchableOpacity
-                key={cruise.id}
+                key={createCruiseListKey(cruise, index)}
                 style={styles.casinoHistoryItem}
                 onPress={() => handleCruiseItemPress(cruise.id)}
                 activeOpacity={0.7}

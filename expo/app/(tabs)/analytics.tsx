@@ -31,6 +31,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import type { BookedCruise } from '@/types/models';
 import { createDateFromString, formatDate } from '@/lib/date';
+import { createCruiseListKey } from '@/lib/listKeys';
 import { calculateCruiseValue, type ValueBreakdown } from '@/lib/valueCalculator';
 import { formatCurrency, formatNumber } from '@/lib/format';
 
@@ -372,7 +373,7 @@ export default function AnalyticsScreen() {
             {cruisePerformance.length > 0 ? (
               cruisePerformance.map((entry: CruisePerformance, idx: number) => (
                 <TouchableOpacity
-                  key={entry.cruise.id}
+                  key={createCruiseListKey(entry.cruise, idx)}
                   activeOpacity={0.84}
                   onPress={() => handleCruisePress(entry.cruise.id)}
                   style={[styles.cruiseListRow, idx === cruisePerformance.length - 1 && styles.cruiseListRowLast]}

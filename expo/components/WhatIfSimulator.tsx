@@ -25,6 +25,7 @@ import {
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { formatCurrency, formatNumber } from '@/lib/format';
+import { createCruiseListKey } from '@/lib/listKeys';
 import {
   ScenarioType,
   ScenarioInput,
@@ -73,7 +74,7 @@ export function WhatIfSimulator({
 
   const handleScenarioSelect = useCallback((type: ScenarioType) => {
     if (Platform.OS !== 'web') {
-      Haptics.selectionAsync();
+      void Haptics.selectionAsync();
     }
     setSelectedScenario(type);
     setResult(null);
@@ -81,7 +82,7 @@ export function WhatIfSimulator({
 
   const runSimulation = useCallback(() => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     setIsSimulating(true);
 
@@ -135,7 +136,7 @@ export function WhatIfSimulator({
 
   const resetSimulation = useCallback(() => {
     if (Platform.OS !== 'web') {
-      Haptics.selectionAsync();
+      void Haptics.selectionAsync();
     }
     setResult(null);
     setNewNights('7');
@@ -181,9 +182,9 @@ export function WhatIfSimulator({
           <View style={styles.inputsContainer}>
             <Text style={styles.inputLabel}>Select Cruise to Remove</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cruiseScroll}>
-              {bookedCruises.map((cruise) => (
+              {bookedCruises.map((cruise, index) => (
                 <TouchableOpacity
-                  key={cruise.id}
+                  key={createCruiseListKey(cruise, index)}
                   style={[
                     styles.cruiseOption,
                     selectedCruiseId === cruise.id && styles.cruiseOptionSelected,

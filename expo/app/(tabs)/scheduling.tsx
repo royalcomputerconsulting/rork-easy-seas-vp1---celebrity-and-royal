@@ -30,6 +30,7 @@ import { APP_TEXTURE, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { createDateFromString, formatDate, getDaysUntil, isDateInPast } from '@/lib/date';
 import { findBackToBackSets, type BackToBackSet } from '@/lib/backToBackFinder';
+import { createCruiseListKey, createIndexedKey } from '@/lib/listKeys';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import {
   buildCruiseCardFields,
@@ -557,7 +558,7 @@ export default function SchedulingScreen() {
         {activeTab === 'foryou' ? (
           <FlatList
             data={sortedBackToBackSets}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) => createIndexedKey(['back-to-back', item.id], index)}
             renderItem={renderBackToBackCard}
             ListHeaderComponent={listHeader}
             ListEmptyComponent={<PremiumEmptyState title="No chain-ready back-to-backs" subtitle="We preserved the back-to-back discovery flow. Try broadening filters or importing more sailings." />}
@@ -569,7 +570,7 @@ export default function SchedulingScreen() {
         ) : (
           <FlatList
             data={filteredCruises}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) => createCruiseListKey(item, index)}
             renderItem={renderCruiseCard}
             ListHeaderComponent={listHeader}
             ListEmptyComponent={<PremiumEmptyState title="No cruises match these filters" subtitle="All cruise fields are still intact. Adjust the chips above or clear filters to expand the list." />}

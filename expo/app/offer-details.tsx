@@ -32,6 +32,7 @@ import {
   pickCruiseImage,
   type DisplayField,
 } from '../lib/cruisePresentation';
+import { createCruiseListKey, dedupeCruisesByIdentity } from '@/lib/listKeys';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import type { BookedCruise, CasinoOffer, Cruise } from '@/types/models';
@@ -64,7 +65,7 @@ export default function OfferDetailsScreen() {
   const offerData = useMemo(() => {
     const allCruises = [...(storeCruises || []), ...(localData.cruises || [])];
     const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
-    const uniqueCruises = allCruises.filter((cruise, index, self) => index === self.findIndex((entry) => entry.id === cruise.id));
+    const uniqueCruises = dedupeCruisesByIdentity(allCruises);
 
     const offer = allOffers.find((entry: CasinoOffer) => entry.offerCode === offerCode);
     let matchingCruises = uniqueCruises.filter((cruise: Cruise) => cruise.offerCode === offerCode);
@@ -132,7 +133,7 @@ export default function OfferDetailsScreen() {
 
   const filterOptions = useMemo(() => {
     const allCruises = [...(storeCruises || []), ...(localData.cruises || [])].filter((cruise: Cruise) => cruise.offerCode === offerCode);
-    const uniqueCruises = allCruises.filter((cruise, index, self) => index === self.findIndex((entry) => entry.id === cruise.id));
+    const uniqueCruises = dedupeCruisesByIdentity(allCruises);
     const ships = [...new Set(uniqueCruises.map((cruise) => cruise.shipName).filter(Boolean))].sort();
     const guestCounts = [...new Set(uniqueCruises.map((cruise) => cruise.guests || 2))].sort((left, right) => left - right);
     const roomTypes = [...new Set(uniqueCruises.map((cruise) => cruise.cabinType).filter((room): room is string => Boolean(room)))].sort();
@@ -302,7 +303,7 @@ export default function OfferDetailsScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <FlatList
           data={offerData.cruises}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => createCruiseListKey(item, index)}
           renderItem={renderCruiseCard}
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={styles.spacer} />}

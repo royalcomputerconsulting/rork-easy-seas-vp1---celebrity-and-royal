@@ -28,6 +28,7 @@ import { APP_TEXTURE, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { createDateFromString, formatDate, isDateInPast } from '@/lib/date';
 import { calculatePortfolioValue } from '@/lib/valueCalculator';
+import { createCruiseListKey } from '@/lib/listKeys';
 import {
   buildCruiseCardFields,
   pickCruiseImage,
@@ -363,7 +364,7 @@ export default function BookedScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <FlatList
           data={viewMode === 'list' ? filteredCruises : viewMode === 'timeline' ? timelineCards : ([] as BookedCruise[])}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => createCruiseListKey(item, index)}
           renderItem={renderCruiseCard}
           ListHeaderComponent={(
             <View>
