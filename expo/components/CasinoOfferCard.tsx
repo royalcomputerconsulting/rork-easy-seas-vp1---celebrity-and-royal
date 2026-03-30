@@ -31,6 +31,7 @@ interface CasinoOfferCardProps {
   bookedCruiseIds?: Set<string>;
   isActive?: boolean;
   isBestValue?: boolean;
+  offerSource?: 'royal' | 'celebrity' | 'carnival';
 }
 
 interface OfferSummaryCardProps {
@@ -143,9 +144,6 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
 export const JackpotDealsCard = OfferSummaryCard;
 
 const JACKPOT_BG = 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=600&q=80';
-const OFFER_CARD_MARBLE_COLORS = ['#FCFEFF', '#EEF7FF', '#DDEEFF', '#CAE3F8'] as const;
-const OFFER_CARD_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.98)', 'rgba(188,216,241,0.28)', 'rgba(255,255,255,0.18)', 'rgba(142,182,221,0.24)'] as const;
-const OFFER_CARD_MARBLE_LOCATIONS = [0, 0.26, 0.7, 1] as const;
 
 const summaryStyles = StyleSheet.create({
   container: {
@@ -250,10 +248,11 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   obc,
   cruises,
   onPress,
-  onCruisePress: _onCruisePress,
-  bookedCruiseIds: _bookedCruiseIds = new Set(),
+  onCruisePress,
+  bookedCruiseIds = new Set(),
   isActive = true,
   isBestValue = false,
+  offerSource,
 }: CasinoOfferCardProps) {
   const { localData } = useAppState();
   const [showOfferImage, setShowOfferImage] = useState(false);
@@ -503,99 +502,101 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       activeOpacity={0.9}
       testID="casino-offer-card"
     >
-      <LinearGradient
-        colors={OFFER_CARD_MARBLE_COLORS}
-        locations={OFFER_CARD_MARBLE_LOCATIONS}
-        start={{ x: 0.02, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.marbleBackground}
-      >
-        <LinearGradient
-          colors={OFFER_CARD_MARBLE_VEIN_COLORS}
-          locations={OFFER_CARD_MARBLE_LOCATIONS}
-          start={{ x: 0.12, y: 0 }}
-          end={{ x: 0.88, y: 1 }}
-          style={styles.marbleVein}
+      {/* OFFER NAME & CODE - BLACK BOLD AT TOP */}
+      <View style={styles.offerHeaderSection}>
+        <Text style={styles.offerNameHeader}>{offerName}</Text>
+        <View style={styles.offerCodeHeaderBadge}>
+          <Text style={styles.offerCodeHeaderText}>CODE: {offerCode}</Text>
+        </View>
+      </View>
+
+      {/* IMAGE SECTION */}
+      <View style={styles.imageSection}>
+        <Image 
+          source={{ uri: cardImageUri }} 
+          style={styles.heroImage}
+          resizeMode="cover"
+          onError={() => setCardImageUri(DEFAULT_CRUISE_IMAGE)}
         />
-        <View style={styles.offerHeaderSection}>
-          <Text style={styles.offerNameHeader}>{offerName}</Text>
-          <View style={styles.offerCodeHeaderBadge}>
-            <Text style={styles.offerCodeHeaderText}>CODE: {offerCode}</Text>
-          </View>
+        
+        <View style={[styles.statusBadgeLarge, { backgroundColor: statusBadge.bg }]}>
+          <Text style={styles.statusBadgeLargeText}>{statusBadge.text}</Text>
         </View>
 
-        <View style={styles.imageSection}>
-          <Image 
-            source={{ uri: cardImageUri }} 
-            style={styles.heroImage}
-            resizeMode="cover"
-            onError={() => setCardImageUri(DEFAULT_CRUISE_IMAGE)}
-          />
-          
-          <View style={[styles.statusBadgeLarge, { backgroundColor: statusBadge.bg }]}>
-            <Text style={styles.statusBadgeLargeText}>{statusBadge.text}</Text>
+        {expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && (
+          <View style={styles.expiryAlertBadge}>
+            <Clock size={14} color={COLORS.white} />
+            <Text style={styles.expiryAlertText}>Expires in {expiryDays} days</Text>
           </View>
+        )}
 
-          {expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && (
-            <View style={styles.expiryAlertBadge}>
-              <Clock size={14} color={COLORS.white} />
-              <Text style={styles.expiryAlertText}>Expires in {expiryDays} days</Text>
+        <View style={styles.cruiseCountBadge}>
+          <Text style={styles.cruiseCountBadgeText}>
+            {offerSource === 'carnival'
+              ? 'Tap to view cruises on Carnival.com'
+              : `${offerDetails.totalCruises} cruise${offerDetails.totalCruises !== 1 ? 's' : ''} available`}
+          </Text>
+        </View>
+      </View>
+
+      {/* CONTENT SECTION */}
+      <View style={styles.contentSection}>
+        {/* Destinations */}
+        {uniqueDestinations.length > 0 && (
+          <View style={styles.destinationsRow}>
+            <Text style={styles.destLabel}>DESTINATIONS</Text>
+            <Text style={styles.destValue} numberOfLines={2}>
+              {uniqueDestinations.join(' • ')}
+            </Text>
+          </View>
+        )}
+
+        {/* Key Info Row: Room Type, Expiration, Total Value */}
+        <View style={styles.keyInfoRow}>
+          {offerDetails.roomType && offerDetails.roomType !== 'N/A' && (
+            <View style={styles.roomTypeBadge}>
+              <Text style={styles.roomTypeBadgeLabel}>ROOM TYPE</Text>
+              <Text style={styles.roomTypeBadgeValue}>{offerDetails.roomType}</Text>
             </View>
           )}
-
-          <View style={styles.cruiseCountBadge}>
-            <Text style={styles.cruiseCountBadgeText}>
-              {offerDetails.totalCruises} cruise{offerDetails.totalCruises !== 1 ? 's' : ''} available
+          {expiryDate && (
+            <View style={[styles.expiryBadge, expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && styles.expiryBadgeUrgent]}>
+              <Clock size={14} color={expiryDays !== null && expiryDays <= 7 && expiryDays > 0 ? '#DC2626' : COLORS.navyDeep} />
+              <View>
+                <Text style={styles.expiryBadgeLabel}>EXPIRES</Text>
+                <Text style={[styles.expiryBadgeValue, expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && styles.expiryBadgeValueUrgent]}>
+                  {createDateFromString(expiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+              </View>
+            </View>
+          )}
+          <View style={styles.totalValueCompact}>
+            <Text style={styles.totalValueCompactLabel}>
+              TOTAL VALUE{aggregateValue && aggregateValue.cruiseCount > 1 ? ` (${aggregateValue.cruiseCount})` : ''}
+            </Text>
+            <Text style={styles.totalValueCompactAmount}>
+              ${totalValue > 0 ? Math.round(totalValue).toLocaleString() : '---'}
             </Text>
           </View>
         </View>
 
-        <View style={styles.contentSection}>
-          {uniqueDestinations.length > 0 && (
-            <View style={styles.destinationsRow}>
-              <Text style={styles.destLabel}>DESTINATIONS</Text>
-              <Text style={styles.destValue} numberOfLines={2}>
-                {uniqueDestinations.join(' • ')}
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.keyInfoRow}>
-            {offerDetails.roomType && offerDetails.roomType !== 'N/A' && (
-              <View style={styles.roomTypeBadge}>
-                <Text style={styles.roomTypeBadgeLabel}>ROOM TYPE</Text>
-                <Text style={styles.roomTypeBadgeValue}>{offerDetails.roomType}</Text>
-              </View>
+        {/* ACTION ROW */}
+        <View style={styles.actionRowLarge}>
+          <TouchableOpacity style={[styles.primaryButtonLarge, offerSource === 'carnival' && styles.carnivalButton]} onPress={onPress}>
+            {offerSource === 'carnival' ? (
+              <>
+                <ExternalLink size={18} color={COLORS.white} />
+                <Text style={styles.primaryButtonTextLarge}>View Cruises on Carnival.com</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.primaryButtonTextLarge}>View All Cruises</Text>
+                <ChevronRight size={18} color={COLORS.white} />
+              </>
             )}
-            {expiryDate && (
-              <View style={[styles.expiryBadge, expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && styles.expiryBadgeUrgent]}>
-                <Clock size={14} color={expiryDays !== null && expiryDays <= 7 && expiryDays > 0 ? '#DC2626' : COLORS.navyDeep} />
-                <View>
-                  <Text style={styles.expiryBadgeLabel}>EXPIRES</Text>
-                  <Text style={[styles.expiryBadgeValue, expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && styles.expiryBadgeValueUrgent]}>
-                    {createDateFromString(expiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </Text>
-                </View>
-              </View>
-            )}
-            <View style={styles.totalValueCompact}>
-              <Text style={styles.totalValueCompactLabel}>
-                TOTAL VALUE{aggregateValue && aggregateValue.cruiseCount > 1 ? ` (${aggregateValue.cruiseCount})` : ''}
-              </Text>
-              <Text style={styles.totalValueCompactAmount}>
-                ${totalValue > 0 ? Math.round(totalValue).toLocaleString() : '---'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.actionRowLarge}>
-            <TouchableOpacity style={styles.primaryButtonLarge} onPress={onPress}>
-              <Text style={styles.primaryButtonTextLarge}>View All Cruises</Text>
-              <ChevronRight size={18} color={COLORS.white} />
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         </View>
-      </LinearGradient>
+      </View>
 
       <Modal
         visible={showOfferImage}
@@ -658,24 +659,14 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: '#D7E6F4',
     ...SHADOW.md,
   },
-  marbleBackground: {
-    borderRadius: BORDER_RADIUS.lg,
-    position: 'relative',
-  },
-  marbleVein: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.94,
-  },
   offerHeaderSection: {
-    backgroundColor: 'rgba(247,251,255,0.76)',
+    backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.sm,
@@ -755,7 +746,6 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     padding: SPACING.md,
-    backgroundColor: 'rgba(245,250,255,0.66)',
   },
   keyInfoRow: {
     flexDirection: 'row',
@@ -764,12 +754,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   roomTypeBadge: {
-    backgroundColor: 'rgba(246,250,255,0.78)',
+    backgroundColor: '#E0F2F1',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#D5E6F4',
+    borderColor: COLORS.navyDeep,
   },
   roomTypeBadgeLabel: {
     fontSize: 10,
@@ -787,12 +777,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(246,250,255,0.78)',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#D5E6F4',
+    borderColor: '#E2E8F0',
   },
   expiryBadgeUrgent: {
     backgroundColor: '#FEF2F2',
@@ -815,12 +805,12 @@ const styles = StyleSheet.create({
   totalValueCompact: {
     marginLeft: 'auto' as const,
     alignItems: 'flex-end',
-    backgroundColor: 'rgba(240,249,244,0.9)',
+    backgroundColor: '#E8F5E9',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#8BC6A8',
+    borderColor: '#4CAF50',
   },
   totalValueCompactLabel: {
     fontSize: 9,
@@ -1002,6 +992,9 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.sm,
+  },
+  carnivalButton: {
+    backgroundColor: '#CC2232',
   },
   primaryButtonTextLarge: {
     fontSize: 14,

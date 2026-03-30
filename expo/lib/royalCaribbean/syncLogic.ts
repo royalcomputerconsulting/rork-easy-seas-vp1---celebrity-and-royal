@@ -59,6 +59,12 @@ export interface SyncPreviewCounts {
   totalBookedCruises: number;
 }
 
+export interface ApplySyncPreviewOptions {
+  preserveManagedOffers?: boolean;
+  preserveManagedCruises?: boolean;
+  preserveManagedBookedCruises?: boolean;
+}
+
 function isInstantRewardOrCertificate(offerCode: string | undefined, offerName: string | undefined): boolean {
   if (!offerCode && !offerName) return false;
   
@@ -570,11 +576,16 @@ export function applySyncPreview(
   existingOffers: CasinoOffer[],
   existingCruises: Cruise[],
   existingBookedCruises: BookedCruise[],
-  syncSource: SyncDataSource = 'royal'
+  syncSource: SyncDataSource = 'royal',
+  options?: ApplySyncPreviewOptions
 ): { offers: CasinoOffer[]; cruises: Cruise[]; bookedCruises: BookedCruise[] } {
   // STRATEGY: Synced data is the SOURCE OF TRUTH for the active sync source.
   // Items from that source NOT present in the sync are REMOVED.
   // Other sources are always preserved.
+
+  const preserveManagedOffers = options?.preserveManagedOffers ?? false;
+  const preserveManagedCruises = options?.preserveManagedCruises ?? false;
+  const preserveManagedBookedCruises = options?.preserveManagedBookedCruises ?? false;
 
   const updatedOfferIds = new Set(preview.offers.updates.map(u => u.existing.id));
   const finalOffers = [
@@ -586,6 +597,10 @@ export function applySyncPreview(
             findMatchingOffer(newOffer, [o])
           );
           if (!isBeingReplaced) {
+            if (preserveManagedOffers) {
+              console.log(`[SyncLogic] Preserving existing ${syncSource}-source offer because this sync did not capture a replacement: ${o.offerCode} - ${o.offerName}`);
+              return true;
+            }
             console.log(`[SyncLogic] Removing stale ${syncSource}-source offer: ${o.offerCode} - ${o.offerName}`);
             return false;
           }
@@ -594,6 +609,9 @@ export function applySyncPreview(
       })
       .filter(o => !updatedOfferIds.has(o.id))
       .filter(o => {
+        if (preserveManagedOffers && isManagedOfferSource(o, syncSource)) {
+          return true;
+        }
         const isBeingReplaced = preview.offers.new.some(newOffer => 
           findMatchingOffer(newOffer, [o])
         );
@@ -613,6 +631,10 @@ export function applySyncPreview(
             findMatchingCruise(newCruise, [c])
           );
           if (!isBeingReplaced) {
+            if (preserveManagedCruises) {
+              console.log(`[SyncLogic] Preserving existing ${syncSource}-source cruise because this sync did not capture a replacement: ${c.shipName} on ${c.sailDate}`);
+              return true;
+            }
             console.log(`[SyncLogic] Removing stale ${syncSource}-source cruise: ${c.shipName} on ${c.sailDate}`);
             return false;
           }
@@ -621,6 +643,9 @@ export function applySyncPreview(
       })
       .filter(c => !updatedCruiseIds.has(c.id))
       .filter(c => {
+        if (preserveManagedCruises && isManagedCruiseSource(c, syncSource)) {
+          return true;
+        }
         const isBeingReplaced = preview.cruises.new.some(newCruise => 
           findMatchingCruise(newCruise, [c])
         );
@@ -662,6 +687,10 @@ export function applySyncPreview(
             findMatchingBookedCruise(newCruise, [c])
           );
           if (!isBeingReplaced) {
+            if (preserveManagedBookedCruises) {
+              console.log(`[SyncLogic] Preserving existing ${syncSource}-source booked cruise because this sync did not capture a replacement: ${c.shipName} on ${c.sailDate}`);
+              return true;
+            }
             console.log(`[SyncLogic] Removing stale ${syncSource}-source booked cruise: ${c.shipName} on ${c.sailDate}`);
             return false;
           }
@@ -670,6 +699,9 @@ export function applySyncPreview(
       })
       .filter(c => !updatedBookedCruiseIds.has(c.id))
       .filter(c => {
+        if (preserveManagedBookedCruises && isManagedCruiseSource(c, syncSource)) {
+          return true;
+        }
         const isBeingReplaced = preview.bookedCruises.new.some(newCruise => 
           findMatchingBookedCruise(newCruise, [c])
         );
@@ -681,6 +713,9 @@ export function applySyncPreview(
 
   console.log('[SyncLogic] applySyncPreview final counts:', {
     syncSource,
+    preserveManagedOffers,
+    preserveManagedCruises,
+    preserveManagedBookedCruises,
     existingOffers: existingOffers.length,
     finalOffers: finalOffers.length,
     existingCruises: existingCruises.length,

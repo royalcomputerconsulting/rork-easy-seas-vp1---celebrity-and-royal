@@ -48,8 +48,7 @@ import {
   Rss,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, DS } from '@/constants/theme';
-import { SETTINGS_GLASS_THEME, SETTINGS_GLASS_SHADOW } from '@/constants/settingsGlassTheme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { isDateInPast } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
@@ -61,7 +60,6 @@ import {
   parseICSFile, 
   parseBookedCSV,
   generateOffersCSV, 
-  generateCalendarICS,
   generateBookedCSV,
   exportFile,
   downloadFromURL,
@@ -112,7 +110,7 @@ export default function SettingsScreen() {
   const entitlement = useEntitlement();
   const { settings, updateSettings, clearLocalData, setLocalData, localData } = useAppState();
   const coreData = useCoreData();
-  const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers } = coreData;
+  const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers, calendarEvents } = coreData;
   const cruises = coreData.cruises;
   const {
     currentUser,
@@ -163,11 +161,6 @@ export default function SettingsScreen() {
   const { stats: crewStats } = useCrewRecognition();
 
   const normalizedAuthenticatedEmail = useMemo(() => normalizeAccountEmail(authenticatedEmail), [authenticatedEmail]);
-  const canSeeCarnivalSync = useMemo(() => {
-    if (isAdmin) return true;
-    const email = authenticatedEmail?.toLowerCase().trim();
-    return email === 's@a.com' || email === 'scott.merlis1@gmail.com';
-  }, [isAdmin, authenticatedEmail]);
   const normalizedCurrentUserEmail = useMemo(() => normalizeAccountEmail(currentUser?.email), [currentUser?.email]);
   const isProfileIdentityReady = useMemo(() => {
     if (!normalizedAuthenticatedEmail) {
@@ -273,7 +266,6 @@ export default function SettingsScreen() {
     carnivalVifpTier: isProfileDisplayReady ? currentUser?.carnivalVifpTier || '' : '',
     carnivalPlayersClubTier: isProfileDisplayReady ? currentUser?.carnivalPlayersClubTier || '' : '',
     carnivalPlayersClubPoints: isProfileDisplayReady ? currentUser?.carnivalPlayersClubPoints || 0 : 0,
-    birthdate: isProfileDisplayReady ? currentUser?.birthdate || '' : '',
   }), [
     authenticatedEmail,
     currentUser,
@@ -469,46 +461,96 @@ export default function SettingsScreen() {
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
+  const existingCalendarFeedQuery = trpc.calendar.getCalendarFeedToken.useQuery(
+    { email: normalizedAuthenticatedEmail ?? '' },
+    { enabled: Boolean(normalizedAuthenticatedEmail), staleTime: 60000 }
+  );
+
+  const calendarFeedTokenStorageKey = useMemo(() => {
+    return getUserScopedKey('easyseas_calendar_feed_token', normalizedAuthenticatedEmail ?? null);
+  }, [normalizedAuthenticatedEmail]);
+
+  const calendarFeedUpdatedStorageKey = useMemo(() => {
+    return getUserScopedKey('easyseas_calendar_feed_updated', normalizedAuthenticatedEmail ?? null);
+  }, [normalizedAuthenticatedEmail]);
 
   useEffect(() => {
     const loadFeedToken = async () => {
       try {
-        const stored = await AsyncStorage.getItem('easyseas_calendar_feed_token');
+        const stored = await AsyncStorage.getItem(calendarFeedTokenStorageKey);
+        const lastUpdate = await AsyncStorage.getItem(calendarFeedUpdatedStorageKey);
+
         if (stored) {
           setCalendarFeedToken(stored);
           setCalendarFeedUrl(`${RENDER_BACKEND_URL}/api/calendar-feed/${stored}`);
-          const lastUpdate = await AsyncStorage.getItem('easyseas_calendar_feed_updated');
-          if (lastUpdate) setFeedLastUpdated(lastUpdate);
+          setFeedLastUpdated(lastUpdate);
           console.log('[Settings] Loaded calendar feed token:', stored.slice(0, 8) + '...');
+          return;
         }
+
+        setCalendarFeedToken(null);
+        setCalendarFeedUrl(null);
+        setFeedLastUpdated(lastUpdate);
       } catch (error) {
         console.error('[Settings] Error loading feed token:', error);
       }
     };
     void loadFeedToken();
-  }, []);
+  }, [calendarFeedTokenStorageKey, calendarFeedUpdatedStorageKey]);
+
+  useEffect(() => {
+    const backendToken = existingCalendarFeedQuery.data?.token;
+    const backendUpdatedAt = existingCalendarFeedQuery.data?.updatedAt ?? null;
+
+    if (!existingCalendarFeedQuery.data?.found || !backendToken) {
+      return;
+    }
+
+    const syncStoredFeed = async () => {
+      try {
+        await AsyncStorage.setItem(calendarFeedTokenStorageKey, backendToken);
+        if (backendUpdatedAt) {
+          await AsyncStorage.setItem(calendarFeedUpdatedStorageKey, backendUpdatedAt);
+        }
+        setCalendarFeedToken(backendToken);
+        setCalendarFeedUrl(`${RENDER_BACKEND_URL}/api/calendar-feed/${backendToken}`);
+        setFeedLastUpdated(backendUpdatedAt);
+        console.log('[Settings] Synced existing backend calendar feed token:', backendToken.slice(0, 8) + '...');
+      } catch (error) {
+        console.error('[Settings] Failed to sync backend feed token locally:', error);
+      }
+    };
+
+    void syncStoredFeed();
+  }, [calendarFeedTokenStorageKey, calendarFeedUpdatedStorageKey, existingCalendarFeedQuery.data]);
 
   const handlePublishCalendarFeed = useCallback(async () => {
-    const email = currentUser?.email;
+    const email = normalizedCurrentUserEmail ?? normalizedAuthenticatedEmail;
     if (!email) {
-      Alert.alert('Profile Required', 'Please set your email in your profile before publishing a calendar feed.');
+      Alert.alert('Profile Required', 'Please sign in or set your email in your profile before publishing a calendar feed.');
       return;
     }
 
     try {
       setIsPublishingFeed(true);
-      console.log('[Settings] Publishing calendar feed...');
+      console.log('[Settings] Publishing calendar feed...', { email });
 
       let token = calendarFeedToken;
       if (!token) {
         token = generateFeedToken();
         setCalendarFeedToken(token);
-        await AsyncStorage.setItem('easyseas_calendar_feed_token', token);
+        await AsyncStorage.setItem(calendarFeedTokenStorageKey, token);
         console.log('[Settings] Generated new feed token:', token.slice(0, 8) + '...');
       }
 
       const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
-      const allEvents = localData.calendar || [];
+      const allEvents = calendarEvents.length > 0 ? calendarEvents : (localData.calendar || []);
+
+      if (allBooked.length === 0 && allEvents.length === 0) {
+        Alert.alert('No Calendar Data', 'Add booked cruises or calendar events before publishing your feed.');
+        return;
+      }
+
       console.log('[Settings] Generating ICS from', allBooked.length, 'cruises and', allEvents.length, 'events');
 
       const icsContent = generateCalendarFeed(allBooked, allEvents);
@@ -523,12 +565,13 @@ export default function SettingsScreen() {
       setCalendarFeedUrl(feedUrl);
       const now = new Date().toISOString();
       setFeedLastUpdated(now);
-      await AsyncStorage.setItem('easyseas_calendar_feed_updated', now);
+      await AsyncStorage.setItem(calendarFeedUpdatedStorageKey, now);
+      await existingCalendarFeedQuery.refetch();
 
       console.log('[Settings] Calendar feed published successfully:', feedUrl);
       Alert.alert(
         'Calendar Feed Published',
-        `Your calendar feed is live with ${allBooked.length} cruises.\n\nYou can now subscribe to this feed from any calendar app (Apple Calendar, Google Calendar, Outlook, etc.).\n\nTap "Copy URL" to copy the feed link.`
+        `Your calendar feed is live with ${allBooked.length} cruises and ${allEvents.length} events.\n\nYou can now subscribe to this feed from any calendar app (Apple Calendar, Google Calendar, Outlook, etc.).\n\nTap "Copy URL" to copy the feed link.`
       );
     } catch (error) {
       console.error('[Settings] Publish feed error:', error);
@@ -536,17 +579,32 @@ export default function SettingsScreen() {
     } finally {
       setIsPublishingFeed(false);
     }
-  }, [calendarFeedToken, currentUser, bookedCruises, localData, saveCalendarFeedMutation]);
+  }, [
+    bookedCruises,
+    calendarEvents,
+    calendarFeedToken,
+    calendarFeedTokenStorageKey,
+    calendarFeedUpdatedStorageKey,
+    existingCalendarFeedQuery,
+    localData.booked,
+    localData.calendar,
+    normalizedAuthenticatedEmail,
+    normalizedCurrentUserEmail,
+    saveCalendarFeedMutation,
+  ]);
 
   const handleCopyFeedUrl = useCallback(async () => {
     if (!calendarFeedUrl) return;
     try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(calendarFeedUrl);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+        console.log('[Settings] Calendar feed URL copied to clipboard');
+        return;
       }
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-      console.log('[Settings] Calendar feed URL copied to clipboard');
+
+      Alert.alert('Feed URL', calendarFeedUrl);
     } catch (error) {
       console.error('[Settings] Copy error:', error);
       Alert.alert('Feed URL', calendarFeedUrl);
@@ -583,15 +641,15 @@ export default function SettingsScreen() {
             setCalendarFeedToken(newToken);
             setCalendarFeedUrl(null);
             setFeedLastUpdated(null);
-            await AsyncStorage.setItem('easyseas_calendar_feed_token', newToken);
-            await AsyncStorage.removeItem('easyseas_calendar_feed_updated');
+            await AsyncStorage.setItem(calendarFeedTokenStorageKey, newToken);
+            await AsyncStorage.removeItem(calendarFeedUpdatedStorageKey);
             console.log('[Settings] Regenerated feed token:', newToken.slice(0, 8) + '...');
             Alert.alert('Token Regenerated', 'Your feed URL has been reset. Tap "Publish Feed" to make it live with the new URL.');
           },
         },
       ]
     );
-  }, []);
+  }, [calendarFeedTokenStorageKey, calendarFeedUpdatedStorageKey]);
 
   const handleImportCalendarFromURL = useCallback(async () => {
     try {
@@ -886,20 +944,21 @@ export default function SettingsScreen() {
       setIsExporting(true);
       console.log('[Settings] Starting calendar ICS export');
       
-      const allEvents = localData.calendar || [];
+      const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
+      const allEvents = calendarEvents.length > 0 ? calendarEvents : (localData.calendar || []);
       
-      if (allEvents.length === 0) {
-        Alert.alert('No Data', 'No calendar events to export. Import events first.');
+      if (allBooked.length === 0 && allEvents.length === 0) {
+        Alert.alert('No Data', 'No cruises or calendar events to export. Import data first.');
         setIsExporting(false);
         return;
       }
 
-      const icsContent = generateCalendarICS(allEvents);
+      const icsContent = generateCalendarFeed(allBooked, allEvents);
       const fileName = `easyseas_calendar_${new Date().toISOString().split('T')[0]}.ics`;
       
       const success = await exportFile(icsContent, fileName);
       if (success) {
-        Alert.alert('Export Successful', `Exported ${allEvents.length} events to ${fileName}`);
+        Alert.alert('Export Successful', `Exported ${allBooked.length} cruises and ${allEvents.length} events to ${fileName}`);
       } else {
         Alert.alert('Export Info', 'File saved but sharing may not be available on this device.');
       }
@@ -910,7 +969,7 @@ export default function SettingsScreen() {
     } finally {
       setIsExporting(false);
     }
-  }, [localData.calendar]);
+  }, [bookedCruises, calendarEvents, localData.booked, localData.calendar]);
 
   const handleClearData = useCallback(() => {
     Alert.alert(
@@ -1028,8 +1087,6 @@ export default function SettingsScreen() {
         setIsImportingAll(false);
         return;
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      
       if (result.success && result.imported) {
         const { cruises: importedCruises, bookedCruises: importedBooked, casinoOffers: importedOffers, calendarEvents, casinoSessions: importedSessions, certificates, machines: importedMachines } = result.imported;
         
@@ -1170,7 +1227,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     carnivalVifpTier?: string;
     carnivalPlayersClubTier?: string;
     carnivalPlayersClubPoints?: number;
-    birthdate?: string;
   }) => {
     if (!isProfileDisplayReady) {
       console.log('[Settings] Blocked profile save while account data is still loading');
@@ -1272,7 +1328,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       carnivalVifpTier?: string;
       carnivalPlayersClubTier?: string;
       carnivalPlayersClubPoints?: number;
-      birthdate?: string;
     },
     oldEmail: string | undefined,
     newEmail: string,
@@ -1297,7 +1352,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           carnivalVifpTier: profileData.carnivalVifpTier,
           carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
           carnivalPlayersClubPoints: profileData.carnivalPlayersClubPoints,
-          birthdate: profileData.birthdate || undefined,
         });
       } else {
         const owner = await ensureOwner();
@@ -1318,7 +1372,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           carnivalVifpTier: profileData.carnivalVifpTier,
           carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
           carnivalPlayersClubPoints: profileData.carnivalPlayersClubPoints,
-          birthdate: profileData.birthdate || undefined,
         });
       }
       
@@ -1552,7 +1605,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         ) : (
           value
         )}
-        {onPress && <ChevronRight size={18} color={isDanger ? COLORS.error : SETTINGS_GLASS_THEME.textSecondary} />}
+        {onPress && <ChevronRight size={18} color={isDanger ? '#DC2626' : '#9CA3AF'} />}
       </View>
     </TouchableOpacity>
   );
@@ -1561,9 +1614,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     <Switch
       value={value}
       onValueChange={onToggle}
-      trackColor={{ false: 'rgba(255,255,255,0.16)', true: 'rgba(255,255,255,0.34)' }}
-      thumbColor={value ? SETTINGS_GLASS_THEME.textPrimary : 'rgba(255,255,255,0.72)'}
-      ios_backgroundColor="rgba(255,255,255,0.16)"
+      trackColor={{ false: '#E2E8F0', true: 'rgba(30,58,95,0.35)' }}
+      thumbColor={value ? '#1E3A5F' : '#9CA3AF'}
+      ios_backgroundColor="#E2E8F0"
     />
   );
 
@@ -1571,12 +1624,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     icon: React.ReactNode,
     title: string,
     subtitle: string,
-    _gradientColors: [string, string] = ['#1E3A5F', '#7B2D8E']
+    gradientColors: [string, string] = ['#0369A1', '#0284C7']
   ) => (
     <LinearGradient
-      colors={SETTINGS_GLASS_THEME.headerGradient}
-      start={{ x: 0.02, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      colors={gradientColors}
       style={styles.sectionGradientHeader}
     >
       <View style={styles.sectionHeaderContent}>
@@ -1592,14 +1643,14 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
   );
 
   return (
-    <LinearGradient
-      colors={SETTINGS_GLASS_THEME.backgroundGradient}
-      start={{ x: 0.02, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      
+      <LinearGradient
+        colors={['#F0F4F8', '#F0F4F8']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView 
           showsVerticalScrollIndicator={true}
@@ -1608,21 +1659,19 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         >
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <SettingsIcon size={24} color={SETTINGS_GLASS_THEME.textPrimary} />
+              <SettingsIcon size={24} color="#1E3A5F" />
               <Text style={styles.screenTitle}>Settings</Text>
             </View>
           </View>
 
           <View style={styles.dataOverviewCard}>
             <LinearGradient
-              colors={SETTINGS_GLASS_THEME.headerGradient}
-              start={{ x: 0.02, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              colors={['#0F2A4A', '#1A3A5C'] as [string, string]}
               style={styles.dataOverviewHeader}
             >
               <View style={styles.dataOverviewHeaderContent}>
                 <View style={styles.dataOverviewIconBadge}>
-                  <Anchor size={18} color={SETTINGS_GLASS_THEME.textPrimary} />
+                  <Anchor size={18} color={COLORS.white} />
                 </View>
                 <View style={styles.dataOverviewTitleGroup}>
                   <Text style={styles.dataOverviewTitle}>Data Overview</Text>
@@ -1679,20 +1728,20 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           </View>
 
           <View style={[styles.sectionCard, { marginBottom: SPACING.md }]}>
-            {renderSectionHeader(<Ship size={18} color={SETTINGS_GLASS_THEME.textPrimary} />, 'Quick Actions', 'Sync, import & backup shortcuts')}
+            {renderSectionHeader(<Ship size={18} color={COLORS.white} />, 'Quick Actions', 'Sync, import & backup shortcuts')}
             <View style={styles.quickActionsBody}>
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/royal-caribbean-sync' as any)}
               activeOpacity={0.7}
             >
-              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
-                <Ship size={16} color="#0070C9" />
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(0, 112, 201, 0.15)' }]}>
+                <Ship size={16} color="#60A5FA" />
               </View>
               <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
-              <ChevronRight size={16} color={SETTINGS_GLASS_THEME.textSecondary} />
+              <ChevronRight size={16} color='#9CA3AF' />
             </TouchableOpacity>
-            {canSeeCarnivalSync && (
+            {isAdmin && (
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/carnival-sync' as any)}
@@ -1702,7 +1751,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 <Anchor size={16} color="#CC2232" />
               </View>
               <Text style={styles.quickActionLabelInline}>Sync Carnival Cruises</Text>
-              <ChevronRight size={16} color={SETTINGS_GLASS_THEME.textSecondary} />
+              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
             )}
             <TouchableOpacity 
@@ -1710,11 +1759,11 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               onPress={() => router.push('/pricing-summary' as any)}
               activeOpacity={0.7}
             >
-              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
-                <TrendingDown size={16} color="#4CAF50" />
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(76, 175, 80, 0.15)' }]}>
+                <TrendingDown size={16} color="#8EF2C1" />
               </View>
               <Text style={styles.quickActionLabelInline}>Pricing Summary & History</Text>
-              <ChevronRight size={16} color={SETTINGS_GLASS_THEME.textSecondary} />
+              <ChevronRight size={16} color='#9CA3AF' />
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
@@ -1730,7 +1779,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 )}
               </View>
               <Text style={styles.quickActionLabelInline}>Load Import Offers.CSV</Text>
-              <ChevronRight size={16} color={SETTINGS_GLASS_THEME.textSecondary} />
+              <ChevronRight size={16} color='#9CA3AF' />
             </TouchableOpacity>
             <View style={styles.quickActionsRow}>
               <TouchableOpacity 
@@ -1788,7 +1837,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             <>
               <View style={styles.profileLoadingCard} testID="settings-profile-loading-card">
                 <View style={styles.profileLoadingIconWrap}>
-                  <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
                 </View>
                 <View style={styles.profileLoadingCopy}>
                   <Text style={styles.profileLoadingTitle}>Securing your profile</Text>
@@ -1798,7 +1847,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
               <View style={styles.profileLoadingCard} testID="settings-playing-hours-loading-card">
                 <View style={styles.profileLoadingIconWrap}>
-                  <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
                 </View>
                 <View style={styles.profileLoadingCopy}>
                   <Text style={styles.profileLoadingTitle}>Refreshing playing hours</Text>
@@ -1810,19 +1859,19 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Moon size={18} color={SETTINGS_GLASS_THEME.textPrimary} />, 'Display Preferences', 'Customize how data appears', ['#1A2560', '#6B21A8'])}
+              {renderSectionHeader(<Moon size={18} color={COLORS.white} />, 'Display Preferences', 'Customize how data appears')}
               {renderSettingRow(
-                <DollarSign size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <DollarSign size={18} color='rgba(168,198,255,0.85)' />,
                 'Show Taxes in List',
                 renderToggle(settings.showTaxesInList, (val) => updateSettings({ showTaxesInList: val }))
               )}
               {renderSettingRow(
-                <DollarSign size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <DollarSign size={18} color='rgba(168,198,255,0.85)' />,
                 'Price Per Night',
                 renderToggle(settings.showPricePerNight, (val) => updateSettings({ showPricePerNight: val }))
               )}
               {renderSettingRow(
-                <Moon size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <Moon size={18} color='rgba(168,198,255,0.85)' />,
                 'Theme',
                 settings.theme === 'dark' ? 'Dark' : settings.theme === 'light' ? 'Light' : 'System'
               )}
@@ -1831,14 +1880,14 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Bell size={18} color={SETTINGS_GLASS_THEME.textPrimary} />, 'Notifications', 'Alert preferences', ['#162B3D', '#5B21B6'])}
+              {renderSectionHeader(<Bell size={18} color={COLORS.white} />, 'Notifications', 'Alert preferences')}
               {renderSettingRow(
-                <Bell size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <Bell size={18} color='rgba(216,192,255,0.85)' />,
                 'Price Drop Alerts',
                 renderToggle(settings.priceDropAlerts, (val) => updateSettings({ priceDropAlerts: val }))
               )}
               {renderSettingRow(
-                <Bell size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <Bell size={18} color='rgba(216,192,255,0.85)' />,
                 'Daily Summary',
                 renderToggle(settings.dailySummaryNotifications || false, (val) => updateSettings({ dailySummaryNotifications: val }))
               )}
@@ -1847,16 +1896,16 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Database size={18} color={SETTINGS_GLASS_THEME.textPrimary} />, 'Data Management', 'Import, export & backup your data', ['#1C1650', '#7C3AED'])}
+              {renderSectionHeader(<Database size={18} color={COLORS.white} />, 'Data Management', 'Import, export & backup your data')}
               <View style={[styles.dataSubsection, styles.importBanner]}>
                 <Text style={styles.subsectionLabel}>IMPORT</Text>
                 <Text style={styles.subsectionHelper}>Bring in new CSV manifests, booked logs, or calendar drops.</Text>
               </View>
               {renderSettingRow(
-                <FileSpreadsheet size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <FileSpreadsheet size={18} color='rgba(168,198,255,0.85)' />,
                 'Offers CSV',
                 isImporting ? (
-                  <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
+                  <ActivityIndicator size="small" color='#A8C6FF' />
                 ) : lastImportResult?.type === 'offers' ? (
                   <View style={styles.successBadge}>
                     <CheckCircle size={12} color={COLORS.success} />
@@ -1866,10 +1915,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 handleImportOffersCSV
               )}
               {renderSettingRow(
-                <Ship size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <Ship size={18} color='rgba(168,198,255,0.85)' />,
                 'Booked Cruises CSV',
                 isImporting ? (
-                  <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
+                  <ActivityIndicator size="small" color='#A8C6FF' />
                 ) : lastImportResult?.type === 'booked' ? (
                   <View style={styles.successBadge}>
                     <CheckCircle size={12} color={COLORS.success} />
@@ -1879,10 +1928,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 handleImportBookedCSV
               )}
               {renderSettingRow(
-                <Calendar size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <Calendar size={18} color='rgba(168,198,255,0.85)' />,
                 'Calendar (.ics)',
                 isImporting ? (
-                  <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
+                  <ActivityIndicator size="small" color='#A8C6FF' />
                 ) : lastImportResult?.type === 'calendar' ? (
                   <View style={styles.successBadge}>
                     <CheckCircle size={12} color={COLORS.success} />
@@ -1892,53 +1941,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 handleImportCalendarICS
               )}
 <View style={styles.dataDivider} />
-              
-              <View style={[styles.dataSubsection, styles.fullBackupBanner]}>
-                <Text style={styles.subsectionLabel}>FULL BACKUP</Text>
-                <Text style={styles.subsectionHelper}>Export slices or recover your entire vault in one flow.</Text>
-              </View>
-              {renderSettingRow(
-                <Upload size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
-                'Offers CSV',
-                isExporting ? (
-                  <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    {dataStats.sailings} sailings
-                  </Text>
-                ),
-                handleExportOffersCSV
-              )}
-              {renderSettingRow(
-                <Ship size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
-                'Booked Cruises CSV',
-                isExporting ? (
-                  <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    {dataStats.booked} booked
-                  </Text>
-                ),
-                handleExportBookedCSV
-              )}
-              {renderSettingRow(
-                <Download size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
-                'Calendar (.ics)',
-                isExporting ? (
-                  <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    {dataStats.events} events
-                  </Text>
-                ),
-                handleExportCalendarICS
-              )}
-
-              <View style={styles.dataDivider} />
 
               <View style={[styles.dataSubsection, styles.calendarFeedBanner]}>
                 <Text style={styles.subsectionLabel}>CALENDAR FEED</Text>
-                <Text style={styles.subsectionHelper}>Publish your cruises as a subscribable calendar feed.</Text>
+                <Text style={styles.subsectionHelper}>Publish your cruises and imported events as a subscribable calendar feed.</Text>
               </View>
               <View style={styles.calendarFeedSection}>
                 <TouchableOpacity
@@ -1948,9 +1954,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                   disabled={isPublishingFeed}
                 >
                   {isPublishingFeed ? (
-                    <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.buttonPrimaryText} />
+                    <ActivityIndicator size="small" color={COLORS.white} />
                   ) : (
-                    <Rss size={16} color={SETTINGS_GLASS_THEME.buttonPrimaryText} />
+                    <Rss size={16} color={COLORS.white} />
                   )}
                   <Text style={styles.publishFeedButtonText}>
                     {calendarFeedUrl ? 'Update Feed' : 'Publish Feed'}
@@ -1966,7 +1972,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 {calendarFeedUrl && (
                   <>
                     <View style={styles.feedUrlContainer}>
-                      <Link2 size={14} color={SETTINGS_GLASS_THEME.textSecondary} />
+                      <Link2 size={14} color={CLEAN_THEME.text.secondary} />
                       <Text style={styles.feedUrlText} numberOfLines={1} ellipsizeMode="middle">
                         {calendarFeedUrl}
                       </Text>
@@ -1980,7 +1986,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                         {isCopied ? (
                           <CheckCircle size={14} color={COLORS.success} />
                         ) : (
-                          <Copy size={14} color={SETTINGS_GLASS_THEME.textPrimary} />
+                          <Copy size={14} color={COLORS.navyDeep} />
                         )}
                         <Text style={[styles.feedActionText, isCopied && styles.feedActionTextActive]}>
                           {isCopied ? 'Copied!' : 'Copy URL'}
@@ -1991,7 +1997,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                         onPress={handleSubscribeToFeed}
                         activeOpacity={0.7}
                       >
-                        <Calendar size={14} color={SETTINGS_GLASS_THEME.textPrimary} />
+                        <Calendar size={14} color={COLORS.navyDeep} />
                         <Text style={styles.feedActionText}>Subscribe</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -1999,13 +2005,13 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                         onPress={handleRegenerateFeedToken}
                         activeOpacity={0.7}
                       >
-                        <RefreshCcw size={14} color={SETTINGS_GLASS_THEME.textPrimary} />
+                        <RefreshCcw size={14} color={COLORS.navyDeep} />
                         <Text style={styles.feedActionText}>New URL</Text>
                       </TouchableOpacity>
                     </View>
                     {feedLastUpdated && (
                       <Text style={styles.feedLastUpdated}>
-                        Last published: {new Date(feedLastUpdated).toLocaleDateString()} at {new Date(feedLastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {`Last published: ${new Date(feedLastUpdated).toLocaleDateString()} at ${new Date(feedLastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
                       </Text>
                     )}
                   </>
@@ -2013,18 +2019,58 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
                 {!calendarFeedUrl && (
                   <Text style={styles.feedHelperText}>
-                    Publish your booked cruises and events as an .ics calendar feed that you can subscribe to from Apple Calendar, Google Calendar, Outlook, or any calendar app.
+                    Publish your booked cruises and imported events as an .ics calendar feed that you can subscribe to from Apple Calendar, Google Calendar, Outlook, or any calendar app.
                   </Text>
                 )}
               </View>
 
               <View style={styles.dataDivider} />
-
+              
+              <View style={[styles.dataSubsection, styles.fullBackupBanner]}>
+                <Text style={styles.subsectionLabel}>FULL BACKUP</Text>
+                <Text style={styles.subsectionHelper}>Export slices or recover your entire vault in one flow.</Text>
+              </View>
+              {renderSettingRow(
+                <Upload size={18} color='rgba(142,242,193,0.85)' />,
+                'Offers CSV',
+                isExporting ? (
+                  <ActivityIndicator size="small" color='#8EF2C1' />
+                ) : (
+                  <Text style={styles.countBadge}>
+                    {dataStats.sailings} sailings
+                  </Text>
+                ),
+                handleExportOffersCSV
+              )}
+              {renderSettingRow(
+                <Ship size={18} color='rgba(142,242,193,0.85)' />,
+                'Booked Cruises CSV',
+                isExporting ? (
+                  <ActivityIndicator size="small" color='#8EF2C1' />
+                ) : (
+                  <Text style={styles.countBadge}>
+                    {dataStats.booked} booked
+                  </Text>
+                ),
+                handleExportBookedCSV
+              )}
+              {renderSettingRow(
+                <Download size={18} color='rgba(142,242,193,0.85)' />,
+                'Calendar (.ics)',
+                isExporting ? (
+                  <ActivityIndicator size="small" color='#8EF2C1' />
+                ) : (
+                  <Text style={styles.countBadge}>
+                    {dataStats.events} events
+                  </Text>
+                ),
+                handleExportCalendarICS
+              )}
 {renderSettingRow(
                 <FolderArchive size={18} color={COLORS.success} />,
                 'Export All App Data',
                 isExportingAll ? (
-                  <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
+                  <ActivityIndicator size="small" color='#8EF2C1' />
                 ) : (
                   <Text style={styles.countBadge}>
                     Complete
@@ -2036,7 +2082,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 <FolderInput size={18} color={COLORS.info} />,
                 'Restore from Backup',
                 isImportingAll ? (
-                  <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
+                  <ActivityIndicator size="small" color='#A8C6FF' />
                 ) : undefined,
                 handleImportAllData
               )}
@@ -2092,9 +2138,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<HelpCircle size={18} color={SETTINGS_GLASS_THEME.textPrimary} />, 'Support', 'Help & resources', ['#1E3A5F', '#9333EA'])}
+              {renderSectionHeader(<HelpCircle size={18} color={COLORS.white} />, 'Support', 'Help & resources')}
               {renderSettingRow(
-                <HelpCircle size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <HelpCircle size={18} color='rgba(255,226,143,0.85)' />,
                 'Help Center',
                 undefined,
                 () => Alert.alert(
@@ -2144,21 +2190,21 @@ STEP 4: Optional Calendar Import
                 )
               )}
               {renderSettingRow(
-                <BookOpen size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <BookOpen size={18} color='rgba(255,226,143,0.85)' />,
                 'User Manual',
-                <ChevronRight size={14} color={SETTINGS_GLASS_THEME.textSecondary} />,
+                <ChevronRight size={14} color='rgba(255,255,255,0.35)' />,
                 () => setIsUserManualVisible(true)
               )}
               {renderSettingRow(
-                <BookOpen size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <BookOpen size={18} color='rgba(255,226,143,0.85)' />,
                 'Purchase "Smooth Sailing (In Rough Waters)" on Amazon',
-                <ExternalLink size={14} color={SETTINGS_GLASS_THEME.textSecondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => handleOpenLink('https://www.amazon.com/Smooth-Sailing-Rough-Waters-Consistently/dp/B0G4NMSM31/ref=sr_1_1?crid=BWS5ZWAQCC46&dib=eyJ2IjoiMSJ9.pTShQ0uJgtzeHg_EAFai2a6YTAan0h_35hcv7ZH0QKfGjHj071QN20LucGBJIEps.F_tIgnCOSc3EqGF6wUtOWK_hXH-5Ti3Miy6KYQ_JaLY&dib_tag=se&keywords=smooth+sailing+in+rough+waters&qid=1766758613&s=books&sprefix=smooth+sailing+in+rough+water%2Cstripbooks%2C189&sr=1-1')
               )}
               {renderSettingRow(
-                <Star size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <Star size={18} color='rgba(255,226,143,0.85)' />,
                 'Rate App',
-                <ExternalLink size={14} color={SETTINGS_GLASS_THEME.textSecondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => handleOpenLink('https://apps.apple.com/us/app/easy-seas/id6758175890?ppid=9a051237-cab0-4164-9459-4c55a1976721')
               )}
             </View>
@@ -2166,7 +2212,7 @@ STEP 4: Optional Calendar Import
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Crown size={18} color={SETTINGS_GLASS_THEME.textPrimary} />, 'Subscriptions & Purchases', 'Manage your plan', ['#1B2550', '#6D28D9'])}
+              {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan')}
               <View style={styles.subscriptionStatusBanner}>
                 <Crown size={18} color={
                   entitlement.subscriptionDisplayStatus === 'annual' ? '#10B981' :
@@ -2191,40 +2237,40 @@ STEP 4: Optional Calendar Import
               </View>
               <View style={styles.dataDivider} />
               {renderSettingRow(
-                <RefreshCcw size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <RefreshCcw size={18} color='rgba(255,226,143,0.85)' />,
                 'Restore Purchases',
-                <ChevronRight size={14} color={SETTINGS_GLASS_THEME.textSecondary} />,
+                <ChevronRight size={14} color='rgba(255,255,255,0.35)' />,
                 () => { void entitlement.restore(); }
               )}
               {renderSettingRow(
-                <ExternalLink size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <ExternalLink size={18} color='rgba(255,226,143,0.85)' />,
                 'Manage Subscriptions',
-                <ExternalLink size={14} color={SETTINGS_GLASS_THEME.textSecondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => { void entitlement.openManageSubscription(); }
               )}
               {renderSettingRow(
-                <Calendar size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <Calendar size={18} color='rgba(255,226,143,0.85)' />,
                 'Purchase a Monthly Subscription',
-                <ChevronRight size={14} color={SETTINGS_GLASS_THEME.textSecondary} />,
+                <ChevronRight size={14} color='rgba(255,255,255,0.35)' />,
                 () => router.push('/paywall-monthly' as any)
               )}
               {renderSettingRow(
-                <Crown size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <Crown size={18} color='rgba(255,226,143,0.85)' />,
                 'Purchase an Annual Subscription',
-                <ChevronRight size={14} color={SETTINGS_GLASS_THEME.textSecondary} />,
+                <ChevronRight size={14} color='rgba(255,255,255,0.35)' />,
                 () => router.push('/paywall' as any)
               )}
               <View style={styles.dataDivider} />
               {renderSettingRow(
-                <Shield size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <Shield size={18} color='rgba(168,198,255,0.85)' />,
                 'Privacy Policy',
-                <ExternalLink size={14} color={SETTINGS_GLASS_THEME.textSecondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => entitlement.openPrivacyPolicy()
               )}
               {renderSettingRow(
-                <Shield size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                <Shield size={18} color='rgba(168,198,255,0.85)' />,
                 'Terms of Use (EULA)',
-                <ExternalLink size={14} color={SETTINGS_GLASS_THEME.textSecondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => entitlement.openTerms()
               )}
             </View>
@@ -2236,7 +2282,7 @@ STEP 4: Optional Calendar Import
           {isAdmin && (
             <View style={styles.section}>
               <View style={styles.sectionCard}>
-                {renderSectionHeader(<Shield size={18} color={SETTINGS_GLASS_THEME.textPrimary} />, 'Admin', 'Email whitelist & data tools', ['#1B2040', '#8B5CF6'])}
+                {renderSectionHeader(<Shield size={18} color={COLORS.white} />, 'Admin', 'Email whitelist & data tools')}
                 <View style={styles.adminHeader}>
                   <Text style={styles.adminHeaderText}>Manage user access</Text>
                   <Text style={styles.adminHeaderSubtext}>
@@ -2250,7 +2296,7 @@ STEP 4: Optional Calendar Import
                     value={newWhitelistEmail}
                     onChangeText={setNewWhitelistEmail}
                     placeholder="Enter email to whitelist"
-                    placeholderTextColor={SETTINGS_GLASS_THEME.textMuted}
+                    placeholderTextColor={CLEAN_THEME.text.secondary}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -2303,10 +2349,10 @@ STEP 4: Optional Calendar Import
                   <Text style={styles.subsectionHelper}>Import CSV files and reset app data.</Text>
                 </View>
                 {renderSettingRow(
-                  <FileSpreadsheet size={18} color={SETTINGS_GLASS_THEME.textPrimary} />,
+                  <FileSpreadsheet size={18} color='rgba(168,198,255,0.85)' />,
                   'Import Offers CSV',
                   isImporting ? (
-                    <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
+                    <ActivityIndicator size="small" color='rgba(168,198,255,0.8)' />
                   ) : lastImportResult?.type === 'offers' ? (
                     <View style={styles.successBadge}>
                       <CheckCircle size={12} color={COLORS.success} />
@@ -2327,7 +2373,7 @@ STEP 4: Optional Calendar Import
 
                 {isLoadingWhitelist ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={SETTINGS_GLASS_THEME.textPrimary} />
+                    <ActivityIndicator size="small" color='rgba(168,198,255,0.8)' />
                   </View>
                 ) : (
                   <View style={styles.whitelistContainer}>
@@ -2366,7 +2412,7 @@ STEP 4: Optional Calendar Import
 
           <View style={styles.section}>
             <View style={[styles.sectionCard, styles.dangerCard]}>
-              {renderSectionHeader(<Trash2 size={18} color={SETTINGS_GLASS_THEME.textPrimary} />, 'Danger Zone', 'Irreversible actions', ['#DC2626', '#B91C1C'])}
+              {renderSectionHeader(<Trash2 size={18} color={COLORS.white} />, 'Danger Zone', 'Irreversible actions', ['#DC2626', '#B91C1C'])}
               {renderSettingRow(
                 <Trash2 size={18} color={COLORS.error} />,
                 'Clear All Data',
@@ -2398,7 +2444,7 @@ STEP 4: Optional Calendar Import
                     style={styles.aboutAppStoreButton}
                     activeOpacity={0.7}
                   >
-                    <ExternalLink size={14} color={SETTINGS_GLASS_THEME.buttonPrimaryText} />
+                    <ExternalLink size={14} color="#FFFFFF" />
                     <Text style={styles.aboutAppStoreText}>App Store</Text>
                   </TouchableOpacity>
                 </View>
@@ -2408,7 +2454,7 @@ STEP 4: Optional Calendar Import
 
           <View style={styles.footer}>
             <View style={styles.footerLogoRow}>
-              <Ship size={20} color={SETTINGS_GLASS_THEME.textPrimary} />
+              <Ship size={20} color='#6B7280' />
               <Text style={styles.footerAppName}>EasySeas</Text>
             </View>
             <Text style={styles.footerTagline}>Cruise Point Tracker</Text>
@@ -2443,14 +2489,14 @@ STEP 4: Optional Calendar Import
         visible={isUserManualVisible}
         onClose={() => setIsUserManualVisible(false)}
       />
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#F0F4F8',
   },
   safeArea: {
     flex: 1,
@@ -2461,6 +2507,7 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: SPACING.lg,
+    paddingHorizontal: SPACING.xs,
   },
   titleRow: {
     flexDirection: 'row',
@@ -2468,10 +2515,10 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   screenTitle: {
-    fontSize: 30,
-    fontWeight: '800' as const,
-    color: SETTINGS_GLASS_THEME.textPrimary,
-    letterSpacing: 0.2,
+    fontSize: TYPOGRAPHY.fontSizeHeader,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#1A2A3D',
+    letterSpacing: -0.5,
   },
   section: {
     marginTop: SPACING.lg,
@@ -2479,37 +2526,45 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#6B7280',
     marginBottom: SPACING.sm,
     marginLeft: SPACING.xs,
     letterSpacing: 1.5,
   },
   dangerTitle: {
-    color: COLORS.error,
+    color: '#DC2626',
   },
   sectionCard: {
-    backgroundColor: SETTINGS_GLASS_THEME.surface,
-    borderRadius: DS.radius.xl,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.borderStrong,
+    borderColor: '#E2E8F0',
     overflow: 'hidden',
-    ...SETTINGS_GLASS_SHADOW,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   dangerCard: {
-    borderColor: 'rgba(255, 170, 194, 0.5)',
-    backgroundColor: 'rgba(104, 24, 56, 0.72)',
+    borderColor: 'rgba(220,38,38,0.25)',
+    backgroundColor: 'rgba(220,38,38,0.04)',
   },
   profileLoadingCard: {
     marginTop: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
-    backgroundColor: SETTINGS_GLASS_THEME.surface,
-    borderRadius: DS.radius.xl,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: '#E2E8F0',
     padding: SPACING.lg,
-    ...SETTINGS_GLASS_SHADOW,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
   profileLoadingIconWrap: {
     width: 44,
@@ -2517,9 +2572,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: SETTINGS_GLASS_THEME.iconBackground,
-    borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.iconBorder,
+    backgroundColor: '#F1F5F9',
   },
   profileLoadingCopy: {
     flex: 1,
@@ -2527,12 +2580,12 @@ const styles = StyleSheet.create({
   profileLoadingTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#1A2A3D',
   },
   profileLoadingSubtitle: {
     marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#6B7280',
     lineHeight: 20,
   },
   settingRow: {
@@ -2542,7 +2595,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: SETTINGS_GLASS_THEME.border,
+    borderBottomColor: '#F1F5F9',
   },
   settingLeft: {
     flexDirection: 'row',
@@ -2553,13 +2606,13 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#1A2A3D',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     flexShrink: 1,
     flexWrap: 'wrap',
   },
   dangerLabel: {
-    color: COLORS.error,
+    color: '#DC2626',
   },
   settingRight: {
     flexDirection: 'row',
@@ -2568,7 +2621,7 @@ const styles = StyleSheet.create({
   },
   settingValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#0E7490',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   footer: {
@@ -2583,19 +2636,19 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   footerAppName: {
-    fontSize: 20,
-    fontWeight: '800' as const,
-    color: SETTINGS_GLASS_THEME.textPrimary,
-    letterSpacing: 0.3,
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#1A2A3D',
+    letterSpacing: 0.5,
   },
   footerTagline: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#6B7280',
     marginBottom: SPACING.md,
   },
   footerCopyright: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textMuted,
+    color: '#9CA3AF',
     marginTop: SPACING.md,
   },
 
@@ -2603,7 +2656,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xl,
     paddingTop: SPACING.lg,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(3, 105, 161, 0.15)',
+    borderTopColor: '#E5E7EB',
     paddingHorizontal: SPACING.md,
   },
   legalDisclaimerTitle: {
@@ -2616,7 +2669,7 @@ const styles = StyleSheet.create({
   },
   legalDisclaimerText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#9CA3AF',
     lineHeight: 16,
     textAlign: 'left',
   },
@@ -2624,37 +2677,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  successText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.success,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  countBadge: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: SETTINGS_GLASS_THEME.textPrimary,
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceStrong,
+    backgroundColor: 'rgba(5,150,105,0.08)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: 'rgba(5,150,105,0.20)',
+  },
+  successText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#059669',
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  countBadge: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#6B7280',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     overflow: 'hidden' as const,
   },
   backupHint: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#9CA3AF',
     marginTop: SPACING.sm,
     marginHorizontal: SPACING.xs,
     fontStyle: 'italic' as const,
   },
   extensionHint: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textMuted,
+    color: '#6B21A8',
     marginTop: SPACING.xs,
     marginHorizontal: SPACING.xs,
     fontStyle: 'italic' as const,
@@ -2663,39 +2718,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xs,
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceMuted,
+    backgroundColor: '#FAFBFC',
   },
   importBanner: {
-    backgroundColor: SETTINGS_GLASS_THEME.surface,
+    backgroundColor: 'rgba(30,58,95,0.03)',
   },
   fullBackupBanner: {
-    backgroundColor: SETTINGS_GLASS_THEME.surface,
+    backgroundColor: 'rgba(5,150,105,0.03)',
+  },
+  calendarFeedBanner: {
+    backgroundColor: 'rgba(123,45,142,0.03)',
   },
   subsectionLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#B8860B',
     letterSpacing: 1.5,
   },
   subsectionHelper: {
     marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textMuted,
+    color: '#6B7280',
     letterSpacing: 0.5,
   },
   dataDivider: {
     height: 1,
-    backgroundColor: SETTINGS_GLASS_THEME.border,
+    backgroundColor: '#F1F5F9',
     marginVertical: SPACING.xs,
   },
   dataOverviewCard: {
-    borderRadius: DS.radius.xl,
+    borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.md,
-    backgroundColor: SETTINGS_GLASS_THEME.surface,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.borderStrong,
-    ...SETTINGS_GLASS_SHADOW,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   dataOverviewHeader: {
     padding: SPACING.sm,
@@ -2713,24 +2775,22 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: SETTINGS_GLASS_THEME.iconBackground,
+    backgroundColor: 'rgba(255, 255, 255, 0.30)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.iconBorder,
   },
   dataOverviewTitleGroup: {
     flex: 1,
   },
   dataOverviewTitle: {
-    fontSize: 18,
-    fontWeight: '800' as const,
-    color: SETTINGS_GLASS_THEME.textPrimary,
-    letterSpacing: 0.2,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+    letterSpacing: 0.3,
   },
   dataOverviewSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: 'rgba(255, 255, 255, 0.9)',
     marginTop: 2,
   },
   dataOverviewBody: {
@@ -2745,20 +2805,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     gap: 3,
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceMuted,
-    borderRadius: DS.radius.sm,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: '#E2E8F0',
   },
   dataOverviewStatValue: {
     fontSize: 18,
     fontWeight: '700' as const,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#1A2A3D',
   },
   dataOverviewStatLabel: {
     fontSize: 10,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#6B7280',
   },
   dataOverviewUpcomingCompletedRow: {
     flexDirection: 'row' as const,
@@ -2767,11 +2827,11 @@ const styles = StyleSheet.create({
   },
   dataOverviewMiniStat: {
     fontSize: 9,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#9CA3AF',
   },
   dataOverviewMiniStatDivider: {
     fontSize: 9,
-    color: SETTINGS_GLASS_THEME.textMuted,
+    color: '#D1D5DB',
   },
   dataOverviewGrid: {
     flexDirection: 'row',
@@ -2780,11 +2840,11 @@ const styles = StyleSheet.create({
   dataOverviewGridCard: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceMuted,
-    borderRadius: DS.radius.sm,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: '#E2E8F0',
   },
   dataOverviewGridIcon: {
     width: 28,
@@ -2797,33 +2857,40 @@ const styles = StyleSheet.create({
   dataOverviewGridValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '700' as const,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#1A2A3D',
   },
   dataOverviewGridLabel: {
     fontSize: 10,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#6B7280',
     marginTop: 2,
     textAlign: 'center' as const,
   },
   quickActionsSection: {
     marginBottom: SPACING.md,
-    backgroundColor: SETTINGS_GLASS_THEME.surface,
-    borderRadius: DS.radius.xl,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
-    ...SETTINGS_GLASS_SHADOW,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  quickActionsBody: {
+    padding: SPACING.sm,
   },
   quickActionFullWidth: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceMuted,
-    borderRadius: DS.radius.md,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: '#E2E8F0',
   },
   quickActionsRow: {
     flexDirection: 'row',
@@ -2833,12 +2900,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceMuted,
-    borderRadius: DS.radius.md,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: '#E2E8F0',
   },
   quickActionIconSmall: {
     width: 34,
@@ -2852,25 +2919,25 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '600' as const,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#1A2A3D',
     letterSpacing: 0.1,
   },
   adminHeader: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceMuted,
+    backgroundColor: '#FAFBFC',
     borderBottomWidth: 1,
-    borderBottomColor: SETTINGS_GLASS_THEME.border,
+    borderBottomColor: '#F1F5F9',
   },
   adminHeaderText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#1A2A3D',
     marginBottom: 4,
   },
   adminHeaderSubtext: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#6B7280',
     lineHeight: 16,
   },
   addEmailContainer: {
@@ -2879,29 +2946,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: SETTINGS_GLASS_THEME.border,
+    borderBottomColor: '#F1F5F9',
   },
   addEmailInput: {
     flex: 1,
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceMuted,
-    borderRadius: DS.radius.md,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#1A2A3D',
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: '#E2E8F0',
   },
   addEmailButton: {
-    backgroundColor: SETTINGS_GLASS_THEME.buttonPrimaryBackground,
-    borderRadius: DS.radius.md,
+    backgroundColor: 'rgba(30,58,95,0.08)',
+    borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1E3A5F',
   },
   addEmailButtonText: {
-    color: SETTINGS_GLASS_THEME.buttonPrimaryText,
+    color: '#1E3A5F',
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
@@ -2916,7 +2985,7 @@ const styles = StyleSheet.create({
   whitelistCount: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#6B7280',
     marginBottom: SPACING.sm,
   },
   whitelistItem: {
@@ -2925,11 +2994,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
-    backgroundColor: SETTINGS_GLASS_THEME.surface,
-    borderRadius: DS.radius.md,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.md,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: '#E2E8F0',
   },
   whitelistItemLeft: {
     flexDirection: 'row',
@@ -2941,42 +3010,48 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: 'rgba(5,150,105,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   whitelistItemEmail: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#1A2A3D',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     flex: 1,
   },
   adminBadge: {
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceStrong,
+    backgroundColor: 'rgba(212,160,10,0.10)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: 'rgba(212,160,10,0.25)',
   },
   adminBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#92400E',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   removeButton: {
     padding: SPACING.sm,
-    backgroundColor: 'rgba(244, 67, 54, 0.1)',
+    backgroundColor: 'rgba(220,38,38,0.06)',
     borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(220,38,38,0.18)',
   },
   aboutPromoSection: {
     marginTop: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
-    backgroundColor: SETTINGS_GLASS_THEME.surface,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.borderStrong,
-    ...SETTINGS_GLASS_SHADOW,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   aboutBanner: {
     width: '100%',
@@ -3002,12 +3077,12 @@ const styles = StyleSheet.create({
   aboutQrTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#1A2A3D',
     marginBottom: 4,
   },
   aboutQrSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#6B7280',
     marginBottom: SPACING.sm,
     lineHeight: 16,
   },
@@ -3015,27 +3090,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: SETTINGS_GLASS_THEME.buttonPrimaryBackground,
+    backgroundColor: '#1E3A5F',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.md,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#2E5077',
   },
   aboutAppStoreText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: SETTINGS_GLASS_THEME.buttonPrimaryText,
+    color: '#FFFFFF',
   },
   subscriptionStatusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
     padding: SPACING.md,
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceMuted,
-    borderRadius: DS.radius.md,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.md,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: '#E2E8F0',
   },
   subscriptionStatusText: {
     flex: 1,
@@ -3043,22 +3120,19 @@ const styles = StyleSheet.create({
   subscriptionStatusTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#1A2A3D',
     marginBottom: 2,
   },
   subscriptionStatusSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#6B7280',
   },
   subscriptionHint: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#9CA3AF',
     marginTop: SPACING.xs,
     marginHorizontal: SPACING.xs,
     lineHeight: 16,
-  },
-  calendarFeedBanner: {
-    backgroundColor: SETTINGS_GLASS_THEME.surface,
   },
   calendarFeedSection: {
     paddingHorizontal: SPACING.md,
@@ -3069,56 +3143,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    backgroundColor: SETTINGS_GLASS_THEME.buttonPrimaryBackground,
-    borderRadius: DS.radius.md,
+    backgroundColor: '#1E3A5F',
+    borderWidth: 1,
+    borderColor: '#2E5077',
+    borderRadius: BORDER_RADIUS.md,
     paddingVertical: 12,
     paddingHorizontal: SPACING.lg,
   },
   publishFeedButtonText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: SETTINGS_GLASS_THEME.buttonPrimaryText,
+    color: COLORS.white,
   },
   feedLiveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#E8F5E9',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: DS.radius.pill,
+    borderRadius: BORDER_RADIUS.round,
     marginLeft: 4,
-    borderWidth: 1,
-    borderColor: DS.accent.success,
   },
   feedLiveDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: DS.accent.success,
+    backgroundColor: '#4CAF50',
   },
   feedLiveText: {
     fontSize: 10,
     fontWeight: '700' as const,
-    color: DS.text.success,
+    color: COLORS.white,
     letterSpacing: 0.5,
   },
   feedUrlContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceMuted,
-    borderRadius: DS.radius.sm,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 8,
     marginTop: SPACING.sm,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: '#E2E8F0',
   },
   feedUrlText: {
     flex: 1,
     fontSize: 11,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#6B7280',
     fontFamily: undefined,
   },
   feedActionsRow: {
@@ -3132,34 +3206,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: SETTINGS_GLASS_THEME.surfaceStrong,
+    backgroundColor: '#F8FAFC',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: 10,
     paddingHorizontal: SPACING.sm,
     borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.border,
+    borderColor: '#E2E8F0',
   },
   feedActionButtonActive: {
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    borderColor: 'rgba(76, 175, 80, 0.3)',
+    backgroundColor: 'rgba(5,150,105,0.06)',
+    borderColor: 'rgba(5,150,105,0.20)',
   },
   feedActionText: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: '#6B7280',
   },
   feedActionTextActive: {
-    color: COLORS.success,
+    color: '#059669',
   },
   feedLastUpdated: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#9CA3AF',
     marginTop: SPACING.sm,
     textAlign: 'center' as const,
   },
   feedHelperText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: '#9CA3AF',
     marginTop: SPACING.sm,
     lineHeight: 16,
   },
@@ -3168,8 +3242,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: SETTINGS_GLASS_THEME.border,
   },
   sectionHeaderContent: {
     flexDirection: 'row',
@@ -3181,26 +3253,19 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: SETTINGS_GLASS_THEME.iconBackground,
+    backgroundColor: 'rgba(255, 255, 255, 0.30)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: SETTINGS_GLASS_THEME.iconBorder,
   },
   sectionHeaderTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: SETTINGS_GLASS_THEME.textPrimary,
+    color: COLORS.white,
     letterSpacing: 0.3,
   },
   sectionHeaderSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: SETTINGS_GLASS_THEME.textSecondary,
+    color: 'rgba(255, 255, 255, 0.85)',
     marginTop: 2,
-  },
-  quickActionsBody: {
-    padding: 12,
-    paddingTop: 14,
-    gap: 0,
   },
 });

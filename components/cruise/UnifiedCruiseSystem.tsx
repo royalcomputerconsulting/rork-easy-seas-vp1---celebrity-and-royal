@@ -23,6 +23,14 @@ import {
 import { SHADOW, SPACING } from '@/constants/theme';
 import type { DisplayField } from '../../lib/cruisePresentation';
 
+const APP_TEXTURE = {
+  surfaceStrong: '#FFFFFF',
+  surfaceMuted: '#F8FAFC',
+  border: '#E2E8F0',
+  borderStrong: '#D7E3EF',
+  goldWash: 'rgba(212, 160, 10, 0.10)',
+} as const;
+
 export type AccentTone = 'gold' | 'teal' | 'emerald' | 'violet' | 'rose' | 'slate';
 
 export interface AccentBadge {
@@ -157,7 +165,6 @@ export const PremiumHeroCard = memo(function PremiumHeroCard({
           {subtitle ? <Text style={[styles.heroSubtitle, compact && styles.heroSubtitleCompact]}>{subtitle}</Text> : null}
           <View style={[styles.pillsRow, compact && styles.pillsRowCompact]}>
             {pills.map((pill) => {
-              const tone = getToneStyles(pill.tone);
               return (
                 <View key={pill.label} style={[styles.summaryPill, compact && styles.summaryPillCompact, { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.25)' }]}> 
                   <Text style={styles.summaryPillLabel}>{pill.label}</Text>

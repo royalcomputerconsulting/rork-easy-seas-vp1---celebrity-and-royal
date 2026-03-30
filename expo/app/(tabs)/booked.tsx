@@ -1,53 +1,43 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  RefreshControl,
-  Platform,
   ActivityIndicator,
-  Image,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Stack, useRouter } from 'expo-router';
+import { Plus, Trophy } from 'lucide-react-native';
+import { AddBookedCruiseModal } from '@/components/AddBookedCruiseModal';
+import { CrownAnchorTimeline } from '@/components/CrownAnchorTimeline';
 import {
-  Ship,
-  RotateCcw,
-  EyeOff,
-  X,
-  ArrowUpDown,
-  Clock,
-  Award,
-  Plus,
-  List,
-  CheckCircle,
-  Anchor,
-  Dice5,
-  TrendingUp,
-  Coins,
-  Target,
-  DollarSign,
-  Crown,
-} from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME, DS } from '@/constants/theme';
+  PremiumActionBar,
+  PremiumChipBar,
+  PremiumEmptyState,
+  PremiumEntityCard,
+  PremiumHeroCard,
+  PremiumPageBackground,
+  PremiumQuickFacts,
+  PremiumStatGrid,
+} from '../../components/cruise/UnifiedCruiseSystem';
+import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
+import { formatCurrency, formatNumber } from '@/lib/format';
+import { createDateFromString, formatDate, isDateInPast } from '@/lib/date';
+import { calculatePortfolioValue } from '@/lib/valueCalculator';
+import {
+  buildCruiseCardFields,
+  pickCruiseImage,
+  type DisplayField,
+} from '../../lib/cruisePresentation';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { useUser } from '@/state/UserProvider';
-import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
-import { isDateInPast, createDateFromString } from '@/lib/date';
-import { PremiumCruiseMiniCard } from '@/components/PremiumCruiseMiniCard';
-import type { BookedCruise } from '@/types/models';
-import { AddBookedCruiseModal } from '@/components/AddBookedCruiseModal';
-
-import { getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
-import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { formatCurrency, formatNumber as formatNum } from '@/lib/format';
-import { calculatePortfolioValue } from '@/lib/valueCalculator';
-import { CrownAnchorTimeline } from '@/components/CrownAnchorTimeline';
+import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
+import type { BookedCruise } from '@/types/models';
 
 type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
@@ -61,18 +51,23 @@ const FILTER_OPTIONS: { label: string; value: FilterType }[] = [
 ];
 
 const SORT_OPTIONS: { label: string; value: SortType }[] = [
-  { label: 'Next Sailing First', value: 'next' },
-  { label: 'Newest First', value: 'newest' },
-  { label: 'Oldest First', value: 'oldest' },
-  { label: 'By Ship', value: 'ship' },
-  { label: 'By Nights', value: 'nights' },
+  { label: 'Next Sailing', value: 'next' },
+  { label: 'Newest', value: 'newest' },
+  { label: 'Oldest', value: 'oldest' },
+  { label: 'Ship', value: 'ship' },
+  { label: 'Nights', value: 'nights' },
+];
+
+const VIEW_OPTIONS: { label: string; value: ViewMode }[] = [
+  { label: 'List', value: 'list' },
+  { label: 'Timeline', value: 'timeline' },
+  { label: 'C&A', value: 'points' },
 ];
 
 export default function BookedScreen() {
   const router = useRouter();
   const { localData, clubRoyaleProfile, isLoading: appLoading, refreshData } = useAppState();
   const { addBookedCruise, bookedCruises: storedBooked } = useCoreData();
-  useUser();
   const { casinoAnalytics } = useSimpleAnalytics();
   const {
     clubRoyalePoints: loyaltyClubRoyalePoints,
@@ -80,76 +75,74 @@ export default function BookedScreen() {
     crownAnchorPoints,
   } = useLoyalty();
 
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [filter, setFilter] = useState<FilterType>('all');
   const [sortBy, setSortBy] = useState<SortType>('next');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hideCompleted, setHideCompleted] = useState(false);
-  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [hideCompleted, setHideCompleted] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
 
-  const bookedCruises = useMemo(() => {
+  const bookedCruises = useMemo<BookedCruise[]>(() => {
     const localBooked = localData.booked || [];
-    if (localBooked.length > 0) return localBooked;
-    if (storedBooked.length > 0) return storedBooked;
-    return [];
+    if (localBooked.length > 0) {
+      return localBooked;
+    }
+    return storedBooked.length > 0 ? storedBooked : [];
   }, [localData.booked, storedBooked]);
 
-  const filteredCruises = useMemo(() => {
+  const filteredCruises = useMemo<BookedCruise[]>(() => {
     let result = [...bookedCruises];
 
     if (filter === 'upcoming') {
-      result = result.filter(cruise => !isDateInPast(cruise.returnDate));
+      result = result.filter((cruise) => !isDateInPast(cruise.returnDate));
     } else if (filter === 'completed') {
-      result = result.filter(cruise => isDateInPast(cruise.returnDate));
+      result = result.filter((cruise) => isDateInPast(cruise.returnDate));
     } else if (filter === 'celebrity') {
-      result = result.filter(cruise => 
-        cruise.cruiseSource === 'celebrity' || 
-        cruise.shipName?.toLowerCase().startsWith('celebrity')
-      );
+      result = result.filter((cruise) => cruise.cruiseSource === 'celebrity' || cruise.shipName?.toLowerCase().startsWith('celebrity'));
     }
 
     if (hideCompleted) {
-      result = result.filter(cruise => !isDateInPast(cruise.returnDate));
+      result = result.filter((cruise) => !isDateInPast(cruise.returnDate));
     }
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(cruise =>
+    const query = searchQuery.trim().toLowerCase();
+    if (query.length > 0) {
+      result = result.filter((cruise) => (
         cruise.shipName?.toLowerCase().includes(query) ||
         cruise.destination?.toLowerCase().includes(query) ||
         cruise.departurePort?.toLowerCase().includes(query) ||
         cruise.reservationNumber?.toLowerCase().includes(query) ||
-        cruise.itineraryName?.toLowerCase().includes(query)
-      );
+        cruise.itineraryName?.toLowerCase().includes(query) ||
+        cruise.bookingId?.toLowerCase().includes(query)
+      ));
     }
 
     switch (sortBy) {
       case 'next': {
         const now = new Date();
-        result.sort((a, b) => {
-          const aDate = createDateFromString(a.sailDate);
-          const bDate = createDateFromString(b.sailDate);
-          const aUpcoming = aDate >= now;
-          const bUpcoming = bDate >= now;
-          if (aUpcoming && bUpcoming) return aDate.getTime() - bDate.getTime();
-          if (!aUpcoming && !bUpcoming) return bDate.getTime() - aDate.getTime();
-          return aUpcoming ? -1 : 1;
+        result.sort((left, right) => {
+          const leftDate = createDateFromString(left.sailDate);
+          const rightDate = createDateFromString(right.sailDate);
+          const leftUpcoming = leftDate >= now;
+          const rightUpcoming = rightDate >= now;
+          if (leftUpcoming && rightUpcoming) return leftDate.getTime() - rightDate.getTime();
+          if (!leftUpcoming && !rightUpcoming) return rightDate.getTime() - leftDate.getTime();
+          return leftUpcoming ? -1 : 1;
         });
         break;
       }
       case 'newest':
-        result.sort((a, b) => createDateFromString(b.sailDate).getTime() - createDateFromString(a.sailDate).getTime());
+        result.sort((left, right) => createDateFromString(right.sailDate).getTime() - createDateFromString(left.sailDate).getTime());
         break;
       case 'oldest':
-        result.sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
+        result.sort((left, right) => createDateFromString(left.sailDate).getTime() - createDateFromString(right.sailDate).getTime());
         break;
       case 'ship':
-        result.sort((a, b) => (a.shipName || '').localeCompare(b.shipName || ''));
+        result.sort((left, right) => (left.shipName || '').localeCompare(right.shipName || ''));
         break;
       case 'nights':
-        result.sort((a, b) => (b.nights || 0) - (a.nights || 0));
+        result.sort((left, right) => (right.nights || 0) - (left.nights || 0));
         break;
     }
 
@@ -160,44 +153,33 @@ export default function BookedScreen() {
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
 
   const stats = useMemo(() => {
-    const upcoming = bookedCruises.filter(c => !isDateInPast(c.returnDate)).length;
-    const completed = bookedCruises.filter(c => isDateInPast(c.returnDate)).length;
-    const withData = bookedCruises.filter(c => c.price && c.price > 0).length;
+    const upcoming = bookedCruises.filter((cruise) => !isDateInPast(cruise.returnDate)).length;
+    const completed = bookedCruises.filter((cruise) => isDateInPast(cruise.returnDate)).length;
     const totalNights = crownAnchorPoints;
-    const totalPoints = bookedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
-    const totalSpent = bookedCruises.reduce((sum, c) => sum + (c.totalPrice || c.price || 0), 0);
-    return { upcoming, completed, withData, total: bookedCruises.length, totalNights, totalPoints, totalSpent };
+    const totalPoints = bookedCruises.reduce((sum, cruise) => sum + (cruise.earnedPoints || cruise.casinoPoints || 0), 0);
+    const totalSpent = bookedCruises.reduce((sum, cruise) => sum + (cruise.totalPrice || cruise.price || 0), 0);
+    const totalRetailValue = bookedCruises.reduce((sum, cruise) => sum + calculatePortfolioValue([cruise]).totalRetailValue, 0);
+    return { upcoming, completed, total: bookedCruises.length, totalNights, totalPoints, totalSpent, totalRetailValue };
   }, [bookedCruises, crownAnchorPoints]);
 
   const casinoStats = useMemo(() => {
     const today = new Date();
-    const completedCruises = bookedCruises.filter(cruise => {
+    const completedCruises = bookedCruises.filter((cruise) => {
       const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
       return returnDate ? returnDate < today : cruise.completionState === 'completed';
     });
-    
-    const upcomingCruises = bookedCruises.filter(cruise => {
+    const upcomingCruises = bookedCruises.filter((cruise) => {
       const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
       return returnDate ? returnDate >= today : cruise.completionState !== 'completed';
     });
-    
+
     const completedPortfolio = calculatePortfolioValue(completedCruises);
     const upcomingPortfolio = calculatePortfolioValue(upcomingCruises);
-    const totalWinnings = completedCruises.reduce((sum, c) => sum + (c.winnings || 0), 0);
-    
+    const totalWinnings = completedCruises.reduce((sum, cruise) => sum + (cruise.winnings || 0), 0);
     const totalRetailValue = upcomingPortfolio.totalRetailValue || 0;
     const totalTaxesFees = upcomingPortfolio.totalTaxesFees || 0;
     const netProfit = (totalRetailValue - totalTaxesFees) + totalWinnings;
-    
-    console.log('[Booked] Casino stats calculated:', {
-      upcomingCount: upcomingCruises.length,
-      completedCount: completedCruises.length,
-      totalRetailValue,
-      totalTaxesFees,
-      totalWinnings,
-      netProfit,
-    });
-    
+
     return {
       totalCoinIn: casinoAnalytics.totalCoinIn || completedPortfolio.totalCoinIn || 0,
       netResult: casinoAnalytics.netResult || totalWinnings || 0,
@@ -210,10 +192,10 @@ export default function BookedScreen() {
     };
   }, [bookedCruises, casinoAnalytics]);
 
-  const nextCruise = useMemo(() => {
+  const nextCruise = useMemo<BookedCruise | null>(() => {
     const upcomingCruises = bookedCruises
-      .filter(c => !isDateInPast(c.returnDate))
-      .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
+      .filter((cruise) => !isDateInPast(cruise.returnDate))
+      .sort((left, right) => createDateFromString(left.sailDate).getTime() - createDateFromString(right.sailDate).getTime());
     return upcomingCruises[0] || null;
   }, [bookedCruises]);
 
@@ -221,7 +203,7 @@ export default function BookedScreen() {
     setRefreshing(true);
     console.log('[Booked] Refreshing data...');
     await refreshData();
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     setRefreshing(false);
   }, [refreshData]);
 
@@ -229,484 +211,212 @@ export default function BookedScreen() {
     setFilter('all');
     setSearchQuery('');
     setHideCompleted(false);
-    setSortBy('newest');
+    setSortBy('next');
   }, []);
 
   const handleCruisePress = useCallback((cruise: BookedCruise) => {
     console.log('[Booked] Cruise pressed:', cruise.id);
-    router.push(`/cruise-details?id=${cruise.id}` as any);
+    router.push(`/cruise-details?id=${cruise.id}` as never);
   }, [router]);
 
-  const handleAddCruise = useCallback(() => {
-    console.log('[Booked] Opening add cruise modal');
-    setShowAddModal(true);
-  }, []);
-
   const handleSaveNewCruise = useCallback(async (cruise: BookedCruise) => {
-    console.log('[Booked] Saving new cruise:', cruise);
+    console.log('[Booked] Saving new cruise:', cruise.id);
     addBookedCruise(cruise);
     await refreshData();
   }, [addBookedCruise, refreshData]);
 
-  const getDaysUntilCruise = useCallback((sailDate: string | undefined): number | null => {
-    if (!sailDate) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const sail = createDateFromString(sailDate);
-    sail.setHours(0, 0, 0, 0);
-    const diffTime = sail.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : null;
-  }, []);
+  const heroPills = useMemo(() => ([
+    { label: 'Upcoming', value: formatNumber(stats.upcoming), tone: 'gold' as const },
+    { label: 'Completed', value: formatNumber(stats.completed), tone: 'emerald' as const },
+    { label: 'C&A Points', value: formatNumber(stats.totalNights), tone: 'violet' as const },
+    { label: 'Retail', value: formatCurrency(stats.totalRetailValue), tone: 'teal' as const },
+  ]), [stats.completed, stats.totalNights, stats.totalRetailValue, stats.upcoming]);
 
-  const formatNumber = useCallback((num: number): string => {
-    return formatNum(num);
-  }, []);
+  const quickFacts = useMemo<DisplayField[]>(() => ([
+    { key: 'tier', label: 'Club Royale', value: clubRoyaleTier, tone: 'accent' },
+    { key: 'points', label: 'Casino Points', value: formatNumber(currentPoints), tone: 'accent' },
+    { key: 'cruises', label: 'Tracked Cruises', value: formatNumber(stats.total), tone: 'default' },
+  ]), [clubRoyaleTier, currentPoints, stats.total]);
 
-
+  const statGridFields = useMemo<DisplayField[]>(() => ([
+    { key: 'totalCoinIn', label: 'Coin-In', value: formatCurrency(casinoStats.totalCoinIn), tone: 'success' },
+    { key: 'netResult', label: 'Net Win/Loss', value: `${casinoStats.netResult >= 0 ? '+' : ''}${formatCurrency(casinoStats.netResult)}`, tone: casinoStats.netResult >= 0 ? 'success' : 'danger' },
+    { key: 'taxes', label: 'Taxes Paid', value: formatCurrency(casinoStats.totalTaxesFees), tone: 'warning' },
+    { key: 'spent', label: 'Out of Pocket', value: formatCurrency(stats.totalSpent), tone: 'warning' },
+  ]), [casinoStats.netResult, casinoStats.totalCoinIn, casinoStats.totalTaxesFees, stats.totalSpent]);
 
   const renderCruiseCard = useCallback(({ item }: { item: BookedCruise }) => {
+    const cardFields = buildCruiseCardFields(item);
     const isPast = isDateInPast(item.returnDate);
-    
+    const subtitle = `${formatDate(item.sailDate, 'medium')} • ${item.nights || 0} nights • ${item.departurePort || 'Port TBD'}`;
+    const chips = [
+      item.destination || item.itineraryName || 'Cruise',
+      item.bookingId || 'No booking ID',
+      item.reservationNumber || 'No reservation #',
+      item.cabinType || item.stateroomType || 'Cabin TBD',
+    ].filter(Boolean);
+
     return (
-      <PremiumCruiseMiniCard
-        cruise={item}
+      <PremiumEntityCard
+        title={item.shipName}
+        subtitle={subtitle}
+        imageUri={pickCruiseImage(item)}
+        badge={isPast ? { label: 'COMPLETED', tone: 'emerald' } : { label: 'BOOKED', tone: 'teal' }}
+        chips={chips}
+        primaryFields={cardFields.primary}
+        extraFields={cardFields.extra}
+        footerText="Booking ID, reservation data, pricing, casino metrics, and all tracked fields remain available here."
         onPress={() => handleCruisePress(item)}
-        variant={isPast ? 'completed' : 'booked'}
       />
     );
   }, [handleCruisePress]);
 
-  const renderTimelineView = () => {
-    const upcomingCruises = filteredCruises
-      .filter(c => !isDateInPast(c.returnDate))
-      .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
-    const completedCruises = filteredCruises
-      .filter(c => isDateInPast(c.returnDate))
-      .sort((a, b) => createDateFromString(b.returnDate || b.sailDate).getTime() - createDateFromString(a.returnDate || a.sailDate).getTime());
-    
-    return (
-      <View style={styles.timelineContainer}>
-        {/* Upcoming Section */}
-        <View style={styles.timelineSection}>
-          <View style={styles.timelineSectionHeader}>
-            <View style={styles.timelineSectionIcon}>
-              <Clock size={16} color={COLORS.white} />
-            </View>
-            <Text style={styles.timelineSectionTitle}>Upcoming ({upcomingCruises.length})</Text>
-          </View>
-          
-          {upcomingCruises.length === 0 ? (
-            <View style={styles.timelineEmptyCard}>
-              <Ship size={24} color={COLORS.textSecondary} />
-              <Text style={styles.timelineEmptyText}>No upcoming cruises</Text>
-            </View>
-          ) : (
-            <View style={styles.timelineVerticalList}>
-              {upcomingCruises.map((cruise) => {
-                const daysUntil = getDaysUntilCruise(cruise.sailDate);
-                return (
-                  <View key={cruise.id} style={styles.timelineItemWrapper}>
-                    {daysUntil !== null && (
-                      <View style={styles.timelineDaysIndicator}>
-                        <Text style={styles.timelineDaysNumber}>{daysUntil}</Text>
-                        <Text style={styles.timelineDaysLabel}>DAYS</Text>
-                      </View>
-                    )}
-                    <View style={styles.timelineCardWrapper}>
-                      <PremiumCruiseMiniCard
-                        cruise={cruise}
-                        onPress={() => handleCruisePress(cruise)}
-                        variant="booked"
-                      />
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </View>
-        
-        {/* Completed Section */}
-        <View style={styles.timelineSection}>
-          <View style={styles.timelineSectionHeader}>
-            <View style={[styles.timelineSectionIcon, { backgroundColor: COLORS.success }]}>
-              <CheckCircle size={16} color={COLORS.white} />
-            </View>
-            <Text style={styles.timelineSectionTitle}>Completed ({completedCruises.length})</Text>
-          </View>
-          
-          {completedCruises.length === 0 ? (
-            <View style={styles.timelineEmptyCard}>
-              <CheckCircle size={24} color={COLORS.textSecondary} />
-              <Text style={styles.timelineEmptyText}>No completed cruises</Text>
-            </View>
-          ) : (
-            <View style={styles.timelineVerticalList}>
-              {completedCruises.map((cruise) => {
-                const points = cruise.earnedPoints || cruise.casinoPoints || 0;
-                return (
-                  <View key={cruise.id} style={styles.timelineItemWrapper}>
-                    {points > 0 && (
-                      <View style={[styles.timelineDaysIndicator, styles.timelinePointsIndicator]}>
-                        <Award size={14} color={COLORS.success} />
-                        <Text style={styles.timelinePointsValue}>+{formatNumber(points)}</Text>
-                      </View>
-                    )}
-                    <View style={styles.timelineCardWrapper}>
-                      <PremiumCruiseMiniCard
-                        cruise={cruise}
-                        onPress={() => handleCruisePress(cruise)}
-                        variant="completed"
-                      />
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </View>
-      </View>
-    );
-  };
+  const timelineCards = useMemo<BookedCruise[]>(() => {
+    return [...filteredCruises].sort((left, right) => createDateFromString(left.sailDate).getTime() - createDateFromString(right.sailDate).getTime());
+  }, [filteredCruises]);
 
-  const heroImage = useMemo(() => {
-    if (nextCruise?.destination) {
-      const hash = nextCruise.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      return getImageForDestination(nextCruise.destination, hash);
-    }
-    return DEFAULT_CRUISE_IMAGE;
-  }, [nextCruise]);
+  const header = useMemo(() => (
+    <View style={styles.headerStack}>
+      <PremiumHeroCard
+        title="My Cruises"
+        subtitle={nextCruise ? `${nextCruise.shipName} sails ${formatDate(nextCruise.sailDate, 'medium')}. The booked experience now uses the same premium surfaces, chips, and stat rhythm as Offers.` : 'Every booked sailing now shares the premium offers visual system without dropping a single field.'}
+        badge={{ label: 'BOOKED PORTFOLIO', tone: 'teal' }}
+        imageUri={pickCruiseImage(nextCruise ?? bookedCruises[0], 'booked-cruises')}
+        pills={heroPills}
+      >
+        <PremiumQuickFacts fields={quickFacts} />
+      </PremiumHeroCard>
 
-  const renderHeader = () => (
-    <View style={styles.headerContent}>
-      {/* Colorful Hero Header */}
-      <View style={styles.heroContainer}>
-        <Image source={{ uri: heroImage }} style={styles.heroImage} resizeMode="cover" />
-        <LinearGradient
-          colors={['rgba(0, 31, 63, 0.3)', 'rgba(0, 31, 63, 0.85)', 'rgba(0, 31, 63, 0.95)']}
-          style={styles.heroOverlay}
-        />
-        <View style={styles.heroContent}>
-          <View style={styles.heroTitleRow}>
-            <View style={styles.heroIconBadge}>
-              <Anchor size={24} color={COLORS.white} />
-            </View>
-            <View style={styles.heroTitleGroup}>
-              <Text style={styles.heroTitle}>My Cruises</Text>
-              <Text style={styles.heroSubtitle}>{stats.total} cruises • {stats.totalNights} nights sailed</Text>
-            </View>
-          </View>
-          
-          {nextCruise && (
-            <View style={styles.nextCruiseCard}>
-              <View style={styles.nextCruiseHeader}>
-                <Clock size={14} color={COLORS.beigeWarm} />
-                <Text style={styles.nextCruiseLabel}>NEXT VOYAGE</Text>
-              </View>
-              <Text style={styles.nextCruiseShip}>{nextCruise.shipName}</Text>
-              <Text style={styles.nextCruiseDest}>
-                {nextCruise.nights}N • {nextCruise.destination || nextCruise.itineraryName || 'Caribbean'}
-              </Text>
-              <Text style={styles.nextCruiseDate}>
-                {createDateFromString(nextCruise.sailDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
-              </Text>
-            </View>
-          )}
-          
-          <View style={styles.heroStatsRow}>
-            <View style={styles.heroStatItem}>
-              <Clock size={16} color={COLORS.aquaAccent} />
-              <Text style={styles.heroStatValue}>{stats.upcoming}</Text>
-              <Text style={styles.heroStatLabel}>Upcoming</Text>
-            </View>
-            <View style={styles.heroStatDivider} />
-            <View style={styles.heroStatItem}>
-              <CheckCircle size={16} color={COLORS.success} />
-              <Text style={styles.heroStatValue}>{stats.completed}</Text>
-              <Text style={styles.heroStatLabel}>Completed</Text>
-            </View>
-            <View style={styles.heroStatDivider} />
-            <View style={styles.heroStatItem}>
-              <Award size={16} color={COLORS.goldAccent} />
-              <Text style={styles.heroStatValue}>{formatNumber(currentPoints)}</Text>
-              <Text style={styles.heroStatLabel}>Points</Text>
-            </View>
-          </View>
-        </View>
-      </View>
+      <PremiumStatGrid title="Casino & Value Snapshot" fields={statGridFields} />
 
-      {/* Combined Casino Section */}
-      <View style={styles.casinoSection}>
-        <View style={styles.casinoGradient}>
-          <View style={styles.casinoHeader}>
-            <View style={styles.casinoIconBadge}>
-              <Dice5 size={20} color={COLORS.white} />
-            </View>
-            <Text style={styles.casinoTitle}>Casino</Text>
-            <View style={styles.casinoTierBadge}>
-              <Text style={styles.casinoTierText}>{clubRoyaleTier}</Text>
-            </View>
-          </View>
-          
-          <View style={styles.casinoMetricsGrid}>
-            <View style={styles.casinoMetricCard}>
-              <View style={[styles.casinoMetricIcon, { backgroundColor: 'rgba(255, 152, 0, 0.15)' }]}>
-                <Coins size={16} color={COLORS.goldDark} />
-              </View>
-              <Text style={styles.casinoMetricValue}>{formatCurrency(casinoStats.totalCoinIn)}</Text>
-              <Text style={styles.casinoMetricLabel}>Total Coin-In</Text>
-            </View>
-            
-            <View style={styles.casinoMetricCard}>
-              <View style={[styles.casinoMetricIcon, { backgroundColor: casinoStats.netResult >= 0 ? 'rgba(76, 175, 80, 0.15)' : 'rgba(244, 67, 54, 0.15)' }]}>
-                <Target size={16} color={casinoStats.netResult >= 0 ? COLORS.success : COLORS.error} />
-              </View>
-              <Text style={[styles.casinoMetricValue, { color: casinoStats.netResult >= 0 ? COLORS.success : COLORS.error }]}>
-                {casinoStats.netResult >= 0 ? '+' : ''}{formatCurrency(casinoStats.netResult)}
-              </Text>
-              <Text style={styles.casinoMetricLabel}>Net Win/Loss</Text>
-            </View>
-            
-            <View style={styles.casinoMetricCard}>
-              <View style={[styles.casinoMetricIcon, { backgroundColor: 'rgba(103, 58, 183, 0.15)' }]}>
-                <Award size={16} color={COLORS.royalPurple} />
-              </View>
-              <Text style={styles.casinoMetricValue}>{formatNumber(currentPoints)}</Text>
-              <Text style={styles.casinoMetricLabel}>Current Points</Text>
-            </View>
-          </View>
-          
-          <View style={styles.casinoFinancialsRow}>
-            <View style={styles.casinoFinancialItem}>
-              <Ship size={14} color={COLORS.navyDeep} />
-              <View style={styles.casinoFinancialText}>
-                <Text style={styles.casinoFinancialLabel}>Retail Value</Text>
-                <Text style={[styles.casinoFinancialValue, { color: COLORS.success }]}>
-                  {formatCurrency(casinoStats.totalRetailValue)}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.casinoFinancialDivider} />
-            <View style={styles.casinoFinancialItem}>
-              <DollarSign size={14} color={COLORS.navyDeep} />
-              <View style={styles.casinoFinancialText}>
-                <Text style={styles.casinoFinancialLabel}>Taxes Paid</Text>
-                <Text style={styles.casinoFinancialValue}>
-                  {formatCurrency(casinoStats.totalTaxesFees)}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.casinoFinancialDivider} />
-            <View style={styles.casinoFinancialItem}>
-              <TrendingUp size={14} color={casinoStats.totalProfit >= 0 ? COLORS.success : COLORS.error} />
-              <View style={styles.casinoFinancialText}>
-                <Text style={styles.casinoFinancialLabel}>Net Profit</Text>
-                <Text style={[styles.casinoFinancialValue, { color: casinoStats.totalProfit >= 0 ? COLORS.success : COLORS.error }]}>
-                  {casinoStats.totalProfit >= 0 ? '+' : ''}{formatCurrency(casinoStats.totalProfit)}
-                </Text>
-              </View>
-            </View>
-          </View>
-          
-          {casinoStats.completedCount > 0 && (
-            <View style={styles.casinoAvgRow}>
-              <View style={styles.casinoAvgItem}>
-                <Text style={styles.casinoAvgLabel}>Avg Coin-In/Cruise</Text>
-                <Text style={styles.casinoAvgValue}>{formatCurrency(casinoStats.avgCoinInPerCruise)}</Text>
-              </View>
-              <View style={styles.casinoAvgDivider} />
-              <View style={styles.casinoAvgItem}>
-                <Text style={styles.casinoAvgLabel}>Avg Win/Loss</Text>
-                <Text style={[styles.casinoAvgValue, { color: casinoStats.avgWinLossPerCruise >= 0 ? COLORS.success : COLORS.error }]}>
-                  {casinoStats.avgWinLossPerCruise >= 0 ? '+' : ''}{formatCurrency(casinoStats.avgWinLossPerCruise)}
-                </Text>
-              </View>
-            </View>
-          )}
-        </View>
-      </View>
+      <PremiumActionBar
+        actions={[
+          { key: 'add', label: 'Add Cruise', onPress: () => setShowAddModal(true), tone: 'gold' },
+          { key: 'refresh', label: 'Refresh', onPress: onRefresh, tone: 'teal' },
+          { key: 'hide', label: hideCompleted ? 'Show Completed' : 'Hide Completed', onPress: () => setHideCompleted((current) => !current), tone: 'violet' },
+          { key: 'clear', label: 'Clear Filters', onPress: clearFilters, tone: 'rose' },
+        ]}
+      />
 
-      <View style={styles.viewModeRow}>
-        <View style={styles.viewModeToggle}>
-          <TouchableOpacity
-            style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
-            onPress={() => setViewMode('list')}
-            activeOpacity={0.7}
-          >
-            <List size={16} color={viewMode === 'list' ? COLORS.navyDeep : COLORS.textSecondary} />
-            <Text style={[styles.viewModeText, viewMode === 'list' && styles.viewModeTextActive]}>List</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.viewModeButton, viewMode === 'timeline' && styles.viewModeButtonActive]}
-            onPress={() => setViewMode('timeline')}
-            activeOpacity={0.7}
-          >
-            <Clock size={16} color={viewMode === 'timeline' ? COLORS.navyDeep : COLORS.textSecondary} />
-            <Text style={[styles.viewModeText, viewMode === 'timeline' && styles.viewModeTextActive]}>Timeline</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.viewModeButton, viewMode === 'points' && styles.viewModeButtonActive]}
-            onPress={() => setViewMode('points')}
-            activeOpacity={0.7}
-          >
-            <Crown size={16} color={viewMode === 'points' ? COLORS.navyDeep : COLORS.textSecondary} />
-            <Text style={[styles.viewModeText, viewMode === 'points' && styles.viewModeTextActive]}>C&A Pts</Text>
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity
-          style={styles.addCruiseButton}
-          onPress={handleAddCruise}
-          activeOpacity={0.7}
-        >
-          <Plus size={16} color={COLORS.white} />
-          <Text style={styles.addCruiseText}>Add Cruise</Text>
-        </TouchableOpacity>
-      </View>
+      <PremiumChipBar
+        chips={VIEW_OPTIONS.map((option) => ({
+          key: option.value,
+          label: option.label,
+          active: viewMode === option.value,
+          onPress: () => setViewMode(option.value),
+          tone: option.value === 'points' ? 'violet' : option.value === 'timeline' ? 'gold' : 'teal',
+        }))}
+      />
 
-      {viewMode === 'timeline' && renderTimelineView()}
-
-      {viewMode === 'points' && (
-        <CrownAnchorTimeline
-          currentPoints={crownAnchorPoints}
-          bookedCruises={bookedCruises}
-        />
-      )}
-
-      {viewMode === 'list' && (
+      {viewMode === 'list' ? (
         <>
-          <MinimalistFilterBar
-            tabs={FILTER_OPTIONS.map(opt => ({ key: opt.value, label: opt.label }))}
-            activeTab={filter}
-            onTabPress={(key) => setFilter(key as FilterType)}
-            actions={[
-              { key: 'refresh', label: 'Refresh', icon: RotateCcw, onPress: onRefresh },
-              { key: 'hide', label: hideCompleted ? 'Show All' : 'Hide Done', icon: EyeOff, active: hideCompleted, onPress: () => setHideCompleted(!hideCompleted) },
-              { key: 'clear', label: 'Clear Filters', icon: X, onPress: clearFilters },
-              { key: 'sort', label: 'Sort', icon: ArrowUpDown, onPress: () => setShowSortMenu(!showSortMenu) },
-            ]}
-            searchValue={searchQuery}
-            onSearchChange={setSearchQuery}
-            searchPlaceholder="Search by ship, destination, reservation..."
-            showingCount={filteredCruises.length}
-            totalCount={stats.total}
-            bookedCount={stats.upcoming}
+          <PremiumChipBar
+            chips={FILTER_OPTIONS.map((option) => ({
+              key: option.value,
+              label: option.label,
+              active: filter === option.value,
+              onPress: () => setFilter(option.value),
+              tone: option.value === 'completed' ? 'emerald' : option.value === 'upcoming' ? 'gold' : 'slate',
+            }))}
           />
-          
-          <View style={styles.cruiseListHeaderBooked}>
-            <Text style={styles.cruiseListTitle}>MY CRUISES</Text>
-            <Text style={styles.cruiseListSubtitle}>
-              {filteredCruises.length} {filteredCruises.length === 1 ? 'cruise' : 'cruises'} • Tap to view details
-            </Text>
+
+          <View style={styles.searchSurface}>
+            <Text style={styles.searchLabel}>Search ship, destination, reservation, booking ID, or itinerary</Text>
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search booked cruises"
+              placeholderTextColor="#9CA3AF"
+              style={styles.searchInput}
+              testID="booked-search-input"
+            />
           </View>
+
+          <PremiumChipBar
+            chips={SORT_OPTIONS.map((option) => ({
+              key: option.value,
+              label: option.label,
+              active: sortBy === option.value,
+              onPress: () => setSortBy(option.value),
+              tone: option.value === 'nights' ? 'violet' : option.value === 'ship' ? 'teal' : 'gold',
+            }))}
+          />
         </>
-      )}
-
-      {showSortMenu && viewMode === 'list' && (
-        <View style={styles.sortMenu}>
-          {SORT_OPTIONS.map(option => (
-            <TouchableOpacity
-              key={option.value}
-              style={[styles.sortOption, sortBy === option.value && styles.sortOptionActive]}
-              onPress={() => {
-                setSortBy(option.value);
-                setShowSortMenu(false);
-              }}
-            >
-              <Text style={[styles.sortOptionText, sortBy === option.value && styles.sortOptionTextActive]}>
-                {option.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+      ) : null}
     </View>
-  );
-
-  const renderEmpty = () => (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIconContainer}>
-        <Ship size={56} color={COLORS.beigeWarm} />
-      </View>
-      <Text style={styles.emptyTitle}>No Cruises Found</Text>
-      <Text style={styles.emptyText}>
-        {filter === 'upcoming' 
-          ? 'You have no upcoming cruises scheduled.'
-          : filter === 'completed'
-          ? 'You haven\'t completed any cruises yet.'
-          : filter === 'celebrity'
-          ? 'You have no Celebrity cruises booked.'
-          : searchQuery
-          ? 'No cruises match your search.'
-          : 'Your booked cruises will appear here.'}
-      </Text>
-      {(searchQuery || filter !== 'all' || hideCompleted) && (
-        <TouchableOpacity style={styles.clearFiltersButton} onPress={clearFilters}>
-          <LinearGradient
-            colors={[COLORS.beigeWarm, COLORS.goldDark]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.clearFiltersGradient}
-          >
-            <Text style={styles.clearFiltersText}>Clear Filters</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  ), [bookedCruises, clearFilters, filter, heroPills, hideCompleted, nextCruise, onRefresh, quickFacts, searchQuery, sortBy, statGridFields, viewMode]);
 
   if (appLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.navyDeep} />
-        <Text style={styles.loadingText}>Loading cruises...</Text>
-      </View>
+      <PremiumPageBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#1E3A5F" />
+          <Text style={styles.loadingText}>Loading booked cruises…</Text>
+        </View>
+      </PremiumPageBackground>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <PremiumPageBackground>
       <Stack.Screen options={{ headerShown: false }} />
-      
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <FlatList
-          data={viewMode === 'list' ? filteredCruises : ([] as BookedCruise[])}
-          renderItem={renderCruiseCard}
+          data={viewMode === 'list' ? filteredCruises : viewMode === 'timeline' ? timelineCards : ([] as BookedCruise[])}
           keyExtractor={(item) => item.id}
+          renderItem={renderCruiseCard}
+          ListHeaderComponent={(
+            <View>
+              {header}
+              {viewMode === 'timeline' ? (
+                <View style={styles.timelineSurface}>
+                  <Text style={styles.timelineTitle}>Chronological Voyage Timeline</Text>
+                  <Text style={styles.timelineSubtitle}>Upcoming and completed sailings share the same premium card system and retain all booking fields inside each card.</Text>
+                </View>
+              ) : null}
+              {viewMode === 'points' ? (
+                <View style={styles.pointsSurface}>
+                  <View style={styles.pointsHeaderRow}>
+                    <View style={styles.pointsIconWrap}>
+                      <Trophy size={18} color="#B8860B" />
+                    </View>
+                    <View style={styles.pointsHeaderTextWrap}>
+                      <Text style={styles.pointsTitle}>Crown & Anchor Progress</Text>
+                      <Text style={styles.pointsSubtitle}>All booked sailings still feed the same loyalty progression timeline.</Text>
+                    </View>
+                  </View>
+                  <CrownAnchorTimeline currentPoints={crownAnchorPoints} bookedCruises={bookedCruises} />
+                </View>
+              ) : null}
+            </View>
+          )}
+          ListEmptyComponent={viewMode === 'list' ? <PremiumEmptyState title="No booked cruises found" subtitle="All booked-cruise data is still supported. Adjust filters, search, or add a new cruise." /> : null}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1E3A5F" colors={['#1E3A5F']} />}
           contentContainerStyle={styles.listContent}
-          ListHeaderComponent={renderHeader}
-          ListEmptyComponent={viewMode === 'list' ? renderEmpty : undefined}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={COLORS.beigeWarm}
-              colors={[COLORS.beigeWarm]}
-            />
-          }
+          ItemSeparatorComponent={() => <View style={styles.listSpacer} />}
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={true}
-          initialNumToRender={6}
-          maxToRenderPerBatch={5}
-          windowSize={7}
-          updateCellsBatchingPeriod={50}
         />
       </SafeAreaView>
+
+      <TouchableOpacity
+        style={styles.addFloatingButton}
+        onPress={() => setShowAddModal(true)}
+        activeOpacity={0.9}
+        testID="booked-add-cruise"
+      >
+        <Plus size={22} color="#FFFFFF" />
+      </TouchableOpacity>
 
       <AddBookedCruiseModal
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSave={handleSaveNewCruise}
       />
-    </View>
+    </PremiumPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: DS.bg.page,
-  },
   safeArea: {
     flex: 1,
   },
@@ -714,833 +424,119 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: DS.bg.page,
+    paddingHorizontal: SPACING.xl,
   },
   loadingText: {
     marginTop: SPACING.md,
+    color: '#6B7280',
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: DS.text.secondary,
+    fontWeight: '700' as const,
   },
   listContent: {
-    padding: SPACING.md,
+    paddingHorizontal: SPACING.lg,
     paddingBottom: 120,
   },
-  headerContent: {
-    marginBottom: SPACING.md,
+  listSpacer: {
+    height: SPACING.md,
   },
-  heroContainer: {
-    height: 280,
-    borderRadius: BORDER_RADIUS.lg,
-    overflow: 'hidden',
-    marginBottom: SPACING.md,
-    ...SHADOW.lg,
+  headerStack: {
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.lg,
+    gap: SPACING.md,
   },
-  heroImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
-  },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  heroContent: {
-    flex: 1,
-    justifyContent: 'space-between',
-    padding: SPACING.md,
-  },
-  heroTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  heroIconBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  heroTitleGroup: {
-    flex: 1,
-  },
-  heroTitle: {
-    fontSize: 28,
-    fontWeight: '800' as const,
-    color: COLORS.white,
-    letterSpacing: 0.3,
-  },
-  heroSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginTop: 2,
-  },
-  nextCruiseCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
+  searchSurface: {
+    borderRadius: 22,
+    padding: SPACING.lg,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: '#E2E8F0',
   },
-  nextCruiseHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.xs,
-  },
-  nextCruiseLabel: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    color: COLORS.beigeWarm,
-    letterSpacing: 1,
-  },
-  nextCruiseShip: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: COLORS.white,
-  },
-  nextCruiseDest: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: 2,
-  },
-  nextCruiseDate: {
-    fontSize: 12,
-    color: COLORS.beigeWarm,
-    marginTop: 4,
-    fontWeight: '600' as const,
-  },
-  heroStatsRow: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
-    justifyContent: 'space-around',
-  },
-  heroStatItem: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  heroStatValue: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    color: COLORS.white,
-  },
-  heroStatLabel: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  heroStatDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  casinoSection: {
-    marginBottom: SPACING.md,
-    borderRadius: DS.radius.xl,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: DS.border.default,
-    ...SHADOW.sm,
-  },
-  casinoGradient: {
-    padding: SPACING.md,
-    backgroundColor: DS.bg.card,
-  },
-  casinoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  casinoIconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F5F0E0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: DS.accent.warning,
-  },
-  casinoTitle: {
-    fontSize: 18,
-    fontWeight: '800' as const,
-    color: DS.text.primary,
-    flex: 1,
-  },
-  casinoTierBadge: {
-    backgroundColor: '#F5F0E0',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: DS.radius.pill,
-    borderWidth: 1,
-    borderColor: DS.accent.warning,
-  },
-  casinoTierText: {
+  searchLabel: {
+    color: '#6B7280',
     fontSize: 12,
     fontWeight: '700' as const,
-    color: DS.text.warning,
-  },
-  casinoMetricsGrid: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  casinoMetricCard: {
-    flex: 1,
-    backgroundColor: DS.bg.secondary,
-    borderRadius: DS.radius.md,
-    padding: SPACING.sm,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: DS.border.default,
-  },
-  casinoMetricIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  casinoMetricValue: {
-    fontSize: 14,
-    fontWeight: '700' as const,
-    color: DS.text.primary,
-    textAlign: 'center' as const,
-  },
-  casinoMetricLabel: {
-    fontSize: 10,
-    color: DS.text.secondary,
-    textAlign: 'center' as const,
-    marginTop: 2,
-  },
-  casinoFinancialsRow: {
-    flexDirection: 'row',
-    backgroundColor: DS.bg.secondary,
-    borderRadius: DS.radius.md,
-    padding: SPACING.sm,
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: DS.border.default,
-  },
-  casinoFinancialItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  casinoFinancialText: {
-    flex: 1,
-  },
-  casinoFinancialLabel: {
-    fontSize: 10,
-    color: DS.text.secondary,
-  },
-  casinoFinancialValue: {
-    fontSize: 12,
-    fontWeight: '700' as const,
-    color: DS.text.primary,
-  },
-  casinoFinancialDivider: {
-    width: 1,
-    backgroundColor: DS.border.divider,
-    marginHorizontal: SPACING.xs,
-  },
-  casinoAvgRow: {
-    flexDirection: 'row',
-    backgroundColor: DS.bg.secondary,
-    borderRadius: DS.radius.sm,
-    padding: SPACING.sm,
-    borderWidth: 1,
-    borderColor: DS.border.default,
-  },
-  casinoAvgItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  casinoAvgLabel: {
-    fontSize: 10,
-    color: DS.text.secondary,
-    marginBottom: 2,
-  },
-  casinoAvgValue: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: DS.text.primary,
-  },
-  casinoAvgDivider: {
-    width: 1,
-    backgroundColor: DS.border.divider,
-    marginHorizontal: SPACING.sm,
-  },
-  cruiseCardWrapper: {
-    position: 'relative',
-  },
-  countdownBadge: {
-    position: 'absolute',
-    top: -8,
-    right: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.royalPurple,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.round,
-    zIndex: 10,
-    ...SHADOW.sm,
-  },
-  countdownText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
-  },
-  pointsEarnedBadge: {
-    position: 'absolute',
-    top: -8,
-    right: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.success,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.round,
-    zIndex: 10,
-    ...SHADOW.sm,
-  },
-  pointsEarnedText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  statsHighlightRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  statsHighlightCard: {
-    flex: 1,
-    backgroundColor: 'rgba(224, 242, 254, 0.5)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    minWidth: 70,
-  },
-  statsHighlightIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-  },
-  statsHighlightValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  statsHighlightLabel: {
-    fontSize: 10,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
-    marginTop: 2,
-    textAlign: 'center' as const,
-  },
-  viewModeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-    paddingHorizontal: SPACING.xs,
-  },
-  viewModeToggle: {
-    flexDirection: 'row',
-    backgroundColor: '#F0F0F0',
-    borderRadius: DS.radius.pill,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: DS.border.default,
-  },
-  viewModeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: DS.radius.pill,
-  },
-  viewModeButtonActive: {
-    backgroundColor: DS.bg.card,
-    borderWidth: 1,
-    borderColor: DS.border.default,
-  },
-  viewModeText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: DS.text.secondary,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  viewModeTextActive: {
-    color: DS.text.primary,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-  },
-  addCruiseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: DS.text.primary,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: DS.radius.pill,
-  },
-  addCruiseText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#FFFFFF',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-  },
-  timelineContainer: {
-    marginBottom: SPACING.lg,
-  },
-  timelineSection: {
-    marginBottom: SPACING.lg,
-  },
-  timelineSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-    paddingHorizontal: SPACING.xs,
-  },
-  timelineSectionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.navyDeep,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timelineSectionTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: DS.text.primary,
-  },
-  timelineVerticalList: {
-    gap: SPACING.sm,
-  },
-  timelineItemWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  timelineDaysIndicator: {
-    width: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.navyDeep,
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.sm,
-    marginRight: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  timelineDaysNumber: {
-    fontSize: 18,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
-    lineHeight: 22,
-  },
-  timelineDaysLabel: {
-    fontSize: 8,
-    color: COLORS.beigeWarm,
-    textTransform: 'uppercase' as const,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    letterSpacing: 0.5,
-  },
-  timelinePointsIndicator: {
-    backgroundColor: 'rgba(76, 175, 80, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(76, 175, 80, 0.3)',
-  },
-  timelinePointsValue: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.success,
-    marginTop: 2,
-  },
-  timelineCardWrapper: {
-    flex: 1,
-  },
-  timelineEmptyCard: {
-    paddingVertical: SPACING.xl,
-    borderRadius: DS.radius.lg,
-    backgroundColor: DS.bg.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: DS.border.default,
-  },
-  timelineEmptyText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: DS.text.secondary,
-    marginTop: SPACING.xs,
-    textAlign: 'center' as const,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: TYPOGRAPHY.fontSizeXL,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: CLEAN_THEME.data.value,
-  },
-  statLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.white,
-    marginTop: 2,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: 'rgba(212, 165, 116, 0.2)',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-    flexWrap: 'wrap',
-  },
-  sortMenu: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.lg,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    overflow: 'hidden',
-    ...SHADOW.md,
-  },
-  sortOption: {
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 31, 63, 0.08)',
-  },
-  sortOptionActive: {
-    backgroundColor: 'rgba(224, 242, 254, 0.5)',
-  },
-  sortOptionText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
-  },
-  sortOptionTextActive: {
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  cruiseListHeaderBooked: {
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.xs,
-    backgroundColor: DS.bg.card,
-    borderRadius: DS.radius.md,
-    borderWidth: 1,
-    borderColor: DS.border.default,
-  },
-  cruiseListTitle: {
-    fontSize: 22,
-    fontWeight: '800' as const,
-    color: DS.text.primary,
-    letterSpacing: 0.3,
-    marginBottom: 4,
-  },
-  cruiseListSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: Platform.OS === 'ios' ? SPACING.sm : 0,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorderAccent,
+    letterSpacing: 0.7,
+    marginBottom: 12,
   },
   searchInput: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: CLEAN_THEME.data.value,
-    marginLeft: SPACING.sm,
-    paddingVertical: SPACING.sm,
-  },
-  sortChipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  sortChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: 'rgba(212, 165, 116, 0.15)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.round,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#F8FAFC',
+    color: '#1A2A3D',
+    fontSize: 15,
+    fontWeight: '600' as const,
     borderWidth: 1,
-    borderColor: 'rgba(212, 165, 116, 0.3)',
+    borderColor: '#E2E8F0',
   },
-  sortChipText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.beigeWarm,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  filterTabs: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: SPACING.xs,
-  },
-  filterTab: {
-    flex: 1,
-    paddingVertical: SPACING.sm,
-    alignItems: 'center',
-    borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  activeTab: {
-    backgroundColor: COLORS.beigeWarm,
-    borderColor: COLORS.beigeWarm,
-  },
-  filterTabText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
-  },
-  activeTabText: {
-    color: COLORS.navyDeep,
-  },
-  cruiseCard: {
-    backgroundColor: COLORS.cardBackgroundDark,
-    borderRadius: BORDER_RADIUS.xl,
-    overflow: 'hidden',
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorderAccent,
+  timelineSurface: {
+    borderRadius: 24,
     padding: SPACING.lg,
-    ...SHADOW.lg,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  statusBadge: {
-    position: 'absolute',
-    top: SPACING.md,
-    right: SPACING.md,
+  timelineTitle: {
+    color: '#1A2A3D',
+    fontSize: 18,
+    fontWeight: '800' as const,
+  },
+  timelineSubtitle: {
+    marginTop: 6,
+    color: '#6B7280',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  pointsSurface: {
+    borderRadius: 24,
+    padding: SPACING.lg,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  pointsHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.sm,
-    gap: 4,
-    zIndex: 1,
+    gap: 12,
+    marginBottom: SPACING.md,
   },
-  upcomingBadge: {
-    backgroundColor: 'rgba(212, 165, 116, 0.9)',
-  },
-  completedBadge: {
-    backgroundColor: 'rgba(76, 175, 80, 0.9)',
-  },
-  statusText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-  },
-  completedStatusText: {
-    color: COLORS.white,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-    marginTop: SPACING.xl,
-  },
-  shipIconContainer: {
+  pointsIconWrap: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(212, 165, 116, 0.15)',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SPACING.md,
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
   },
-  cardHeaderInfo: {
+  pointsHeaderTextWrap: {
     flex: 1,
   },
-  shipName: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: CLEAN_THEME.data.value,
+  pointsTitle: {
+    color: '#1A2A3D',
+    fontSize: 18,
+    fontWeight: '800' as const,
   },
-  offerBadge: {
-    flexDirection: 'row',
+  pointsSubtitle: {
+    marginTop: 4,
+    color: '#6B7280',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  addFloatingButton: {
+    position: 'absolute',
+    right: SPACING.lg,
+    bottom: 100,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#1E3A5F',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  offerBadgeText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.goldAccent,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  destination: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.beigeWarm,
-    marginBottom: SPACING.sm,
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
-    paddingBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(212, 165, 116, 0.15)',
-  },
-  detail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  detailText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.white,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    flexWrap: 'wrap',
-  },
-  reservationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  reservationLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  reservationNumber: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: CLEAN_THEME.data.value,
-  },
-  cabinTypeBadge: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  cabinTypeText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.data.value,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  priceContainer: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  price: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.success,
-  },
-  pointsRow: {
-    marginTop: SPACING.md,
-    paddingTop: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(212, 165, 116, 0.15)',
-  },
-  pointsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: 'rgba(76, 175, 80, 0.15)',
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    alignSelf: 'flex-start',
-  },
-  pointsValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.success,
-  },
-  pointsLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.success,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: SPACING.huge,
-    paddingHorizontal: SPACING.xl,
-    backgroundColor: 'rgba(224, 242, 254, 0.3)',
-    borderRadius: BORDER_RADIUS.lg,
-    marginHorizontal: SPACING.md,
-  },
-  emptyIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(224, 242, 254, 0.8)',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
-  },
-  emptyTitle: {
-    fontSize: TYPOGRAPHY.fontSizeXL,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    marginBottom: SPACING.sm,
-  },
-  emptyText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
-    textAlign: 'center' as const,
-    lineHeight: 22,
-    marginBottom: SPACING.xl,
-  },
-  clearFiltersButton: {
-    borderRadius: BORDER_RADIUS.md,
-    overflow: 'hidden',
-  },
-  clearFiltersGradient: {
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.xxl,
-  },
-  clearFiltersText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    shadowColor: '#000000',
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
 });

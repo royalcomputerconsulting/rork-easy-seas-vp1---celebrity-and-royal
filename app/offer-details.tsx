@@ -66,12 +66,12 @@ export default function OfferDetailsScreen() {
   const offerData = useMemo(() => {
     const allCruises = [...(storeCruises || []), ...(localData.cruises || [])];
     const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
-    const uniqueCruises = dedupeCruisesByIdentity(allCruises);
+    const uniqueCruises = dedupeCruisesByIdentity<Cruise>(allCruises);
 
     const offer = allOffers.find((entry: CasinoOffer) => entry.offerCode === offerCode);
     let matchingCruises = uniqueCruises.filter((cruise: Cruise) => cruise.offerCode === offerCode);
 
-    matchingCruises = matchingCruises.map((cruise) => {
+    matchingCruises = matchingCruises.map((cruise: Cruise) => {
       if (!offer) {
         return cruise;
       }
@@ -91,7 +91,7 @@ export default function OfferDetailsScreen() {
       } satisfies Cruise;
     });
 
-    const filteredCruises = matchingCruises.filter((cruise) => {
+    const filteredCruises = matchingCruises.filter((cruise: Cruise) => {
       if (filterShip && cruise.shipName !== filterShip) return false;
       if (filterGuests) {
         const cruiseGuests = cruise.guests || 2;
@@ -134,10 +134,10 @@ export default function OfferDetailsScreen() {
 
   const filterOptions = useMemo(() => {
     const allCruises = [...(storeCruises || []), ...(localData.cruises || [])].filter((cruise: Cruise) => cruise.offerCode === offerCode);
-    const uniqueCruises = dedupeCruisesByIdentity(allCruises);
-    const ships = [...new Set(uniqueCruises.map((cruise) => cruise.shipName).filter(Boolean))].sort();
-    const guestCounts = [...new Set(uniqueCruises.map((cruise) => cruise.guests || 2))].sort((left, right) => left - right);
-    const roomTypes = [...new Set(uniqueCruises.map((cruise) => cruise.cabinType).filter((room): room is string => Boolean(room)))].sort();
+    const uniqueCruises = dedupeCruisesByIdentity<Cruise>(allCruises);
+    const ships = Array.from(new Set<string>(uniqueCruises.map((cruise: Cruise) => cruise.shipName).filter((ship): ship is string => Boolean(ship)))).sort((left: string, right: string) => left.localeCompare(right));
+    const guestCounts = Array.from(new Set<number>(uniqueCruises.map((cruise: Cruise) => cruise.guests || 2))).sort((left: number, right: number) => left - right);
+    const roomTypes = Array.from(new Set<string>(uniqueCruises.map((cruise: Cruise) => cruise.cabinType).filter((room): room is string => typeof room === 'string' && room.length > 0))).sort((left: string, right: string) => left.localeCompare(right));
     return { ships, guestCounts, roomTypes };
   }, [localData.cruises, offerCode, storeCruises]);
 
@@ -223,7 +223,7 @@ export default function OfferDetailsScreen() {
   const daysUntilExpiry = offerInfo.expiryDate ? getDaysUntil(offerInfo.expiryDate) : null;
   const offerValue = useMemo(() => offerData.offer ? calculateOfferValue(offerData.offer) : null, [offerData.offer]);
   const offerCardFields = useMemo(() => buildOfferCardFields(offerData.offer, offerData.cruises), [offerData.cruises, offerData.offer]);
-  const offerSections = useMemo(() => buildDataSections(offerData.offer ? (offerData.offer as Record<string, unknown>) : ({
+  const offerSections = useMemo(() => buildDataSections(offerData.offer ? (offerData.offer as unknown as Record<string, unknown>) : ({
     offerCode: offerInfo.offerCode,
     offerName: offerInfo.offerName,
     expiryDate: offerInfo.expiryDate,

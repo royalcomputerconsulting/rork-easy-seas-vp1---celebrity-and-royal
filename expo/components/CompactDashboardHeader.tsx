@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, DS } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
+import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS, LEVEL_ORDER } from '@/constants/crownAnchor';
 import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER, getCelebrityCaptainsClubLevelByPoints } from '@/constants/celebrityCaptainsClub';
@@ -93,6 +94,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     return `${mm}-${dd}-${yy}`;
   };
 
+  const marbleConfig = MARBLE_TEXTURES.lightBlue;
+
   const displayName = currentUser?.name || memberName;
   const displayNumber = activeBrand === 'royal' 
     ? (crownAnchorNumber || currentUser?.crownAnchorNumber || '')
@@ -115,29 +118,21 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
   return (
     <LinearGradient
-      colors={['#FCFEFF', '#EEF7FF', '#DDEEFF']}
-      locations={[0, 0.42, 1]}
-      start={{ x: 0.02, y: 0 }}
+      colors={marbleConfig.gradientColors as unknown as [string, string, ...string[]]}
+      locations={marbleConfig.gradientLocations}
+      start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
-      <LinearGradient
-        pointerEvents="none"
-        colors={['rgba(255,255,255,0.98)', 'rgba(188,216,241,0.3)', 'rgba(255,255,255,0.18)', 'rgba(142,182,221,0.24)']}
-        locations={[0, 0.22, 0.72, 1]}
-        start={{ x: 0.12, y: 0 }}
-        end={{ x: 0.88, y: 1 }}
-        style={styles.marbleVeinOverlay}
-      />
       <View style={styles.topRow}>
         <View style={styles.memberInfoInline}>
-          {!hideLogo && (
+          {!hideLogo ? (
             <Image 
               source={{ uri: IMAGES.logo }}
               style={styles.headerLogo}
               resizeMode="contain"
             />
-          )}
+          ) : null}
           <View style={styles.memberTextInfo}>
             <Text style={styles.memberGreeting}>{displayName}</Text>
             <Text style={styles.memberSubtitle}>{displayNumberLabel} {displayNumber}</Text>
@@ -145,23 +140,23 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </View>
         
         <View style={styles.actionsSection}>
-          {onAlertsPress && (
+          {onAlertsPress ? (
             <TouchableOpacity 
               style={styles.iconBtn} 
               onPress={onAlertsPress}
               activeOpacity={0.7}
             >
               <Bell size={18} color={CLEAN_THEME.text.primary} />
-              {alertCount > 0 && (
+              {alertCount > 0 ? (
                 <View style={styles.alertBadge}>
                   <Text style={styles.alertBadgeText}>
                     {alertCount > 9 ? '9+' : alertCount}
                   </Text>
                 </View>
-              )}
+              ) : null}
             </TouchableOpacity>
-          )}
-          {onLogoutPress && (
+          ) : null}
+          {onLogoutPress ? (
             <TouchableOpacity 
               style={styles.iconBtn} 
               onPress={onLogoutPress}
@@ -169,8 +164,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
             >
               <LogOut size={18} color={CLEAN_THEME.text.primary} />
             </TouchableOpacity>
-          )}
-          {onSettingsPress && (
+          ) : null}
+          {onSettingsPress ? (
             <TouchableOpacity 
               style={styles.iconBtn} 
               onPress={onSettingsPress}
@@ -178,7 +173,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
             >
               <Settings size={18} color={CLEAN_THEME.text.primary} />
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
       </View>
 
@@ -195,12 +190,12 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           <Text style={[styles.tierText, { color: COLORS.navyDeep }]}>{crownAnchorLevel.toUpperCase()}</Text>
         </View>
       </View>
-      {crewMemberCount > 0 && (
+      {crewMemberCount > 0 ? (
         <View style={styles.crewCountRow}>
           <Users size={13} color={CLEAN_THEME.text.secondary} />
           <Text style={styles.crewCountText}>{crewMemberCount} crew members</Text>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.progressGrid}>
         {/* BAR 1: Loyalty Progress (Crown & Anchor) - Always show current → next level */}
@@ -255,7 +250,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 }
               </Text>
 
-              {!isPinnacle && pinnacleProgress.thresholdCrossedShip && pinnacleProgress.thresholdCrossedSailDate && (
+              {!isPinnacle && pinnacleProgress.thresholdCrossedShip && pinnacleProgress.thresholdCrossedSailDate ? (
                 <View style={styles.pinnacleDetailsContainer}>
                   <View style={styles.pinnacleDetailRow}>
                     <View style={styles.pinnacleIconBadge}>
@@ -282,7 +277,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                     </View>
                   </View>
                 </View>
-              )}
+              ) : null}
             </View>
           );
         })()}
@@ -841,22 +836,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: DS.radius.xl,
+    borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(223, 214, 206, 0.92)',
+    borderColor: 'rgba(0, 31, 63, 0.15)',
     marginBottom: SPACING.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-  },
-  marbleVeinOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.92,
+    ...SHADOW.sm,
   },
   topRow: {
     flexDirection: 'row',
@@ -879,27 +865,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   memberGreeting: {
-    fontSize: 22,
-    fontWeight: '800' as const,
-    color: DS.text.primary,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: CLEAN_THEME.text.primary,
   },
   memberSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: DS.text.secondary,
+    color: CLEAN_THEME.text.secondary,
     marginTop: 2,
-    fontWeight: '500' as const,
   },
   actionsSection: {
     flexDirection: 'row',
     gap: SPACING.xs,
   },
   iconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.82)',
-    borderWidth: 1,
-    borderColor: 'rgba(223, 214, 206, 0.92)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: CLEAN_THEME.background.tertiary,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -942,11 +925,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   progressCard: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderRadius: DS.radius.sm,
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(223, 214, 206, 0.9)',
+    borderColor: CLEAN_THEME.border.light,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -956,18 +939,18 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: DS.text.primary,
+    color: CLEAN_THEME.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   progressPercent: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: DS.text.primary,
+    color: CLEAN_THEME.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   progressBarBg: {
-    height: 5,
-    backgroundColor: '#E5E5E5',
-    borderRadius: 3,
+    height: 4,
+    backgroundColor: CLEAN_THEME.border.light,
+    borderRadius: 2,
     overflow: 'hidden',
   },
   progressBarFill: {
@@ -976,7 +959,7 @@ const styles = StyleSheet.create({
   },
   progressEta: {
     fontSize: 10,
-    color: DS.text.secondary,
+    color: CLEAN_THEME.text.secondary,
     marginTop: 4,
   },
   pinnacleDetailsContainer: {
@@ -1053,12 +1036,12 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.74)',
-    borderRadius: DS.radius.sm,
-    padding: SPACING.sm,
+    backgroundColor: CLEAN_THEME.background.card,
+    borderRadius: BORDER_RADIUS.xs,
+    padding: SPACING.xs,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(223, 214, 206, 0.9)',
+    borderColor: CLEAN_THEME.border.light,
   },
   statItem: {
     flex: 1,
@@ -1066,18 +1049,17 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    backgroundColor: DS.border.divider,
+    backgroundColor: CLEAN_THEME.border.light,
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: '700' as const,
-    color: DS.text.primary,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: CLEAN_THEME.data.value,
   },
   statLabel: {
     fontSize: 10,
-    color: DS.text.secondary,
-    marginTop: 2,
-    fontWeight: '500' as const,
+    color: CLEAN_THEME.data.label,
+    marginTop: 1,
   },
   quickStatsPillRow: {
     flexDirection: 'row',
@@ -1087,23 +1069,22 @@ const styles = StyleSheet.create({
   quickStatPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.78)',
-    borderRadius: DS.radius.pill,
-    paddingVertical: 6,
-    paddingHorizontal: SPACING.sm,
-    gap: 4,
+    backgroundColor: CLEAN_THEME.background.tertiary,
+    borderRadius: BORDER_RADIUS.round,
+    paddingVertical: 4,
+    paddingHorizontal: SPACING.xs,
+    gap: 3,
     borderWidth: 1,
-    borderColor: 'rgba(223, 214, 206, 0.9)',
+    borderColor: CLEAN_THEME.border.light,
   },
   quickStatPillValue: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: DS.text.primary,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: CLEAN_THEME.data.value,
   },
   quickStatPillLabel: {
-    fontSize: 12,
-    color: DS.text.secondary,
-    fontWeight: '500' as const,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: CLEAN_THEME.data.label,
   },
   crewCountRow: {
     flexDirection: 'row',

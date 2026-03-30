@@ -12,6 +12,11 @@ import React, { useCallback } from "react";
 import { Platform, View, StyleSheet } from "react-native";
 import { COLORS } from '../../constants/theme';
 import * as Haptics from 'expo-haptics';
+
+const TAB_BG = '#FFFFFF';
+const ACTIVE_COLOR = '#1E3A5F';
+const INACTIVE_COLOR = '#9CA3AF';
+
 export default function TabLayout() {
   const handleTabPress = useCallback(() => {
     if (Platform.OS !== 'web') {
@@ -26,25 +31,25 @@ export default function TabLayout() {
         tabPress: handleTabPress,
       }}
       screenOptions={{
-        tabBarActiveTintColor: COLORS.navyDeep,
-        tabBarInactiveTintColor: COLORS.textDarkGrey,
+        tabBarActiveTintColor: ACTIVE_COLOR,
+        tabBarInactiveTintColor: INACTIVE_COLOR,
         tabBarShowLabel: true,
         tabBarStyle: {
           position: 'absolute',
-          backgroundColor: COLORS.white,
+          backgroundColor: TAB_BG,
           borderTopWidth: 1,
-          borderTopColor: COLORS.borderLight,
+          borderTopColor: '#E5E7EB',
           elevation: 8,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.08,
+          shadowOpacity: 0.06,
           shadowRadius: 8,
         },
         tabBarLabelStyle: {
           fontSize: 9,
-          fontWeight: '600' as const,
-          marginTop: 2,
-          letterSpacing: 0,
+          fontWeight: '700' as const,
+          marginTop: 1,
+          letterSpacing: 0.3,
         },
         tabBarItemStyle: {
           paddingHorizontal: 0,
@@ -142,11 +147,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: 44,
-    height: 32,
+    height: 30,
     borderRadius: 8,
-    backgroundColor: COLORS.white,
+    backgroundColor: 'transparent',
   },
   activeIconContainer: {
-    backgroundColor: COLORS.gold,
+    backgroundColor: 'rgba(30,58,95,0.08)',
+    borderRadius: 8,
   },
 });

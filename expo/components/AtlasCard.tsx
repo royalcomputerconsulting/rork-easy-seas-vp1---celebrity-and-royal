@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, Star, Zap, Ship, Lock } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, DS } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
+import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import type { MachineEncyclopediaEntry } from '@/types/models';
 
 interface AtlasCardProps {
@@ -46,7 +47,7 @@ export function AtlasCard({
           <View style={styles.compactRight}>
             {locked ? (
               <View style={styles.compactLockBadge} testID="atlas-card.lock">
-                <Lock size={16} color={DS.text.primary} />
+                <Lock size={16} color={COLORS.navyDeep} />
               </View>
             ) : null}
             {onToggleFavorite && (
@@ -60,8 +61,8 @@ export function AtlasCard({
               >
                 <Star
                   size={20}
-                  color={isFavorite ? DS.accent.warning : DS.text.tertiary}
-                  fill={isFavorite ? DS.accent.warning : 'none'}
+                  color={isFavorite ? COLORS.goldDark : COLORS.textMuted}
+                  fill={isFavorite ? COLORS.goldDark : 'none'}
                   strokeWidth={2}
                 />
               </TouchableOpacity>
@@ -80,7 +81,8 @@ export function AtlasCard({
       testID="atlas-card"
     >
       <LinearGradient
-        colors={DS.bg.marbleShell}
+        colors={MARBLE_TEXTURES.lightBlue.gradientColors}
+        locations={MARBLE_TEXTURES.lightBlue.gradientLocations}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.marbleBackground}
@@ -214,21 +216,18 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: DS.border.default,
-    backgroundColor: DS.bg.card,
-    ...DS.shadow.md,
+    ...SHADOW.md,
   },
   marbleBackground: {
     borderRadius: BORDER_RADIUS.lg,
   },
   headerSection: {
-    backgroundColor: DS.bg.card,
+    backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: DS.border.default,
+    borderBottomColor: '#E5E7EB',
   },
   headerTop: {
     flexDirection: 'row',
@@ -246,7 +245,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: '800' as const,
-    color: DS.text.primary,
+    color: '#000000',
     lineHeight: 24,
   },
   starButton: {
@@ -260,20 +259,18 @@ const styles = StyleSheet.create({
   manufacturer: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: DS.text.secondary,
+    color: COLORS.textDarkGrey,
   },
   yearBadge: {
-    backgroundColor: DS.bg.secondary,
+    backgroundColor: COLORS.navyDeep,
     paddingHorizontal: SPACING.xs,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.xs,
-    borderWidth: 1,
-    borderColor: DS.border.default,
   },
   yearText: {
     fontSize: 11,
     fontWeight: '700' as const,
-    color: DS.text.secondary,
+    color: COLORS.white,
   },
   badgesRow: {
     flexDirection: 'row',
@@ -281,9 +278,7 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    backgroundColor: 'rgba(250, 250, 250, 0.92)',
-    borderBottomWidth: 1,
-    borderBottomColor: DS.border.divider,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   badge: {
     flexDirection: 'row',
@@ -422,13 +417,12 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   compactContainer: {
-    backgroundColor: DS.bg.card,
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.sm,
     overflow: 'hidden',
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: DS.border.default,
-    ...DS.shadow.sm,
+    borderColor: COLORS.borderLight,
   },
   compactContent: {
     flexDirection: 'row',
@@ -444,13 +438,13 @@ const styles = StyleSheet.create({
   compactMachineName: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: DS.text.primary,
+    color: COLORS.navyDeep,
     marginBottom: 2,
   },
   compactManufacturer: {
     fontSize: 13,
     fontWeight: '500' as const,
-    color: DS.text.secondary,
+    color: COLORS.textDarkGrey,
   },
   compactRight: {
     flexDirection: 'row',
@@ -461,9 +455,9 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 10,
-    backgroundColor: DS.bg.secondary,
+    backgroundColor: 'rgba(18, 58, 99, 0.08)',
     borderWidth: 1,
-    borderColor: DS.border.default,
+    borderColor: 'rgba(18, 58, 99, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
