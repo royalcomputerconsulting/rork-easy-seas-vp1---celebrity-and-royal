@@ -11,6 +11,8 @@ export interface DisplayField {
   tone?: 'default' | 'accent' | 'success' | 'warning' | 'danger';
 }
 
+type DisplayFieldTone = NonNullable<DisplayField['tone']>;
+
 export interface DataSection {
   key: string;
   title: string;
@@ -388,7 +390,15 @@ export function formatFieldValue(value: unknown, key: string): string {
       .join(' • ');
   }
 
-  return String(value);
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint' || typeof value === 'symbol') {
+    return String(value);
+  }
+
+  if (typeof value === 'function') {
+    return '[Function]';
+  }
+
+  return '';
 }
 
 function extractFields(entity: EntityRecord, keys: string[], consumed: Set<string>): DisplayField[] {
@@ -518,16 +528,20 @@ export function buildCruiseCardFields(cruise: Cruise | BookedCruise, linkedOffer
 
   const fields = orderedKeys
     .filter((key) => hasMeaningfulValue(record[key]))
-    .map((key) => ({
-      key,
-      label: formatFieldLabel(key),
-      value: formatFieldValue(record[key], key),
-      tone: key === 'retailValue' || key === 'totalValue' || key === 'freePlay' || key === 'freeOBC'
+    .map((key) => {
+      const tone: DisplayFieldTone = key === 'retailValue' || key === 'totalValue' || key === 'freePlay' || key === 'freeOBC'
         ? 'success'
         : key === 'netResult'
           ? ((Number((cruise as BookedCruise).netResult ?? (cruise as BookedCruise).winnings ?? 0) >= 0) ? 'success' : 'danger')
-          : 'default',
-    }));
+          : 'default';
+
+      return {
+        key,
+        label: formatFieldLabel(key),
+        value: formatFieldValue(record[key], key),
+        tone,
+      };
+    });
 
   return {
     primary: fields.slice(0, 8),
@@ -642,12 +656,18 @@ export function buildOfferCardFields(offer: CasinoOffer | undefined, cruises: Cr
 
   const fields = orderedKeys
     .filter((key) => hasMeaningfulValue(record[key]))
-    .map((key) => ({
-      key,
-      label: key === 'cruisesAvailable' ? 'Cruises Available' : formatFieldLabel(key),
-      value: formatFieldValue(record[key], key),
-      tone: key === 'totalValue' || key === 'freePlay' || key === 'OBC' || key === 'tradeInValue' ? 'success' : 'default',
-    }));
+    .map((key) => {
+      const tone: DisplayFieldTone = key === 'totalValue' || key === 'freePlay' || key === 'OBC' || key === 'tradeInValue'
+        ? 'success'
+        : 'default';
+
+      return {
+        key,
+        label: key === 'cruisesAvailable' ? 'Cruises Available' : formatFieldLabel(key),
+        value: formatFieldValue(record[key], key),
+        tone,
+      };
+    });
 
   return {
     primary: fields.slice(0, 8),
@@ -698,7 +718,6 @@ export function mergeCruiseWithOffer(cruise: Cruise | BookedCruise, linkedOffer?
   }
 
   return {
-    ...linkedOffer,
     ...cruise,
     offerName: cruise.offerName || linkedOffer.offerName || linkedOffer.title,
     freePlay: cruise.freePlay ?? linkedOffer.freePlay ?? linkedOffer.freeplayAmount,

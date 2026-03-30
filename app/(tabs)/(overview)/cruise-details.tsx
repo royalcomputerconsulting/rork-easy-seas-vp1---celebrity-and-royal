@@ -291,6 +291,7 @@ export default function CruiseDetailsScreen() {
               badge={getCruiseBadge(mergedCruise)}
               imageUri={pickCruiseImage(mergedCruise)}
               pills={heroPills}
+              compact
             >
               <PremiumQuickFacts fields={quickFacts} />
             </PremiumHeroCard>
@@ -435,8 +436,8 @@ const styles = StyleSheet.create({
     paddingBottom: 90,
   },
   headerStack: {
-    paddingTop: SPACING.sm,
-    gap: SPACING.md,
+    paddingTop: SPACING.xs,
+    gap: SPACING.sm,
   },
   notFoundWrap: {
     flex: 1,

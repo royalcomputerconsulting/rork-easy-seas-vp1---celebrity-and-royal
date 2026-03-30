@@ -20,7 +20,8 @@ import {
   Star,
   Wallet,
 } from 'lucide-react-native';
-import { SHADOW, SPACING } from '@/constants/theme';
+import { APP_TEXTURE, SHADOW, SPACING } from '@/constants/theme';
+import { TexturedAppShell } from '@/components/ui/TexturedAppShell';
 import type { DisplayField } from '../../lib/cruisePresentation';
 
 export type AccentTone = 'gold' | 'teal' | 'emerald' | 'violet' | 'rose' | 'slate';
@@ -109,9 +110,11 @@ function getFieldToneColor(tone?: DisplayField['tone']) {
 
 export const PremiumPageBackground = memo(function PremiumPageBackground({ children }: { children: React.ReactNode }) {
   return (
-    <View style={styles.pageBackground}>
-      {children}
-    </View>
+    <TexturedAppShell testID="premium-page-background">
+      <View style={styles.pageBackground}>
+        {children}
+      </View>
+    </TexturedAppShell>
   );
 });
 
@@ -157,7 +160,6 @@ export const PremiumHeroCard = memo(function PremiumHeroCard({
           {subtitle ? <Text style={[styles.heroSubtitle, compact && styles.heroSubtitleCompact]}>{subtitle}</Text> : null}
           <View style={[styles.pillsRow, compact && styles.pillsRowCompact]}>
             {pills.map((pill) => {
-              const tone = getToneStyles(pill.tone);
               return (
                 <View key={pill.label} style={[styles.summaryPill, compact && styles.summaryPillCompact, { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.25)' }]}> 
                   <Text style={styles.summaryPillLabel}>{pill.label}</Text>
@@ -507,7 +509,7 @@ export const PremiumQuickFacts = memo(function PremiumQuickFacts({ fields }: { f
 const styles = StyleSheet.create({
   pageBackground: {
     flex: 1,
-    backgroundColor: '#F0F4F8',
+    backgroundColor: 'transparent',
   },
   heroShadowWrap: {
     borderRadius: 28,
@@ -664,10 +666,12 @@ const styles = StyleSheet.create({
   surfaceCard: {
     borderRadius: 26,
     padding: SPACING.lg,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: APP_TEXTURE.surfaceStrong,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: APP_TEXTURE.border,
     ...SHADOW.card,
+    shadowColor: '#10223A',
+    shadowOpacity: 0.08,
   },
   sectionHeading: {
     color: '#1A2A3D',
@@ -686,9 +690,9 @@ const styles = StyleSheet.create({
     minHeight: 92,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: APP_TEXTURE.surfaceMuted,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.58)',
   },
   statTileLabel: {
     color: '#6B7280',
@@ -713,7 +717,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: APP_TEXTURE.surfaceMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -724,7 +730,7 @@ const styles = StyleSheet.create({
   fieldRow: {
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: 'rgba(126, 143, 162, 0.18)',
   },
   fieldLabel: {
     color: '#6B7280',
@@ -743,11 +749,12 @@ const styles = StyleSheet.create({
   entityCardWrap: {
     borderRadius: 28,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: APP_TEXTURE.surfaceStrong,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: APP_TEXTURE.border,
     ...SHADOW.lg,
-    shadowOpacity: 0.08,
+    shadowColor: '#10223A',
+    shadowOpacity: 0.1,
   },
   entityHeader: {
     minHeight: 178,
@@ -822,9 +829,9 @@ const styles = StyleSheet.create({
     minHeight: 82,
     borderRadius: 18,
     padding: 13,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: APP_TEXTURE.surfaceMuted,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.58)',
   },
   entityFieldLabel: {
     color: '#6B7280',
@@ -847,9 +854,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: APP_TEXTURE.surfaceMuted,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.58)',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -987,9 +994,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.xxl,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: APP_TEXTURE.surfaceStrong,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: APP_TEXTURE.border,
     ...SHADOW.card,
   },
   emptyIconBubble: {
@@ -998,9 +1005,9 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0F4F8',
+    backgroundColor: APP_TEXTURE.goldWash,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: APP_TEXTURE.borderStrong,
   },
   emptyTitle: {
     marginTop: 16,
@@ -1025,9 +1032,9 @@ const styles = StyleSheet.create({
     minWidth: 150,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: APP_TEXTURE.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: APP_TEXTURE.border,
     ...SHADOW.sm,
   },
   quickFactLabel: {
