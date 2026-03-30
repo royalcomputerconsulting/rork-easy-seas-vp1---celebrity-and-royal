@@ -10,7 +10,6 @@ import {
 } from "lucide-react-native";
 import React, { useCallback } from "react";
 import { Platform, View, StyleSheet } from "react-native";
-import { COLORS } from '../../constants/theme';
 import * as Haptics from 'expo-haptics';
 
 const TAB_BG = 'rgba(8, 16, 34, 0.97)';

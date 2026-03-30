@@ -17,7 +17,7 @@ import {
   RefreshCcw,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';

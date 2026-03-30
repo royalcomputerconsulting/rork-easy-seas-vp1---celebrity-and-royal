@@ -31,6 +31,7 @@ interface CasinoOfferCardProps {
   bookedCruiseIds?: Set<string>;
   isActive?: boolean;
   isBestValue?: boolean;
+  offerSource?: 'royal' | 'celebrity' | 'carnival';
 }
 
 interface OfferSummaryCardProps {
@@ -247,8 +248,8 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   obc,
   cruises,
   onPress,
-  onCruisePress,
-  bookedCruiseIds = new Set(),
+  onCruisePress: _onCruisePress,
+  bookedCruiseIds: _bookedCruiseIds = new Set(),
   isActive = true,
   isBestValue = false,
 }: CasinoOfferCardProps) {

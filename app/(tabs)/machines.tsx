@@ -15,14 +15,12 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download, Crown, RefreshCcw, ExternalLink } from 'lucide-react-native';
+import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions, type CasinoSession } from '@/state/CasinoSessionProvider';
 import { AtlasCard } from '@/components/AtlasCard';
-import { useEntitlement } from '@/state/EntitlementProvider';
-import { useAuth } from '@/state/AuthProvider';
 import { exportFavoriteMachinesToDocx, exportAllMachinesIncrementallyToDocx } from '@/lib/exportMachinesToDocx';
 import { MachineSessionStats } from '@/components/MachineSessionStats';
 import { MachineSessionsList } from '@/components/MachineSessionsList';
@@ -34,11 +32,6 @@ type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 
 export default function AtlasScreen() {
   const router = useRouter();
-  const entitlement = useEntitlement();
-  const auth = useAuth();
-
-
-
   const listRef = useRef<FlatList<MachineEncyclopediaEntry> | null>(null);
   const scrollOffsetRef = useRef<number>(0);
 
@@ -288,7 +281,7 @@ export default function AtlasScreen() {
   }, [router]);
 
   const handleToggleFavorite = useCallback((id: string) => {
-    toggleFavorite(id);
+    void toggleFavorite(id);
   }, [toggleFavorite]);
 
   const handleExportFavorites = useCallback(async () => {
@@ -580,7 +573,6 @@ export default function AtlasScreen() {
     );
   }, [
     activeFilter,
-    entitlement,
     favoriteMachines.length,
     filteredMachines.length,
     handleClearFilters,
@@ -593,7 +585,6 @@ export default function AtlasScreen() {
     isLoadingIndex,
     myAtlasMachines.length,
     reload,
-    router,
     searchQuery,
     sessions,
     showSessionsSection,

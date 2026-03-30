@@ -666,20 +666,22 @@ function OverviewScreenContent() {
 
   const renderOfferCard = useCallback(({ item, index }: { item: CasinoOfferCardData | Cruise; index: number }) => {
     if ('cruises' in item) {
+      const groupedOffer = item as CasinoOfferCardData;
+
       return (
         <CasinoOfferCard
-          offerCode={item.offerCode}
-          offerName={item.offerName}
-          expiryDate={item.expiryDate}
-          tradeInValue={item.tradeInValue}
-          freePlay={item.freePlay}
-          obc={item.obc}
-          cruises={item.cruises}
-          onPress={() => handleOfferPress(item)}
+          offerCode={groupedOffer.offerCode}
+          offerName={groupedOffer.offerName}
+          expiryDate={groupedOffer.expiryDate}
+          tradeInValue={groupedOffer.tradeInValue}
+          freePlay={groupedOffer.freePlay}
+          obc={groupedOffer.obc}
+          cruises={groupedOffer.cruises}
+          onPress={() => handleOfferPress(groupedOffer)}
           onCruisePress={handleCruiseItemPress}
           bookedCruiseIds={bookedCruiseIds}
           isBestValue={index === 0}
-          offerSource={item.offerSource}
+          offerSource={groupedOffer.offerSource}
         />
       );
     }

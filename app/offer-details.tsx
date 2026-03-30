@@ -221,7 +221,7 @@ export default function OfferDetailsScreen() {
   const daysUntilExpiry = offerInfo.expiryDate ? getDaysUntil(offerInfo.expiryDate) : null;
   const offerValue = useMemo(() => offerData.offer ? calculateOfferValue(offerData.offer) : null, [offerData.offer]);
   const offerCardFields = useMemo(() => buildOfferCardFields(offerData.offer, offerData.cruises), [offerData.cruises, offerData.offer]);
-  const offerSections = useMemo(() => buildDataSections(offerData.offer ? (offerData.offer as Record<string, unknown>) : ({
+  const offerSections = useMemo(() => buildDataSections(offerData.offer ? (offerData.offer as unknown as Record<string, unknown>) : ({
     offerCode: offerInfo.offerCode,
     offerName: offerInfo.offerName,
     expiryDate: offerInfo.expiryDate,
