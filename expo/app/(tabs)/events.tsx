@@ -25,6 +25,44 @@ interface DayData {
         personal: number;
     };
 }
+interface NormalizedCalendarItem {
+    id: string;
+    bucket: keyof DayData['events'];
+    startDateKey: string;
+    endDateKey: string;
+    cruiseId?: string;
+}
+function getDateKey(value: Date | string): string {
+    const date = value instanceof Date ? new Date(value) : createDateFromString(value);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+function getMonthAnchor(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+function getCruiseIdFromEvent(event: CalendarEvent): string | undefined {
+    if (event.cruiseId) {
+        return event.cruiseId;
+    }
+    if (event.id.startsWith('cruise-event-')) {
+        return event.id.replace('cruise-event-', '');
+    }
+    if (event.id.startsWith('cruise-')) {
+        return event.id.replace('cruise-', '');
+    }
+    return undefined;
+}
+function getEventBucket(event: CalendarEvent): keyof DayData['events'] {
+    if (event.type === 'cruise' || event.sourceType === 'cruise') {
+        return 'cruise';
+    }
+    if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
+        return 'travel';
+    }
+    return 'personal';
+}
 const EVENT_COLORS = {
     cruise: '#22C55E',
     travel: '#3B82F6',
@@ -37,108 +75,85 @@ export default function EventsScreen() {
     const coreData = useCoreData();
     const { bookedCruises } = coreData;
     const [viewMode, setViewMode] = useState<ViewMode>('month');
-    const [currentDate, setCurrentDate] = useState(new Date());
+    const [currentDate, setCurrentDate] = useState<Date>(() => getMonthAnchor(new Date()));
     const [refreshKey, setRefreshKey] = useState(0);
     const calendarEvents = useMemo(() => {
-        const events = [...(localData.calendar || []), ...(localData.tripit || [])];
+        const mergedEvents = [...(localData.calendar || []), ...(localData.tripit || [])];
+        const dedupedEvents = new Map<string, CalendarEvent>();
+        mergedEvents.forEach(event => {
+            dedupedEvents.set(event.id, event);
+        });
+        const events = Array.from(dedupedEvents.values());
         console.log('[Events] Calendar events updated:', events.length);
         return events;
     }, [localData.calendar, localData.tripit]);
-    useEffect(() => {
-        console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', bookedCruises.length);
-        setRefreshKey(prev => prev + 1);
-    }, [calendarEvents.length, bookedCruises.length]);
-    const eventCounts = useMemo(() => {
-        let cruise = 0;
-        let travel = 0;
-        let personal = 0;
-        const countedCruiseIds = new Set<string>();
-        calendarEvents.forEach(event => {
-            if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
-                cruise++;
-                if ((event as any).cruiseId)
-                    countedCruiseIds.add((event as any).cruiseId);
-            }
-            else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
-                travel++;
-            }
-            else {
-                personal++;
-            }
-        });
-        bookedCruises.forEach((bc) => {
-            if (!countedCruiseIds.has(bc.id)) {
-                cruise++;
-            }
-        });
-        return { cruise, travel, personal };
-    }, [calendarEvents, bookedCruises]);
-    const totalEventsThisMonth = useMemo(() => {
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
-        let count = 0;
+    const normalizedCalendarItems = useMemo((): NormalizedCalendarItem[] => {
+        const items: NormalizedCalendarItem[] = [];
+        const coveredCruiseIds = new Set<string>();
         calendarEvents.forEach(event => {
             const eventStart = event.startDate || event.start || '';
-            if (eventStart) {
-                const eventDate = new Date(eventStart);
-                if (eventDate.getFullYear() === year && eventDate.getMonth() === month) {
-                    count++;
-                }
+            if (!eventStart) {
+                return;
             }
-        });
-        bookedCruises.forEach((bc: BookedCruise) => {
-            if (bc.sailDate) {
-                const sailDate = new Date(bc.sailDate);
-                if (sailDate.getFullYear() === year && sailDate.getMonth() === month) {
-                    count++;
-                }
+            const eventEnd = event.endDate || event.end || eventStart;
+            const startDateKey = getDateKey(eventStart);
+            const endDateKey = getDateKey(eventEnd);
+            const cruiseId = getCruiseIdFromEvent(event);
+            const bucket = getEventBucket(event);
+            if (bucket === 'cruise' && cruiseId) {
+                coveredCruiseIds.add(cruiseId);
             }
+            items.push({
+                id: event.id,
+                bucket,
+                startDateKey,
+                endDateKey,
+                cruiseId,
+            });
         });
-        return count;
-    }, [calendarEvents, bookedCruises, currentDate]);
-    const isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
-        const start = new Date(startStr);
-        const end = new Date(endStr);
-        const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-        start.setHours(0, 0, 0, 0);
-        end.setHours(23, 59, 59, 999);
-        return targetDate >= start && targetDate <= end;
-    }, []);
+        bookedCruises.forEach(cruise => {
+            if (!cruise.sailDate || !cruise.returnDate || coveredCruiseIds.has(cruise.id)) {
+                return;
+            }
+            items.push({
+                id: `booked-${cruise.id}`,
+                bucket: 'cruise',
+                startDateKey: getDateKey(cruise.sailDate),
+                endDateKey: getDateKey(cruise.returnDate),
+                cruiseId: cruise.id,
+            });
+        });
+        console.log('[Events] Normalized calendar items:', items.length);
+        return items;
+    }, [calendarEvents, bookedCruises]);
+    useEffect(() => {
+        console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', bookedCruises.length, 'normalized:', normalizedCalendarItems.length);
+        setRefreshKey(prev => prev + 1);
+    }, [calendarEvents.length, bookedCruises.length, normalizedCalendarItems.length]);
+    const eventCounts = useMemo(() => {
+        return normalizedCalendarItems.reduce((totals, item) => {
+            totals[item.bucket] += 1;
+            return totals;
+        }, { cruise: 0, travel: 0, personal: 0 });
+    }, [normalizedCalendarItems]);
+    const totalEventsThisMonth = useMemo(() => {
+        const monthStartKey = getDateKey(currentDate);
+        const monthEndKey = getDateKey(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0));
+        return normalizedCalendarItems.filter(item => item.startDateKey <= monthEndKey && item.endDateKey >= monthStartKey).length;
+    }, [currentDate, normalizedCalendarItems]);
     const getEventsForDate = useCallback((date: Date): {
         cruise: number;
         travel: number;
         personal: number;
     } => {
-        let cruise = 0;
-        let travel = 0;
-        let personal = 0;
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
-        calendarEvents.forEach(event => {
-            const eventStart = event.startDate || event.start || '';
-            const eventEnd = event.endDate || event.end || eventStart;
-            if (!eventStart)
-                return;
-            const startDate = eventStart.split('T')[0];
-            const endDate = eventEnd ? eventEnd.split('T')[0] : startDate;
-            if (!startDate || !endDate)
-                return;
-            if (dateStr >= startDate && dateStr <= endDate) {
-                if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
-                    cruise++;
-                }
-                else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
-                    travel++;
-                }
-                else {
-                    personal++;
-                }
+        const dateKey = getDateKey(date);
+        return normalizedCalendarItems.reduce((totals, item) => {
+            if (item.startDateKey <= dateKey && item.endDateKey >= dateKey) {
+                totals[item.bucket] += 1;
             }
-        });
-        return { cruise, travel, personal };
-    }, [calendarEvents]);
+            return totals;
+        }, { cruise: 0, travel: 0, personal: 0 });
+    }, [normalizedCalendarItems]);
     const calendarDays = useMemo((): DayData[][] => {
         console.log('[Events] Recalculating calendar days, refreshKey:', refreshKey);
         const year = currentDate.getFullYear();
@@ -194,54 +209,59 @@ export default function EventsScreen() {
     }, [currentDate, getEventsForDate, refreshKey]);
     const weekDays = useMemo(() => {
         const today = new Date();
-        const startOfWeek = new Date(today);
-        startOfWeek.setDate(today.getDate() - today.getDay());
+        today.setHours(0, 0, 0, 0);
+        const referenceDate = getMonthAnchor(currentDate);
+        const startOfWeek = new Date(referenceDate);
+        startOfWeek.setDate(referenceDate.getDate() - referenceDate.getDay());
         const days: DayData[] = [];
         for (let i = 0; i < 7; i++) {
             const date = new Date(startOfWeek);
             date.setDate(startOfWeek.getDate() + i);
-            const isToday = date.toDateString() === today.toDateString();
+            date.setHours(0, 0, 0, 0);
+            const isToday = date.getTime() === today.getTime();
             days.push({
                 date,
                 dayNumber: date.getDate(),
-                isCurrentMonth: true,
+                isCurrentMonth: date.getMonth() === currentDate.getMonth(),
                 isToday,
                 events: getEventsForDate(date),
             });
         }
         return days;
-    }, [getEventsForDate, refreshKey]);
+    }, [currentDate, getEventsForDate, refreshKey]);
     const next90Days = useMemo(() => {
-        const today = new Date();
+        const startDate = getMonthAnchor(currentDate);
+        const todayKey = getDateKey(new Date());
         const days: DayData[] = [];
         for (let i = 0; i < 90; i++) {
-            const date = new Date(today);
-            date.setDate(today.getDate() + i);
-            const isToday = i === 0;
+            const date = new Date(startDate);
+            date.setDate(startDate.getDate() + i);
             days.push({
                 date,
                 dayNumber: date.getDate(),
-                isCurrentMonth: true,
-                isToday,
+                isCurrentMonth: date.getMonth() === currentDate.getMonth(),
+                isToday: getDateKey(date) === todayKey,
                 events: getEventsForDate(date),
             });
         }
         return days;
-    }, [getEventsForDate, refreshKey]);
+    }, [currentDate, getEventsForDate, refreshKey]);
     const navigateMonth = useCallback((direction: 'prev' | 'next') => {
         setCurrentDate(prev => {
-            const newDate = new Date(prev);
-            if (direction === 'prev') {
-                newDate.setMonth(prev.getMonth() - 1);
-            }
-            else {
-                newDate.setMonth(prev.getMonth() + 1);
-            }
-            return newDate;
+            const monthOffset = direction === 'prev' ? -1 : 1;
+            const nextMonth = new Date(prev.getFullYear(), prev.getMonth() + monthOffset, 1);
+            console.log('[Events] Navigating month', {
+                direction,
+                from: getDateKey(prev),
+                to: getDateKey(nextMonth),
+            });
+            return nextMonth;
         });
     }, []);
     const goToToday = useCallback(() => {
-        setCurrentDate(new Date());
+        const todayMonth = getMonthAnchor(new Date());
+        console.log('[Events] Returning to current month', getDateKey(todayMonth));
+        setCurrentDate(todayMonth);
     }, []);
     const handleClearEvents = useCallback(() => {
         Alert.alert('Clear All Events', 'Are you sure you want to clear all calendar events? This cannot be undone.', [
