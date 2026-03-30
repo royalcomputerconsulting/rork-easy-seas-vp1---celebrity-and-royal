@@ -171,14 +171,14 @@ function HourlyBreakdownChart({
                   { height: (item.golden / 60) * maxHeight }
                 ]} 
               />
-              {item.played > 0 && (
+              {item.played > 0 ? (
                 <View 
                   style={[
                     styles.playedBar, 
                     { height: (item.played / 60) * maxHeight }
                   ]} 
                 />
-              )}
+              ) : null}
             </View>
             <Text style={styles.barLabel}>
               {item.hour.toString().padStart(2, '0')}
@@ -201,7 +201,7 @@ function HourlyBreakdownChart({
 }
 
 export const CasinoSessionTracker = React.memo(function CasinoSessionTracker({
-  date,
+  date: _date,
   goldenTimeSlots,
   sessions,
   summary,
@@ -285,7 +285,7 @@ export const CasinoSessionTracker = React.memo(function CasinoSessionTracker({
               sessions={sessions}
             />
 
-            {goldenTimeSlots.length > 0 && (
+            {goldenTimeSlots.length > 0 ? (
               <View style={styles.slotsSection}>
                 <Text style={styles.sectionTitle}>Golden Time Slots</Text>
                 {goldenTimeSlots.map((slot) => (
@@ -300,9 +300,9 @@ export const CasinoSessionTracker = React.memo(function CasinoSessionTracker({
                   </View>
                 ))}
               </View>
-            )}
+            ) : null}
 
-            {sessions.length > 0 && (
+            {sessions.length > 0 ? (
               <View style={styles.sessionsSection}>
                 <Text style={styles.sectionTitle}>Logged Sessions</Text>
                 {sessions.map((session) => (
@@ -315,9 +315,9 @@ export const CasinoSessionTracker = React.memo(function CasinoSessionTracker({
                       <Text style={styles.sessionDuration}>
                         {formatMinutes(session.durationMinutes)}
                       </Text>
-                      {session.notes && (
+                      {session.notes ? (
                         <Text style={styles.sessionNotes}>{session.notes}</Text>
-                      )}
+                      ) : null}
                     </View>
                     <TouchableOpacity
                       style={styles.deleteButton}
@@ -329,9 +329,9 @@ export const CasinoSessionTracker = React.memo(function CasinoSessionTracker({
                   </View>
                 ))}
               </View>
-            )}
+            ) : null}
 
-            {onViewDetails && (
+            {onViewDetails ? (
               <TouchableOpacity 
                 style={styles.viewDetailsButton}
                 onPress={onViewDetails}
@@ -340,7 +340,7 @@ export const CasinoSessionTracker = React.memo(function CasinoSessionTracker({
                 <Text style={styles.viewDetailsText}>View Full Analytics</Text>
                 <ChevronRight size={18} color="#059669" />
               </TouchableOpacity>
-            )}
+            ) : null}
           </>
         ) : (
           <View style={styles.noGoldenTime}>

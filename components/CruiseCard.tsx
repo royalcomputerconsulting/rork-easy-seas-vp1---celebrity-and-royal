@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 
 import { createDateFromString } from '@/lib/date';
-import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 
@@ -38,7 +37,7 @@ function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'acti
 export const CruiseCard = React.memo(function CruiseCard({ 
   cruise, 
   onPress, 
-  showPricePerNight = true, 
+  showPricePerNight: _showPricePerNight = true, 
   compact = false,
   mini = false,
   variant = 'default',
@@ -81,7 +80,7 @@ export const CruiseCard = React.memo(function CruiseCard({
   const retailValue = useMemo(() => {
     if (!showRetailValue) return null;
     
-    const cabinType = cruise.cabinType || 'Balcony';
+    const _cabinType = cruise.cabinType || 'Balcony';
     const guestCount = cruise.guests || 2;
     let cabinValueForTwo = 0;
     

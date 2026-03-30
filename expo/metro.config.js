@@ -1,6 +1,19 @@
+const path = require("node:path");
 const { getDefaultConfig } = require("expo/metro-config");
 const { withRorkMetro } = require("@rork-ai/toolkit-sdk/metro");
 
-const config = getDefaultConfig(__dirname);
+const projectRoot = __dirname;
+const workspaceRoot = path.resolve(projectRoot, "..");
+const config = getDefaultConfig(projectRoot);
+
+config.watchFolders = [...new Set([...(config.watchFolders ?? []), workspaceRoot])];
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, "node_modules"),
+  path.resolve(workspaceRoot, "node_modules"),
+];
+config.resolver.disableHierarchicalLookup = true;
+
+console.log("[metro] projectRoot", projectRoot);
+console.log("[metro] workspaceRoot", workspaceRoot);
 
 module.exports = withRorkMetro(config);

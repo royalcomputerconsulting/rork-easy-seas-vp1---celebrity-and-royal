@@ -208,7 +208,7 @@ function GoalProgressRing({
 
   const handlePress = useCallback(() => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     onEdit();
   }, [onEdit]);
@@ -340,12 +340,12 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
   const [editValues, setEditValues] = useState<Record<string, string>>({});
 
   const handleEditGoal = useCallback((goalType: WeeklyGoal['type']) => {
-    const goal = weeklyGoals.find(g => g.type === goalType);
+    const goal = weeklyGoals.find((g: WeeklyGoal) => g.type === goalType);
     if (goal) {
       setEditValues(prev => ({ ...prev, [goalType]: goal.target.toString() }));
       setEditingGoal(goalType);
       if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     }
   }, [weeklyGoals]);
@@ -355,7 +355,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
     if (!isNaN(newTarget) && newTarget > 0) {
       console.log('[WeeklyGoalsCard] Would update goal target:', goalType, newTarget);
       if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
     setEditingGoal(null);
@@ -366,19 +366,19 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
   }, []);
 
   const completedGoalsCount = useMemo(() => {
-    return weeklyGoals.filter(g => g.completed).length;
+    return weeklyGoals.filter((g: WeeklyGoal) => g.completed).length;
   }, [weeklyGoals]);
 
   useEffect(() => {
-    const newlyCompleted = weeklyGoals.find(g => g.completed);
+    const newlyCompleted = weeklyGoals.find((g: WeeklyGoal) => g.completed);
     if (newlyCompleted && onGoalComplete) {
       onGoalComplete(newlyCompleted);
     }
   }, [completedGoalsCount, weeklyGoals, onGoalComplete]);
 
   if (compact) {
-    const completedCount = weeklyGoals.filter(g => g.completed).length;
-    const totalProgress = weeklyGoals.reduce((sum, g) => 
+    const completedCount = weeklyGoals.filter((g: WeeklyGoal) => g.completed).length;
+    const totalProgress = weeklyGoals.reduce((sum: number, g: WeeklyGoal) => 
       sum + Math.min((g.current / g.target) * 100, 100), 0) / weeklyGoals.length;
 
     return (
@@ -433,7 +433,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.goalsScrollContent}
         >
-          {weeklyGoals.map((goal) => (
+          {weeklyGoals.map((goal: WeeklyGoal) => (
             <GoalProgressRing
               key={goal.id}
               goal={goal}
@@ -447,7 +447,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
         </ScrollView>
 
         <View style={styles.goalsListContainer}>
-          {weeklyGoals.map((goal) => {
+          {weeklyGoals.map((goal: WeeklyGoal) => {
             const config = GOAL_CONFIG[goal.type];
             const progress = Math.min((goal.current / goal.target) * 100, 100);
             const IconComponent = config.icon;

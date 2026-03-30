@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TrendingUp, TrendingDown, Target, DollarSign, Clock, Zap } from 'lucide-react-native';
-import { useMachineStrategy, MachineRecommendation } from '@/state/MachineStrategyProvider';
+import { useMachineStrategy, type MachineRecommendation, type StrategyInsight } from '@/state/MachineStrategyProvider';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 
 export function MachineStrategyCard() {
@@ -85,7 +85,7 @@ export function MachineStrategyCard() {
 
           <View style={styles.listContainer}>
             <Text style={styles.sectionTitle}>All Recommendations</Text>
-            {recommendations.slice(0, 6).map((rec, index) => (
+            {recommendations.slice(0, 6).map((rec: MachineRecommendation, index: number) => (
               <RecommendationItem key={index} recommendation={rec} rank={index + 1} />
             ))}
           </View>
@@ -99,7 +99,7 @@ export function MachineStrategyCard() {
               <Text style={styles.emptyText}>Play more sessions to generate insights</Text>
             </View>
           ) : (
-            insights.map((insight) => (
+            insights.map((insight: StrategyInsight) => (
               <View key={insight.id} style={styles.insightBox}>
                 <View style={styles.insightHeader}>
                   <Text style={styles.insightTitle}>{insight.title}</Text>

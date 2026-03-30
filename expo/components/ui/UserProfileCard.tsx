@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { Save, CheckCircle, AlertCircle, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
 import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
@@ -33,7 +33,6 @@ interface UserProfileData {
   carnivalVifpTier?: string;
   carnivalPlayersClubTier?: string;
   carnivalPlayersClubPoints?: number;
-  birthdate?: string;
 }
 
 interface EnrichmentData {
@@ -89,7 +88,6 @@ export function UserProfileCard({
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
   const [formData, setFormData] = useState<UserProfileData>(currentValues);
-  const [birthdateInput, setBirthdateInput] = useState<string>(currentValues.birthdate || '');
   const [activeBrand, setActiveBrand] = useState<BrandType>(
     (currentValues.preferredBrand as BrandType) || 'royal'
   );
@@ -97,7 +95,6 @@ export function UserProfileCard({
 
   useEffect(() => {
     setFormData(currentValues);
-    setBirthdateInput(currentValues.birthdate || '');
     setActiveBrand((currentValues.preferredBrand as BrandType) || 'royal');
   }, [currentValues]);
 
@@ -115,7 +112,6 @@ export function UserProfileCard({
   const calculatedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[calculatedCelebrityTier];
 
   const handleSave = () => {
-    const trimmedBirthdate = birthdateInput.trim();
     onSave({
       ...formData,
       clubRoyaleTier: calculatedTier,
@@ -123,7 +119,6 @@ export function UserProfileCard({
       celebrityBlueChipTier: calculatedCelebrityTier,
       celebrityCaptainsClubLevel: calculatedCelebrityLevel,
       preferredBrand: activeBrand,
-      birthdate: trimmedBirthdate || undefined,
     });
     setIsModalVisible(false);
   };
@@ -295,28 +290,10 @@ export function UserProfileCard({
     );
   };
 
-  const birthdateSectionJSX = (
-    <View style={styles.inputGroup}>
-      <Text style={[styles.inputLabel, { color: '#7C3AED' }]}>🎂 Birthdate (for Luck Forecast)</Text>
-      <TextInput
-        style={styles.input}
-        value={birthdateInput}
-        onChangeText={setBirthdateInput}
-        placeholder="MM/DD/YYYY or YYYY-MM-DD"
-        placeholderTextColor="#9CA3AF"
-        keyboardType="numbers-and-punctuation"
-      />
-      <Text style={styles.birthdateHint}>
-        Used to calculate personalized Chinese &amp; Western zodiac luck scores on your calendar
-      </Text>
-    </View>
-  );
-
   const renderEditForm = () => {
     if (activeBrand === 'royal') {
       return (
         <>
-          {birthdateSectionJSX}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Name</Text>
             <TextInput
@@ -700,12 +677,16 @@ export function UserProfileCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.2)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
   },
   header: {
     padding: SPACING.sm,
@@ -776,25 +757,27 @@ const styles = StyleSheet.create({
   valueCard: {
     flex: 1,
     minWidth: '47%',
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   valueCardWide: {
     minWidth: '96%',
   },
   valueCardLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: 4,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
   },
   valueCardValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   syncTimestampContainer: {
     paddingHorizontal: SPACING.sm,
@@ -802,7 +785,7 @@ const styles = StyleSheet.create({
   },
   syncTimestampText: {
     fontSize: 10,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.4)',
     fontStyle: 'italic' as const,
     textAlign: 'center',
   },
@@ -814,18 +797,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    backgroundColor: 'rgba(255,226,143,0.1)',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.3)',
+    borderColor: 'rgba(255,226,143,0.35)',
     borderStyle: 'dashed',
     gap: SPACING.xs,
   },
   editButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#FFE28F',
   },
   modalOverlay: {
     flex: 1,
@@ -835,11 +819,13 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
   },
   modalContainer: {
-    backgroundColor: COLORS.white,
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.xl,
     width: '100%',
     maxWidth: 500,
     maxHeight: '90%',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -847,7 +833,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   modalHeaderLeft: {
     flexDirection: 'row',
@@ -857,6 +843,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
   },
   modalCloseButton: {
     padding: SPACING.xs,
@@ -870,18 +857,18 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#1E40AF',
+    color: 'rgba(255,255,255,0.65)',
     marginBottom: SPACING.xs,
   },
   input: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: 'rgba(255,255,255,0.15)',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   levelHint: {
     flexDirection: 'row',
@@ -889,7 +876,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    backgroundColor: 'rgba(168,198,255,0.1)',
     borderRadius: BORDER_RADIUS.sm,
     gap: 6,
   },
@@ -900,7 +887,7 @@ const styles = StyleSheet.create({
   },
   levelHintText: {
     fontSize: 10,
-    color: '#1E40AF',
+    color: '#A8C6FF',
   },
   levelHintLevel: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
@@ -912,20 +899,22 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: COLORS.white,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#0D1E33',
   },
   modalCancelButton: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     paddingVertical: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   modalCancelText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.6)',
   },
   modalSaveButton: {
     flex: 1,
@@ -943,11 +932,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.white,
-  },
-  birthdateHint: {
-    fontSize: 10,
-    color: '#7C3AED',
-    marginTop: 4,
-    fontStyle: 'italic' as const,
   },
 });

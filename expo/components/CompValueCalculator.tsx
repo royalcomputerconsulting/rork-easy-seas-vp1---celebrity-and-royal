@@ -106,7 +106,7 @@ export function CompValueCalculator({ onCompValueChange, initialItems = [] }: Co
         </Text>
       </View>
 
-      {compItems.length > 0 && (
+      {compItems.length > 0 ? (
         <ScrollView style={styles.itemsList} showsVerticalScrollIndicator={false}>
           {compItems.map((item) => {
             const categoryInfo = getCategoryInfo(item.category);
@@ -135,7 +135,7 @@ export function CompValueCalculator({ onCompValueChange, initialItems = [] }: Co
             );
           })}
         </ScrollView>
-      )}
+      ) : null}
 
       {!showAddForm ? (
         <TouchableOpacity
@@ -232,7 +232,7 @@ export function CompValueCalculator({ onCompValueChange, initialItems = [] }: Co
         </View>
       )}
 
-      {compItems.length === 0 && !showAddForm && (
+      {compItems.length === 0 && !showAddForm ? (
         <View style={styles.emptyState}>
           <Calculator size={40} color={COLORS.textSecondary} />
           <Text style={styles.emptyText}>No comp items tracked yet</Text>
@@ -240,7 +240,7 @@ export function CompValueCalculator({ onCompValueChange, initialItems = [] }: Co
             Add items to calculate total comp value
           </Text>
         </View>
-      )}
+      ) : null}
     </LinearGradient>
   );
 }

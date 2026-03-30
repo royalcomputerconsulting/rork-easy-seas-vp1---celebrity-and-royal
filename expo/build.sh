@@ -1,9 +1,14 @@
 #!/bin/bash
 
+set -e
+
+echo "Syncing latest project files into expo workspace..."
+node ./scripts/sync-from-root.mjs
+
 echo "Installing dependencies..."
-npm install
+bun install
 
 echo "Exporting Expo web app..."
-npx expo export -p web --output-dir dist
+bunx expo export -p web --output-dir dist
 
 echo "Build complete! Static files are in ./dist"

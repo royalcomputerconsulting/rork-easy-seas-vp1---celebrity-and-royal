@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { Save, CheckCircle, AlertCircle, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
 import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';

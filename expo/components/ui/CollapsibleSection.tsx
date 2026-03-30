@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,8 +24,8 @@ interface CollapsibleSectionProps {
   icon?: React.ReactNode;
   children: React.ReactNode;
   defaultExpanded?: boolean;
-  isExpanded?: boolean;
   expanded?: boolean;
+  isExpanded?: boolean;
   headerStyle?: 'default' | 'compact';
   showBorder?: boolean;
   onToggle?: (expanded: boolean) => void;
@@ -37,40 +37,43 @@ export function CollapsibleSection({
   icon,
   children,
   defaultExpanded = true,
-  isExpanded,
   expanded,
+  isExpanded,
   headerStyle = 'default',
   showBorder = true,
   onToggle,
 }: CollapsibleSectionProps) {
+  const [internalExpanded, setInternalExpanded] = useState<boolean>(defaultExpanded);
   const controlledExpanded = isExpanded ?? expanded;
-  const isControlled = controlledExpanded !== undefined;
-  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
-  const currentExpanded = isControlled ? controlledExpanded : internalExpanded;
-  const rotateAnim = useRef(new Animated.Value((controlledExpanded ?? defaultExpanded) ? 1 : 0)).current;
+  const isControlled = typeof controlledExpanded === 'boolean';
+  const currentExpanded = controlledExpanded ?? internalExpanded;
+  const rotateAnim = useRef(new Animated.Value(currentExpanded ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(rotateAnim, {
+      toValue: currentExpanded ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [currentExpanded, rotateAnim]);
 
   const toggleExpanded = useCallback(() => {
     const newExpanded = !currentExpanded;
-    
+
     LayoutAnimation.configureNext({
       duration: 200,
       update: {
         type: LayoutAnimation.Types.easeInEaseOut,
       },
     });
-    
-    Animated.timing(rotateAnim, {
-      toValue: newExpanded ? 1 : 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-    
+
     if (!isControlled) {
       setInternalExpanded(newExpanded);
     }
+
     onToggle?.(newExpanded);
     console.log('[CollapsibleSection] Toggled:', title, newExpanded);
-  }, [currentExpanded, rotateAnim, title, onToggle, isControlled]);
+  }, [currentExpanded, isControlled, onToggle, title]);
 
   const iconRotation = rotateAnim.interpolate({
     inputRange: [0, 1],

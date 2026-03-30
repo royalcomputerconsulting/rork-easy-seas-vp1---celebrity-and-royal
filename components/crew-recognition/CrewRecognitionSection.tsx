@@ -19,7 +19,7 @@ import { RecognitionEntryDetailModal } from './RecognitionEntryDetailModal';
 import { SurveyListModal } from './SurveyListModal';
 import { exportToCSV } from '@/lib/csv-export';
 import { getAllShipNames } from '@/constants/shipInfo';
-import type { RecognitionEntryWithCrew, Department } from '@/types/crew-recognition';
+import type { RecognitionEntryWithCrew, Department, Sailing } from '@/types/crew-recognition';
 
 
 
@@ -129,7 +129,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
   const toggleShipFilter = useCallback((ship: string) => {
     const current = filters.shipNames;
     if (current.includes(ship)) {
-      updateFilters({ shipNames: current.filter(s => s !== ship) });
+      updateFilters({ shipNames: current.filter((s: string) => s !== ship) });
     } else {
       updateFilters({ shipNames: [...current, ship] });
     }
@@ -138,22 +138,22 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
   const toggleDeptFilter = useCallback((dept: string) => {
     const current = filters.departments;
     if (current.includes(dept)) {
-      updateFilters({ departments: current.filter(d => d !== dept) });
+      updateFilters({ departments: current.filter((d: string) => d !== dept) });
     } else {
       updateFilters({ departments: [...current, dept] });
     }
   }, [filters.departments, updateFilters]);
 
-  const allRoyalShips = useMemo(() => getAllShipNames().sort(), []);
-  const sailingShips = useMemo(() => sailings.map(s => s.shipName), [sailings]);
+  const allRoyalShips = useMemo(() => getAllShipNames().sort((a, b) => a.localeCompare(b)), []);
+  const sailingShips = useMemo(() => sailings.map((s: Sailing) => s.shipName), [sailings]);
   const uniqueShips = useMemo(
-    () => Array.from(new Set([...allRoyalShips, ...sailingShips])).sort(),
+    () => Array.from(new Set([...allRoyalShips, ...sailingShips])).sort((a, b) => a.localeCompare(b)),
     [allRoyalShips, sailingShips]
   );
 
   const uniqueDepts = useMemo(() => {
-    const entryDepts = entries.map(e => e.department);
-    return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort();
+    const entryDepts = entries.map((e: RecognitionEntryWithCrew) => e.department);
+    return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort((a, b) => a.localeCompare(b));
   }, [entries]);
 
   const showMockData = stats.crewMemberCount === 0 && !statsLoading;
@@ -406,7 +406,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
           </View>
         ) : (
           <View style={styles.cardList}>
-              {displayEntries.map((entry) => (
+              {displayEntries.map((entry: RecognitionEntryWithCrew) => (
                 <TouchableOpacity
                   key={entry.id}
                   style={styles.crewCard}
