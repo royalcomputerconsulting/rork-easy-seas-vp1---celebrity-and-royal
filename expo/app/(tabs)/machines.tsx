@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   View,
   Image,
+  type GestureResponderEvent,
+  type PanResponderGestureState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
@@ -32,6 +34,7 @@ type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 
 export default function AtlasScreen() {
   const router = useRouter();
+
   const listRef = useRef<FlatList<MachineEncyclopediaEntry> | null>(null);
   const scrollOffsetRef = useRef<number>(0);
 
@@ -120,7 +123,7 @@ export default function AtlasScreen() {
         const ratio = maxScroll > 0 ? scrollOffsetRef.current / maxScroll : 0;
         handlePanState.startThumbY = Math.max(0, Math.min(thumbTravel, ratio * thumbTravel));
       },
-      onPanResponderMove: (_evt, gestureState) => {
+      onPanResponderMove: (_evt: GestureResponderEvent, gestureState: PanResponderGestureState) => {
         const nextThumbY = Math.max(0, Math.min(thumbTravel, handlePanState.startThumbY + gestureState.dy));
         const ratio = thumbTravel > 0 ? nextThumbY / thumbTravel : 0;
         const nextOffset = ratio * maxScroll;
@@ -281,7 +284,7 @@ export default function AtlasScreen() {
   }, [router]);
 
   const handleToggleFavorite = useCallback((id: string) => {
-    void toggleFavorite(id);
+    toggleFavorite(id);
   }, [toggleFavorite]);
 
   const handleExportFavorites = useCallback(async () => {
@@ -390,7 +393,7 @@ export default function AtlasScreen() {
               onPress={() => {
                 console.log('[Atlas] Retry pressed');
                 setUiError(null);
-                reload().catch((e) => {
+                reload().catch((e: unknown) => {
                   console.error('[Atlas] Reload failed', e);
                   setUiError(e instanceof Error ? e.message : 'Unknown error');
                 });
@@ -493,7 +496,7 @@ export default function AtlasScreen() {
                     activeOpacity={0.7}
                     testID="machines.filter.all"
                   >
-                    <Database size={14} color={activeFilter === 'all' ? COLORS.white : COLORS.navyDeep} />
+                    <Database size={14} color={activeFilter === 'all' ? COLORS.white : 'rgba(255,255,255,0.55)'} />
                     <Text style={[styles.filterChipText, activeFilter === 'all' && styles.filterChipTextActive]}>All</Text>
                   </TouchableOpacity>
                 );
@@ -518,7 +521,7 @@ export default function AtlasScreen() {
                         fill={activeFilter === 'favorites' ? COLORS.white : 'none'}
                       />
                       <Text style={[styles.filterChipText, activeFilter === 'favorites' && styles.filterChipTextActive]}>
-                        Favorites ({favoriteMachines.length})
+                        {`Favorites (${favoriteMachines.length})`}
                       </Text>
                     </TouchableOpacity>
                     {favoriteMachines.length > 0 && (
@@ -595,8 +598,8 @@ export default function AtlasScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient
-          colors={['#051120', '#0B1D38', '#132A4D', '#26143C']}
-          locations={[0, 0.33, 0.66, 1]}
+          colors={['#F0F4F8', '#F0F4F8']}
+          locations={[0, 1]}
           style={styles.gradientContainer}
         >
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -783,15 +786,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(0,0,0,0.06)',
   },
 
   scrollThumb: {
     width: 12,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,226,143,0.5)',
+    backgroundColor: 'rgba(30,58,95,0.4)',
     borderWidth: 1,
-    borderColor: 'rgba(255,226,143,0.7)',
+    borderColor: 'rgba(30,58,95,0.6)',
   },
 
   alphabetRail: {
@@ -808,16 +811,16 @@ const styles = StyleSheet.create({
   alphabetLetter: {
     fontSize: 10,
     fontWeight: '800' as const,
-    color: 'rgba(255,255,255,0.45)',
+    color: '#6B7280',
     lineHeight: 12,
   },
 
   alphabetLetterDisabled: {
-    color: 'rgba(255,255,255,0.18)',
+    color: '#D1D5DB',
   },
 
   alphabetLetterActive: {
-    color: '#FFE28F',
+    color: '#1E3A5F',
   },
 
   alphaBubble: {
@@ -828,11 +831,11 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,226,143,0.25)',
+    backgroundColor: 'rgba(30,58,95,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,226,143,0.5)',
+    borderColor: 'rgba(30,58,95,0.25)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -848,7 +851,7 @@ const styles = StyleSheet.create({
   },
 
   alphaBubbleText: {
-    color: '#FFE28F',
+    color: '#1E3A5F',
     fontSize: 18,
     fontWeight: '900' as const,
   },
@@ -868,22 +871,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: '#E2E8F0',
   },
   addSessionButton: {
-    backgroundColor: 'rgba(142,242,193,0.25)',
+    backgroundColor: 'rgba(5,150,105,0.10)',
     borderRadius: 12,
     width: 48,
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(142,242,193,0.45)',
+    borderColor: 'rgba(5,150,105,0.25)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -899,7 +902,7 @@ const styles = StyleSheet.create({
   sectionToggleText: {
     fontSize: 18,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   sessionsContent: {
     marginBottom: 16,
@@ -912,8 +915,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   logoHeaderImage: {
-    width: 160,
-    height: 160,
+    width: 80,
+    height: 80,
   },
   logoHeaderTextContainer: {
     marginLeft: SPACING.md,
@@ -922,13 +925,13 @@ const styles = StyleSheet.create({
   logoHeaderTitle: {
     fontSize: 24,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
     letterSpacing: 0.5,
   },
   logoHeaderSubtitle: {
     fontSize: 14,
     fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.65)',
+    color: '#6B7280',
     marginTop: 2,
     letterSpacing: 0.3,
   },
@@ -936,22 +939,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: 20,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#E2E8F0',
   },
   title: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: '#FFE28F',
+    color: '#B8860B',
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.75)',
+    color: '#4B5563',
   },
   searchSection: {
     paddingHorizontal: 20,
@@ -961,18 +964,18 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: '#E2E8F0',
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   filtersContainer: {
     backgroundColor: 'transparent',
@@ -987,28 +990,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: '#E2E8F0',
   },
   filterChipActive: {
-    backgroundColor: 'rgba(255,226,143,0.2)',
-    borderColor: 'rgba(255,226,143,0.5)',
+    backgroundColor: 'rgba(30,58,95,0.08)',
+    borderColor: '#1E3A5F',
   },
   filterChipText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#6B7280',
   },
   filterChipTextActive: {
-    color: '#FFE28F',
+    color: '#1E3A5F',
   },
   clearFilterChip: {
-    backgroundColor: 'rgba(220,38,38,0.2)',
-    borderColor: 'rgba(220,38,38,0.45)',
+    backgroundColor: 'rgba(220,38,38,0.08)',
+    borderColor: 'rgba(220,38,38,0.30)',
   },
   listContent: {
     paddingHorizontal: 20,
@@ -1018,37 +1021,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#E2E8F0',
   },
   emptyText: {
     marginTop: 16,
     fontSize: 16,
-    color: 'rgba(255,255,255,0.55)',
+    color: '#6B7280',
     textAlign: 'center',
   },
   clearButton: {
     marginTop: 16,
-    backgroundColor: 'rgba(255,226,143,0.2)',
+    backgroundColor: 'rgba(30,58,95,0.08)',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,226,143,0.45)',
+    borderColor: '#1E3A5F',
   },
   clearButtonText: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: '#FFE28F',
+    color: '#1E3A5F',
   },
   loadingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,226,143,0.12)',
+    backgroundColor: 'rgba(212,160,10,0.08)',
     paddingVertical: 12,
     paddingHorizontal: 20,
     gap: 10,
@@ -1056,12 +1059,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,226,143,0.25)',
+    borderColor: 'rgba(212,160,10,0.20)',
   },
   loadingText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: '#FFE28F',
+    color: '#92400E',
   },
   initialLoading: {
     flexDirection: 'row',
@@ -1072,14 +1075,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#E2E8F0',
   },
   initialLoadingText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#6B7280',
   },
   errorBanner: {
     paddingHorizontal: 16,
@@ -1087,34 +1090,36 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     borderRadius: 14,
-    backgroundColor: 'rgba(220,38,38,0.12)',
+    backgroundColor: 'rgba(220,38,38,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(220,38,38,0.3)',
+    borderColor: 'rgba(220,38,38,0.20)',
   },
   errorTitle: {
     fontSize: 15,
     fontWeight: '800' as const,
-    color: COLORS.navyDeep,
+    color: '#DC2626',
     marginBottom: 4,
   },
   errorBody: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: COLORS.textDarkGrey,
+    color: '#4B5563',
     lineHeight: 18,
     marginBottom: 12,
   },
   retryButton: {
     alignSelf: 'flex-start',
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(220,38,38,0.08)',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(220,38,38,0.20)',
   },
   retryButtonText: {
     fontSize: 13,
     fontWeight: '800' as const,
-    color: COLORS.white,
+    color: '#DC2626',
   },
   favoritesChipContainer: {
     flexDirection: 'row',
@@ -1153,12 +1158,14 @@ const styles = StyleSheet.create({
     marginLeft: 0,
   },
   exportAllButton: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(30,58,95,0.08)',
     borderRadius: 20,
     width: 32,
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(30,58,95,0.20)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1174,6 +1181,6 @@ const styles = StyleSheet.create({
   exportProgressText: {
     fontSize: 8,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#4B5563',
   },
 });

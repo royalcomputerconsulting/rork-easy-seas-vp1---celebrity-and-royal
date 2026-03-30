@@ -1,0 +1,214 @@
+═══════════════════════════════════════════════════════════════════════════
+  EASY SEAS BACKEND - COMPLETE DEPLOYMENT PACKAGE
+═══════════════════════════════════════════════════════════════════════════
+
+📦 WHAT'S INCLUDED
+─────────────────────────────────────────────────────────────────────────
+
+Everything you need to deploy the Easy Seas backend is in this directory:
+
+  ✓ PACKAGE.json          → Rename to package.json (all dependencies)
+  ✓ .npmrc                → NPM configuration
+  ✓ server.js             → Entry point
+  ✓ backend/hono.js       → Hono app with CORS and tRPC
+  ✓ backend/db.js         → SurrealDB connection
+  ✓ backend/trpc/         → All tRPC routers and routes
+
+
+🚀 DEPLOYMENT STEPS
+─────────────────────────────────────────────────────────────────────────
+
+STEP 1: PREPARE FILES
+─────────────────────
+
+1. Create a NEW GitHub repository (or use existing)
+
+2. Copy ALL files from assets/github-deploy/ to your repo root:
+   - PACKAGE.json (rename to package.json after copying)
+   - .npmrc
+   - server.js
+   - backend/ (entire directory with all subdirectories)
+
+3. Your GitHub repo structure should look like:
+   your-repo/
+   ├── package.json        (renamed from PACKAGE.json)
+   ├── .npmrc
+   ├── server.js
+   └── backend/
+       ├── hono.js
+       ├── db.js
+       └── trpc/
+           ├── app-router.js
+           ├── create-context.js
+           └── routes/
+               ├── example.js
+               ├── data.js
+               ├── calendar.js
+               ├── royal-caribbean-sync.js
+               └── cruise-deals.js
+
+4. Commit and push to GitHub
+
+
+STEP 2: CREATE RENDER WEB SERVICE
+─────────────────────────────────
+
+1. Go to https://render.com
+2. Click "New +" → "Web Service"
+3. Connect your GitHub repository
+4. Configure:
+   
+   Name: easyseas-backend (or your choice)
+   Environment: Node
+   Region: Choose closest to your users
+   Branch: main (or your default branch)
+   
+   Build Command:
+   npm install --legacy-peer-deps
+   
+   Start Command:
+   node server.js
+
+
+STEP 3: ADD ENVIRONMENT VARIABLES
+─────────────────────────────────
+
+In Render dashboard, go to Environment section and add:
+
+REQUIRED:
+  EXPO_PUBLIC_RORK_DB_ENDPOINT      = [Your SurrealDB endpoint URL]
+  EXPO_PUBLIC_RORK_DB_NAMESPACE     = [Your SurrealDB namespace]
+  EXPO_PUBLIC_RORK_DB_TOKEN         = [Your SurrealDB token]
+  EXPO_PUBLIC_TOOLKIT_URL           = [Rork toolkit URL for web search]
+
+OPTIONAL:
+  PORT                              = 3000 (Render sets automatically)
+
+
+STEP 4: DEPLOY
+─────────────────
+
+1. Click "Create Web Service"
+2. Wait for build to complete (2-3 minutes)
+3. Your backend will be live at: https://your-service.onrender.com
+
+
+STEP 5: TEST YOUR DEPLOYMENT
+─────────────────────────────
+
+Test the health endpoint:
+
+  curl https://your-service.onrender.com/api
+
+Expected response:
+  {
+    "status": "ok",
+    "message": "API is running",
+    "timestamp": 1234567890
+  }
+
+
+🔧 LOCAL TESTING (OPTIONAL)
+─────────────────────────────────────────────────────────────────────────
+
+To test locally before deploying:
+
+1. Navigate to the directory with all files
+
+2. Install dependencies:
+   npm install --legacy-peer-deps
+
+3. Set environment variables:
+   export EXPO_PUBLIC_RORK_DB_ENDPOINT="your-endpoint"
+   export EXPO_PUBLIC_RORK_DB_NAMESPACE="your-namespace"
+   export EXPO_PUBLIC_RORK_DB_TOKEN="your-token"
+   export EXPO_PUBLIC_TOOLKIT_URL="your-toolkit-url"
+
+4. Start server:
+   node server.js
+
+5. Test at http://localhost:3000/api
+
+
+📝 API ENDPOINTS
+─────────────────────────────────────────────────────────────────────────
+
+Health Check:
+  GET /api → Returns server status
+
+tRPC API:
+  POST /api/trpc/* → All tRPC routes
+
+Available Routers:
+  • example              → Test routes
+  • data                 → User data storage/retrieval
+  • calendar             → ICS calendar fetching
+  • royalCaribbeanSync   → Royal Caribbean sync status
+  • cruiseDeals          → Cruise pricing search
+
+
+🐛 TROUBLESHOOTING
+─────────────────────────────────────────────────────────────────────────
+
+Problem: Build fails with ERESOLVE error
+Solution: 
+  - Verify .npmrc exists in repo root
+  - Ensure build command has --legacy-peer-deps
+
+Problem: "package.json not found"
+Solution:
+  - Make sure you renamed PACKAGE.json to package.json
+  - Verify it's in the repository root, not in a subdirectory
+
+Problem: Database connection errors
+Solution:
+  - Check all EXPO_PUBLIC_RORK_DB_* variables are set in Render
+  - Verify SurrealDB instance is accessible
+  - Check Render logs for specific error messages
+
+Problem: Server crashes on start
+Solution:
+  - Check Render logs for error details
+  - Verify all environment variables are set
+  - Ensure @hono/node-server is in dependencies
+
+Problem: Module not found errors
+Solution:
+  - All imports use .js extension
+  - Verify package.json has "type": "module"
+  - Check all files were copied correctly
+
+
+📊 MONITORING
+─────────────────────────────────────────────────────────────────────────
+
+After deployment, monitor:
+  1. Render dashboard → Logs tab
+  2. Render dashboard → Metrics tab
+  3. Test API endpoints regularly
+  4. Check database connection health
+
+
+🎯 NEXT STEPS
+─────────────────────────────────────────────────────────────────────────
+
+1. Update your mobile app to use the Render URL
+2. Test all features end-to-end
+3. Set up custom domain (optional)
+4. Configure auto-deploy from GitHub (optional)
+5. Set up health check monitoring (optional)
+
+
+💡 IMPORTANT NOTES
+─────────────────────────────────────────────────────────────────────────
+
+• All files are JavaScript (.js) with ES modules
+• No TypeScript compilation needed
+• No build step required (just npm install)
+• The .npmrc file handles peer dependency conflicts
+• Server logs to console - view in Render dashboard
+
+
+═══════════════════════════════════════════════════════════════════════════
+  Need help? Check Render logs first, they show detailed error messages!
+═══════════════════════════════════════════════════════════════════════════

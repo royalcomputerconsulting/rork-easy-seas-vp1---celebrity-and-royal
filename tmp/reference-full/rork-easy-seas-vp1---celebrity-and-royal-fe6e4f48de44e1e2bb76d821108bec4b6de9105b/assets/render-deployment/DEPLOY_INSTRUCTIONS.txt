@@ -1,0 +1,105 @@
+═══════════════════════════════════════════════════════════════════
+RENDER BACKEND DEPLOYMENT - STEP BY STEP INSTRUCTIONS
+═══════════════════════════════════════════════════════════════════
+
+STEP 1: COPY FILES TO YOUR GITHUB REPO
+───────────────────────────────────────────────────────────────────
+
+Copy these files from the assets/render-deployment/ folder to your GitHub repo ROOT:
+
+1. server.js          → Copy to root directory
+2. package.json       → REPLACE your existing package.json
+3. npmrc              → Rename to .npmrc (with the dot) in root directory
+
+Important: All 3 files must be in the ROOT of your GitHub repository, 
+not in any subdirectory.
+
+
+STEP 2: COMMIT AND PUSH TO GITHUB
+───────────────────────────────────────────────────────────────────
+
+In your GitHub repository:
+1. Upload or copy the 3 files above
+2. Commit the changes
+3. Push to main branch
+
+
+STEP 3: UPDATE RENDER SETTINGS
+───────────────────────────────────────────────────────────────────
+
+Go to your Render dashboard (https://dashboard.render.com):
+
+1. Click on your "easy-seas" web service
+
+2. Click "Settings" in the left sidebar
+
+3. Find "Build Command" and change it to:
+   npm install --legacy-peer-deps
+
+4. Find "Start Command" and change it to:
+   node server.js
+
+5. Scroll down and click "Save Changes"
+
+
+STEP 4: ADD ENVIRONMENT VARIABLES (if not already added)
+───────────────────────────────────────────────────────────────────
+
+Still in Settings, scroll to "Environment Variables":
+
+1. Add EXPO_PUBLIC_RORK_DB_ENDPOINT = (your database endpoint)
+2. Add EXPO_PUBLIC_RORK_DB_NAMESPACE = (your database namespace)
+3. Add EXPO_PUBLIC_RORK_DB_TOKEN = (your database token)
+4. Add NODE_ENV = production
+
+Click "Save Changes"
+
+
+STEP 5: DEPLOY
+───────────────────────────────────────────────────────────────────
+
+1. Click "Manual Deploy" dropdown
+2. Click "Deploy latest commit"
+3. Wait for the build to complete (usually 2-5 minutes)
+
+
+STEP 6: TEST YOUR BACKEND
+───────────────────────────────────────────────────────────────────
+
+Once deployed, visit these URLs in your browser:
+
+✓ https://easy-seas.onrender.com/
+  Should show: "Easy Seas Backend API is running"
+
+✓ https://easy-seas.onrender.com/trpc/getCruises
+  Should return JSON data from your database
+
+
+STEP 7: UPDATE YOUR APP
+───────────────────────────────────────────────────────────────────
+
+In your Rork app's state/trpc.tsx file, make sure the URL is:
+https://easy-seas.onrender.com/trpc
+
+
+═══════════════════════════════════════════════════════════════════
+TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════
+
+Problem: Build still fails with "cp: cannot stat 'npmrc'"
+Solution: Make sure you renamed npmrc to .npmrc (with the dot)
+         OR remove any custom build commands in Render settings
+
+Problem: "Cannot find module '@hono/node-server'"
+Solution: Check that package.json has "@hono/node-server": "^1.13.7"
+         in the dependencies section
+
+Problem: Server starts but tRPC endpoints don't work
+Solution: Make sure the backend/ folder with all tRPC files is in GitHub
+
+Problem: "CORS error" when calling from app
+Solution: This is normal and will be fixed in the next update
+
+═══════════════════════════════════════════════════════════════════
+
+If you have any issues, check the build logs in Render dashboard.

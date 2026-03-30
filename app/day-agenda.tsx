@@ -30,8 +30,8 @@ import { useAuth } from '@/state/AuthProvider';
 import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
+import { LuckReportSection } from '@/components/LuckReportSection';
 
 const EVENT_COLORS = {
   cruise: '#3B82F6',
@@ -703,9 +703,9 @@ export default function DayAgendaScreen() {
     setIsSyncing(true);
     
     try {
-      const existingEvents = coreData.calendarEvents.filter(e => e.sourceType !== 'cruise');
+      const existingEvents = coreData.calendarEvents.filter((e: CalendarEvent) => e.sourceType !== 'cruise');
       
-      const cruiseEvents: CalendarEvent[] = bookedCruises.map(cruise => ({
+      const cruiseEvents: CalendarEvent[] = bookedCruises.map((cruise: BookedCruise) => ({
         id: `cruise-event-${cruise.id}`,
         title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
         startDate: cruise.sailDate,
@@ -1033,7 +1033,14 @@ export default function DayAgendaScreen() {
             <TimeZoneConverter />
           </View>
 
-          <CrewRecognitionSection />
+          <View style={styles.sectionContainer}>
+            <LuckReportSection
+              selectedDate={selectedDate}
+              birthdate={currentUser?.birthdate}
+              name={currentUser?.name}
+              dayLuck={dayLuck}
+            />
+          </View>
         </ScrollView>
       </SafeAreaView>
       

@@ -1,0 +1,77 @@
+DEPLOYMENT STEPS - COPY THIS ENTIRE FOLDER TO GITHUB
+========================================================
+
+⚠️ CRITICAL: Files must be at REPOSITORY ROOT (not in a 'src' folder) ⚠️
+
+STEP 1: Copy all files from this folder to your GitHub repository ROOT
+-----------------------------------------------------------------------
+Your GitHub repository should look like this AT THE ROOT:
+
+repository-root/
+  ├── backend/
+  │   ├── trpc/
+  │   │   ├── routes/
+  │   │   │   ├── calendar.js
+  │   │   │   ├── cruise-deals.js
+  │   │   │   ├── data.js
+  │   │   │   ├── example.js
+  │   │   │   └── royal-caribbean-sync.js
+  │   │   ├── app-router.js
+  │   │   └── create-context.js
+  │   └── db.js
+  │   └── hono.js
+  ├── .npmrc
+  ├── package.json (use the contents from package-json-FIXED.txt)
+  └── server.js
+
+
+STEP 2: Create package.json at the ROOT of your repository
+-----------------------------------------------------------
+Copy the contents from "package-json-FIXED.txt" and create a file named "package.json"
+
+
+STEP 3: Create .npmrc file at the ROOT of your repository
+----------------------------------------------------------
+Content should be:
+auto-install-peers=true
+legacy-peer-deps=true
+
+
+STEP 4: Copy server.js to the ROOT of your repository
+------------------------------------------------------
+The server.js file is already in this folder.
+
+
+STEP 5: In Render Dashboard Settings
+-------------------------------------
+- Build Command: npm install --legacy-peer-deps
+- Start Command: npm run backend
+
+(The "backend" script in package.json runs: node server.js)
+
+
+STEP 6: Add Environment Variables in Render
+--------------------------------------------
+In your Render service settings, add these environment variables:
+- EXPO_PUBLIC_RORK_DB_ENDPOINT
+- EXPO_PUBLIC_RORK_DB_NAMESPACE
+- EXPO_PUBLIC_RORK_DB_TOKEN
+
+
+IMPORTANT NOTES:
+---------------
+⚠️ 1. DO NOT put files in a "src" folder - they MUST be at the repository root
+⚠️ 2. If you currently have files in a "src" folder, MOVE THEM TO ROOT
+3. The structure above is EXACT - backend/ folder at root level
+4. Make sure all .js files are copied (not .ts files)
+5. The .npmrc file is NOT a system file - it's a configuration file for npm
+6. After pushing to GitHub, Render will automatically redeploy
+
+CURRENT ERROR DIAGNOSIS:
+------------------------
+Your error shows: /opt/render/project/src/backend/trpc/app-router.js
+This means files are in a "src" folder - they should NOT be there.
+
+CORRECT PATH should be: /opt/render/project/backend/trpc/app-router.js
+
+FIX: Remove the "src" folder and place all files at repository root.

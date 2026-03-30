@@ -1,0 +1,1913 @@
+import React, { useState, useMemo, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  Platform,
+  ActivityIndicator,
+  Modal,
+} from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Ship,
+  X,
+  Bell,
+  Sparkles,
+  ListFilter,
+  Bot,
+  SlidersHorizontal,
+  Check,
+  Bookmark,
+} from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME, DS } from '@/constants/theme';
+import { useAppState } from '@/state/AppStateProvider';
+import { useCoreData } from '@/state/CoreDataProvider';
+import { useUser } from '@/state/UserProvider';
+import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
+import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
+import { isDateInPast, getDaysUntil, createDateFromString } from '@/lib/date';
+import { PremiumCruiseMiniCard } from '@/components/PremiumCruiseMiniCard';
+import type { Cruise, BookedCruise } from '@/types/models';
+import { calculateCruiseValue } from '@/lib/valueCalculator';
+import { useAgentX } from '@/state/AgentXProvider';
+import { getRecommendedCruises, type RecommendationScore } from '@/lib/recommendationEngine';
+import { AgentXChat } from '@/components/AgentXChat';
+import { AlertsManagerModal } from '@/components/AlertsManagerModal';
+import { FavoriteStateroomsSection } from '@/components/favorite-staterooms/FavoriteStateroomsSection';
+import { findBackToBackSets, type BackToBackSet, type CruiseOffer } from '@/lib/backToBackFinder';
+import { Link2, Calendar, Tag, Anchor } from 'lucide-react-native';
+
+type ViewTab = 'available' | 'all' | 'foryou' | 'booked';
+type CabinFilter = 'all' | 'Interior' | 'Oceanview' | 'Balcony' | 'Suite';
+type SortOption = 'date-asc' | 'date-desc' | 'value-asc' | 'value-desc' | 'nights-desc';
+
+interface FilterState {
+  cabinType: CabinFilter;
+  noConflicts: boolean;
+  searchQuery: string;
+  sortBy: SortOption;
+  selectedShips: string[];
+}
+
+const TABS: { key: ViewTab; label: string; icon?: any }[] = [
+  { key: 'available', label: 'Available', icon: Ship },
+  { key: 'all', label: 'All', icon: ListFilter },
+  { key: 'foryou', label: 'Back 2 Back', icon: Sparkles },
+  { key: 'booked', label: 'Booked', icon: Bookmark },
+];
+
+const CABIN_FILTERS: { key: CabinFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'Interior', label: 'Interior' },
+  { key: 'Oceanview', label: 'Ocean' },
+  { key: 'Balcony', label: 'Balcony' },
+  { key: 'Suite', label: 'Suite' },
+];
+
+export default function SchedulingScreen() {
+  const router = useRouter();
+  const { localData, clubRoyaleProfile, isLoading: appLoading } = useAppState();
+  const { bookedCruises } = useCoreData();
+  const { currentUser } = useUser();
+  const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, isExpanded, toggleExpanded } = useAgentX();
+
+  const [activeTab, setActiveTab] = useState<ViewTab>('available');
+  const [filters, setFilters] = useState<FilterState>({
+    cabinType: 'all',
+    noConflicts: false,
+    searchQuery: '',
+    sortBy: 'date-asc',
+    selectedShips: [],
+  });
+  const [showShipFilter, setShowShipFilter] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
+
+  const allCruises = useMemo(() => {
+    return localData.cruises || [];
+  }, [localData.cruises]);
+
+  const bookedIds = useMemo(() => {
+    const localBooked = localData.booked || [];
+    const storeBooked = bookedCruises || [];
+    return new Set([
+      ...localBooked.map((b: BookedCruise) => b.id),
+      ...storeBooked.map((b: BookedCruise) => b.id),
+    ]);
+  }, [localData.booked, bookedCruises]);
+
+  const bookedDates = useMemo(() => {
+    const dates = new Set<string>();
+    const allBooked = [...(localData.booked || []), ...(bookedCruises || [])];
+    allBooked.forEach((cruise: BookedCruise) => {
+      const sailDate = createDateFromString(cruise.sailDate);
+      const returnDate = createDateFromString(cruise.returnDate);
+      let currentDate = new Date(sailDate);
+      while (currentDate <= returnDate) {
+        dates.add(currentDate.toISOString().split('T')[0]);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
+    return dates;
+  }, [localData.booked, bookedCruises]);
+
+  const hasConflict = useCallback((cruise: Cruise): boolean => {
+    const sailDate = createDateFromString(cruise.sailDate);
+    const returnDate = createDateFromString(cruise.returnDate);
+    let currentDate = new Date(sailDate);
+    while (currentDate <= returnDate) {
+      if (bookedDates.has(currentDate.toISOString().split('T')[0])) {
+        return true;
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    return false;
+  }, [bookedDates]);
+
+  const [, setRecommendationScores] = useState<Map<string, RecommendationScore>>(new Map());
+  const [b2bSets, setB2bSets] = useState<BackToBackSet[]>([]);
+
+  const _getSmartRecommendations = useCallback((cruises: Cruise[]): Cruise[] => {
+    const allBooked = [...(localData.booked || []), ...(bookedCruises || [])];
+    const offers = localData.offers || [];
+    
+    console.log('[Scheduling] Running smart recommendation engine...');
+    
+    const recommendations = getRecommendedCruises(
+      cruises,
+      allBooked,
+      offers,
+      {
+        limit: 20,
+        excludeConflicts: true,
+        bookedDates,
+      }
+    );
+    
+    const scoresMap = new Map<string, RecommendationScore>();
+    recommendations.forEach(rec => {
+      scoresMap.set(rec.cruise.id, rec);
+    });
+    setRecommendationScores(scoresMap);
+    
+    console.log('[Scheduling] Recommendations generated:', recommendations.length);
+    
+    return recommendations.map(r => r.cruise);
+  }, [bookedDates, localData.booked, localData.offers, bookedCruises]);
+
+  const getBackToBackSets = useCallback((cruises: Cruise[]): BackToBackSet[] => {
+    console.log('[Scheduling] Finding back-to-back cruise sets...');
+    console.log('[Scheduling] Total cruises to search:', cruises.length);
+    
+    const allBooked = [...(localData.booked || []), ...(bookedCruises || [])];
+    console.log('[Scheduling] Including booked cruises for B2B matching:', allBooked.length);
+    
+    const allOffers = localData.offers || [];
+    console.log('[Scheduling] Including casino offers for status filtering:', allOffers.length);
+    
+    const sets = findBackToBackSets(cruises, bookedDates, {
+      maxGapDays: 2,
+      requireDifferentOffers: true,
+      excludeConflicts: false,
+      minChainLength: 2,
+      bookedCruises: allBooked,
+      casinoOffers: allOffers,
+    });
+    
+    console.log('[Scheduling] Found', sets.length, 'back-to-back sets');
+    setB2bSets(sets);
+    
+    return sets;
+  }, [bookedDates, localData.booked, bookedCruises, localData.offers]);
+
+  const availableShips = useMemo(() => {
+    const ships = new Set<string>();
+    const offers = localData.offers || [];
+    offers.forEach((offer: any) => {
+      if (offer.shipName) {
+        ships.add(offer.shipName);
+      }
+    });
+    allCruises.forEach(cruise => {
+      if (cruise.shipName) {
+        ships.add(cruise.shipName);
+      }
+    });
+    return Array.from(ships).sort();
+  }, [localData.offers, allCruises]);
+
+  const enrichedCruises = useMemo(() => {
+    const offers = localData.offers || [];
+    
+    return allCruises.map(cruise => {
+      if (cruise.offerName && cruise.offerCode) {
+        return cruise;
+      }
+      
+      const matchingOffer = offers.find(offer => {
+        if (offer.cruiseId === cruise.id) return true;
+        if (offer.cruiseIds?.includes(cruise.id)) return true;
+        
+        if (offer.offerCode && cruise.offerCode && offer.offerCode === cruise.offerCode) return true;
+        
+        if (offer.shipName === cruise.shipName && 
+            offer.sailingDate === cruise.sailDate) return true;
+        
+        return false;
+      });
+      
+      if (matchingOffer) {
+        return {
+          ...cruise,
+          offerName: matchingOffer.offerName || matchingOffer.title || cruise.offerName,
+          offerCode: matchingOffer.offerCode || cruise.offerCode,
+          freePlay: matchingOffer.freePlay || matchingOffer.freeplayAmount || cruise.freePlay,
+          tradeInValue: matchingOffer.tradeInValue || cruise.tradeInValue,
+          perks: matchingOffer.perks || cruise.perks,
+        };
+      }
+      
+      return cruise;
+    });
+  }, [allCruises, localData.offers]);
+
+  const bookedCruisesData = useMemo(() => {
+    const localBooked = localData.booked || [];
+    const storeBooked = bookedCruises || [];
+    if (localBooked.length > 0) return localBooked;
+    return storeBooked;
+  }, [localData.booked, bookedCruises]);
+
+  const filteredCruises = useMemo(() => {
+    let result = [...enrichedCruises];
+
+    if (activeTab === 'available') {
+      result = result.filter(c => 
+        !isDateInPast(c.sailDate) && 
+        !bookedIds.has(c.id) && 
+        !hasConflict(c)
+      );
+    } else if (activeTab === 'all') {
+      result = result.filter(c => !isDateInPast(c.sailDate));
+    } else if (activeTab === 'foryou') {
+      getBackToBackSets(enrichedCruises);
+      return [];
+    } else if (activeTab === 'booked') {
+      result = bookedCruisesData.filter(c => !isDateInPast(c.returnDate || c.sailDate)) as Cruise[];
+    }
+
+    if (filters.cabinType !== 'all') {
+      result = result.filter(c => c.cabinType === filters.cabinType);
+    }
+
+    if (filters.noConflicts && activeTab === 'all') {
+      result = result.filter(c => !hasConflict(c));
+    }
+
+    if (filters.selectedShips.length > 0) {
+      result = result.filter(c => c.shipName && filters.selectedShips.includes(c.shipName));
+    }
+
+    if (filters.searchQuery.trim()) {
+      const query = filters.searchQuery.toLowerCase();
+      result = result.filter(c =>
+        c.shipName?.toLowerCase().includes(query) ||
+        c.destination?.toLowerCase().includes(query) ||
+        c.departurePort?.toLowerCase().includes(query) ||
+        c.itineraryName?.toLowerCase().includes(query)
+      );
+    }
+
+    result.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'date-asc':
+          return createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime();
+        case 'date-desc':
+          return createDateFromString(b.sailDate).getTime() - createDateFromString(a.sailDate).getTime();
+        case 'value-asc': {
+          const valueA = calculateCruiseValue(a as Cruise | BookedCruise).totalRetailValue;
+          const valueB = calculateCruiseValue(b as Cruise | BookedCruise).totalRetailValue;
+          return valueA - valueB;
+        }
+        case 'value-desc': {
+          const valueA = calculateCruiseValue(a as Cruise | BookedCruise).totalRetailValue;
+          const valueB = calculateCruiseValue(b as Cruise | BookedCruise).totalRetailValue;
+          return valueB - valueA;
+        }
+        case 'nights-desc':
+          return (b.nights || 0) - (a.nights || 0);
+        default:
+          return createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime();
+      }
+    });
+    return result;
+  }, [enrichedCruises, activeTab, filters, bookedIds, hasConflict, bookedCruisesData, getBackToBackSets]);
+
+  const stats = useMemo(() => ({
+    showing: filteredCruises.length,
+    total: enrichedCruises.length,
+    booked: bookedCruisesData.length,
+    available: enrichedCruises.filter(c => !isDateInPast(c.sailDate) && !bookedIds.has(c.id)).length,
+  }), [filteredCruises, enrichedCruises, bookedIds, bookedCruisesData]);
+
+  const alertCount = useMemo(() => {
+    return (localData.offers || []).filter((o: any) => {
+      if (o.expiryDate) {
+        const days = getDaysUntil(o.expiryDate);
+        return days > 0 && days <= 7;
+      }
+      return false;
+    }).length;
+  }, [localData.offers]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    console.log('[Scheduling] Refreshing cruises...');
+    await new Promise(resolve => setTimeout(resolve, 800));
+    setRefreshing(false);
+  }, []);
+
+  const _handleSearch = useCallback((query: string) => {
+    setFilters(prev => ({ ...prev, searchQuery: query }));
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setFilters({
+      cabinType: 'all',
+      noConflicts: false,
+      searchQuery: '',
+      sortBy: 'date-asc',
+      selectedShips: [],
+    });
+    setShowShipFilter(false);
+  }, []);
+
+  const toggleShipFilter = useCallback((shipName: string) => {
+    setFilters(prev => {
+      const isSelected = prev.selectedShips.includes(shipName);
+      if (isSelected) {
+        return { ...prev, selectedShips: prev.selectedShips.filter(s => s !== shipName) };
+      } else {
+        return { ...prev, selectedShips: [...prev.selectedShips, shipName] };
+      }
+    });
+  }, []);
+
+  const handleSortChange = useCallback((sortOption: SortOption) => {
+    setFilters(prev => ({ ...prev, sortBy: sortOption }));
+  }, []);
+
+  const handleCruisePress = useCallback((cruise: Cruise) => {
+    console.log('[Scheduling] Cruise pressed:', cruise.id);
+    router.push(`/cruise-details?id=${cruise.id}` as any);
+  }, [router]);
+
+  const handleSettingsPress = useCallback(() => {
+    router.push('/settings' as any);
+  }, [router]);
+
+  const handleAlertsPress = useCallback(() => {
+    console.log('[Scheduling] Alerts pressed');
+    setShowAlertsModal(true);
+  }, []);
+
+  const renderCruiseCard = useCallback(({ item, index: _index }: { item: Cruise; index: number }) => {
+    const isBooked = bookedIds.has(item.id) || activeTab === 'booked';
+    
+    return (
+      <PremiumCruiseMiniCard
+        cruise={item}
+        onPress={() => handleCruisePress(item)}
+        variant={isBooked ? 'booked' : 'available'}
+      />
+    );
+  }, [bookedIds, handleCruisePress, activeTab]);
+
+  const renderSlotOffers = useCallback((offers: CruiseOffer[]) => {
+    const groupedByCode = offers.reduce((acc, offer) => {
+      const code = offer.offerCode || 'NO_CODE';
+      if (!acc[code]) acc[code] = [];
+      acc[code].push(offer);
+      return acc;
+    }, {} as Record<string, CruiseOffer[]>);
+
+    return (
+      <View style={styles.slotOffersContainer}>
+        <Text style={styles.slotOffersTitle}>Available Offers ({offers.length} options):</Text>
+        {Object.entries(groupedByCode).map(([code, codeOffers]) => (
+          <View key={code} style={styles.offerGroup}>
+            <View style={styles.offerCodeHeader}>
+              <Tag size={10} color={COLORS.goldDark} />
+              <Text style={styles.offerCodeText}>{code === 'NO_CODE' ? 'Standard' : code}</Text>
+            </View>
+            {codeOffers.map((offer, i) => (
+              <TouchableOpacity
+                key={`${offer.cruiseId}_${i}`}
+                style={styles.offerOption}
+                onPress={() => handleCruisePress(offer.cruise)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.offerOptionLeft}>
+                  <Text style={styles.offerCabinType}>{offer.cabinType || 'Any Room'}</Text>
+                  <Text style={styles.offerGuests}>{offer.guestsInfo}</Text>
+                </View>
+                {offer.offerName && (
+                  <Text style={styles.offerNameSmall} numberOfLines={1}>{offer.offerName}</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        ))}
+      </View>
+    );
+  }, [handleCruisePress]);
+
+  const getB2BSetValue = useCallback((set: BackToBackSet): number => {
+    return set.cruises.reduce((sum, c) => sum + calculateCruiseValue(c).totalRetailValue, 0);
+  }, []);
+
+  const sortedB2bSets = useMemo(() => {
+    if (b2bSets.length === 0) return b2bSets;
+    const sorted = [...b2bSets];
+    switch (filters.sortBy) {
+      case 'date-asc':
+        sorted.sort((a, b) => createDateFromString(a.startDate).getTime() - createDateFromString(b.startDate).getTime());
+        break;
+      case 'date-desc':
+        sorted.sort((a, b) => createDateFromString(b.startDate).getTime() - createDateFromString(a.startDate).getTime());
+        break;
+      case 'nights-desc':
+        sorted.sort((a, b) => b.totalNights - a.totalNights);
+        break;
+      case 'value-desc':
+        sorted.sort((a, b) => getB2BSetValue(b) - getB2BSetValue(a));
+        break;
+      case 'value-asc':
+        sorted.sort((a, b) => getB2BSetValue(a) - getB2BSetValue(b));
+        break;
+      default:
+        sorted.sort((a, b) => createDateFromString(a.startDate).getTime() - createDateFromString(b.startDate).getTime());
+    }
+    return sorted;
+  }, [b2bSets, filters.sortBy, getB2BSetValue]);
+
+  const renderB2BSetCard = useCallback((set: BackToBackSet, index: number) => {
+    const slots = set.slots || [];
+    const setValue = set.cruises.reduce((sum, c) => sum + calculateCruiseValue(c).totalRetailValue, 0);
+    
+    return (
+      <View key={set.id} style={styles.b2bSetCard}>
+        <LinearGradient
+          colors={['#E0F7FA', '#DBEAFE', '#E0F2FE']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.b2bSetHeader}
+        >
+          <View style={styles.b2bSetBadge}>
+            <Link2 size={14} color={COLORS.navyDeep} />
+            <Text style={styles.b2bSetBadgeText}>BACK-TO-BACK SET #{index + 1}</Text>
+          </View>
+          <View style={styles.b2bSetSummary}>
+            <View style={styles.b2bSummaryItem}>
+              <Ship size={12} color={COLORS.navyDeep} />
+              <Text style={styles.b2bSummaryText}>{slots[0]?.shipName || 'Unknown Ship'}</Text>
+            </View>
+            <View style={styles.b2bSummaryItem}>
+              <Calendar size={12} color={COLORS.navyDeep} />
+              <Text style={styles.b2bSummaryText}>{set.totalNights} nights total</Text>
+            </View>
+            <View style={styles.b2bSummaryItem}>
+              <Anchor size={12} color={COLORS.navyDeep} />
+              <Text style={styles.b2bSummaryText}>{set.departurePort}</Text>
+            </View>
+          </View>
+          <View style={styles.b2bValueRow}>
+            <Text style={styles.b2bDateRange}>{set.startDate} → {set.endDate}</Text>
+            {setValue > 0 && (
+              <View style={styles.b2bValueBadge}>
+                <Text style={styles.b2bValueText}>${setValue.toLocaleString()}</Text>
+              </View>
+            )}
+          </View>
+        </LinearGradient>
+        
+        {slots.map((slot, slotIndex) => (
+          <View
+            key={slot.key}
+            style={[
+              styles.b2bCruiseItem,
+              slotIndex === slots.length - 1 && styles.b2bCruiseItemLast
+            ]}
+          >
+            <View style={styles.b2bCruisePosition}>
+              <Text style={styles.b2bPositionNumber}>{slotIndex + 1}</Text>
+              {slotIndex < slots.length - 1 && (
+                <View style={styles.b2bConnectorContainer}>
+                  <View style={styles.b2bConnector} />
+                  {set.gapDays && set.gapDays[slotIndex] !== undefined && (
+                    <View style={styles.b2bGapBadge}>
+                      <Text style={styles.b2bGapText}>
+                        {set.gapDays[slotIndex] === 0 ? 'Same day' : `${set.gapDays[slotIndex]}d gap`}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+            
+            <View style={styles.b2bCruiseContent}>
+              <View style={styles.b2bCruiseHeader}>
+                <Calendar size={14} color={COLORS.navyDeep} />
+                <Text style={styles.b2bShipName}>
+                  {slot.sailDate} → {slot.returnDate}
+                </Text>
+                <View style={styles.nightsBadge}>
+                  <Text style={styles.nightsBadgeText}>{slot.nights}N</Text>
+                </View>
+              </View>
+              
+              {renderSlotOffers(slot.offers)}
+            </View>
+          </View>
+        ))}
+        
+        <View style={styles.b2bSetFooter}>
+          <Text style={styles.b2bFooterLabel}>All Available Offer Codes in this Set:</Text>
+          <View style={styles.b2bOfferTags}>
+            {(set.offerCodes || []).filter(code => code && code.trim()).map((code, i) => (
+              <View key={i} style={styles.b2bOfferTag}>
+                <Text style={styles.b2bOfferTagText}>{code}</Text>
+              </View>
+            ))}
+            {(!set.offerCodes || set.offerCodes.length === 0 || set.offerCodes.filter(code => code && code.trim()).length === 0) && (
+              <Text style={styles.b2bNoOfferText}>No offer codes specified</Text>
+            )}
+          </View>
+          <Text style={styles.b2bFooterHint}>
+            Pick ONE offer per sailing. Each sailing in the chain can use a different code.
+          </Text>
+        </View>
+      </View>
+    );
+  }, [renderSlotOffers]);
+
+  const renderHeader = () => (
+    <View style={styles.headerContent}>
+      <CompactDashboardHeader
+        memberName={currentUser?.name || clubRoyaleProfile.memberName}
+        onSettingsPress={handleSettingsPress}
+        onAlertsPress={handleAlertsPress}
+        alertCount={alertCount}
+        availableCruises={stats.available}
+        bookedCruises={stats.booked}
+        activeOffers={alertCount}
+        onCruisesPress={() => setActiveTab('available')}
+        onBookedPress={() => router.push('/booked' as any)}
+        onOffersPress={() => setActiveTab('foryou')}
+      />
+
+      <MinimalistFilterBar
+        tabs={TABS.map(tab => ({ key: tab.key, label: tab.label }))}
+        activeTab={activeTab}
+        onTabPress={(key) => setActiveTab(key as ViewTab)}
+        actions={[
+          { key: 'clear', label: 'Clear', icon: X, onPress: clearFilters },
+          { key: 'alerts', label: 'Alerts', icon: Bell, badge: alertCount, onPress: handleAlertsPress },
+        ]}
+        ships={availableShips}
+        selectedShips={filters.selectedShips}
+        onShipToggle={toggleShipFilter}
+        onClearShips={() => setFilters(prev => ({ ...prev, selectedShips: [] }))}
+        showingCount={stats.showing}
+        totalCount={stats.total}
+        bookedCount={stats.booked}
+      />
+
+      {/* Compact sort and filter row */}
+      <View style={styles.sortFilterRow}>
+        <View style={styles.sortChips}>
+          <TouchableOpacity
+            style={[styles.sortChip, (filters.sortBy === 'date-asc' || filters.sortBy === 'nights-desc') && styles.sortChipActive]}
+            onPress={() => handleSortChange(filters.sortBy === 'date-asc' ? 'nights-desc' : 'date-asc')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.sortChipText, (filters.sortBy === 'date-asc' || filters.sortBy === 'nights-desc') && styles.sortChipTextActive]}>{filters.sortBy === 'nights-desc' ? 'Longest' : 'Soonest'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.sortChip, filters.sortBy === 'date-desc' && styles.sortChipActive]}
+            onPress={() => handleSortChange('date-desc')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.sortChipText, filters.sortBy === 'date-desc' && styles.sortChipTextActive]}>Latest</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.sortChip, filters.sortBy === 'value-desc' && styles.sortChipActive]}
+            onPress={() => handleSortChange('value-desc')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.sortChipText, filters.sortBy === 'value-desc' && styles.sortChipTextActive]}>Value</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity
+          style={[styles.filterToggle, showAdvancedFilters && styles.filterToggleActive]}
+          onPress={() => setShowAdvancedFilters(!showAdvancedFilters)}
+          activeOpacity={0.7}
+        >
+          <SlidersHorizontal size={14} color={showAdvancedFilters ? COLORS.navyDeep : CLEAN_THEME.text.secondary} />
+          {(filters.cabinType !== 'all' || filters.noConflicts || filters.selectedShips.length > 0) && (
+            <View style={styles.filterDot} />
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Collapsible Filters */}
+      {showAdvancedFilters && (
+        <View style={styles.filtersPanel}>
+          {/* Ship Filter */}
+          <TouchableOpacity
+            style={styles.shipFilterHeader}
+            onPress={() => setShowShipFilter(!showShipFilter)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.shipFilterHeaderLeft}>
+              <Ship size={14} color={COLORS.navyDeep} />
+              <Text style={styles.shipFilterLabel}>Ships</Text>
+              {filters.selectedShips.length > 0 && (
+                <View style={styles.shipCountBadge}>
+                  <Text style={styles.shipCountText}>{filters.selectedShips.length}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.shipFilterToggleText}>
+              {filters.selectedShips.length === 0 ? 'All Ships' : filters.selectedShips.length === 1 ? filters.selectedShips[0] : `${filters.selectedShips.length} selected`}
+            </Text>
+          </TouchableOpacity>
+          
+          {showShipFilter && (
+            <View style={styles.shipFilterList}>
+              {availableShips.length === 0 ? (
+                <Text style={styles.noShipsText}>No ships available</Text>
+              ) : (
+                availableShips.map(ship => (
+                  <TouchableOpacity
+                    key={ship}
+                    style={[
+                      styles.shipChip,
+                      filters.selectedShips.includes(ship) && styles.shipChipActive
+                    ]}
+                    onPress={() => toggleShipFilter(ship)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[
+                      styles.shipCheckbox,
+                      filters.selectedShips.includes(ship) && styles.shipCheckboxActive
+                    ]}>
+                      {filters.selectedShips.includes(ship) && <Check size={10} color={COLORS.white} />}
+                    </View>
+                    <Text style={[
+                      styles.shipChipText,
+                      filters.selectedShips.includes(ship) && styles.shipChipTextActive
+                    ]}>
+                      {ship}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
+              {filters.selectedShips.length > 0 && (
+                <TouchableOpacity
+                  style={styles.clearShipsButton}
+                  onPress={() => setFilters(prev => ({ ...prev, selectedShips: [] }))}
+                  activeOpacity={0.7}
+                >
+                  <X size={12} color={COLORS.error} />
+                  <Text style={styles.clearShipsText}>Clear ship filter</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* Cabin Type Filter */}
+          <Text style={styles.filterSectionTitle}>Cabin Type</Text>
+          <View style={styles.cabinRow}>
+            {CABIN_FILTERS.map(cabin => (
+              <TouchableOpacity
+                key={cabin.key}
+                style={[styles.cabinChip, filters.cabinType === cabin.key && styles.cabinChipActive]}
+                onPress={() => setFilters(prev => ({ ...prev, cabinType: cabin.key }))}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.cabinChipText, filters.cabinType === cabin.key && styles.cabinChipTextActive]}>
+                  {cabin.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={styles.conflictToggle}
+            onPress={() => setFilters(prev => ({ ...prev, noConflicts: !prev.noConflicts }))}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.toggleCheckbox, filters.noConflicts && styles.toggleCheckboxActive]}>
+              {filters.noConflicts && <Check size={10} color={COLORS.white} />}
+            </View>
+            <Text style={styles.conflictText}>No conflicts</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      <View style={styles.cruiseListHeader}>
+        <Text style={styles.cruiseListTitle}>
+          {activeTab === 'booked' ? 'BOOKED CRUISES' : activeTab === 'foryou' ? 'BACK-TO-BACK SETS' : 'ALL CRUISES'}
+        </Text>
+        <Text style={styles.cruiseListSubtitle}>
+          {activeTab === 'foryou' 
+            ? `${b2bSets.length} ${b2bSets.length === 1 ? 'set' : 'sets'} found • Different offers on each cruise`
+            : `${filteredCruises.length} ${filteredCruises.length === 1 ? 'cruise' : 'cruises'} • Tap to view details`
+          }
+        </Text>
+      </View>
+      
+      {activeTab === 'foryou' && b2bSets.length > 0 && (
+        <View style={styles.b2bExplanation}>
+          <Link2 size={14} color={COLORS.navyDeep} />
+          <Text style={styles.b2bExplanationText}>
+            Each set shows consecutive cruises with different offer codes that you can book back-to-back.
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderListFooter = useCallback(() => {
+    if (activeTab !== 'available') {
+      return null;
+    }
+
+    return <FavoriteStateroomsSection shipOptions={availableShips} />;
+  }, [activeTab, availableShips]);
+
+  const renderEmpty = () => {
+    if (activeTab === 'foryou') {
+      return (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIconContainer}>
+            <Link2 size={56} color={COLORS.navyDeep} />
+          </View>
+          <Text style={styles.emptyTitle}>No Back-to-Back Sets Found</Text>
+          <Text style={styles.emptyText}>
+            {"No consecutive cruise pairs with different offer codes were found that don't conflict with your booked cruises."}
+          </Text>
+        </View>
+      );
+    }
+    
+    return (
+      <View style={styles.emptyState}>
+        <View style={styles.emptyIconContainer}>
+          <Ship size={56} color={COLORS.navyDeep} />
+        </View>
+        <Text style={styles.emptyTitle}>No Cruises Found</Text>
+        <Text style={styles.emptyText}>
+          {filters.searchQuery || filters.cabinType !== 'all' || filters.noConflicts
+              ? 'Try adjusting your filters or search.'
+              : 'Import cruise data to see available voyages.'}
+        </Text>
+        {(filters.searchQuery || filters.cabinType !== 'all' || filters.noConflicts) && (
+          <TouchableOpacity style={styles.clearFiltersButton} onPress={clearFilters}>
+            <LinearGradient
+              colors={[COLORS.beigeWarm, COLORS.goldDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.clearFiltersGradient}
+            >
+              <Text style={styles.clearFiltersText}>Clear Filters</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
+  const handleAgentClose = useCallback(() => {
+    setVisible(false);
+  }, [setVisible]);
+
+  const handleAgentToggle = useCallback(() => {
+    setVisible(!isVisible);
+  }, [isVisible, setVisible]);
+
+  if (appLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.navyDeep} />
+        <Text style={styles.loadingText}>Loading cruises...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <LinearGradient
+      colors={DS.bg.marbleShell}
+      start={{ x: 0.02, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {activeTab === 'foryou' ? (
+          <FlatList
+            data={sortedB2bSets}
+            renderItem={({ item, index }) => renderB2BSetCard(item, index)}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            ListHeaderComponent={renderHeader}
+            ListEmptyComponent={renderEmpty}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={COLORS.navyDeep}
+                colors={[COLORS.navyDeep]}
+              />
+            }
+            showsVerticalScrollIndicator={true}
+            persistentScrollbar={true}
+          />
+        ) : (
+          <FlatList
+            data={filteredCruises}
+            renderItem={renderCruiseCard}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            ListHeaderComponent={renderHeader}
+            ListFooterComponent={renderListFooter}
+            ListEmptyComponent={renderEmpty}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={COLORS.navyDeep}
+                colors={[COLORS.navyDeep]}
+              />
+            }
+            showsVerticalScrollIndicator={true}
+            persistentScrollbar={true}
+            removeClippedSubviews={Platform.OS === 'android'}
+            initialNumToRender={10}
+            maxToRenderPerBatch={20}
+            windowSize={21}
+            updateCellsBatchingPeriod={50}
+            getItemLayout={(data, index) => ({
+              length: 140,
+              offset: 140 * index,
+              index,
+            })}
+          />
+        )}
+      </SafeAreaView>
+
+      {/* Agent X Floating Button */}
+      <TouchableOpacity
+        style={styles.agentFab}
+        onPress={handleAgentToggle}
+        activeOpacity={0.85}
+      >
+        <LinearGradient
+          colors={[COLORS.goldAccent, COLORS.beigeWarm]}
+          style={styles.agentFabGradient}
+        >
+          {isVisible ? (
+            <X size={24} color={COLORS.navyDeep} />
+          ) : (
+            <Bot size={24} color={COLORS.navyDeep} />
+          )}
+        </LinearGradient>
+      </TouchableOpacity>
+
+      {/* Agent X Chat Modal */}
+      <Modal
+        visible={isVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={handleAgentClose}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            activeOpacity={1} 
+            onPress={handleAgentClose}
+          />
+          <View style={[styles.agentChatContainer, isExpanded && styles.agentChatExpanded]}>
+            <AgentXChat
+              messages={messages}
+              onSendMessage={sendMessage}
+              isLoading={agentLoading}
+              isExpanded={isExpanded}
+              onToggleExpand={toggleExpanded}
+              onClose={handleAgentClose}
+              showHeader={true}
+              placeholder="Ask about cruises, tier progress, offers..."
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Alerts Manager Modal */}
+      <AlertsManagerModal
+        visible={showAlertsModal}
+        onClose={() => setShowAlertsModal(false)}
+      />
+    </LinearGradient>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: DS.bg.page,
+  },
+  loadingText: {
+    marginTop: SPACING.md,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: DS.text.secondary,
+  },
+  listContent: {
+    padding: SPACING.md,
+    paddingBottom: 120,
+  },
+  headerContent: {
+    marginBottom: SPACING.md,
+    backgroundColor: 'transparent',
+  },
+
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: DS.bg.secondary,
+    borderRadius: DS.radius.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: Platform.OS === 'ios' ? SPACING.sm : 0,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: DS.border.default,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: DS.text.primary,
+    marginLeft: SPACING.sm,
+    paddingVertical: SPACING.sm,
+  },
+  filterSectionLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: CLEAN_THEME.text.secondary,
+    marginBottom: SPACING.sm,
+  },
+  cabinFilters: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  cabinChip: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: DS.radius.pill,
+    backgroundColor: DS.bg.secondary,
+    borderWidth: 1,
+    borderColor: DS.border.default,
+  },
+  cabinChipActive: {
+    backgroundColor: DS.text.primary,
+    borderColor: DS.text.primary,
+  },
+  cabinChipText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: DS.text.secondary,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  cabinChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700' as const,
+  },
+  conflictToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  toggleCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: CLEAN_THEME.border.medium,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  toggleCheckboxActive: {
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
+  },
+  conflictToggleText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: CLEAN_THEME.text.primary,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: DS.border.default,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: DS.border.divider,
+  },
+  statValue: {
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: DS.text.primary,
+  },
+  statLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: DS.text.secondary,
+    marginTop: 2,
+  },
+  cruiseCard: {
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    ...SHADOW.md,
+  },
+  conflictCard: {
+    borderColor: 'rgba(244, 67, 54, 0.4)',
+  },
+  recommendedCard: {
+    borderColor: COLORS.beigeWarm,
+    borderWidth: 2,
+  },
+  recommendedBadge: {
+    position: 'absolute',
+    top: 0,
+    right: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.beigeWarm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderBottomLeftRadius: BORDER_RADIUS.sm,
+    borderBottomRightRadius: BORDER_RADIUS.sm,
+    gap: 4,
+  },
+  recommendedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  shipIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(212, 165, 116, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.md,
+  },
+  cardHeaderInfo: {
+    flex: 1,
+  },
+  shipName: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: DS.text.primary,
+  },
+  offerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  offerBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.goldAccent,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  cardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  bookedBadge: {
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  bookedBadgeText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  conflictBadge: {
+    backgroundColor: COLORS.error,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  conflictBadgeText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  destinationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  destination: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: DS.text.secondary,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    flex: 1,
+  },
+  expiringSoonBadge: {
+    backgroundColor: 'rgba(255, 152, 0, 0.2)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 152, 0, 0.4)',
+  },
+  expiringSoonText: {
+    fontSize: 10,
+    color: COLORS.warning,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  cruiseDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+    paddingBottom: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: DS.border.divider,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  detailText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: DS.text.secondary,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  cabinTypeBadge: {
+    backgroundColor: DS.bg.secondary,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: DS.radius.sm,
+    borderWidth: 1,
+    borderColor: DS.border.default,
+  },
+  cabinTypeText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: DS.text.secondary,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  daysUntilText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: DS.text.secondary,
+    flex: 1,
+  },
+  priceText: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.success,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.huge,
+    paddingHorizontal: SPACING.xl,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
+    marginHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: DS.border.default,
+  },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  emptyTitle: {
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: DS.text.primary,
+    marginBottom: SPACING.sm,
+  },
+  emptyText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: DS.text.secondary,
+    textAlign: 'center' as const,
+    lineHeight: 22,
+    marginBottom: SPACING.xl,
+  },
+  clearFiltersButton: {
+    borderRadius: BORDER_RADIUS.md,
+    overflow: 'hidden',
+  },
+  clearFiltersGradient: {
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xxl,
+  },
+  clearFiltersText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  controlsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  sortPillsContainer: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    flex: 1,
+  },
+  sortPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: CLEAN_THEME.background.tertiary,
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: CLEAN_THEME.border.light,
+  },
+  sortPillActive: {
+    backgroundColor: CLEAN_THEME.filter.activeBg,
+    borderColor: COLORS.navyDeep,
+  },
+  sortPillText: {
+    fontSize: 11,
+    color: CLEAN_THEME.text.secondary,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  sortPillTextActive: {
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  advancedFilterToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: CLEAN_THEME.background.tertiary,
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: CLEAN_THEME.border.light,
+    marginLeft: SPACING.sm,
+  },
+  advancedFilterToggleActive: {
+    backgroundColor: CLEAN_THEME.filter.activeBg,
+    borderColor: COLORS.navyDeep,
+  },
+  advancedFilterText: {
+    fontSize: 11,
+    color: CLEAN_THEME.text.secondary,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  advancedFilterTextActive: {
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  filterBadge: {
+    backgroundColor: COLORS.goldAccent,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 2,
+  },
+  filterBadgeText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  advancedFiltersPanel: {
+    backgroundColor: CLEAN_THEME.background.secondary,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginHorizontal: SPACING.sm,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: CLEAN_THEME.border.light,
+  },
+  filterSection: {
+    marginBottom: SPACING.sm,
+  },
+  sortFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.md,
+    paddingVertical: SPACING.sm,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  sortChips: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  sortChip: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 10,
+    borderRadius: DS.radius.pill,
+    backgroundColor: DS.bg.secondary,
+    borderWidth: 1,
+    borderColor: DS.border.default,
+  },
+  sortChipActive: {
+    backgroundColor: DS.text.primary,
+    borderColor: DS.text.primary,
+  },
+  sortChipText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: DS.text.primary,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  sortChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  filterToggle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative' as const,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.15)',
+  },
+  filterToggleActive: {
+    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  filterDot: {
+    position: 'absolute' as const,
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.goldAccent,
+  },
+  filtersPanel: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    marginHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.15)',
+  },
+  shipFilterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+    marginBottom: SPACING.sm,
+    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  shipFilterHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  shipFilterLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  shipCountBadge: {
+    backgroundColor: COLORS.goldAccent,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  shipCountText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  shipFilterToggleText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+  },
+  shipFilterList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+    paddingBottom: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  shipChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  shipChipActive: {
+    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: COLORS.navyDeep,
+  },
+  shipCheckbox: {
+    width: 16,
+    height: 16,
+    borderRadius: 3,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 31, 63, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shipCheckboxActive: {
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
+  },
+  shipChipText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+  },
+  shipChipTextActive: {
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  noShipsText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.5,
+    fontStyle: 'italic' as const,
+    padding: SPACING.sm,
+  },
+  clearShipsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+  },
+  clearShipsText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.error,
+  },
+  filterSectionTitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+    opacity: 0.6,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: SPACING.xs,
+  },
+  cabinRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  conflictText: {
+    fontSize: 12,
+    color: CLEAN_THEME.text.secondary,
+  },
+  cruiseListHeader: {
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    marginBottom: SPACING.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  cruiseListTitle: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  cruiseListSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+  },
+  agentFab: {
+    position: 'absolute',
+    bottom: 100,
+    left: SPACING.lg,
+    zIndex: 100,
+    ...SHADOW.lg,
+  },
+  agentFabGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  agentChatContainer: {
+    height: '70%',
+    borderTopLeftRadius: BORDER_RADIUS.xl,
+    borderTopRightRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden',
+  },
+  agentChatExpanded: {
+    height: '95%',
+  },
+  b2bSetCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.15)',
+    ...SHADOW.md,
+  },
+  b2bSetHeader: {
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  b2bSetBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  b2bSetBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    letterSpacing: 1,
+  },
+  b2bSetSummary: {
+    flexDirection: 'row',
+    gap: SPACING.lg,
+  },
+  b2bSummaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  b2bSummaryText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+  },
+  b2bCruiseItem: {
+    flexDirection: 'row',
+    padding: SPACING.md,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  b2bCruiseItemLast: {
+    borderBottomWidth: 0,
+  },
+  b2bCruisePosition: {
+    width: 40,
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  b2bPositionNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.navyDeep,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textAlign: 'center' as const,
+    lineHeight: 24,
+    overflow: 'hidden',
+  },
+  b2bConnectorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  b2bConnector: {
+    width: 2,
+    flex: 1,
+    backgroundColor: COLORS.goldAccent,
+  },
+  b2bGapBadge: {
+    position: 'absolute' as const,
+    top: '50%',
+    backgroundColor: 'rgba(212, 165, 116, 0.2)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    transform: [{ translateY: -8 }],
+  },
+  b2bGapText: {
+    fontSize: 8,
+    color: COLORS.goldDark,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  b2bCruiseContent: {
+    flex: 1,
+  },
+  b2bCruiseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.xs,
+  },
+  b2bShipName: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  b2bCruiseDetails: {
+    gap: 6,
+  },
+  b2bDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  b2bDetailText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.8,
+  },
+  b2bRoomBadge: {
+    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  b2bRoomText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  b2bOfferSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 31, 63, 0.05)',
+  },
+  b2bOfferInfo: {
+    flex: 1,
+  },
+  b2bOfferCode: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.goldDark,
+  },
+  b2bOfferName: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  b2bSetFooter: {
+    padding: SPACING.md,
+    backgroundColor: 'rgba(0, 31, 63, 0.03)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  b2bFooterLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.6,
+    marginBottom: SPACING.xs,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  b2bOfferTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+  },
+  b2bOfferTag: {
+    backgroundColor: COLORS.goldAccent,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  b2bOfferTagText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  b2bNoOfferText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.5,
+    fontStyle: 'italic' as const,
+  },
+  b2bFooterHint: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.6,
+    marginTop: SPACING.sm,
+    fontStyle: 'italic' as const,
+  },
+  b2bDateRange: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    marginTop: SPACING.xs,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    opacity: 0.8,
+  },
+  nightsBadge: {
+    backgroundColor: COLORS.navyDeep,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: SPACING.xs,
+  },
+  nightsBadgeText: {
+    fontSize: 10,
+    color: COLORS.white,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  slotOffersContainer: {
+    marginTop: SPACING.sm,
+    backgroundColor: 'rgba(0, 31, 63, 0.03)',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+  },
+  slotOffersTitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+    marginBottom: SPACING.xs,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  offerGroup: {
+    marginBottom: SPACING.xs,
+  },
+  offerCodeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+    paddingBottom: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(212, 165, 116, 0.2)',
+  },
+  offerCodeText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.goldDark,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  offerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    paddingHorizontal: SPACING.xs,
+    marginLeft: SPACING.sm,
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  offerOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  offerCabinType: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    backgroundColor: 'rgba(0, 31, 63, 0.08)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  offerGuests: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+  },
+  offerNameSmall: {
+    fontSize: 10,
+    color: COLORS.navyDeep,
+    opacity: 0.5,
+    maxWidth: 120,
+  },
+  b2bExplanation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    backgroundColor: 'rgba(212, 165, 116, 0.15)',
+    borderRadius: BORDER_RADIUS.md,
+    marginTop: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 165, 116, 0.3)',
+  },
+  b2bExplanationText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    lineHeight: 18,
+  },
+  b2bValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.xs,
+  },
+  b2bValueBadge: {
+    backgroundColor: 'rgba(34, 139, 34, 0.15)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 139, 34, 0.3)',
+  },
+  b2bValueText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '700' as const,
+    color: '#228B22',
+  },
+});
