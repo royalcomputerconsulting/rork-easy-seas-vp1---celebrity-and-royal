@@ -24,13 +24,14 @@ import {
 import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
+import { useAppState } from '@/state/AppStateProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import type { BookedCruise, CalendarEvent, Cruise } from '@/types/models';
 import { createDateFromString, formatDate } from '@/lib/date';
 import { formatDateKey, getLuckForDatePersonalized, isScottUser, LUCK_SCALE, type LuckColor, type LuckInfo } from '../../constants/luckScores';
 import { useAuth } from '@/state/AuthProvider';
 
-const HERO_GRADIENT = ['#051120', '#0B1D38', '#132A4D', '#26143C'] as const;
+const HERO_GRADIENT = ['#F0F4F8', '#F0F4F8'] as const;
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const LUCK_ORDER = ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Indigo', 'Violet'] as const satisfies readonly LuckColor[];
 
@@ -126,7 +127,12 @@ function formatSyncDate(date: Date): string {
 
 export default function EventsScreen() {
   const router = useRouter();
-  const { cruises, calendarEvents, bookedCruises, isLoading } = useCoreData();
+  const { cruises, calendarEvents, bookedCruises: coreBookedCruises, isLoading } = useCoreData();
+  const { localData } = useAppState();
+  const bookedCruises = useMemo(() => {
+    const localBooked = localData.booked || [];
+    return localBooked.length > 0 ? localBooked : (coreBookedCruises || []);
+  }, [localData.booked, coreBookedCruises]);
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
   const { isAdmin, authenticatedEmail } = useAuth();
   const useScottData = isScottUser(isAdmin, authenticatedEmail);
@@ -169,17 +175,29 @@ export default function EventsScreen() {
 
     const bookedCruiseEvents = bookedCruises
       .filter((c: BookedCruise) => Boolean(c.sailDate))
-      .map((c: BookedCruise): TimelineEvent => ({
-        id: `booked-${c.id}`,
-        title: c.shipName || 'Booked cruise',
-        category: 'bookedCruise',
-        startDate: createDateFromString(c.sailDate),
-        endDate: c.returnDate
-          ? createDateFromString(c.returnDate)
-          : addDays(createDateFromString(c.sailDate), Math.max(0, (c.nights || 1) - 1)),
-        location: c.destination || c.itineraryName || c.departurePort,
-        shipName: c.shipName,
-      }));
+      .map((c: BookedCruise): TimelineEvent => {
+        const sailDate = createDateFromString(c.sailDate);
+        let endDate: Date;
+        if (c.returnDate && c.returnDate.trim() !== '') {
+          endDate = createDateFromString(c.returnDate);
+        } else {
+          const nights = c.nights && c.nights > 0 ? c.nights : 7;
+          endDate = addDays(sailDate, nights);
+        }
+        if (endDate.getTime() <= sailDate.getTime()) {
+          endDate = addDays(sailDate, 7);
+        }
+        console.log(`[Calendar] Booked cruise ${c.shipName}: ${c.sailDate} → ${formatDateKey(endDate)} (nights=${c.nights}, returnDate=${c.returnDate})`);
+        return {
+          id: `booked-${c.id}`,
+          title: c.shipName || 'Booked cruise',
+          category: 'bookedCruise',
+          startDate: sailDate,
+          endDate,
+          location: c.destination || c.itineraryName || c.departurePort,
+          shipName: c.shipName,
+        };
+      });
 
     const availableCruiseEvents = cruises
       .filter((c: Cruise) => {
@@ -324,7 +342,7 @@ export default function EventsScreen() {
         : hasEvent
           ? (outlineColor as string)
           : '#D1D5DB';
-      const borderWidth = day.isToday || hasEvent ? 2.5 : 1;
+      const borderWidth = day.isToday ? 9 : hasEvent ? 9 : 1;
 
       return (
         <TouchableOpacity
@@ -390,15 +408,15 @@ export default function EventsScreen() {
 
           <View style={styles.heroBadgeRow}>
             <View style={styles.heroBadge}>
-              <Sparkles size={13} color="#FFE28F" />
+              <Sparkles size={13} color="#B8860B" />
               <Text style={styles.heroBadgeText}>{clubRoyaleTier}</Text>
             </View>
             <View style={styles.heroBadge}>
-              <Ship size={13} color="#9EFDF2" />
+              <Ship size={13} color="#0E7490" />
               <Text style={styles.heroBadgeText}>{`${bookedCruises.length} booked`}</Text>
             </View>
             <View style={styles.heroBadge}>
-              <Clock4 size={13} color="#D8C0FF" />
+              <Clock4 size={13} color="#6B21A8" />
               <Text style={styles.heroBadgeText}>{isLoading ? 'Syncing' : crownAnchorLevel}</Text>
             </View>
           </View>
@@ -427,8 +445,8 @@ export default function EventsScreen() {
           </View>
 
           <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{String(monthSummary.bestDays)}</Text>
+            <View style={[styles.statCard, styles.statCardLuck]}>
+              <Text style={[styles.statValue, styles.statValueLuck]}>{String(monthSummary.bestDays)}</Text>
               <Text style={styles.statLabel}>{'Best Luck Days'}</Text>
             </View>
             <View style={[styles.statCard, styles.statCardBooked]}>
@@ -451,7 +469,7 @@ export default function EventsScreen() {
                   style={styles.navBtn}
                   testID="calendar-prev-month"
                 >
-                  <ChevronLeft size={20} color="#FFFFFF" />
+                  <ChevronLeft size={20} color="#1A2A3D" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -461,7 +479,9 @@ export default function EventsScreen() {
                   <Text style={styles.monthTitle}>
                     {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                   </Text>
-                  <Text style={styles.monthHint}>{'Tap to go to today'}</Text>
+                  <Text style={styles.monthHint}>
+                    {`${monthSummary.bookedCruiseDays + monthSummary.availableCruiseDays} events · Tap to go to today`}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -469,7 +489,7 @@ export default function EventsScreen() {
                   style={styles.navBtn}
                   testID="calendar-next-month"
                 >
-                  <ChevronRight size={20} color="#FFFFFF" />
+                  <ChevronRight size={20} color="#1A2A3D" />
                 </TouchableOpacity>
               </View>
 
@@ -501,7 +521,7 @@ export default function EventsScreen() {
                   disabled={isSyncing}
                   testID="calendar-sync-btn"
                 >
-                  <RefreshCw size={13} color={isSyncing ? 'rgba(255,255,255,0.5)' : '#FFFFFF'} />
+                  <RefreshCw size={13} color={isSyncing ? '#9CA3AF' : '#FFFFFF'} />
                   <Text style={[styles.syncBtnText, isSyncing && { opacity: 0.5 }]}>
                     {isSyncing ? 'Syncing…' : 'Sync Luck'}
                   </Text>
@@ -512,7 +532,7 @@ export default function EventsScreen() {
             <View style={styles.agendaCard} testID="calendar-agenda-card">
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleGroup}>
-                  <CalendarDays size={18} color="#FFE28F" />
+                  <CalendarDays size={18} color="#1E3A5F" />
                   <Text style={styles.sectionTitle}>{'Upcoming'}</Text>
                 </View>
                 <Text style={styles.sectionCount}>{`${upcomingEvents.length} items`}</Text>
@@ -567,7 +587,7 @@ export default function EventsScreen() {
                 })
               ) : (
                 <View style={styles.emptyState}>
-                  <CalendarDays size={28} color="rgba(255,255,255,0.28)" />
+                  <CalendarDays size={28} color="#CBD5E1" />
                   <Text style={styles.emptyTitle}>{'No upcoming events'}</Text>
                   <Text style={styles.emptyBody}>
                     {'Booked cruises, offer sailings, and imported events will appear here.'}
@@ -581,7 +601,7 @@ export default function EventsScreen() {
           <View style={styles.legendCard} testID="calendar-luck-legend">
             <View style={styles.sectionHeaderRow}>
               <View style={styles.sectionTitleGroup}>
-                <Sparkles size={17} color="#FFE28F" />
+                <Sparkles size={17} color="#B8860B" />
                 <Text style={styles.sectionTitle}>{'Luck Scale (1–9)'}</Text>
               </View>
             </View>
@@ -623,7 +643,7 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#051120',
+    backgroundColor: '#F0F4F8',
   },
   safeArea: {
     flex: 1,
@@ -650,11 +670,11 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 22,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   heroSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.66)',
+    color: '#6B7280',
     marginTop: 3,
     lineHeight: 18,
   },
@@ -670,14 +690,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 99,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: '#E2E8F0',
   },
   heroBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   modeRow: {
     flexDirection: 'row',
@@ -689,21 +709,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 10,
     borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#E2E8F0',
   },
   modeButtonActive: {
-    backgroundColor: 'rgba(255,226,143,0.18)',
-    borderColor: 'rgba(255,226,143,0.55)',
+    backgroundColor: 'rgba(30,58,95,0.08)',
+    borderColor: '#1E3A5F',
   },
   modeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.55)',
+    color: '#9CA3AF',
   },
   modeTextActive: {
-    color: '#FFE28F',
+    color: '#1E3A5F',
   },
   statsRow: {
     flexDirection: 'row',
@@ -711,54 +731,61 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#E2E8F0',
     alignItems: 'center',
   },
   statCardBooked: {
-    backgroundColor: 'rgba(22,163,74,0.15)',
-    borderColor: 'rgba(22,163,74,0.4)',
+    backgroundColor: 'rgba(22,163,74,0.06)',
+    borderColor: 'rgba(22,163,74,0.25)',
   },
   statCardAvail: {
-    backgroundColor: 'rgba(14,165,233,0.12)',
-    borderColor: 'rgba(14,165,233,0.35)',
+    backgroundColor: 'rgba(14,165,233,0.06)',
+    borderColor: 'rgba(14,165,233,0.25)',
+  },
+  statCardLuck: {
+    backgroundColor: 'rgba(212,160,10,0.06)',
+    borderColor: 'rgba(212,160,10,0.25)',
   },
   statValue: {
     fontSize: 24,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   statValueBooked: {
-    color: '#4ADE80',
+    color: '#059669',
   },
   statValueAvail: {
-    color: '#38BDF8',
+    color: '#0284C7',
+  },
+  statValueLuck: {
+    color: '#B8860B',
   },
   statLabel: {
     fontSize: 10,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.55)',
+    color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 4,
     textAlign: 'center',
   },
   calendarCard: {
-    backgroundColor: '#0D1E33',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    ...SHADOW.md,
+    borderColor: '#E2E8F0',
+    ...SHADOW.card,
   },
   calHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: SPACING.md,
-    backgroundColor: '#0A1628',
+    backgroundColor: '#F8FAFC',
     borderRadius: BORDER_RADIUS.lg,
     paddingVertical: 10,
     paddingHorizontal: 8,
@@ -769,9 +796,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: '#E2E8F0',
   },
   calHeaderCenter: {
     flex: 1,
@@ -780,11 +807,11 @@ const styles = StyleSheet.create({
   monthTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   monthHint: {
     fontSize: 10,
-    color: 'rgba(255,255,255,0.4)',
+    color: '#9CA3AF',
     marginTop: 2,
   },
   weekdayRow: {
@@ -796,7 +823,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 11,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.6)',
+    color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -844,11 +871,11 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     paddingTop: SPACING.sm,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderTopColor: '#E5E7EB',
   },
   syncLabel: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.45)',
+    color: '#9CA3AF',
     fontWeight: '500' as const,
     flex: 1,
     flexShrink: 1,
@@ -860,13 +887,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 99,
-    backgroundColor: 'rgba(79,70,229,0.7)',
+    backgroundColor: '#1E3A5F',
     borderWidth: 1,
-    borderColor: 'rgba(129,120,255,0.5)',
+    borderColor: '#2E5077',
     marginLeft: SPACING.sm,
   },
   syncBtnSyncing: {
-    backgroundColor: 'rgba(79,70,229,0.35)',
+    backgroundColor: '#9CA3AF',
   },
   syncBtnText: {
     fontSize: 12,
@@ -874,11 +901,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   agendaCard: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#E2E8F0',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -894,21 +921,21 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   sectionCount: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.45)',
+    color: '#9CA3AF',
   },
   agendaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#F8FAFC',
     borderRadius: BORDER_RADIUS.lg,
     marginBottom: SPACING.sm,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: '#E2E8F0',
   },
   agendaAccentBar: {
     width: 4,
@@ -937,7 +964,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
   },
   agendaBadge: {
     borderRadius: 99,
@@ -953,7 +980,7 @@ const styles = StyleSheet.create({
   agendaMeta: {
     marginTop: 2,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.55)',
+    color: '#6B7280',
   },
   agendaLuckBadge: {
     marginRight: SPACING.sm,
@@ -982,21 +1009,21 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.55)',
+    color: '#6B7280',
   },
   emptyBody: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.4)',
+    color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: SPACING.md,
   },
   legendCard: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: '#E2E8F0',
   },
   luckGrid: {
     gap: 6,
@@ -1006,12 +1033,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#F8FAFC',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: '#E2E8F0',
   },
   luckTileScore: {
     fontSize: 20,
@@ -1022,18 +1049,18 @@ const styles = StyleSheet.create({
   luckTileName: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.85)',
+    color: '#4B5563',
   },
   outlineLegend: {
     paddingTop: SPACING.md,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: '#E5E7EB',
     gap: 8,
   },
   outlineLegendTitle: {
     fontSize: 11,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
@@ -1052,7 +1079,7 @@ const styles = StyleSheet.create({
   },
   outlineLegendText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#4B5563',
     fontWeight: '600' as const,
   },
 });

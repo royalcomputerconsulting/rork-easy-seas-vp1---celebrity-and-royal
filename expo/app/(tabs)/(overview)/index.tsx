@@ -298,10 +298,10 @@ function OverviewScreenContent() {
   }, [cruisesData]);
 
   const certificateSummary = useMemo(() => {
-    const fppCerts = getCertificatesByType('fpp').filter(c => c.status === 'available');
-    const nextCruiseCerts = getCertificatesByType('nextCruise').filter(c => c.status === 'available');
-    const obcCerts = getCertificatesByType('obc').filter(c => c.status === 'available');
-    const freeplayCerts = getCertificatesByType('freeplay').filter(c => c.status === 'available');
+    const fppCerts = getCertificatesByType('fpp').filter((c: { status?: string }) => c.status === 'available');
+    const nextCruiseCerts = getCertificatesByType('nextCruise').filter((c: { status?: string }) => c.status === 'available');
+    const obcCerts = getCertificatesByType('obc').filter((c: { status?: string }) => c.status === 'available');
+    const freeplayCerts = getCertificatesByType('freeplay').filter((c: { status?: string }) => c.status === 'available');
     
     return [
       { type: 'fpp' as const, label: 'FPP Certs', value: fppCerts.length },
@@ -666,22 +666,20 @@ function OverviewScreenContent() {
 
   const renderOfferCard = useCallback(({ item, index }: { item: CasinoOfferCardData | Cruise; index: number }) => {
     if ('cruises' in item) {
-      const groupedOffer = item as CasinoOfferCardData;
-
       return (
         <CasinoOfferCard
-          offerCode={groupedOffer.offerCode}
-          offerName={groupedOffer.offerName}
-          expiryDate={groupedOffer.expiryDate}
-          tradeInValue={groupedOffer.tradeInValue}
-          freePlay={groupedOffer.freePlay}
-          obc={groupedOffer.obc}
-          cruises={groupedOffer.cruises}
-          onPress={() => handleOfferPress(groupedOffer)}
+          offerCode={item.offerCode}
+          offerName={item.offerName}
+          expiryDate={item.expiryDate}
+          tradeInValue={item.tradeInValue}
+          freePlay={item.freePlay}
+          obc={item.obc}
+          cruises={item.cruises}
+          onPress={() => handleOfferPress(item)}
           onCruisePress={handleCruiseItemPress}
           bookedCruiseIds={bookedCruiseIds}
           isBestValue={index === 0}
-          offerSource={groupedOffer.offerSource}
+          offerSource={item.offerSource}
         />
       );
     }
@@ -809,7 +807,7 @@ export default function OverviewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A1628',
+    backgroundColor: '#F0F4F8',
   },
   safeArea: {
     flex: 1,
@@ -824,12 +822,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A1628',
+    backgroundColor: '#F0F4F8',
   },
   loadingText: {
     marginTop: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#E2E8F0',
+    color: '#6B7280',
   },
   listContent: {
     paddingHorizontal: SPACING.md,
@@ -920,13 +918,13 @@ const styles = StyleSheet.create({
   logoHeaderTitle: {
     fontSize: 24,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: '#1A2A3D',
     letterSpacing: 0.5,
   },
   logoHeaderSubtitle: {
     fontSize: 14,
     fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#6B7280',
     marginTop: 2,
     letterSpacing: 0.3,
   },
@@ -936,9 +934,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.md,
     marginTop: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: '#FFFFFF',
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -1071,7 +1071,7 @@ const styles = StyleSheet.create({
   offerDetailItem: {},
   offerDetailLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.6)',
+    color: '#6B7280',
     marginBottom: 2,
   },
   offerDetailValue: {
@@ -1103,7 +1103,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
@@ -1115,7 +1115,7 @@ const styles = StyleSheet.create({
   },
   cruisePreviewDate: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.6)',
+    color: '#6B7280',
   },
   bookedMini: {
     backgroundColor: COLORS.success,
@@ -1130,7 +1130,7 @@ const styles = StyleSheet.create({
   },
   moreCruises: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.6)',
+    color: '#9CA3AF',
     fontStyle: 'italic',
   },
   emptyState: {
@@ -1138,9 +1138,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: SPACING.huge,
     paddingHorizontal: SPACING.xl,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.xl,
     marginTop: SPACING.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   emptyIconContainer: {
     width: 100,
@@ -1203,10 +1205,12 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   casinoHistorySection: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     marginTop: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   casinoHistoryHeader: {
     marginBottom: SPACING.md,

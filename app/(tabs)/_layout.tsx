@@ -12,9 +12,9 @@ import React, { useCallback } from "react";
 import { Platform, View, StyleSheet } from "react-native";
 import * as Haptics from 'expo-haptics';
 
-const TAB_BG = 'rgba(8, 16, 34, 0.97)';
-const ACTIVE_COLOR = '#FFE28F';
-const INACTIVE_COLOR = 'rgba(200,215,255,0.55)';
+const TAB_BG = '#FFFFFF';
+const ACTIVE_COLOR = '#1E3A5F';
+const INACTIVE_COLOR = '#9CA3AF';
 
 export default function TabLayout() {
   const handleTabPress = useCallback(() => {
@@ -37,12 +37,12 @@ export default function TabLayout() {
           position: 'absolute',
           backgroundColor: TAB_BG,
           borderTopWidth: 1,
-          borderTopColor: 'rgba(255,255,255,0.08)',
-          elevation: 20,
+          borderTopColor: '#E5E7EB',
+          elevation: 8,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.45,
-          shadowRadius: 16,
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
         },
         tabBarLabelStyle: {
           fontSize: 9,
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   activeIconContainer: {
-    backgroundColor: 'rgba(255,226,143,0.14)',
+    backgroundColor: 'rgba(30,58,95,0.08)',
     borderRadius: 8,
   },
 });

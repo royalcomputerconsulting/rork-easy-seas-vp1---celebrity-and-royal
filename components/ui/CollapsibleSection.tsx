@@ -25,7 +25,6 @@ interface CollapsibleSectionProps {
   children: React.ReactNode;
   defaultExpanded?: boolean;
   expanded?: boolean;
-  isExpanded?: boolean;
   headerStyle?: 'default' | 'compact';
   showBorder?: boolean;
   onToggle?: (expanded: boolean) => void;
@@ -38,15 +37,13 @@ export function CollapsibleSection({
   children,
   defaultExpanded = true,
   expanded,
-  isExpanded,
   headerStyle = 'default',
   showBorder = true,
   onToggle,
 }: CollapsibleSectionProps) {
   const [internalExpanded, setInternalExpanded] = useState<boolean>(defaultExpanded);
-  const controlledExpanded = isExpanded ?? expanded;
-  const isControlled = typeof controlledExpanded === 'boolean';
-  const currentExpanded = controlledExpanded ?? internalExpanded;
+  const isControlled = typeof expanded === 'boolean';
+  const currentExpanded = expanded ?? internalExpanded;
   const rotateAnim = useRef(new Animated.Value(currentExpanded ? 1 : 0)).current;
 
   useEffect(() => {

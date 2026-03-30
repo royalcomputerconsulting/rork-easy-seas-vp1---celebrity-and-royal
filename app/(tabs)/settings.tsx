@@ -338,7 +338,7 @@ export default function SettingsScreen() {
     const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
     // Count unique offers by offerCode - this is the true unique identifier for an offer
     // Multiple sailings can share the same offerCode (e.g., 2601C05 applies to multiple cruises)
-    const uniqueOfferCodes = new Set(allOffers.map(o => o.offerCode).filter(Boolean));
+    const uniqueOfferCodes = new Set(allOffers.map((o: { offerCode?: string | null }) => o.offerCode).filter(Boolean));
     const uniqueOfferCount = uniqueOfferCodes.size || allOffers.length;
     
     console.log('[Settings] Data stats calculation:', {
@@ -348,8 +348,8 @@ export default function SettingsScreen() {
     });
     
     const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
-    const upcoming = allBooked.filter(c => !isDateInPast(c.returnDate)).length;
-    const completed = allBooked.filter(c => isDateInPast(c.returnDate)).length;
+    const upcoming = allBooked.filter((c: { returnDate: string }) => !isDateInPast(c.returnDate)).length;
+    const completed = allBooked.filter((c: { returnDate: string }) => isDateInPast(c.returnDate)).length;
 
     return {
       cruises: cruises.length || localData.cruises?.length || 0,
@@ -2231,15 +2231,15 @@ STEP 4: Optional Calendar Import
               )}
               <View style={styles.dataDivider} />
               {renderSettingRow(
-                <Shield size={18} color={COLORS.navyDeep} />,
+                <Shield size={18} color='rgba(168,198,255,0.85)' />,
                 'Privacy Policy',
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => entitlement.openPrivacyPolicy()
               )}
               {renderSettingRow(
-                <Shield size={18} color={COLORS.navyDeep} />,
+                <Shield size={18} color='rgba(168,198,255,0.85)' />,
                 'Terms of Use (EULA)',
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
                 () => entitlement.openTerms()
               )}
             </View>
@@ -2318,10 +2318,10 @@ STEP 4: Optional Calendar Import
                   <Text style={styles.subsectionHelper}>Import CSV files and reset app data.</Text>
                 </View>
                 {renderSettingRow(
-                  <FileSpreadsheet size={18} color={COLORS.navyDeep} />,
+                  <FileSpreadsheet size={18} color='rgba(168,198,255,0.85)' />,
                   'Import Offers CSV',
                   isImporting ? (
-                    <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                    <ActivityIndicator size="small" color='rgba(168,198,255,0.8)' />
                   ) : lastImportResult?.type === 'offers' ? (
                     <View style={styles.successBadge}>
                       <CheckCircle size={12} color={COLORS.success} />
@@ -2342,7 +2342,7 @@ STEP 4: Optional Calendar Import
 
                 {isLoadingWhitelist ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                    <ActivityIndicator size="small" color='rgba(168,198,255,0.8)' />
                   </View>
                 ) : (
                   <View style={styles.whitelistContainer}>
@@ -2423,7 +2423,7 @@ STEP 4: Optional Calendar Import
 
           <View style={styles.footer}>
             <View style={styles.footerLogoRow}>
-              <Ship size={20} color={COLORS.navyDeep} />
+              <Ship size={20} color='#6B7280' />
               <Text style={styles.footerAppName}>EasySeas</Text>
             </View>
             <Text style={styles.footerTagline}>Cruise Point Tracker</Text>

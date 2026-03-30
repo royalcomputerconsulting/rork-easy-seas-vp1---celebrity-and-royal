@@ -137,7 +137,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.textNavy,
   },
   carnivalActiveButton: {
-    backgroundColor: '#CC2232',
+    backgroundColor: '#A06B18',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 233, 170, 0.35)',
   },
   toggleText: {
     fontSize: 9,
