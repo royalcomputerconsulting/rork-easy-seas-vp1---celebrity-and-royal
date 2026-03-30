@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     fontSize: 22,
-    fontWeight: '800' as const,
+    fontFamily: 'Lobster_400Regular',
     color: '#1A2A3D',
   },
   heroSubtitle: {

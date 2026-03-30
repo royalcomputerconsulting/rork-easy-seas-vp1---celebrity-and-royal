@@ -2054,7 +2054,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     color: '#FFFFFF',
     marginBottom: SPACING.md,
-    fontFamily: DS.font.lobster,
+    fontWeight: '800' as const,
   },
   intelligenceCardsColumn: {
     gap: SPACING.md,
@@ -2078,7 +2078,7 @@ const styles = StyleSheet.create({
   intelligenceCardTitle: {
     fontSize: 24,
     color: '#FFFFFF',
-    fontFamily: DS.font.lobster,
+    fontWeight: '800' as const,
   },
   intelligenceCardSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,

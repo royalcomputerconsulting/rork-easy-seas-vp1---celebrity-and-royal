@@ -768,7 +768,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     fontSize: 28,
-    fontFamily: DS.font.lobster,
+    fontWeight: '800' as const,
     color: COLORS.white,
     letterSpacing: 0.3,
   },
@@ -1260,7 +1260,7 @@ const styles = StyleSheet.create({
   },
   cruiseListTitle: {
     fontSize: 22,
-    fontFamily: DS.font.lobster,
+    fontWeight: '800' as const,
     color: DS.text.primary,
     letterSpacing: 0.3,
     marginBottom: 4,

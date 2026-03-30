@@ -930,7 +930,7 @@ const styles = StyleSheet.create({
   },
   logoHeaderTitle: {
     fontSize: 24,
-    fontWeight: '700' as const,
+    fontFamily: 'Lobster_400Regular',
     color: '#1A2A3D',
     letterSpacing: 0.5,
   },

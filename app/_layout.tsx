@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { useFonts, Lobster_400Regular } from "@expo-google-fonts/lobster";
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StyleSheet, View, Text, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
@@ -548,6 +549,7 @@ const ServiceProviders = composeProviders(
 );
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({ Lobster_400Regular });
   const [isStorageReady, setIsStorageReady] = useState<boolean>(false);
   const [storageError, setStorageError] = useState<string | null>(null);
 
@@ -596,7 +598,7 @@ export default function RootLayout() {
         <GestureHandlerRootView style={rootStyles.gestureHandler}>
           <ErrorBoundary>
             <WebResponsiveWrapper>
-              {isStorageReady ? (
+              {isStorageReady && fontsLoaded ? (
                 <AuthProvider>
                   <UserDataSyncProvider>
                     <UserProvider>

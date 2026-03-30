@@ -1966,7 +1966,7 @@ const styles = StyleSheet.create({
   },
   appTitle: {
     fontSize: 26,
-    fontFamily: DS.font.lobster,
+    fontWeight: '800' as const,
     color: DS.text.primary,
     letterSpacing: 0.3,
   },
@@ -2156,7 +2156,7 @@ const styles = StyleSheet.create({
   },
   casinoPerformanceTitle: {
     fontSize: 20,
-    fontFamily: DS.font.lobster,
+    fontWeight: '800' as const,
     color: DS.text.warning,
   },
   casinoPerformanceSubtitle: {

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, GRADIENTS } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, GRADIENTS, DS } from '@/constants/theme';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
@@ -22,7 +22,7 @@ interface EasySeasHeroProps {
 }
 
 export function EasySeasHero({
-  memberName = 'Player',
+  memberName: _memberName = 'Player',
   onSettingsPress,
   onAlertsPress,
   alertCount = 0,
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   },
   appTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontFamily: DS.font.lobster,
     color: COLORS.textNavy,
     letterSpacing: 0.5,
   },

@@ -22,7 +22,7 @@ interface EasySeasHeroProps {
 }
 
 export function EasySeasHero({
-  memberName = 'Player',
+  memberName: _memberName = 'Player',
   onSettingsPress,
   onAlertsPress,
   alertCount = 0,
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   },
   appTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontFamily: 'Lobster_400Regular',
     color: COLORS.textNavy,
     letterSpacing: 0.5,
   },

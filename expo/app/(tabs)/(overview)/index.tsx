@@ -1219,7 +1219,7 @@ const styles = StyleSheet.create({
   },
   casinoHistoryTitle: {
     fontSize: 22,
-    fontFamily: DS.font.lobster,
+    fontWeight: '800' as const,
     color: DS.text.primary,
     letterSpacing: 0.3,
   },
