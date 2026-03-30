@@ -38,7 +38,7 @@ import { DeckPlanProvider } from "@/state/DeckPlanProvider";
 import { UserDataSyncProvider, useUserDataSync } from "@/state/UserDataSyncProvider";
 import { EntitlementProvider } from "@/state/EntitlementProvider";
 import { CrewRecognitionProvider } from "@/state/CrewRecognitionProvider";
-import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
+import { APP_TEXTURE, COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 import { composeProviders } from "@/lib/composeProviders";
 import { ensureStorageHealthy } from "@/lib/storage/storageRecovery";
 
@@ -67,7 +67,7 @@ const rootStyles = StyleSheet.create({
   },
   storageBootstrapContainer: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: APP_TEXTURE.webBackdrop,
     alignItems: "center",
     justifyContent: "center",
     padding: SPACING.xl,
@@ -75,10 +75,10 @@ const rootStyles = StyleSheet.create({
   storageBootstrapCard: {
     width: "100%",
     maxWidth: 520,
-    borderRadius: 20,
-    backgroundColor: "#F7FAFF",
+    borderRadius: 24,
+    backgroundColor: APP_TEXTURE.surfaceStrong,
     borderWidth: 1,
-    borderColor: "#E6EEF9",
+    borderColor: APP_TEXTURE.border,
     padding: SPACING.xl,
   },
   storageBootstrapTitle: {
@@ -99,7 +99,7 @@ const rootStyles = StyleSheet.create({
   },
   cloudRestoreContainer: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: APP_TEXTURE.webBackdrop,
     alignItems: "center",
     justifyContent: "center",
     padding: SPACING.xl,
@@ -107,10 +107,10 @@ const rootStyles = StyleSheet.create({
   cloudRestoreCard: {
     width: "100%",
     maxWidth: 520,
-    borderRadius: 20,
-    backgroundColor: "#F7FAFF",
+    borderRadius: 24,
+    backgroundColor: APP_TEXTURE.surfaceStrong,
     borderWidth: 1,
-    borderColor: "#E6EEF9",
+    borderColor: APP_TEXTURE.border,
     padding: SPACING.xl,
   },
   cloudRestoreTitle: {
@@ -138,7 +138,7 @@ const rootStyles = StyleSheet.create({
 const freshStartStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: APP_TEXTURE.webBackdrop,
     justifyContent: 'center',
     alignItems: 'center',
     padding: SPACING.xl,
@@ -641,7 +641,7 @@ const webStyles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0F1B2D',
+    backgroundColor: APP_TEXTURE.webBackdrop,
   },
   background: {
     ...StyleSheet.absoluteFillObject,
@@ -654,7 +654,7 @@ const webStyles = StyleSheet.create({
     width: 500,
     height: 500,
     borderRadius: 250,
-    backgroundColor: 'rgba(30, 58, 95, 0.4)',
+    backgroundColor: APP_TEXTURE.goldWash,
   },
   bgAccent: {
     position: 'absolute',
@@ -663,22 +663,22 @@ const webStyles = StyleSheet.create({
     width: 400,
     height: 400,
     borderRadius: 200,
-    backgroundColor: 'rgba(0, 151, 167, 0.15)',
+    backgroundColor: APP_TEXTURE.tealWash,
   },
   phoneFrame: {
     width: WEB_MAX_WIDTH,
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: APP_TEXTURE.frame,
     borderRadius: 32,
     overflow: 'hidden',
     marginVertical: 20,
-    shadowColor: '#000',
+    shadowColor: '#10223A',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.18,
     shadowRadius: 24,
     elevation: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: APP_TEXTURE.border,
   },
   phoneNotch: {
     width: 120,

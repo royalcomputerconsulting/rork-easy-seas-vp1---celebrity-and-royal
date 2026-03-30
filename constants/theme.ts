@@ -196,6 +196,26 @@ export const GRADIENTS = {
   },
 };
 
+export const APP_TEXTURE = {
+  canvasTop: '#F6EEDF',
+  canvasMid: '#EEF3F8',
+  canvasBottom: '#E2EAF3',
+  surface: 'rgba(255,255,255,0.70)',
+  surfaceStrong: 'rgba(255,255,255,0.84)',
+  surfaceMuted: 'rgba(247,250,252,0.62)',
+  border: 'rgba(126, 143, 162, 0.22)',
+  borderStrong: 'rgba(212, 160, 10, 0.28)',
+  goldWash: 'rgba(212,160,10,0.12)',
+  tealWash: 'rgba(0,151,167,0.10)',
+  violetWash: 'rgba(123,45,142,0.08)',
+  ink: '#1A2A3D',
+  inkSoft: '#5B6B80',
+  webBackdrop: '#E6EDF4',
+  frame: '#F8FBFF',
+  tabBar: 'rgba(248, 250, 252, 0.90)',
+  tabBarBorder: 'rgba(126, 143, 162, 0.24)',
+};
+
 export const TYPOGRAPHY = {
   fontFamily: 'System' as const,
   fontFamilyBold: 'System' as const,

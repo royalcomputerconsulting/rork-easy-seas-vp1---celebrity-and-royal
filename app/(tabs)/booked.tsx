@@ -24,7 +24,7 @@ import {
   PremiumQuickFacts,
   PremiumStatGrid,
 } from '../../components/cruise/UnifiedCruiseSystem';
-import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
+import { APP_TEXTURE, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { createDateFromString, formatDate, isDateInPast } from '@/lib/date';
 import { calculatePortfolioValue } from '@/lib/valueCalculator';
@@ -447,9 +447,9 @@ const styles = StyleSheet.create({
   searchSurface: {
     borderRadius: 22,
     padding: SPACING.lg,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: APP_TEXTURE.surfaceStrong,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: APP_TEXTURE.border,
   },
   searchLabel: {
     color: '#6B7280',
@@ -463,19 +463,19 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.52)',
     color: '#1A2A3D',
     fontSize: 15,
     fontWeight: '600' as const,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.62)',
   },
   timelineSurface: {
     borderRadius: 24,
     padding: SPACING.lg,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: APP_TEXTURE.surfaceStrong,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: APP_TEXTURE.border,
   },
   timelineTitle: {
     color: '#1A2A3D',
@@ -491,9 +491,9 @@ const styles = StyleSheet.create({
   pointsSurface: {
     borderRadius: 24,
     padding: SPACING.lg,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: APP_TEXTURE.surfaceStrong,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: APP_TEXTURE.border,
   },
   pointsHeaderRow: {
     flexDirection: 'row',
@@ -507,7 +507,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: APP_TEXTURE.goldWash,
+    borderWidth: 1,
+    borderColor: APP_TEXTURE.borderStrong,
   },
   pointsHeaderTextWrap: {
     flex: 1,
@@ -530,11 +532,13 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#132B47',
+    borderWidth: 1,
+    borderColor: 'rgba(255,226,143,0.24)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOpacity: 0.28,
+    shadowColor: '#10223A',
+    shadowOpacity: 0.2,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
