@@ -2032,11 +2032,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 'Save as Mock Data',
                 isSavingMockData ? (
                   <ActivityIndicator size="small" color="#9C27B0" />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    .ts files
-                  </Text>
-                ),
+                ) : 'TS files',
                 handleSaveMockData
               )}
               
