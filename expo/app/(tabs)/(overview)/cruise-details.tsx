@@ -1,59 +1,23 @@
-import React, { memo, useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import type { ItineraryDay, BookedCruise, CasinoOffer } from '@/types/models';
-import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, Dice5, AlertCircle, Trash2, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, DS } from '@/constants/theme';
-import { formatCurrency, formatNights } from '@/lib/format';
-import { formatDate, getDaysUntil, createDateFromString } from '@/lib/date';
+import { AlertCircle, ArrowLeft, Save, Ship, Trash2, X } from 'lucide-react-native';
+import type { BookedCruise, CasinoOffer } from '@/types/models';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, DS } from '@/constants/theme';
+import { formatDate } from '@/lib/date';
+import { createDateFromString, getDaysUntil } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
-
-import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, getResolvedCruiseItinerary, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
-import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
-
-type CompactFactProps = {
-  icon: React.ComponentType<{ size?: number; color?: string }>;
-  value: string;
-  label?: string;
-};
+import { DEFAULT_PLAYING_HOURS, useUser } from '@/state/UserProvider';
+import { calculatePersonalizedPlayEstimate, getResolvedCruiseItinerary, type PersonalizedPlayEstimate, type PlayingHoursConfig } from '@/lib/casinoAvailability';
+import { DEFAULT_CRUISE_IMAGE, getUniqueImageForCruise } from '@/constants/cruiseImages';
+import { CruiseDetailsOverview } from '@/components/cruise/CruiseDetailsOverview';
 
 const PAGE_MARBLE_COLORS = ['#FCFEFF', '#EEF7FF', '#DDEEFF', '#CAE3F8'] as const;
 const PAGE_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.98)', 'rgba(188,216,241,0.3)', 'rgba(255,255,255,0.18)', 'rgba(142,182,221,0.24)'] as const;
 const PAGE_MARBLE_LOCATIONS = [0, 0.22, 0.72, 1] as const;
-
-function getItineraryMetaText(day: ItineraryDay): string {
-  if (day.isSeaDay) {
-    return 'Sea day';
-  }
-
-  if (day.arrival && day.departure) {
-    return `${day.arrival} - ${day.departure}`;
-  }
-
-  if (day.arrival) {
-    return `From ${day.arrival} • Overnight`;
-  }
-
-  if (day.departure) {
-    return `Until ${day.departure}`;
-  }
-
-  return day.notes || 'Port window inferred';
-}
-
-const CompactFact = memo(function CompactFact({ icon: Icon, value, label }: CompactFactProps) {
-  return (
-    <View style={styles.compactFact}>
-      <Icon size={12} color={COLORS.textSecondary} />
-      <Text style={styles.compactFactValue} numberOfLines={1}>{value}</Text>
-      {label && <Text style={styles.compactFactLabel}>{label}</Text>}
-    </View>
-  );
-});
 
 interface EditFormData {
   shipName: string;
@@ -83,17 +47,8 @@ interface EditFormData {
   nextCruiseCertificate: string;
 }
 
-export default function CruiseDetailsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
-  const { localData } = useAppState();
-  const { getCruiseValueBreakdown, getCruiseCasinoAvailability, completedCruises } = useSimpleAnalytics();
-
-  const [editModalVisible, setEditModalVisible] = useState<boolean>(false);
-  const [fullEditModalVisible, setFullEditModalVisible] = useState<boolean>(false);
-  const [editWinnings, setEditWinnings] = useState<string>('');
-  const [editPoints, setEditPoints] = useState<string>('');
-  const [editForm, setEditForm] = useState<EditFormData>({
+function createEmptyEditForm(): EditFormData {
+  return {
     shipName: '',
     departurePort: '',
     destination: '',
@@ -119,38 +74,57 @@ export default function CruiseDetailsScreen() {
     amountPaid: '',
     tradeInValue: '',
     nextCruiseCertificate: '',
-  });
+  };
+}
 
-  const { bookedCruises: storeBookedCruises, cruises: storeCruises, casinoOffers: storeOffers, updateBookedCruise: updateCruiseInStore, updateCruise: updateCruiseInCruisesStore, removeBookedCruise, addBookedCruise } = useCoreData();
+export default function CruiseDetailsScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const { localData } = useAppState();
+  const { getCruiseValueBreakdown, getCruiseCasinoAvailability } = useSimpleAnalytics();
+  const {
+    bookedCruises: storeBookedCruises,
+    cruises: storeCruises,
+    casinoOffers: storeOffers,
+    updateBookedCruise: updateCruiseInStore,
+    updateCruise: updateCruiseInCruisesStore,
+    removeBookedCruise,
+    addBookedCruise,
+  } = useCoreData();
   const { currentUser } = useUser();
-  
-  const [heroImageUri, setHeroImageUri] = useState<string>(DEFAULT_CRUISE_IMAGE);
+
+  const [editModalVisible, setEditModalVisible] = useState<boolean>(false);
+  const [fullEditModalVisible, setFullEditModalVisible] = useState<boolean>(false);
   const [unbookModalVisible, setUnbookModalVisible] = useState<boolean>(false);
-  
+  const [editWinnings, setEditWinnings] = useState<string>('');
+  const [editPoints, setEditPoints] = useState<string>('');
+  const [heroImageUri, setHeroImageUri] = useState<string>(DEFAULT_CRUISE_IMAGE);
+  const [editForm, setEditForm] = useState<EditFormData>(createEmptyEditForm());
+
   const playingHoursConfig: PlayingHoursConfig = useMemo(() => {
     const userPlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
+
     return {
       enabled: userPlayingHours.enabled,
       sessions: userPlayingHours.sessions,
     };
   }, [currentUser?.playingHours]);
 
-  const updateCruise = (updatedCruise: any) => {
-    console.log('[CruiseDetails] Updating cruise:', updatedCruise);
-    console.log('[CruiseDetails] Updated points:', updatedCruise.earnedPoints);
-    console.log('[CruiseDetails] Updated winnings:', updatedCruise.winnings);
-    console.log('[CruiseDetails] Updated sailDate:', updatedCruise.sailDate);
-    console.log('[CruiseDetails] Updated returnDate:', updatedCruise.returnDate);
-    
+  const updateCruise = (updatedCruise: BookedCruise & Record<string, unknown>) => {
+    console.log('[CruiseDetails] Updating cruise record', {
+      cruiseId: updatedCruise.id,
+      sailDate: updatedCruise.sailDate,
+      returnDate: updatedCruise.returnDate,
+      earnedPoints: updatedCruise.earnedPoints,
+      winnings: updatedCruise.winnings,
+    });
+
     updateCruiseInStore(updatedCruise.id, updatedCruise);
-    
-    const existsInCruises = (storeCruises || []).some(c => c.id === updatedCruise.id);
+
+    const existsInCruises = (storeCruises || []).some((item) => item.id === updatedCruise.id);
     if (existsInCruises) {
-      console.log('[CruiseDetails] Also updating in non-booked cruises store');
       updateCruiseInCruisesStore(updatedCruise.id, updatedCruise);
     }
-    
-    console.log('[CruiseDetails] Cruise updated in store. LoyaltyProvider will recalculate automatically.');
   };
 
   const cruise = useMemo(() => {
@@ -160,360 +134,163 @@ export default function CruiseDetailsScreen() {
       ...(localData.booked || []),
       ...(localData.cruises || []),
     ];
-    
-    let found = allCruises.find(c => c.id === id);
-    
-    // Enrich pricing from linked offer if cruise has missing prices
+
+    let found = allCruises.find((item) => item.id === id);
+
     if (found && found.offerCode) {
       const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
-      const linkedOff = allOffers.find(o => 
-        o.offerCode === found!.offerCode || 
-        o.id === found!.offerCode ||
-        o.cruiseId === found!.id
-      );
-      
-      if (linkedOff) {
+      const linkedOffer = allOffers.find((offer) => (
+        offer.offerCode === found?.offerCode
+        || offer.id === found?.offerCode
+        || offer.cruiseId === found?.id
+      ));
+
+      if (linkedOffer) {
         const needsPricing = !found.interiorPrice && !found.oceanviewPrice && !found.balconyPrice && !found.suitePrice;
         if (needsPricing) {
-          console.log('[CruiseDetails] Enriching cruise pricing from linked offer:', linkedOff.offerCode);
+          console.log('[CruiseDetails] Enriching cruise pricing from linked offer', {
+            cruiseId: found.id,
+            offerCode: linkedOffer.offerCode,
+          });
+
           found = {
             ...found,
-            interiorPrice: found.interiorPrice || linkedOff.interiorPrice,
-            oceanviewPrice: found.oceanviewPrice || linkedOff.oceanviewPrice,
-            balconyPrice: found.balconyPrice || linkedOff.balconyPrice,
-            suitePrice: found.suitePrice || linkedOff.suitePrice,
-            taxes: found.taxes || linkedOff.taxesFees,
-            portsAndTimes: found.portsAndTimes || linkedOff.portsAndTimes,
-            ports: found.ports || linkedOff.ports,
+            interiorPrice: found.interiorPrice || linkedOffer.interiorPrice,
+            oceanviewPrice: found.oceanviewPrice || linkedOffer.oceanviewPrice,
+            balconyPrice: found.balconyPrice || linkedOffer.balconyPrice,
+            suitePrice: found.suitePrice || linkedOffer.suitePrice,
+            taxes: found.taxes || linkedOffer.taxesFees,
+            portsAndTimes: found.portsAndTimes || linkedOffer.portsAndTimes,
+            ports: found.ports || linkedOffer.ports,
           };
         }
       }
     }
-    
-    console.log('[CruiseDetails] Found cruise:', found?.id, 'itinerary days:', found?.itinerary?.length, 'prices:', {
-      interior: found?.interiorPrice,
-      oceanview: found?.oceanviewPrice,
-      balcony: found?.balconyPrice,
-      suite: found?.suitePrice,
-      taxes: found?.taxes,
+
+    console.log('[CruiseDetails] Located cruise', {
+      cruiseId: found?.id,
+      shipName: found?.shipName,
+      offerCode: found?.offerCode,
     });
+
     return found;
-  }, [storeCruises, storeBookedCruises, storeOffers, localData.cruises, localData.booked, localData.offers, id]);
+  }, [id, localData.booked, localData.cruises, localData.offers, storeBookedCruises, storeCruises, storeOffers]);
 
   useEffect(() => {
-    if (cruise) {
-      const imageUrl = getUniqueImageForCruise(
-        cruise.id,
-        cruise.destination || cruise.itineraryName || '',
-        cruise.sailDate,
-        cruise.shipName
-      );
-      setHeroImageUri(imageUrl || DEFAULT_CRUISE_IMAGE);
+    if (!cruise) {
+      return;
     }
+
+    const imageUrl = getUniqueImageForCruise(
+      cruise.id,
+      cruise.destination || cruise.itineraryName || '',
+      cruise.sailDate,
+      cruise.shipName,
+    );
+
+    setHeroImageUri(imageUrl || DEFAULT_CRUISE_IMAGE);
   }, [cruise]);
 
   const linkedOffer = useMemo((): CasinoOffer | undefined => {
-    if (!cruise?.offerCode) return undefined;
-    
-    // Check CruiseStore offers first (primary), then localData offers (fallback)
-    const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
-    
-    return allOffers.find(o => 
-      o.offerCode === cruise.offerCode || 
-      o.id === cruise.offerCode ||
-      o.cruiseId === cruise.id
-    );
-  }, [cruise, storeOffers, localData.offers]);
+    if (!cruise?.offerCode) {
+      return undefined;
+    }
 
-  // Calculate accurate nights from sailDate and returnDate
+    const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
+
+    return allOffers.find((offer) => (
+      offer.offerCode === cruise.offerCode
+      || offer.id === cruise.offerCode
+      || offer.cruiseId === cruise.id
+    ));
+  }, [cruise, localData.offers, storeOffers]);
+
   const accurateNights = useMemo(() => {
-    if (!cruise) return 0;
-    
-    if (cruise.sailDate && (cruise as BookedCruise).returnDate) {
+    if (!cruise) {
+      return 0;
+    }
+
+    const bookedCruise = cruise as BookedCruise;
+    if (cruise.sailDate && bookedCruise.returnDate) {
       try {
-        const sailDateObj = createDateFromString(cruise.sailDate);
-        const returnDateObj = createDateFromString((cruise as BookedCruise).returnDate);
-        const daysBetween = Math.round((returnDateObj.getTime() - sailDateObj.getTime()) / (1000 * 60 * 60 * 24));
-        
-        if (daysBetween > 0 && daysBetween < 365) {
-          console.log('[CruiseDetails] Calculated accurate nights from dates:', daysBetween, 'sailDate:', cruise.sailDate, 'returnDate:', (cruise as BookedCruise).returnDate);
-          return daysBetween;
+        const sailDate = createDateFromString(cruise.sailDate);
+        const returnDate = createDateFromString(bookedCruise.returnDate);
+        const diffDays = Math.round((returnDate.getTime() - sailDate.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffDays > 0 && diffDays < 365) {
+          return diffDays;
         }
-      } catch (e) {
-        console.warn('[CruiseDetails] Error calculating nights from dates:', e);
+      } catch (error) {
+        console.log('[CruiseDetails] Failed to calculate nights from dates', error);
       }
     }
-    
+
     return cruise.nights || 0;
   }, [cruise]);
 
-  const _itineraryDisplay = useMemo((): { days: { day: number; port: string; isSeaDay: boolean }[]; needsManualEntry: boolean; source: string } => {
-    if (!cruise) return { days: [], needsManualEntry: true, source: 'none' };
-    
-    const totalDays = accurateNights + 1;
-    const result: { day: number; port: string; isSeaDay: boolean }[] = [];
-    let source = 'none';
-    let needsManualEntry = false;
-    
-    console.log('[CruiseDetails] Starting itinerary lookup for cruise:', {
-      cruiseId: cruise.id,
-      shipName: cruise.shipName,
-      sailDate: cruise.sailDate,
-      hasItinerary: !!cruise.itinerary?.length,
-      hasPortsAndTimes: !!cruise.portsAndTimes,
-      hasPorts: !!cruise.ports?.length,
-      linkedOfferCode: cruise.offerCode,
-      linkedOfferHasPortsAndTimes: !!linkedOffer?.portsAndTimes,
-      linkedOfferHasPorts: !!linkedOffer?.ports?.length,
-    });
-    
-    const determineSeaDay = (port: string): boolean => {
-      const normalizedPort = port.toLowerCase().trim();
-      return normalizedPort === 'at sea' || 
-             normalizedPort === 'sea day' ||
-             normalizedPort === 'cruising' ||
-             normalizedPort.includes('sea day') ||
-             normalizedPort.includes('at sea');
-    };
-    
-    const parsePortsAndTimes = (portsAndTimes: string): { day: number; port: string; isSeaDay: boolean }[] => {
-      const parsed: { day: number; port: string; isSeaDay: boolean }[] = [];
-      const lines = portsAndTimes.split(/\r?\n/).filter((line: string) => line.trim());
-      lines.forEach((line: string, index: number) => {
-        const parts = line.split(/[;|\t]/).map((p: string) => p.trim());
-        const port = parts[0] || '';
-        if (port) {
-          parsed.push({
-            day: index + 1,
-            port,
-            isSeaDay: determineSeaDay(port),
-          });
-        }
-      });
-      return parsed;
-    };
-    
-    // Check cruise.itinerary first (structured data)
-    if (cruise.itinerary && cruise.itinerary.length > 0) {
-      source = 'cruise.itinerary';
-      cruise.itinerary.forEach((day: ItineraryDay) => {
-        result.push({
-          day: day.day,
-          port: day.port,
-          isSeaDay: day.isSeaDay || determineSeaDay(day.port),
-        });
-      });
-    } 
-    // Check cruise.portsAndTimes (raw string)
-    else if (cruise.portsAndTimes) {
-      source = 'cruise.portsAndTimes';
-      const parsed = parsePortsAndTimes(cruise.portsAndTimes);
-      result.push(...parsed);
-    } 
-    // Check linkedOffer.portsAndTimes
-    else if (linkedOffer?.portsAndTimes) {
-      source = 'linkedOffer.portsAndTimes';
-      const parsed = parsePortsAndTimes(linkedOffer.portsAndTimes);
-      result.push(...parsed);
-    } 
-    // Check cruise.itineraryRaw (array of strings)
-    else if (cruise.itineraryRaw && cruise.itineraryRaw.length > 0) {
-      source = 'cruise.itineraryRaw';
-      cruise.itineraryRaw.forEach((port: string, index: number) => {
-        result.push({
-          day: index + 1,
-          port,
-          isSeaDay: determineSeaDay(port),
-        });
-      });
-    } 
-    // Check cruise.ports (array of port names)
-    else if (cruise.ports && cruise.ports.length > 0) {
-      source = 'cruise.ports';
-      cruise.ports.forEach((port: string, index: number) => {
-        result.push({
-          day: index + 1,
-          port,
-          isSeaDay: determineSeaDay(port),
-        });
-      });
-    } 
-    // Check linkedOffer.ports
-    else if (linkedOffer?.ports && linkedOffer.ports.length > 0) {
-      source = 'linkedOffer.ports';
-      linkedOffer.ports.forEach((port: string, index: number) => {
-        result.push({
-          day: index + 1,
-          port,
-          isSeaDay: determineSeaDay(port),
-        });
-      });
-    } 
-    // Search all offers in both localData and storeOffers
-    else {
-      // Combine all offers from both sources
-      const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
-      
-      // Try to find an offer matching ship and date
-      const matchingOffer = allOffers.find(o => {
-        const shipMatch = o.shipName === cruise.shipName || 
-                         o.shipName?.toLowerCase().includes(cruise.shipName?.toLowerCase().split(' ')[0] || '');
-        const dateMatch = o.sailingDate === cruise.sailDate;
-        const hasItineraryData = o.portsAndTimes || (o.ports && o.ports.length > 0);
-        return shipMatch && dateMatch && hasItineraryData;
-      });
-      
-      // Also try matching by offer code
-      const offerByCode = cruise.offerCode ? allOffers.find(o => 
-        o.offerCode === cruise.offerCode && (o.portsAndTimes || (o.ports && o.ports.length > 0))
-      ) : null;
-      
-      const fallbackOffer = matchingOffer || offerByCode;
-      
-      if (fallbackOffer?.portsAndTimes) {
-        source = 'fallbackOffer.portsAndTimes';
-        const parsed = parsePortsAndTimes(fallbackOffer.portsAndTimes);
-        result.push(...parsed);
-        console.log('[CruiseDetails] Found itinerary in fallback offer:', fallbackOffer.offerCode);
-      } else if (fallbackOffer?.ports && fallbackOffer.ports.length > 0) {
-        source = 'fallbackOffer.ports';
-        fallbackOffer.ports.forEach((port: string, index: number) => {
-          result.push({
-            day: index + 1,
-            port,
-            isSeaDay: determineSeaDay(port),
-          });
-        });
-        console.log('[CruiseDetails] Found ports in fallback offer:', fallbackOffer.offerCode);
-      }
-    }
-    
-    if (result.length === 0 || cruise.itineraryNeedsManualEntry) {
-      needsManualEntry = true;
-      source = 'manual_entry_required';
-      console.log('[CruiseDetails] No itinerary data found, flagging for manual entry:', {
-        cruiseId: cruise.id,
-        shipName: cruise.shipName,
-        sailDate: cruise.sailDate,
-        nights: cruise.nights,
-        checkedSources: ['cruise.itinerary', 'cruise.portsAndTimes', 'linkedOffer', 'cruise.itineraryRaw', 'cruise.ports', 'allOffers'],
-      });
-    } else if (result.length < totalDays) {
-      console.log('[CruiseDetails] Itinerary incomplete:', {
-        actualDays: result.length,
-        expectedDays: totalDays,
-        source,
-      });
-    }
-    
-    console.log('[CruiseDetails] Itinerary resolved:', { source, days: result.length, needsManualEntry });
-    return { days: result, needsManualEntry, source };
-  }, [cruise, linkedOffer, storeOffers, localData.offers, accurateNights]);
-
   const cruiseDetails = useMemo(() => {
-    if (!cruise) return null;
-    const displayPrice = cruise.balconyPrice || cruise.oceanviewPrice || cruise.interiorPrice || cruise.price || 0;
+    if (!cruise) {
+      return null;
+    }
+
     const retailPrice = cruise.retailValue || cruise.originalPrice || 0;
+    const displayPrice = cruise.balconyPrice || cruise.oceanviewPrice || cruise.interiorPrice || cruise.price || 0;
     const daysUntil = getDaysUntil(cruise.sailDate);
-    const savings = retailPrice > displayPrice ? retailPrice - displayPrice : 0;
-    const hasPerks = cruise.freeOBC || cruise.freeGratuities || cruise.freeDrinkPackage || cruise.freeWifi || cruise.freeSpecialtyDining;
+    const hasPerks = !!(
+      cruise.freeOBC
+      || cruise.freeGratuities
+      || cruise.freeDrinkPackage
+      || cruise.freeWifi
+      || cruise.freeSpecialtyDining
+    );
     const isBooked = 'reservationNumber' in cruise || 'bookingId' in cruise;
-    return { displayPrice, retailPrice, daysUntil, savings, hasPerks, isBooked };
+
+    return {
+      displayPrice,
+      retailPrice,
+      daysUntil,
+      hasPerks,
+      isBooked,
+    };
   }, [cruise]);
 
   const valueBreakdown = useMemo(() => {
-    if (!cruise) return null;
+    if (!cruise) {
+      return null;
+    }
+
     return getCruiseValueBreakdown(cruise);
   }, [cruise, getCruiseValueBreakdown]);
 
   const casinoAvailability = useMemo(() => {
-    if (!cruise) return null;
+    if (!cruise) {
+      return null;
+    }
+
     return getCruiseCasinoAvailability(cruise);
   }, [cruise, getCruiseCasinoAvailability]);
 
-  const itineraryDays = useMemo((): ItineraryDay[] => {
+  const itineraryDays = useMemo(() => {
     if (!cruise) {
       return [];
     }
 
     return getResolvedCruiseItinerary(cruise, [...(storeOffers || []), ...(localData.offers || [])]);
-  }, [cruise, storeOffers, localData.offers]);
-
-  const _casinoStatusBadge = useMemo(() => {
-    if (!casinoAvailability) return null;
-    return getCasinoStatusBadge(casinoAvailability.casinoOpenDays, casinoAvailability.totalDays);
-  }, [casinoAvailability]);
+  }, [cruise, localData.offers, storeOffers]);
 
   const personalizedPlayEstimate = useMemo((): PersonalizedPlayEstimate | null => {
-    if (!casinoAvailability) return null;
+    if (!casinoAvailability) {
+      return null;
+    }
+
     return calculatePersonalizedPlayEstimate(casinoAvailability, playingHoursConfig);
   }, [casinoAvailability, playingHoursConfig]);
 
-  const _expectedPointsCalculation = useMemo(() => {
-    if (!cruise || !casinoAvailability || completedCruises.length === 0) {
-      return null;
-    }
-
-    let totalPoints = 0;
-    let totalNights = 0;
-    let totalCasinoDays = 0;
-    let totalCasinoHours = 0;
-    let cruisesWithPoints = 0;
-
-    completedCruises.forEach((c: BookedCruise) => {
-      const points = c.earnedPoints || c.casinoPoints || 0;
-      if (points > 0) {
-        totalPoints += points;
-        totalNights += c.nights || 0;
-        cruisesWithPoints++;
-        
-        const completedCasinoAvail = getCruiseCasinoAvailability(c);
-        totalCasinoDays += completedCasinoAvail.casinoOpenDays;
-        totalCasinoHours += completedCasinoAvail.estimatedCasinoHours;
-      }
-    });
-
-    if (cruisesWithPoints === 0 || totalCasinoDays === 0) {
-      return null;
-    }
-
-    const avgPointsPerNight = totalNights > 0 ? totalPoints / totalNights : 0;
-    const avgPointsPerCasinoDay = totalCasinoDays > 0 ? totalPoints / totalCasinoDays : 0;
-    const avgPointsPerCasinoHour = totalCasinoHours > 0 ? totalPoints / totalCasinoHours : 0;
-    
-    const expectedPointsByNights = Math.round(avgPointsPerNight * cruise.nights);
-    const expectedPointsByCasinoDays = Math.round(avgPointsPerCasinoDay * casinoAvailability.casinoOpenDays);
-    const expectedPointsByHours = Math.round(avgPointsPerCasinoHour * casinoAvailability.estimatedCasinoHours);
-
-    console.log('[CruiseDetails] Expected points calculation:', {
-      totalPoints,
-      totalNights,
-      totalCasinoDays,
-      totalCasinoHours,
-      avgPointsPerNight,
-      avgPointsPerCasinoDay,
-      avgPointsPerCasinoHour,
-      cruiseNights: cruise.nights,
-      cruiseCasinoDays: casinoAvailability.casinoOpenDays,
-      cruiseCasinoHours: casinoAvailability.estimatedCasinoHours,
-      expectedPointsByNights,
-      expectedPointsByCasinoDays,
-      expectedPointsByHours,
-    });
-
-    return {
-      avgPointsPerNight: Math.round(avgPointsPerNight),
-      avgPointsPerCasinoDay: Math.round(avgPointsPerCasinoDay),
-      avgPointsPerCasinoHour: Math.round(avgPointsPerCasinoHour),
-      expectedPointsByNights,
-      expectedPointsByCasinoDays,
-      expectedPointsByHours,
-      basedOnCruises: cruisesWithPoints,
-    };
-  }, [cruise, casinoAvailability, completedCruises, getCruiseCasinoAvailability]);
-
   const openFullEditModal = () => {
-    if (!cruise) return;
+    if (!cruise) {
+      return;
+    }
+
     setEditForm({
       shipName: cruise.shipName || '',
       departurePort: cruise.departurePort || '',
@@ -527,47 +304,47 @@ export default function CruiseDetailsScreen() {
       balconyPrice: String(cruise.balconyPrice || ''),
       suitePrice: String(cruise.suitePrice || ''),
       taxes: String(cruise.taxes || ''),
-      bwoNumber: String((cruise as any).bwoNumber || ''),
+      bwoNumber: String((cruise as BookedCruise & { bwoNumber?: string }).bwoNumber || ''),
       freeOBC: String(cruise.freeOBC || linkedOffer?.OBC || linkedOffer?.obcAmount || ''),
       freePlay: String(cruise.freePlay || linkedOffer?.freePlay || linkedOffer?.freeplayAmount || ''),
       freeGratuities: cruise.freeGratuities || false,
       freeDrinkPackage: cruise.freeDrinkPackage || false,
       freeWifi: cruise.freeWifi || false,
       freeSpecialtyDining: cruise.freeSpecialtyDining || false,
-      singleOccupancy: (cruise as BookedCruise).singleOccupancy !== false,
-      winnings: String((cruise as any).winnings || ''),
-      earnedPoints: String((cruise as any).earnedPoints || (cruise as any).casinoPoints || ''),
+      singleOccupancy: (cruise as BookedCruise & { singleOccupancy?: boolean }).singleOccupancy !== false,
+      winnings: String((cruise as BookedCruise & { winnings?: number }).winnings || ''),
+      earnedPoints: String((cruise as BookedCruise & { earnedPoints?: number; casinoPoints?: number }).earnedPoints || (cruise as BookedCruise & { earnedPoints?: number; casinoPoints?: number }).casinoPoints || ''),
       amountPaid: String(cruise.totalPrice || cruise.price || ''),
       tradeInValue: String(cruise.tradeInValue || linkedOffer?.tradeInValue || ''),
-      nextCruiseCertificate: String((cruise as any).nextCruiseCertificate || ''),
+      nextCruiseCertificate: String((cruise as BookedCruise & { nextCruiseCertificate?: number }).nextCruiseCertificate || ''),
     });
+
     setFullEditModalVisible(true);
   };
 
   const saveFullEdit = () => {
-    if (!cruise) return;
-    
-    const newNights = parseInt(editForm.nights) || cruise.nights;
+    if (!cruise) {
+      return;
+    }
+
+    const newNights = parseInt(editForm.nights, 10) || cruise.nights;
     const newSailDate = editForm.sailDate || cruise.sailDate;
-    
-    let newReturnDate = cruise.returnDate;
+    let newReturnDate = (cruise as BookedCruise).returnDate;
+
     if (newSailDate !== cruise.sailDate || newNights !== cruise.nights) {
       try {
-        const sailDateObj = createDateFromString(newSailDate);
-        if (sailDateObj && !isNaN(sailDateObj.getTime())) {
-          const returnDateObj = new Date(sailDateObj);
-          returnDateObj.setDate(returnDateObj.getDate() + newNights);
-          const mm = String(returnDateObj.getMonth() + 1).padStart(2, '0');
-          const dd = String(returnDateObj.getDate()).padStart(2, '0');
-          const yyyy = returnDateObj.getFullYear();
-          newReturnDate = `${mm}-${dd}-${yyyy}`;
-          console.log('[CruiseDetails] Recalculated returnDate:', newReturnDate);
-        }
-      } catch (e) {
-        console.warn('[CruiseDetails] Failed to recalculate returnDate:', e);
+        const sailDate = createDateFromString(newSailDate);
+        const returnDate = new Date(sailDate);
+        returnDate.setDate(returnDate.getDate() + newNights);
+        const mm = String(returnDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(returnDate.getDate()).padStart(2, '0');
+        const yyyy = String(returnDate.getFullYear());
+        newReturnDate = `${mm}-${dd}-${yyyy}`;
+      } catch (error) {
+        console.log('[CruiseDetails] Failed to recalculate return date', error);
       }
     }
-    
+
     const updatedCruise = {
       ...cruise,
       shipName: editForm.shipName || cruise.shipName,
@@ -578,7 +355,7 @@ export default function CruiseDetailsScreen() {
       sailDate: newSailDate,
       returnDate: newReturnDate,
       cabinType: editForm.cabinType || cruise.cabinType,
-      guests: parseInt(editForm.guests) || cruise.guests || 2,
+      guests: parseInt(editForm.guests, 10) || cruise.guests || 2,
       interiorPrice: parseFloat(editForm.interiorPrice) || 0,
       oceanviewPrice: parseFloat(editForm.oceanviewPrice) || 0,
       balconyPrice: parseFloat(editForm.balconyPrice) || 0,
@@ -600,30 +377,50 @@ export default function CruiseDetailsScreen() {
       tradeInValue: parseFloat(editForm.tradeInValue) || 0,
       nextCruiseCertificate: parseFloat(editForm.nextCruiseCertificate) || 0,
     };
-    
-    console.log('[CruiseDetails] Saving full edit:', updatedCruise);
+
+    console.log('[CruiseDetails] Saving full edit', {
+      cruiseId: updatedCruise.id,
+      shipName: updatedCruise.shipName,
+    });
+
     updateCruise(updatedCruise);
     setFullEditModalVisible(false);
   };
 
   const handleBookCruise = () => {
-    if (!cruise) return;
-    
-    const bookedCruise = {
+    if (!cruise) {
+      return;
+    }
+
+    const bookedCruise: BookedCruise = {
       ...cruise,
       id: cruise.id || `booked-${Date.now()}`,
       bookingId: `booking-${Date.now()}`,
       reservationNumber: `RES-${Date.now().toString().slice(-6)}`,
-      status: 'booked' as const,
-      isBooked: true,
+      status: 'booked',
       earnedPoints: 0,
       casinoPoints: 0,
       winnings: 0,
     };
-    
-    console.log('[CruiseDetails] Booking cruise:', bookedCruise);
+
+    console.log('[CruiseDetails] Booking cruise', {
+      cruiseId: bookedCruise.id,
+      shipName: bookedCruise.shipName,
+    });
+
     addBookedCruise(bookedCruise);
     router.back();
+  };
+
+  const openCasinoEditModal = () => {
+    if (!cruise) {
+      return;
+    }
+
+    const bookedCruise = cruise as BookedCruise & { winnings?: number; earnedPoints?: number; casinoPoints?: number };
+    setEditWinnings(String(bookedCruise.winnings || 0));
+    setEditPoints(String(bookedCruise.earnedPoints || bookedCruise.casinoPoints || 0));
+    setEditModalVisible(true);
   };
 
   if (!cruise || !cruiseDetails) {
@@ -674,672 +471,25 @@ export default function CruiseDetailsScreen() {
         end={{ x: 0.88, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <View style={styles.heroPlaceholder}>
-          <Image
-            source={{ uri: heroImageUri }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-            onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)}
-          />
-          <LinearGradient
-            colors={['rgba(255,255,255,0.08)', 'rgba(240,248,255,0.54)']}
-            style={StyleSheet.absoluteFill}
-          />
-          {isBooked && (
-            <View style={styles.bookedBadge}>
-              <Text style={styles.bookedBadgeText}>BOOKED</Text>
-            </View>
-          )}
-          <View style={styles.heroButtonsContainer}>
-            <TouchableOpacity 
-              style={styles.editAllButton} 
-              onPress={openFullEditModal}
-              activeOpacity={0.7}
-            >
-              <Edit3 size={18} color={COLORS.white} />
-              <Text style={styles.editAllButtonText}>Edit</Text>
-            </TouchableOpacity>
-            
-            {!isBooked ? (
-              <TouchableOpacity 
-                style={styles.bookHeaderButton} 
-                activeOpacity={0.8}
-                onPress={handleBookCruise}
-                testID="book-cruise-button"
-              >
-                <Text style={styles.bookHeaderButtonText}>Book</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity 
-                style={styles.unbookHeaderButton} 
-                activeOpacity={0.8}
-                onPress={() => setUnbookModalVisible(true)}
-                testID="unbook-cruise-button"
-              >
-                <Trash2 size={16} color={COLORS.white} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-        <View style={styles.content}>
-          <View style={styles.headerSection}>
-            <View style={styles.shipRow}>
-              <Ship size={24} color={COLORS.beigeWarm} />
-              <Text style={styles.shipName}>{cruise.shipName}</Text>
-            </View>
-            <Text style={styles.destination}>{cruise.itineraryName || cruise.destination || 'Cruise'}</Text>
-            
-            {!!(linkedOffer?.offerName || linkedOffer?.title || cruise.offerCode) && (
-              <View style={styles.offerNameContainer}>
-                <Sparkles size={16} color={COLORS.goldDark} />
-                <Text style={styles.offerNameText}>
-                  {linkedOffer?.offerName || linkedOffer?.title || `Offer ${cruise.offerCode}`}
-                </Text>
-              </View>
-            )}
-            
-            {cruise.offerCode && (
-              <View style={styles.offerCodeBadge}>
-                <Tag size={14} color={COLORS.beigeWarm} />
-                <Text style={styles.offerCodeText}>{cruise.offerCode}</Text>
-              </View>
-            )}
-            
-            {daysUntil > 0 && (
-              <View style={styles.countdownContainer}>
-                <Clock size={16} color={COLORS.beigeWarm} />
-                <Text style={styles.countdown}>{daysUntil} days until departure</Text>
-              </View>
-            )}
-          </View>
 
-          <View style={styles.compactFactsRow} testID="cruise-facts-card">
-            <CompactFact icon={Calendar} value={formatDate(cruise.sailDate, 'short')} />
-            <Text style={styles.factDivider}>•</Text>
-            <CompactFact icon={Clock} value={formatNights(accurateNights)} />
-            <Text style={styles.factDivider}>•</Text>
-            <CompactFact icon={MapPin} value={cruise.departurePort || 'TBD'} />
-          </View>
-          <View style={styles.compactFactsRow}>
-            <CompactFact icon={Users} value={`${cruise.guests || 2} guests`} />
-            <Text style={styles.factDivider}>•</Text>
-            <CompactFact icon={Anchor} value={cruise.cabinType || 'TBD'} />
-            <Text style={styles.factDivider}>•</Text>
-            <CompactFact icon={Dice5} value={casinoAvailability ? `${casinoAvailability.casinoOpenDays}/${casinoAvailability.totalDays} casino` : '—'} />
-          </View>
-
-          {isBooked && (
-            <View style={styles.cruiseDetailsSection}>
-              <View style={styles.sectionHeader}>
-                <Ship size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitle}>Cruise Details</Text>
-              </View>
-              
-              <View style={styles.detailsGrid}>
-                <View style={styles.detailRow} testID="cruise-detail-booking-id">
-                  <Text style={styles.detailRowLabel}>Booking ID</Text>
-                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).bookingId ?? '—'}</Text>
-                </View>
-
-                <View style={styles.detailRow} testID="cruise-detail-reservation-number">
-                  <Text style={styles.detailRowLabel}>Reservation #</Text>
-                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).reservationNumber ?? '—'}</Text>
-                </View>
-
-                <View style={styles.detailRow} testID="cruise-detail-package-code">
-                  <Text style={styles.detailRowLabel}>Package Code</Text>
-                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).packageCode ?? '—'}</Text>
-                </View>
-
-                <View style={styles.detailRow} testID="cruise-detail-passenger-status">
-                  <Text style={styles.detailRowLabel}>Passenger Status</Text>
-                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).passengerStatus ?? '—'}</Text>
-                </View>
-
-                <View style={styles.detailRow} testID="cruise-detail-stateroom-number">
-                  <Text style={styles.detailRowLabel}>Stateroom #</Text>
-                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomNumber ?? '—'}</Text>
-                </View>
-
-                <View style={styles.detailRow} testID="cruise-detail-stateroom-category-code">
-                  <Text style={styles.detailRowLabel}>Stateroom Category</Text>
-                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomCategoryCode ?? '—'}</Text>
-                </View>
-
-                <View style={styles.detailRow} testID="cruise-detail-stateroom-type">
-                  <Text style={styles.detailRowLabel}>Stateroom Type</Text>
-                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).stateroomType ?? '—'}</Text>
-                </View>
-
-                <View style={styles.detailRow} testID="cruise-detail-deck-number">
-                  <Text style={styles.detailRowLabel}>Deck</Text>
-                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).deckNumber ?? '—'}</Text>
-                </View>
-
-                <View style={styles.detailRow} testID="cruise-detail-muster-station">
-                  <Text style={styles.detailRowLabel}>Muster Station</Text>
-                  <Text style={styles.detailRowValue}>{(cruise as BookedCruise).musterStation ?? '—'}</Text>
-                </View>
-                
-                {(cruise as BookedCruise).bookingStatus && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailRowLabel}>Booking Status</Text>
-                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).bookingStatus}</Text>
-                  </View>
-                )}
-                
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailRowLabel}>Paid in Full</Text>
-                  <Text style={styles.detailRowValue}>
-                    {(cruise as any).paidInFull === 'Yes' || (cruise as any).paidInFull === true ? 'Yes' : 'No'}
-                  </Text>
-                </View>
-                
-                {((cruise as any).balanceDue && parseFloat((cruise as any).balanceDue) > 0) && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailRowLabel}>Balance Due</Text>
-                    <Text style={[styles.detailRowValue, { color: COLORS.error }]}>
-                      {formatCurrency(parseFloat((cruise as any).balanceDue))}
-                    </Text>
-                  </View>
-                )}
-                
-                {cruise.guests && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailRowLabel}>Number of Guests</Text>
-                    <Text style={styles.detailRowValue}>{cruise.guests}</Text>
-                  </View>
-                )}
-                
-                {(cruise as BookedCruise).guestNames && (cruise as BookedCruise).guestNames!.length > 0 && (
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailRowLabel}>Guests</Text>
-                    <Text style={styles.detailRowValue}>{(cruise as BookedCruise).guestNames!.join(', ')}</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
-
-          {((cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 || (cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0) && (
-            <View style={styles.fpObcQuickView}>
-              {(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 && (
-                <View style={styles.fpQuickBadge}>
-                  <Text style={styles.fpQuickLabel}>FreePlay</Text>
-                  <Text style={styles.fpQuickValue}>${(cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0).toLocaleString()}</Text>
-                </View>
-              )}
-              {(cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0 && (
-                <View style={styles.obcQuickBadge}>
-                  <Text style={styles.obcQuickLabel}>OBC</Text>
-                  <Text style={styles.obcQuickValue}>${(cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0).toLocaleString()}</Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {(cruise.interiorPrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Interior</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.interiorPrice ?? 0)}</Text>
-            </View>
-          )}
-
-          {(cruise.oceanviewPrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Oceanview</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.oceanviewPrice ?? 0)}</Text>
-            </View>
-          )}
-
-          {(cruise.balconyPrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Balcony</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.balconyPrice ?? 0)}</Text>
-            </View>
-          )}
-
-          {(cruise.suitePrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Suite</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.suitePrice ?? 0)}</Text>
-            </View>
-          )}
-
-          {(cruise.taxes ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Port Taxes & Fees</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.taxes ?? 0)}</Text>
-            </View>
-          )}
-
-          {isBooked && (
-            <TouchableOpacity 
-              style={styles.bwoFpObcCard} 
-              onPress={openFullEditModal}
-              activeOpacity={0.7}
-              testID="bwo-fp-obc-section"
-            >
-              <View style={styles.bwoFpObcHeader}>
-                <Text style={styles.bwoFpObcTitle}>Cruise Receipt Details</Text>
-                <Edit3 size={14} color={COLORS.textSecondary} />
-              </View>
-              {((cruise as any).bwoNumber || (cruise.freePlay ?? 0) > 0 || (cruise.freeOBC ?? 0) > 0) ? (
-                <View style={styles.bwoFpObcRow}>
-                  {(cruise as any).bwoNumber ? (
-                    <View style={styles.bwoChip}>
-                      <Text style={styles.bwoLabel}>BWO#</Text>
-                      <Text style={styles.bwoValue}>{(cruise as any).bwoNumber}</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.bwoChipEmpty}>
-                      <Text style={styles.bwoLabelEmpty}>BWO#</Text>
-                      <Text style={styles.bwoValueEmpty}>—</Text>
-                    </View>
-                  )}
-                  <View style={(cruise.freePlay ?? 0) > 0 ? styles.fpChip : styles.fpChipEmpty}>
-                    <Text style={(cruise.freePlay ?? 0) > 0 ? styles.fpChipLabel : styles.fpChipLabelEmpty}>FreePlay</Text>
-                    <Text style={(cruise.freePlay ?? 0) > 0 ? styles.fpChipValue : styles.fpChipValueEmpty}>
-                      {(cruise.freePlay ?? 0) > 0 ? `${(cruise.freePlay ?? 0).toLocaleString()}` : '—'}
-                    </Text>
-                  </View>
-                  <View style={(cruise.freeOBC ?? 0) > 0 ? styles.obcChip : styles.obcChipEmpty}>
-                    <Text style={(cruise.freeOBC ?? 0) > 0 ? styles.obcChipLabel : styles.obcChipLabelEmpty}>OBC</Text>
-                    <Text style={(cruise.freeOBC ?? 0) > 0 ? styles.obcChipValue : styles.obcChipValueEmpty}>
-                      {(cruise.freeOBC ?? 0) > 0 ? `${(cruise.freeOBC ?? 0).toLocaleString()}` : '—'}
-                    </Text>
-                  </View>
-                </View>
-              ) : (
-                <Text style={styles.bwoFpObcPlaceholder}>Tap to add BWO#, FreePlay, or OBC from your receipt</Text>
-              )}
-            </TouchableOpacity>
-          )}
-
-          {isBooked && (
-            <View style={styles.compactCasinoCard}>
-              <View style={styles.casinoResultsRow}>
-                <View style={styles.casinoResultCol}>
-                  <Text style={styles.casinoResultLabel}>Win/Loss</Text>
-                  <Text style={[
-                    styles.casinoResultValue,
-                    { color: ((cruise as any).winnings || 0) >= 0 ? COLORS.success : COLORS.error }
-                  ]}>
-                    {((cruise as any).winnings || 0) >= 0 ? '+' : ''}{formatCurrency((cruise as any).winnings || 0)}
-                  </Text>
-                </View>
-                <View style={styles.casinoResultCol}>
-                  <Text style={styles.casinoResultLabel}>Points</Text>
-                  <Text style={[styles.casinoResultValue, { color: COLORS.points }]}>
-                    {((cruise as any).earnedPoints || (cruise as any).casinoPoints || 0).toLocaleString()}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.casinoEditButton}
-                  onPress={() => {
-                    console.log('[CruiseDetails] Opening edit modal for cruise:', cruise);
-                    const bookedCruise = cruise as any;
-                    setEditWinnings(String(bookedCruise.winnings || 0));
-                    setEditPoints(String(bookedCruise.earnedPoints || bookedCruise.casinoPoints || 0));
-                    setEditModalVisible(true);
-                  }}
-                  testID="edit-casino-stats-button"
-                >
-                  <Edit3 size={16} color={COLORS.navyDeep} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {(hasPerks || cruise.offerCode || (cruise as any).offerCode) && (
-            <View style={styles.offersSectionCompact}>
-              <View style={styles.sectionHeaderCompact}>
-                <Gift size={16} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitleCompact}>Special Offers & Perks</Text>
-              </View>
-              
-              <View style={styles.offersCompactContent}>
-                {(cruise.offerCode || (cruise as any).offerCode) && (
-                  <View style={styles.offerItemCompact}>
-                    <Sparkles size={12} color={COLORS.goldDark} />
-                    <Text style={styles.offerTextCompact}>{cruise.offerCode || (cruise as any).offerCode}</Text>
-                  </View>
-                )}
-                {cruise.freeGratuities && (
-                  <View style={styles.offerItemCompact}>
-                    <Star size={12} color={COLORS.success} />
-                    <Text style={styles.offerTextCompact}>Gratuities</Text>
-                  </View>
-                )}
-                {cruise.freeDrinkPackage && (
-                  <View style={styles.offerItemCompact}>
-                    <Star size={12} color={COLORS.success} />
-                    <Text style={styles.offerTextCompact}>Drinks</Text>
-                  </View>
-                )}
-                {cruise.freeWifi && (
-                  <View style={styles.offerItemCompact}>
-                    <Star size={12} color={COLORS.success} />
-                    <Text style={styles.offerTextCompact}>WiFi</Text>
-                  </View>
-                )}
-                {cruise.freeSpecialtyDining && (
-                  <View style={styles.offerItemCompact}>
-                    <Star size={12} color={COLORS.success} />
-                    <Text style={styles.offerTextCompact}>Specialty Dining</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
-
-          {isBooked && (cruise as BookedCruise).bookingId && (
-            <View style={styles.payloadDetailsSection}>
-              <View style={styles.sectionHeader}>
-                <Ship size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitle}>Booking Details</Text>
-              </View>
-              
-              <View style={styles.payloadGrid}>
-                {(cruise as any).bookingChannel && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Booking Channel</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).bookingChannel}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).bookingCurrency && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Currency</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).bookingCurrency}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).bookingOfficeCountryCode && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Office Country</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).bookingOfficeCountryCode}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).bookingType && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Booking Type</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).bookingType}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).brand && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Brand</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).brand}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).consumerId && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Consumer ID</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).consumerId}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).grantorPassengerId && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Grantor Passenger</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).grantorPassengerId}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).lastName && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Last Name</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).lastName}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).linkFlow && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Link Flow</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).linkFlow}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).linkType && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Link Type</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).linkType}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).masterBookingId && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Master Booking ID</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).masterBookingId}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).masterPassengerId && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Master Passenger ID</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).masterPassengerId}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).numberOfNights !== undefined && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Number of Nights</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).numberOfNights}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).officeCode && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Office Code</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).officeCode}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).passengerId && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Passenger ID</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).passengerId}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).passengersInStateroom !== undefined && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Passengers in Stateroom</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).passengersInStateroom}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).preferred !== undefined && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Preferred</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).preferred ? 'Yes' : 'No'}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).shipCode && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Ship Code</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).shipCode}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).stateroomDescription && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Stateroom Description</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).stateroomDescription}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).stateroomSubtype && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Stateroom Subtype</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).stateroomSubtype}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).stateroomType && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Stateroom Type</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).stateroomType}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).isDirect !== undefined && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Is Direct</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).isDirect ? 'Yes' : 'No'}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).isBoardingExpressEnabled !== undefined && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Boarding Express</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).isBoardingExpressEnabled ? 'Enabled' : 'Disabled'}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).isInternationalBooking !== undefined && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>International Booking</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).isInternationalBooking ? 'Yes' : 'No'}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).amendToken && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Amend Token</Text>
-                    <Text style={styles.payloadValue} numberOfLines={1}>{(cruise as any).amendToken}</Text>
-                  </View>
-                )}
-                
-                {(cruise as any).passengers && Array.isArray((cruise as any).passengers) && (
-                  <View style={styles.payloadRow}>
-                    <Text style={styles.payloadLabel}>Passengers</Text>
-                    <Text style={styles.payloadValue}>{(cruise as any).passengers.length} guest(s)</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
-
-          {casinoAvailability && (
-            <LinearGradient
-              colors={PAGE_MARBLE_COLORS}
-              locations={PAGE_MARBLE_LOCATIONS}
-              start={{ x: 0.02, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.casinoSectionCompact}
-            >
-              <View style={styles.sectionHeaderCompact}>
-                <MapPin size={16} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitleCompact}>Itinerary & Casino</Text>
-              </View>
-              
-              <View style={styles.casinoStatsRow}>
-                <View style={styles.casinoStatBox}>
-                  <Text style={styles.casinoStatBoxLabel}>Casino</Text>
-                  <Text style={styles.casinoStatBoxValue}>{casinoAvailability.casinoOpenDays}d</Text>
-                </View>
-                <View style={styles.casinoStatBox}>
-                  <Text style={styles.casinoStatBoxLabel}>Sea Days</Text>
-                  <Text style={styles.casinoStatBoxValue}>{casinoAvailability.seaDays}d</Text>
-                </View>
-                <View style={styles.casinoStatBox}>
-                  <Text style={styles.casinoStatBoxLabel}>Est Pts</Text>
-                  <Text style={styles.casinoStatBoxValue}>~{((personalizedPlayEstimate?.estimatedPoints || 0) / 1000).toFixed(1)}k</Text>
-                </View>
-              </View>
-
-              <View style={styles.itineraryCompactList}>
-                {itineraryDays.map((day) => {
-                  const availability = casinoAvailability.dailyAvailability.find((entry) => entry.day === day.day);
-                  const casinoOpen = availability?.casinoOpen ?? day.isSeaDay;
-
-                  return (
-                    <View key={`${day.day}-${day.port}`} style={styles.itineraryDayCompact}>
-                      <Text style={styles.itineraryDayNumber}>D{day.day}</Text>
-                      <View style={styles.itineraryCompactDayContent}>
-                        <Text style={styles.itineraryDayPortCompact} numberOfLines={1}>
-                          {day.isSeaDay ? 'At Sea' : day.port}
-                        </Text>
-                        <Text style={styles.itineraryDayMeta} numberOfLines={1}>
-                          {getItineraryMetaText(day)}
-                        </Text>
-                      </View>
-                      <View style={styles.itineraryDayStatus}>
-                        <View style={[styles.casinoDotIndicator, { backgroundColor: casinoOpen ? COLORS.success : COLORS.error }]} />
-                        <Text style={styles.itineraryDayStatusText}>{casinoOpen ? 'Open' : 'Closed'}</Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            </LinearGradient>
-          )}
-
-          {valueBreakdown && (
-            <View style={styles.valueSection}>
-              <View style={styles.sectionHeader}>
-                <DollarSign size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitle}>Value Summary</Text>
-                <TouchableOpacity
-                  style={styles.editValueButton}
-                  onPress={openFullEditModal}
-                >
-                  <Edit3 size={14} color={COLORS.beigeWarm} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.valueCompactGrid}>
-                <View style={styles.valueCompactRow}>
-                  <Text style={styles.valueCompactLabel}>Retail</Text>
-                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown.totalRetailValue)}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.valueCompactRow}
-                  onPress={openFullEditModal}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.valueCompactLabelWithIcon}>
-                    <Text style={styles.valueCompactLabel}>Paid</Text>
-                    <Edit3 size={10} color={COLORS.textSecondary} />
-                  </View>
-                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown.amountPaid)}</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.valueNetRow}>
-                <Text style={styles.valueNetLabel}>Net Value</Text>
-                <Text style={[styles.valueNetAmount, { color: valueBreakdown.netValue >= 0 ? COLORS.success : COLORS.error }]}>
-                  {valueBreakdown.netValue >= 0 ? '+' : ''}{formatCurrency(valueBreakdown.netValue)}
-                </Text>
-              </View>
-              
-              <View style={styles.coverageBar}>
-                <View 
-                  style={[
-                    styles.coverageFill, 
-                    { width: `${Math.min(100, valueBreakdown.coverageFraction * 100)}%` }
-                  ]} 
-                />
-              </View>
-              <Text style={styles.coverageText}>
-                {(valueBreakdown.coverageFraction * 100).toFixed(0)}% Coverage
-                {valueBreakdown.isFullyComped && ' • Fully Comped!'}
-              </Text>
-            </View>
-          )}
-
-
-        </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <CruiseDetailsOverview
+          cruise={cruise}
+          linkedOffer={linkedOffer}
+          heroImageUri={heroImageUri}
+          accurateNights={accurateNights}
+          daysUntil={daysUntil}
+          isBooked={isBooked}
+          hasPerks={hasPerks}
+          valueBreakdown={valueBreakdown}
+          casinoAvailability={casinoAvailability}
+          personalizedPlayEstimate={personalizedPlayEstimate}
+          itineraryDays={itineraryDays}
+          onEditPress={openFullEditModal}
+          onBookPress={handleBookCruise}
+          onUnbookPress={() => setUnbookModalVisible(true)}
+          onEditCasinoPress={openCasinoEditModal}
+        />
       </ScrollView>
 
       <Modal
@@ -1352,10 +502,7 @@ export default function CruiseDetailsScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Casino Statistics</Text>
-              <TouchableOpacity
-                onPress={() => setEditModalVisible(false)}
-                style={styles.modalCloseButton}
-              >
+              <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.modalCloseButton}>
                 <X size={24} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -1387,29 +534,24 @@ export default function CruiseDetailsScreen() {
             </View>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setEditModalVisible(false)}
-              >
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setEditModalVisible(false)}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={styles.saveButton}
                 onPress={() => {
                   console.log('[CruiseDetails] Saving casino stats');
                   const winningsValue = parseFloat(editWinnings) || 0;
                   const pointsValue = parseFloat(editPoints) || 0;
-                  
-                  const updatedCruise = {
-                    ...cruise,
+
+                  updateCruise({
+                    ...(cruise as BookedCruise & Record<string, unknown>),
                     winnings: winningsValue,
                     earnedPoints: pointsValue,
                     casinoPoints: pointsValue,
-                  };
-                  
-                  console.log('[CruiseDetails] Updated cruise:', updatedCruise);
-                  updateCruise(updatedCruise);
+                  });
+
                   setEditModalVisible(false);
                 }}
               >
@@ -1431,23 +573,20 @@ export default function CruiseDetailsScreen() {
           <View style={styles.fullModalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Cruise Details</Text>
-              <TouchableOpacity
-                onPress={() => setFullEditModalVisible(false)}
-                style={styles.modalCloseButton}
-              >
+              <TouchableOpacity onPress={() => setFullEditModalVisible(false)} style={styles.modalCloseButton}>
                 <X size={24} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.fullModalBody} showsVerticalScrollIndicator={false}>
               <Text style={styles.sectionLabel}>Basic Info</Text>
-              
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Ship Name</Text>
                 <TextInput
                   style={styles.input}
                   value={editForm.shipName}
-                  onChangeText={(val) => setEditForm(prev => ({ ...prev, shipName: val }))}
+                  onChangeText={(value) => setEditForm((prev) => ({ ...prev, shipName: value }))}
                   placeholder="Ship name"
                   placeholderTextColor={COLORS.textSecondary}
                 />
@@ -1458,29 +597,29 @@ export default function CruiseDetailsScreen() {
                 <TextInput
                   style={styles.input}
                   value={editForm.destination}
-                  onChangeText={(val) => setEditForm(prev => ({ ...prev, destination: val }))}
+                  onChangeText={(value) => setEditForm((prev) => ({ ...prev, destination: value }))}
                   placeholder="Destination"
                   placeholderTextColor={COLORS.textSecondary}
                 />
               </View>
 
               <View style={styles.inputRow}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Departure Port</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.departurePort}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, departurePort: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, departurePort: value }))}
                     placeholder="Port"
                     placeholderTextColor={COLORS.textSecondary}
                   />
                 </View>
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: SPACING.md }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Nights</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.nights}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, nights: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, nights: value }))}
                     keyboardType="numeric"
                     placeholder="# Nights"
                     placeholderTextColor={COLORS.textSecondary}
@@ -1489,22 +628,22 @@ export default function CruiseDetailsScreen() {
               </View>
 
               <View style={styles.inputRow}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Sail Date (MM-DD-YYYY)</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.sailDate}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, sailDate: val }))}
-                    placeholder="2025-01-15"
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, sailDate: value }))}
+                    placeholder="04-02-2026"
                     placeholderTextColor={COLORS.textSecondary}
                   />
                 </View>
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: SPACING.md }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Guests</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.guests}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, guests: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, guests: value }))}
                     keyboardType="numeric"
                     placeholder="2"
                     placeholderTextColor={COLORS.textSecondary}
@@ -1517,7 +656,7 @@ export default function CruiseDetailsScreen() {
                 <TextInput
                   style={styles.input}
                   value={editForm.cabinType}
-                  onChangeText={(val) => setEditForm(prev => ({ ...prev, cabinType: val }))}
+                  onChangeText={(value) => setEditForm((prev) => ({ ...prev, cabinType: value }))}
                   placeholder="Balcony, Suite, etc."
                   placeholderTextColor={COLORS.textSecondary}
                 />
@@ -1526,23 +665,23 @@ export default function CruiseDetailsScreen() {
               <Text style={styles.sectionLabel}>Pricing</Text>
 
               <View style={styles.inputRow}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Interior ($)</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.interiorPrice}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, interiorPrice: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, interiorPrice: value }))}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={COLORS.textSecondary}
                   />
                 </View>
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: SPACING.md }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Ocean View ($)</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.oceanviewPrice}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, oceanviewPrice: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, oceanviewPrice: value }))}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={COLORS.textSecondary}
@@ -1551,23 +690,23 @@ export default function CruiseDetailsScreen() {
               </View>
 
               <View style={styles.inputRow}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Balcony ($)</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.balconyPrice}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, balconyPrice: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, balconyPrice: value }))}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={COLORS.textSecondary}
                   />
                 </View>
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: SPACING.md }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Suite ($)</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.suitePrice}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, suitePrice: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, suitePrice: value }))}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={COLORS.textSecondary}
@@ -1580,7 +719,7 @@ export default function CruiseDetailsScreen() {
                 <TextInput
                   style={styles.input}
                   value={editForm.taxes}
-                  onChangeText={(val) => setEditForm(prev => ({ ...prev, taxes: val }))}
+                  onChangeText={(value) => setEditForm((prev) => ({ ...prev, taxes: value }))}
                   keyboardType="numeric"
                   placeholder="0"
                   placeholderTextColor={COLORS.textSecondary}
@@ -1590,34 +729,34 @@ export default function CruiseDetailsScreen() {
               <Text style={styles.sectionLabel}>Casino Offer Details</Text>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>BWO# (Booking/Offer Reference)</Text>
+                <Text style={styles.inputLabel}>BWO#</Text>
                 <TextInput
                   style={styles.input}
                   value={editForm.bwoNumber}
-                  onChangeText={(val) => setEditForm(prev => ({ ...prev, bwoNumber: val }))}
-                  placeholder="e.g., 2501A01"
+                  onChangeText={(value) => setEditForm((prev) => ({ ...prev, bwoNumber: value }))}
+                  placeholder="e.g. 2501A01"
                   placeholderTextColor={COLORS.textSecondary}
                 />
               </View>
 
               <View style={styles.inputRow}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>FreePlay ($)</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.freePlay}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, freePlay: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, freePlay: value }))}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={COLORS.textSecondary}
                   />
                 </View>
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: SPACING.md }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>OBC ($)</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.freeOBC}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, freeOBC: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, freeOBC: value }))}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={COLORS.textSecondary}
@@ -1625,38 +764,24 @@ export default function CruiseDetailsScreen() {
                 </View>
               </View>
 
-              <Text style={styles.sectionLabel}>Additional Perks</Text>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Additional Onboard Credit ($)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editForm.freeOBC}
-                  onChangeText={(val) => setEditForm(prev => ({ ...prev, freeOBC: val }))}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor={COLORS.textSecondary}
-                />
-              </View>
-
               <View style={styles.inputRow}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Trade-In Value ($)</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.tradeInValue}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, tradeInValue: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, tradeInValue: value }))}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={COLORS.textSecondary}
                   />
                 </View>
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: SPACING.md }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Next Cruise Cert ($)</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.nextCruiseCertificate}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, nextCruiseCertificate: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, nextCruiseCertificate: value }))}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={COLORS.textSecondary}
@@ -1669,23 +794,23 @@ export default function CruiseDetailsScreen() {
                 <TextInput
                   style={styles.input}
                   value={editForm.amountPaid}
-                  onChangeText={(val) => setEditForm(prev => ({ ...prev, amountPaid: val }))}
+                  onChangeText={(value) => setEditForm((prev) => ({ ...prev, amountPaid: value }))}
                   keyboardType="numeric"
                   placeholder="0"
                   placeholderTextColor={COLORS.textSecondary}
                 />
               </View>
 
-              <View style={[styles.switchRow, { backgroundColor: 'rgba(59,130,246,0.10)', borderRadius: 10, marginBottom: 6 }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.switchLabel}>Solo Sailing (Single Occupancy)</Text>
-                  <Text style={{ color: COLORS.textSecondary, fontSize: 11, marginTop: 2 }}>
-                    {editForm.singleOccupancy ? 'Earns +1 bonus C&A point/night' : 'Base 1 C&A point/night (shared cabin)'}
+              <View style={[styles.switchRow, styles.switchRowHighlighted]}>
+                <View style={styles.switchCopyWrap}>
+                  <Text style={styles.switchLabel}>Solo Sailing</Text>
+                  <Text style={styles.switchHelpText}>
+                    {editForm.singleOccupancy ? 'Earns +1 bonus C&A point/night' : 'Base 1 C&A point/night'}
                   </Text>
                 </View>
                 <Switch
                   value={editForm.singleOccupancy}
-                  onValueChange={(val) => setEditForm(prev => ({ ...prev, singleOccupancy: val }))}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, singleOccupancy: value }))}
                   trackColor={{ false: 'rgba(255,255,255,0.2)', true: '#3B82F6' }}
                   thumbColor={COLORS.white}
                 />
@@ -1695,7 +820,7 @@ export default function CruiseDetailsScreen() {
                 <Text style={styles.switchLabel}>Free Gratuities</Text>
                 <Switch
                   value={editForm.freeGratuities}
-                  onValueChange={(val) => setEditForm(prev => ({ ...prev, freeGratuities: val }))}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, freeGratuities: value }))}
                   trackColor={{ false: 'rgba(255,255,255,0.2)', true: COLORS.success }}
                   thumbColor={COLORS.white}
                 />
@@ -1705,7 +830,7 @@ export default function CruiseDetailsScreen() {
                 <Text style={styles.switchLabel}>Free Drink Package</Text>
                 <Switch
                   value={editForm.freeDrinkPackage}
-                  onValueChange={(val) => setEditForm(prev => ({ ...prev, freeDrinkPackage: val }))}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, freeDrinkPackage: value }))}
                   trackColor={{ false: 'rgba(255,255,255,0.2)', true: COLORS.success }}
                   thumbColor={COLORS.white}
                 />
@@ -1715,7 +840,7 @@ export default function CruiseDetailsScreen() {
                 <Text style={styles.switchLabel}>Free WiFi</Text>
                 <Switch
                   value={editForm.freeWifi}
-                  onValueChange={(val) => setEditForm(prev => ({ ...prev, freeWifi: val }))}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, freeWifi: value }))}
                   trackColor={{ false: 'rgba(255,255,255,0.2)', true: COLORS.success }}
                   thumbColor={COLORS.white}
                 />
@@ -1725,7 +850,7 @@ export default function CruiseDetailsScreen() {
                 <Text style={styles.switchLabel}>Free Specialty Dining</Text>
                 <Switch
                   value={editForm.freeSpecialtyDining}
-                  onValueChange={(val) => setEditForm(prev => ({ ...prev, freeSpecialtyDining: val }))}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, freeSpecialtyDining: value }))}
                   trackColor={{ false: 'rgba(255,255,255,0.2)', true: COLORS.success }}
                   thumbColor={COLORS.white}
                 />
@@ -1734,23 +859,23 @@ export default function CruiseDetailsScreen() {
               <Text style={styles.sectionLabel}>Casino Stats</Text>
 
               <View style={styles.inputRow}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Won/Loss ($)</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.winnings}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, winnings: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, winnings: value }))}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={COLORS.textSecondary}
                   />
                 </View>
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: SPACING.md }]}>
+                <View style={styles.rowInputGroup}>
                   <Text style={styles.inputLabel}>Points Earned</Text>
                   <TextInput
                     style={styles.input}
                     value={editForm.earnedPoints}
-                    onChangeText={(val) => setEditForm(prev => ({ ...prev, earnedPoints: val }))}
+                    onChangeText={(value) => setEditForm((prev) => ({ ...prev, earnedPoints: value }))}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={COLORS.textSecondary}
@@ -1758,21 +883,15 @@ export default function CruiseDetailsScreen() {
                 </View>
               </View>
 
-              <View style={{ height: SPACING.xl }} />
+              <View style={styles.modalSpacer} />
             </ScrollView>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setFullEditModalVisible(false)}
-              >
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setFullEditModalVisible(false)}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={saveFullEdit}
-              >
+
+              <TouchableOpacity style={styles.saveButton} onPress={saveFullEdit}>
                 <Save size={18} color={COLORS.white} />
                 <Text style={styles.saveButtonText}>Save Changes</Text>
               </TouchableOpacity>
@@ -1791,10 +910,7 @@ export default function CruiseDetailsScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Unbook Cruise</Text>
-              <TouchableOpacity
-                onPress={() => setUnbookModalVisible(false)}
-                style={styles.modalCloseButton}
-              >
+              <TouchableOpacity onPress={() => setUnbookModalVisible(false)} style={styles.modalCloseButton}>
                 <X size={24} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -1804,27 +920,22 @@ export default function CruiseDetailsScreen() {
                 <AlertCircle size={48} color={COLORS.error} />
                 <Text style={styles.unbookWarningTitle}>Are you sure?</Text>
                 <Text style={styles.unbookWarningText}>
-                  This will remove <Text style={styles.unbookWarningBold}>{cruise?.shipName}</Text> ({formatDate(cruise?.sailDate || '', 'medium')}) from your booked cruises.
+                  This will remove <Text style={styles.unbookWarningBold}>{cruise.shipName}</Text> ({formatDate(cruise.sailDate || '', 'medium')}) from your booked cruises.
                 </Text>
-                <Text style={styles.unbookWarningSubtext}>
-                  This action cannot be undone.
-                </Text>
+                <Text style={styles.unbookWarningSubtext}>This action cannot be undone.</Text>
               </View>
             </View>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setUnbookModalVisible(false)}
-              >
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setUnbookModalVisible(false)}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={styles.unbookConfirmButton}
                 onPress={() => {
-                  if (cruise?.id) {
-                    console.log('[CruiseDetails] Unbooking cruise:', cruise.id);
+                  if (cruise.id) {
+                    console.log('[CruiseDetails] Unbooking cruise', { cruiseId: cruise.id });
                     removeBookedCruise(cruise.id);
                     setUnbookModalVisible(false);
                     router.back();
@@ -1847,12 +958,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
+  scrollContent: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: 120,
+  },
   notFoundContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: SPACING.xl,
-    backgroundColor: 'transparent',
   },
   notFoundTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
@@ -1870,1849 +985,208 @@ const styles = StyleSheet.create({
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: SPACING.sm,
     backgroundColor: DS.text.primary,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDER_RADIUS.md,
-    gap: SPACING.sm,
   },
   backButtonText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.white,
   },
-  scrollContent: {
-    paddingBottom: 120,
-  },
-  heroPlaceholder: {
-    height: 240,
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    marginTop: SPACING.md,
-    marginHorizontal: SPACING.md,
-    borderRadius: DS.radius.xl,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: DS.border.default,
-  },
-  bookedBadge: {
-    position: 'absolute',
-    top: SPACING.lg,
-    left: SPACING.lg,
-    backgroundColor: 'rgba(93, 170, 138, 0.14)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(93, 170, 138, 0.24)',
-  },
-  bookedBadgeText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: DS.accent.success,
-    letterSpacing: 1,
-  },
-  heroButtonsContainer: {
-    position: 'absolute',
-    top: SPACING.lg,
-    right: SPACING.lg,
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  editAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(5,7,10,0.58)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-    gap: SPACING.xs,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-  },
-  bookHeaderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: DS.text.primary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-    borderWidth: 1,
-    borderColor: DS.text.primary,
-  },
-  bookHeaderButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: DS.text.inverse,
-  },
-  unbookHeaderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(5,7,10,0.58)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-  },
-  editAllButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
-  },
-  content: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.lg,
-  },
-  headerSection: {
-    marginTop: -DS.spacing.xl,
-    marginBottom: SPACING.lg,
-    padding: DS.spacing.lg,
-    backgroundColor: 'rgba(255,255,255,0.48)',
-    borderRadius: DS.radius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-    ...DS.shadow.md,
-  },
-  shipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.xs,
-  },
-  shipName: {
-    fontSize: TYPOGRAPHY.fontSizeXL,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: DS.text.primary,
-  },
-  destination: {
-    fontSize: TYPOGRAPHY.fontSizeTitle,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: DS.text.primary,
-    marginBottom: SPACING.sm,
-  },
-  offerNameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,249,243,0.58)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    gap: SPACING.xs,
-    marginBottom: SPACING.xs,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-  },
-  offerNameText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: DS.text.primary,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  offerCodeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,249,243,0.58)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
-    gap: SPACING.xs,
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-  },
-  offerCodeText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: DS.text.primary,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  countdownContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  countdown: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: DS.text.secondary,
-  },
-  factsCard: {
-    backgroundColor: 'rgba(255,255,255,0.48)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-    ...SHADOW.sm,
-  },
-  factsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.xs,
-  },
-  factPill: {
-    flex: 1,
-    minWidth: '48%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: 'rgba(0, 31, 63, 0.03)',
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  factIconBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(219, 234, 254, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.2)',
-  },
-  factTextWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  factLabel: {
-    fontSize: 10,
-    color: COLORS.textSecondary,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-    marginBottom: 1,
-  },
-  factValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-  },
-  pricingChipsCard: {
-    backgroundColor: 'rgba(255,255,255,0.48)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-  },
-  pricingChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-  },
-  pricingChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 8,
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1,
-    borderColor: 'rgba(2, 132, 199, 0.15)',
-  },
-  pricingChipMuted: {
-    backgroundColor: 'rgba(15, 23, 42, 0.03)',
-    borderColor: 'rgba(15, 23, 42, 0.08)',
-  },
-  pricingChipLabel: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.6,
-  },
-  pricingChipValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.money,
-  },
-  pricingChipValueMuted: {
-    color: COLORS.textPrimary,
-  },
-  compactInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  compactInfoItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  compactInfoValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.navyDeep,
-    flex: 1,
-  },
-  compactInfoDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: 'rgba(0, 31, 63, 0.1)',
-    marginHorizontal: SPACING.sm,
-  },
-  compactPriceCard: {
-    backgroundColor: 'rgba(255,255,255,0.48)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-  },
-  pricingRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-  },
-  pricingCol: {
-    flex: 1,
-    minWidth: 60,
-    alignItems: 'center',
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
-    backgroundColor: '#F0F9FF',
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  pricingLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  pricingValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.money,
-  },
-  compactPriceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.sm,
-  },
-  compactPriceTitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-    flex: 1,
-  },
-  compactSavingsBadge: {
-    backgroundColor: 'rgba(76, 175, 80, 0.15)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
-    borderRadius: BORDER_RADIUS.xs,
-  },
-  compactSavingsText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.success,
-  },
-  compactPriceGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.xs,
-  },
-  compactPriceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 6,
-    borderRadius: BORDER_RADIUS.xs,
-    gap: 6,
-  },
-  compactPriceLabel: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.5,
-  },
-  compactPriceValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.money,
-  },
-  compactTaxesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 31, 63, 0.06)',
-  },
-  compactTaxesLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-  },
-  compactTaxesValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.textPrimary,
-  },
-  compactCasinoCard: {
-    backgroundColor: 'rgba(255,255,255,0.48)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-  },
-  casinoResultsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.lg,
-  },
-  casinoResultCol: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  casinoResultLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-    marginBottom: 4,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-  casinoResultValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  casinoEditButton: {
-    padding: SPACING.sm,
-    backgroundColor: 'rgba(0, 31, 63, 0.05)',
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  compactCasinoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.sm,
-  },
-  compactCasinoTitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-    flex: 1,
-  },
-  compactEditButton: {
-    padding: 4,
-  },
-  compactCasinoStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  compactCasinoStatItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  compactCasinoStatLabel: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  compactCasinoStatValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  compactCasinoStatDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: 'rgba(0, 31, 63, 0.1)',
-    marginHorizontal: SPACING.md,
-  },
-  detailLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textDarkGrey,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    marginTop: SPACING.sm,
-  },
-  detailValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-    marginTop: 2,
-  },
-  offersSection: {
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    backgroundColor: '#E0F2FE',
-    ...SHADOW.sm,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '800' as const,
-    color: DS.text.primary,
-    letterSpacing: 0.2,
-  },
-  offersList: {
-    gap: SPACING.sm,
-  },
-  offerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  offerText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
-  },
-  itineraryList: {
-    gap: 0,
-    marginTop: SPACING.md,
-  },
-  itineraryDayRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    minHeight: 60,
-  },
-  itineraryDayDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: COLORS.beigeWarm,
-    marginTop: 6,
-    zIndex: 1,
-  },
-  seaDayDot: {
-    backgroundColor: '#3b82f6',
-  },
-  itineraryDayLine: {
-    position: 'absolute',
-    left: 5,
-    top: 18,
-    bottom: -18,
-    width: 2,
-    backgroundColor: COLORS.cardBorder,
-  },
-  itineraryDayContent: {
-    marginLeft: SPACING.md,
-    flex: 1,
-    backgroundColor: '#DBEAFE',
-    padding: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  itineraryDayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  itineraryDayLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.points,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  itineraryDayPort: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.navyDeep,
-  },
-  casinoDayStatusChip: {
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 2,
-    borderRadius: BORDER_RADIUS.xs,
-  },
-  casinoDayStatusChipText: {
-    fontSize: 9,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-
-  editButton: {
-    position: 'absolute',
-    top: SPACING.sm,
-    right: SPACING.sm,
-    padding: SPACING.xs,
-  },
-  casinoSection: {
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    backgroundColor: '#E0F2FE',
-    ...SHADOW.sm,
-  },
-  casinoStatusBadge: {
-    marginLeft: 'auto',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  casinoStatusText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  casinoStatsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.md,
-  },
-  casinoStatsCompact: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.xs,
-    marginBottom: SPACING.md,
-  },
-  casinoStatCompact: {
-    flex: 1,
-    minWidth: 60,
-    alignItems: 'center',
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
-    backgroundColor: '#DBEAFE',
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  casinoStatCompactLabel: {
-    fontSize: 9,
-    color: COLORS.textSecondary,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    marginBottom: 2,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-  casinoStatCompactValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  casinoStatCard: {
-    flex: 1,
-    alignItems: 'center',
-    padding: SPACING.sm,
-    backgroundColor: '#DBEAFE',
-    borderRadius: BORDER_RADIUS.sm,
-    marginHorizontal: 2,
-  },
-  casinoStatValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  casinoStatLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textDarkGrey,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    marginTop: 2,
-  },
-  casinoDescription: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textDarkGrey,
-    textAlign: 'center',
-    marginBottom: SPACING.md,
-  },
-  casinoDayList: {
-    gap: SPACING.xs,
-  },
-  casinoDayItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DBEAFE',
-    padding: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-    gap: SPACING.sm,
-  },
-  casinoDayIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  casinoDayContent: {
-    flex: 1,
-  },
-  casinoDayLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.points,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  casinoDayPort: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  casinoDayStatus: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  moreText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: SPACING.xs,
-  },
-  manualEntryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
-    marginLeft: 'auto',
-    gap: 4,
-  },
-  manualEntryBadgeText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.warning,
-  },
-  manualEntryContainer: {
-    alignItems: 'center',
-    padding: SPACING.xl,
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
-    borderStyle: 'dashed',
-  },
-  manualEntryTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.warning,
-    marginTop: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  manualEntryText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: SPACING.lg,
-  },
-  manualEntryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.beigeWarm,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    gap: SPACING.sm,
-  },
-  manualEntryButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-  },
-  itinerarySourceText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginTop: SPACING.md,
-    opacity: 0.7,
-  },
-  valueSection: {
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    backgroundColor: '#E0F2FE',
-    ...SHADOW.sm,
-  },
-  valueCompactGrid: {
-    gap: SPACING.xs,
-    marginBottom: SPACING.sm,
-  },
-  valueCompactRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    backgroundColor: '#DBEAFE',
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  valueCompactLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textDarkGrey,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  valueCompactLabelWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  valueCompactValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  valueNetRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: BORDER_RADIUS.sm,
-    marginBottom: SPACING.sm,
-  },
-  valueNetLabel: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  valueNetAmount: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  valueRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: SPACING.xs,
-  },
-  valueLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textDarkGrey,
-  },
-  valueAmount: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  valueDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    marginVertical: SPACING.sm,
-  },
-  valueTotalLabel: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  valueTotalAmount: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    color: COLORS.money,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  netValueRow: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    marginHorizontal: -SPACING.sm,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-    marginTop: SPACING.sm,
-  },
-  netValueLabel: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  netValueAmount: {
-    fontSize: TYPOGRAPHY.fontSizeXL,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  coverageBar: {
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 3,
-    marginTop: SPACING.md,
-    overflow: 'hidden',
-  },
-  coverageFill: {
-    height: '100%',
-    backgroundColor: COLORS.success,
-    borderRadius: 3,
-  },
-  coverageText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textDarkGrey,
-    textAlign: 'center',
-    marginTop: SPACING.xs,
-  },
-  expectedPointsSection: {
-    backgroundColor: '#DBEAFE',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 151, 167, 0.2)',
-  },
-  expectedPointsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.sm,
-  },
-  expectedPointsTitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.points,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-  expectedPointsCard: {
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  expectedPointsValue: {
-    fontSize: TYPOGRAPHY.fontSizeTitle,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.points,
-  },
-  expectedPointsLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  expectedPointsBreakdown: {
-    gap: SPACING.xs,
-  },
-  expectedPointsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  expectedPointsRowLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-  },
-  expectedPointsRowValue: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textPrimary,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  editValueButton: {
-    marginLeft: 'auto',
-    padding: SPACING.xs,
-  },
-  valueLabelWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  amountPaidRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: SPACING.xs,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    marginHorizontal: -SPACING.sm,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  amountPaidLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  linkedOfferInfo: {
-    marginTop: SPACING.md,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.05)',
-  },
-  linkedOfferLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic',
-  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(9, 18, 32, 0.48)',
     justifyContent: 'center',
-    alignItems: 'center',
     padding: SPACING.lg,
   },
   fullModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(9, 18, 32, 0.42)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.lg,
-    width: '100%',
-    maxWidth: 400,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    ...SHADOW.lg,
+    borderRadius: 24,
+    padding: SPACING.lg,
   },
   fullModalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: BORDER_RADIUS.xl,
-    borderTopRightRadius: BORDER_RADIUS.xl,
     maxHeight: '90%',
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    ...SHADOW.lg,
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.lg,
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-    backgroundColor: COLORS.bgSecondary,
+    justifyContent: 'space-between',
+    marginBottom: SPACING.lg,
   },
   modalTitle: {
-    fontSize: TYPOGRAPHY.fontSizeXL,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: DS.text.primary,
+    fontSize: 20,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
   },
   modalCloseButton: {
-    padding: SPACING.xs,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(17,24,39,0.04)',
   },
   modalBody: {
-    padding: SPACING.lg,
-    gap: SPACING.lg,
+    gap: SPACING.md,
   },
   fullModalBody: {
-    padding: SPACING.lg,
-    maxHeight: 500,
+    flexGrow: 0,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.lg,
+  },
+  cancelButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(17,24,39,0.06)',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
+  },
+  saveButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 16,
+    paddingVertical: 14,
+    backgroundColor: COLORS.navyDeep,
+  },
+  saveButtonText: {
+    fontSize: 14,
+    fontWeight: '800' as const,
+    color: COLORS.white,
   },
   inputGroup: {
     marginBottom: SPACING.md,
   },
   inputLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: DS.text.secondary,
-    marginBottom: SPACING.xs,
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
   },
   input: {
-    backgroundColor: DS.bg.secondary,
     borderWidth: 1,
-    borderColor: DS.border.default,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: DS.text.primary,
+    borderColor: 'rgba(197,213,228,0.9)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: COLORS.navyDeep,
+    backgroundColor: 'rgba(246,250,255,0.88)',
   },
   inputRow: {
     flexDirection: 'row',
-    marginBottom: SPACING.md,
+    gap: SPACING.md,
+  },
+  rowInputGroup: {
+    flex: 1,
   },
   sectionLabel: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontSize: 13,
+    fontWeight: '800' as const,
     color: COLORS.navyDeep,
-    marginBottom: SPACING.md,
-    marginTop: SPACING.md,
     textTransform: 'uppercase' as const,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
+    marginBottom: SPACING.md,
+    marginTop: SPACING.sm,
   },
   switchRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: 'rgba(197,213,228,0.9)',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: SPACING.sm,
+    backgroundColor: 'rgba(246,250,255,0.88)',
+  },
+  switchRowHighlighted: {
+    backgroundColor: 'rgba(59,130,246,0.08)',
+    borderColor: 'rgba(59,130,246,0.18)',
+  },
+  switchCopyWrap: {
+    flex: 1,
+    paddingRight: SPACING.md,
   },
   switchLabel: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontSize: 14,
+    fontWeight: '700' as const,
     color: COLORS.navyDeep,
   },
-  modalFooter: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    padding: SPACING.lg,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
-    backgroundColor: COLORS.bgSecondary,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: DS.bg.secondary,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: DS.border.default,
-  },
-  cancelButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: DS.text.secondary,
-  },
-  saveButton: {
-    flex: 1,
-    backgroundColor: DS.text.primary,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-  },
-  saveButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
-  },
-  playScheduleBreakdown: {
-    gap: SPACING.xs,
-    marginTop: SPACING.sm,
-  },
-  playDayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#DBEAFE',
-    padding: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  playDayInfo: {
-    flex: 1,
-  },
-  playDayLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textDarkGrey,
-  },
-  playDayPort: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  playDayStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  playDaySessions: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.points,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    backgroundColor: COLORS.pointsBg,
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 2,
-    borderRadius: BORDER_RADIUS.xs,
-  },
-  playDayHours: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-    minWidth: 30,
-    textAlign: 'center' as const,
-  },
-  playDayPoints: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.success,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    minWidth: 50,
-    textAlign: 'right' as const,
-  },
-  playScheduleNote: {
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
-  },
-  playScheduleNoteText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textDarkGrey,
-    fontStyle: 'italic' as const,
-    textAlign: 'center' as const,
-    lineHeight: 16,
-  },
-  combinedEstimateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.md,
-    gap: SPACING.lg,
-  },
-  combinedEstimateItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  combinedEstimateIconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.points,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  goldenIconBadge: {
-    backgroundColor: '#F59E0B',
-  },
-  combinedEstimateValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.points,
-  },
-  combinedEstimateLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
+  switchHelpText: {
+    marginTop: 4,
+    fontSize: 11,
     color: COLORS.textSecondary,
   },
-  combinedEstimateDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: COLORS.borderLight,
+  modalSpacer: {
+    height: SPACING.xl,
   },
-  combinedEstimateSubtext: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textDarkGrey,
-    textAlign: 'center' as const,
-    marginBottom: SPACING.sm,
-  },
-  historicalComparisonSection: {
-    backgroundColor: '#DBEAFE',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-  },
-  historicalComparisonTitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.textDarkGrey,
-  },
-  historicalStatsRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginTop: SPACING.xs,
-  },
-  historicalStatItem: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: '#DBEAFE',
-    padding: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  historicalStatValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.points,
-  },
-  historicalStatLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  historicalStatNote: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-    textAlign: 'center' as const,
-    marginTop: SPACING.xs,
-    fontStyle: 'italic' as const,
-  },
-  casinoStatsCard: {
-    width: '100%',
-  },
-  casinoStatsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  casinoStatsValues: {
-    marginTop: SPACING.sm,
-    gap: SPACING.xs,
-  },
-  casinoStatRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  casinoStatRowLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textDarkGrey,
-  },
-  casinoStatRowValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-
   unbookWarningContainer: {
     alignItems: 'center',
-    padding: SPACING.lg,
+    paddingVertical: SPACING.md,
   },
   unbookWarningTitle: {
-    fontSize: TYPOGRAPHY.fontSizeXL,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.error,
     marginTop: SPACING.md,
     marginBottom: SPACING.sm,
+    fontSize: 22,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
   },
   unbookWarningText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.textDarkGrey,
-    textAlign: 'center',
+    fontSize: 15,
     lineHeight: 22,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
   },
   unbookWarningBold: {
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontWeight: '800' as const,
     color: COLORS.navyDeep,
   },
   unbookWarningSubtext: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.sm,
-    fontStyle: 'italic',
+    fontSize: 13,
+    color: COLORS.error,
+    fontWeight: '700' as const,
   },
   unbookConfirmButton: {
     flex: 1,
-    backgroundColor: COLORS.error,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.sm,
+    gap: 6,
+    borderRadius: 16,
+    paddingVertical: 14,
+    backgroundColor: COLORS.error,
   },
   unbookConfirmButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontSize: 14,
+    fontWeight: '800' as const,
     color: COLORS.white,
-  },
-  offerCodeCard: {
-    backgroundColor: '#FFFBEB',
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.2)',
-  },
-  offerCodeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.xs,
-  },
-  offerCodeLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#92400E',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-  offerCodeValue: {
-    fontSize: TYPOGRAPHY.fontSizeXL,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#92400E',
-  },
-  compactFactsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    marginBottom: SPACING.sm,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: DS.bg.card,
-    borderRadius: DS.radius.lg,
-    borderWidth: 1,
-    borderColor: DS.border.default,
-  },
-  compactFact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  compactFactValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: DS.text.primary,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  compactFactLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: DS.text.secondary,
-  },
-  factDivider: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: DS.text.tertiary,
-    marginHorizontal: SPACING.sm,
-  },
-  fpObcHighlight: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  fpHighlightCard: {
-    flex: 1,
-    backgroundColor: '#DCFCE7',
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: '#86EFAC',
-    alignItems: 'center',
-  },
-  fpHighlightLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#15803D',
-    letterSpacing: 0.5,
-    marginBottom: SPACING.xs,
-  },
-  fpHighlightValue: {
-    fontSize: TYPOGRAPHY.fontSizeTitle,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#15803D',
-  },
-  obcHighlightCard: {
-    flex: 1,
-    backgroundColor: '#DBEAFE',
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
-    alignItems: 'center',
-  },
-  obcHighlightLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
-    letterSpacing: 0.5,
-    marginBottom: SPACING.xs,
-  },
-  obcHighlightValue: {
-    fontSize: TYPOGRAPHY.fontSizeTitle,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
-  },
-  fpObcQuickView: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
-    paddingVertical: SPACING.sm,
-  },
-  fpQuickBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: '#86EFAC',
-  },
-  fpQuickLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#15803D',
-  },
-  fpQuickValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#15803D',
-  },
-  obcQuickBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
-  },
-  obcQuickLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
-  },
-  obcQuickValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
-  },
-  bwoFpObcCard: {
-    backgroundColor: 'rgba(255,255,255,0.48)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-    ...DS.shadow.sm,
-  },
-  bwoFpObcHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
-  },
-  bwoFpObcTitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-  bwoFpObcRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-  },
-  bwoChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: '#FCD34D',
-  },
-  bwoLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#92400E',
-  },
-  bwoValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#92400E',
-  },
-  fpChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: '#86EFAC',
-  },
-  fpChipLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#15803D',
-  },
-  fpChipValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#15803D',
-  },
-  obcChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
-  },
-  obcChipLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
-  },
-  obcChipValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
-  },
-  bwoFpObcPlaceholder: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic' as const,
-    textAlign: 'center' as const,
-    paddingVertical: SPACING.sm,
-  },
-  bwoChipEmpty: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(254, 243, 199, 0.4)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'rgba(252, 211, 77, 0.4)',
-    borderStyle: 'dashed',
-  },
-  bwoLabelEmpty: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(146, 64, 14, 0.5)',
-  },
-  bwoValueEmpty: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(146, 64, 14, 0.4)',
-  },
-  fpChipEmpty: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(220, 252, 231, 0.4)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'rgba(134, 239, 172, 0.4)',
-    borderStyle: 'dashed',
-  },
-  fpChipLabelEmpty: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(21, 128, 61, 0.5)',
-  },
-  fpChipValueEmpty: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(21, 128, 61, 0.4)',
-  },
-  obcChipEmpty: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(219, 234, 254, 0.4)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'rgba(147, 197, 253, 0.4)',
-    borderStyle: 'dashed',
-  },
-  obcChipLabelEmpty: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(30, 64, 175, 0.5)',
-  },
-  obcChipValueEmpty: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(30, 64, 175, 0.4)',
-  },
-  cruiseDetailsSection: {
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-    backgroundColor: 'rgba(255,255,255,0.48)',
-    ...DS.shadow.sm,
-  },
-  payloadDetailsSection: {
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-    backgroundColor: 'rgba(255,255,255,0.48)',
-    ...DS.shadow.sm,
-  },
-  payloadGrid: {
-    gap: SPACING.xs,
-  },
-  payloadRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: SPACING.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: DS.border.divider,
-  },
-  payloadLabel: {
-    fontSize: 12,
-    fontWeight: '600' as const,
-    color: DS.text.secondary,
-    opacity: 0.9,
-    flex: 1,
-  },
-  payloadValue: {
-    fontSize: 12,
-    fontWeight: '700' as const,
-    color: DS.text.primary,
-    flex: 1,
-    textAlign: 'right' as const,
-  },
-  detailsGrid: {
-    gap: SPACING.sm,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    backgroundColor: 'rgba(255,249,243,0.58)',
-    borderRadius: BORDER_RADIUS.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(236,236,236,0.94)',
-  },
-  detailRowLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: DS.text.secondary,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  detailRowValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: DS.text.primary,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  pricingCategoryCard: {
-    backgroundColor: 'rgba(255,255,255,0.48)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-    ...DS.shadow.sm,
-  },
-  pricingCategoryLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: DS.text.secondary,
-    marginBottom: SPACING.xs,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 1,
-  },
-  pricingCategoryValue: {
-    fontSize: 28,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: DS.text.primary,
-  },
-  offersSectionCompact: {
-    backgroundColor: 'rgba(255,255,255,0.48)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-    ...DS.shadow.sm,
-  },
-  sectionHeaderCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.sm,
-  },
-  sectionTitleCompact: {
-    fontSize: 20,
-    fontFamily: DS.font.lobster,
-    color: DS.text.primary,
-  },
-  offersCompactContent: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-  },
-  offerItemCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,249,243,0.58)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.xs,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-  },
-  offerTextCompact: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: DS.text.primary,
-  },
-  casinoSectionCompact: {
-    backgroundColor: 'transparent',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(221,213,205,0.92)',
-    ...DS.shadow.sm,
-  },
-  casinoStatsRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  casinoStatBox: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.74)',
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.sm,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(223, 214, 206, 0.9)',
-  },
-  casinoStatBoxLabel: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.textSecondary,
-    marginBottom: 2,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-  casinoStatBoxValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: DS.text.primary,
-  },
-  itineraryCompactList: {
-    gap: SPACING.xs,
-  },
-  itineraryDayCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    borderRadius: BORDER_RADIUS.xs,
-    borderWidth: 1,
-    borderColor: 'rgba(223, 214, 206, 0.88)',
-  },
-  itineraryCompactDayContent: {
-    flex: 1,
-    gap: 2,
-  },
-  itineraryDayNumber: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.textSecondary,
-    width: 24,
-  },
-  itineraryDayPortCompact: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: DS.text.primary,
-  },
-  itineraryDayMeta: {
-    fontSize: 10,
-    color: COLORS.textSecondary,
-  },
-  casinoDotIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  itineraryDayStatus: {
-    minWidth: 42,
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  itineraryDayStatusText: {
-    fontSize: 10,
-    color: COLORS.textSecondary,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-  },
-  itineraryMoreText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-    textAlign: 'center' as const,
-    marginTop: SPACING.xs,
-    fontStyle: 'italic' as const,
   },
 });
