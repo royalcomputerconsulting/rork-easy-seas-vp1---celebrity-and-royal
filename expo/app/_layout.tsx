@@ -10,7 +10,6 @@ import { clearAllAppData } from "@/lib/dataManager";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { renderNodeInView } from "@/lib/renderNodeInView";
 import { FinancialsProvider } from "@/state/FinancialsProvider";
 import { CasinoStrategyProvider } from "@/state/CasinoStrategyProvider";
 import { SimpleAnalyticsProvider } from "@/state/SimpleAnalyticsProvider";
@@ -222,7 +221,7 @@ function WebResponsiveWrapper({ children }: { children: React.ReactNode }) {
   const isWide = width > WEB_BREAKPOINT;
 
   if (!isWide) {
-    return <>{renderNodeInView(children)}</>;
+    return <>{children}</>;
   }
 
   return (
@@ -234,7 +233,7 @@ function WebResponsiveWrapper({ children }: { children: React.ReactNode }) {
       <View style={[webStyles.phoneFrame, { maxHeight: height - 40 }]}> 
         <View style={webStyles.phoneNotch} />
         <View style={webStyles.phoneContent}>
-          {renderNodeInView(children)}
+          {children}
         </View>
       </View>
     </View>
