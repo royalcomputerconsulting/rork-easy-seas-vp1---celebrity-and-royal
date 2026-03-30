@@ -8,7 +8,7 @@ import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribb
 import { exportFile } from '@/lib/importExport';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, Download, FileDown, FileText } from 'lucide-react-native';
-import { WebViewMessage } from '@/lib/royalCaribbean/types';
+import { LogEntry, WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
@@ -250,7 +250,7 @@ function CarnivalSyncScreen() {
         logContent += `Courtesy Holds: ${state.syncCounts.courtesyHolds}\n`;
       }
       logContent += `\n--- DETAILED LOG ---\n`;
-      state.logs.forEach(log => {
+      state.logs.forEach((log: LogEntry) => {
         const typeTag = log.type === 'error' ? '[ERROR]' : log.type === 'success' ? '[OK]' : log.type === 'warning' ? '[WARN]' : '[INFO]';
         logContent += `${log.timestamp} ${typeTag} ${log.message}\n`;
       });
@@ -279,7 +279,7 @@ function CarnivalSyncScreen() {
       return;
     }
 
-    void runIngestion().catch((error) => {
+    void runIngestion().catch((error: unknown) => {
       const errorMessage = error instanceof Error ? error.message : 'Carnival sync could not start';
       console.error('[CarnivalSync] Failed to start ingestion:', error);
       addLog(`Unable to start Carnival sync: ${errorMessage}`, 'error');
@@ -293,7 +293,7 @@ function CarnivalSyncScreen() {
 
     setIsConfirmingSync(true);
     void syncToApp(coreData, loyalty)
-      .catch((error) => {
+      .catch((error: unknown) => {
         const errorMessage = error instanceof Error ? error.message : 'Carnival sync failed';
         console.error('[CarnivalSync] Sync-to-app error:', error);
         addLog(`Unable to finish Carnival sync: ${errorMessage}`, 'error');
@@ -377,7 +377,7 @@ function CarnivalSyncScreen() {
               </View>
             </View>
             <View style={styles.logsScrollTop}>
-              {state.logs.slice(-2).map((log, index) => (
+              {state.logs.slice(-2).map((log: LogEntry, index: number) => (
                 <View key={`${log.timestamp}-${index}`} style={[styles.logEntry, log.type === 'error' && styles.logError]}>
                   <Text style={styles.logTimestamp}>{log.timestamp}</Text>
                   <Text style={[
