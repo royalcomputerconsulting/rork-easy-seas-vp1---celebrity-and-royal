@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } from 'lucide-react-native';
-import { APP_TEXTURE, COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 
 import { createDateFromString } from '@/lib/date';
+import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 
@@ -37,7 +38,7 @@ function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'acti
 export const CruiseCard = React.memo(function CruiseCard({ 
   cruise, 
   onPress, 
-  showPricePerNight: _showPricePerNight = true, 
+  showPricePerNight = true, 
   compact = false,
   mini = false,
   variant = 'default',
@@ -80,6 +81,7 @@ export const CruiseCard = React.memo(function CruiseCard({
   const retailValue = useMemo(() => {
     if (!showRetailValue) return null;
     
+    const cabinType = cruise.cabinType || 'Balcony';
     const guestCount = cruise.guests || 2;
     let cabinValueForTwo = 0;
     
@@ -609,17 +611,17 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
-    backgroundColor: '#11263F',
+    backgroundColor: '#0D1E33',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
-    shadowColor: '#081423',
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 6,
   },
   miniContainer: {
-    backgroundColor: '#11263F',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     marginBottom: SPACING.sm,
@@ -627,10 +629,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingRight: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    shadowColor: '#081423',
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },
@@ -923,17 +925,17 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   compactContainer: {
-    backgroundColor: '#11263F',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     marginBottom: SPACING.sm,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    shadowColor: '#081423',
+    borderColor: 'rgba(255,255,255,0.1)',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 3,
   },
@@ -984,28 +986,28 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: SPACING.md,
     left: SPACING.md,
-    backgroundColor: 'rgba(212,160,10,0.88)',
+    backgroundColor: 'rgba(123,45,142,0.9)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,244,214,0.5)',
+    borderColor: 'rgba(216,192,255,0.5)',
   },
   saleBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: APP_TEXTURE.ink,
+    color: COLORS.white,
   },
   nightsBadge: {
     position: 'absolute',
     bottom: SPACING.xl,
     left: SPACING.md,
-    backgroundColor: 'rgba(255,248,231,0.18)',
+    backgroundColor: 'rgba(0,31,63,0.9)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,226,143,0.42)',
+    borderColor: 'rgba(255,226,143,0.5)',
   },
   nightsBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -1017,7 +1019,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(7,16,30,0.78)',
+    backgroundColor: 'rgba(6,14,30,0.88)',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
   },
@@ -1169,13 +1171,13 @@ const styles = StyleSheet.create({
   },
   compactPrimaryButton: {
     flex: 1,
-    backgroundColor: 'rgba(255,226,143,0.22)',
+    backgroundColor: 'rgba(255,226,143,0.2)',
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,226,143,0.42)',
+    borderColor: 'rgba(255,226,143,0.45)',
   },
   compactPrimaryButtonText: {
     fontSize: TYPOGRAPHY.fontSizeXS,

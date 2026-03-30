@@ -176,8 +176,8 @@ export default function CruiseDetailsScreen() {
 
   const valueBreakdown = useMemo(() => (mergedCruise ? calculateCruiseValue(mergedCruise) : null), [mergedCruise]);
   const daysUntil = mergedCruise?.sailDate ? getDaysUntil(mergedCruise.sailDate) : null;
-  const detailSections = useMemo<DataSection[]>(() => mergedCruise ? buildDataSections(mergedCruise as unknown as Record<string, unknown>) : [], [mergedCruise]);
-  const linkedOfferSections = useMemo<DataSection[]>(() => linkedOffer ? buildDataSections(linkedOffer as unknown as Record<string, unknown>) : [], [linkedOffer]);
+  const detailSections = useMemo<DataSection[]>(() => mergedCruise ? buildDataSections(mergedCruise as Record<string, unknown>) : [], [mergedCruise]);
+  const linkedOfferSections = useMemo<DataSection[]>(() => linkedOffer ? buildDataSections(linkedOffer as Record<string, unknown>) : [], [linkedOffer]);
   const linkedOfferCard = useMemo(() => buildOfferCardFields(linkedOffer, mergedCruise ? [mergedCruise] : []), [linkedOffer, mergedCruise]);
 
   const heroPills = useMemo(() => ([

@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useState, useCallback, useRef, useEffect, useContext, createContext, useMemo, ReactNode } from 'react';
 import { WebView } from 'react-native-webview';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -21,7 +21,7 @@ import { convertLoyaltyInfoToExtended } from '@/lib/royalCaribbean/loyaltyConver
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
-import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
+import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { healImportedData } from '@/lib/dataHealing';
 import type { BookedCruise, CasinoOffer, Cruise } from '@/types/models';
@@ -568,13 +568,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     return false;
   }, []);
 
-  const sanitizeSyncArray = useCallback(<T extends object,>(value: unknown, label: string): T[] => {
+  const sanitizeSyncArray = useCallback(<T extends Record<string, unknown>,>(value: unknown, label: string): T[] => {
     if (!Array.isArray(value)) {
       addLog(`⚠️ ${label} was not an array. Using an empty list instead.`, 'warning');
       return [];
     }
 
-    const sanitized = value.filter((item): item is T => Boolean(item) && typeof item === 'object');
+    const sanitized = value.filter((item) => item && typeof item === 'object') as T[];
     if (sanitized.length !== value.length) {
       addLog(`⚠️ Removed ${value.length - sanitized.length} invalid ${label.toLowerCase()} row(s) before sync`, 'warning');
     }
@@ -1714,7 +1714,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           addLog(`🎯 Prepared ${offersToEnrich.length} Carnival rate code(s) for detailed sailing/pricing fetch`, 'success');
         }
 
-        const _waitForOfferSailings = (
+        const waitForOfferSailings = (
           offerCode: string,
           timeoutMs: number = 35000
         ): { requestId: number; promise: Promise<OfferRow[]> } => {
@@ -2521,12 +2521,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         try {
           if (preview.loyalty.clubRoyalePoints.changed) {
             addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
-            await loyaltyContext.setManualClubRoyalePoints?.(preview.loyalty.clubRoyalePoints.synced);
+            await loyaltyContext.setManualClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
           }
           
           if (preview.loyalty.crownAndAnchorPoints.changed) {
             addLog(`Updating Crown & Anchor points: ${preview.loyalty.crownAndAnchorPoints.current} → ${preview.loyalty.crownAndAnchorPoints.synced}`, 'info');
-            await loyaltyContext.setManualCrownAnchorPoints?.(preview.loyalty.crownAndAnchorPoints.synced);
+            await loyaltyContext.setManualCrownAnchorPoints(preview.loyalty.crownAndAnchorPoints.synced);
           }
         } catch (loyaltyError) {
           console.error('[RoyalCaribbeanSync] Error updating loyalty points:', loyaltyError);

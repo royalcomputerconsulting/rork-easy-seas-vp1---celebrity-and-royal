@@ -221,11 +221,11 @@ export function TierProgressionChart({
           <View style={styles.achievedInfo}>
             <CheckCircle size={14} color={COLORS.success} />
             <Text style={styles.achievedText}>
-              {'You have achieved '}
+              You have achieved{' '}
               <Text style={{ color: CLUB_ROYALE_TIERS[playerContext.currentTier]?.color || COLORS.success, fontWeight: '700' as const }}>
                 {playerContext.currentTier}
-              </Text>
-              {` status! ${tierProgress.percentComplete.toFixed(0)}% progress to Masters.`}
+              </Text>{' '}
+              status! {tierProgress.percentComplete.toFixed(0)}% progress to Masters.
             </Text>
           </View>
         )}
@@ -234,9 +234,9 @@ export function TierProgressionChart({
           <View style={styles.achievedInfo}>
             <Trophy size={14} color={COLORS.goldAccent} />
             <Text style={styles.achievedText}>
-              {'Congratulations! You have reached '}
-              <Text style={{ color: COLORS.goldAccent, fontWeight: '700' as const }}>Masters</Text>
-              {' - the highest tier!'}
+              Congratulations! You have reached{' '}
+              <Text style={{ color: COLORS.goldAccent, fontWeight: '700' as const }}>Masters</Text>{' '}
+              - the highest tier!
             </Text>
           </View>
         )}
@@ -245,11 +245,11 @@ export function TierProgressionChart({
           <View style={styles.milestoneInfo}>
             <TrendingUp size={14} color={COLORS.success} />
             <Text style={styles.milestoneText}>
-              {'Reach '}
+              Reach{' '}
               <Text style={{ color: CLUB_ROYALE_TIERS[nextMilestone.tier]?.color || COLORS.success, fontWeight: '700' as const }}>
                 {nextMilestone.tier}
-              </Text>
-              {` in ~${nextMilestone.month} months (${formatNumber(nextMilestone.points)} points)`}
+              </Text>{' '}
+              in ~{nextMilestone.month} months ({formatNumber(nextMilestone.points)} points)
             </Text>
           </View>
         )}
@@ -258,11 +258,11 @@ export function TierProgressionChart({
           <View style={styles.milestoneInfo}>
             <Target size={14} color={COLORS.aquaAccent} />
             <Text style={styles.milestoneText}>
-              {'Next tier: '}
+              Next tier:{' '}
               <Text style={{ color: CLUB_ROYALE_TIERS[nextTier]?.color || COLORS.aquaAccent, fontWeight: '700' as const }}>
                 {nextTier}
-              </Text>
-              {` at ${formatNumber(CLUB_ROYALE_TIERS[nextTier].threshold)} points`}
+              </Text>{' '}
+              at {formatNumber(CLUB_ROYALE_TIERS[nextTier].threshold)} points
             </Text>
           </View>
         )}

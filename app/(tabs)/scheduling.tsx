@@ -26,7 +26,7 @@ import {
   PremiumQuickFacts,
   PremiumStatGrid,
 } from '../../components/cruise/UnifiedCruiseSystem';
-import { APP_TEXTURE, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
+import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { createDateFromString, formatDate, getDaysUntil, isDateInPast } from '@/lib/date';
 import { findBackToBackSets, type BackToBackSet } from '@/lib/backToBackFinder';
@@ -645,9 +645,9 @@ const styles = StyleSheet.create({
   searchSurface: {
     borderRadius: 22,
     padding: SPACING.lg,
-    backgroundColor: APP_TEXTURE.surfaceStrong,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
+    borderColor: '#E2E8F0',
   },
   searchLabel: {
     color: '#6B7280',
@@ -661,12 +661,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: 'rgba(255,255,255,0.52)',
+    backgroundColor: '#F8FAFC',
     color: '#1A2A3D',
     fontSize: 15,
     fontWeight: '600' as const,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.62)',
+    borderColor: '#E2E8F0',
   },
   advancedStack: {
     gap: SPACING.md,
@@ -678,23 +678,23 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: APP_TEXTURE.surfaceStrong,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
+    borderColor: '#E2E8F0',
   },
   booleanFilterButtonActive: {
-    backgroundColor: 'rgba(0,151,167,0.10)',
-    borderColor: 'rgba(0,151,167,0.24)',
+    backgroundColor: 'rgba(0,151,167,0.08)',
+    borderColor: 'rgba(0,151,167,0.30)',
   },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 1,
-    borderColor: 'rgba(126, 143, 162, 0.28)',
+    borderColor: '#D1D5DB',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.52)',
+    backgroundColor: '#F8FAFC',
   },
   checkboxActive: {
     backgroundColor: COLORS.navyDeep,
@@ -714,9 +714,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,245,247,0.72)',
+    backgroundColor: 'rgba(220,38,38,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(220,38,38,0.18)',
+    borderColor: 'rgba(220,38,38,0.20)',
   },
   clearButtonText: {
     color: '#DC2626',
@@ -730,13 +730,11 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#132B47',
-    borderWidth: 1,
-    borderColor: 'rgba(255,226,143,0.24)',
+    backgroundColor: '#1E3A5F',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#10223A',
-    shadowOpacity: 0.2,
+    shadowColor: '#000000',
+    shadowOpacity: 0.28,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
@@ -754,7 +752,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     overflow: 'hidden',
-    backgroundColor: APP_TEXTURE.frame,
+    backgroundColor: '#F0F4F8',
   },
   agentContainerExpanded: {
     height: '88%',

@@ -8,7 +8,6 @@ import {
   Ship,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
-import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import { formatCurrency } from '@/lib/format';
 import { getDaysUntil, createDateFromString } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
@@ -27,7 +26,9 @@ interface OfferCardProps {
   showValueBreakdown?: boolean;
 }
 
-
+const OFFER_MARBLE_COLORS = ['#FCFEFF', '#EEF7FF', '#DDEEFF', '#CAE3F8'] as const;
+const OFFER_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.98)', 'rgba(188,216,241,0.3)', 'rgba(255,255,255,0.18)', 'rgba(142,182,221,0.24)'] as const;
+const OFFER_MARBLE_LOCATIONS = [0, 0.24, 0.72, 1] as const;
 
 function getOfferImage(offer: Cruise): string {
   if (offer.imageUrl) return offer.imageUrl;
@@ -211,43 +212,58 @@ export const OfferCard = React.memo(function OfferCard({
         activeOpacity={0.7}
         testID="offer-card-compact"
       >
-        <View style={styles.compactContent}>
-          <View style={styles.compactLeft}>
-            <View style={styles.compactShipRow}>
-              <Ship size={12} color={COLORS.navyDeep} />
-              <Text style={styles.compactShipName} numberOfLines={1}>
-                {offer.shipName}
-              </Text>
-            </View>
-            <Text style={styles.compactDestination} numberOfLines={1}>
-              {offer.destination}
-            </Text>
-            <View style={styles.compactDetails}>
-              <Text style={styles.compactDate}>
-                {createDateFromString(offer.sailDate).toLocaleDateString('en-US', {
-                  timeZone: 'UTC',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </Text>
-              <View style={styles.compactDot} />
-              <Text style={styles.compactNights}>{offer.nights} nights</Text>
-            </View>
-          </View>
-
-          <View style={styles.compactRight}>
-            {offer.price !== undefined && (
-              <Text style={styles.compactPrice}>{formatCurrency(offer.price)}</Text>
-            )}
-            {isBooked && (
-              <View style={styles.compactBookedBadge}>
-                <CheckCircle size={10} color={COLORS.white} />
-                <Text style={styles.compactBookedText}>Booked</Text>
+        <LinearGradient
+          colors={OFFER_MARBLE_COLORS}
+          locations={OFFER_MARBLE_LOCATIONS}
+          start={{ x: 0.02, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.compactMarbleBackground}
+        >
+          <LinearGradient
+            colors={OFFER_MARBLE_VEIN_COLORS}
+            locations={OFFER_MARBLE_LOCATIONS}
+            start={{ x: 0.14, y: 0 }}
+            end={{ x: 0.86, y: 1 }}
+            style={styles.compactMarbleVein}
+          />
+          <View style={styles.compactContent}>
+            <View style={styles.compactLeft}>
+              <View style={styles.compactShipRow}>
+                <Ship size={12} color={COLORS.navyDeep} />
+                <Text style={styles.compactShipName} numberOfLines={1}>
+                  {offer.shipName}
+                </Text>
               </View>
-            )}
-            <ChevronRight size={16} color={COLORS.navyDeep} />
+              <Text style={styles.compactDestination} numberOfLines={1}>
+                {offer.destination}
+              </Text>
+              <View style={styles.compactDetails}>
+                <Text style={styles.compactDate}>
+                  {createDateFromString(offer.sailDate).toLocaleDateString('en-US', {
+                    timeZone: 'UTC',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </Text>
+                <View style={styles.compactDot} />
+                <Text style={styles.compactNights}>{offer.nights} nights</Text>
+              </View>
+            </View>
+
+            <View style={styles.compactRight}>
+              {offer.price !== undefined && (
+                <Text style={styles.compactPrice}>{formatCurrency(offer.price)}</Text>
+              )}
+              {isBooked && (
+                <View style={styles.compactBookedBadge}>
+                  <CheckCircle size={10} color={COLORS.white} />
+                  <Text style={styles.compactBookedText}>Booked</Text>
+                </View>
+              )}
+              <ChevronRight size={16} color={COLORS.navyDeep} />
+            </View>
           </View>
-        </View>
+        </LinearGradient>
       </TouchableOpacity>
     );
   }
@@ -260,12 +276,19 @@ export const OfferCard = React.memo(function OfferCard({
       testID="offer-card"
     >
       <LinearGradient
-        colors={MARBLE_TEXTURES.lightBlue.gradientColors}
-        locations={MARBLE_TEXTURES.lightBlue.gradientLocations}
-        start={{ x: 0, y: 0 }}
+        colors={OFFER_MARBLE_COLORS}
+        locations={OFFER_MARBLE_LOCATIONS}
+        start={{ x: 0.02, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.marbleBackground}
       >
+        <LinearGradient
+          colors={OFFER_MARBLE_VEIN_COLORS}
+          locations={OFFER_MARBLE_LOCATIONS}
+          start={{ x: 0.12, y: 0 }}
+          end={{ x: 0.88, y: 1 }}
+          style={styles.marbleVein}
+        />
       {/* OFFER NAME & CODE - BLACK BOLD AT TOP */}
       {(offer.offerName || offer.offerCode) && (
         <View style={styles.offerHeaderSection}>
@@ -379,13 +402,21 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: '#D7E6F4',
+    backgroundColor: '#FFFFFF',
     ...SHADOW.md,
   },
   marbleBackground: {
     borderRadius: BORDER_RADIUS.lg,
+    position: 'relative',
+  },
+  marbleVein: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.82,
   },
   offerHeaderSection: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(247,251,255,0.88)',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.sm,
@@ -474,6 +505,7 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     padding: SPACING.md,
+    backgroundColor: 'rgba(246,250,255,0.78)',
   },
   actionIcons: {
     flexDirection: 'row',
@@ -538,11 +570,11 @@ const styles = StyleSheet.create({
   },
   metaInfoBox: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(244,249,255,0.76)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#D5E6F4',
   },
   metaInfoLabel: {
     fontSize: 9,
@@ -746,7 +778,17 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#D7E6F4',
     ...SHADOW.sm,
+  },
+  compactMarbleBackground: {
+    borderRadius: BORDER_RADIUS.md,
+    position: 'relative',
+  },
+  compactMarbleVein: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.84,
   },
   compactBooked: {
     borderWidth: 1,
@@ -757,6 +799,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: SPACING.md,
+    backgroundColor: 'rgba(244,249,255,0.72)',
   },
   compactLeft: {
     flex: 1,

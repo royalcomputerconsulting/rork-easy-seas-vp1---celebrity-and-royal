@@ -3,11 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Anchor, Star, TrendingUp, CheckCircle, Clock, Crown } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
-import { createDateFromString } from '@/lib/date';
+import { createDateFromString, isDateInPast } from '@/lib/date';
 import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
 import type { BookedCruise } from '@/types/models';
 

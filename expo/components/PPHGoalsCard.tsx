@@ -21,6 +21,7 @@ import {
   BarChart3,
   Zap,
 } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { formatNumber } from '@/lib/format';
@@ -46,7 +47,7 @@ interface PeriodStats {
 }
 
 export const PPHGoalsCard = React.memo(function PPHGoalsCard({
-  analytics: _analytics,
+  analytics,
   sessions,
   targetPPH,
   onTargetChange,
@@ -164,7 +165,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
     if (!isNaN(newTarget) && newTarget > 0) {
       onTargetChange(newTarget);
       if (Platform.OS !== 'web') {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
     setIsEditingTarget(false);
@@ -172,7 +173,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
 
   const handleSelectPeriod = useCallback((period: TimePeriod) => {
     if (Platform.OS !== 'web') {
-      void Haptics.selectionAsync();
+      Haptics.selectionAsync();
     }
     setSelectedPeriod(period);
   }, []);
@@ -264,7 +265,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
               </Text>
             </View>
 
-            {currentStats.trend !== 0 && selectedPeriod !== 'all' ? (
+            {currentStats.trend !== 0 && selectedPeriod !== 'all' && (
               <View style={styles.trendRow}>
                 {currentStats.trend > 0 ? (
                   <TrendingUp size={12} color="#10B981" />
@@ -278,7 +279,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
                   {currentStats.trend > 0 ? '+' : ''}{currentStats.trend.toFixed(0)}% vs previous
                 </Text>
               </View>
-            ) : null}
+            )}
           </Animated.View>
 
           <View style={styles.targetCard}>
@@ -392,7 +393,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
                   ]}>
                     {stats.pointsPerHour.toFixed(0)} pts/hr
                   </Text>
-                  {stats.trend !== 0 && period !== 'all' ? (
+                  {stats.trend !== 0 && period !== 'all' && (
                     <View style={[
                       styles.comparisonTrend,
                       { backgroundColor: stats.trend > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }
@@ -409,7 +410,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
                         {Math.abs(stats.trend).toFixed(0)}%
                       </Text>
                     </View>
-                  ) : null}
+                  )}
                   <ChevronRight size={14} color="#D1D5DB" />
                 </View>
               </TouchableOpacity>

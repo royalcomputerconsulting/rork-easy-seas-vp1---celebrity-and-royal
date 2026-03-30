@@ -27,7 +27,7 @@ import {
   Coins,
 } from 'lucide-react-native';
 
-import { APP_TEXTURE, COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
@@ -48,7 +48,6 @@ import { AgentXAnalysisCard } from '@/components/AgentXAnalysisCard';
 import { QuickActionsFAB } from '@/components/ui/QuickActionsFAB';
 import { getDaysUntil, isDateInPast, formatDate } from '@/lib/date';
 import { MachineStrategyCard } from '@/components/MachineStrategyCard';
-import { TexturedAppShell } from '@/components/ui/TexturedAppShell';
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
@@ -710,8 +709,7 @@ function OverviewScreenContent() {
   const keyExtractor = useCallback((item: CasinoOfferCardData | Cruise) => item.id, []);
 
   return (
-    <TexturedAppShell testID="overview-textured-shell">
-      <View style={styles.container}>
+    <View style={styles.container}>
       <CertificateManagerModal
         visible={showCertificateModal}
         onClose={() => setShowCertificateModal(false)}
@@ -779,8 +777,7 @@ function OverviewScreenContent() {
           windowSize={7}
         />
       </SafeAreaView>
-      </View>
-    </TexturedAppShell>
+    </View>
   );
 }
 
@@ -797,12 +794,10 @@ export default function OverviewScreen() {
 
   if (coreLoading) {
     return (
-      <TexturedAppShell testID="overview-loading-shell">
-        <SafeAreaView style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color='#1E3A5F' />
-          <Text style={styles.loadingText}>Loading your data...</Text>
-        </SafeAreaView>
-      </TexturedAppShell>
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color='#9EFDF2' />
+        <Text style={styles.loadingText}>Loading your data...</Text>
+      </SafeAreaView>
     );
   }
 
@@ -812,7 +807,7 @@ export default function OverviewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#F0F4F8',
   },
   safeArea: {
     flex: 1,
@@ -827,7 +822,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: '#F0F4F8',
   },
   loadingText: {
     marginTop: SPACING.md,
@@ -939,11 +934,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.md,
     marginTop: SPACING.md,
-    backgroundColor: APP_TEXTURE.surfaceStrong,
+    backgroundColor: '#FFFFFF',
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
+    borderColor: '#E2E8F0',
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -972,11 +967,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   progressCard: {
-    backgroundColor: APP_TEXTURE.surface,
+    backgroundColor: CLEAN_THEME.background.secondary,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
+    borderColor: CLEAN_THEME.border.light,
   },
   progressItem: {
     marginBottom: SPACING.xs,
@@ -1143,11 +1138,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: SPACING.huge,
     paddingHorizontal: SPACING.xl,
-    backgroundColor: APP_TEXTURE.surfaceStrong,
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.xl,
     marginTop: SPACING.lg,
     borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
+    borderColor: '#E2E8F0',
   },
   emptyIconContainer: {
     width: 100,
@@ -1210,12 +1205,12 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   casinoHistorySection: {
-    backgroundColor: APP_TEXTURE.surfaceStrong,
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     marginTop: SPACING.md,
     borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
+    borderColor: '#E2E8F0',
   },
   casinoHistoryHeader: {
     marginBottom: SPACING.md,
@@ -1237,12 +1232,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   casinoHistoryItem: {
-    backgroundColor: APP_TEXTURE.surfaceMuted,
+    backgroundColor: '#F8FAFC',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.58)',
+    borderColor: '#E2E8F0',
   },
   casinoHistoryItemHeader: {
     flexDirection: 'row',
@@ -1277,7 +1272,7 @@ const styles = StyleSheet.create({
   casinoHistoryStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.48)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
   },

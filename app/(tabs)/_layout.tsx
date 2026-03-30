@@ -10,10 +10,10 @@ import {
 } from "lucide-react-native";
 import React, { useCallback } from "react";
 import { Platform, View, StyleSheet } from "react-native";
-import { APP_TEXTURE } from '../../constants/theme';
+import { COLORS } from '../../constants/theme';
 import * as Haptics from 'expo-haptics';
 
-const TAB_BG = APP_TEXTURE.tabBar;
+const TAB_BG = '#FFFFFF';
 const ACTIVE_COLOR = '#1E3A5F';
 const INACTIVE_COLOR = '#9CA3AF';
 
@@ -38,12 +38,12 @@ export default function TabLayout() {
           position: 'absolute',
           backgroundColor: TAB_BG,
           borderTopWidth: 1,
-          borderTopColor: APP_TEXTURE.tabBarBorder,
-          elevation: 10,
-          shadowColor: '#10223A',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 14,
+          borderTopColor: '#E5E7EB',
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
         },
         tabBarLabelStyle: {
           fontSize: 9,
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   activeIconContainer: {
-    backgroundColor: APP_TEXTURE.goldWash,
+    backgroundColor: 'rgba(30,58,95,0.08)',
     borderRadius: 8,
   },
 });

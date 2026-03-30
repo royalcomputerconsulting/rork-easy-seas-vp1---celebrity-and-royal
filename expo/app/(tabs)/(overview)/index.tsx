@@ -10,9 +10,9 @@ import {
   ActivityIndicator,
   Animated,
   Image,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { 
   Tag,
@@ -27,14 +27,13 @@ import {
   Coins,
 } from 'lucide-react-native';
 
-import { APP_TEXTURE, COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME, DS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { useAuth } from '@/state/AuthProvider';
 import { useAgentX } from '@/state/AgentXProvider';
 import { usePriceTrackingSync } from '@/lib/usePriceTrackingSync';
-import { createCruiseListKey } from '@/lib/listKeys';
 import { useAlerts } from '@/state/AlertsProvider';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { CasinoCertificatesCard } from '@/components/CasinoCertificatesCard';
@@ -49,7 +48,6 @@ import { AgentXAnalysisCard } from '@/components/AgentXAnalysisCard';
 import { QuickActionsFAB } from '@/components/ui/QuickActionsFAB';
 import { getDaysUntil, isDateInPast, formatDate } from '@/lib/date';
 import { MachineStrategyCard } from '@/components/MachineStrategyCard';
-import { TexturedAppShell } from '@/components/ui/TexturedAppShell';
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
@@ -135,8 +133,6 @@ interface CasinoOfferCardData {
   obc?: number;
   perks?: string[];
   cruises: Cruise[];
-  offerSource?: 'royal' | 'celebrity' | 'carnival';
-  bookingLink?: string;
 }
 
 function OverviewScreenContent() {
@@ -152,7 +148,7 @@ function OverviewScreenContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
-  const [isMachineStrategyExpanded, setIsMachineStrategyExpanded] = useState<boolean>(false);
+  const [machineStrategyOpen, setMachineStrategyOpen] = useState(false);
   const { 
     certificates, 
     addCertificate, 
@@ -233,8 +229,6 @@ function OverviewScreenContent() {
           obc,
           perks: offer.perks ?? [],
           cruises: [],
-          offerSource: offer.offerSource,
-          bookingLink: offer.bookingLink,
         });
         return;
       }
@@ -280,7 +274,7 @@ function OverviewScreenContent() {
       }
     });
 
-    return Array.from(offersMap.values()).filter(offer => offer.cruises.length > 0 || offer.offerSource === 'carnival');
+    return Array.from(offersMap.values()).filter(offer => offer.cruises.length > 0);
   }, [offersData, cruisesData]);
 
   const nonExpiredOffers = useMemo(() => {
@@ -443,15 +437,6 @@ function OverviewScreenContent() {
   const handleOfferPress = useCallback((offer: CasinoOfferCardData | Cruise) => {
     console.log('[Overview] Offer pressed:', offer.id);
     if ('cruises' in offer) {
-      if (offer.offerSource === 'carnival') {
-        const carnivalUrl = offer.bookingLink
-          || `https://www.carnival.com/cruise-search?rateCodes=${encodeURIComponent(offer.offerCode)}&pageNumber=1&numadults=2&pageSize=50&sort=fromprice&showBest=true`;
-        console.log('[Overview] Opening Carnival offer externally:', carnivalUrl);
-        Linking.openURL(carnivalUrl).catch(err => {
-          console.error('[Overview] Failed to open Carnival URL:', err);
-        });
-        return;
-      }
       router.push(`/offer-details?offerCode=${encodeURIComponent(offer.offerCode)}` as any);
     } else {
       router.push(`/cruise-details?id=${offer.id}` as any);
@@ -595,8 +580,8 @@ function OverviewScreenContent() {
         subtitle="Personalized recommendations"
         icon={<Target size={18} color="#FFFFFF" />}
         defaultExpanded={false}
-        expanded={isMachineStrategyExpanded}
-        onToggle={setIsMachineStrategyExpanded}
+        isExpanded={machineStrategyOpen}
+        onToggle={setMachineStrategyOpen}
         showBorder={false}
       >
         <MachineStrategyCard />
@@ -610,10 +595,10 @@ function OverviewScreenContent() {
               <Text style={styles.casinoHistoryTitle}>CASINO HISTORY</Text>
             </View>
             <Text style={styles.casinoHistorySubtitle}>
-              {`${cruisesWithCasinoData.length} cruise${cruisesWithCasinoData.length !== 1 ? 's' : ''} with casino data`}
+              {cruisesWithCasinoData.length} cruise{cruisesWithCasinoData.length !== 1 ? 's' : ''} with casino data
             </Text>
           </View>
-          {cruisesWithCasinoData.map((cruise: BookedCruise, index: number) => {
+          {cruisesWithCasinoData.map((cruise: BookedCruise) => {
             const winnings = cruise.winnings || 0;
             const earnedPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
             const isWin = winnings >= 0;
@@ -621,7 +606,7 @@ function OverviewScreenContent() {
             
             return (
               <TouchableOpacity
-                key={createCruiseListKey(cruise, index)}
+                key={cruise.id}
                 style={styles.casinoHistoryItem}
                 onPress={() => handleCruiseItemPress(cruise.id)}
                 activeOpacity={0.7}
@@ -681,7 +666,6 @@ function OverviewScreenContent() {
           onCruisePress={handleCruiseItemPress}
           bookedCruiseIds={bookedCruiseIds}
           isBestValue={index === 0}
-          offerSource={item.offerSource}
         />
       );
     }
@@ -711,8 +695,12 @@ function OverviewScreenContent() {
   const keyExtractor = useCallback((item: CasinoOfferCardData | Cruise) => item.id, []);
 
   return (
-    <TexturedAppShell testID="overview-textured-shell">
-      <View style={styles.container}>
+    <LinearGradient
+      colors={DS.bg.marbleShell}
+      start={{ x: 0.02, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
       <CertificateManagerModal
         visible={showCertificateModal}
         onClose={() => setShowCertificateModal(false)}
@@ -769,8 +757,8 @@ function OverviewScreenContent() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor='#9EFDF2'
-              colors={['#9EFDF2']}
+              tintColor={COLORS.navyDeep}
+              colors={[COLORS.navyDeep]}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -780,8 +768,7 @@ function OverviewScreenContent() {
           windowSize={7}
         />
       </SafeAreaView>
-      </View>
-    </TexturedAppShell>
+    </LinearGradient>
   );
 }
 
@@ -798,12 +785,10 @@ export default function OverviewScreen() {
 
   if (coreLoading) {
     return (
-      <TexturedAppShell testID="overview-loading-shell">
-        <SafeAreaView style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color='#1E3A5F' />
-          <Text style={styles.loadingText}>Loading your data...</Text>
-        </SafeAreaView>
-      </TexturedAppShell>
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.navyDeep} />
+        <Text style={styles.loadingText}>Loading your data...</Text>
+      </SafeAreaView>
     );
   }
 
@@ -828,12 +813,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: DS.bg.page,
   },
   loadingText: {
     marginTop: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#6B7280',
+    color: DS.text.secondary,
   },
   listContent: {
     paddingHorizontal: SPACING.md,
@@ -909,9 +894,15 @@ const styles = StyleSheet.create({
   logoHeaderContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
     marginTop: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderRadius: DS.radius.xl,
+    backgroundColor: '#05070A',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    ...SHADOW.sm,
   },
   logoHeaderImage: {
     width: 80,
@@ -922,17 +913,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logoHeaderTitle: {
-    fontSize: 24,
-    fontWeight: '700' as const,
-    color: '#1A2A3D',
-    letterSpacing: 0.5,
+    fontSize: 28,
+    fontFamily: DS.font.lobster,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   logoHeaderSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500' as const,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.74)',
     marginTop: 2,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -940,11 +931,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.md,
     marginTop: SPACING.md,
-    backgroundColor: APP_TEXTURE.surfaceStrong,
+    backgroundColor: 'rgba(255,255,255,0.78)',
     padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: DS.radius.lg,
     borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
+    borderColor: 'rgba(223, 214, 206, 0.9)',
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -952,10 +943,10 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   sectionTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    letterSpacing: 1,
+    fontSize: 18,
+    fontWeight: '800' as const,
+    color: DS.text.primary,
+    letterSpacing: 0.5,
   },
   progressSection: {
     marginBottom: SPACING.md,
@@ -973,11 +964,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   progressCard: {
-    backgroundColor: APP_TEXTURE.surface,
+    backgroundColor: CLEAN_THEME.background.secondary,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
+    borderColor: CLEAN_THEME.border.light,
   },
   progressItem: {
     marginBottom: SPACING.xs,
@@ -1077,7 +1068,7 @@ const styles = StyleSheet.create({
   offerDetailItem: {},
   offerDetailLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.6)',
     marginBottom: 2,
   },
   offerDetailValue: {
@@ -1109,7 +1100,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
@@ -1121,7 +1112,7 @@ const styles = StyleSheet.create({
   },
   cruisePreviewDate: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.6)',
   },
   bookedMini: {
     backgroundColor: COLORS.success,
@@ -1136,7 +1127,7 @@ const styles = StyleSheet.create({
   },
   moreCruises: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.6)',
     fontStyle: 'italic',
   },
   emptyState: {
@@ -1144,17 +1135,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: SPACING.huge,
     paddingHorizontal: SPACING.xl,
-    backgroundColor: APP_TEXTURE.surfaceStrong,
-    borderRadius: BORDER_RADIUS.xl,
-    marginTop: SPACING.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
     borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
+    borderColor: DS.border.default,
+    marginTop: SPACING.lg,
   },
   emptyIconContainer: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(30, 58, 95, 0.1)',
+    backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.lg,
@@ -1162,26 +1153,26 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
     marginBottom: SPACING.sm,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#4B5563',
+    color: DS.text.secondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: SPACING.xl,
   },
   importButton: {
-    backgroundColor: COLORS.navyDeep,
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: DS.text.primary,
+    borderRadius: DS.radius.md,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xxl,
   },
   importButtonText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    color: '#FFFFFF',
   },
   agentChatOverlay: {
     position: 'absolute',
@@ -1211,12 +1202,12 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   casinoHistorySection: {
-    backgroundColor: APP_TEXTURE.surfaceStrong,
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: DS.bg.card,
+    borderRadius: DS.radius.xl,
     padding: SPACING.md,
     marginTop: SPACING.md,
     borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
+    borderColor: DS.border.default,
   },
   casinoHistoryHeader: {
     marginBottom: SPACING.md,
@@ -1227,23 +1218,23 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   casinoHistoryTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    letterSpacing: 1,
+    fontSize: 22,
+    fontFamily: DS.font.lobster,
+    color: DS.text.primary,
+    letterSpacing: 0.3,
   },
   casinoHistorySubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
+    color: DS.text.secondary,
     marginTop: 4,
   },
   casinoHistoryItem: {
-    backgroundColor: APP_TEXTURE.surfaceMuted,
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: DS.bg.secondary,
+    borderRadius: DS.radius.md,
     padding: SPACING.md,
     marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.58)',
+    borderColor: DS.border.default,
   },
   casinoHistoryItemHeader: {
     flexDirection: 'row',
@@ -1259,7 +1250,7 @@ const styles = StyleSheet.create({
   casinoHistoryShipName: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: DS.text.primary,
   },
   casinoHistoryDateRow: {
     flexDirection: 'row',
@@ -1268,17 +1259,17 @@ const styles = StyleSheet.create({
   },
   casinoHistoryDate: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
+    color: DS.text.secondary,
   },
   casinoHistoryItinerary: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#4B5563',
+    color: DS.text.secondary,
     marginBottom: SPACING.sm,
   },
   casinoHistoryStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.48)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
   },

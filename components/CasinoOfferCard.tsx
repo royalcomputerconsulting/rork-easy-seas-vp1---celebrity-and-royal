@@ -11,7 +11,7 @@ import {
   DollarSign,
   Tag,
 } from 'lucide-react-native';
-import { APP_TEXTURE, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, COLORS } from '@/constants/theme';
+import { SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, COLORS } from '@/constants/theme';
 import { createDateFromString } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, CasinoOffer } from '@/types/models';
@@ -147,14 +147,10 @@ const JACKPOT_BG = 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=
 
 const summaryStyles = StyleSheet.create({
   container: {
-    borderRadius: BORDER_RADIUS.xl,
+    borderRadius: BORDER_RADIUS.lg,
     marginBottom: SPACING.lg,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: APP_TEXTURE.borderStrong,
     ...SHADOW.lg,
-    shadowColor: '#10223A',
-    shadowOpacity: 0.16,
   },
   backgroundImage: {
     width: '100%',
@@ -185,11 +181,9 @@ const summaryStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: SPACING.lg,
-    backgroundColor: 'rgba(255,248,231,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
   },
   statItem: {
     flexDirection: 'row',
@@ -224,16 +218,16 @@ const summaryStyles = StyleSheet.create({
   },
   filterButton: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   filterButtonActive: {
-    backgroundColor: '#FFF7E1',
-    borderColor: '#FFF7E1',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
   },
   filterButtonText: {
     fontSize: 14,
@@ -254,8 +248,8 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   obc,
   cruises,
   onPress,
-  onCruisePress: _onCruisePress,
-  bookedCruiseIds: _bookedCruiseIds = new Set(),
+  onCruisePress,
+  bookedCruiseIds = new Set(),
   isActive = true,
   isBestValue = false,
   offerSource,
@@ -665,23 +659,19 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: APP_TEXTURE.surfaceStrong,
-    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
     ...SHADOW.md,
-    shadowColor: '#10223A',
-    shadowOpacity: 0.12,
   },
   offerHeaderSection: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: APP_TEXTURE.border,
+    borderBottomColor: '#E5E7EB',
   },
   offerNameHeader: {
     fontSize: 18,
@@ -756,7 +746,6 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     padding: SPACING.md,
-    backgroundColor: APP_TEXTURE.surfaceStrong,
   },
   keyInfoRow: {
     flexDirection: 'row',
@@ -765,12 +754,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   roomTypeBadge: {
-    backgroundColor: 'rgba(0,151,167,0.10)',
+    backgroundColor: '#E0F2F1',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(0,151,167,0.22)',
+    borderColor: COLORS.navyDeep,
   },
   roomTypeBadgeLabel: {
     fontSize: 10,
@@ -788,12 +777,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.56)',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.62)',
+    borderColor: '#E2E8F0',
   },
   expiryBadgeUrgent: {
     backgroundColor: '#FEF2F2',
@@ -816,23 +805,23 @@ const styles = StyleSheet.create({
   totalValueCompact: {
     marginLeft: 'auto' as const,
     alignItems: 'flex-end',
-    backgroundColor: 'rgba(212,160,10,0.12)',
+    backgroundColor: '#E8F5E9',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(212,160,10,0.24)',
+    borderColor: '#4CAF50',
   },
   totalValueCompactLabel: {
     fontSize: 9,
     fontWeight: '700' as const,
-    color: '#8A5C00',
+    color: '#2E7D32',
     letterSpacing: 0.3,
   },
   totalValueCompactAmount: {
     fontSize: 16,
     fontWeight: '800' as const,
-    color: '#8A5C00',
+    color: '#2E7D32',
   },
   destinationsRow: {
     marginBottom: SPACING.md,

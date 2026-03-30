@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, ActivityIndicator, TextInput, Alert, Modal, ScrollView } from 'react-native';
 import { Save, Dices, Plus, Trash2, Edit2, Clock, X } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { formatTime12Hour } from '@/lib/format';
 import type { PlayingHours, PlayingSession } from '@/state/UserProvider';

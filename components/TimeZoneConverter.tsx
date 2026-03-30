@@ -236,7 +236,7 @@ export function TimeZoneConverter() {
         console.log('[TimeZone] Error loading saved zones:', e);
       }
     };
-    void loadSaved();
+    loadSaved();
   }, []);
 
   useEffect(() => {
@@ -257,7 +257,7 @@ export function TimeZoneConverter() {
       duration: 250,
       useNativeDriver: false,
     }).start();
-  }, [expanded, expandAnim]);
+  }, [expanded]);
 
   const offset = useMemo(
     () => getOffsetDifference(localTz.offset, remoteTz.offset),
@@ -295,7 +295,7 @@ export function TimeZoneConverter() {
     if (meetingTimeInput.trim()) {
       handleConvertMeeting();
     }
-  }, [meetingFrom, localTz, remoteTz, meetingTimeInput, handleConvertMeeting]);
+  }, [meetingFrom, localTz, remoteTz, handleConvertMeeting]);
 
   const toggleExpanded = useCallback(() => {
     setExpanded((prev) => !prev);

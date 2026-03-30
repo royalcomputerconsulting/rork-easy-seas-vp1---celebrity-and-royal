@@ -435,7 +435,7 @@ function PointsEfficiencySection({ analytics, cruiseMetrics }: { analytics: Sess
   );
 }
 
-export function CasinoIntelligenceCard({ analytics, onViewDetails: _onViewDetails, completedCruises }: CasinoIntelligenceCardProps) {
+export function CasinoIntelligenceCard({ analytics, onViewDetails, completedCruises }: CasinoIntelligenceCardProps) {
   const cruiseMetrics = useMemo((): CruiseBasedMetrics | undefined => {
     if (!completedCruises || completedCruises.length === 0) return undefined;
     

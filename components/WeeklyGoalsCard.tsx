@@ -208,7 +208,7 @@ function GoalProgressRing({
 
   const handlePress = useCallback(() => {
     if (Platform.OS !== 'web') {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     onEdit();
   }, [onEdit]);
@@ -345,7 +345,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
       setEditValues(prev => ({ ...prev, [goalType]: goal.target.toString() }));
       setEditingGoal(goalType);
       if (Platform.OS !== 'web') {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     }
   }, [weeklyGoals]);
@@ -355,7 +355,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
     if (!isNaN(newTarget) && newTarget > 0) {
       console.log('[WeeklyGoalsCard] Would update goal target:', goalType, newTarget);
       if (Platform.OS !== 'web') {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
     setEditingGoal(null);

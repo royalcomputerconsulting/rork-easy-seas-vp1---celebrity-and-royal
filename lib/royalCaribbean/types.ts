@@ -283,6 +283,6 @@ export interface RoyalCaribbeanSyncState {
   error: string | null;
   lastSyncTimestamp: string | null;
   syncCounts: SyncDataCounts | null;
-  syncPreview: Record<string, unknown> | null;
+  syncPreview: any | null;
   scrapePricingAndItinerary: boolean;
 }

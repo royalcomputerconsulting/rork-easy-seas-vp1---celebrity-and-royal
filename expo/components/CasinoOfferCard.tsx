@@ -11,7 +11,7 @@ import {
   DollarSign,
   Tag,
 } from 'lucide-react-native';
-import { APP_TEXTURE, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, COLORS } from '@/constants/theme';
+import { SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, COLORS } from '@/constants/theme';
 import { createDateFromString } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, CasinoOffer } from '@/types/models';
@@ -31,7 +31,6 @@ interface CasinoOfferCardProps {
   bookedCruiseIds?: Set<string>;
   isActive?: boolean;
   isBestValue?: boolean;
-  offerSource?: 'royal' | 'celebrity' | 'carnival';
 }
 
 interface OfferSummaryCardProps {
@@ -144,17 +143,16 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
 export const JackpotDealsCard = OfferSummaryCard;
 
 const JACKPOT_BG = 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=600&q=80';
+const OFFER_CARD_MARBLE_COLORS = ['#FCFEFF', '#EEF7FF', '#DDEEFF', '#CAE3F8'] as const;
+const OFFER_CARD_MARBLE_VEIN_COLORS = ['rgba(255,255,255,0.98)', 'rgba(188,216,241,0.28)', 'rgba(255,255,255,0.18)', 'rgba(142,182,221,0.24)'] as const;
+const OFFER_CARD_MARBLE_LOCATIONS = [0, 0.26, 0.7, 1] as const;
 
 const summaryStyles = StyleSheet.create({
   container: {
-    borderRadius: BORDER_RADIUS.xl,
+    borderRadius: BORDER_RADIUS.lg,
     marginBottom: SPACING.lg,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: APP_TEXTURE.borderStrong,
     ...SHADOW.lg,
-    shadowColor: '#10223A',
-    shadowOpacity: 0.16,
   },
   backgroundImage: {
     width: '100%',
@@ -185,11 +183,9 @@ const summaryStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: SPACING.lg,
-    backgroundColor: 'rgba(255,248,231,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
   },
   statItem: {
     flexDirection: 'row',
@@ -224,16 +220,16 @@ const summaryStyles = StyleSheet.create({
   },
   filterButton: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   filterButtonActive: {
-    backgroundColor: '#FFF7E1',
-    borderColor: '#FFF7E1',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
   },
   filterButtonText: {
     fontSize: 14,
@@ -258,7 +254,6 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   bookedCruiseIds: _bookedCruiseIds = new Set(),
   isActive = true,
   isBestValue = false,
-  offerSource,
 }: CasinoOfferCardProps) {
   const { localData } = useAppState();
   const [showOfferImage, setShowOfferImage] = useState(false);
@@ -508,101 +503,99 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       activeOpacity={0.9}
       testID="casino-offer-card"
     >
-      {/* OFFER NAME & CODE - BLACK BOLD AT TOP */}
-      <View style={styles.offerHeaderSection}>
-        <Text style={styles.offerNameHeader}>{offerName}</Text>
-        <View style={styles.offerCodeHeaderBadge}>
-          <Text style={styles.offerCodeHeaderText}>CODE: {offerCode}</Text>
-        </View>
-      </View>
-
-      {/* IMAGE SECTION */}
-      <View style={styles.imageSection}>
-        <Image 
-          source={{ uri: cardImageUri }} 
-          style={styles.heroImage}
-          resizeMode="cover"
-          onError={() => setCardImageUri(DEFAULT_CRUISE_IMAGE)}
+      <LinearGradient
+        colors={OFFER_CARD_MARBLE_COLORS}
+        locations={OFFER_CARD_MARBLE_LOCATIONS}
+        start={{ x: 0.02, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.marbleBackground}
+      >
+        <LinearGradient
+          colors={OFFER_CARD_MARBLE_VEIN_COLORS}
+          locations={OFFER_CARD_MARBLE_LOCATIONS}
+          start={{ x: 0.12, y: 0 }}
+          end={{ x: 0.88, y: 1 }}
+          style={styles.marbleVein}
         />
-        
-        <View style={[styles.statusBadgeLarge, { backgroundColor: statusBadge.bg }]}>
-          <Text style={styles.statusBadgeLargeText}>{statusBadge.text}</Text>
+        <View style={styles.offerHeaderSection}>
+          <Text style={styles.offerNameHeader}>{offerName}</Text>
+          <View style={styles.offerCodeHeaderBadge}>
+            <Text style={styles.offerCodeHeaderText}>CODE: {offerCode}</Text>
+          </View>
         </View>
 
-        {expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && (
-          <View style={styles.expiryAlertBadge}>
-            <Clock size={14} color={COLORS.white} />
-            <Text style={styles.expiryAlertText}>Expires in {expiryDays} days</Text>
+        <View style={styles.imageSection}>
+          <Image 
+            source={{ uri: cardImageUri }} 
+            style={styles.heroImage}
+            resizeMode="cover"
+            onError={() => setCardImageUri(DEFAULT_CRUISE_IMAGE)}
+          />
+          
+          <View style={[styles.statusBadgeLarge, { backgroundColor: statusBadge.bg }]}>
+            <Text style={styles.statusBadgeLargeText}>{statusBadge.text}</Text>
           </View>
-        )}
 
-        <View style={styles.cruiseCountBadge}>
-          <Text style={styles.cruiseCountBadgeText}>
-            {offerSource === 'carnival'
-              ? 'Tap to view cruises on Carnival.com'
-              : `${offerDetails.totalCruises} cruise${offerDetails.totalCruises !== 1 ? 's' : ''} available`}
-          </Text>
-        </View>
-      </View>
-
-      {/* CONTENT SECTION */}
-      <View style={styles.contentSection}>
-        {/* Destinations */}
-        {uniqueDestinations.length > 0 && (
-          <View style={styles.destinationsRow}>
-            <Text style={styles.destLabel}>DESTINATIONS</Text>
-            <Text style={styles.destValue} numberOfLines={2}>
-              {uniqueDestinations.join(' • ')}
-            </Text>
-          </View>
-        )}
-
-        {/* Key Info Row: Room Type, Expiration, Total Value */}
-        <View style={styles.keyInfoRow}>
-          {offerDetails.roomType && offerDetails.roomType !== 'N/A' && (
-            <View style={styles.roomTypeBadge}>
-              <Text style={styles.roomTypeBadgeLabel}>ROOM TYPE</Text>
-              <Text style={styles.roomTypeBadgeValue}>{offerDetails.roomType}</Text>
+          {expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && (
+            <View style={styles.expiryAlertBadge}>
+              <Clock size={14} color={COLORS.white} />
+              <Text style={styles.expiryAlertText}>Expires in {expiryDays} days</Text>
             </View>
           )}
-          {expiryDate && (
-            <View style={[styles.expiryBadge, expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && styles.expiryBadgeUrgent]}>
-              <Clock size={14} color={expiryDays !== null && expiryDays <= 7 && expiryDays > 0 ? '#DC2626' : COLORS.navyDeep} />
-              <View>
-                <Text style={styles.expiryBadgeLabel}>EXPIRES</Text>
-                <Text style={[styles.expiryBadgeValue, expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && styles.expiryBadgeValueUrgent]}>
-                  {createDateFromString(expiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </Text>
+
+          <View style={styles.cruiseCountBadge}>
+            <Text style={styles.cruiseCountBadgeText}>
+              {offerDetails.totalCruises} cruise{offerDetails.totalCruises !== 1 ? 's' : ''} available
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.contentSection}>
+          {uniqueDestinations.length > 0 && (
+            <View style={styles.destinationsRow}>
+              <Text style={styles.destLabel}>DESTINATIONS</Text>
+              <Text style={styles.destValue} numberOfLines={2}>
+                {uniqueDestinations.join(' • ')}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.keyInfoRow}>
+            {offerDetails.roomType && offerDetails.roomType !== 'N/A' && (
+              <View style={styles.roomTypeBadge}>
+                <Text style={styles.roomTypeBadgeLabel}>ROOM TYPE</Text>
+                <Text style={styles.roomTypeBadgeValue}>{offerDetails.roomType}</Text>
               </View>
+            )}
+            {expiryDate && (
+              <View style={[styles.expiryBadge, expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && styles.expiryBadgeUrgent]}>
+                <Clock size={14} color={expiryDays !== null && expiryDays <= 7 && expiryDays > 0 ? '#DC2626' : COLORS.navyDeep} />
+                <View>
+                  <Text style={styles.expiryBadgeLabel}>EXPIRES</Text>
+                  <Text style={[styles.expiryBadgeValue, expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && styles.expiryBadgeValueUrgent]}>
+                    {createDateFromString(expiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </Text>
+                </View>
+              </View>
+            )}
+            <View style={styles.totalValueCompact}>
+              <Text style={styles.totalValueCompactLabel}>
+                TOTAL VALUE{aggregateValue && aggregateValue.cruiseCount > 1 ? ` (${aggregateValue.cruiseCount})` : ''}
+              </Text>
+              <Text style={styles.totalValueCompactAmount}>
+                ${totalValue > 0 ? Math.round(totalValue).toLocaleString() : '---'}
+              </Text>
             </View>
-          )}
-          <View style={styles.totalValueCompact}>
-            <Text style={styles.totalValueCompactLabel}>
-              TOTAL VALUE{aggregateValue && aggregateValue.cruiseCount > 1 ? ` (${aggregateValue.cruiseCount})` : ''}
-            </Text>
-            <Text style={styles.totalValueCompactAmount}>
-              ${totalValue > 0 ? Math.round(totalValue).toLocaleString() : '---'}
-            </Text>
+          </View>
+
+          <View style={styles.actionRowLarge}>
+            <TouchableOpacity style={styles.primaryButtonLarge} onPress={onPress}>
+              <Text style={styles.primaryButtonTextLarge}>View All Cruises</Text>
+              <ChevronRight size={18} color={COLORS.white} />
+            </TouchableOpacity>
           </View>
         </View>
-
-        {/* ACTION ROW */}
-        <View style={styles.actionRowLarge}>
-          <TouchableOpacity style={[styles.primaryButtonLarge, offerSource === 'carnival' && styles.carnivalButton]} onPress={onPress}>
-            {offerSource === 'carnival' ? (
-              <>
-                <ExternalLink size={18} color={COLORS.white} />
-                <Text style={styles.primaryButtonTextLarge}>View Cruises on Carnival.com</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.primaryButtonTextLarge}>View All Cruises</Text>
-                <ChevronRight size={18} color={COLORS.white} />
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
+      </LinearGradient>
 
       <Modal
         visible={showOfferImage}
@@ -665,23 +658,29 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: APP_TEXTURE.surfaceStrong,
-    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
+    borderColor: '#D7E6F4',
     ...SHADOW.md,
-    shadowColor: '#10223A',
-    shadowOpacity: 0.12,
+  },
+  marbleBackground: {
+    borderRadius: BORDER_RADIUS.lg,
+    position: 'relative',
+  },
+  marbleVein: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.94,
   },
   offerHeaderSection: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(247,251,255,0.76)',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: APP_TEXTURE.border,
+    borderBottomColor: '#E5E7EB',
   },
   offerNameHeader: {
     fontSize: 18,
@@ -756,7 +755,7 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     padding: SPACING.md,
-    backgroundColor: APP_TEXTURE.surfaceStrong,
+    backgroundColor: 'rgba(245,250,255,0.66)',
   },
   keyInfoRow: {
     flexDirection: 'row',
@@ -765,12 +764,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   roomTypeBadge: {
-    backgroundColor: 'rgba(0,151,167,0.10)',
+    backgroundColor: 'rgba(246,250,255,0.78)',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(0,151,167,0.22)',
+    borderColor: '#D5E6F4',
   },
   roomTypeBadgeLabel: {
     fontSize: 10,
@@ -788,12 +787,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.56)',
+    backgroundColor: 'rgba(246,250,255,0.78)',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.62)',
+    borderColor: '#D5E6F4',
   },
   expiryBadgeUrgent: {
     backgroundColor: '#FEF2F2',
@@ -816,23 +815,23 @@ const styles = StyleSheet.create({
   totalValueCompact: {
     marginLeft: 'auto' as const,
     alignItems: 'flex-end',
-    backgroundColor: 'rgba(212,160,10,0.12)',
+    backgroundColor: 'rgba(240,249,244,0.9)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(212,160,10,0.24)',
+    borderColor: '#8BC6A8',
   },
   totalValueCompactLabel: {
     fontSize: 9,
     fontWeight: '700' as const,
-    color: '#8A5C00',
+    color: '#2E7D32',
     letterSpacing: 0.3,
   },
   totalValueCompactAmount: {
     fontSize: 16,
     fontWeight: '800' as const,
-    color: '#8A5C00',
+    color: '#2E7D32',
   },
   destinationsRow: {
     marginBottom: SPACING.md,
@@ -1003,9 +1002,6 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.sm,
-  },
-  carnivalButton: {
-    backgroundColor: '#CC2232',
   },
   primaryButtonTextLarge: {
     fontSize: 14,

@@ -57,6 +57,7 @@ export interface UserProfile {
   carnivalVifpTier?: string;
   carnivalPlayersClubTier?: string;
   carnivalPlayersClubPoints?: number;
+  birthdate?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -204,6 +205,7 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     carnivalVifpTier: typeof userRecord.carnivalVifpTier === 'string' ? userRecord.carnivalVifpTier : '',
     carnivalPlayersClubTier: typeof userRecord.carnivalPlayersClubTier === 'string' ? userRecord.carnivalPlayersClubTier : '',
     carnivalPlayersClubPoints: typeof userRecord.carnivalPlayersClubPoints === 'number' ? userRecord.carnivalPlayersClubPoints : 0,
+    birthdate: typeof userRecord.birthdate === 'string' ? userRecord.birthdate : undefined,
     createdAt: typeof userRecord.createdAt === 'string' ? userRecord.createdAt : now,
     updatedAt: typeof userRecord.updatedAt === 'string' ? userRecord.updatedAt : now,
   };
