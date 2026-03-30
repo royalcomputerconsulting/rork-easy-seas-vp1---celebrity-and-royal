@@ -12,6 +12,7 @@ import { ArrowLeft, Filter } from 'lucide-react-native';
 import {
   PremiumActionBar,
   PremiumChipBar,
+  PremiumCompactCruiseCard,
   PremiumDataSection,
   PremiumEmptyState,
   PremiumEntityCard,
@@ -24,7 +25,7 @@ import { SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { calculateOfferValue } from '@/lib/valueCalculator';
 import { createDateFromString, formatDate, getDaysUntil } from '@/lib/date';
 import {
-  buildCruiseCardFields,
+  buildCompactCruiseCardFields,
   buildDataSections,
   buildOfferCardFields,
   getCruiseBadge,
@@ -276,10 +277,10 @@ export default function OfferDetailsScreen() {
   }, [offerData.offer, updateCasinoOffer]);
 
   const renderCruiseCard = useCallback(({ item }: { item: Cruise }) => {
-    const fields = buildCruiseCardFields(item, offerData.offer);
+    const fields = buildCompactCruiseCardFields(item, offerData.offer);
     const badge = bookedCruiseIds.has(item.id) ? { label: 'BOOKED', tone: 'teal' as const } : getCruiseBadge(item);
     return (
-      <PremiumEntityCard
+      <PremiumCompactCruiseCard
         title={item.shipName}
         subtitle={`${formatDate(item.sailDate, 'medium')} • ${item.nights || 0} nights • ${item.departurePort || 'Port TBD'}`}
         imageUri={pickCruiseImage(item)}
@@ -287,15 +288,14 @@ export default function OfferDetailsScreen() {
         chips={[
           item.destination || item.itineraryName || 'Cruise',
           item.cabinType || offerInfo.roomType || 'Cabin TBD',
-          item.offerCode || offerInfo.offerCode,
         ].filter(Boolean)}
-        primaryFields={fields.primary}
-        extraFields={fields.extra}
-        footerText="Every cruise under this offer retains its full data payload and opens the unified cruise detail screen."
+        highlights={fields.highlights}
+        details={fields.details}
+        footerText="Tap to open the full cruise detail screen."
         onPress={() => handleCruisePress(item.id)}
       />
     );
-  }, [bookedCruiseIds, handleCruisePress, offerData.offer, offerInfo.offerCode, offerInfo.roomType]);
+  }, [bookedCruiseIds, handleCruisePress, offerData.offer, offerInfo.roomType]);
 
   return (
     <PremiumPageBackground>
@@ -320,6 +320,7 @@ export default function OfferDetailsScreen() {
                 badge={getOfferBadge(offerData.offer)}
                 imageUri={pickCruiseImage(offerData.offer ?? offerData.cruises[0], offerInfo.offerCode)}
                 pills={heroPills}
+                compact
               >
                 <PremiumQuickFacts fields={quickFacts} />
               </PremiumHeroCard>
@@ -393,7 +394,7 @@ export default function OfferDetailsScreen() {
 
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionTitle}>Eligible Cruises</Text>
-                <Text style={styles.sectionSubtitle}>{offerData.cruises.length} sailings • union of cruise + offer data preserved</Text>
+                <Text style={styles.sectionSubtitle}>{offerData.cruises.length} sailings • compact at-a-glance cards with full values visible</Text>
               </View>
             </View>
           )}

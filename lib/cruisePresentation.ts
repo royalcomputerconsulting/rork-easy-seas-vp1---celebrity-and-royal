@@ -549,6 +549,37 @@ export function buildCruiseCardFields(cruise: Cruise | BookedCruise, linkedOffer
   };
 }
 
+export function buildCompactCruiseCardFields(cruise: Cruise | BookedCruise, linkedOffer?: CasinoOffer): { highlights: DisplayField[]; details: DisplayField[] } {
+  const allFields = buildCruiseCardFields(cruise, linkedOffer);
+  const combinedFields = [...allFields.primary, ...allFields.extra];
+  const fieldMap = new Map<string, DisplayField>(combinedFields.map((field) => [field.key, field]));
+
+  const highlights = [
+    'cabinType',
+    'guests',
+    'tradeInValue',
+    'retailValue',
+    'totalValue',
+    'status',
+  ]
+    .map((key) => fieldMap.get(key))
+    .filter((field): field is DisplayField => Boolean(field));
+
+  const details = [
+    'offerCode',
+    'offerName',
+    'freePlay',
+    'freeOBC',
+  ]
+    .map((key) => fieldMap.get(key))
+    .filter((field): field is DisplayField => Boolean(field));
+
+  return {
+    highlights,
+    details,
+  };
+}
+
 export function buildOfferCardFields(offer: CasinoOffer | undefined, cruises: Cruise[]): { primary: DisplayField[]; extra: DisplayField[] } {
   const fallbackCruise = cruises[0];
   const targetOffer = offer ?? {

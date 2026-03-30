@@ -125,6 +125,7 @@ export const PremiumHeroCard = memo(function PremiumHeroCard({
   imageUri,
   pills,
   children,
+  compact = false,
 }: {
   title: string;
   subtitle?: string;
@@ -132,41 +133,42 @@ export const PremiumHeroCard = memo(function PremiumHeroCard({
   imageUri: string;
   pills: SummaryPill[];
   children?: React.ReactNode;
+  compact?: boolean;
 }) {
   const badgeTone = badge ? getToneStyles(badge.tone) : null;
 
   return (
     <View style={styles.heroShadowWrap}>
-      <ImageBackground source={{ uri: imageUri }} style={styles.heroCard} imageStyle={styles.heroImage}>
+      <ImageBackground source={{ uri: imageUri }} style={[styles.heroCard, compact && styles.heroCardCompact]} imageStyle={styles.heroImage}>
         <LinearGradient
           colors={['rgba(6,14,30,0.22)', 'rgba(7,19,40,0.72)', 'rgba(10,26,52,0.92)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.heroOverlay}
+          style={[styles.heroOverlay, compact && styles.heroOverlayCompact]}
         >
-          <View style={styles.heroTopRow}>
-            <View style={styles.heroIconBubble}>
-              <Sparkles size={18} color="#FFE28F" />
+          <View style={[styles.heroTopRow, compact && styles.heroTopRowCompact]}>
+            <View style={[styles.heroIconBubble, compact && styles.heroIconBubbleCompact]}>
+              <Sparkles size={compact ? 16 : 18} color="#FFE28F" />
             </View>
             {badgeTone ? (
-              <View style={[styles.badge, { backgroundColor: badgeTone.bg, borderColor: badgeTone.border }]}>
+              <View style={[styles.badge, { backgroundColor: badgeTone.bg, borderColor: badgeTone.border }]}> 
                 <Text style={[styles.badgeText, { color: badgeTone.text }]}>{badge?.label}</Text>
               </View>
             ) : null}
           </View>
-          <Text style={styles.heroTitle}>{title}</Text>
-          {subtitle ? <Text style={styles.heroSubtitle}>{subtitle}</Text> : null}
-          <View style={styles.pillsRow}>
+          <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]}>{title}</Text>
+          {subtitle ? <Text style={[styles.heroSubtitle, compact && styles.heroSubtitleCompact]}>{subtitle}</Text> : null}
+          <View style={[styles.pillsRow, compact && styles.pillsRowCompact]}>
             {pills.map((pill) => {
               return (
-                <View key={pill.label} style={[styles.summaryPill, { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.25)' }]}> 
+                <View key={pill.label} style={[styles.summaryPill, compact && styles.summaryPillCompact, { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.25)' }]}> 
                   <Text style={styles.summaryPillLabel}>{pill.label}</Text>
-                  <Text style={[styles.summaryPillValue, { color: '#FFFFFF' }]}>{pill.value}</Text>
+                  <Text style={[styles.summaryPillValue, compact && styles.summaryPillValueCompact, { color: '#FFFFFF' }]}>{pill.value}</Text>
                 </View>
               );
             })}
           </View>
-          {children ? <View style={styles.heroChildContainer}>{children}</View> : null}
+          {children ? <View style={[styles.heroChildContainer, compact && styles.heroChildContainerCompact]}>{children}</View> : null}
         </LinearGradient>
       </ImageBackground>
     </View>
@@ -378,6 +380,93 @@ export const PremiumEntityCard = memo(function PremiumEntityCard({
   );
 });
 
+export const PremiumCompactCruiseCard = memo(function PremiumCompactCruiseCard({
+  title,
+  subtitle,
+  imageUri,
+  badge,
+  chips,
+  highlights,
+  details,
+  footerText,
+  onPress,
+}: {
+  title: string;
+  subtitle?: string;
+  imageUri: string;
+  badge?: AccentBadge;
+  chips?: string[];
+  highlights: DisplayField[];
+  details?: DisplayField[];
+  footerText?: string;
+  onPress?: () => void;
+}) {
+  const badgeTone = useMemo(() => (badge ? getToneStyles(badge.tone) : null), [badge]);
+
+  return (
+    <TouchableOpacity style={styles.compactCruiseCard} activeOpacity={0.92} onPress={onPress} testID="premium-compact-cruise-card">
+      <ImageBackground source={{ uri: imageUri }} style={styles.compactCruiseBanner} imageStyle={styles.compactCruiseBannerImage}>
+        <LinearGradient
+          colors={['rgba(10,24,49,0.18)', 'rgba(10,24,49,0.70)', 'rgba(12,26,52,0.94)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.compactCruiseBannerOverlay}
+        >
+          <View style={styles.compactCruiseBannerTopRow}>
+            {badgeTone ? (
+              <View style={[styles.badge, { backgroundColor: badgeTone.bg, borderColor: badgeTone.border }]}>
+                <Text style={[styles.badgeText, { color: badgeTone.text }]}>{badge?.label}</Text>
+              </View>
+            ) : <View />}
+            {onPress ? (
+              <View style={styles.inlineActionBadge}>
+                <ArrowRight size={16} color="#FFFFFF" />
+              </View>
+            ) : null}
+          </View>
+        </LinearGradient>
+      </ImageBackground>
+
+      <View style={styles.compactCruiseBody}>
+        <Text style={styles.compactCruiseTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.compactCruiseSubtitle}>{subtitle}</Text> : null}
+
+        {chips && chips.length > 0 ? (
+          <View style={styles.compactCruiseChipRow}>
+            {chips.slice(0, 3).map((chip) => (
+              <View key={chip} style={styles.compactCruiseChip}>
+                <Text style={styles.compactCruiseChipText}>{chip}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <View style={styles.compactCruiseHighlightGrid}>
+          {highlights.map((field) => (
+            <View key={field.key} style={styles.compactCruiseHighlightTile}>
+              <Text style={styles.compactCruiseHighlightLabel}>{field.label}</Text>
+              <Text style={[styles.compactCruiseHighlightValue, { color: getFieldToneColor(field.tone) }]}>{field.value}</Text>
+            </View>
+          ))}
+        </View>
+
+        {details && details.length > 0 ? (
+          <View style={styles.compactCruiseDetailStack}>
+            {details.map((field) => (
+              <View key={field.key} style={styles.compactCruiseDetailRow}>
+                <Text style={styles.compactCruiseDetailLabel}>{field.label}</Text>
+                <Text style={[styles.compactCruiseDetailValue, { color: getFieldToneColor(field.tone) }]} numberOfLines={2}>{field.value}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {footerText ? <Text style={styles.compactCruiseFooter}>{footerText}</Text> : null}
+      </View>
+    </TouchableOpacity>
+  );
+});
+
 export const PremiumEmptyState = memo(function PremiumEmptyState({
   title,
   subtitle,
@@ -433,6 +522,9 @@ const styles = StyleSheet.create({
     minHeight: 248,
     justifyContent: 'flex-end',
   },
+  heroCardCompact: {
+    minHeight: 154,
+  },
   heroImage: {
     borderRadius: 28,
   },
@@ -441,11 +533,17 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
     justifyContent: 'flex-end',
   },
+  heroOverlayCompact: {
+    padding: SPACING.lg,
+  },
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 18,
+  },
+  heroTopRowCompact: {
+    marginBottom: 12,
   },
   heroIconBubble: {
     width: 42,
@@ -456,6 +554,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  heroIconBubbleCompact: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
   },
   badge: {
     paddingHorizontal: 12,
@@ -474,11 +577,20 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
     letterSpacing: -0.8,
   },
+  heroTitleCompact: {
+    fontSize: 23,
+    letterSpacing: -0.5,
+  },
   heroSubtitle: {
     marginTop: 8,
     color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 14,
     lineHeight: 20,
+  },
+  heroSubtitleCompact: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
   },
   pillsRow: {
     marginTop: 18,
@@ -486,12 +598,22 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
+  pillsRowCompact: {
+    marginTop: 12,
+    gap: 8,
+  },
   summaryPill: {
     minWidth: 88,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 18,
     borderWidth: 1,
+  },
+  summaryPillCompact: {
+    minWidth: 74,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
   },
   summaryPillLabel: {
     color: 'rgba(255, 255, 255, 0.75)',
@@ -505,8 +627,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800' as const,
   },
+  summaryPillValueCompact: {
+    fontSize: 13,
+  },
   heroChildContainer: {
     marginTop: 18,
+  },
+  heroChildContainerCompact: {
+    marginTop: 14,
   },
   actionRow: {
     gap: 10,
@@ -742,6 +870,124 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 12,
     lineHeight: 18,
+  },
+  compactCruiseCard: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: APP_TEXTURE.surfaceStrong,
+    borderWidth: 1,
+    borderColor: APP_TEXTURE.border,
+    ...SHADOW.card,
+    shadowColor: '#10223A',
+    shadowOpacity: 0.08,
+  },
+  compactCruiseBanner: {
+    height: 82,
+    justifyContent: 'flex-start',
+  },
+  compactCruiseBannerImage: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  compactCruiseBannerOverlay: {
+    flex: 1,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+  },
+  compactCruiseBannerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  compactCruiseBody: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.md,
+    gap: 10,
+  },
+  compactCruiseTitle: {
+    color: '#1A2A3D',
+    fontSize: 19,
+    fontWeight: '800' as const,
+    letterSpacing: -0.4,
+  },
+  compactCruiseSubtitle: {
+    color: '#64748B',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  compactCruiseChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  compactCruiseChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: APP_TEXTURE.goldWash,
+    borderWidth: 1,
+    borderColor: APP_TEXTURE.borderStrong,
+  },
+  compactCruiseChipText: {
+    color: '#73510D',
+    fontSize: 11,
+    fontWeight: '700' as const,
+  },
+  compactCruiseHighlightGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  compactCruiseHighlightTile: {
+    width: '47%',
+    minHeight: 74,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: APP_TEXTURE.surfaceMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.58)',
+  },
+  compactCruiseHighlightLabel: {
+    color: '#6B7280',
+    fontSize: 10,
+    fontWeight: '700' as const,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  compactCruiseHighlightValue: {
+    marginTop: 6,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '800' as const,
+    color: '#1A2A3D',
+  },
+  compactCruiseDetailStack: {
+    gap: 8,
+  },
+  compactCruiseDetailRow: {
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(126, 143, 162, 0.16)',
+  },
+  compactCruiseDetailLabel: {
+    color: '#6B7280',
+    fontSize: 10,
+    fontWeight: '700' as const,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  compactCruiseDetailValue: {
+    marginTop: 5,
+    color: '#1A2A3D',
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '700' as const,
+  },
+  compactCruiseFooter: {
+    color: '#94A3B8',
+    fontSize: 12,
+    lineHeight: 17,
   },
   emptyCard: {
     borderRadius: 28,
