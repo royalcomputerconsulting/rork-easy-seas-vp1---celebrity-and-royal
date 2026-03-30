@@ -43,6 +43,7 @@ export interface UserProfile {
   isOwner?: boolean;
   avatarUrl?: string;
   crownAnchorNumber?: string;
+  birthdate?: string;
   playingHours?: PlayingHours;
   celebrityEmail?: string;
   celebrityCaptainsClubNumber?: string;
@@ -119,6 +120,7 @@ function createOwnerProfile(email: string | null): UserProfile {
     email: email ?? DEFAULT_OWNER.email,
     isOwner: true,
     crownAnchorNumber: DEFAULT_OWNER.crownAnchorNumber,
+    birthdate: undefined,
     celebrityEmail: DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: DEFAULT_OWNER.celebrityCaptainsClubNumber,
     celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
