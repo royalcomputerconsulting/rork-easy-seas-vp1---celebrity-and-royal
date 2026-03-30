@@ -1,6 +1,9 @@
 #!/bin/bash
-set -e
 
-echo "Running Expo build from ./expo..."
-cd "$(dirname "$0")/expo"
-bash ./build.sh
+echo "Installing dependencies..."
+npm install
+
+echo "Exporting Expo web app..."
+npx expo export -p web --output-dir dist
+
+echo "Build complete! Static files are in ./dist"

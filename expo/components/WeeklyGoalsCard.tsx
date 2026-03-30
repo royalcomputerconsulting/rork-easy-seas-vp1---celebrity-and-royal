@@ -268,12 +268,12 @@ function GoalProgressRing({
         </View>
       )}
       
-      {isCompleted && goal.reward ? (
+      {isCompleted && goal.reward && (
         <View style={[styles.rewardBadge, { backgroundColor: config.lightColor }]}>
           <Star size={10} color={config.color} fill={config.color} />
           <Text style={[styles.rewardText, { color: config.color }]}>{goal.reward}</Text>
         </View>
-      ) : null}
+      )}
     </Animated.View>
   );
 }
@@ -497,7 +497,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
           })}
         </View>
 
-        {completedGoalsCount === weeklyGoals.length && weeklyGoals.length > 0 ? (
+        {completedGoalsCount === weeklyGoals.length && weeklyGoals.length > 0 && (
           <View style={styles.allCompleteCard}>
             <LinearGradient
               colors={['#10B981', '#059669']}
@@ -516,7 +516,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
               </View>
             </LinearGradient>
           </View>
-        ) : null}
+        )}
 
         <View style={styles.tipsContainer}>
           <View style={styles.tipRow}>

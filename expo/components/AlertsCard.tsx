@@ -169,7 +169,7 @@ export const AlertItem = React.memo(function AlertItem({ alert, onDismiss, onSno
         </Text>
 
         <View style={styles.alertActions}>
-          {alert.actionLabel ? (
+          {alert.actionLabel && (
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: `${priorityColor}20` }]}
               onPress={handleAction}
@@ -180,7 +180,7 @@ export const AlertItem = React.memo(function AlertItem({ alert, onDismiss, onSno
               </Text>
               <ChevronRight size={14} color={priorityColor} />
             </TouchableOpacity>
-          ) : null}
+          )}
           
           <View style={styles.secondaryActions}>
             <TouchableOpacity
@@ -299,22 +299,22 @@ export const AlertsCard = React.memo(function AlertsCard({
         <View style={styles.cardTitleRow}>
           <Bell size={20} color={COLORS.beigeWarm} />
           <Text style={styles.cardTitle}>{title}</Text>
-          {(criticalCount > 0 || highCount > 0) ? (
+          {(criticalCount > 0 || highCount > 0) && (
             <View style={styles.alertCountBadge}>
               <Text style={styles.alertCountText}>
                 {criticalCount + highCount}
               </Text>
             </View>
-          ) : null}
+          )}
         </View>
-        {onClearAll && alerts.length > 0 ? (
+        {onClearAll && alerts.length > 0 && (
           <TouchableOpacity onPress={onClearAll} activeOpacity={0.7}>
             <Text style={styles.clearAllText}>Clear All</Text>
           </TouchableOpacity>
-        ) : null}
+        )}
       </View>
 
-      {alerts.length > 0 ? (
+      {alerts.length > 0 && (
         <View style={styles.alertsSection}>
           <View style={styles.sectionHeader}>
             <AlertTriangle size={14} color={COLORS.warning} />
@@ -332,7 +332,7 @@ export const AlertsCard = React.memo(function AlertsCard({
             />
           ))}
           
-          {alerts.length > maxAlerts ? (
+          {alerts.length > maxAlerts && (
             <TouchableOpacity 
               style={styles.viewMoreButton} 
               activeOpacity={0.7}
@@ -343,11 +343,11 @@ export const AlertsCard = React.memo(function AlertsCard({
               </Text>
               <ChevronRight size={14} color={COLORS.beigeWarm} style={expanded ? { transform: [{ rotate: '90deg' }] } : undefined} />
             </TouchableOpacity>
-          ) : null}
+          )}
         </View>
-      ) : null}
+      )}
 
-      {showInsights && insights.length > 0 ? (
+      {showInsights && insights.length > 0 && (
         <View style={styles.insightsSection}>
           <View style={styles.sectionHeader}>
             <Sparkles size={14} color={COLORS.goldAccent} />
@@ -360,7 +360,7 @@ export const AlertsCard = React.memo(function AlertsCard({
             <InsightItem key={insight.id} insight={insight} />
           ))}
         </View>
-      ) : null}
+      )}
     </View>
   );
 });
@@ -422,11 +422,11 @@ export const CompactAlertsList = React.memo(function CompactAlertsList({ alerts,
           </Text>
         </TouchableOpacity>
       ))}
-      {alerts.length > maxItems ? (
+      {alerts.length > maxItems && (
         <Text style={styles.moreAlertsText}>
           +{alerts.length - maxItems} more
         </Text>
-      ) : null}
+      )}
     </View>
   );
 });

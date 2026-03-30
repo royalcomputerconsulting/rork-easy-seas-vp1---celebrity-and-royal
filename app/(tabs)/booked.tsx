@@ -326,7 +326,7 @@ export default function BookedScreen() {
               value={searchQuery}
               onChangeText={setSearchQuery}
               placeholder="Search booked cruises"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor="rgba(207,219,246,0.46)"
               style={styles.searchInput}
               testID="booked-search-input"
             />
@@ -350,7 +350,7 @@ export default function BookedScreen() {
     return (
       <PremiumPageBackground>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#1E3A5F" />
+          <ActivityIndicator size="large" color="#9EFDF2" />
           <Text style={styles.loadingText}>Loading booked cruises…</Text>
         </View>
       </PremiumPageBackground>
@@ -378,7 +378,7 @@ export default function BookedScreen() {
                 <View style={styles.pointsSurface}>
                   <View style={styles.pointsHeaderRow}>
                     <View style={styles.pointsIconWrap}>
-                      <Trophy size={18} color="#B8860B" />
+                      <Trophy size={18} color="#FFE28F" />
                     </View>
                     <View style={styles.pointsHeaderTextWrap}>
                       <Text style={styles.pointsTitle}>Crown & Anchor Progress</Text>
@@ -391,7 +391,7 @@ export default function BookedScreen() {
             </View>
           )}
           ListEmptyComponent={viewMode === 'list' ? <PremiumEmptyState title="No booked cruises found" subtitle="All booked-cruise data is still supported. Adjust filters, search, or add a new cruise." /> : null}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1E3A5F" colors={['#1E3A5F']} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#9EFDF2" colors={['#9EFDF2']} />}
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={styles.listSpacer} />}
           showsVerticalScrollIndicator={false}
@@ -404,7 +404,7 @@ export default function BookedScreen() {
         activeOpacity={0.9}
         testID="booked-add-cruise"
       >
-        <Plus size={22} color="#FFFFFF" />
+        <Plus size={22} color={COLORS.navyDeep} />
       </TouchableOpacity>
 
       <AddBookedCruiseModal
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: SPACING.md,
-    color: '#6B7280',
+    color: '#EAF1FF',
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '700' as const,
   },
@@ -447,12 +447,12 @@ const styles = StyleSheet.create({
   searchSurface: {
     borderRadius: 22,
     padding: SPACING.lg,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(10, 24, 47, 0.72)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   searchLabel: {
-    color: '#6B7280',
+    color: 'rgba(222, 233, 255, 0.78)',
     fontSize: 12,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -463,37 +463,37 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#F8FAFC',
-    color: '#1A2A3D',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600' as const,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.09)',
   },
   timelineSurface: {
     borderRadius: 24,
     padding: SPACING.lg,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(10, 24, 47, 0.68)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   timelineTitle: {
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800' as const,
   },
   timelineSubtitle: {
     marginTop: 6,
-    color: '#6B7280',
+    color: 'rgba(215, 226, 248, 0.76)',
     fontSize: 13,
     lineHeight: 20,
   },
   pointsSurface: {
     borderRadius: 24,
     padding: SPACING.lg,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(10, 24, 47, 0.68)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   pointsHeaderRow: {
     flexDirection: 'row',
@@ -507,19 +507,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   pointsHeaderTextWrap: {
     flex: 1,
   },
   pointsTitle: {
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800' as const,
   },
   pointsSubtitle: {
     marginTop: 4,
-    color: '#6B7280',
+    color: 'rgba(215, 226, 248, 0.76)',
     fontSize: 13,
     lineHeight: 19,
   },
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#FFE28F',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000000',

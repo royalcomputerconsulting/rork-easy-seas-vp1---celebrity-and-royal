@@ -12,7 +12,6 @@ import { ArrowLeft, Filter } from 'lucide-react-native';
 import {
   PremiumActionBar,
   PremiumChipBar,
-  PremiumCompactCruiseCard,
   PremiumDataSection,
   PremiumEmptyState,
   PremiumEntityCard,
@@ -25,7 +24,7 @@ import { SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { calculateOfferValue } from '@/lib/valueCalculator';
 import { createDateFromString, formatDate, getDaysUntil } from '@/lib/date';
 import {
-  buildCompactCruiseCardFields,
+  buildCruiseCardFields,
   buildDataSections,
   buildOfferCardFields,
   getCruiseBadge,
@@ -33,7 +32,6 @@ import {
   pickCruiseImage,
   type DisplayField,
 } from '../lib/cruisePresentation';
-import { createCruiseListKey, dedupeCruisesByIdentity } from '@/lib/listKeys';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import type { BookedCruise, CasinoOffer, Cruise } from '@/types/models';
@@ -66,12 +64,12 @@ export default function OfferDetailsScreen() {
   const offerData = useMemo(() => {
     const allCruises = [...(storeCruises || []), ...(localData.cruises || [])];
     const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
-    const uniqueCruises = dedupeCruisesByIdentity<Cruise>(allCruises);
+    const uniqueCruises = allCruises.filter((cruise, index, self) => index === self.findIndex((entry) => entry.id === cruise.id));
 
     const offer = allOffers.find((entry: CasinoOffer) => entry.offerCode === offerCode);
     let matchingCruises = uniqueCruises.filter((cruise: Cruise) => cruise.offerCode === offerCode);
 
-    matchingCruises = matchingCruises.map((cruise: Cruise) => {
+    matchingCruises = matchingCruises.map((cruise) => {
       if (!offer) {
         return cruise;
       }
@@ -91,7 +89,7 @@ export default function OfferDetailsScreen() {
       } satisfies Cruise;
     });
 
-    const filteredCruises = matchingCruises.filter((cruise: Cruise) => {
+    const filteredCruises = matchingCruises.filter((cruise) => {
       if (filterShip && cruise.shipName !== filterShip) return false;
       if (filterGuests) {
         const cruiseGuests = cruise.guests || 2;
@@ -134,10 +132,10 @@ export default function OfferDetailsScreen() {
 
   const filterOptions = useMemo(() => {
     const allCruises = [...(storeCruises || []), ...(localData.cruises || [])].filter((cruise: Cruise) => cruise.offerCode === offerCode);
-    const uniqueCruises = dedupeCruisesByIdentity<Cruise>(allCruises);
-    const ships = Array.from(new Set<string>(uniqueCruises.map((cruise: Cruise) => cruise.shipName).filter((ship): ship is string => Boolean(ship)))).sort((left: string, right: string) => left.localeCompare(right));
-    const guestCounts = Array.from(new Set<number>(uniqueCruises.map((cruise: Cruise) => cruise.guests || 2))).sort((left: number, right: number) => left - right);
-    const roomTypes = Array.from(new Set<string>(uniqueCruises.map((cruise: Cruise) => cruise.cabinType).filter((room): room is string => typeof room === 'string' && room.length > 0))).sort((left: string, right: string) => left.localeCompare(right));
+    const uniqueCruises = allCruises.filter((cruise, index, self) => index === self.findIndex((entry) => entry.id === cruise.id));
+    const ships = [...new Set(uniqueCruises.map((cruise) => cruise.shipName).filter(Boolean))].sort();
+    const guestCounts = [...new Set(uniqueCruises.map((cruise) => cruise.guests || 2))].sort((left, right) => left - right);
+    const roomTypes = [...new Set(uniqueCruises.map((cruise) => cruise.cabinType).filter((room): room is string => Boolean(room)))].sort();
     return { ships, guestCounts, roomTypes };
   }, [localData.cruises, offerCode, storeCruises]);
 
@@ -223,7 +221,7 @@ export default function OfferDetailsScreen() {
   const daysUntilExpiry = offerInfo.expiryDate ? getDaysUntil(offerInfo.expiryDate) : null;
   const offerValue = useMemo(() => offerData.offer ? calculateOfferValue(offerData.offer) : null, [offerData.offer]);
   const offerCardFields = useMemo(() => buildOfferCardFields(offerData.offer, offerData.cruises), [offerData.cruises, offerData.offer]);
-  const offerSections = useMemo(() => buildDataSections(offerData.offer ? (offerData.offer as unknown as Record<string, unknown>) : ({
+  const offerSections = useMemo(() => buildDataSections(offerData.offer ? (offerData.offer as Record<string, unknown>) : ({
     offerCode: offerInfo.offerCode,
     offerName: offerInfo.offerName,
     expiryDate: offerInfo.expiryDate,
@@ -277,10 +275,10 @@ export default function OfferDetailsScreen() {
   }, [offerData.offer, updateCasinoOffer]);
 
   const renderCruiseCard = useCallback(({ item }: { item: Cruise }) => {
-    const fields = buildCompactCruiseCardFields(item, offerData.offer);
+    const fields = buildCruiseCardFields(item, offerData.offer);
     const badge = bookedCruiseIds.has(item.id) ? { label: 'BOOKED', tone: 'teal' as const } : getCruiseBadge(item);
     return (
-      <PremiumCompactCruiseCard
+      <PremiumEntityCard
         title={item.shipName}
         subtitle={`${formatDate(item.sailDate, 'medium')} • ${item.nights || 0} nights • ${item.departurePort || 'Port TBD'}`}
         imageUri={pickCruiseImage(item)}
@@ -288,14 +286,15 @@ export default function OfferDetailsScreen() {
         chips={[
           item.destination || item.itineraryName || 'Cruise',
           item.cabinType || offerInfo.roomType || 'Cabin TBD',
+          item.offerCode || offerInfo.offerCode,
         ].filter(Boolean)}
-        highlights={fields.highlights}
-        details={fields.details}
-        footerText="Tap to open the full cruise detail screen."
+        primaryFields={fields.primary}
+        extraFields={fields.extra}
+        footerText="Every cruise under this offer retains its full data payload and opens the unified cruise detail screen."
         onPress={() => handleCruisePress(item.id)}
       />
     );
-  }, [bookedCruiseIds, handleCruisePress, offerData.offer, offerInfo.roomType]);
+  }, [bookedCruiseIds, handleCruisePress, offerData.offer, offerInfo.offerCode, offerInfo.roomType]);
 
   return (
     <PremiumPageBackground>
@@ -303,7 +302,7 @@ export default function OfferDetailsScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <FlatList
           data={offerData.cruises}
-          keyExtractor={(item, index) => createCruiseListKey(item, index)}
+          keyExtractor={(item) => item.id}
           renderItem={renderCruiseCard}
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={styles.spacer} />}
@@ -320,7 +319,6 @@ export default function OfferDetailsScreen() {
                 badge={getOfferBadge(offerData.offer)}
                 imageUri={pickCruiseImage(offerData.offer ?? offerData.cruises[0], offerInfo.offerCode)}
                 pills={heroPills}
-                compact
               >
                 <PremiumQuickFacts fields={quickFacts} />
               </PremiumHeroCard>
@@ -394,7 +392,7 @@ export default function OfferDetailsScreen() {
 
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionTitle}>Eligible Cruises</Text>
-                <Text style={styles.sectionSubtitle}>{offerData.cruises.length} sailings • compact at-a-glance cards with full values visible</Text>
+                <Text style={styles.sectionSubtitle}>{offerData.cruises.length} sailings • union of cruise + offer data preserved</Text>
               </View>
             </View>
           )}

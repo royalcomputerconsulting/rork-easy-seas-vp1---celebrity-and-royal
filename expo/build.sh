@@ -1,10 +1,9 @@
 #!/bin/bash
-set -e
 
 echo "Installing dependencies..."
-bun install
+npm install
 
 echo "Exporting Expo web app..."
-bunx expo export -p web --output-dir dist
+npx expo export -p web --output-dir dist
 
 echo "Build complete! Static files are in ./dist"

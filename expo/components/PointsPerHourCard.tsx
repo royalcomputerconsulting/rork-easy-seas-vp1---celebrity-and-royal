@@ -126,7 +126,7 @@ export const PointsPerHourCard = React.memo(function PointsPerHourCard({
             {analytics.pointsPerHour.toFixed(1)}
           </Text>
           <Text style={styles.compactUnit}>pts/hr</Text>
-          {trend.direction !== 'none' ? (
+          {trend.direction !== 'none' && (
             <View style={[
               styles.compactTrend,
               { backgroundColor: trend.direction === 'up' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)' }
@@ -143,7 +143,7 @@ export const PointsPerHourCard = React.memo(function PointsPerHourCard({
                 {trend.change.toFixed(0)}%
               </Text>
             </View>
-          ) : null}
+          )}
         </View>
       </View>
     );

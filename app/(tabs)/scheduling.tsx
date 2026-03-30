@@ -483,7 +483,7 @@ export default function SchedulingScreen() {
           value={filters.searchQuery}
           onChangeText={(value) => setFilters((current) => ({ ...current, searchQuery: value }))}
           placeholder="Search cruises"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor="rgba(207,219,246,0.46)"
           style={styles.searchInput}
           testID="scheduling-search-input"
         />
@@ -561,7 +561,7 @@ export default function SchedulingScreen() {
             renderItem={renderBackToBackCard}
             ListHeaderComponent={listHeader}
             ListEmptyComponent={<PremiumEmptyState title="No chain-ready back-to-backs" subtitle="We preserved the back-to-back discovery flow. Try broadening filters or importing more sailings." />}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1E3A5F" colors={['#1E3A5F']} />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#9EFDF2" colors={['#9EFDF2']} />}
             contentContainerStyle={styles.listContent}
             ItemSeparatorComponent={() => <View style={styles.listSpacer} />}
             showsVerticalScrollIndicator={false}
@@ -574,7 +574,7 @@ export default function SchedulingScreen() {
             ListHeaderComponent={listHeader}
             ListEmptyComponent={<PremiumEmptyState title="No cruises match these filters" subtitle="All cruise fields are still intact. Adjust the chips above or clear filters to expand the list." />}
             ListFooterComponent={activeTab === 'available' ? <FavoriteStateroomsSection shipOptions={availableShips} /> : null}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1E3A5F" colors={['#1E3A5F']} />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#9EFDF2" colors={['#9EFDF2']} />}
             contentContainerStyle={styles.listContent}
             ItemSeparatorComponent={() => <View style={styles.listSpacer} />}
             showsVerticalScrollIndicator={false}
@@ -588,7 +588,7 @@ export default function SchedulingScreen() {
         activeOpacity={0.9}
         testID="scheduling-ai-toggle"
       >
-        {isVisible ? <X size={22} color="#FFFFFF" /> : <Bot size={22} color="#FFFFFF" />}
+        {isVisible ? <X size={22} color={COLORS.navyDeep} /> : <Bot size={22} color={COLORS.navyDeep} />}
       </TouchableOpacity>
 
       <Modal visible={isVisible} animationType="slide" transparent onRequestClose={handleAgentClose}>
@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: SPACING.md,
-    color: '#6B7280',
+    color: '#EAF1FF',
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '700' as const,
   },
@@ -645,12 +645,12 @@ const styles = StyleSheet.create({
   searchSurface: {
     borderRadius: 22,
     padding: SPACING.lg,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(10, 24, 47, 0.72)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   searchLabel: {
-    color: '#6B7280',
+    color: 'rgba(222, 233, 255, 0.78)',
     fontSize: 12,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -661,12 +661,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#F8FAFC',
-    color: '#1A2A3D',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600' as const,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.09)',
   },
   advancedStack: {
     gap: SPACING.md,
@@ -678,23 +678,23 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   booleanFilterButtonActive: {
-    backgroundColor: 'rgba(0,151,167,0.08)',
-    borderColor: 'rgba(0,151,167,0.30)',
+    backgroundColor: 'rgba(31,212,194,0.16)',
+    borderColor: 'rgba(90,255,233,0.42)',
   },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: 'rgba(255,255,255,0.24)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   checkboxActive: {
     backgroundColor: COLORS.navyDeep,
@@ -702,7 +702,7 @@ const styles = StyleSheet.create({
   },
   booleanFilterText: {
     flex: 1,
-    color: '#1A2A3D',
+    color: '#F2F6FF',
     fontSize: 14,
     fontWeight: '700' as const,
   },
@@ -714,12 +714,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 16,
-    backgroundColor: 'rgba(220,38,38,0.06)',
+    backgroundColor: 'rgba(255, 103, 145, 0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(220,38,38,0.20)',
+    borderColor: 'rgba(255, 167, 189, 0.38)',
   },
   clearButtonText: {
-    color: '#DC2626',
+    color: '#FFD0DB',
     fontSize: 13,
     fontWeight: '800' as const,
   },
@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#FFE28F',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000000',
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     overflow: 'hidden',
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#091426',
   },
   agentContainerExpanded: {
     height: '88%',

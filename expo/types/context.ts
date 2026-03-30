@@ -16,7 +16,7 @@ import type {
   ROICalculation,
   WhatIfScenario,
   TierProjection,
-  CabinTypeValue,
+  CabinCategory,
 } from './models';
 
 export interface LocalData {
@@ -136,7 +136,7 @@ export interface ValuationContextValue {
   calculateOfferValue: (offer: CasinoOffer) => OfferValuation;
   calculatePayTable: (offer: CasinoOffer) => CasinoPayTable;
   calculateCruiseROI: (cruise: BookedCruise) => ROICalculation;
-  getCabinPrice: (item: Cruise | CasinoOffer, cabinType: CabinTypeValue) => number | undefined;
+  getCabinPrice: (item: Cruise | CasinoOffer, cabinType: CabinCategory | string) => number | undefined;
   compareCruiseROI: (cruiseIds: string[]) => ROICalculation[];
 }
 

@@ -265,7 +265,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
               </Text>
             </View>
 
-            {currentStats.trend !== 0 && selectedPeriod !== 'all' ? (
+            {currentStats.trend !== 0 && selectedPeriod !== 'all' && (
               <View style={styles.trendRow}>
                 {currentStats.trend > 0 ? (
                   <TrendingUp size={12} color="#10B981" />
@@ -279,7 +279,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
                   {currentStats.trend > 0 ? '+' : ''}{currentStats.trend.toFixed(0)}% vs previous
                 </Text>
               </View>
-            ) : null}
+            )}
           </Animated.View>
 
           <View style={styles.targetCard}>
@@ -393,7 +393,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
                   ]}>
                     {stats.pointsPerHour.toFixed(0)} pts/hr
                   </Text>
-                  {stats.trend !== 0 && period !== 'all' ? (
+                  {stats.trend !== 0 && period !== 'all' && (
                     <View style={[
                       styles.comparisonTrend,
                       { backgroundColor: stats.trend > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }
@@ -410,7 +410,7 @@ export const PPHGoalsCard = React.memo(function PPHGoalsCard({
                         {Math.abs(stats.trend).toFixed(0)}%
                       </Text>
                     </View>
-                  ) : null}
+                  )}
                   <ChevronRight size={14} color="#D1D5DB" />
                 </View>
               </TouchableOpacity>

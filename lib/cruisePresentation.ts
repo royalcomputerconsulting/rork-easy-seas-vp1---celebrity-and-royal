@@ -388,7 +388,7 @@ export function formatFieldValue(value: unknown, key: string): string {
       .join(' • ');
   }
 
-  return typeof value === 'symbol' ? value.toString() : `${value}`;
+  return String(value);
 }
 
 function extractFields(entity: EntityRecord, keys: string[], consumed: Set<string>): DisplayField[] {
@@ -518,55 +518,20 @@ export function buildCruiseCardFields(cruise: Cruise | BookedCruise, linkedOffer
 
   const fields = orderedKeys
     .filter((key) => hasMeaningfulValue(record[key]))
-    .map((key) => {
-      const tone: DisplayField['tone'] = key === 'retailValue' || key === 'totalValue' || key === 'freePlay' || key === 'freeOBC'
+    .map((key) => ({
+      key,
+      label: formatFieldLabel(key),
+      value: formatFieldValue(record[key], key),
+      tone: key === 'retailValue' || key === 'totalValue' || key === 'freePlay' || key === 'freeOBC'
         ? 'success'
         : key === 'netResult'
           ? ((Number((cruise as BookedCruise).netResult ?? (cruise as BookedCruise).winnings ?? 0) >= 0) ? 'success' : 'danger')
-          : 'default';
-
-      return {
-        key,
-        label: formatFieldLabel(key),
-        value: formatFieldValue(record[key], key),
-        tone,
-      };
-    });
+          : 'default',
+    }));
 
   return {
     primary: fields.slice(0, 8),
     extra: fields.slice(8),
-  };
-}
-
-export function buildCompactCruiseCardFields(cruise: Cruise | BookedCruise, linkedOffer?: CasinoOffer): { highlights: DisplayField[]; details: DisplayField[] } {
-  const allFields = buildCruiseCardFields(cruise, linkedOffer);
-  const combinedFields = [...allFields.primary, ...allFields.extra];
-  const fieldMap = new Map<string, DisplayField>(combinedFields.map((field) => [field.key, field]));
-
-  const highlights = [
-    'cabinType',
-    'guests',
-    'tradeInValue',
-    'retailValue',
-    'totalValue',
-    'status',
-  ]
-    .map((key) => fieldMap.get(key))
-    .filter((field): field is DisplayField => Boolean(field));
-
-  const details = [
-    'offerCode',
-    'offerName',
-    'freePlay',
-    'freeOBC',
-  ]
-    .map((key) => fieldMap.get(key))
-    .filter((field): field is DisplayField => Boolean(field));
-
-  return {
-    highlights,
-    details,
   };
 }
 
@@ -646,16 +611,12 @@ export function buildOfferCardFields(offer: CasinoOffer | undefined, cruises: Cr
 
   const fields = orderedKeys
     .filter((key) => hasMeaningfulValue(record[key]))
-    .map((key) => {
-      const tone: DisplayField['tone'] = key === 'totalValue' || key === 'freePlay' || key === 'OBC' || key === 'tradeInValue' ? 'success' : 'default';
-
-      return {
-        key,
-        label: key === 'cruisesAvailable' ? 'Cruises Available' : formatFieldLabel(key),
-        value: formatFieldValue(record[key], key),
-        tone,
-      };
-    });
+    .map((key) => ({
+      key,
+      label: key === 'cruisesAvailable' ? 'Cruises Available' : formatFieldLabel(key),
+      value: formatFieldValue(record[key], key),
+      tone: key === 'totalValue' || key === 'freePlay' || key === 'OBC' || key === 'tradeInValue' ? 'success' : 'default',
+    }));
 
   return {
     primary: fields.slice(0, 8),
@@ -705,9 +666,9 @@ export function mergeCruiseWithOffer(cruise: Cruise | BookedCruise, linkedOffer?
     return cruise;
   }
 
-  const mergedCruise: Cruise | BookedCruise = {
+  return {
+    ...linkedOffer,
     ...cruise,
-    offerCode: cruise.offerCode ?? linkedOffer.offerCode,
     offerName: cruise.offerName || linkedOffer.offerName || linkedOffer.title,
     freePlay: cruise.freePlay ?? linkedOffer.freePlay ?? linkedOffer.freeplayAmount,
     freeOBC: cruise.freeOBC ?? linkedOffer.OBC ?? linkedOffer.obcAmount,
@@ -718,6 +679,4 @@ export function mergeCruiseWithOffer(cruise: Cruise | BookedCruise, linkedOffer?
     suitePrice: cruise.suitePrice ?? linkedOffer.suitePrice,
     taxes: cruise.taxes ?? linkedOffer.taxesFees,
   };
-
-  return mergedCruise;
 }

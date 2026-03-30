@@ -364,16 +364,12 @@ export function PlayingHoursCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#0D1E33',
+    backgroundColor: '#F0F9FF',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    borderColor: 'rgba(3, 105, 161, 0.2)',
+    ...SHADOW.sm,
     marginTop: SPACING.md,
   },
   header: {
@@ -413,10 +409,9 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFE28F',
-    letterSpacing: 1.2,
+    color: '#0369A1',
+    letterSpacing: 1,
     marginBottom: SPACING.xs,
-    textTransform: 'uppercase' as const,
   },
   sessionsContainer: {
     gap: SPACING.xs,
@@ -425,15 +420,15 @@ const styles = StyleSheet.create({
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(3, 105, 161, 0.15)',
     overflow: 'hidden',
   },
   sessionRowEnabled: {
-    backgroundColor: 'rgba(168,198,255,0.12)',
-    borderColor: 'rgba(168,198,255,0.35)',
+    backgroundColor: '#E0F2FE',
+    borderColor: '#0369A1',
   },
   sessionMainContent: {
     flex: 1,
@@ -455,39 +450,39 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   sessionDotEnabled: {
-    backgroundColor: '#A8C6FF',
+    backgroundColor: '#0369A1',
   },
   sessionDotDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#D1D5DB',
   },
   sessionName: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#FFFFFF',
+    color: '#0C4A6E',
   },
   sessionNameDisabled: {
-    color: 'rgba(255,255,255,0.35)',
+    color: '#9CA3AF',
   },
   sessionTime: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#6B7280',
   },
   sessionToggle: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.xs,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#E5E7EB',
   },
   sessionToggleEnabled: {
-    backgroundColor: 'rgba(168,198,255,0.3)',
+    backgroundColor: '#0369A1',
   },
   sessionToggleText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(255,255,255,0.4)',
+    color: '#6B7280',
   },
   sessionToggleTextEnabled: {
-    color: '#A8C6FF',
+    color: COLORS.white,
   },
   saveButton: {
     borderRadius: BORDER_RADIUS.sm,
@@ -509,7 +504,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.08)',
+    borderLeftColor: 'rgba(3, 105, 161, 0.15)',
   },
   sessionActionButton: {
     padding: SPACING.xs,
@@ -520,19 +515,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(168,198,255,0.08)',
+    backgroundColor: 'rgba(3, 105, 161, 0.08)',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(168,198,255,0.3)',
+    borderColor: 'rgba(3, 105, 161, 0.3)',
     borderStyle: 'dashed',
     gap: SPACING.xs,
   },
   addSessionText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#A8C6FF',
+    color: '#0369A1',
   },
   modalOverlay: {
     flex: 1,
@@ -542,13 +537,11 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
   },
   modalContainer: {
-    backgroundColor: '#0D1E33',
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.xl,
     width: '100%',
     maxWidth: 500,
     maxHeight: '90%',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -556,7 +549,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: '#E5E7EB',
   },
   modalHeaderLeft: {
     flexDirection: 'row',
@@ -566,7 +559,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#0369A1',
   },
   modalCloseButton: {
     padding: SPACING.xs,
@@ -581,21 +574,21 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: 'rgba(255,255,255,0.65)',
+    color: '#0369A1',
   },
   textInput: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: '#F9FAFB',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: '#D1D5DB',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#FFFFFF',
+    color: '#111827',
   },
   inputHint: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.4)',
+    color: '#6B7280',
     fontStyle: 'italic' as const,
   },
   modalActions: {
@@ -606,17 +599,15 @@ const styles = StyleSheet.create({
   },
   modalCancelButton: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: '#F3F4F6',
     paddingVertical: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
   },
   modalCancelText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: 'rgba(255,255,255,0.6)',
+    color: '#6B7280',
   },
   modalSaveButton: {
     flex: 1,

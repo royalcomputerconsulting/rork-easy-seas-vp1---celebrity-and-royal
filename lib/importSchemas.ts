@@ -26,8 +26,6 @@ export const cruiseImportSchema = z.object({
   offerName: z.string().max(200),
   roomType: z.string().max(100),
   guestsInfo: z.string().max(100),
-  profileName: z.string().max(200).optional().default(''),
-  backToBackCount: z.number().int().min(0).max(50).optional().default(0),
   perks: z.string().max(1000),
   shipClass: z.string().max(100),
   tradeInValue: positiveNumberSchema,
@@ -197,7 +195,7 @@ function generateSuggestions(error: z.ZodIssue): string[] {
   
   if (error.code === 'invalid_type') {
     if ('expected' in error && 'received' in error) {
-      suggestions.push(`Expected ${String(error.expected)}, but got ${String(error.received)}`);
+      suggestions.push(`Expected ${error.expected}, but got ${error.received}`);
       if (error.expected === 'number') {
         suggestions.push('Remove any currency symbols ($, commas) from numeric values');
       }

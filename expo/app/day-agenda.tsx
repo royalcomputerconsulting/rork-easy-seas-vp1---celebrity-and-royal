@@ -25,11 +25,11 @@ import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
-import { getLuckForDatePersonalized, isScottUser } from '@/constants/luckScores';
-import { useAuth } from '@/state/AuthProvider';
-import { determineCasinoHoursWithContext, determineSeaDay, getResolvedCruiseItinerary, type CasinoDayContext } from '@/lib/casinoAvailability';
+import { calculatePersonalizedLuck, type HoroscopeLuckResult } from '@/lib/luckCalculator';
+import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
+import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 
 const EVENT_COLORS = {
@@ -66,7 +66,6 @@ interface MergedCruiseData {
   departurePort?: string;
   nights: number;
   itinerary?: ItineraryDay[];
-  ports?: string[];
   bookings: {
     reservationNumber?: string;
     cabinNumber?: string;
@@ -90,50 +89,6 @@ interface TimelineEvent {
   isOpportune?: boolean;
 }
 
-function formatAgendaDateKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function getCruiseRangeEndDate(sailDate: string, returnDate: string | undefined, nights: number | undefined): string {
-  if (returnDate && returnDate.trim().length > 0) {
-    return returnDate;
-  }
-
-  const fallbackEndDate = createDateFromString(sailDate);
-  fallbackEndDate.setHours(0, 0, 0, 0);
-  fallbackEndDate.setDate(fallbackEndDate.getDate() + Math.max(1, nights ?? 0));
-  const computedReturnDate = formatAgendaDateKey(fallbackEndDate);
-
-  console.log('[DayAgenda] Derived fallback return date', {
-    sailDate,
-    returnDate,
-    nights,
-    computedReturnDate,
-  });
-
-  return computedReturnDate;
-}
-
-function getItineraryWindowText(itineraryDay: ItineraryDay | undefined | null): string | undefined {
-  if (!itineraryDay || itineraryDay.isSeaDay) {
-    return undefined;
-  }
-
-  if (itineraryDay.arrival && itineraryDay.departure) {
-    return `${itineraryDay.arrival} - ${itineraryDay.departure}`;
-  }
-
-  if (itineraryDay.arrival) {
-    return `From ${itineraryDay.arrival} • Overnight`;
-  }
-
-  if (itineraryDay.departure) {
-    return `Until ${itineraryDay.departure}`;
-  }
-
-  return itineraryDay.notes || 'Port day';
-}
-
 export default function DayAgendaScreen() {
   const router = useRouter();
   const { date } = useLocalSearchParams<{ date: string }>();
@@ -143,8 +98,6 @@ export default function DayAgendaScreen() {
   const { bookedCruises } = coreData;
 
   const playingHours: PlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
-  const { isAdmin, authenticatedEmail } = useAuth();
-  const useScottData = isScottUser(isAdmin, authenticatedEmail);
   const { getSessionsForDate, getDailySummary, addSession, removeSession } = useCasinoSessions();
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -199,28 +152,13 @@ export default function DayAgendaScreen() {
 
   const mergedCruiseBookings = useMemo((): MergedCruiseData[] => {
     const cruiseMap = new Map<string, MergedCruiseData>();
-
+    
     bookedCruises.forEach((cruise: BookedCruise) => {
-      if (!cruise.sailDate) {
-        return;
-      }
-
-      const computedReturnDate = getCruiseRangeEndDate(cruise.sailDate, cruise.returnDate, cruise.nights);
-
-      if (!isDateInRange(selectedDate, cruise.sailDate, computedReturnDate)) {
-        return;
-      }
-
-      const key = `${cruise.shipName}-${cruise.sailDate}-${computedReturnDate}`;
-
-      console.log('[DayAgenda] Matching cruise for selected date', {
-        selectedDate: formatAgendaDateKey(selectedDate),
-        shipName: cruise.shipName,
-        sailDate: cruise.sailDate,
-        computedReturnDate,
-        cruiseId: cruise.id,
-      });
-
+      if (!cruise.sailDate || !cruise.returnDate) return;
+      if (!isDateInRange(selectedDate, cruise.sailDate, cruise.returnDate)) return;
+      
+      const key = `${cruise.shipName}-${cruise.sailDate}`;
+      
       if (cruiseMap.has(key)) {
         const existing = cruiseMap.get(key)!;
         existing.bookings.push({
@@ -235,13 +173,12 @@ export default function DayAgendaScreen() {
           id: cruise.id,
           shipName: cruise.shipName || 'Unknown Ship',
           sailDate: cruise.sailDate,
-          returnDate: computedReturnDate,
+          returnDate: cruise.returnDate,
           destination: cruise.destination,
           itineraryName: cruise.itineraryName,
           departurePort: cruise.departurePort,
           nights: cruise.nights || 0,
-          itinerary: getResolvedCruiseItinerary(cruise),
-          ports: cruise.ports,
+          itinerary: cruise.itinerary,
           bookings: [{
             reservationNumber: cruise.reservationNumber,
             cabinNumber: cruise.cabinNumber,
@@ -252,7 +189,7 @@ export default function DayAgendaScreen() {
         });
       }
     });
-
+    
     return Array.from(cruiseMap.values());
   }, [bookedCruises, selectedDate, isDateInRange]);
 
@@ -267,7 +204,8 @@ export default function DayAgendaScreen() {
   }, [selectedDate]);
 
   const getItineraryForDay = useCallback((cruise: MergedCruiseData, dayNum: number): ItineraryDay | undefined => {
-    return cruise.itinerary?.find((day) => day.day === dayNum);
+    if (!cruise.itinerary) return undefined;
+    return cruise.itinerary.find(d => d.day === dayNum);
   }, []);
 
   const getCasinoContext = useCallback((cruise: MergedCruiseData, dayNum: number): CasinoDayContext => {
@@ -295,10 +233,6 @@ export default function DayAgendaScreen() {
       port: currentDay?.port || 'Unknown',
     };
   }, []);
-
-  const mergedCruiseBookingIds = useMemo(() => {
-    return new Set<string>(mergedCruiseBookings.map((cruise) => cruise.id));
-  }, [mergedCruiseBookings]);
 
   const timelineEvents = useMemo((): TimelineEvent[] => {
     const events: TimelineEvent[] = [];
@@ -349,22 +283,6 @@ export default function DayAgendaScreen() {
             });
           }
         } else {
-          const portWindowText = getItineraryWindowText(itineraryDay);
-
-          if (itineraryDay.arrival || itineraryDay.departure) {
-            events.push({
-              id: `port-window-${cruise.id}`,
-              type: 'port',
-              title: `In Port: ${itineraryDay.port}`,
-              subtitle: portWindowText || 'Port window',
-              startTime: itineraryDay.arrival || '00:00',
-              endTime: itineraryDay.departure || (itineraryDay.arrival ? '23:59' : undefined),
-              color: '#FFFFFF',
-              icon: 'port',
-              notes: itineraryDay.notes,
-            });
-          }
-
           if (itineraryDay.arrival) {
             events.push({
               id: `arrival-${cruise.id}`,
@@ -495,15 +413,8 @@ export default function DayAgendaScreen() {
     });
     
     calendarEvents.forEach(event => {
-      if (event.sourceType === 'cruise' && event.cruiseId && mergedCruiseBookingIds.has(event.cruiseId)) {
-        return;
-      }
-
       const eventStart = event.startDate || event.start || '';
-      const rawEventEnd = event.endDate || event.end;
-      const eventEnd = event.type === 'cruise'
-        ? getCruiseRangeEndDate(eventStart, rawEventEnd, undefined)
-        : (rawEventEnd || eventStart);
+      const eventEnd = event.endDate || event.end || eventStart;
       
       if (eventStart) {
         const startDateStr = eventStart.split('T')[0];
@@ -533,22 +444,15 @@ export default function DayAgendaScreen() {
     });
     
     return events;
-  }, [selectedDate, mergedCruiseBookings, mergedCruiseBookingIds, calendarEvents, getDayOfCruise, getItineraryForDay, getCasinoContext]);
+  }, [selectedDate, mergedCruiseBookings, calendarEvents, getDayOfCruise, getItineraryForDay, getCasinoContext]);
 
   const agendaItems = useMemo((): AgendaItem[] => {
     const items: AgendaItem[] = [];
     const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
 
     calendarEvents.forEach(event => {
-      if (event.sourceType === 'cruise' && event.cruiseId && mergedCruiseBookingIds.has(event.cruiseId)) {
-        return;
-      }
-
       const eventStart = event.startDate || event.start || '';
-      const rawEventEnd = event.endDate || event.end;
-      const eventEnd = event.type === 'cruise'
-        ? getCruiseRangeEndDate(eventStart, rawEventEnd, undefined)
-        : (rawEventEnd || eventStart);
+      const eventEnd = event.endDate || event.end || eventStart;
       
       if (eventStart) {
         const startDateStr = eventStart.split('T')[0];
@@ -581,20 +485,12 @@ export default function DayAgendaScreen() {
     });
 
     mergedCruiseBookings.forEach((cruise) => {
-      const dayNum = getDayOfCruise(cruise);
-      const itineraryDay = getItineraryForDay(cruise, dayNum);
-      const itineraryWindow = getItineraryWindowText(itineraryDay);
-
       items.push({
         id: `cruise-${cruise.id}`,
         type: 'cruise',
         title: cruise.shipName,
-        subtitle: itineraryDay
-          ? itineraryDay.isSeaDay
-            ? `At Sea • ${cruise.destination || cruise.itineraryName || 'Cruise day'}`
-            : `${itineraryDay.port}${itineraryWindow ? ` • ${itineraryWindow}` : ''}`
-          : cruise.destination || cruise.itineraryName,
-        location: itineraryDay && !itineraryDay.isSeaDay ? itineraryDay.port : cruise.departurePort,
+        subtitle: cruise.destination || cruise.itineraryName,
+        location: cruise.departurePort,
         isAllDay: true,
         color: EVENT_COLORS.cruise,
         data: cruise,
@@ -610,7 +506,7 @@ export default function DayAgendaScreen() {
     });
 
     return items;
-  }, [selectedDate, calendarEvents, mergedCruiseBookingIds, mergedCruiseBookings, getDayOfCruise, getDayStatus, getItineraryForDay]);
+  }, [selectedDate, calendarEvents, mergedCruiseBookings, getDayStatus]);
 
   const handleItemPress = useCallback((item: AgendaItem) => {
     if (item.type === 'cruise' && 'sailDate' in item.data) {
@@ -748,7 +644,10 @@ export default function DayAgendaScreen() {
     return `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
   }, [selectedDate]);
 
-  const dayLuck = useMemo(() => getLuckForDatePersonalized(dateStr, useScottData), [dateStr, useScottData]);
+  const horoscopeLuck = useMemo((): HoroscopeLuckResult | null => {
+    if (!currentUser?.birthdate) return null;
+    return calculatePersonalizedLuck(currentUser.birthdate, dateStr);
+  }, [currentUser?.birthdate, dateStr]);
 
   const goldenTimeSlots = useMemo(() => {
     return opportunePlayingTimes.map(t => ({
@@ -806,27 +705,21 @@ export default function DayAgendaScreen() {
     try {
       const existingEvents = coreData.calendarEvents.filter(e => e.sourceType !== 'cruise');
       
-      const cruiseEvents: CalendarEvent[] = bookedCruises
-        .filter((cruise) => Boolean(cruise.sailDate))
-        .map((cruise) => {
-          const computedReturnDate = getCruiseRangeEndDate(cruise.sailDate, cruise.returnDate, cruise.nights);
-
-          return {
-            id: `cruise-event-${cruise.id}`,
-            title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
-            startDate: cruise.sailDate,
-            endDate: computedReturnDate,
-            start: cruise.sailDate,
-            end: computedReturnDate,
-            type: 'cruise' as const,
-            sourceType: 'cruise' as const,
-            location: cruise.departurePort,
-            description: `${cruise.nights} night cruise${cruise.reservationNumber ? ` - Res# ${cruise.reservationNumber}` : ''}${cruise.cabinNumber ? ` - Cabin ${cruise.cabinNumber}` : ''}`,
-            cruiseId: cruise.id,
-            allDay: true,
-            source: 'import' as const,
-          };
-        });
+      const cruiseEvents: CalendarEvent[] = bookedCruises.map(cruise => ({
+        id: `cruise-event-${cruise.id}`,
+        title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
+        startDate: cruise.sailDate,
+        endDate: cruise.returnDate,
+        start: cruise.sailDate,
+        end: cruise.returnDate,
+        type: 'cruise' as const,
+        sourceType: 'cruise' as const,
+        location: cruise.departurePort,
+        description: `${cruise.nights} night cruise${cruise.reservationNumber ? ` - Res# ${cruise.reservationNumber}` : ''}${cruise.cabinNumber ? ` - Cabin ${cruise.cabinNumber}` : ''}`,
+        cruiseId: cruise.id,
+        allDay: true,
+        source: 'import' as const,
+      }));
       
       const allEvents = [...existingEvents, ...cruiseEvents];
       coreData.setCalendarEvents(allEvents);
@@ -969,9 +862,9 @@ export default function DayAgendaScreen() {
                     <View style={styles.portDayBadge}>
                       <Anchor size={14} color={EVENT_COLORS.port} />
                       <Text style={styles.portDayText}>{itineraryDay.port}</Text>
-                      {getItineraryWindowText(itineraryDay) && (
+                      {itineraryDay.arrival && itineraryDay.departure && (
                         <Text style={styles.portTimes}>
-                          {getItineraryWindowText(itineraryDay)}
+                          {itineraryDay.arrival} - {itineraryDay.departure}
                         </Text>
                       )}
                     </View>
@@ -1064,17 +957,60 @@ export default function DayAgendaScreen() {
 
         <View style={styles.dateHeader}>
           <Text style={styles.dateText}>{formattedDate}</Text>
-          <View style={styles.dateSubRow}>
-            <Text style={styles.eventCount}>
-              {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
-            </Text>
-            {dayLuck ? (
-              <View style={[styles.luckBadge, { backgroundColor: `${dayLuck.hex}22`, borderColor: `${dayLuck.hex}55` }]}>
-                <Text style={[styles.luckBadgeScore, { color: dayLuck.hex }]}>{String(dayLuck.score)}</Text>
-                <Text style={[styles.luckBadgeLabel, { color: dayLuck.hex }]}>{dayLuck.label}</Text>
+          <Text style={styles.eventCount}>
+            {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
+          </Text>
+          {horoscopeLuck && (
+            <View style={styles.luckRow}>
+              <View style={[styles.luckCard, { borderColor: horoscopeLuck.combinedHex + '80' }]}>
+                <View style={[styles.luckScoreBadge, { backgroundColor: horoscopeLuck.combinedHex }]}>
+                  <Text style={styles.luckScoreNum}>{String(horoscopeLuck.combinedScore)}</Text>
+                </View>
+                <View style={styles.luckCardText}>
+                  <Text style={styles.luckCardTitle}>Today&apos;s Luck</Text>
+                  <Text style={[styles.luckCardLabel, { color: horoscopeLuck.combinedHex }]}>{horoscopeLuck.combinedLabel}</Text>
+                </View>
               </View>
-            ) : null}
-          </View>
+              <View style={styles.luckSignsRow}>
+                <View style={styles.luckSignChip}>
+                  <Text style={styles.luckSignEmoji}>🐉</Text>
+                  <View>
+                    <Text style={styles.luckSignName}>{horoscopeLuck.chineseAnimal}</Text>
+                    <View style={styles.luckSignScoreRow}>
+                      {Array.from({ length: 9 }).map((_, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.luckDot,
+                            { backgroundColor: i < horoscopeLuck.chineseScore ? '#F59E0B' : 'rgba(255,255,255,0.15)' },
+                          ]}
+                        />
+                      ))}
+                      <Text style={styles.luckDotNum}>{horoscopeLuck.chineseScore}/9</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.luckSignChip}>
+                  <Text style={styles.luckSignEmoji}>⭐</Text>
+                  <View>
+                    <Text style={styles.luckSignName}>{horoscopeLuck.westernSign}</Text>
+                    <View style={styles.luckSignScoreRow}>
+                      {Array.from({ length: 9 }).map((_, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.luckDot,
+                            { backgroundColor: i < horoscopeLuck.westernScore ? '#818CF8' : 'rgba(255,255,255,0.15)' },
+                          ]}
+                        />
+                      ))}
+                      <Text style={styles.luckDotNum}>{horoscopeLuck.westernScore}/9</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
 
         <ScrollView 
@@ -1139,6 +1075,8 @@ export default function DayAgendaScreen() {
           <View style={styles.sectionContainer}>
             <TimeZoneConverter />
           </View>
+
+          <CrewRecognitionSection />
         </ScrollView>
       </SafeAreaView>
       
@@ -1204,36 +1142,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#FFFFFF',
-    marginBottom: 6,
-  },
-  dateSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   eventCount: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: '#FFFFFF',
-  },
-  luckBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 99,
-    borderWidth: 1,
-  },
-  luckBadgeScore: {
-    fontSize: 15,
-    fontWeight: '900' as const,
-    lineHeight: 18,
-  },
-  luckBadgeLabel: {
-    fontSize: 11,
-    fontWeight: '700' as const,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.4,
   },
   scrollView: {
     flex: 1,
@@ -1595,5 +1508,84 @@ const styles = StyleSheet.create({
   },
   timelineSubtitleOpportune: {
     color: '#FFFFFF',
+  },
+  luckRow: {
+    marginTop: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  luckCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    gap: SPACING.sm,
+  },
+  luckScoreBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  luckScoreNum: {
+    fontSize: 18,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  luckCardText: {
+    flex: 1,
+  },
+  luckCardTitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  luckCardLabel: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  luckSignsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  luckSignChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    gap: SPACING.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  luckSignEmoji: {
+    fontSize: 22,
+  },
+  luckSignName: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#FFFFFF',
+    marginBottom: 3,
+  },
+  luckSignScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  luckDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  luckDotNum: {
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.55)',
+    fontWeight: '700' as const,
+    marginLeft: 3,
   },
 });

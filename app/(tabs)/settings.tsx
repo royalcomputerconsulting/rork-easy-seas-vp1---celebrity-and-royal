@@ -73,13 +73,6 @@ import {
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
-import {
-  getImportedSource,
-  getImportedSourceLabel,
-  mergeImportedBookedCruises,
-  mergeImportedCruises,
-  mergeImportedOffers,
-} from '@/lib/importMerge';
 import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
 
 
@@ -401,38 +394,21 @@ export default function SettingsScreen() {
         fieldsFixed: healingReport.fieldsFixed.length,
       });
 
-      const existingCruises = cruises.length > 0 ? cruises : (localData.cruises || []);
-      const existingOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
-      const importedSource = getImportedSource({ cruises: parsedCruises, offers: parsedOffers });
-      const mergedCruises = mergeImportedCruises(existingCruises, parsedCruises);
-      const mergedOffers = mergeImportedOffers(existingOffers, parsedOffers);
-
-      console.log('[Settings] Merged imported offers CSV:', {
-        importedSource,
-        existingCruises: existingCruises.length,
-        existingOffers: existingOffers.length,
-        parsedCruises: parsedCruises.length,
-        parsedOffers: parsedOffers.length,
-        mergedCruises: mergedCruises.length,
-        mergedOffers: mergedOffers.length,
-      });
-
-      await setCruises(mergedCruises);
-      await setCasinoOffers(mergedOffers);
+      await setCruises(parsedCruises);
+      await setCasinoOffers(parsedOffers);
       await setLocalData({
-        cruises: mergedCruises,
-        offers: mergedOffers,
+        cruises: parsedCruises,
+        offers: parsedOffers,
       });
 
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
       console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
-      const sourceLabel = getImportedSourceLabel(importedSource);
       const healNote = healingReport.fieldsFixed.length > 0 ? `\n\nData healing fixed ${healingReport.fieldsFixed.length} field(s).` : '';
       setLastImportResult({ type: 'offers', count: parsedCruises.length });
       Alert.alert(
         'Import Successful', 
-        `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}`
+        `Imported ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}${healNote}`
       );
       console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {
@@ -457,7 +433,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [casinoOffers, cruises, localData.cruises, localData.offers, setCruises, setCasinoOffers, setLocalData]);
+  }, [setCruises, setCasinoOffers, setLocalData]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
@@ -819,22 +795,16 @@ export default function SettingsScreen() {
       const existingBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
       console.log('[Settings] Existing booked cruises:', existingBooked.length);
       
-      const parsedBooked = parseBookedCSV(result.content, []);
+      const parsedBooked = parseBookedCSV(result.content, existingBooked);
       
       if (parsedBooked.length === 0) {
-        Alert.alert('Import Failed', 'No valid booked cruise data was found in the CSV file.');
+        Alert.alert('No New Cruises', 'All cruises in the file already exist in your database, or the file contains no valid data.');
         setIsImporting(false);
         return;
       }
 
-      const importedSource = getImportedSource({ bookedCruises: parsedBooked });
-      const mergedBooked = mergeImportedBookedCruises(existingBooked, parsedBooked);
-      console.log('[Settings] Merged booked cruises:', {
-        importedSource,
-        existingBooked: existingBooked.length,
-        parsedBooked: parsedBooked.length,
-        mergedBooked: mergedBooked.length,
-      });
+      const mergedBooked = [...existingBooked, ...parsedBooked];
+      console.log('[Settings] Merged booked cruises:', mergedBooked.length, '(added:', parsedBooked.length, ')');
 
       await setBookedCruises(mergedBooked);
       await setLocalData({
@@ -844,14 +814,13 @@ export default function SettingsScreen() {
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
       console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
-      const sourceLabel = getImportedSourceLabel(importedSource);
       setLastImportResult({ type: 'booked', count: parsedBooked.length });
       
       Alert.alert(
         'Import Successful', 
-        `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).`
+        `Added ${parsedBooked.length} new cruises from ${result.fileName}`
       );
-      console.log('[Settings] Booked import complete:', parsedBooked.length, 'cruise rows imported');
+      console.log('[Settings] Booked import complete:', parsedBooked.length, 'new cruises added');
     } catch (error) {
       console.error('[Settings] Booked import error:', error);
       
@@ -1605,7 +1574,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         ) : (
           value
         )}
-        {onPress && <ChevronRight size={18} color={isDanger ? '#DC2626' : '#9CA3AF'} />}
+        {onPress && <ChevronRight size={18} color={isDanger ? '#FFB3C1' : 'rgba(255,255,255,0.35)'} />}
       </View>
     </TouchableOpacity>
   );
@@ -1614,9 +1583,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     <Switch
       value={value}
       onValueChange={onToggle}
-      trackColor={{ false: '#E2E8F0', true: 'rgba(30,58,95,0.35)' }}
-      thumbColor={value ? '#1E3A5F' : '#9CA3AF'}
-      ios_backgroundColor="#E2E8F0"
+      trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(168,198,255,0.45)' }}
+      thumbColor={value ? '#A8C6FF' : 'rgba(255,255,255,0.4)'}
+      ios_backgroundColor="rgba(255,255,255,0.1)"
     />
   );
 
@@ -1646,7 +1615,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient
-        colors={['#F0F4F8', '#F0F4F8']}
+        colors={['#051120', '#0B1D38', '#132A4D', '#26143C']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -1659,7 +1628,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         >
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <SettingsIcon size={24} color="#1E3A5F" />
+              <SettingsIcon size={24} color="#FFE28F" />
               <Text style={styles.screenTitle}>Settings</Text>
             </View>
           </View>
@@ -1735,11 +1704,11 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               onPress={() => router.push('/royal-caribbean-sync' as any)}
               activeOpacity={0.7}
             >
-              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(0, 112, 201, 0.15)' }]}>
-                <Ship size={16} color="#60A5FA" />
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
+                <Ship size={16} color="#0070C9" />
               </View>
               <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
-              <ChevronRight size={16} color='#9CA3AF' />
+              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
             {isAdmin && (
             <TouchableOpacity 
@@ -1759,11 +1728,11 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               onPress={() => router.push('/pricing-summary' as any)}
               activeOpacity={0.7}
             >
-              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(76, 175, 80, 0.15)' }]}>
-                <TrendingDown size={16} color="#8EF2C1" />
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
+                <TrendingDown size={16} color="#4CAF50" />
               </View>
               <Text style={styles.quickActionLabelInline}>Pricing Summary & History</Text>
-              <ChevronRight size={16} color='#9CA3AF' />
+              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
@@ -1779,7 +1748,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 )}
               </View>
               <Text style={styles.quickActionLabelInline}>Load Import Offers.CSV</Text>
-              <ChevronRight size={16} color='#9CA3AF' />
+              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
             <View style={styles.quickActionsRow}>
               <TouchableOpacity 
@@ -2011,7 +1980,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                     </View>
                     {feedLastUpdated && (
                       <Text style={styles.feedLastUpdated}>
-                        {`Last published: ${new Date(feedLastUpdated).toLocaleDateString()} at ${new Date(feedLastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                        Last published: {new Date(feedLastUpdated).toLocaleDateString()} at {new Date(feedLastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </Text>
                     )}
                   </>
@@ -2262,15 +2231,15 @@ STEP 4: Optional Calendar Import
               )}
               <View style={styles.dataDivider} />
               {renderSettingRow(
-                <Shield size={18} color='rgba(168,198,255,0.85)' />,
+                <Shield size={18} color={COLORS.navyDeep} />,
                 'Privacy Policy',
-                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
+                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
                 () => entitlement.openPrivacyPolicy()
               )}
               {renderSettingRow(
-                <Shield size={18} color='rgba(168,198,255,0.85)' />,
+                <Shield size={18} color={COLORS.navyDeep} />,
                 'Terms of Use (EULA)',
-                <ExternalLink size={14} color='rgba(255,255,255,0.35)' />,
+                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
                 () => entitlement.openTerms()
               )}
             </View>
@@ -2349,10 +2318,10 @@ STEP 4: Optional Calendar Import
                   <Text style={styles.subsectionHelper}>Import CSV files and reset app data.</Text>
                 </View>
                 {renderSettingRow(
-                  <FileSpreadsheet size={18} color='rgba(168,198,255,0.85)' />,
+                  <FileSpreadsheet size={18} color={COLORS.navyDeep} />,
                   'Import Offers CSV',
                   isImporting ? (
-                    <ActivityIndicator size="small" color='rgba(168,198,255,0.8)' />
+                    <ActivityIndicator size="small" color={COLORS.navyDeep} />
                   ) : lastImportResult?.type === 'offers' ? (
                     <View style={styles.successBadge}>
                       <CheckCircle size={12} color={COLORS.success} />
@@ -2373,7 +2342,7 @@ STEP 4: Optional Calendar Import
 
                 {isLoadingWhitelist ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color='rgba(168,198,255,0.8)' />
+                    <ActivityIndicator size="small" color={COLORS.navyDeep} />
                   </View>
                 ) : (
                   <View style={styles.whitelistContainer}>
@@ -2454,7 +2423,7 @@ STEP 4: Optional Calendar Import
 
           <View style={styles.footer}>
             <View style={styles.footerLogoRow}>
-              <Ship size={20} color='#6B7280' />
+              <Ship size={20} color={COLORS.navyDeep} />
               <Text style={styles.footerAppName}>EasySeas</Text>
             </View>
             <Text style={styles.footerTagline}>Cruise Point Tracker</Text>
@@ -2496,7 +2465,7 @@ STEP 4: Optional Calendar Import
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#051120',
   },
   safeArea: {
     flex: 1,
@@ -2517,7 +2486,7 @@ const styles = StyleSheet.create({
   screenTitle: {
     fontSize: TYPOGRAPHY.fontSizeHeader,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     letterSpacing: -0.5,
   },
   section: {
@@ -2526,39 +2495,39 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.45)',
     marginBottom: SPACING.sm,
     marginLeft: SPACING.xs,
     letterSpacing: 1.5,
   },
   dangerTitle: {
-    color: '#DC2626',
+    color: '#FFB3C1',
   },
   sectionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
   },
   dangerCard: {
-    borderColor: 'rgba(220,38,38,0.25)',
-    backgroundColor: 'rgba(220,38,38,0.04)',
+    borderColor: 'rgba(220,38,38,0.4)',
+    backgroundColor: 'rgba(220,38,38,0.08)',
   },
   profileLoadingCard: {
     marginTop: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
     padding: SPACING.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -2572,7 +2541,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   profileLoadingCopy: {
     flex: 1,
@@ -2580,12 +2549,12 @@ const styles = StyleSheet.create({
   profileLoadingTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
   },
   profileLoadingSubtitle: {
     marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.55)',
     lineHeight: 20,
   },
   settingRow: {
@@ -2595,7 +2564,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   settingLeft: {
     flexDirection: 'row',
@@ -2606,13 +2575,13 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     flexShrink: 1,
     flexWrap: 'wrap',
   },
   dangerLabel: {
-    color: '#DC2626',
+    color: '#FFB3C1',
   },
   settingRight: {
     flexDirection: 'row',
@@ -2621,7 +2590,7 @@ const styles = StyleSheet.create({
   },
   settingValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#0E7490',
+    color: '#9EFDF2',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   footer: {
@@ -2638,17 +2607,17 @@ const styles = StyleSheet.create({
   footerAppName: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   footerTagline: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: SPACING.md,
   },
   footerCopyright: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.35)',
     marginTop: SPACING.md,
   },
 
@@ -2656,7 +2625,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xl,
     paddingTop: SPACING.lg,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: SPACING.md,
   },
   legalDisclaimerTitle: {
@@ -2669,7 +2638,7 @@ const styles = StyleSheet.create({
   },
   legalDisclaimerText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.4)',
     lineHeight: 16,
     textAlign: 'left',
   },
@@ -2677,39 +2646,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(5,150,105,0.08)',
+    backgroundColor: 'rgba(142,242,193,0.15)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(5,150,105,0.20)',
+    borderColor: 'rgba(142,242,193,0.3)',
   },
   successText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#059669',
+    color: '#8EF2C1',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   countBadge: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#6B7280',
-    backgroundColor: '#F1F5F9',
+    color: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden' as const,
   },
   backupHint: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.4)',
     marginTop: SPACING.sm,
     marginHorizontal: SPACING.xs,
     fontStyle: 'italic' as const,
   },
   extensionHint: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#6B21A8',
+    color: '#D8C0FF',
     marginTop: SPACING.xs,
     marginHorizontal: SPACING.xs,
     fontStyle: 'italic' as const,
@@ -2718,46 +2687,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xs,
-    backgroundColor: '#FAFBFC',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   importBanner: {
-    backgroundColor: 'rgba(30,58,95,0.03)',
+    backgroundColor: 'rgba(168,198,255,0.08)',
   },
   fullBackupBanner: {
-    backgroundColor: 'rgba(5,150,105,0.03)',
+    backgroundColor: 'rgba(142,242,193,0.06)',
   },
   calendarFeedBanner: {
-    backgroundColor: 'rgba(123,45,142,0.03)',
+    backgroundColor: 'rgba(216,192,255,0.06)',
   },
   subsectionLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#B8860B',
+    color: '#FFE28F',
     letterSpacing: 1.5,
   },
   subsectionHelper: {
     marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.5)',
     letterSpacing: 0.5,
   },
   dataDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     marginVertical: SPACING.xs,
   },
   dataOverviewCard: {
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.md,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0D1E33',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
   },
   dataOverviewHeader: {
     padding: SPACING.sm,
@@ -2775,7 +2744,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.30)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2805,20 +2774,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   dataOverviewStatValue: {
     fontSize: 18,
     fontWeight: '700' as const,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
   },
   dataOverviewStatLabel: {
     fontSize: 10,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.5)',
   },
   dataOverviewUpcomingCompletedRow: {
     flexDirection: 'row' as const,
@@ -2827,11 +2796,11 @@ const styles = StyleSheet.create({
   },
   dataOverviewMiniStat: {
     fontSize: 9,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.45)',
   },
   dataOverviewMiniStatDivider: {
     fontSize: 9,
-    color: '#D1D5DB',
+    color: 'rgba(255,255,255,0.25)',
   },
   dataOverviewGrid: {
     flexDirection: 'row',
@@ -2840,11 +2809,11 @@ const styles = StyleSheet.create({
   dataOverviewGridCard: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   dataOverviewGridIcon: {
     width: 28,
@@ -2857,26 +2826,26 @@ const styles = StyleSheet.create({
   dataOverviewGridValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: '700' as const,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
   },
   dataOverviewGridLabel: {
     fontSize: 10,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.5)',
     marginTop: 2,
     textAlign: 'center' as const,
   },
   quickActionsSection: {
     marginBottom: SPACING.md,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0D1E33',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
   },
   quickActionsBody: {
     padding: SPACING.sm,
@@ -2884,13 +2853,13 @@ const styles = StyleSheet.create({
   quickActionFullWidth: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   quickActionsRow: {
     flexDirection: 'row',
@@ -2900,12 +2869,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   quickActionIconSmall: {
     width: 34,
@@ -2919,25 +2888,25 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '600' as const,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     letterSpacing: 0.1,
   },
   adminHeader: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
-    backgroundColor: '#FAFBFC',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   adminHeaderText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   adminHeaderSubtext: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.5)',
     lineHeight: 16,
   },
   addEmailContainer: {
@@ -2946,31 +2915,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   addEmailInput: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   addEmailButton: {
-    backgroundColor: 'rgba(30,58,95,0.08)',
+    backgroundColor: 'rgba(255,226,143,0.2)',
     borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#1E3A5F',
+    borderColor: 'rgba(255,226,143,0.4)',
   },
   addEmailButtonText: {
-    color: '#1E3A5F',
+    color: '#FFE28F',
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
@@ -2985,7 +2954,7 @@ const styles = StyleSheet.create({
   whitelistCount: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: SPACING.sm,
   },
   whitelistItem: {
@@ -2994,11 +2963,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: BORDER_RADIUS.md,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   whitelistItemLeft: {
     flexDirection: 'row',
@@ -3010,43 +2979,43 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(5,150,105,0.08)',
+    backgroundColor: 'rgba(142,242,193,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   whitelistItemEmail: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     flex: 1,
   },
   adminBadge: {
-    backgroundColor: 'rgba(212,160,10,0.10)',
+    backgroundColor: 'rgba(255,226,143,0.2)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(212,160,10,0.25)',
+    borderColor: 'rgba(255,226,143,0.4)',
   },
   adminBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#92400E',
+    color: '#FFE28F',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   removeButton: {
     padding: SPACING.sm,
-    backgroundColor: 'rgba(220,38,38,0.06)',
+    backgroundColor: 'rgba(220,38,38,0.12)',
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(220,38,38,0.18)',
+    borderColor: 'rgba(220,38,38,0.25)',
   },
   aboutPromoSection: {
     marginTop: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0D1E33',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
@@ -3077,12 +3046,12 @@ const styles = StyleSheet.create({
   aboutQrTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   aboutQrSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.55)',
     marginBottom: SPACING.sm,
     lineHeight: 16,
   },
@@ -3090,13 +3059,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#1E3A5F',
+    backgroundColor: 'rgba(255,226,143,0.2)',
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.md,
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: '#2E5077',
+    borderColor: 'rgba(255,226,143,0.4)',
   },
   aboutAppStoreText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -3108,11 +3077,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
     padding: SPACING.md,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: BORDER_RADIUS.md,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   subscriptionStatusText: {
     flex: 1,
@@ -3120,16 +3089,16 @@ const styles = StyleSheet.create({
   subscriptionStatusTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   subscriptionStatusSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.5)',
   },
   subscriptionHint: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.4)',
     marginTop: SPACING.xs,
     marginHorizontal: SPACING.xs,
     lineHeight: 16,
@@ -3143,9 +3112,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    backgroundColor: '#1E3A5F',
+    backgroundColor: 'rgba(168,198,255,0.2)',
     borderWidth: 1,
-    borderColor: '#2E5077',
+    borderColor: 'rgba(168,198,255,0.4)',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: 12,
     paddingHorizontal: SPACING.lg,
@@ -3159,7 +3128,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: BORDER_RADIUS.round,
@@ -3181,18 +3150,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 8,
     marginTop: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   feedUrlText: {
     flex: 1,
     fontSize: 11,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.5)',
     fontFamily: undefined,
   },
   feedActionsRow: {
@@ -3206,34 +3175,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: 10,
     paddingHorizontal: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   feedActionButtonActive: {
-    backgroundColor: 'rgba(5,150,105,0.06)',
-    borderColor: 'rgba(5,150,105,0.20)',
+    backgroundColor: 'rgba(142,242,193,0.12)',
+    borderColor: 'rgba(142,242,193,0.3)',
   },
   feedActionText: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.75)',
   },
   feedActionTextActive: {
-    color: '#059669',
+    color: '#8EF2C1',
   },
   feedLastUpdated: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.4)',
     marginTop: SPACING.sm,
     textAlign: 'center' as const,
   },
   feedHelperText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.45)',
     marginTop: SPACING.sm,
     lineHeight: 16,
   },
@@ -3253,7 +3222,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.30)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3265,7 +3234,7 @@ const styles = StyleSheet.create({
   },
   sectionHeaderSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255, 255, 255, 0.85)',
+    color: 'rgba(255, 255, 255, 0.9)',
     marginTop: 2,
   },
 });

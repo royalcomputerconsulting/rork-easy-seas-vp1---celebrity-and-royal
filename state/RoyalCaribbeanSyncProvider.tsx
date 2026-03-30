@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useState, useCallback, useRef, useEffect, useContext, createContext, useMemo, ReactNode } from 'react';
 import { WebView } from 'react-native-webview';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -568,7 +568,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     return false;
   }, []);
 
-  const sanitizeSyncArray = useCallback(<T,>(value: unknown, label: string): T[] => {
+  const sanitizeSyncArray = useCallback(<T extends Record<string, unknown>,>(value: unknown, label: string): T[] => {
     if (!Array.isArray(value)) {
       addLog(`⚠️ ${label} was not an array. Using an empty list instead.`, 'warning');
       return [];
@@ -2519,12 +2519,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       if (syncSource !== 'carnival' && preview.loyalty) {
         try {
-          if (preview.loyalty.clubRoyalePoints.changed && loyaltyContext.setManualClubRoyalePoints) {
+          if (preview.loyalty.clubRoyalePoints.changed) {
             addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
             await loyaltyContext.setManualClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
           }
           
-          if (preview.loyalty.crownAndAnchorPoints.changed && loyaltyContext.setManualCrownAnchorPoints) {
+          if (preview.loyalty.crownAndAnchorPoints.changed) {
             addLog(`Updating Crown & Anchor points: ${preview.loyalty.crownAndAnchorPoints.current} → ${preview.loyalty.crownAndAnchorPoints.synced}`, 'info');
             await loyaltyContext.setManualCrownAnchorPoints(preview.loyalty.crownAndAnchorPoints.synced);
           }

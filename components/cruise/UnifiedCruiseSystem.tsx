@@ -23,14 +23,6 @@ import {
 import { SHADOW, SPACING } from '@/constants/theme';
 import type { DisplayField } from '../../lib/cruisePresentation';
 
-const APP_TEXTURE = {
-  surfaceStrong: '#FFFFFF',
-  surfaceMuted: '#F8FAFC',
-  border: '#E2E8F0',
-  borderStrong: '#D7E3EF',
-  goldWash: 'rgba(212, 160, 10, 0.10)',
-} as const;
-
 export type AccentTone = 'gold' | 'teal' | 'emerald' | 'violet' | 'rose' | 'slate';
 
 export interface AccentBadge {
@@ -63,39 +55,39 @@ function getToneStyles(tone: AccentTone = 'slate') {
   switch (tone) {
     case 'gold':
       return {
-        bg: 'rgba(212, 160, 10, 0.12)',
-        border: 'rgba(212, 160, 10, 0.35)',
-        text: '#92400E',
+        bg: 'rgba(245, 185, 59, 0.18)',
+        border: 'rgba(255, 214, 92, 0.55)',
+        text: '#FFE18A',
       };
     case 'teal':
       return {
-        bg: 'rgba(0, 151, 167, 0.10)',
-        border: 'rgba(0, 151, 167, 0.35)',
-        text: '#0E7490',
+        bg: 'rgba(31, 212, 194, 0.18)',
+        border: 'rgba(90, 255, 233, 0.45)',
+        text: '#9EFDF2',
       };
     case 'emerald':
       return {
-        bg: 'rgba(5, 150, 105, 0.10)',
-        border: 'rgba(5, 150, 105, 0.35)',
-        text: '#065F46',
+        bg: 'rgba(39, 210, 137, 0.18)',
+        border: 'rgba(113, 255, 188, 0.45)',
+        text: '#A8F5C7',
       };
     case 'violet':
       return {
-        bg: 'rgba(123, 45, 142, 0.10)',
-        border: 'rgba(123, 45, 142, 0.35)',
-        text: '#6B21A8',
+        bg: 'rgba(156, 102, 255, 0.18)',
+        border: 'rgba(197, 156, 255, 0.45)',
+        text: '#D8C0FF',
       };
     case 'rose':
       return {
-        bg: 'rgba(220, 38, 38, 0.08)',
-        border: 'rgba(220, 38, 38, 0.30)',
-        text: '#9F1239',
+        bg: 'rgba(255, 103, 145, 0.18)',
+        border: 'rgba(255, 167, 189, 0.45)',
+        text: '#FFC6D6',
       };
     default:
       return {
-        bg: '#F1F5F9',
-        border: '#E2E8F0',
-        text: '#475569',
+        bg: 'rgba(255, 255, 255, 0.12)',
+        border: 'rgba(255, 255, 255, 0.18)',
+        text: '#E5ECFF',
       };
   }
 }
@@ -103,21 +95,30 @@ function getToneStyles(tone: AccentTone = 'slate') {
 function getFieldToneColor(tone?: DisplayField['tone']) {
   switch (tone) {
     case 'success':
-      return '#059669';
+      return '#8EF2C1';
     case 'warning':
-      return '#D97706';
+      return '#FFD58A';
     case 'danger':
-      return '#DC2626';
+      return '#FFB3C1';
     case 'accent':
-      return '#1E3A5F';
+      return '#A6C6FF';
     default:
-      return '#1A2A3D';
+      return '#FFFFFF';
   }
 }
 
 export const PremiumPageBackground = memo(function PremiumPageBackground({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.pageBackground}>
+      <LinearGradient
+        colors={['#051120', '#0B1D38', '#132A4D', '#26143C']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.pageOrbTop} />
+      <View style={styles.pageOrbBottom} />
+      <View style={styles.pageNoiseCard} />
       {children}
     </View>
   );
@@ -130,7 +131,6 @@ export const PremiumHeroCard = memo(function PremiumHeroCard({
   imageUri,
   pills,
   children,
-  compact = false,
 }: {
   title: string;
   subtitle?: string;
@@ -138,42 +138,42 @@ export const PremiumHeroCard = memo(function PremiumHeroCard({
   imageUri: string;
   pills: SummaryPill[];
   children?: React.ReactNode;
-  compact?: boolean;
 }) {
   const badgeTone = badge ? getToneStyles(badge.tone) : null;
 
   return (
     <View style={styles.heroShadowWrap}>
-      <ImageBackground source={{ uri: imageUri }} style={[styles.heroCard, compact && styles.heroCardCompact]} imageStyle={styles.heroImage}>
+      <ImageBackground source={{ uri: imageUri }} style={styles.heroCard} imageStyle={styles.heroImage}>
         <LinearGradient
-          colors={['rgba(6,14,30,0.22)', 'rgba(7,19,40,0.72)', 'rgba(10,26,52,0.92)']}
+          colors={['rgba(6,14,30,0.22)', 'rgba(7,19,40,0.82)', 'rgba(10,26,52,0.96)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.heroOverlay, compact && styles.heroOverlayCompact]}
+          style={styles.heroOverlay}
         >
-          <View style={[styles.heroTopRow, compact && styles.heroTopRowCompact]}>
-            <View style={[styles.heroIconBubble, compact && styles.heroIconBubbleCompact]}>
-              <Sparkles size={compact ? 16 : 18} color="#FFE28F" />
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroIconBubble}>
+              <Sparkles size={18} color="#FFE28F" />
             </View>
             {badgeTone ? (
-              <View style={[styles.badge, { backgroundColor: badgeTone.bg, borderColor: badgeTone.border }]}> 
+              <View style={[styles.badge, { backgroundColor: badgeTone.bg, borderColor: badgeTone.border }]}>
                 <Text style={[styles.badgeText, { color: badgeTone.text }]}>{badge?.label}</Text>
               </View>
             ) : null}
           </View>
-          <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]}>{title}</Text>
-          {subtitle ? <Text style={[styles.heroSubtitle, compact && styles.heroSubtitleCompact]}>{subtitle}</Text> : null}
-          <View style={[styles.pillsRow, compact && styles.pillsRowCompact]}>
+          <Text style={styles.heroTitle}>{title}</Text>
+          {subtitle ? <Text style={styles.heroSubtitle}>{subtitle}</Text> : null}
+          <View style={styles.pillsRow}>
             {pills.map((pill) => {
+              const tone = getToneStyles(pill.tone);
               return (
-                <View key={pill.label} style={[styles.summaryPill, compact && styles.summaryPillCompact, { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.25)' }]}> 
+                <View key={pill.label} style={[styles.summaryPill, { backgroundColor: tone.bg, borderColor: tone.border }]}> 
                   <Text style={styles.summaryPillLabel}>{pill.label}</Text>
-                  <Text style={[styles.summaryPillValue, compact && styles.summaryPillValueCompact, { color: '#FFFFFF' }]}>{pill.value}</Text>
+                  <Text style={[styles.summaryPillValue, { color: tone.text }]}>{pill.value}</Text>
                 </View>
               );
             })}
           </View>
-          {children ? <View style={[styles.heroChildContainer, compact && styles.heroChildContainerCompact]}>{children}</View> : null}
+          {children ? <View style={styles.heroChildContainer}>{children}</View> : null}
         </LinearGradient>
       </ImageBackground>
     </View>
@@ -224,13 +224,13 @@ export const PremiumChipBar = memo(function PremiumChipBar({ chips }: { chips: C
             style={[
               styles.chip,
               {
-                backgroundColor: chip.active ? tone.bg : '#F1F5F9',
-                borderColor: chip.active ? tone.border : '#E2E8F0',
+                backgroundColor: chip.active ? tone.bg : 'rgba(255,255,255,0.08)',
+                borderColor: chip.active ? tone.border : 'rgba(255,255,255,0.12)',
               },
             ]}
             testID={`chip-${chip.key}`}
           >
-            <Text style={[styles.chipText, { color: chip.active ? tone.text : '#64748B' }]}>{chip.label}</Text>
+            <Text style={[styles.chipText, { color: chip.active ? tone.text : '#D1DAF3' }]}>{chip.label}</Text>
           </TouchableOpacity>
         );
       })}
@@ -277,7 +277,7 @@ export const PremiumDataSection = memo(function PremiumDataSection({
       <TouchableOpacity style={styles.sectionHeaderRow} onPress={() => setExpanded((current) => !current)} activeOpacity={0.82}>
         <Text style={styles.sectionHeading}>{title}</Text>
         <View style={styles.sectionChevronWrap}>
-          {expanded ? <ChevronUp size={18} color="#4B5563" /> : <ChevronDown size={18} color="#4B5563" />}
+          {expanded ? <ChevronUp size={18} color="#E4ECFF" /> : <ChevronDown size={18} color="#E4ECFF" />}
         </View>
       </TouchableOpacity>
       {expanded ? (
@@ -322,7 +322,7 @@ export const PremiumEntityCard = memo(function PremiumEntityCard({
     <TouchableOpacity style={styles.entityCardWrap} activeOpacity={0.92} onPress={onPress} testID="premium-entity-card">
       <ImageBackground source={{ uri: imageUri }} style={styles.entityHeader} imageStyle={styles.entityHeaderImage}>
         <LinearGradient
-          colors={['rgba(8,18,37,0.15)', 'rgba(10,24,49,0.72)', 'rgba(16,18,42,0.92)']}
+          colors={['rgba(8,18,37,0.15)', 'rgba(10,24,49,0.82)', 'rgba(16,18,42,0.96)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.entityHeaderOverlay}
@@ -335,7 +335,7 @@ export const PremiumEntityCard = memo(function PremiumEntityCard({
             ) : <View />}
             {onPress ? (
               <View style={styles.inlineActionBadge}>
-                <ArrowRight size={16} color="#FFFFFF" />
+                <ArrowRight size={16} color="#F8FCFF" />
               </View>
             ) : null}
           </View>
@@ -365,7 +365,7 @@ export const PremiumEntityCard = memo(function PremiumEntityCard({
           <View style={styles.extraBlock}>
             <TouchableOpacity style={styles.moreButton} onPress={() => setExpanded((current) => !current)} activeOpacity={0.85}>
               <Text style={styles.moreButtonText}>{expanded ? 'Hide full data' : 'Show full data'}</Text>
-              {expanded ? <ChevronUp size={16} color="#4B5563" /> : <ChevronDown size={16} color="#4B5563" />}
+              {expanded ? <ChevronUp size={16} color="#DCE7FF" /> : <ChevronDown size={16} color="#DCE7FF" />}
             </TouchableOpacity>
             {expanded ? (
               <View style={styles.fieldStack}>
@@ -385,93 +385,6 @@ export const PremiumEntityCard = memo(function PremiumEntityCard({
   );
 });
 
-export const PremiumCompactCruiseCard = memo(function PremiumCompactCruiseCard({
-  title,
-  subtitle,
-  imageUri,
-  badge,
-  chips,
-  highlights,
-  details,
-  footerText,
-  onPress,
-}: {
-  title: string;
-  subtitle?: string;
-  imageUri: string;
-  badge?: AccentBadge;
-  chips?: string[];
-  highlights: DisplayField[];
-  details?: DisplayField[];
-  footerText?: string;
-  onPress?: () => void;
-}) {
-  const badgeTone = useMemo(() => (badge ? getToneStyles(badge.tone) : null), [badge]);
-
-  return (
-    <TouchableOpacity style={styles.compactCruiseCard} activeOpacity={0.92} onPress={onPress} testID="premium-compact-cruise-card">
-      <ImageBackground source={{ uri: imageUri }} style={styles.compactCruiseBanner} imageStyle={styles.compactCruiseBannerImage}>
-        <LinearGradient
-          colors={['rgba(10,24,49,0.18)', 'rgba(10,24,49,0.70)', 'rgba(12,26,52,0.94)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.compactCruiseBannerOverlay}
-        >
-          <View style={styles.compactCruiseBannerTopRow}>
-            {badgeTone ? (
-              <View style={[styles.badge, { backgroundColor: badgeTone.bg, borderColor: badgeTone.border }]}>
-                <Text style={[styles.badgeText, { color: badgeTone.text }]}>{badge?.label}</Text>
-              </View>
-            ) : <View />}
-            {onPress ? (
-              <View style={styles.inlineActionBadge}>
-                <ArrowRight size={16} color="#FFFFFF" />
-              </View>
-            ) : null}
-          </View>
-        </LinearGradient>
-      </ImageBackground>
-
-      <View style={styles.compactCruiseBody}>
-        <Text style={styles.compactCruiseTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.compactCruiseSubtitle}>{subtitle}</Text> : null}
-
-        {chips && chips.length > 0 ? (
-          <View style={styles.compactCruiseChipRow}>
-            {chips.slice(0, 3).map((chip) => (
-              <View key={chip} style={styles.compactCruiseChip}>
-                <Text style={styles.compactCruiseChipText}>{chip}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        <View style={styles.compactCruiseHighlightGrid}>
-          {highlights.map((field) => (
-            <View key={field.key} style={styles.compactCruiseHighlightTile}>
-              <Text style={styles.compactCruiseHighlightLabel}>{field.label}</Text>
-              <Text style={[styles.compactCruiseHighlightValue, { color: getFieldToneColor(field.tone) }]}>{field.value}</Text>
-            </View>
-          ))}
-        </View>
-
-        {details && details.length > 0 ? (
-          <View style={styles.compactCruiseDetailStack}>
-            {details.map((field) => (
-              <View key={field.key} style={styles.compactCruiseDetailRow}>
-                <Text style={styles.compactCruiseDetailLabel}>{field.label}</Text>
-                <Text style={[styles.compactCruiseDetailValue, { color: getFieldToneColor(field.tone) }]} numberOfLines={2}>{field.value}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {footerText ? <Text style={styles.compactCruiseFooter}>{footerText}</Text> : null}
-      </View>
-    </TouchableOpacity>
-  );
-});
-
 export const PremiumEmptyState = memo(function PremiumEmptyState({
   title,
   subtitle,
@@ -482,7 +395,7 @@ export const PremiumEmptyState = memo(function PremiumEmptyState({
   return (
     <View style={styles.emptyCard} testID="premium-empty-state">
       <View style={styles.emptyIconBubble}>
-        <Ship size={26} color="#1E3A5F" />
+        <Ship size={26} color="#FFE28F" />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptySubtitle}>{subtitle}</Text>
@@ -501,7 +414,7 @@ export const PremiumQuickFacts = memo(function PremiumQuickFacts({ fields }: { f
         const Icon = field.key.toLowerCase().includes('date') ? CalendarDays : field.key.toLowerCase().includes('port') ? MapPin : field.key.toLowerCase().includes('value') || field.key.toLowerCase().includes('free') ? Wallet : field.key.toLowerCase().includes('point') ? Coins : field.key.toLowerCase().includes('ship') ? Ship : Star;
         return (
           <View key={field.key} style={styles.quickFactCard}>
-            <Icon size={15} color="#1E3A5F" />
+            <Icon size={15} color="#9CB7FF" />
             <Text style={styles.quickFactLabel}>{field.label}</Text>
             <Text style={[styles.quickFactValue, { color: getFieldToneColor(field.tone) }]}>{field.value}</Text>
           </View>
@@ -514,21 +427,48 @@ export const PremiumQuickFacts = memo(function PremiumQuickFacts({ fields }: { f
 const styles = StyleSheet.create({
   pageBackground: {
     flex: 1,
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#071223',
+  },
+  pageOrbTop: {
+    position: 'absolute',
+    top: -80,
+    right: -40,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(102, 76, 255, 0.15)',
+  },
+  pageOrbBottom: {
+    position: 'absolute',
+    bottom: -60,
+    left: -70,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: 'rgba(32, 204, 182, 0.12)',
+  },
+  pageNoiseCard: {
+    position: 'absolute',
+    top: 180,
+    left: 24,
+    right: 24,
+    height: 220,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.03)',
+    transform: [{ rotate: '-4deg' }],
   },
   heroShadowWrap: {
     borderRadius: 28,
     overflow: 'hidden',
     ...SHADOW.lg,
     shadowColor: '#000000',
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.32,
   },
   heroCard: {
     minHeight: 248,
     justifyContent: 'flex-end',
-  },
-  heroCardCompact: {
-    minHeight: 154,
   },
   heroImage: {
     borderRadius: 28,
@@ -538,32 +478,21 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
     justifyContent: 'flex-end',
   },
-  heroOverlayCompact: {
-    padding: SPACING.lg,
-  },
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 18,
   },
-  heroTopRowCompact: {
-    marginBottom: 12,
-  },
   heroIconBubble: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.20)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  heroIconBubbleCompact: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
   },
   badge: {
     paddingHorizontal: 12,
@@ -582,30 +511,17 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
     letterSpacing: -0.8,
   },
-  heroTitleCompact: {
-    fontSize: 23,
-    letterSpacing: -0.5,
-  },
   heroSubtitle: {
     marginTop: 8,
-    color: 'rgba(255, 255, 255, 0.85)',
+    color: 'rgba(232, 240, 255, 0.84)',
     fontSize: 14,
     lineHeight: 20,
-  },
-  heroSubtitleCompact: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 18,
   },
   pillsRow: {
     marginTop: 18,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-  },
-  pillsRowCompact: {
-    marginTop: 12,
-    gap: 8,
   },
   summaryPill: {
     minWidth: 88,
@@ -614,14 +530,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
   },
-  summaryPillCompact: {
-    minWidth: 74,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
   summaryPillLabel: {
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: 'rgba(236, 243, 255, 0.74)',
     fontSize: 10,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -632,14 +542,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800' as const,
   },
-  summaryPillValueCompact: {
-    fontSize: 13,
-  },
   heroChildContainer: {
     marginTop: 18,
-  },
-  heroChildContainerCompact: {
-    marginTop: 14,
   },
   actionRow: {
     gap: 10,
@@ -671,13 +575,13 @@ const styles = StyleSheet.create({
   surfaceCard: {
     borderRadius: 26,
     padding: SPACING.lg,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(10, 24, 47, 0.72)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...SHADOW.card,
+    borderColor: 'rgba(152, 178, 255, 0.14)',
+    ...SHADOW.md,
   },
   sectionHeading: {
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800' as const,
     letterSpacing: -0.3,
@@ -693,12 +597,12 @@ const styles = StyleSheet.create({
     minHeight: 92,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   statTileLabel: {
-    color: '#6B7280',
+    color: 'rgba(213, 224, 255, 0.72)',
     fontSize: 11,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -706,7 +610,7 @@ const styles = StyleSheet.create({
   },
   statTileValue: {
     marginTop: 8,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800' as const,
     lineHeight: 24,
@@ -720,7 +624,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -731,10 +635,10 @@ const styles = StyleSheet.create({
   fieldRow: {
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   fieldLabel: {
-    color: '#6B7280',
+    color: 'rgba(209, 220, 247, 0.68)',
     fontSize: 12,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -742,7 +646,7 @@ const styles = StyleSheet.create({
   },
   fieldValue: {
     marginTop: 7,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     fontSize: 15,
     lineHeight: 22,
     fontWeight: '600' as const,
@@ -750,11 +654,10 @@ const styles = StyleSheet.create({
   entityCardWrap: {
     borderRadius: 28,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(8, 20, 40, 0.88)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(151, 176, 255, 0.14)',
     ...SHADOW.lg,
-    shadowOpacity: 0.08,
   },
   entityHeader: {
     minHeight: 178,
@@ -778,11 +681,11 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.20)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   entityTitle: {
     color: '#FFFFFF',
@@ -792,7 +695,7 @@ const styles = StyleSheet.create({
   },
   entitySubtitle: {
     marginTop: 7,
-    color: 'rgba(255, 255, 255, 0.85)',
+    color: 'rgba(228, 236, 255, 0.8)',
     fontSize: 14,
     lineHeight: 20,
   },
@@ -806,12 +709,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   inlineChipText: {
-    color: '#FFFFFF',
+    color: '#ECF3FF',
     fontSize: 11,
     fontWeight: '700' as const,
   },
@@ -829,12 +732,12 @@ const styles = StyleSheet.create({
     minHeight: 82,
     borderRadius: 18,
     padding: 13,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   entityFieldLabel: {
-    color: '#6B7280',
+    color: 'rgba(212, 223, 255, 0.68)',
     fontSize: 11,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -845,7 +748,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '800' as const,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
   },
   extraBlock: {
     marginTop: 2,
@@ -854,150 +757,31 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.1)',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   moreButtonText: {
-    color: '#4B5563',
+    color: '#DCE7FF',
     fontSize: 13,
     fontWeight: '800' as const,
   },
   footerHint: {
-    color: '#9CA3AF',
+    color: 'rgba(207, 219, 246, 0.72)',
     fontSize: 12,
     lineHeight: 18,
-  },
-  compactCruiseCard: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: APP_TEXTURE.surfaceStrong,
-    borderWidth: 1,
-    borderColor: APP_TEXTURE.border,
-    ...SHADOW.card,
-    shadowColor: '#10223A',
-    shadowOpacity: 0.08,
-  },
-  compactCruiseBanner: {
-    height: 82,
-    justifyContent: 'flex-start',
-  },
-  compactCruiseBannerImage: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-  },
-  compactCruiseBannerOverlay: {
-    flex: 1,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-  },
-  compactCruiseBannerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  compactCruiseBody: {
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.md,
-    gap: 10,
-  },
-  compactCruiseTitle: {
-    color: '#1A2A3D',
-    fontSize: 19,
-    fontWeight: '800' as const,
-    letterSpacing: -0.4,
-  },
-  compactCruiseSubtitle: {
-    color: '#64748B',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  compactCruiseChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  compactCruiseChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: APP_TEXTURE.goldWash,
-    borderWidth: 1,
-    borderColor: APP_TEXTURE.borderStrong,
-  },
-  compactCruiseChipText: {
-    color: '#73510D',
-    fontSize: 11,
-    fontWeight: '700' as const,
-  },
-  compactCruiseHighlightGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  compactCruiseHighlightTile: {
-    width: '47%',
-    minHeight: 74,
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: APP_TEXTURE.surfaceMuted,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.58)',
-  },
-  compactCruiseHighlightLabel: {
-    color: '#6B7280',
-    fontSize: 10,
-    fontWeight: '700' as const,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-  },
-  compactCruiseHighlightValue: {
-    marginTop: 6,
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '800' as const,
-    color: '#1A2A3D',
-  },
-  compactCruiseDetailStack: {
-    gap: 8,
-  },
-  compactCruiseDetailRow: {
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(126, 143, 162, 0.16)',
-  },
-  compactCruiseDetailLabel: {
-    color: '#6B7280',
-    fontSize: 10,
-    fontWeight: '700' as const,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-  },
-  compactCruiseDetailValue: {
-    marginTop: 5,
-    color: '#1A2A3D',
-    fontSize: 14,
-    lineHeight: 19,
-    fontWeight: '700' as const,
-  },
-  compactCruiseFooter: {
-    color: '#94A3B8',
-    fontSize: 12,
-    lineHeight: 17,
   },
   emptyCard: {
     borderRadius: 28,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.xxl,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(10, 24, 47, 0.72)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...SHADOW.card,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   emptyIconBubble: {
     width: 60,
@@ -1005,19 +789,19 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0F4F8',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   emptyTitle: {
     marginTop: 16,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '800' as const,
   },
   emptySubtitle: {
     marginTop: 8,
-    color: '#6B7280',
+    color: 'rgba(215, 226, 248, 0.76)',
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
@@ -1032,14 +816,13 @@ const styles = StyleSheet.create({
     minWidth: 150,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255,255,255,0.09)',
   },
   quickFactLabel: {
     marginTop: 10,
-    color: '#6B7280',
+    color: 'rgba(216, 226, 248, 0.68)',
     fontSize: 11,
     fontWeight: '700' as const,
     textTransform: 'uppercase',
@@ -1047,7 +830,7 @@ const styles = StyleSheet.create({
   },
   quickFactValue: {
     marginTop: 6,
-    color: '#1A2A3D',
+    color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '800' as const,
     lineHeight: 22,
