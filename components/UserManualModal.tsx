@@ -1027,7 +1027,7 @@ function ImportantBox({ title, children }: {
       {children}
     </View>);
 }
-function BulletList({ title, items }: {
+function BulletList({ title: _title, items }: {
     title?: string;
     items: string[];
 }) {
@@ -1044,7 +1044,7 @@ function NumberedList({ items }: {
 }) {
     return (<View style={styles.list}>
       {items.map((item, index) => (<View key={index} style={styles.listItem}>
-          <Text style={styles.numberBullet}>{index + 1}.</Text>
+          <Text style={styles.numberBullet}>{`${index + 1}.`}</Text>
           <Text style={styles.listText}>{item}</Text>
         </View>))}
     </View>);
