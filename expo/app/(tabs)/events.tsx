@@ -10,7 +10,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import type { CalendarEvent, BookedCruise } from '@/types/models';
-import { createDateFromString, getDailyLuckScoreForDate } from '@/lib/date';
+import { createDateFromString, getDailyLuckDigitForDate, getLuckDigitColor } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -101,6 +101,48 @@ function mergeBookedCruiseSources(primaryCruises: BookedCruise[], secondaryCruis
   return Array.from(mergedCruises.values());
 }
 
+function normalizeDayDate(date: Date): Date {
+  const normalizedDate = new Date(date);
+  normalizedDate.setHours(0, 0, 0, 0);
+  return normalizedDate;
+}
+
+function getDateRange(startInput: string | undefined, endInput?: string, fallbackNights?: number): { start: Date; end: Date } | null {
+  if (!startInput) {
+    return null;
+  }
+
+  const start = normalizeDayDate(createDateFromString(startInput));
+  if (Number.isNaN(start.getTime())) {
+    return null;
+  }
+
+  const end = endInput
+    ? normalizeDayDate(createDateFromString(endInput))
+    : normalizeDayDate(new Date(start));
+
+  if (Number.isNaN(end.getTime())) {
+    const fallbackEnd = normalizeDayDate(new Date(start));
+    if (fallbackNights && fallbackNights > 0) {
+      fallbackEnd.setDate(fallbackEnd.getDate() + fallbackNights);
+    }
+    return { start, end: fallbackEnd };
+  }
+
+  if ((!endInput || end < start) && fallbackNights && fallbackNights > 0) {
+    const fallbackEnd = normalizeDayDate(new Date(start));
+    fallbackEnd.setDate(fallbackEnd.getDate() + fallbackNights);
+    return { start, end: fallbackEnd };
+  }
+
+  return { start, end };
+}
+
+function isDateWithinRange(date: Date, range: { start: Date; end: Date }): boolean {
+  const targetDate = normalizeDayDate(date);
+  return targetDate >= range.start && targetDate <= range.end;
+}
+
 export default function EventsScreen() {
   const router = useRouter();
   const { localData } = useAppState();
@@ -128,7 +170,7 @@ export default function EventsScreen() {
   }, [bookedCruises, localData.booked]);
 
   const getLuckScoreForDate = useCallback((date: Date): number | null => {
-    return getDailyLuckScoreForDate(currentUser?.birthdate ?? '', date);
+    return getDailyLuckDigitForDate(currentUser?.birthdate ?? '', date);
   }, [currentUser?.birthdate]);
 
   console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', mergedBookedCruises.length);
@@ -173,52 +215,43 @@ export default function EventsScreen() {
     return count;
   }, [calendarEvents, currentDate, mergedBookedCruises]);
 
-  const isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
-    const start = createDateFromString(startStr);
-    const end = createDateFromString(endStr);
-    const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-    return targetDate >= start && targetDate <= end;
+  const isDateInRange = useCallback((date: Date, startStr: string, endStr?: string, fallbackNights?: number): boolean => {
+    const dateRange = getDateRange(startStr, endStr, fallbackNights);
+    if (!dateRange) {
+      return false;
+    }
+
+    return isDateWithinRange(date, dateRange);
   }, []);
 
   const getEventsForDate = useCallback((date: Date): { cruise: number; travel: number; personal: number } => {
     let cruise = 0;
     let travel = 0;
     let personal = 0;
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-
     calendarEvents.forEach(event => {
       const eventStart = event.startDate || event.start || '';
       const eventEnd = event.endDate || event.end || eventStart;
+      const isEventOnDate = isDateInRange(date, eventStart, eventEnd);
 
-      if (!eventStart) return;
+      if (!isEventOnDate) {
+        return;
+      }
 
-      const startDate = eventStart.split('T')[0];
-      const endDate = eventEnd ? eventEnd.split('T')[0] : startDate;
-
-      if (!startDate || !endDate) return;
-
-      if (dateStr >= startDate && dateStr <= endDate) {
-        if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
-          cruise++;
-        } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
-          travel++;
-        } else {
-          personal++;
-        }
+      if (event.type === 'cruise' || (event as CalendarEvent & { sourceType?: string }).sourceType === 'cruise') {
+        cruise++;
+      } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
+        travel++;
+      } else {
+        personal++;
       }
     });
 
     mergedBookedCruises.forEach((cruiseBooking: BookedCruise) => {
-      if (!cruiseBooking.sailDate || !cruiseBooking.returnDate) {
+      if (!cruiseBooking.sailDate) {
         return;
       }
 
-      if (isDateInRange(date, cruiseBooking.sailDate, cruiseBooking.returnDate)) {
+      if (isDateInRange(date, cruiseBooking.sailDate, cruiseBooking.returnDate, cruiseBooking.nights)) {
         cruise++;
       }
     });
@@ -416,6 +449,7 @@ export default function EventsScreen() {
   const renderDayCell = useCallback((day: DayData) => {
     const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
     const bgColor = getDayBackgroundColor(day);
+    const luckBadgeColor = day.luckScore !== null ? getLuckDigitColor(day.luckScore) : null;
     
     return (
       <TouchableOpacity
@@ -429,9 +463,13 @@ export default function EventsScreen() {
         activeOpacity={0.7}
         onPress={() => handleDayPress(day)}
       >
-        {day.luckScore !== null && day.isCurrentMonth ? (
-          <View style={styles.luckBadge} testID={`calendar-luck-badge-${day.date.toISOString().split('T')[0]}`}>
-            <Text style={styles.luckBadgeText}>{day.luckScore}</Text>
+        {day.luckScore !== null && day.isCurrentMonth && luckBadgeColor ? (
+          <View
+            style={[styles.luckBadge, { backgroundColor: `${luckBadgeColor}1F`, borderColor: `${luckBadgeColor}66` }]}
+            testID={`calendar-luck-badge-${day.date.toISOString().split('T')[0]}`}
+          >
+            <Text style={[styles.luckBadgeLabel, { color: luckBadgeColor }]}>LUCK#</Text>
+            <Text style={[styles.luckBadgeText, { color: luckBadgeColor }]}>{day.luckScore}</Text>
           </View>
         ) : null}
         <Text style={[
@@ -985,21 +1023,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    minWidth: 20,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+    minWidth: 28,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  luckBadgeLabel: {
+    fontSize: 6,
+    lineHeight: 7,
+    fontWeight: '800' as const,
+    letterSpacing: 0.3,
+  },
   luckBadgeText: {
-    fontSize: 8,
-    lineHeight: 9,
-    fontWeight: '700' as const,
-    color: '#B45309',
+    fontSize: 10,
+    lineHeight: 11,
+    fontWeight: '800' as const,
   },
   eventDotsContainer: {
     flexDirection: 'row',

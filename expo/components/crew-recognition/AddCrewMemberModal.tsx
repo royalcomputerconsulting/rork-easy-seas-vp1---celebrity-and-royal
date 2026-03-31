@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,13 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
-import { X, User, Anchor } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import { X, User, Anchor, FileText, Upload, Users } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
-import { DEPARTMENTS } from '@/types/crew-recognition';
+import { DEPARTMENTS, type Department } from '@/types/crew-recognition';
 import type { Sailing } from '@/types/crew-recognition';
 import type { BookedCruise } from '@/types/models';
 
@@ -30,13 +33,22 @@ interface AddCrewMemberModalProps {
   bookedCruises?: BookedCruise[];
 }
 
+type EntryMode = 'single' | 'batch';
+
+interface ParsedCrewMember {
+  fullName: string;
+  department: Department;
+  roleTitle?: string;
+  notes?: string;
+}
+
 function findCurrentAboardSailing(sailings: Sailing[], bookedCruises: BookedCruise[]): Sailing | null {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   for (const sailing of sailings) {
-    const start = new Date(sailing.sailStartDate + 'T00:00:00');
-    const end = new Date(sailing.sailEndDate + 'T23:59:59');
+    const start = new Date(`${sailing.sailStartDate}T00:00:00`);
+    const end = new Date(`${sailing.sailEndDate}T23:59:59`);
     if (today >= start && today <= end) {
       return sailing;
     }
@@ -44,11 +56,11 @@ function findCurrentAboardSailing(sailings: Sailing[], bookedCruises: BookedCrui
 
   for (const cruise of bookedCruises) {
     if (!cruise.sailDate || !cruise.returnDate) continue;
-    const start = new Date(cruise.sailDate + 'T00:00:00');
-    const end = new Date(cruise.returnDate + 'T23:59:59');
+    const start = new Date(`${cruise.sailDate}T00:00:00`);
+    const end = new Date(`${cruise.returnDate}T23:59:59`);
     if (today >= start && today <= end) {
       const matchingSailing = sailings.find(
-        s => s.shipName === cruise.shipName && s.sailStartDate === cruise.sailDate
+        (s) => s.shipName === cruise.shipName && s.sailStartDate === cruise.sailDate,
       );
       if (matchingSailing) return matchingSailing;
     }
@@ -57,32 +69,222 @@ function findCurrentAboardSailing(sailings: Sailing[], bookedCruises: BookedCrui
   return null;
 }
 
+function normalizeShipName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function parseHeaderLine(line: string): { shipName: string; startMonth: number; startDay: number } | null {
+  const trimmedLine = line.trim();
+  const match = trimmedLine.match(/^(.*?)\s+(\d{1,2})\/(\d{1,2})(?:\s*-\s*(?:(\d{1,2})\/)?(\d{1,2}))?$/);
+  if (!match) {
+    return null;
+  }
+
+  const shipName = match[1]?.trim() ?? '';
+  const startMonth = Number(match[2]);
+  const startDay = Number(match[3]);
+
+  if (!shipName || Number.isNaN(startMonth) || Number.isNaN(startDay)) {
+    return null;
+  }
+
+  return { shipName, startMonth, startDay };
+}
+
+function findSailingFromHeader(headerLine: string, sailings: Sailing[]): Sailing | null {
+  const parsedHeader = parseHeaderLine(headerLine);
+  if (!parsedHeader) {
+    return null;
+  }
+
+  const normalizedHeaderShip = normalizeShipName(parsedHeader.shipName);
+
+  return sailings.find((sailing) => {
+    const normalizedSailingShip = normalizeShipName(sailing.shipName);
+    const shipMatch =
+      normalizedSailingShip.includes(normalizedHeaderShip) ||
+      normalizedHeaderShip.includes(normalizedSailingShip);
+
+    if (!shipMatch) {
+      return false;
+    }
+
+    const sailingDate = new Date(`${sailing.sailStartDate}T00:00:00`);
+    return (
+      sailingDate.getMonth() + 1 === parsedHeader.startMonth &&
+      sailingDate.getDate() === parsedHeader.startDay
+    );
+  }) ?? null;
+}
+
+function inferDepartmentFromText(details: string): Department {
+  const normalized = details.toLowerCase();
+
+  if (normalized.includes('casino') || normalized.includes('dealer') || normalized.includes('host')) return 'Casino';
+  if (normalized.includes('waiter') || normalized.includes('restaurant') || normalized.includes('dining') || normalized.includes('cafe') || normalized.includes('table')) return 'Dining';
+  if (normalized.includes('stateroom') || normalized.includes('housekeeping') || normalized.includes('attendant')) return 'Housekeeping';
+  if (normalized.includes('guest relation') || normalized.includes('front desk')) return 'Guest Relations';
+  if (normalized.includes('activity') || normalized.includes('activities')) return 'Activities';
+  if (normalized.includes('spa')) return 'Spa';
+  if (normalized.includes('retail') || normalized.includes('shop')) return 'Retail';
+  if (normalized.includes('bar') || normalized.includes('beverage') || normalized.includes('drink')) return 'Beverage';
+  if (normalized.includes('loyalty') || normalized.includes('nextcruise')) return 'Loyalty';
+  if (normalized.includes('public area') || normalized.includes('cleaner') || normalized.includes('sanitation')) return 'Public Areas';
+
+  return 'Other';
+}
+
+function parseCrewMemberLine(line: string): ParsedCrewMember | null {
+  const trimmedLine = line.trim();
+  if (!trimmedLine) {
+    return null;
+  }
+
+  const parts = trimmedLine.split('-');
+  const fullName = parts[0]?.trim() ?? '';
+  const detailText = parts.slice(1).join('-').trim();
+
+  if (!fullName) {
+    return null;
+  }
+
+  const roleTitle = detailText || undefined;
+  const notes = detailText || undefined;
+
+  return {
+    fullName,
+    department: inferDepartmentFromText(detailText),
+    roleTitle,
+    notes,
+  };
+}
+
+async function readTextFile(): Promise<{ content: string; fileName: string } | null> {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ['text/plain', 'text/csv'],
+    copyToCacheDirectory: true,
+  });
+
+  if (result.canceled || !result.assets || result.assets.length === 0) {
+    return null;
+  }
+
+  const asset = result.assets[0];
+  console.log('[AddCrewMember] Selected crew import file:', asset.name, asset.uri);
+
+  let content = '';
+  if (Platform.OS === 'web') {
+    const response = await fetch(asset.uri);
+    content = await response.text();
+  } else {
+    content = await FileSystem.readAsStringAsync(asset.uri);
+  }
+
+  return {
+    content,
+    fileName: asset.name,
+  };
+}
+
 export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, bookedCruises = [] }: AddCrewMemberModalProps) {
+  const [entryMode, setEntryMode] = useState<EntryMode>('single');
   const [fullName, setFullName] = useState('');
-  const [department, setDepartment] = useState('');
+  const [department, setDepartment] = useState<Department | ''>('');
   const [roleTitle, setRoleTitle] = useState('');
   const [notes, setNotes] = useState('');
+  const [bulkText, setBulkText] = useState('');
+  const [importedFileName, setImportedFileName] = useState<string>('');
   const [sailingId, setSailingId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isImportingFile, setIsImportingFile] = useState(false);
   const [showDepartmentPicker, setShowDepartmentPicker] = useState(false);
   const [showSailingPicker, setShowSailingPicker] = useState(false);
   const [autoLinked, setAutoLinked] = useState(false);
 
   const currentAboardSailing = useMemo(
     () => findCurrentAboardSailing(sailings, bookedCruises),
-    [sailings, bookedCruises]
+    [sailings, bookedCruises],
   );
 
+  const batchLines = useMemo(() => {
+    return bulkText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  }, [bulkText]);
+
+  const batchHeaderLine = batchLines[0] ?? '';
+
+  const matchedBatchSailing = useMemo(() => {
+    if (entryMode !== 'batch' || !batchHeaderLine) {
+      return null;
+    }
+
+    return findSailingFromHeader(batchHeaderLine, sailings);
+  }, [batchHeaderLine, entryMode, sailings]);
+
+  const selectedSailing = useMemo(() => {
+    return sailings.find((s) => s.id === sailingId) ?? null;
+  }, [sailingId, sailings]);
+
   useEffect(() => {
-    if (visible && currentAboardSailing && sailingId === '') {
+    if (visible && currentAboardSailing && sailingId === '' && entryMode === 'single') {
       console.log('[AddCrewMember] Auto-linking to current sailing:', currentAboardSailing.shipName, currentAboardSailing.sailStartDate);
       setSailingId(currentAboardSailing.id);
       setAutoLinked(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, currentAboardSailing]);
+  }, [visible, currentAboardSailing, sailingId, entryMode]);
 
-  const handleSubmit = async () => {
+  useEffect(() => {
+    if (entryMode !== 'batch' || !matchedBatchSailing) {
+      return;
+    }
+
+    console.log('[AddCrewMember] Auto-matched batch import sailing:', matchedBatchSailing.shipName, matchedBatchSailing.sailStartDate);
+    setSailingId(matchedBatchSailing.id);
+    setAutoLinked(true);
+  }, [entryMode, matchedBatchSailing]);
+
+  const resetForm = useCallback(() => {
+    setEntryMode('single');
+    setFullName('');
+    setDepartment('');
+    setRoleTitle('');
+    setNotes('');
+    setBulkText('');
+    setImportedFileName('');
+    setSailingId('');
+    setAutoLinked(false);
+    setShowDepartmentPicker(false);
+    setShowSailingPicker(false);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    resetForm();
+    onClose();
+  }, [onClose, resetForm]);
+
+  const handleFileImport = useCallback(async () => {
+    setIsImportingFile(true);
+    try {
+      const fileResult = await readTextFile();
+      if (!fileResult) {
+        return;
+      }
+
+      console.log('[AddCrewMember] Crew file imported:', fileResult.fileName, 'chars:', fileResult.content.length);
+      setEntryMode('batch');
+      setBulkText(fileResult.content);
+      setImportedFileName(fileResult.fileName);
+    } catch (error) {
+      console.error('[AddCrewMember] Failed to import crew file:', error);
+      Alert.alert('Import failed', 'Unable to read that text file. Please try another file.');
+    } finally {
+      setIsImportingFile(false);
+    }
+  }, []);
+
+  const handleSingleSubmit = useCallback(async () => {
     if (!fullName.trim()) {
       Alert.alert('Error', 'Please enter a full name');
       return;
@@ -93,31 +295,78 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
       return;
     }
 
+    await onSubmit({
+      fullName: fullName.trim(),
+      department,
+      roleTitle: roleTitle.trim() || undefined,
+      notes: notes.trim() || undefined,
+      sailingId: sailingId || undefined,
+    });
+  }, [department, fullName, notes, onSubmit, roleTitle, sailingId]);
+
+  const handleBatchSubmit = useCallback(async () => {
+    if (batchLines.length < 2) {
+      Alert.alert('Error', 'Paste a crew list with the sailing header on the first line and at least one crew member below it.');
+      return;
+    }
+
+    if (!parseHeaderLine(batchHeaderLine)) {
+      Alert.alert('Missing sailing header', 'The first line must contain the ship and sailing date, for example: Harmony 3/1-8');
+      return;
+    }
+
+    const resolvedSailingId = matchedBatchSailing?.id ?? sailingId;
+    if (!resolvedSailingId) {
+      Alert.alert('Sailing not found', 'The first line must match one of your sailings, or select the sailing manually before importing.');
+      return;
+    }
+
+    const parsedMembers = batchLines.slice(1)
+      .map((line) => parseCrewMemberLine(line))
+      .filter((member): member is ParsedCrewMember => member !== null);
+
+    if (parsedMembers.length === 0) {
+      Alert.alert('Error', 'No valid crew member lines were found below the sailing header.');
+      return;
+    }
+
+    console.log('[AddCrewMember] Importing batch crew list:', {
+      count: parsedMembers.length,
+      sailingId: resolvedSailingId,
+      importedFileName,
+    });
+
+    for (const member of parsedMembers) {
+      await onSubmit({
+        fullName: member.fullName,
+        department: member.department,
+        roleTitle: member.roleTitle,
+        notes: member.notes,
+        sailingId: resolvedSailingId,
+      });
+    }
+
+    Alert.alert('Crew imported', `${parsedMembers.length} crew member${parsedMembers.length === 1 ? '' : 's'} added to this sailing.`);
+  }, [batchHeaderLine, batchLines, importedFileName, matchedBatchSailing?.id, onSubmit, sailingId]);
+
+  const handleSubmit = useCallback(async () => {
     setIsSubmitting(true);
     try {
-      await onSubmit({
-        fullName: fullName.trim(),
-        department,
-        roleTitle: roleTitle.trim() || undefined,
-        notes: notes.trim() || undefined,
-        sailingId: sailingId || undefined,
-      });
-
-      setFullName('');
-      setDepartment('');
-      setRoleTitle('');
-      setNotes('');
-      setSailingId('');
-      setAutoLinked(false);
-      onClose();
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to add crew member');
+      if (entryMode === 'single') {
+        await handleSingleSubmit();
+      } else {
+        await handleBatchSubmit();
+      }
+      handleClose();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add crew member';
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [entryMode, handleBatchSubmit, handleClose, handleSingleSubmit]);
 
-  const selectedSailing = sailings.find(s => s.id === sailingId);
+  const batchPreviewCount = Math.max(0, batchLines.length - 1);
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -126,94 +375,178 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
           <View style={styles.header}>
             <User size={24} color={COLORS.primary} />
             <Text style={styles.title}>Add Crew Member</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton} testID="close-add-crew-modal">
               <X size={24} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.content}>
-            <View style={styles.field}>
-              <Text style={styles.label}>Full Name *</Text>
-              <TextInput
-                style={styles.input}
-                value={fullName}
-                onChangeText={setFullName}
-                placeholder="Enter full name"
-                placeholderTextColor={COLORS.textTertiary}
-              />
-            </View>
-
-            <View style={styles.field}>
-              <Text style={styles.label}>Department *</Text>
+          <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+            <View style={styles.modeToggleRow}>
               <TouchableOpacity
-                style={styles.picker}
-                onPress={() => setShowDepartmentPicker(!showDepartmentPicker)}
+                style={[styles.modeButton, entryMode === 'single' && styles.modeButtonActive]}
+                onPress={() => setEntryMode('single')}
+                activeOpacity={0.8}
+                testID="crew-mode-single"
               >
-                <Text style={department ? styles.pickerText : styles.pickerPlaceholder}>
-                  {department || 'Select department'}
-                </Text>
+                <User size={16} color={entryMode === 'single' ? COLORS.white : COLORS.primary} />
+                <Text style={[styles.modeButtonText, entryMode === 'single' && styles.modeButtonTextActive]}>One person</Text>
               </TouchableOpacity>
-              {showDepartmentPicker && (
-                <View style={styles.pickerOptions}>
-                  {DEPARTMENTS.map(dept => (
-                    <TouchableOpacity
-                      key={dept}
-                      style={styles.pickerOption}
-                      onPress={() => {
-                        setDepartment(dept);
-                        setShowDepartmentPicker(false);
-                      }}
-                    >
-                      <Text style={styles.pickerOptionText}>{dept}</Text>
-                    </TouchableOpacity>
-                  ))}
+              <TouchableOpacity
+                style={[styles.modeButton, entryMode === 'batch' && styles.modeButtonActive]}
+                onPress={() => setEntryMode('batch')}
+                activeOpacity={0.8}
+                testID="crew-mode-batch"
+              >
+                <Users size={16} color={entryMode === 'batch' ? COLORS.white : COLORS.primary} />
+                <Text style={[styles.modeButtonText, entryMode === 'batch' && styles.modeButtonTextActive]}>Paste list</Text>
+              </TouchableOpacity>
+            </View>
+
+            {entryMode === 'single' ? (
+              <>
+                <View style={styles.field}>
+                  <Text style={styles.label}>Full Name *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={fullName}
+                    onChangeText={setFullName}
+                    placeholder="Enter full name"
+                    placeholderTextColor={COLORS.textTertiary}
+                    testID="crew-full-name-input"
+                  />
                 </View>
-              )}
-            </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.label}>Department *</Text>
+                  <TouchableOpacity
+                    style={styles.picker}
+                    onPress={() => setShowDepartmentPicker((prev) => !prev)}
+                    activeOpacity={0.8}
+                    testID="crew-department-picker"
+                  >
+                    <Text style={department ? styles.pickerText : styles.pickerPlaceholder}>
+                      {department || 'Select department'}
+                    </Text>
+                  </TouchableOpacity>
+                  {showDepartmentPicker ? (
+                    <View style={styles.pickerOptions}>
+                      {DEPARTMENTS.map((dept) => (
+                        <TouchableOpacity
+                          key={dept}
+                          style={styles.pickerOption}
+                          onPress={() => {
+                            setDepartment(dept);
+                            setShowDepartmentPicker(false);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.pickerOptionText}>{dept}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.label}>Role Title</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={roleTitle}
+                    onChangeText={setRoleTitle}
+                    placeholder="e.g., Stateroom attendant"
+                    placeholderTextColor={COLORS.textTertiary}
+                    testID="crew-role-input"
+                  />
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.label}>Notes</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="Additional notes"
+                    placeholderTextColor={COLORS.textTertiary}
+                    multiline
+                    numberOfLines={3}
+                    testID="crew-notes-input"
+                  />
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.batchHelpCard}>
+                  <View style={styles.batchHelpHeader}>
+                    <FileText size={16} color="#0369A1" />
+                    <Text style={styles.batchHelpTitle}>Paste a sailing list or import a text file</Text>
+                  </View>
+                  <Text style={styles.batchHelpText}>
+                    First line: ship and sailing date. Example: Harmony 3/1-8{`\n`}
+                    Following lines: Name - role / notes
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.fileImportButton, isImportingFile && styles.fileImportButtonDisabled]}
+                    onPress={() => void handleFileImport()}
+                    disabled={isImportingFile}
+                    activeOpacity={0.8}
+                    testID="crew-import-file"
+                  >
+                    {isImportingFile ? (
+                      <ActivityIndicator size="small" color="#0369A1" />
+                    ) : (
+                      <Upload size={16} color="#0369A1" />
+                    )}
+                    <Text style={styles.fileImportButtonText}>{importedFileName || 'Import text file'}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.label}>Crew List *</Text>
+                  <TextInput
+                    style={[styles.input, styles.batchTextArea]}
+                    value={bulkText}
+                    onChangeText={setBulkText}
+                    placeholder={"Harmony 3/1-8\nRidwan - stateroom attendant #8572\nPudji - stateroom attendant\nGinny - sabor restaurant"}
+                    placeholderTextColor={COLORS.textTertiary}
+                    multiline
+                    textAlignVertical="top"
+                    testID="crew-bulk-input"
+                  />
+                  <Text style={styles.batchFooterText}>
+                    {batchPreviewCount} crew member{batchPreviewCount === 1 ? '' : 's'} ready to import
+                  </Text>
+                </View>
+              </>
+            )}
 
             <View style={styles.field}>
-              <Text style={styles.label}>Role Title</Text>
-              <TextInput
-                style={styles.input}
-                value={roleTitle}
-                onChangeText={setRoleTitle}
-                placeholder="e.g., Casino dealer"
-                placeholderTextColor={COLORS.textTertiary}
-              />
-            </View>
-
-            <View style={styles.field}>
-              <Text style={styles.label}>Notes</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="Additional notes"
-                placeholderTextColor={COLORS.textTertiary}
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-
-            <View style={styles.field}>
-              <Text style={styles.label}>Link to Sailing (Optional)</Text>
-              {autoLinked && selectedSailing && (
+              <Text style={styles.label}>{entryMode === 'batch' ? 'Matched Sailing *' : 'Link to Sailing (Optional)'}</Text>
+              {autoLinked && selectedSailing ? (
                 <View style={styles.autoLinkedBadge}>
                   <Anchor size={12} color="#0369A1" />
-                  <Text style={styles.autoLinkedText}>Auto-linked — currently aboard this sailing</Text>
+                  <Text style={styles.autoLinkedText}>
+                    {entryMode === 'batch' ? 'Matched from header and linked to this sailing' : 'Auto-linked — currently aboard this sailing'}
+                  </Text>
                 </View>
-              )}
+              ) : null}
               <TouchableOpacity
                 style={[styles.picker, autoLinked && selectedSailing && styles.pickerAutoLinked]}
-                onPress={() => { setShowSailingPicker(!showSailingPicker); setAutoLinked(false); }}
+                onPress={() => {
+                  setShowSailingPicker((prev) => !prev);
+                  setAutoLinked(false);
+                }}
+                activeOpacity={0.8}
+                testID="crew-sailing-picker"
               >
                 <Text style={sailingId ? styles.pickerText : styles.pickerPlaceholder}>
                   {selectedSailing
                     ? `${selectedSailing.shipName} - ${selectedSailing.sailStartDate}`
-                    : 'Select sailing'}
+                    : entryMode === 'batch'
+                      ? 'Select sailing or paste a matching header'
+                      : 'Select sailing'}
                 </Text>
               </TouchableOpacity>
-              {showSailingPicker && (
+              {showSailingPicker ? (
                 <ScrollView style={styles.pickerOptions} nestedScrollEnabled>
                   <TouchableOpacity
                     style={styles.pickerOption}
@@ -221,10 +554,11 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
                       setSailingId('');
                       setShowSailingPicker(false);
                     }}
+                    activeOpacity={0.8}
                   >
                     <Text style={styles.pickerOptionText}>None</Text>
                   </TouchableOpacity>
-                  {sailings.map(sailing => (
+                  {sailings.map((sailing) => (
                     <TouchableOpacity
                       key={sailing.id}
                       style={styles.pickerOption}
@@ -232,6 +566,7 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
                         setSailingId(sailing.id);
                         setShowSailingPicker(false);
                       }}
+                      activeOpacity={0.8}
                     >
                       <Text style={styles.pickerOptionText}>
                         {sailing.shipName} - {sailing.sailStartDate}
@@ -239,23 +574,25 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-              )}
+              ) : null}
             </View>
           </ScrollView>
 
           <View style={styles.footer}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+            <TouchableOpacity style={styles.cancelButton} onPress={handleClose} activeOpacity={0.8}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-              onPress={handleSubmit}
+              onPress={() => void handleSubmit()}
               disabled={isSubmitting}
+              activeOpacity={0.8}
+              testID="submit-add-crew"
             >
               {isSubmitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.submitButtonText}>Add Crew Member</Text>
+                <Text style={styles.submitButtonText}>{entryMode === 'single' ? 'Add Crew Member' : 'Import Crew List'}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -298,7 +635,39 @@ const styles = StyleSheet.create({
     padding: SPACING.xs,
   },
   content: {
-    padding: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+  },
+  contentContainer: {
+    paddingVertical: SPACING.lg,
+  },
+  modeToggleRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.2)',
+    backgroundColor: 'rgba(3, 105, 161, 0.06)',
+  },
+  modeButtonActive: {
+    backgroundColor: '#0369A1',
+    borderColor: '#0369A1',
+  },
+  modeButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '600' as const,
+    color: '#0369A1',
+  },
+  modeButtonTextActive: {
+    color: COLORS.white,
   },
   field: {
     marginBottom: SPACING.md,
@@ -316,16 +685,21 @@ const styles = StyleSheet.create({
     padding: SPACING.sm,
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: COLORS.text,
+    backgroundColor: COLORS.white,
   },
   textArea: {
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  batchTextArea: {
+    minHeight: 180,
   },
   picker: {
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
+    backgroundColor: COLORS.white,
   },
   pickerText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
@@ -401,9 +775,60 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500' as const,
     color: '#0369A1',
+    flex: 1,
   },
   pickerAutoLinked: {
     borderColor: '#0369A1',
     backgroundColor: 'rgba(3, 105, 161, 0.04)',
+  },
+  batchHelpCard: {
+    backgroundColor: 'rgba(3, 105, 161, 0.06)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.14)',
+    gap: SPACING.sm,
+  },
+  batchHelpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  batchHelpTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '700' as const,
+    color: COLORS.text,
+    flex: 1,
+  },
+  batchHelpText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 20,
+    color: COLORS.textSecondary,
+  },
+  fileImportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: SPACING.xs,
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.22)',
+  },
+  fileImportButtonDisabled: {
+    opacity: 0.6,
+  },
+  fileImportButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '600' as const,
+    color: '#0369A1',
+  },
+  batchFooterText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
   },
 });

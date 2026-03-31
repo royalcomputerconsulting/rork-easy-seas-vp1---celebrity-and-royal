@@ -2553,6 +2553,35 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           
           await loyaltyContext.setExtendedLoyaltyData(effectiveExtendedLoyalty);
           addLog('Extended loyalty data synced successfully', 'success');
+
+          if (currentUser && updateUserProfile) {
+            const profileUpdates: Record<string, string | number> = {};
+
+            if (syncSource === 'celebrity') {
+              profileUpdates.preferredBrand = 'celebrity';
+            } else if (syncSource === 'royal') {
+              profileUpdates.preferredBrand = 'royal';
+            }
+
+            if (effectiveExtendedLoyalty.crownAndAnchorId) {
+              profileUpdates.crownAnchorNumber = effectiveExtendedLoyalty.crownAndAnchorId;
+            }
+            if (effectiveExtendedLoyalty.captainsClubId) {
+              profileUpdates.celebrityCaptainsClubNumber = effectiveExtendedLoyalty.captainsClubId;
+            }
+            if (effectiveExtendedLoyalty.captainsClubPoints !== undefined) {
+              profileUpdates.celebrityCaptainsClubPoints = effectiveExtendedLoyalty.captainsClubPoints;
+            }
+            if (effectiveExtendedLoyalty.celebrityBlueChipPoints !== undefined) {
+              profileUpdates.celebrityBlueChipPoints = effectiveExtendedLoyalty.celebrityBlueChipPoints;
+            }
+
+            if (Object.keys(profileUpdates).length > 0) {
+              console.log('[RoyalCaribbeanSync] Syncing loyalty fields into user profile:', profileUpdates);
+              await updateUserProfile(currentUser.id, profileUpdates);
+              addLog('User profile loyalty fields updated from sync payload', 'success');
+            }
+          }
         } catch (extLoyaltyError) {
           console.error('[RoyalCaribbeanSync] Error syncing extended loyalty:', extLoyaltyError);
           addLog(`⚠️ Warning: Failed to sync extended loyalty data: ${String(extLoyaltyError)}`, 'warning');

@@ -143,6 +143,14 @@ export function UserProfileCard({
     }
   };
 
+  const getMaskedRoyalNumber = (value?: string) => {
+    if (!value || !value.trim()) {
+      return 'Not set';
+    }
+
+    return 'Hidden for privacy';
+  };
+
   const renderEnrichmentBadge = (hasData: boolean) => (
     <View style={[styles.enrichmentBadge, hasData ? styles.enrichmentBadgeActive : styles.enrichmentBadgeInactive]}>
       {hasData ? (
@@ -219,6 +227,7 @@ export function UserProfileCard({
     : !!enrichmentData?.venetianSocietyMemberNumber;
 
   const getSubscriptionTierDisplay = () => {
+    if (entitlement.source === 'dev') return { text: 'Admin Access', color: '#0369A1' };
     if (entitlement.subscriptionDisplayStatus === 'annual') return { text: 'Annual Subscription', color: '#10B981' };
     if (entitlement.subscriptionDisplayStatus === 'monthly') return { text: 'Monthly Subscription', color: '#3B82F6' };
     if (entitlement.subscriptionDisplayStatus === 'grace_period') return { text: `Grace Period (${entitlement.trialDaysRemaining}d left)`, color: '#F59E0B' };
@@ -233,7 +242,7 @@ export function UserProfileCard({
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.email, undefined, true)}
         {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
-        {renderValueCard('Crown & Anchor #', currentValues.crownAnchorNumber || enrichmentData?.crownAndAnchorId, undefined, true)}
+        {renderValueCard('Crown & Anchor #', getMaskedRoyalNumber(currentValues.crownAnchorNumber || enrichmentData?.crownAndAnchorId), undefined, true)}
         {renderValueCard('C&A Level', enrichmentData?.crownAndAnchorTier || calculatedLevel, calculatedLevelInfo?.color)}
         {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
         {renderValueCard('Club Royale Tier', enrichmentData?.clubRoyaleTierFromApi || calculatedTier, calculatedTierInfo?.color)}

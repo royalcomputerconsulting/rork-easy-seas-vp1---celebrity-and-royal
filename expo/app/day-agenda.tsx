@@ -24,7 +24,7 @@ import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
-import { createDateFromString } from '@/lib/date';
+import { createDateFromString, getDailyLuckDigitForDate, getLuckDigitColor, getLuckDigitLabel } from '@/lib/date';
 import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -88,6 +88,43 @@ interface TimelineEvent {
   isOpportune?: boolean;
 }
 
+function normalizeDayDate(date: Date): Date {
+  const normalizedDate = new Date(date);
+  normalizedDate.setHours(0, 0, 0, 0);
+  return normalizedDate;
+}
+
+function getDateRange(startInput: string | undefined, endInput?: string, fallbackNights?: number): { start: Date; end: Date } | null {
+  if (!startInput) {
+    return null;
+  }
+
+  const start = normalizeDayDate(createDateFromString(startInput));
+  if (Number.isNaN(start.getTime())) {
+    return null;
+  }
+
+  const end = endInput
+    ? normalizeDayDate(createDateFromString(endInput))
+    : normalizeDayDate(new Date(start));
+
+  if (Number.isNaN(end.getTime())) {
+    const fallbackEnd = normalizeDayDate(new Date(start));
+    if (fallbackNights && fallbackNights > 0) {
+      fallbackEnd.setDate(fallbackEnd.getDate() + fallbackNights);
+    }
+    return { start, end: fallbackEnd };
+  }
+
+  if ((!endInput || end < start) && fallbackNights && fallbackNights > 0) {
+    const fallbackEnd = normalizeDayDate(new Date(start));
+    fallbackEnd.setDate(fallbackEnd.getDate() + fallbackNights);
+    return { start, end: fallbackEnd };
+  }
+
+  return { start, end };
+}
+
 export default function DayAgendaScreen() {
   const router = useRouter();
   const { date } = useLocalSearchParams<{ date: string }>();
@@ -117,30 +154,37 @@ export default function DayAgendaScreen() {
     });
   }, [selectedDate]);
 
+  const dailyLuckDigit = useMemo(() => {
+    return getDailyLuckDigitForDate(currentUser?.birthdate ?? '', selectedDate);
+  }, [currentUser?.birthdate, selectedDate]);
+
+  const dailyLuckColor = useMemo(() => {
+    return dailyLuckDigit !== null ? getLuckDigitColor(dailyLuckDigit) : '#FFFFFF';
+  }, [dailyLuckDigit]);
+
   const calendarEvents = useMemo(() => {
     return [...(localData.calendar || []), ...(localData.tripit || [])];
   }, [localData.calendar, localData.tripit]);
 
-  const isDateInRange = useCallback((targetDate: Date, startStr: string, endStr: string): boolean => {
-    const start = createDateFromString(startStr);
-    const end = createDateFromString(endStr);
-    const targetDateOnly = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-    return targetDateOnly >= start && targetDateOnly <= end;
+  const isDateInRange = useCallback((targetDate: Date, startStr: string, endStr?: string, fallbackNights?: number): boolean => {
+    const dateRange = getDateRange(startStr, endStr, fallbackNights);
+    if (!dateRange) {
+      return false;
+    }
+
+    const targetDateOnly = normalizeDayDate(targetDate);
+    return targetDateOnly >= dateRange.start && targetDateOnly <= dateRange.end;
   }, []);
 
-  const getDayStatus = useCallback((targetDate: Date, startStr: string, endStr: string): 'start' | 'middle' | 'end' | 'single' => {
-    const start = createDateFromString(startStr);
-    const end = createDateFromString(endStr);
-    const targetDateOnly = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-    
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    targetDateOnly.setHours(0, 0, 0, 0);
-    
-    const startTime = start.getTime();
-    const endTime = end.getTime();
+  const getDayStatus = useCallback((targetDate: Date, startStr: string, endStr?: string, fallbackNights?: number): 'start' | 'middle' | 'end' | 'single' => {
+    const dateRange = getDateRange(startStr, endStr, fallbackNights);
+    if (!dateRange) {
+      return 'single';
+    }
+
+    const targetDateOnly = normalizeDayDate(targetDate);
+    const startTime = dateRange.start.getTime();
+    const endTime = dateRange.end.getTime();
     const targetTime = targetDateOnly.getTime();
     
     if (startTime === endTime) return 'single';
@@ -153,8 +197,8 @@ export default function DayAgendaScreen() {
     const cruiseMap = new Map<string, MergedCruiseData>();
     
     bookedCruises.forEach((cruise: BookedCruise) => {
-      if (!cruise.sailDate || !cruise.returnDate) return;
-      if (!isDateInRange(selectedDate, cruise.sailDate, cruise.returnDate)) return;
+      if (!cruise.sailDate) return;
+      if (!isDateInRange(selectedDate, cruise.sailDate, cruise.returnDate, cruise.nights)) return;
       
       const key = `${cruise.shipName}-${cruise.sailDate}`;
       
@@ -235,7 +279,6 @@ export default function DayAgendaScreen() {
 
   const timelineEvents = useMemo((): TimelineEvent[] => {
     const events: TimelineEvent[] = [];
-    const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
     
     mergedCruiseBookings.forEach(cruise => {
       const dayNum = getDayOfCruise(cruise);
@@ -415,23 +458,18 @@ export default function DayAgendaScreen() {
       const eventStart = event.startDate || event.start || '';
       const eventEnd = event.endDate || event.end || eventStart;
       
-      if (eventStart) {
-        const startDateStr = eventStart.split('T')[0];
-        const endDateStr = eventEnd.split('T')[0];
-        
-        if (dateStr >= startDateStr && dateStr <= endDateStr) {
-          events.push({
-            id: `cal-${event.id}`,
-            type: 'calendar',
-            title: event.title,
-            subtitle: event.location || event.description,
-            startTime: eventStart.includes('T') ? eventStart.split('T')[1]?.substring(0, 5) : undefined,
-            endTime: eventEnd.includes('T') ? eventEnd.split('T')[1]?.substring(0, 5) : undefined,
-            isAllDay: event.allDay || !eventStart.includes('T'),
-            color: event.type === 'travel' || event.type === 'flight' ? EVENT_COLORS.travel : EVENT_COLORS.personal,
-            icon: 'calendar',
-          });
-        }
+      if (eventStart && isDateInRange(selectedDate, eventStart, eventEnd)) {
+        events.push({
+          id: `cal-${event.id}`,
+          type: 'calendar',
+          title: event.title,
+          subtitle: event.location || event.description,
+          startTime: eventStart.includes('T') ? eventStart.split('T')[1]?.substring(0, 5) : undefined,
+          endTime: eventEnd.includes('T') ? eventEnd.split('T')[1]?.substring(0, 5) : undefined,
+          isAllDay: event.allDay || !eventStart.includes('T'),
+          color: event.type === 'travel' || event.type === 'flight' ? EVENT_COLORS.travel : EVENT_COLORS.personal,
+          icon: 'calendar',
+        });
       }
     });
     
@@ -443,43 +481,37 @@ export default function DayAgendaScreen() {
     });
     
     return events;
-  }, [selectedDate, mergedCruiseBookings, calendarEvents, getDayOfCruise, getItineraryForDay, getCasinoContext]);
+  }, [selectedDate, mergedCruiseBookings, calendarEvents, getDayOfCruise, getItineraryForDay, getCasinoContext, isDateInRange]);
 
   const agendaItems = useMemo((): AgendaItem[] => {
     const items: AgendaItem[] = [];
-    const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
 
     calendarEvents.forEach(event => {
       const eventStart = event.startDate || event.start || '';
       const eventEnd = event.endDate || event.end || eventStart;
       
-      if (eventStart) {
-        const startDateStr = eventStart.split('T')[0];
-        const endDateStr = eventEnd.split('T')[0];
+      if (eventStart && isDateInRange(selectedDate, eventStart, eventEnd)) {
+        const eventType = event.type === 'cruise' ? 'cruise' 
+          : (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') ? 'travel' 
+          : 'personal';
         
-        if (dateStr >= startDateStr && dateStr <= endDateStr) {
-          const eventType = event.type === 'cruise' ? 'cruise' 
-            : (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') ? 'travel' 
-            : 'personal';
-          
-          const eventColor = event.type === 'cruise' ? EVENT_COLORS.cruise 
-            : (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') ? EVENT_COLORS.travel 
-            : EVENT_COLORS.personal;
+        const eventColor = event.type === 'cruise' ? EVENT_COLORS.cruise 
+          : (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') ? EVENT_COLORS.travel 
+          : EVENT_COLORS.personal;
 
-          items.push({
-            id: `event-${event.id}`,
-            type: eventType,
-            title: event.title,
-            subtitle: event.description,
-            location: event.location,
-            startTime: eventStart.includes('T') ? eventStart.split('T')[1]?.substring(0, 5) : undefined,
-            endTime: eventEnd.includes('T') ? eventEnd.split('T')[1]?.substring(0, 5) : undefined,
-            isAllDay: event.allDay || !eventStart.includes('T'),
-            color: eventColor,
-            data: event,
-            dayStatus: getDayStatus(selectedDate, eventStart, eventEnd),
-          });
-        }
+        items.push({
+          id: `event-${event.id}`,
+          type: eventType,
+          title: event.title,
+          subtitle: event.description,
+          location: event.location,
+          startTime: eventStart.includes('T') ? eventStart.split('T')[1]?.substring(0, 5) : undefined,
+          endTime: eventEnd.includes('T') ? eventEnd.split('T')[1]?.substring(0, 5) : undefined,
+          isAllDay: event.allDay || !eventStart.includes('T'),
+          color: eventColor,
+          data: event,
+          dayStatus: getDayStatus(selectedDate, eventStart, eventEnd),
+        });
       }
     });
 
@@ -493,7 +525,7 @@ export default function DayAgendaScreen() {
         isAllDay: true,
         color: EVENT_COLORS.cruise,
         data: cruise,
-        dayStatus: getDayStatus(selectedDate, cruise.sailDate, cruise.returnDate),
+        dayStatus: getDayStatus(selectedDate, cruise.sailDate, cruise.returnDate, cruise.nights),
       });
     });
 
@@ -505,7 +537,7 @@ export default function DayAgendaScreen() {
     });
 
     return items;
-  }, [selectedDate, calendarEvents, mergedCruiseBookings, getDayStatus]);
+  }, [selectedDate, calendarEvents, mergedCruiseBookings, getDayStatus, isDateInRange]);
 
   const handleItemPress = useCallback((item: AgendaItem) => {
     if (item.type === 'cruise' && 'sailDate' in item.data) {
@@ -815,7 +847,7 @@ export default function DayAgendaScreen() {
             
             {item.isAllDay ? (
               <View style={styles.allDayBadge}>
-                <Text style={styles.allDayText}>Day {dayNum}</Text>
+                <Text style={styles.allDayText}>{isCruise ? `Day ${dayNum}` : 'All Day'}</Text>
               </View>
             ) : item.startTime && (
               <View style={styles.timeContainer}>
@@ -950,9 +982,18 @@ export default function DayAgendaScreen() {
         </View>
 
         <View style={styles.dateHeader}>
-          <Text style={styles.dateText}>{formattedDate}</Text>
+          <View style={styles.dateHeaderTopRow}>
+            <Text style={styles.dateText}>{formattedDate}</Text>
+            {dailyLuckDigit !== null ? (
+              <View style={[styles.dailyLuckChip, { backgroundColor: `${dailyLuckColor}22`, borderColor: `${dailyLuckColor}66` }]}>
+                <Text style={[styles.dailyLuckChipLabel, { color: dailyLuckColor }]}>LUCK#</Text>
+                <Text style={[styles.dailyLuckChipValue, { color: dailyLuckColor }]}>{dailyLuckDigit}</Text>
+              </View>
+            ) : null}
+          </View>
           <Text style={styles.eventCount}>
             {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
+            {dailyLuckDigit !== null ? ` • ${getLuckDigitLabel(dailyLuckDigit)} luck day` : ''}
           </Text>
         </View>
 
@@ -1021,7 +1062,7 @@ export default function DayAgendaScreen() {
 
           <View style={styles.sectionContainer}>
             <DailyLuckReport
-              birthdate={currentUser?.birthdate || ''}
+              birthdate={currentUser?.birthdate ?? ''}
               selectedDate={selectedDate}
             />
           </View>
@@ -1086,6 +1127,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
+  dateHeaderTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+  },
   dateText: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
@@ -1095,6 +1142,24 @@ const styles = StyleSheet.create({
   eventCount: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: '#FFFFFF',
+  },
+  dailyLuckChip: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    minWidth: 68,
+  },
+  dailyLuckChipLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.4,
+  },
+  dailyLuckChipValue: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    lineHeight: 24,
   },
   scrollView: {
     flex: 1,

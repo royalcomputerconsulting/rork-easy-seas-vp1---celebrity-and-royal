@@ -306,6 +306,38 @@ export function getDailyLuckScoreForDate(
   return Math.min(100, Math.max(1, Math.round(base + variation)));
 }
 
+export function getDailyLuckDigitForDate(
+  birthdateInput: string | Date | null | undefined,
+  selectedDate: Date,
+): number | null {
+  const overallScore = getDailyLuckScoreForDate(birthdateInput, selectedDate);
+  if (overallScore === null) {
+    return null;
+  }
+
+  return Math.min(9, Math.max(1, Math.ceil(overallScore / (100 / 9))));
+}
+
+export function getLuckDigitColor(digit: number): string {
+  if (digit <= 1) return '#DC2626';
+  if (digit === 2) return '#F97316';
+  if (digit === 3) return '#F59E0B';
+  if (digit === 4) return '#EAB308';
+  if (digit === 5) return '#22C55E';
+  if (digit === 6) return '#14B8A6';
+  if (digit === 7) return '#3B82F6';
+  if (digit === 8) return '#4F46E5';
+  return '#7C3AED';
+}
+
+export function getLuckDigitLabel(digit: number): string {
+  if (digit <= 2) return 'LOW';
+  if (digit <= 4) return 'RISING';
+  if (digit <= 6) return 'BALANCED';
+  if (digit <= 8) return 'STRONG';
+  return 'PEAK';
+}
+
 export function getLuckColor(score: number): [string, string] {
   if (score >= 90) return ['#F59E0B', '#EF4444'];
   if (score >= 75) return ['#10B981', '#059669'];

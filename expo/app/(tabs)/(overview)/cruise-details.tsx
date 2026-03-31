@@ -2,7 +2,7 @@ import React, { memo, useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ItineraryDay, BookedCruise, CasinoOffer } from '@/types/models';
-import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, TrendingUp, Dice5, AlertCircle, Target, Trash2, Sparkles } from 'lucide-react-native';
+import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, Dice5, AlertCircle, Trash2, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { formatCurrency, formatNights } from '@/lib/format';
@@ -223,7 +223,7 @@ export default function CruiseDetailsScreen() {
     return cruise.nights || 0;
   }, [cruise]);
 
-  const itineraryDisplay = useMemo((): { days: { day: number; port: string; isSeaDay: boolean }[]; needsManualEntry: boolean; source: string } => {
+  const _itineraryDisplay = useMemo((): { days: { day: number; port: string; isSeaDay: boolean }[]; needsManualEntry: boolean; source: string } => {
     if (!cruise) return { days: [], needsManualEntry: true, source: 'none' };
     
     const totalDays = accurateNights + 1;
@@ -407,7 +407,7 @@ export default function CruiseDetailsScreen() {
     return getCruiseCasinoAvailability(cruise);
   }, [cruise, getCruiseCasinoAvailability]);
 
-  const casinoStatusBadge = useMemo(() => {
+  const _casinoStatusBadge = useMemo(() => {
     if (!casinoAvailability) return null;
     return getCasinoStatusBadge(casinoAvailability.casinoOpenDays, casinoAvailability.totalDays);
   }, [casinoAvailability]);
@@ -417,7 +417,7 @@ export default function CruiseDetailsScreen() {
     return calculatePersonalizedPlayEstimate(casinoAvailability, playingHoursConfig);
   }, [casinoAvailability, playingHoursConfig]);
 
-  const expectedPointsCalculation = useMemo(() => {
+  const _expectedPointsCalculation = useMemo(() => {
     if (!cruise || !casinoAvailability || completedCruises.length === 0) {
       return null;
     }
@@ -2264,6 +2264,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
     marginBottom: SPACING.md,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(11, 31, 58, 0.08)',
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
@@ -3404,9 +3407,9 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    backgroundColor: '#E0F2FE',
-    ...SHADOW.sm,
+    borderColor: 'rgba(11, 31, 58, 0.12)',
+    backgroundColor: '#F6FBFF',
+    ...SHADOW.md,
   },
   payloadDetailsSection: {
     borderRadius: BORDER_RADIUS.lg,
@@ -3446,23 +3449,27 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    backgroundColor: '#DBEAFE',
-    borderRadius: BORDER_RADIUS.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(2, 132, 199, 0.12)',
+    gap: 4,
+    ...SHADOW.sm,
   },
   detailRowLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textDarkGrey,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.7,
   },
   detailRowValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.navyDeep,
     fontWeight: TYPOGRAPHY.fontWeightBold,
+    lineHeight: 20,
   },
   pricingCategoryCard: {
     backgroundColor: COLORS.white,
