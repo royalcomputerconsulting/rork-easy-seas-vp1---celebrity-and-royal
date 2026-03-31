@@ -14,6 +14,7 @@ import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
 import { BrandToggle, BrandType } from '@/components/ui/BrandToggle';
 import { IMAGES } from '@/constants/images';
+import { maskSensitiveMemberNumber } from '@/lib/privacy';
 
 interface CompactDashboardHeaderProps {
   memberName?: string;
@@ -97,13 +98,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   const marbleConfig = MARBLE_TEXTURES.lightBlue;
 
   const displayName = currentUser?.name || memberName;
-  const displayNumber = activeBrand === 'royal' 
-    ? ((crownAnchorNumber || currentUser?.crownAnchorNumber) ? 'Private' : 'Not set')
+  const displayNumber = activeBrand === 'royal'
+    ? maskSensitiveMemberNumber(crownAnchorNumber || currentUser?.crownAnchorNumber, 'Not set')
     : activeBrand === 'celebrity'
-    ? (currentUser?.celebrityCaptainsClubNumber || 'Not set')
+    ? maskSensitiveMemberNumber(currentUser?.celebrityCaptainsClubNumber, 'Not set')
     : activeBrand === 'silversea'
-    ? (currentUser?.silverseaVenetianNumber || 'Not set')
-    : (currentUser?.carnivalVifpNumber || 'Not set');
+    ? maskSensitiveMemberNumber(currentUser?.silverseaVenetianNumber, 'Not set')
+    : maskSensitiveMemberNumber(currentUser?.carnivalVifpNumber, 'Not set');
   const displayNumberLabel = activeBrand === 'royal' ? 'C&A #'
     : activeBrand === 'celebrity' ? 'Captain\'s Club #'
     : activeBrand === 'silversea' ? 'Venetian Society #'
@@ -836,11 +837,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.12)',
+    borderColor: 'rgba(0, 31, 63, 0.18)',
     marginBottom: SPACING.md,
     ...SHADOW.lg,
   },
@@ -857,21 +858,21 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   headerLogo: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
   },
   memberTextInfo: {
     flex: 1,
     gap: 2,
   },
   memberGreeting: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: CLEAN_THEME.text.primary,
   },
   memberSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontSize: TYPOGRAPHY.fontSizeSM,
     color: CLEAN_THEME.text.secondary,
     marginTop: 2,
   },
@@ -909,19 +910,20 @@ const styles = StyleSheet.create({
   },
   tierRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: SPACING.sm,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
   },
   tierBadge: {
     paddingHorizontal: SPACING.md,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: BORDER_RADIUS.round,
     borderWidth: 1,
     shadowColor: '#000000',
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   tierText: {
     fontSize: 11,
@@ -933,11 +935,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   progressCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.08)',
+    borderColor: 'rgba(0, 31, 63, 0.12)',
     ...SHADOW.sm,
   },
   progressHeader: {
@@ -963,7 +965,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.round,
   },
   progressBarBg: {
-    height: 8,
+    height: 10,
     backgroundColor: 'rgba(30, 58, 95, 0.1)',
     borderRadius: 999,
     overflow: 'hidden',
@@ -973,10 +975,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   progressEta: {
-    fontSize: 10,
+    fontSize: 11,
     color: CLEAN_THEME.text.secondary,
-    marginTop: 8,
-    lineHeight: 14,
+    marginTop: 10,
+    lineHeight: 16,
   },
   pinnacleDetailsContainer: {
     marginTop: SPACING.xs,
@@ -1052,12 +1054,12 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
     marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.08)',
+    borderColor: 'rgba(0, 31, 63, 0.1)',
     ...SHADOW.sm,
   },
   statItem: {
@@ -1071,7 +1073,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 31, 63, 0.08)',
   },
   statValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: CLEAN_THEME.data.value,
   },
@@ -1080,6 +1082,7 @@ const styles = StyleSheet.create({
     color: CLEAN_THEME.data.label,
     marginTop: 4,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   quickStatsPillRow: {
     flexDirection: 'row',
@@ -1088,15 +1091,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   quickStatPill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    borderRadius: BORDER_RADIUS.round,
-    paddingVertical: 8,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 10,
     paddingHorizontal: SPACING.sm,
     gap: 4,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.08)',
+    borderColor: 'rgba(0, 31, 63, 0.1)',
     ...SHADOW.sm,
   },
   quickStatPillValue: {
@@ -1112,12 +1117,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    backgroundColor: 'rgba(255, 255, 255, 0.78)',
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
   },
   crewCountText: {
     fontSize: 11,

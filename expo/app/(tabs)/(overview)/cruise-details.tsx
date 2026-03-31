@@ -722,14 +722,32 @@ export default function CruiseDetailsScreen() {
                 <Ship size={20} color={COLORS.beigeWarm} />
                 <Text style={styles.sectionTitle}>Cruise Details</Text>
               </View>
-              
+              <Text style={styles.sectionSubtitle}>Reservation, stateroom, and guest data arranged into a cleaner sailing card.</Text>
+              <View style={styles.detailHighlightsRow}>
+                {(cruise as BookedCruise).bookingStatus ? (
+                  <View style={styles.detailHighlightChip}>
+                    <Text style={styles.detailHighlightLabel}>Status</Text>
+                    <Text style={styles.detailHighlightValue}>{(cruise as BookedCruise).bookingStatus}</Text>
+                  </View>
+                ) : null}
+                {((cruise as BookedCruise).stateroomNumber || (cruise as BookedCruise).cabinNumber) ? (
+                  <View style={styles.detailHighlightChip}>
+                    <Text style={styles.detailHighlightLabel}>Stateroom</Text>
+                    <Text style={styles.detailHighlightValue}>{(cruise as BookedCruise).stateroomNumber || (cruise as BookedCruise).cabinNumber}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.detailHighlightChip}>
+                  <Text style={styles.detailHighlightLabel}>Guests</Text>
+                  <Text style={styles.detailHighlightValue}>{cruise.guests || (cruise as BookedCruise).guestNames?.length || 2}</Text>
+                </View>
+              </View>
               <View style={styles.detailsGrid}>
-                <View style={styles.detailRow} testID="cruise-detail-booking-id">
+                <View style={[styles.detailRow, styles.detailRowWide]} testID="cruise-detail-booking-id">
                   <Text style={styles.detailRowLabel}>Booking ID</Text>
                   <Text style={styles.detailRowValue}>{(cruise as BookedCruise).bookingId ?? '—'}</Text>
                 </View>
 
-                <View style={styles.detailRow} testID="cruise-detail-reservation-number">
+                <View style={[styles.detailRow, styles.detailRowWide]} testID="cruise-detail-reservation-number">
                   <Text style={styles.detailRowLabel}>Reservation #</Text>
                   <Text style={styles.detailRowValue}>{(cruise as BookedCruise).reservationNumber ?? '—'}</Text>
                 </View>
@@ -800,7 +818,7 @@ export default function CruiseDetailsScreen() {
                 )}
                 
                 {(cruise as BookedCruise).guestNames && (cruise as BookedCruise).guestNames!.length > 0 && (
-                  <View style={styles.detailRow}>
+                  <View style={[styles.detailRow, styles.detailRowWide]}>
                     <Text style={styles.detailRowLabel}>Guests</Text>
                     <Text style={styles.detailRowValue}>{(cruise as BookedCruise).guestNames!.join(', ')}</Text>
                   </View>
@@ -3403,11 +3421,11 @@ const styles = StyleSheet.create({
     color: 'rgba(30, 64, 175, 0.4)',
   },
   cruiseDetailsSection: {
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: 'rgba(11, 31, 58, 0.12)',
+    borderColor: 'rgba(11, 31, 58, 0.14)',
     backgroundColor: '#F6FBFF',
     ...SHADOW.md,
   },
@@ -3445,18 +3463,64 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right' as const,
   },
+  sectionSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.md,
+    lineHeight: 20,
+  },
+  detailHighlightsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  detailHighlightChip: {
+    flex: 1,
+    minWidth: 96,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(2, 132, 199, 0.14)',
+    ...SHADOW.sm,
+  },
+  detailHighlightLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.7,
+    marginBottom: 4,
+  },
+  detailHighlightValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
   detailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: SPACING.sm,
   },
   detailRow: {
+    width: '48%',
+    minHeight: 78,
+    justifyContent: 'space-between',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     backgroundColor: '#FFFFFF',
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
     borderColor: 'rgba(2, 132, 199, 0.12)',
-    gap: 4,
+    gap: 6,
     ...SHADOW.sm,
+  },
+  detailRowWide: {
+    width: '100%',
+    minHeight: 72,
   },
   detailRowLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,

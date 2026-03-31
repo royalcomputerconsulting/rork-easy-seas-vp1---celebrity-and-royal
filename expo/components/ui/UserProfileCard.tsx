@@ -9,6 +9,7 @@ import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS }
 import { getCelebrityBlueChipTierByLevel, CELEBRITY_BLUE_CHIP_TIERS } from '@/constants/celebrityBlueChipClub';
 import { BrandToggle, BrandType } from './BrandToggle';
 import { useEntitlement } from '@/state/EntitlementProvider';
+import { maskSensitiveMemberNumber } from '@/lib/privacy';
 
 interface UserProfileData {
   name: string;
@@ -144,11 +145,7 @@ export function UserProfileCard({
   };
 
   const getMaskedRoyalNumber = (value?: string) => {
-    if (!value || !value.trim()) {
-      return 'Not set';
-    }
-
-    return 'Hidden for privacy';
+    return maskSensitiveMemberNumber(value);
   };
 
   const renderEnrichmentBadge = (hasData: boolean) => (
@@ -261,7 +258,7 @@ export function UserProfileCard({
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.celebrityEmail, undefined, true)}
         {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
-        {renderValueCard("Captain's Club #", currentValues.celebrityCaptainsClubNumber || enrichmentData?.captainsClubId, undefined, true)}
+        {renderValueCard("Captain's Club #", getMaskedRoyalNumber(currentValues.celebrityCaptainsClubNumber || enrichmentData?.captainsClubId), undefined, true)}
         {renderValueCard("Captain's Level", enrichmentData?.captainsClubTier || calculatedCelebrityLevel, calculatedCelebrityLevelInfo?.color)}
         {renderValueCard('Club Points', enrichmentData?.captainsClubPoints ?? currentValues.celebrityCaptainsClubPoints, COLORS.loyalty)}
         {renderValueCard('Blue Chip Tier', enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier, calculatedCelebrityTierInfo?.color)}
@@ -280,7 +277,7 @@ export function UserProfileCard({
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.silverseaEmail, undefined, true)}
         {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
-        {renderValueCard('Venetian Member #', currentValues.silverseaVenetianNumber || enrichmentData?.venetianSocietyMemberNumber, undefined, true)}
+        {renderValueCard('Venetian Member #', getMaskedRoyalNumber(currentValues.silverseaVenetianNumber || enrichmentData?.venetianSocietyMemberNumber), undefined, true)}
         {renderValueCard('Enrolled', enrichmentData?.venetianSocietyEnrolled ? 'Yes' : 'No', enrichmentData?.venetianSocietyEnrolled ? COLORS.success : undefined)}
         {renderValueCard('Tier', enrichmentData?.venetianSocietyTier || currentValues.silverseaVenetianTier)}
         {renderValueCard('Points', currentValues.silverseaVenetianPoints, COLORS.loyalty)}
@@ -296,7 +293,7 @@ export function UserProfileCard({
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
-        {renderValueCard('VIFP Club #', currentValues.carnivalVifpNumber || enrichmentData?.carnivalVifpNumber, undefined, true)}
+        {renderValueCard('VIFP Club #', getMaskedRoyalNumber(currentValues.carnivalVifpNumber || enrichmentData?.carnivalVifpNumber), undefined, true)}
         {renderValueCard('VIFP Tier', enrichmentData?.carnivalVifpTier || currentValues.carnivalVifpTier, '#CC2232')}
         {renderValueCard('Players Club Tier', enrichmentData?.carnivalPlayersClubTier || currentValues.carnivalPlayersClubTier, '#FFB400')}
         {renderValueCard('Players Club Points', enrichmentData?.carnivalPlayersClubPoints ?? currentValues.carnivalPlayersClubPoints, COLORS.points)}

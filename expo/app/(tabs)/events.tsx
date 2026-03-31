@@ -10,10 +10,11 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import type { CalendarEvent, BookedCruise } from '@/types/models';
-import { createDateFromString, getDailyLuckDigitForDate, getLuckDigitColor } from '@/lib/date';
+import { createDateFromString, getDailyLuckDigitForDate, getLuckDigitColor, normalizeBirthdateInput } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { mergeBookedCruiseSources } from '@/lib/calendar/bookedCruises';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -37,69 +38,6 @@ const EVENT_COLORS = {
   travel: '#3B82F6', 
   personal: '#A855F7',
 };
-
-function getBookedCruiseMergeKey(cruise: BookedCruise): string {
-  return [
-    cruise.id,
-    cruise.reservationNumber,
-    cruise.bookingId,
-    cruise.shipName,
-    cruise.sailDate,
-    cruise.returnDate,
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join('::');
-}
-
-function getBookedCruiseCompletenessScore(cruise: BookedCruise): number {
-  return Object.values(cruise).reduce<number>((score, value) => {
-    if (Array.isArray(value)) {
-      return score + (value.length > 0 ? 2 : 0);
-    }
-
-    if (typeof value === 'number') {
-      return score + (Number.isFinite(value) ? 1 : 0);
-    }
-
-    if (typeof value === 'boolean') {
-      return score + 1;
-    }
-
-    if (typeof value === 'string') {
-      return score + (value.trim().length > 0 ? 1 : 0);
-    }
-
-    return score;
-  }, 0);
-}
-
-function mergeBookedCruiseSources(primaryCruises: BookedCruise[], secondaryCruises: BookedCruise[]): BookedCruise[] {
-  const mergedCruises = new Map<string, BookedCruise>();
-
-  [...primaryCruises, ...secondaryCruises].forEach((cruise) => {
-    const mergeKey = getBookedCruiseMergeKey(cruise);
-    if (!mergeKey) {
-      return;
-    }
-
-    const existingCruise = mergedCruises.get(mergeKey);
-    if (!existingCruise) {
-      mergedCruises.set(mergeKey, cruise);
-      return;
-    }
-
-    const existingScore = getBookedCruiseCompletenessScore(existingCruise);
-    const nextScore = getBookedCruiseCompletenessScore(cruise);
-    mergedCruises.set(
-      mergeKey,
-      nextScore >= existingScore
-        ? { ...existingCruise, ...cruise }
-        : { ...cruise, ...existingCruise },
-    );
-  });
-
-  return Array.from(mergedCruises.values());
-}
 
 function normalizeDayDate(date: Date): Date {
   const normalizedDate = new Date(date);
@@ -169,9 +107,13 @@ export default function EventsScreen() {
     return merged;
   }, [bookedCruises, localData.booked]);
 
-  const getLuckScoreForDate = useCallback((date: Date): number | null => {
-    return getDailyLuckDigitForDate(currentUser?.birthdate ?? '', date);
+  const normalizedBirthdate = useMemo(() => {
+    return normalizeBirthdateInput(currentUser?.birthdate) ?? '';
   }, [currentUser?.birthdate]);
+
+  const getLuckScoreForDate = useCallback((date: Date): number | null => {
+    return getDailyLuckDigitForDate(normalizedBirthdate, date);
+  }, [normalizedBirthdate]);
 
   console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', mergedBookedCruises.length);
 
@@ -199,15 +141,15 @@ export default function EventsScreen() {
     });
 
     mergedBookedCruises.forEach((bc: BookedCruise) => {
-      if (!bc.sailDate || !bc.returnDate) {
+      const dateRange = getDateRange(bc.sailDate, bc.returnDate, bc.nights);
+      if (!dateRange) {
         return;
       }
 
-      const sailDate = createDateFromString(bc.sailDate);
-      const returnDate = createDateFromString(bc.returnDate);
-      returnDate.setHours(23, 59, 59, 999);
+      const rangeEnd = new Date(dateRange.end);
+      rangeEnd.setHours(23, 59, 59, 999);
 
-      if (sailDate <= monthEnd && returnDate >= monthStart) {
+      if (dateRange.start <= monthEnd && rangeEnd >= monthStart) {
         count++;
       }
     });
@@ -432,10 +374,10 @@ export default function EventsScreen() {
     if (!hasEvents) return 'transparent';
     
     if (day.events.cruise > 0 && day.events.travel > 0) {
-      return 'rgba(34, 197, 94, 0.25)';
+      return 'rgba(16, 185, 129, 0.38)';
     }
     if (day.events.cruise > 0) {
-      return 'rgba(34, 197, 94, 0.2)';
+      return 'rgba(34, 197, 94, 0.32)';
     }
     if (day.events.travel > 0) {
       return 'rgba(59, 130, 246, 0.2)';
@@ -457,6 +399,7 @@ export default function EventsScreen() {
         style={[
           styles.dayCell,
           { backgroundColor: bgColor },
+          day.events.cruise > 0 && styles.cruiseDayCell,
           day.isToday && styles.todayCell,
           !day.isCurrentMonth && styles.otherMonthCell,
         ]}
@@ -993,6 +936,10 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     margin: 2,
     overflow: 'hidden',
+  },
+  cruiseDayCell: {
+    borderWidth: 1.5,
+    borderColor: 'rgba(34, 197, 94, 0.5)',
   },
   todayCell: {
     borderWidth: 2,

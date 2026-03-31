@@ -2123,6 +2123,7 @@ STEP 4: Optional Calendar Import
               {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan')}
               <View style={styles.subscriptionStatusBanner}>
                 <Crown size={18} color={
+                  (isAdmin || entitlement.source === 'dev') ? '#10B981' :
                   entitlement.subscriptionDisplayStatus === 'annual' ? '#10B981' :
                   entitlement.subscriptionDisplayStatus === 'monthly' ? '#3B82F6' :
                   entitlement.subscriptionDisplayStatus === 'grace_period' ? '#F59E0B' :
@@ -2130,13 +2131,15 @@ STEP 4: Optional Calendar Import
                 } />
                 <View style={styles.subscriptionStatusText}>
                   <Text style={styles.subscriptionStatusTitle}>
-                    {entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual Subscription' :
+                    {(isAdmin || entitlement.source === 'dev') ? 'Admin Access' :
+                     entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual Subscription' :
                      entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly Subscription' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? '5-Day Grace Period' :
                      'Subscription Expired'}
                   </Text>
                   <Text style={styles.subscriptionStatusSubtitle}>
-                    {entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual plan active — all features unlocked' :
+                    {(isAdmin || entitlement.source === 'dev') ? 'Admin access active — full app access stays unlocked and purchase tools remain admin-only' :
+                     entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual plan active — all features unlocked' :
                      entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly plan active — all features unlocked' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining — full access` :
                      'Purchase a monthly or annual subscription to continue'}
@@ -2183,7 +2186,9 @@ STEP 4: Optional Calendar Import
               )}
             </View>
             <Text style={styles.subscriptionHint}>
-              Manage your subscription status, restore previous purchases, and review legal terms. The annual subscription renews automatically unless canceled at least 24 hours before the end of the current period.
+              {(isAdmin || entitlement.source === 'dev')
+                ? 'Your account has privileged access. Restore and manage purchases still work, but new subscription purchases remain hidden for non-admin users.'
+                : 'Manage your subscription status, restore previous purchases, and review legal terms. The annual subscription renews automatically unless canceled at least 24 hours before the end of the current period.'}
             </Text>
           </View>
 

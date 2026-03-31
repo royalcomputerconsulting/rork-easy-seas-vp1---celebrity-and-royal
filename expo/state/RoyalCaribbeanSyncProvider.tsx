@@ -2577,7 +2577,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             }
 
             if (Object.keys(profileUpdates).length > 0) {
-              console.log('[RoyalCaribbeanSync] Syncing loyalty fields into user profile:', profileUpdates);
+              console.log('[RoyalCaribbeanSync] Syncing loyalty fields into user profile:', {
+                updatedFields: Object.keys(profileUpdates),
+              });
               await updateUserProfile(currentUser.id, profileUpdates);
               addLog('User profile loyalty fields updated from sync payload', 'success');
             }

@@ -316,7 +316,11 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
   const setExtendedLoyaltyData = useCallback(async (data: ExtendedLoyaltyData) => {
     try {
       console.log('[LoyaltyProvider] ==================== SAVING EXTENDED LOYALTY DATA ====================');
-      console.log('[LoyaltyProvider] Data to save:', data);
+      console.log('[LoyaltyProvider] Data to save:', {
+        hasRoyalData: Boolean(data.crownAndAnchorTier || data.clubRoyaleTierFromApi || data.clubRoyalePointsFromApi),
+        hasCelebrityData: Boolean(data.captainsClubTier || data.captainsClubPoints || data.celebrityBlueChipTier || data.celebrityBlueChipPoints),
+        hasSilverseaData: Boolean(data.venetianSocietyTier || data.venetianSocietyMemberNumber),
+      });
       
       setExtendedLoyaltyState(data);
       

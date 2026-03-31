@@ -12,6 +12,7 @@ import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
 import { trpc, isWebSyncAvailable, RENDER_BACKEND_URL } from '@/lib/trpc';
 import { syncCruisePricing } from '@/lib/cruisePricingSync';
+import { maskSensitiveMemberNumber } from '@/lib/privacy';
 function RoyalCaribbeanSyncScreen() {
   const router = useRouter();
   const coreData = useCoreData();
@@ -890,7 +891,7 @@ function RoyalCaribbeanSyncScreen() {
                           {extendedLoyaltyData.venetianSocietyMemberNumber && (
                             <View style={styles.loyaltyRow}>
                               <Text style={styles.loyaltyLabel}>Member #:</Text>
-                              <Text style={styles.loyaltyValueMuted}>{extendedLoyaltyData.venetianSocietyMemberNumber}</Text>
+                              <Text style={styles.loyaltyValueMuted}>{maskSensitiveMemberNumber(extendedLoyaltyData.venetianSocietyMemberNumber)}</Text>
                             </View>
                           )}
                         </View>

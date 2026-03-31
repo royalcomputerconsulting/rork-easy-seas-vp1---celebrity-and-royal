@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { useAuth } from "./AuthProvider";
+import { normalizeBirthdateInput } from "@/lib/date";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 
 export interface PlayingHours {
@@ -545,6 +546,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       const normalizedUpdates: Partial<UserProfile> = {
         ...updates,
         email: updates.email !== undefined ? (normalizeEmail(updates.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email) : updates.email,
+        birthdate: updates.birthdate !== undefined ? normalizeBirthdateInput(updates.birthdate) : updates.birthdate,
       };
 
       const updatedUsers = currentUsers.map((user) => (
@@ -559,7 +561,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       console.log('[UserProvider] Updated scoped user:', {
         authenticatedEmail: normalizedAuthenticatedEmail,
         userId,
-        updates: normalizedUpdates,
+        updatedFields: Object.keys(normalizedUpdates),
       });
     } catch (error) {
       console.error('[UserProvider] Failed to persist scoped user update:', error);
@@ -569,6 +571,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
               ...user,
               ...updates,
               email: updates.email !== undefined ? (normalizeEmail(updates.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email) : user.email,
+              birthdate: updates.birthdate !== undefined ? normalizeBirthdateInput(updates.birthdate) : user.birthdate,
               updatedAt: new Date().toISOString(),
             }
           : user

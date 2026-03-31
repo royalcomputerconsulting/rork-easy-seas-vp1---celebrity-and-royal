@@ -72,6 +72,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     updateFilters,
     resetFilters,
     createCrewMember,
+    createSailing,
     updateRecognitionEntry,
     deleteRecognitionEntry,
     syncFromCSVLocally,
@@ -457,6 +458,26 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         onClose={() => setShowAddModal(false)}
         onSubmit={async (data) => {
           await createCrewMember({ ...data, department: data.department as Department, userId });
+        }}
+        onEnsureSailing={async (data) => {
+          const existingSailing = sailings.find((sailing) => (
+            sailing.shipName.trim().toLowerCase() === data.shipName.trim().toLowerCase()
+            && sailing.sailStartDate === data.sailStartDate
+          ));
+
+          if (existingSailing) {
+            return existingSailing.id;
+          }
+
+          const sailing = await createSailing({
+            shipName: data.shipName,
+            sailStartDate: data.sailStartDate,
+            sailEndDate: data.sailEndDate,
+            nights: data.nights,
+            userId,
+          });
+
+          return sailing.id;
         }}
         sailings={sailings}
         bookedCruises={bookedCruises}

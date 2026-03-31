@@ -24,12 +24,13 @@ import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
-import { createDateFromString, getDailyLuckDigitForDate, getLuckDigitColor, getLuckDigitLabel } from '@/lib/date';
+import { createDateFromString, getDailyLuckDigitForDate, getLuckDigitColor, getLuckDigitLabel, normalizeBirthdateInput } from '@/lib/date';
 import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { DailyLuckReport } from '@/components/DailyLuckReport';
+import { mergeBookedCruiseSources } from '@/lib/calendar/bookedCruises';
 
 const EVENT_COLORS = {
   cruise: '#3B82F6',
@@ -65,6 +66,7 @@ interface MergedCruiseData {
   departurePort?: string;
   nights: number;
   itinerary?: ItineraryDay[];
+  ports?: string[];
   bookings: {
     reservationNumber?: string;
     cabinNumber?: string;
@@ -138,6 +140,10 @@ export default function DayAgendaScreen() {
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const normalizedBirthdate = useMemo(() => {
+    return normalizeBirthdateInput(currentUser?.birthdate) ?? '';
+  }, [currentUser?.birthdate]);
+
   const selectedDate = useMemo(() => {
     if (!date) return new Date();
     const [year, month, day] = date.split('-').map(Number);
@@ -155,8 +161,8 @@ export default function DayAgendaScreen() {
   }, [selectedDate]);
 
   const dailyLuckDigit = useMemo(() => {
-    return getDailyLuckDigitForDate(currentUser?.birthdate ?? '', selectedDate);
-  }, [currentUser?.birthdate, selectedDate]);
+    return getDailyLuckDigitForDate(normalizedBirthdate, selectedDate);
+  }, [normalizedBirthdate, selectedDate]);
 
   const dailyLuckColor = useMemo(() => {
     return dailyLuckDigit !== null ? getLuckDigitColor(dailyLuckDigit) : '#FFFFFF';
@@ -165,6 +171,16 @@ export default function DayAgendaScreen() {
   const calendarEvents = useMemo(() => {
     return [...(localData.calendar || []), ...(localData.tripit || [])];
   }, [localData.calendar, localData.tripit]);
+
+  const mergedBookedCruises = useMemo(() => {
+    const merged = mergeBookedCruiseSources(localData.booked || [], bookedCruises);
+    console.log('[DayAgenda] Merged booked cruises for agenda:', {
+      localBooked: localData.booked?.length ?? 0,
+      storedBooked: bookedCruises.length,
+      mergedBooked: merged.length,
+    });
+    return merged;
+  }, [bookedCruises, localData.booked]);
 
   const isDateInRange = useCallback((targetDate: Date, startStr: string, endStr?: string, fallbackNights?: number): boolean => {
     const dateRange = getDateRange(startStr, endStr, fallbackNights);
@@ -196,7 +212,7 @@ export default function DayAgendaScreen() {
   const mergedCruiseBookings = useMemo((): MergedCruiseData[] => {
     const cruiseMap = new Map<string, MergedCruiseData>();
     
-    bookedCruises.forEach((cruise: BookedCruise) => {
+    mergedBookedCruises.forEach((cruise: BookedCruise) => {
       if (!cruise.sailDate) return;
       if (!isDateInRange(selectedDate, cruise.sailDate, cruise.returnDate, cruise.nights)) return;
       
@@ -222,6 +238,7 @@ export default function DayAgendaScreen() {
           departurePort: cruise.departurePort,
           nights: cruise.nights || 0,
           itinerary: cruise.itinerary,
+          ports: cruise.ports,
           bookings: [{
             reservationNumber: cruise.reservationNumber,
             cabinNumber: cruise.cabinNumber,
@@ -234,7 +251,7 @@ export default function DayAgendaScreen() {
     });
     
     return Array.from(cruiseMap.values());
-  }, [bookedCruises, selectedDate, isDateInRange]);
+  }, [mergedBookedCruises, selectedDate, isDateInRange]);
 
   const getDayOfCruise = useCallback((cruise: MergedCruiseData): number => {
     const start = createDateFromString(cruise.sailDate);
@@ -247,8 +264,21 @@ export default function DayAgendaScreen() {
   }, [selectedDate]);
 
   const getItineraryForDay = useCallback((cruise: MergedCruiseData, dayNum: number): ItineraryDay | undefined => {
-    if (!cruise.itinerary) return undefined;
-    return cruise.itinerary.find(d => d.day === dayNum);
+    const itineraryDay = cruise.itinerary?.find((day) => day.day === dayNum);
+    if (itineraryDay) {
+      return itineraryDay;
+    }
+
+    const fallbackPort = cruise.ports?.[dayNum - 1];
+    if (!fallbackPort) {
+      return undefined;
+    }
+
+    return {
+      day: dayNum,
+      port: fallbackPort,
+      isSeaDay: determineSeaDay(fallbackPort),
+    };
   }, []);
 
   const getCasinoContext = useCallback((cruise: MergedCruiseData, dayNum: number): CasinoDayContext => {
@@ -731,7 +761,7 @@ export default function DayAgendaScreen() {
     try {
       const existingEvents = coreData.calendarEvents.filter(e => e.sourceType !== 'cruise');
       
-      const cruiseEvents: CalendarEvent[] = bookedCruises.map(cruise => ({
+      const cruiseEvents: CalendarEvent[] = mergedBookedCruises.map(cruise => ({
         id: `cruise-event-${cruise.id}`,
         title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
         startDate: cruise.sailDate,
@@ -756,7 +786,7 @@ export default function DayAgendaScreen() {
     } finally {
       setIsSyncing(false);
     }
-  }, [bookedCruises, coreData]);
+  }, [coreData, mergedBookedCruises]);
 
   const renderTimelineEvent = useCallback((event: TimelineEvent) => {
     const IconComponent = getTimelineIcon(event.icon);
@@ -1062,7 +1092,7 @@ export default function DayAgendaScreen() {
 
           <View style={styles.sectionContainer}>
             <DailyLuckReport
-              birthdate={currentUser?.birthdate ?? ''}
+              birthdate={normalizedBirthdate}
               selectedDate={selectedDate}
             />
           </View>

@@ -337,22 +337,36 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     return 'basic';
   }, []);
 
-  const computeDisplayStatus = useCallback((info: CustomerInfo | null, currentTrialEnd: Date | null, currentIsGrandfathered: boolean, computedIsPro: boolean, computedIsBasic: boolean): SubscriptionDisplayStatus => {
+  const computeDisplayStatus = useCallback((
+    info: CustomerInfo | null,
+    currentTrialEnd: Date | null,
+    currentIsGrandfathered: boolean,
+    currentHasPrivilegedAccess: boolean,
+    computedIsPro: boolean,
+    computedIsBasic: boolean,
+  ): SubscriptionDisplayStatus => {
     const subType = detectActiveSubscriptionType(info);
-    console.log('[Entitlement] computeDisplayStatus', { subType, currentIsGrandfathered, computedIsPro, computedIsBasic, trialEnd: currentTrialEnd?.toISOString() });
-    
+    console.log('[Entitlement] computeDisplayStatus', {
+      subType,
+      currentIsGrandfathered,
+      currentHasPrivilegedAccess,
+      computedIsPro,
+      computedIsBasic,
+      trialEnd: currentTrialEnd?.toISOString(),
+    });
+
     if (subType === 'annual') return 'annual';
     if (subType === 'monthly') return 'monthly';
-    
-    if (currentIsGrandfathered) return 'annual';
-    
+
+    if (currentIsGrandfathered || currentHasPrivilegedAccess) return 'annual';
+
     if (computedIsPro || computedIsBasic) return 'monthly';
-    
+
     if (currentTrialEnd) {
       const now = new Date();
       if (now < currentTrialEnd) return 'grace_period';
     }
-    
+
     return 'expired';
   }, []);
 
@@ -394,7 +408,14 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     );
     setLastCheckedAt(new Date().toISOString());
     
-    const displayStatus = computeDisplayStatus(info, currentTrialEnd, currentIsGrandfathered, effectiveIsPro, computedIsBasic);
+    const displayStatus = computeDisplayStatus(
+      info,
+      currentTrialEnd,
+      currentIsGrandfathered,
+      currentHasPrivilegedAccess,
+      effectiveIsPro,
+      computedIsBasic,
+    );
     setSubscriptionDisplayStatus(displayStatus);
     console.log('[Entitlement] Display status set to:', displayStatus);
 
@@ -548,7 +569,14 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setLastCheckedAt(new Date().toISOString());
         setCustomerInfo(null);
         setOfferings([]);
-        const webDisplayStatus = computeDisplayStatus(null, currentTrialEnd, currentIsGrandfathered, finalIsPro, false);
+        const webDisplayStatus = computeDisplayStatus(
+          null,
+          currentTrialEnd,
+          currentIsGrandfathered,
+          hasPrivilegedAccess,
+          finalIsPro,
+          false,
+        );
         setSubscriptionDisplayStatus(webDisplayStatus);
         console.log('[Entitlement] Web display status set to:', webDisplayStatus);
       } catch (e) {
@@ -577,7 +605,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
           setLastCheckedAt(new Date().toISOString());
           setCustomerInfo(null);
           setOfferings([]);
-          setSubscriptionDisplayStatus(computeDisplayStatus(null, currentTrialEnd, currentIsGrandfathered, true, false));
+          setSubscriptionDisplayStatus(
+            computeDisplayStatus(null, currentTrialEnd, currentIsGrandfathered, hasPrivilegedAccess, true, false),
+          );
           setError(null);
           return;
         }

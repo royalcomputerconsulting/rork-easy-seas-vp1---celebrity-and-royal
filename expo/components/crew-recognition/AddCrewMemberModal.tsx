@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { X, User, Anchor, FileText, Upload, Users } from 'lucide-react-native';
+import { X, User, Anchor, FileText, Upload, Users, Ship } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { DEPARTMENTS, type Department } from '@/types/crew-recognition';
 import type { Sailing } from '@/types/crew-recognition';
@@ -29,6 +29,12 @@ interface AddCrewMemberModalProps {
     notes?: string;
     sailingId?: string;
   }) => Promise<void>;
+  onEnsureSailing: (data: {
+    shipName: string;
+    sailStartDate: string;
+    sailEndDate: string;
+    nights?: number;
+  }) => Promise<string>;
   sailings: Sailing[];
   bookedCruises?: BookedCruise[];
 }
@@ -117,6 +123,33 @@ function findSailingFromHeader(headerLine: string, sailings: Sailing[]): Sailing
   }) ?? null;
 }
 
+function findBookedCruiseFromHeader(headerLine: string, bookedCruises: BookedCruise[]): BookedCruise | null {
+  const parsedHeader = parseHeaderLine(headerLine);
+  if (!parsedHeader) {
+    return null;
+  }
+
+  const normalizedHeaderShip = normalizeShipName(parsedHeader.shipName);
+
+  return bookedCruises.find((cruise) => {
+    if (!cruise.shipName || !cruise.sailDate) {
+      return false;
+    }
+
+    const normalizedCruiseShip = normalizeShipName(cruise.shipName);
+    const shipMatch =
+      normalizedCruiseShip.includes(normalizedHeaderShip) ||
+      normalizedHeaderShip.includes(normalizedCruiseShip);
+
+    if (!shipMatch) {
+      return false;
+    }
+
+    const sailDate = new Date(`${cruise.sailDate}T00:00:00`);
+    return sailDate.getMonth() + 1 === parsedHeader.startMonth && sailDate.getDate() === parsedHeader.startDay;
+  }) ?? null;
+}
+
 function inferDepartmentFromText(details: string): Department {
   const normalized = details.toLowerCase();
 
@@ -134,29 +167,74 @@ function inferDepartmentFromText(details: string): Department {
   return 'Other';
 }
 
-function parseCrewMemberLine(line: string): ParsedCrewMember | null {
+function looksLikeCrewName(value: string): boolean {
+  const trimmedValue = value.trim();
+  if (!trimmedValue || /\d/.test(trimmedValue) || trimmedValue.includes('#')) {
+    return false;
+  }
+
+  const normalized = trimmedValue
+    .replace(/[’']/g, '')
+    .replace(/\./g, '')
+    .replace(/\s+/g, ' ');
+
+  return /^[A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+){0,2}$/.test(normalized);
+}
+
+function isLikelyRoleDescriptor(value: string): boolean {
+  const normalized = value.toLowerCase().trim();
+  return (
+    normalized.includes('#') ||
+    /attendant|waiter|assistant|restaurant|cafe|bar|server|activities|activity|cleaner|housekeeping|public area|casino|dining|lounge|guest relations|host|table|park cafe|sabor|central park|mytime/.test(normalized)
+  );
+}
+
+function buildParsedCrewMember(fullName: string, detailText: string): ParsedCrewMember | null {
+  const normalizedName = fullName.trim();
+  if (!normalizedName) {
+    return null;
+  }
+
+  const normalizedDetails = detailText.trim();
+  return {
+    fullName: normalizedName,
+    department: inferDepartmentFromText(normalizedDetails),
+    roleTitle: normalizedDetails || undefined,
+    notes: normalizedDetails || undefined,
+  };
+}
+
+function parseCrewMemberLine(line: string): ParsedCrewMember[] {
   const trimmedLine = line.trim();
   if (!trimmedLine) {
-    return null;
+    return [];
   }
 
-  const parts = trimmedLine.split('-');
-  const fullName = parts[0]?.trim() ?? '';
-  const detailText = parts.slice(1).join('-').trim();
-
-  if (!fullName) {
-    return null;
+  const parts = trimmedLine.split('-').map((part) => part.trim()).filter((part) => part.length > 0);
+  if (parts.length === 0) {
+    return [];
   }
 
-  const roleTitle = detailText || undefined;
-  const notes = detailText || undefined;
+  if (parts.length > 1) {
+    const lastSegment = parts[parts.length - 1] ?? '';
+    const leadingSegments = parts.slice(0, -1);
 
-  return {
-    fullName,
-    department: inferDepartmentFromText(detailText),
-    roleTitle,
-    notes,
-  };
+    if (isLikelyRoleDescriptor(lastSegment) && leadingSegments.every(looksLikeCrewName)) {
+      return leadingSegments
+        .map((name) => buildParsedCrewMember(name, lastSegment))
+        .filter((member): member is ParsedCrewMember => member !== null);
+    }
+
+    if (parts.every(looksLikeCrewName)) {
+      return parts
+        .map((name) => buildParsedCrewMember(name, ''))
+        .filter((member): member is ParsedCrewMember => member !== null);
+    }
+  }
+
+  const [firstSegment, ...remainingSegments] = parts;
+  const parsedMember = buildParsedCrewMember(firstSegment ?? '', remainingSegments.join(' - '));
+  return parsedMember ? [parsedMember] : [];
 }
 
 async function readTextFile(): Promise<{ content: string; fileName: string } | null> {
@@ -186,7 +264,7 @@ async function readTextFile(): Promise<{ content: string; fileName: string } | n
   };
 }
 
-export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, bookedCruises = [] }: AddCrewMemberModalProps) {
+export function AddCrewMemberModal({ visible, onClose, onSubmit, onEnsureSailing, sailings, bookedCruises = [] }: AddCrewMemberModalProps) {
   const [entryMode, setEntryMode] = useState<EntryMode>('single');
   const [fullName, setFullName] = useState('');
   const [department, setDepartment] = useState<Department | ''>('');
@@ -215,6 +293,14 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
 
   const batchHeaderLine = batchLines[0] ?? '';
 
+  const parsedBatchMembers = useMemo(() => {
+    if (entryMode !== 'batch') {
+      return [];
+    }
+
+    return batchLines.slice(1).flatMap((line) => parseCrewMemberLine(line));
+  }, [batchLines, entryMode]);
+
   const matchedBatchSailing = useMemo(() => {
     if (entryMode !== 'batch' || !batchHeaderLine) {
       return null;
@@ -222,6 +308,14 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
 
     return findSailingFromHeader(batchHeaderLine, sailings);
   }, [batchHeaderLine, entryMode, sailings]);
+
+  const matchedBatchCruise = useMemo(() => {
+    if (entryMode !== 'batch' || !batchHeaderLine) {
+      return null;
+    }
+
+    return findBookedCruiseFromHeader(batchHeaderLine, bookedCruises);
+  }, [batchHeaderLine, bookedCruises, entryMode]);
 
   const selectedSailing = useMemo(() => {
     return sailings.find((s) => s.id === sailingId) ?? null;
@@ -315,28 +409,35 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
       return;
     }
 
-    const resolvedSailingId = matchedBatchSailing?.id ?? sailingId;
+    let resolvedSailingId = matchedBatchSailing?.id ?? sailingId;
+    if (!resolvedSailingId && matchedBatchCruise?.shipName && matchedBatchCruise.sailDate && matchedBatchCruise.returnDate) {
+      resolvedSailingId = await onEnsureSailing({
+        shipName: matchedBatchCruise.shipName,
+        sailStartDate: matchedBatchCruise.sailDate,
+        sailEndDate: matchedBatchCruise.returnDate,
+        nights: matchedBatchCruise.nights,
+      });
+      setSailingId(resolvedSailingId);
+      setAutoLinked(true);
+    }
+
     if (!resolvedSailingId) {
       Alert.alert('Sailing not found', 'The first line must match one of your sailings, or select the sailing manually before importing.');
       return;
     }
 
-    const parsedMembers = batchLines.slice(1)
-      .map((line) => parseCrewMemberLine(line))
-      .filter((member): member is ParsedCrewMember => member !== null);
-
-    if (parsedMembers.length === 0) {
+    if (parsedBatchMembers.length === 0) {
       Alert.alert('Error', 'No valid crew member lines were found below the sailing header.');
       return;
     }
 
     console.log('[AddCrewMember] Importing batch crew list:', {
-      count: parsedMembers.length,
+      count: parsedBatchMembers.length,
       sailingId: resolvedSailingId,
       importedFileName,
     });
 
-    for (const member of parsedMembers) {
+    for (const member of parsedBatchMembers) {
       await onSubmit({
         fullName: member.fullName,
         department: member.department,
@@ -346,8 +447,8 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
       });
     }
 
-    Alert.alert('Crew imported', `${parsedMembers.length} crew member${parsedMembers.length === 1 ? '' : 's'} added to this sailing.`);
-  }, [batchHeaderLine, batchLines, importedFileName, matchedBatchSailing?.id, onSubmit, sailingId]);
+    Alert.alert('Crew imported', `${parsedBatchMembers.length} crew member${parsedBatchMembers.length === 1 ? '' : 's'} added to this sailing.`);
+  }, [batchHeaderLine, batchLines.length, importedFileName, matchedBatchCruise, matchedBatchSailing?.id, onEnsureSailing, onSubmit, parsedBatchMembers, sailingId]);
 
   const handleSubmit = useCallback(async () => {
     setIsSubmitting(true);
@@ -366,7 +467,7 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
     }
   }, [entryMode, handleBatchSubmit, handleClose, handleSingleSubmit]);
 
-  const batchPreviewCount = Math.max(0, batchLines.length - 1);
+  const batchPreviewCount = parsedBatchMembers.length;
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -482,7 +583,7 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
                   </View>
                   <Text style={styles.batchHelpText}>
                     First line: ship and sailing date. Example: Harmony 3/1-8{`\n`}
-                    Following lines: Name - role / notes
+                    Following lines: Name - role / notes. You can also put several names on one line and end with the shared role.
                   </Text>
                   <TouchableOpacity
                     style={[styles.fileImportButton, isImportingFile && styles.fileImportButtonDisabled]}
@@ -506,7 +607,7 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
                     style={[styles.input, styles.batchTextArea]}
                     value={bulkText}
                     onChangeText={setBulkText}
-                    placeholder={"Harmony 3/1-8\nRidwan - stateroom attendant #8572\nPudji - stateroom attendant\nGinny - sabor restaurant"}
+                    placeholder={"Harmony 3/1-8\nRidwan - stateroom attendant #8572\nPudji - stateroom attendant\nAimee - Apple - Novita - Angelo - Arta - pitawa - park cafe"}
                     placeholderTextColor={COLORS.textTertiary}
                     multiline
                     textAlignVertical="top"
@@ -516,6 +617,14 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
                     {batchPreviewCount} crew member{batchPreviewCount === 1 ? '' : 's'} ready to import
                   </Text>
                 </View>
+                {matchedBatchCruise && !matchedBatchSailing ? (
+                  <View style={styles.autoLinkedBadge}>
+                    <Ship size={12} color="#0369A1" />
+                    <Text style={styles.autoLinkedText}>
+                      Header matched your booked cruise for {matchedBatchCruise.shipName}. The sailing will be created and linked automatically when you import.
+                    </Text>
+                  </View>
+                ) : null}
               </>
             )}
 

@@ -472,6 +472,58 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     },
   });
 
+  const createSailingWithFallback = useCallback(async (data: {
+    shipName: string;
+    sailStartDate: string;
+    sailEndDate: string;
+    nights?: number;
+    userId: string;
+  }): Promise<Sailing> => {
+    const normalizedShipName = data.shipName.trim();
+    const existingLocalSailing = localSailings.find(
+      (sailing) => sailing.shipName === normalizedShipName && sailing.sailStartDate === data.sailStartDate,
+    );
+
+    if (existingLocalSailing) {
+      return existingLocalSailing;
+    }
+
+    if (!isOfflineMode) {
+      try {
+        const result = await createSailingMutation.mutateAsync(data as never);
+        const createdSailing = Array.isArray(result) ? result[0] : result;
+        if (createdSailing && typeof createdSailing === 'object') {
+          return createdSailing as unknown as Sailing;
+        }
+      } catch (err) {
+        console.log('[CrewRecognition] Backend create sailing failed, falling back to local:', err);
+      }
+    }
+
+    const now = new Date().toISOString();
+    const newSailing: Sailing = {
+      id: `local_sailing_manual_${Date.now()}`,
+      shipName: normalizedShipName,
+      sailStartDate: data.sailStartDate,
+      sailEndDate: data.sailEndDate,
+      nights: data.nights,
+      userId: data.userId,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const updatedSailings = [newSailing, ...localSailings];
+    setLocalSailings(updatedSailings);
+    setIsOfflineMode(true);
+    await AsyncStorage.setItem(skSailingsRef.current, JSON.stringify(updatedSailings));
+    console.log('[CrewRecognition] Created sailing locally:', {
+      shipName: normalizedShipName,
+      sailStartDate: data.sailStartDate,
+      sailEndDate: data.sailEndDate,
+    });
+    return newSailing;
+  }, [createSailingMutation, isOfflineMode, localSailings]);
+
   const clearCrewData = useCallback(async () => {
     console.log('[CrewRecognition] Clearing all crew data...');
     setLocalEntries([]);
@@ -568,7 +620,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     createRecognitionEntry: createRecognitionEntryMutation.mutateAsync,
     updateRecognitionEntry: updateRecognitionEntryWithFallback,
     deleteRecognitionEntry: deleteRecognitionEntryWithFallback,
-    createSailing: createSailingMutation.mutateAsync,
+    createSailing: createSailingWithFallback,
     clearCrewData,
     refetch,
   }), [
@@ -578,6 +630,6 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     syncFromCSVLocally, addCrewMemberWithFallback, updateCrewMemberMutation.mutateAsync,
     deleteCrewMemberWithFallback, createRecognitionEntryMutation.mutateAsync,
     updateRecognitionEntryWithFallback, deleteRecognitionEntryWithFallback,
-    createSailingMutation.mutateAsync, clearCrewData, refetch,
+    createSailingWithFallback, clearCrewData, refetch,
   ]);
 });
