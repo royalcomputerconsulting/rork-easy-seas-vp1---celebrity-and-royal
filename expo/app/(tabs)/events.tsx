@@ -7,9 +7,10 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/
 import { useAppState } from '@/state/AppStateProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
+import { useUser } from '@/state/UserProvider';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import type { CalendarEvent, BookedCruise } from '@/types/models';
-import { createDateFromString } from '@/lib/date';
+import { createDateFromString, getDailyLuckScoreForDate } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -23,6 +24,7 @@ interface DayData {
   dayNumber: number;
   isCurrentMonth: boolean;
   isToday: boolean;
+  luckScore: number | null;
   events: {
     cruise: number;
     travel: number;
@@ -36,12 +38,76 @@ const EVENT_COLORS = {
   personal: '#A855F7',
 };
 
+function getBookedCruiseMergeKey(cruise: BookedCruise): string {
+  return [
+    cruise.id,
+    cruise.reservationNumber,
+    cruise.bookingId,
+    cruise.shipName,
+    cruise.sailDate,
+    cruise.returnDate,
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join('::');
+}
+
+function getBookedCruiseCompletenessScore(cruise: BookedCruise): number {
+  return Object.values(cruise).reduce<number>((score, value) => {
+    if (Array.isArray(value)) {
+      return score + (value.length > 0 ? 2 : 0);
+    }
+
+    if (typeof value === 'number') {
+      return score + (Number.isFinite(value) ? 1 : 0);
+    }
+
+    if (typeof value === 'boolean') {
+      return score + 1;
+    }
+
+    if (typeof value === 'string') {
+      return score + (value.trim().length > 0 ? 1 : 0);
+    }
+
+    return score;
+  }, 0);
+}
+
+function mergeBookedCruiseSources(primaryCruises: BookedCruise[], secondaryCruises: BookedCruise[]): BookedCruise[] {
+  const mergedCruises = new Map<string, BookedCruise>();
+
+  [...primaryCruises, ...secondaryCruises].forEach((cruise) => {
+    const mergeKey = getBookedCruiseMergeKey(cruise);
+    if (!mergeKey) {
+      return;
+    }
+
+    const existingCruise = mergedCruises.get(mergeKey);
+    if (!existingCruise) {
+      mergedCruises.set(mergeKey, cruise);
+      return;
+    }
+
+    const existingScore = getBookedCruiseCompletenessScore(existingCruise);
+    const nextScore = getBookedCruiseCompletenessScore(cruise);
+    mergedCruises.set(
+      mergeKey,
+      nextScore >= existingScore
+        ? { ...existingCruise, ...cruise }
+        : { ...cruise, ...existingCruise },
+    );
+  });
+
+  return Array.from(mergedCruises.values());
+}
+
 export default function EventsScreen() {
   const router = useRouter();
   const { localData } = useAppState();
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
   const coreData = useCoreData();
   const { bookedCruises } = coreData;
+  const { currentUser } = useUser();
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -51,7 +117,21 @@ export default function EventsScreen() {
     return events;
   }, [localData.calendar, localData.tripit]);
 
-  console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', bookedCruises.length);
+  const mergedBookedCruises = useMemo(() => {
+    const merged = mergeBookedCruiseSources(localData.booked || [], bookedCruises);
+    console.log('[Events] Merged booked cruises for calendar:', {
+      localBooked: localData.booked?.length ?? 0,
+      storedBooked: bookedCruises.length,
+      mergedBooked: merged.length,
+    });
+    return merged;
+  }, [bookedCruises, localData.booked]);
+
+  const getLuckScoreForDate = useCallback((date: Date): number | null => {
+    return getDailyLuckScoreForDate(currentUser?.birthdate ?? '', date);
+  }, [currentUser?.birthdate]);
+
+  console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', mergedBookedCruises.length);
 
   const totalEventsThisMonth = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -76,7 +156,7 @@ export default function EventsScreen() {
       }
     });
 
-    bookedCruises.forEach((bc: BookedCruise) => {
+    mergedBookedCruises.forEach((bc: BookedCruise) => {
       if (!bc.sailDate || !bc.returnDate) {
         return;
       }
@@ -91,7 +171,7 @@ export default function EventsScreen() {
     });
 
     return count;
-  }, [calendarEvents, bookedCruises, currentDate]);
+  }, [calendarEvents, currentDate, mergedBookedCruises]);
 
   const isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
     const start = createDateFromString(startStr);
@@ -133,7 +213,7 @@ export default function EventsScreen() {
       }
     });
 
-    bookedCruises.forEach((cruiseBooking: BookedCruise) => {
+    mergedBookedCruises.forEach((cruiseBooking: BookedCruise) => {
       if (!cruiseBooking.sailDate || !cruiseBooking.returnDate) {
         return;
       }
@@ -144,7 +224,7 @@ export default function EventsScreen() {
     });
 
     return { cruise, travel, personal };
-  }, [bookedCruises, calendarEvents, isDateInRange]);
+  }, [calendarEvents, isDateInRange, mergedBookedCruises]);
 
   const calendarDays = useMemo((): DayData[][] => {
     console.log('[Events] Recalculating calendar days for month:', currentDate.toISOString());
@@ -168,6 +248,7 @@ export default function EventsScreen() {
         dayNumber: prevMonthDay.getDate(),
         isCurrentMonth: false,
         isToday: false,
+        luckScore: getLuckScoreForDate(prevMonthDay),
         events: getEventsForDate(prevMonthDay),
       });
     }
@@ -181,6 +262,7 @@ export default function EventsScreen() {
         dayNumber: day,
         isCurrentMonth: true,
         isToday,
+        luckScore: getLuckScoreForDate(date),
         events: getEventsForDate(date),
       });
       
@@ -199,6 +281,7 @@ export default function EventsScreen() {
           dayNumber: nextMonthDay,
           isCurrentMonth: false,
           isToday: false,
+          luckScore: getLuckScoreForDate(nextDate),
           events: getEventsForDate(nextDate),
         });
         nextMonthDay++;
@@ -207,7 +290,7 @@ export default function EventsScreen() {
     }
     
     return weeks;
-  }, [currentDate, getEventsForDate]);
+  }, [currentDate, getEventsForDate, getLuckScoreForDate]);
 
   const weekDays = useMemo(() => {
     const today = new Date();
@@ -224,11 +307,12 @@ export default function EventsScreen() {
         dayNumber: date.getDate(),
         isCurrentMonth: true,
         isToday,
+        luckScore: getLuckScoreForDate(date),
         events: getEventsForDate(date),
       });
     }
     return days;
-  }, [getEventsForDate]);
+  }, [getEventsForDate, getLuckScoreForDate]);
 
   const next90Days = useMemo(() => {
     const today = new Date();
@@ -243,11 +327,12 @@ export default function EventsScreen() {
         dayNumber: date.getDate(),
         isCurrentMonth: true,
         isToday,
+        luckScore: getLuckScoreForDate(date),
         events: getEventsForDate(date),
       });
     }
     return days;
-  }, [getEventsForDate]);
+  }, [getEventsForDate, getLuckScoreForDate]);
 
   const navigateMonth = useCallback((direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
@@ -344,6 +429,11 @@ export default function EventsScreen() {
         activeOpacity={0.7}
         onPress={() => handleDayPress(day)}
       >
+        {day.luckScore !== null && day.isCurrentMonth ? (
+          <View style={styles.luckBadge} testID={`calendar-luck-badge-${day.date.toISOString().split('T')[0]}`}>
+            <Text style={styles.luckBadgeText}>{day.luckScore}</Text>
+          </View>
+        ) : null}
         <Text style={[
           styles.dayNumber,
           day.isToday && styles.todayNumber,
@@ -374,7 +464,7 @@ export default function EventsScreen() {
       }
     });
     
-    bookedCruises.forEach(cruise => {
+    mergedBookedCruises.forEach(cruise => {
       if (cruise.sailDate) {
         const sailDate = createDateFromString(cruise.sailDate);
         if (sailDate >= today) {
@@ -384,7 +474,7 @@ export default function EventsScreen() {
     });
     
     return allEvents.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 5);
-  }, [calendarEvents, bookedCruises]);
+  }, [calendarEvents, mergedBookedCruises]);
 
   const renderEventCard = useCallback((item: { event: CalendarEvent | BookedCruise; type: 'calendar' | 'cruise'; date: Date }, index: number) => {
     if (item.type === 'cruise') {
@@ -596,6 +686,9 @@ export default function EventsScreen() {
                       {hasEvents && (
                         <View style={[styles.ninetyDayDot, { backgroundColor: eventColor }]} />
                       )}
+                      {day.luckScore !== null ? (
+                        <Text style={styles.ninetyDayLuckText}>{day.luckScore}</Text>
+                      ) : null}
                     </View>
                   );
                 })}
@@ -861,6 +954,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: BORDER_RADIUS.md,
     margin: 2,
+    overflow: 'hidden',
   },
   todayCell: {
     borderWidth: 2,
@@ -886,6 +980,26 @@ const styles = StyleSheet.create({
   dayNumberWithEvents: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.navyDeep,
+  },
+  luckBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 20,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  luckBadgeText: {
+    fontSize: 8,
+    lineHeight: 9,
+    fontWeight: '700' as const,
+    color: '#B45309',
   },
   eventDotsContainer: {
     flexDirection: 'row',
@@ -957,6 +1071,15 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
+  },
+  ninetyDayLuckText: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    fontSize: 8,
+    lineHeight: 9,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
   },
   ninetyDaysLabels: {
     flexDirection: 'row',

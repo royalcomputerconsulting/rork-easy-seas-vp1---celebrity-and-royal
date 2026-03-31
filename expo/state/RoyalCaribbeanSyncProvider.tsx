@@ -21,7 +21,7 @@ import { convertLoyaltyInfoToExtended } from '@/lib/royalCaribbean/loyaltyConver
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
-import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
+import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { healImportedData } from '@/lib/dataHealing';
 import type { BookedCruise, CasinoOffer, Cruise } from '@/types/models';
@@ -568,7 +568,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     return false;
   }, []);
 
-  const sanitizeSyncArray = useCallback(<T extends object,>(value: unknown, label: string): T[] => {
+  const sanitizeSyncArray = useCallback(<T,>(value: unknown, label: string): T[] => {
     if (!Array.isArray(value)) {
       addLog(`⚠️ ${label} was not an array. Using an empty list instead.`, 'warning');
       return [];
@@ -1714,7 +1714,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           addLog(`🎯 Prepared ${offersToEnrich.length} Carnival rate code(s) for detailed sailing/pricing fetch`, 'success');
         }
 
-        const waitForOfferSailings = (
+        const _waitForOfferSailings = (
           offerCode: string,
           timeoutMs: number = 35000
         ): { requestId: number; promise: Promise<OfferRow[]> } => {

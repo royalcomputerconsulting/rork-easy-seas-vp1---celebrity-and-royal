@@ -370,7 +370,7 @@ export default function AnalyticsScreen() {
     });
     
     if (unlockedAchievements.length > 0) {
-      haptics.success();
+      void haptics.success();
       setCelebrationData({
         title: 'Achievement Unlocked!',
         subtitle: `You earned: ${unlockedAchievements[0].replace(/_/g, ' ').toUpperCase()}`,
@@ -509,7 +509,13 @@ export default function AnalyticsScreen() {
     console.log('[CasinoCruiseExport] Building CSV...', { cruiseCount: cruises.length });
 
     const escapeCsv = (value: unknown): string => {
-      const str = String(value ?? '');
+      const str = typeof value === 'string'
+        ? value
+        : typeof value === 'number' || typeof value === 'boolean'
+        ? String(value)
+        : value == null
+        ? ''
+        : JSON.stringify(value);
       const needsQuotes = /[\n\r\t",]/.test(str);
       const escaped = str.replace(/"/g, '""');
       return needsQuotes ? `"${escaped}"` : escaped;
@@ -1041,7 +1047,7 @@ export default function AnalyticsScreen() {
     pointsEarned: number;
     pph: number;
   }) => {
-    handleAddSession({
+    void handleAddSession({
       startTime: new Date(Date.now() - data.durationMinutes * 60 * 1000).toTimeString().slice(0, 5),
       endTime: new Date().toTimeString().slice(0, 5),
       durationMinutes: data.durationMinutes,
@@ -1097,7 +1103,7 @@ export default function AnalyticsScreen() {
       console.log('[Analytics] Total sessions after generation:', sessions.length + count);
       
       if (count > 0) {
-        haptics.success();
+        void haptics.success();
         setCelebrationData({
           title: forceRegenerate ? 'Sessions Regenerated!' : 'Historical Sessions Generated!',
           subtitle: `Created ${count} session records from ${completedCruises.length} cruises`,
@@ -1198,7 +1204,7 @@ export default function AnalyticsScreen() {
         <WeeklyGoalsCard
           compact={true}
           onGoalComplete={(goal) => {
-            haptics.success();
+            void haptics.success();
             setCelebrationData({
               title: 'Goal Completed!',
               subtitle: `You completed: ${goal.type} goal`,
