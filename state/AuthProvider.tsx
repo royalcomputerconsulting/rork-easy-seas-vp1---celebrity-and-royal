@@ -8,7 +8,38 @@ const AUTH_KEY = "easyseas_authenticated";
 const AUTH_EMAIL_KEY = "easyseas_auth_email";
 const FRESH_START_KEY = "easyseas_fresh_start";
 const PENDING_ACCOUNT_SWITCH_KEY = "easyseas_pending_account_switch";
-const ADMIN_EMAIL = "scott.merlis1@gmail.com";
+const ADMIN_EMAILS = [
+  'scott.merlis1@gmail.com',
+  'dextretehkh@hotmail.sg',
+] as const;
+const DEFAULT_WHITELIST = [
+  'scott.merlis1@gmail.com',
+  'scott.merlis4@gmail.com',
+  'hemispheredancer480@gmail.com',
+  'jsp22008@yahoo.com',
+  'jpence90@gmail.com',
+  'hemispheredancer480@icloud.com',
+  'scott.a.merlis1@gmail.com',
+  'dextretehkh@hotmail.sg',
+] as const;
+
+function normalizeAuthEmail(email: string | null | undefined): string | null {
+  if (!email) {
+    return null;
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  return normalizedEmail.length > 0 ? normalizedEmail : null;
+}
+
+function isAdminEmail(email: string | null | undefined): boolean {
+  const normalizedEmail = normalizeAuthEmail(email);
+  if (!normalizedEmail) {
+    return false;
+  }
+
+  return ADMIN_EMAILS.some((adminEmail) => adminEmail.toLowerCase() === normalizedEmail);
+}
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -38,8 +69,16 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
   const checkWhitelistStatus = useCallback(async (email: string | null): Promise<boolean> => {
     if (!email) return false;
     try {
+      const normalizedEmail = normalizeAuthEmail(email);
+      if (!normalizedEmail) {
+        return false;
+      }
+
+      if (isAdminEmail(normalizedEmail)) {
+        return true;
+      }
+
       const whitelist = await getWhitelistInternal();
-      const normalizedEmail = email.toLowerCase().trim();
       return whitelist.some(e => e.toLowerCase() === normalizedEmail);
     } catch (error) {
       console.error('[AuthProvider] Error checking whitelist status:', error);
@@ -50,22 +89,22 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
   const getWhitelistInternal = async (): Promise<string[]> => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.EMAIL_WHITELIST);
-      if (!stored) {
-        const defaultWhitelist = [
-          'scott.merlis1@gmail.com',
-          'scott.merlis4@gmail.com',
-          'hemispheredancer480@gmail.com',
-          'jsp22008@yahoo.com',
-          'jpence90@gmail.com',
-          'hemispheredancer480@icloud.com',
-          'scott.a.merlis1@gmail.com',
-        ];
-        await AsyncStorage.setItem(STORAGE_KEYS.EMAIL_WHITELIST, JSON.stringify(defaultWhitelist));
-        return defaultWhitelist;
+      const parsedWhitelist = stored ? (JSON.parse(stored) as unknown) : [];
+      const existingWhitelist = Array.isArray(parsedWhitelist)
+        ? parsedWhitelist
+            .map((email) => (typeof email === 'string' ? normalizeAuthEmail(email) : null))
+            .filter((email): email is string => email !== null)
+        : [];
+
+      const mergedWhitelist = Array.from(new Set([...existingWhitelist, ...DEFAULT_WHITELIST]));
+
+      if (!stored || mergedWhitelist.length !== existingWhitelist.length) {
+        await AsyncStorage.setItem(STORAGE_KEYS.EMAIL_WHITELIST, JSON.stringify(mergedWhitelist));
       }
-      return JSON.parse(stored);
+
+      return mergedWhitelist;
     } catch {
-      return [ADMIN_EMAIL];
+      return [...DEFAULT_WHITELIST];
     }
   };
 
@@ -77,11 +116,12 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       setIsAuthenticated(auth === "true");
       setAuthenticatedEmail(email);
       setIsFreshStart(freshStart === "true");
-      setIsAdmin(email?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+      const adminStatus = isAdminEmail(email);
+      setIsAdmin(adminStatus);
       
       const whitelisted = await checkWhitelistStatus(email);
       setIsWhitelisted(whitelisted);
-      console.log('[AuthProvider] Loaded auth state:', { authenticated: auth === "true", email, isAdmin: email?.toLowerCase() === ADMIN_EMAIL.toLowerCase(), isWhitelisted: whitelisted });
+      console.log('[AuthProvider] Loaded auth state:', { authenticated: auth === "true", email, isAdmin: adminStatus, isWhitelisted: whitelisted });
     } catch (error) {
       console.error("[AuthProvider] Error checking authentication:", error);
       setIsAuthenticated(false);
@@ -105,14 +145,18 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
 
 
 
-  const getWhitelist = async (): Promise<string[]> => {
+  const getWhitelist = useCallback(async (): Promise<string[]> => {
     return getWhitelistInternal();
-  };
+  }, []);
 
-  const addToWhitelist = async (email: string): Promise<void> => {
+  const addToWhitelist = useCallback(async (email: string): Promise<void> => {
     try {
       const whitelist = await getWhitelist();
-      const normalizedEmail = email.toLowerCase().trim();
+      const normalizedEmail = normalizeAuthEmail(email);
+      if (!normalizedEmail) {
+        return;
+      }
+
       if (!whitelist.some(e => e.toLowerCase() === normalizedEmail)) {
         const updated = [...whitelist, normalizedEmail];
         await AsyncStorage.setItem(STORAGE_KEYS.EMAIL_WHITELIST, JSON.stringify(updated));
@@ -122,13 +166,17 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       console.error('[AuthProvider] Error adding to whitelist:', error);
       throw error;
     }
-  };
+  }, [getWhitelist]);
 
-  const removeFromWhitelist = async (email: string): Promise<void> => {
+  const removeFromWhitelist = useCallback(async (email: string): Promise<void> => {
     try {
       const whitelist = await getWhitelist();
-      const normalizedEmail = email.toLowerCase().trim();
-      if (normalizedEmail === ADMIN_EMAIL.toLowerCase()) {
+      const normalizedEmail = normalizeAuthEmail(email);
+      if (!normalizedEmail) {
+        return;
+      }
+
+      if (isAdminEmail(normalizedEmail)) {
         throw new Error('Cannot remove admin email from whitelist');
       }
       const updated = whitelist.filter(e => e.toLowerCase() !== normalizedEmail);
@@ -138,20 +186,28 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       console.error('[AuthProvider] Error removing from whitelist:', error);
       throw error;
     }
-  };
+  }, [getWhitelist]);
 
-  const isEmailWhitelisted = async (email: string): Promise<boolean> => {
+  const isEmailWhitelisted = useCallback(async (email: string): Promise<boolean> => {
     try {
+      const normalizedEmail = normalizeAuthEmail(email);
+      if (!normalizedEmail) {
+        return false;
+      }
+
+      if (isAdminEmail(normalizedEmail)) {
+        return true;
+      }
+
       const whitelist = await getWhitelist();
-      const normalizedEmail = email.toLowerCase().trim();
       return whitelist.some(e => e.toLowerCase() === normalizedEmail);
     } catch (error) {
       console.error('[AuthProvider] Error checking whitelist:', error);
       return false;
     }
-  };
+  }, [getWhitelist]);
 
-  const login = async (email: string, password?: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, password?: string): Promise<boolean> => {
     const normalizedEmail = email.toLowerCase().trim();
     
     if (!normalizedEmail || !email.includes('@')) {
@@ -159,9 +215,9 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       return false;
     }
 
-    const isAdminEmail = normalizedEmail === ADMIN_EMAIL.toLowerCase();
+    const isAdminAccount = isAdminEmail(normalizedEmail);
     
-    if (isAdminEmail) {
+    if (isAdminAccount) {
       if (password !== ADMIN_PASSWORD) {
         console.error('[AuthProvider] Invalid admin password');
         return false;
@@ -209,23 +265,23 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     
     setIsAuthenticated(true);
     setAuthenticatedEmail(normalizedEmail);
-    setIsAdmin(isAdminEmail);
+    setIsAdmin(isAdminAccount);
     setIsWhitelisted(whitelisted);
-    console.log('[AuthProvider] Login successful for:', normalizedEmail, 'isAdmin:', isAdminEmail, 'isWhitelisted:', whitelisted);
+    console.log('[AuthProvider] Login successful for:', normalizedEmail, 'isAdmin:', isAdminAccount, 'isWhitelisted:', whitelisted);
     return true;
-  };
+  }, [checkWhitelistStatus]);
 
-  const updateEmail = async (newEmail: string) => {
+  const updateEmail = useCallback(async (newEmail: string) => {
     const normalizedEmail = newEmail.toLowerCase().trim();
     console.log('[AuthProvider] Updating authenticated email to:', normalizedEmail);
     await AsyncStorage.setItem(AUTH_EMAIL_KEY, normalizedEmail);
     setAuthenticatedEmail(normalizedEmail);
-    setIsAdmin(normalizedEmail === ADMIN_EMAIL.toLowerCase());
+    setIsAdmin(isAdminEmail(normalizedEmail));
     const whitelisted = await checkWhitelistStatus(normalizedEmail);
     setIsWhitelisted(whitelisted);
-  };
+  }, [checkWhitelistStatus]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     console.log('[AuthProvider] Logging out and clearing all user data...');
     await AsyncStorage.clear();
     setIsAuthenticated(false);
@@ -234,14 +290,14 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     setIsAdmin(false);
     setIsWhitelisted(false);
     console.log('[AuthProvider] Logged out - all localStorage cleared');
-  };
+  }, []);
 
-  const clearFreshStartFlag = async () => {
+  const clearFreshStartFlag = useCallback(async () => {
     await AsyncStorage.removeItem(FRESH_START_KEY);
     setIsFreshStart(false);
-  };
+  }, []);
 
-  return {
+  return useMemo(() => ({
     isAuthenticated,
     isLoading,
     isFreshStart,
@@ -256,5 +312,20 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     removeFromWhitelist,
     isEmailWhitelisted,
     updateEmail,
-  };
+  }), [
+    addToWhitelist,
+    authenticatedEmail,
+    clearFreshStartFlag,
+    getWhitelist,
+    isAdmin,
+    isAuthenticated,
+    isEmailWhitelisted,
+    isFreshStart,
+    isLoading,
+    isWhitelisted,
+    login,
+    logout,
+    removeFromWhitelist,
+    updateEmail,
+  ]);
 });

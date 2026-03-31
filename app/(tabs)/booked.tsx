@@ -567,6 +567,7 @@ export default function BookedScreen() {
           style={styles.addCruiseButton}
           onPress={handleAddCruise}
           activeOpacity={0.7}
+          testID="add-cruise-button"
         >
           <Plus size={16} color={COLORS.white} />
           <Text style={styles.addCruiseText}>Add Cruise</Text>
@@ -1055,11 +1056,9 @@ const styles = StyleSheet.create({
     textAlign: 'center' as const,
   },
   viewModeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: SPACING.md,
     paddingHorizontal: SPACING.xs,
+    gap: SPACING.sm,
   },
   viewModeToggle: {
     flexDirection: 'row',
@@ -1068,13 +1067,16 @@ const styles = StyleSheet.create({
     padding: 4,
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.1)',
+    width: '100%',
   },
   viewModeButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: SPACING.xs,
     paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.round,
   },
   viewModeButtonActive: {
@@ -1092,11 +1094,14 @@ const styles = StyleSheet.create({
   addCruiseButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: SPACING.xs,
     backgroundColor: COLORS.navyDeep,
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.round,
+    width: '100%',
+    ...SHADOW.sm,
   },
   addCruiseText: {
     fontSize: TYPOGRAPHY.fontSizeSM,

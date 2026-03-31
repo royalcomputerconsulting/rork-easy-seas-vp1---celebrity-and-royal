@@ -186,3 +186,148 @@ export function getRelativeTimeString(date: Date | string): string {
   
   return formatDate(d, 'medium');
 }
+
+const TAROT_LUCK_VALUES: number[] = [
+  85, 92, 78, 88, 82, 74, 90, 87, 80, 68, 93,
+  75, 65, 72, 79, 62, 58, 91, 66, 98, 84, 96,
+];
+
+function buildBirthdate(year: number, month: number, day: number): Date | null {
+  const date = new Date(year, month - 1, day, 8, 0, 0, 0);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+export function formatBirthdateForStorage(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function parseBirthdate(input: string | Date | null | undefined): Date | null {
+  if (!input) {
+    return null;
+  }
+
+  if (input instanceof Date) {
+    if (Number.isNaN(input.getTime())) {
+      return null;
+    }
+
+    return buildBirthdate(input.getFullYear(), input.getMonth() + 1, input.getDate());
+  }
+
+  const trimmedInput = input.trim();
+  if (!trimmedInput) {
+    return null;
+  }
+
+  const normalizedDateOnly = trimmedInput.includes('T')
+    ? trimmedInput.split('T')[0]
+    : trimmedInput;
+
+  const yearFirstMatch = normalizedDateOnly.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (yearFirstMatch) {
+    const year = Number(yearFirstMatch[1]);
+    const month = Number(yearFirstMatch[2]);
+    const day = Number(yearFirstMatch[3]);
+    return buildBirthdate(year, month, day);
+  }
+
+  const monthFirstMatch = normalizedDateOnly.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (monthFirstMatch) {
+    const month = Number(monthFirstMatch[1]);
+    const day = Number(monthFirstMatch[2]);
+    const year = Number(monthFirstMatch[3]);
+    return buildBirthdate(year, month, day);
+  }
+
+  const parsedDate = new Date(trimmedInput);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return null;
+  }
+
+  return buildBirthdate(parsedDate.getFullYear(), parsedDate.getMonth() + 1, parsedDate.getDate());
+}
+
+export function normalizeBirthdateInput(input: string | null | undefined): string | undefined {
+  if (!input) {
+    return undefined;
+  }
+
+  const trimmedInput = input.trim();
+  if (!trimmedInput) {
+    return undefined;
+  }
+
+  const parsedDate = parseBirthdate(trimmedInput);
+  return parsedDate ? formatBirthdateForStorage(parsedDate) : trimmedInput;
+}
+
+function getTarotLuck(birthdate: Date, selectedDate: Date): number {
+  const seed =
+    birthdate.getFullYear() +
+    birthdate.getMonth() * 13 +
+    birthdate.getDate() * 7 +
+    (selectedDate.getFullYear() * 3 +
+      selectedDate.getMonth() * 17 +
+      selectedDate.getDate() * 11);
+  const index = ((seed % TAROT_LUCK_VALUES.length) + TAROT_LUCK_VALUES.length) % TAROT_LUCK_VALUES.length;
+  return TAROT_LUCK_VALUES[index] ?? TAROT_LUCK_VALUES[0];
+}
+
+export function getDailyLuckScoreForDate(
+  birthdateInput: string | Date | null | undefined,
+  selectedDate: Date,
+): number | null {
+  const birthdate = parseBirthdate(birthdateInput);
+  if (!birthdate || Number.isNaN(selectedDate.getTime())) {
+    return null;
+  }
+
+  const dayOfYear = Math.floor(
+    (selectedDate.getTime() - new Date(selectedDate.getFullYear(), 0, 0).getTime()) / 86400000,
+  );
+  const numerology =
+    ((birthdate.getDate() + birthdate.getMonth() + selectedDate.getDate() + selectedDate.getMonth()) % 9) + 1;
+  const tarotLuck = getTarotLuck(birthdate, selectedDate);
+  const base = (75 * 0.3 + tarotLuck * 0.5 + numerology * 3) / 1.0;
+  const variation = Math.sin(dayOfYear + birthdate.getDate()) * 8;
+
+  return Math.min(100, Math.max(1, Math.round(base + variation)));
+}
+
+export function getLuckColor(score: number): [string, string] {
+  if (score >= 90) return ['#F59E0B', '#EF4444'];
+  if (score >= 75) return ['#10B981', '#059669'];
+  if (score >= 60) return ['#3B82F6', '#1D4ED8'];
+  if (score >= 45) return ['#8B5CF6', '#6D28D9'];
+  return ['#6B7280', '#4B5563'];
+}
+
+export function getLuckLabel(score: number): string {
+  if (score >= 95) return 'EXCEPTIONAL LUCK';
+  if (score >= 85) return 'HIGHLY AUSPICIOUS';
+  if (score >= 75) return 'FAVORABLE';
+  if (score >= 65) return 'PROMISING';
+  if (score >= 50) return 'NEUTRAL';
+  if (score >= 35) return 'CAUTION ADVISED';
+  return 'CHALLENGING DAY';
+}
+
+export function getLuckStars(score: number): string {
+  if (score >= 90) return '★★★★★';
+  if (score >= 75) return '★★★★☆';
+  if (score >= 60) return '★★★☆☆';
+  if (score >= 40) return '★★☆☆☆';
+  return '★☆☆☆☆';
+}

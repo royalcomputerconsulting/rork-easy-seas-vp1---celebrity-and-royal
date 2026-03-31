@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { getDailyLuckScoreForDate, getLuckColor, getLuckLabel, getLuckStars, parseBirthdate } from '@/lib/date';
 import { Star, Moon, Sun, Zap, Sparkles } from 'lucide-react-native';
 
 interface DailyLuckReportProps {
@@ -91,49 +92,6 @@ function getTarotCard(birthdate: Date, selectedDate: Date) {
   return TAROT_CARDS[index];
 }
 
-function getDailyLuckScore(birthdate: Date, selectedDate: Date, animalLuck: number, tarotLuck: number) {
-  const dayOfYear = Math.floor((selectedDate.getTime() - new Date(selectedDate.getFullYear(), 0, 0).getTime()) / 86400000);
-  const numerology = ((birthdate.getDate() + birthdate.getMonth() + selectedDate.getDate() + selectedDate.getMonth()) % 9) + 1;
-  const base = (animalLuck * 0.3 + tarotLuck * 0.5 + numerology * 3) / 1.0;
-  const variation = Math.sin(dayOfYear + birthdate.getDate()) * 8;
-  return Math.min(100, Math.max(1, Math.round(base + variation)));
-}
-
-function getLuckColor(score: number): [string, string] {
-  if (score >= 90) return ['#F59E0B', '#EF4444'];
-  if (score >= 75) return ['#10B981', '#059669'];
-  if (score >= 60) return ['#3B82F6', '#1D4ED8'];
-  if (score >= 45) return ['#8B5CF6', '#6D28D9'];
-  return ['#6B7280', '#4B5563'];
-}
-
-function getLuckLabel(score: number): string {
-  if (score >= 95) return 'EXCEPTIONAL LUCK';
-  if (score >= 85) return 'HIGHLY AUSPICIOUS';
-  if (score >= 75) return 'FAVORABLE';
-  if (score >= 65) return 'PROMISING';
-  if (score >= 50) return 'NEUTRAL';
-  if (score >= 35) return 'CAUTION ADVISED';
-  return 'CHALLENGING DAY';
-}
-
-function getLuckStars(score: number): string {
-  if (score >= 90) return '★★★★★';
-  if (score >= 75) return '★★★★☆';
-  if (score >= 60) return '★★★☆☆';
-  if (score >= 40) return '★★☆☆☆';
-  return '★☆☆☆☆';
-}
-
-function parseBirthdate(birthdateStr: string): Date | null {
-  if (!birthdateStr) return null;
-  const match = birthdateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!match) return null;
-  const [, year, month, day] = match.map(Number);
-  const date = new Date(year, month - 1, day, 8, 0, 0);
-  if (isNaN(date.getTime())) return null;
-  return date;
-}
 
 export function DailyLuckReport({ birthdate, selectedDate }: DailyLuckReportProps) {
   const birthdateObj = useMemo(() => parseBirthdate(birthdate), [birthdate]);
@@ -155,7 +113,7 @@ export function DailyLuckReport({ birthdate, selectedDate }: DailyLuckReportProp
 
   const luckScore = useMemo(() => {
     if (!birthdateObj || !chineseAnimal || !tarotCard) return 0;
-    return getDailyLuckScore(birthdateObj, selectedDate, 75, tarotCard.luck);
+    return getDailyLuckScoreForDate(birthdateObj, selectedDate) ?? 0;
   }, [birthdateObj, chineseAnimal, tarotCard, selectedDate]);
 
   const luckColors = useMemo(() => getLuckColor(luckScore), [luckScore]);
@@ -249,12 +207,12 @@ export function DailyLuckReport({ birthdate, selectedDate }: DailyLuckReportProp
 
               <View style={styles.dailyReadingBox}>
                 <Moon size={14} color="#F59E0B" />
-                <Text style={styles.dailyReadingTitle}>Today's Chinese Astrology Reading</Text>
+                <Text style={styles.dailyReadingTitle}>Today&apos;s Chinese Astrology Reading</Text>
               </View>
               <Text style={styles.dailyReadingContent}>
                 The {chineseAnimal.name} navigates today with innate wisdom drawn from the {chineseAnimal.element} element. 
                 The celestial chi flowing on {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' })} aligns with your animal sign in a powerful way. 
-                The interaction between your lunar birth energy and today's cosmic alignment creates a field of {luckScore >= 70 ? 'exceptional opportunity and positive chi' : luckScore >= 50 ? 'balanced energy where caution and opportunity meet' : 'reflective energy suited for inward focus and strategic patience'}. 
+                The interaction between your lunar birth energy and today&apos;s cosmic alignment creates a field of {luckScore >= 70 ? 'exceptional opportunity and positive chi' : luckScore >= 50 ? 'balanced energy where caution and opportunity meet' : 'reflective energy suited for inward focus and strategic patience'}. 
                 Honor the wisdom of your sign by {luckScore >= 70 ? 'acting decisively and boldly — fortune rewards the brave today' : luckScore >= 50 ? 'balancing bold moves with careful observation' : 'conserving your energy and planning your next strategic move'}. 
                 Lucky colors: {chineseAnimal.element === 'Fire' ? 'Red, Orange, Gold' : chineseAnimal.element === 'Water' ? 'Blue, Black, Turquoise' : chineseAnimal.element === 'Wood' ? 'Green, Teal, Emerald' : chineseAnimal.element === 'Metal' ? 'White, Silver, Gold' : 'Yellow, Brown, Ochre'}. 
                 Avoid: rushing decisions before noon. Best hours: {luckScore >= 70 ? '9am–11am and 2pm–5pm' : '10am–12pm and 7pm–9pm'}.
@@ -296,12 +254,12 @@ export function DailyLuckReport({ birthdate, selectedDate }: DailyLuckReportProp
 
               <View style={styles.dailyReadingBox}>
                 <Sun size={14} color="#60A5FA" />
-                <Text style={styles.dailyReadingTitle}>Today's Horoscope Reading</Text>
+                <Text style={styles.dailyReadingTitle}>Today&apos;s Horoscope Reading</Text>
               </View>
               <Text style={styles.dailyReadingContent}>
                 {westernSign.name}, the planetary energies on {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' })} create a {luckScore >= 75 ? 'highly charged, luminous field' : luckScore >= 55 ? 'complex but navigable landscape' : 'contemplative atmosphere'} uniquely tuned to your {westernSign.element} nature. 
                 {westernSign.ruler} is {luckScore >= 70 ? 'in a powerful position today, amplifying your natural gifts and bestowing extraordinary favor on bold initiatives' : luckScore >= 50 ? 'moving through a transitional phase, encouraging you to balance initiative with receptivity' : 'calling you inward, urging reflection and strategic recalibration before your next major move'}. 
-                Your ruling planet's influence today specifically impacts your {luckScore % 3 === 0 ? 'financial decisions and material pursuits' : luckScore % 3 === 1 ? 'relationships and social connections' : 'creative projects and personal expression'}. 
+                Your ruling planet&apos;s influence today specifically impacts your {luckScore % 3 === 0 ? 'financial decisions and material pursuits' : luckScore % 3 === 1 ? 'relationships and social connections' : 'creative projects and personal expression'}. 
                 The cosmic advice for {westernSign.name} today: {luckScore >= 80 ? 'Seize the moment with both hands — the stars have aligned a rare window of fortune that demands bold action' : luckScore >= 60 ? 'Move with intention and confidence, staying attuned to the subtle signals around you' : 'Conserve your celestial energy, observe carefully, and wait for the right moment to act'}. 
                 Power numbers: {((birthdateObj?.getDate() || 0) + selectedDate.getDate()) % 9 + 1} and {((birthdateObj?.getMonth() || 0) + selectedDate.getMonth()) % 7 + 3}.
               </Text>
@@ -351,9 +309,9 @@ export function DailyLuckReport({ birthdate, selectedDate }: DailyLuckReportProp
               </Text>
               <Text style={[styles.dailyReadingContent, { marginTop: SPACING.sm }]}>
                 For you personally — born under the {chineseAnimal?.name} and {westernSign?.name} — {tarotCard.name} arrives today as a profound messenger. 
-                The intersection of your birth numerology (life path {((birthdateObj?.getDate() || 0) + (birthdateObj?.getMonth() || 0) + 1 + birthdateObj?.getFullYear() || 0) % 9 + 1}) and the current lunar cycle amplifies this card's message {luckScore >= 75 ? 'tenfold' : 'in a focused, intentional way'}. 
+                The intersection of your birth numerology (life path {((birthdateObj?.getDate() || 0) + (birthdateObj?.getMonth() || 0) + 1 + birthdateObj?.getFullYear() || 0) % 9 + 1}) and the current lunar cycle amplifies this card&apos;s message {luckScore >= 75 ? 'tenfold' : 'in a focused, intentional way'}. 
                 {luckScore >= 80 ? `${tarotCard.name} appearing today is a supremely auspicious sign — the universe is actively conspiring to bring you exactly what you need. Open your hands and heart to receive.` : luckScore >= 60 ? `${tarotCard.name} brings a measured but genuine message of guidance today. Act with awareness and you will find the path clear before you.` : `${tarotCard.name} arrives today as a teacher, not an obstacle. Its energy invites you to pause, reflect, and emerge wiser and more prepared for the triumphs ahead.`}
-                Lucky hours to act on this card's energy: {tarotCard.luck >= 85 ? '9am, 1pm, and 8pm' : tarotCard.luck >= 70 ? '10am, 3pm, and 9pm' : '11am and 7pm'}.
+                Lucky hours to act on this card&apos;s energy: {tarotCard.luck >= 85 ? '9am, 1pm, and 8pm' : tarotCard.luck >= 70 ? '10am, 3pm, and 9pm' : '11am and 7pm'}.
               </Text>
             </LinearGradient>
           </View>
@@ -373,7 +331,7 @@ export function DailyLuckReport({ birthdate, selectedDate }: DailyLuckReportProp
             <Text style={styles.finalSummaryLabel}>{luckLabel}</Text>
             <Text style={styles.finalSummaryStars}>{luckStars}</Text>
             <Text style={styles.finalSummaryText}>
-              Your {westernSign?.name} energy combined with the {chineseAnimal?.name}'s wisdom, channeled through the {tarotCard?.name} card, creates a {luckScore >= 80 ? 'magnificent constellation of forces working powerfully in your favor today.' : luckScore >= 60 ? 'balanced interplay of cosmic forces offering genuine opportunity when approached with intention.' : 'powerful invitation to turn inward, conserve your energy, and prepare for the abundant days ahead.'}
+              Your {westernSign?.name} energy combined with the {chineseAnimal?.name}&apos;s wisdom, channeled through the {tarotCard?.name} card, creates a {luckScore >= 80 ? 'magnificent constellation of forces working powerfully in your favor today.' : luckScore >= 60 ? 'balanced interplay of cosmic forces offering genuine opportunity when approached with intention.' : 'powerful invitation to turn inward, conserve your energy, and prepare for the abundant days ahead.'}
               {'\n\n'}
               {luckScore >= 90 ? '🌟 THIS IS A POWER DAY — Trust your instincts completely. Make that important call, start that project, place that bet. The cosmos has stacked the deck in your favor.' : luckScore >= 75 ? '✨ A STRONG DAY — Favorable winds are blowing. Lean into opportunities with confidence and strategic intent.' : luckScore >= 60 ? '💫 A STEADY DAY — Navigate with care and intention. Fortune favors the prepared mind today.' : luckScore >= 45 ? '🌙 A REFLECTIVE DAY — Use this time wisely. Observation and planning today builds the foundation for tomorrow\'s triumphs.' : '🌊 A RESTORATIVE DAY — Rest, recalibrate, and trust that the wheel always turns. Your luckiest days are in the pipeline.'}
             </Text>

@@ -50,7 +50,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { isDateInPast } from '@/lib/date';
+import { isDateInPast, normalizeBirthdateInput } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import type { PlayingHours } from '@/state/UserProvider';
@@ -338,9 +338,7 @@ export default function SettingsScreen() {
 
   const dataStats = useMemo(() => {
     const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
-    // Count unique offers by offerCode - this is the true unique identifier for an offer
-    // Multiple sailings can share the same offerCode (e.g., 2601C05 applies to multiple cruises)
-    const uniqueOfferCodes = new Set(allOffers.map(o => o.offerCode).filter(Boolean));
+    const uniqueOfferCodes = new Set(allOffers.map((offer) => offer.offerCode).filter(Boolean));
     const uniqueOfferCount = uniqueOfferCodes.size || allOffers.length;
     
     console.log('[Settings] Data stats calculation:', {
@@ -350,8 +348,8 @@ export default function SettingsScreen() {
     });
     
     const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
-    const upcoming = allBooked.filter(c => !isDateInPast(c.returnDate)).length;
-    const completed = allBooked.filter(c => isDateInPast(c.returnDate)).length;
+    const upcoming = allBooked.filter((cruise) => !isDateInPast(cruise.returnDate)).length;
+    const completed = allBooked.filter((cruise) => isDateInPast(cruise.returnDate)).length;
 
     return {
       cruises: cruises.length || localData.cruises?.length || 0,
@@ -469,7 +467,7 @@ export default function SettingsScreen() {
       setIsPublishingFeed(true);
       console.log('[Settings] Publishing calendar feed...');
 
-      let token = calendarFeedToken;
+      let token: string = calendarFeedToken ?? '';
       if (!token) {
         token = generateFeedToken();
         setCalendarFeedToken(token);
@@ -991,7 +989,6 @@ export default function SettingsScreen() {
         setIsImportingAll(false);
         return;
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       
       if (result.success && result.imported) {
         const { cruises: importedCruises, bookedCruises: importedBooked, casinoOffers: importedOffers, calendarEvents, casinoSessions: importedSessions, certificates, machines: importedMachines } = result.imported;
@@ -1242,12 +1239,18 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     emailChanged: boolean
   ) {
     try {
+      const normalizedBirthdate = normalizeBirthdateInput(profileData.birthdate);
+      console.log('[Settings] Normalized birthdate for profile save:', {
+        inputBirthdate: profileData.birthdate,
+        normalizedBirthdate,
+      });
+
       if (currentUser) {
         await updateUser(currentUser.id, { 
           name: profileData.name,
           email: profileData.email,
           crownAnchorNumber: profileData.crownAnchorNumber,
-          birthdate: profileData.birthdate,
+          birthdate: normalizedBirthdate,
           celebrityEmail: profileData.celebrityEmail,
           celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
@@ -1268,7 +1271,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           name: profileData.name,
           email: profileData.email,
           crownAnchorNumber: profileData.crownAnchorNumber,
-          birthdate: profileData.birthdate,
+          birthdate: normalizedBirthdate,
           celebrityEmail: profileData.celebrityEmail,
           celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,

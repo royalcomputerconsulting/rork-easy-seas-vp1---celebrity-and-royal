@@ -212,6 +212,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   const [isGrandfathered, setIsGrandfathered] = useState<boolean>(false);
   const [accountCreatedAt, setAccountCreatedAt] = useState<Date | null>(null);
   const [subscriptionDisplayStatus, setSubscriptionDisplayStatus] = useState<SubscriptionDisplayStatus>('grace_period');
+  const hasPrivilegedAccess = useMemo(() => auth.isAdmin || auth.isWhitelisted, [auth.isAdmin, auth.isWhitelisted]);
 
   const mountedRef = useRef<boolean>(true);
   const actionInFlightRef = useRef<boolean>(false);
@@ -355,14 +356,22 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     return 'expired';
   }, []);
 
-  const setStateFromCustomerInfo = useCallback((info: CustomerInfo | null, currentTrialEnd: Date | null, currentIsGrandfathered: boolean) => {
+  const setStateFromCustomerInfo = useCallback((
+    info: CustomerInfo | null,
+    currentTrialEnd: Date | null,
+    currentIsGrandfathered: boolean,
+    currentHasPrivilegedAccess: boolean,
+  ) => {
     const computedIsPro = computeIsProFromCustomerInfo(info);
     const computedIsBasic = computeIsBasicFromCustomerInfo(info);
-    const computedTier = computeTier(computedIsPro, computedIsBasic, currentTrialEnd, currentIsGrandfathered);
+    const effectiveIsPro = currentHasPrivilegedAccess || computedIsPro;
+    const computedTier = computeTier(effectiveIsPro, computedIsBasic, currentTrialEnd, currentIsGrandfathered);
     
     console.log('[Entitlement] setStateFromCustomerInfo', {
       computedIsPro,
       computedIsBasic,
+      effectiveIsPro,
+      currentHasPrivilegedAccess,
       computedTier,
       isGrandfathered: currentIsGrandfathered,
       activeSubscriptions: info?.activeSubscriptions ?? [],
@@ -370,16 +379,22 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     });
 
     const wasPro = lastIsProRef.current;
-    const finalIsPro = currentIsGrandfathered || computedIsPro;
+    const finalIsPro = currentIsGrandfathered || effectiveIsPro;
 
     setCustomerInfo(info);
     setIsPro(finalIsPro);
     setIsBasic(computedIsBasic);
     setTier(computedTier);
-    setSource(currentIsGrandfathered ? 'grandfathered' : (computedIsPro || computedIsBasic ? 'iap' : 'unknown'));
+    setSource(
+      currentIsGrandfathered
+        ? 'grandfathered'
+        : currentHasPrivilegedAccess
+          ? 'dev'
+          : (effectiveIsPro || computedIsBasic ? 'iap' : 'unknown')
+    );
     setLastCheckedAt(new Date().toISOString());
     
-    const displayStatus = computeDisplayStatus(info, currentTrialEnd, currentIsGrandfathered, computedIsPro, computedIsBasic);
+    const displayStatus = computeDisplayStatus(info, currentTrialEnd, currentIsGrandfathered, effectiveIsPro, computedIsBasic);
     setSubscriptionDisplayStatus(displayStatus);
     console.log('[Entitlement] Display status set to:', displayStatus);
 
@@ -525,15 +540,15 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         const storedIsPro = stored === 'true';
         console.log('[Entitlement] web refresh: storedIsPro', storedIsPro, 'isGrandfathered', currentIsGrandfathered);
         if (!mountedRef.current) return;
-        const finalIsPro = currentIsGrandfathered || storedIsPro;
+        const finalIsPro = currentIsGrandfathered || storedIsPro || hasPrivilegedAccess;
         setIsPro(finalIsPro);
         setIsBasic(false);
-        setTier(computeTier(storedIsPro, false, currentTrialEnd, currentIsGrandfathered));
-        setSource(currentIsGrandfathered ? 'grandfathered' : (storedIsPro ? 'dev' : 'unknown'));
+        setTier(computeTier(finalIsPro, false, currentTrialEnd, currentIsGrandfathered));
+        setSource(currentIsGrandfathered ? 'grandfathered' : (finalIsPro ? 'dev' : 'unknown'));
         setLastCheckedAt(new Date().toISOString());
         setCustomerInfo(null);
         setOfferings([]);
-        const webDisplayStatus = computeDisplayStatus(null, currentTrialEnd, currentIsGrandfathered, storedIsPro, false);
+        const webDisplayStatus = computeDisplayStatus(null, currentTrialEnd, currentIsGrandfathered, finalIsPro, false);
         setSubscriptionDisplayStatus(webDisplayStatus);
         console.log('[Entitlement] Web display status set to:', webDisplayStatus);
       } catch (e) {
@@ -552,7 +567,21 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       const purchases = await ensurePurchasesLoaded();
       if (!purchases) {
         const message = purchasesInitError ?? 'In-app purchases are not configured.';
-        console.warn('[Entitlement] refresh: Purchases unavailable', { message });
+        console.warn('[Entitlement] refresh: Purchases unavailable', { message, hasPrivilegedAccess });
+
+        if (hasPrivilegedAccess) {
+          setIsPro(true);
+          setIsBasic(false);
+          setTier(computeTier(true, false, currentTrialEnd, currentIsGrandfathered));
+          setSource(currentIsGrandfathered ? 'grandfathered' : 'dev');
+          setLastCheckedAt(new Date().toISOString());
+          setCustomerInfo(null);
+          setOfferings([]);
+          setSubscriptionDisplayStatus(computeDisplayStatus(null, currentTrialEnd, currentIsGrandfathered, true, false));
+          setError(null);
+          return;
+        }
+
         setError(message);
         return;
       }
@@ -573,7 +602,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       console.log('[Entitlement] Fetching customer info');
       const info = await withTimeout(purchases.getCustomerInfo(), DEFAULT_TIMEOUT_MS, 'Checking subscription status');
       if (!mountedRef.current) return;
-      setStateFromCustomerInfo(info, currentTrialEnd, currentIsGrandfathered);
+      setStateFromCustomerInfo(info, currentTrialEnd, currentIsGrandfathered, hasPrivilegedAccess);
     } catch (e) {
       console.error('[Entitlement] refresh failed', e);
       if (!mountedRef.current) return;
@@ -583,7 +612,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setIsLoading(false);
       }
     }
-  }, [computeDisplayStatus, computeTier, ensurePurchasesLoaded, initializeAccountTracking, initializeTrial, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO, syncPurchasesIdentity]);
+  }, [computeDisplayStatus, computeTier, ensurePurchasesLoaded, hasPrivilegedAccess, initializeAccountTracking, initializeTrial, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO, syncPurchasesIdentity]);
 
   useEffect(() => {
     console.log('[Entitlement] Provider mounted - refreshing entitlements');
@@ -680,7 +709,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       if (!mountedRef.current) return;
       const storedTrialEnd = await AsyncStorage.getItem(storageKeys.TRIAL_END);
       const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
-      setStateFromCustomerInfo(result.customerInfo, currentTrialEnd, isGrandfathered);
+      setStateFromCustomerInfo(result.customerInfo, currentTrialEnd, isGrandfathered, hasPrivilegedAccess);
       const successStore = Platform.OS === 'android' ? 'Google Play' : 'App Store';
       Alert.alert('Success', `Full access unlocked via ${successStore}.`);
     } catch (e) {
@@ -695,7 +724,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setIsLoading(false);
       }
     }
-  }, [auth.isAdmin, ensurePurchasesLoaded, findPackageByProductId, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO]);
+  }, [auth.isAdmin, ensurePurchasesLoaded, findPackageByProductId, hasPrivilegedAccess, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO]);
 
   const subscribeBasicMonthly = useCallback(async () => {
     await subscribeToProduct(BASIC_PRODUCT_ID_MONTHLY, 'Basic monthly subscription');
@@ -722,7 +751,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     if (Platform.OS === 'web') {
       try {
         await refresh();
-        const accessRecovered = auth.isWhitelisted || isGrandfathered || lastIsProRef.current;
+        const accessRecovered = hasPrivilegedAccess || isGrandfathered || lastIsProRef.current;
         Alert.alert(
           'Restore Complete',
           accessRecovered
@@ -790,7 +819,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       
       const storedTrialEnd = await AsyncStorage.getItem(storageKeys.TRIAL_END);
       const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
-      setStateFromCustomerInfo(info, currentTrialEnd, isGrandfathered);
+      setStateFromCustomerInfo(info, currentTrialEnd, isGrandfathered, hasPrivilegedAccess);
       
       if (!mountedRef.current) return;
       
@@ -818,7 +847,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setIsLoading(false);
       }
     }
-  }, [auth.authenticatedEmail, auth.isWhitelisted, ensurePurchasesLoaded, isGrandfathered, refresh, setStateFromCustomerInfo, storageKeys.TRIAL_END]);
+  }, [auth.authenticatedEmail, auth.isWhitelisted, ensurePurchasesLoaded, hasPrivilegedAccess, isGrandfathered, refresh, setStateFromCustomerInfo, storageKeys.TRIAL_END]);
 
   const openManageSubscription = useCallback(async () => {
     if (Platform.OS === 'web') {
