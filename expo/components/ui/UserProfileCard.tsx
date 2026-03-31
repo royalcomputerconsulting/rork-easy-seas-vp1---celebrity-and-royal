@@ -10,6 +10,7 @@ import { getCelebrityBlueChipTierByLevel, CELEBRITY_BLUE_CHIP_TIERS } from '@/co
 import { BrandToggle, BrandType } from './BrandToggle';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { maskSensitiveMemberNumber } from '@/lib/privacy';
+import { formatBirthdateForDisplay } from '@/lib/date';
 
 interface UserProfileData {
   name: string;
@@ -89,14 +90,20 @@ export function UserProfileCard({
   isSaving = false,
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
-  const [formData, setFormData] = useState<UserProfileData>(currentValues);
+  const [formData, setFormData] = useState<UserProfileData>({
+    ...currentValues,
+    birthdate: formatBirthdateForDisplay(currentValues.birthdate) || '',
+  });
   const [activeBrand, setActiveBrand] = useState<BrandType>(
     (currentValues.preferredBrand as BrandType) || 'royal'
   );
   const [isModalVisible, setIsModalVisible] = useState(false);
 
   useEffect(() => {
-    setFormData(currentValues);
+    setFormData({
+      ...currentValues,
+      birthdate: formatBirthdateForDisplay(currentValues.birthdate) || '',
+    });
     setActiveBrand((currentValues.preferredBrand as BrandType) || 'royal');
   }, [currentValues]);
 
@@ -147,6 +154,8 @@ export function UserProfileCard({
   const getMaskedRoyalNumber = (value?: string) => {
     return maskSensitiveMemberNumber(value);
   };
+
+  const displayBirthdate = formatBirthdateForDisplay(currentValues.birthdate) || undefined;
 
   const renderEnrichmentBadge = (hasData: boolean) => (
     <View style={[styles.enrichmentBadge, hasData ? styles.enrichmentBadgeActive : styles.enrichmentBadgeInactive]}>
@@ -238,7 +247,7 @@ export function UserProfileCard({
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.email, undefined, true)}
-        {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
+        {renderValueCard('Birthdate', displayBirthdate, undefined, true)}
         {renderValueCard('Crown & Anchor #', getMaskedRoyalNumber(currentValues.crownAnchorNumber || enrichmentData?.crownAndAnchorId), undefined, true)}
         {renderValueCard('C&A Level', enrichmentData?.crownAndAnchorTier || calculatedLevel, calculatedLevelInfo?.color)}
         {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
@@ -257,7 +266,7 @@ export function UserProfileCard({
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.celebrityEmail, undefined, true)}
-        {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
+        {renderValueCard('Birthdate', displayBirthdate, undefined, true)}
         {renderValueCard("Captain's Club #", getMaskedRoyalNumber(currentValues.celebrityCaptainsClubNumber || enrichmentData?.captainsClubId), undefined, true)}
         {renderValueCard("Captain's Level", enrichmentData?.captainsClubTier || calculatedCelebrityLevel, calculatedCelebrityLevelInfo?.color)}
         {renderValueCard('Club Points', enrichmentData?.captainsClubPoints ?? currentValues.celebrityCaptainsClubPoints, COLORS.loyalty)}
@@ -276,7 +285,7 @@ export function UserProfileCard({
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.silverseaEmail, undefined, true)}
-        {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
+        {renderValueCard('Birthdate', displayBirthdate, undefined, true)}
         {renderValueCard('Venetian Member #', getMaskedRoyalNumber(currentValues.silverseaVenetianNumber || enrichmentData?.venetianSocietyMemberNumber), undefined, true)}
         {renderValueCard('Enrolled', enrichmentData?.venetianSocietyEnrolled ? 'Yes' : 'No', enrichmentData?.venetianSocietyEnrolled ? COLORS.success : undefined)}
         {renderValueCard('Tier', enrichmentData?.venetianSocietyTier || currentValues.silverseaVenetianTier)}
@@ -292,7 +301,7 @@ export function UserProfileCard({
       <View style={styles.valuesGrid}>
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
-        {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
+        {renderValueCard('Birthdate', displayBirthdate, undefined, true)}
         {renderValueCard('VIFP Club #', getMaskedRoyalNumber(currentValues.carnivalVifpNumber || enrichmentData?.carnivalVifpNumber), undefined, true)}
         {renderValueCard('VIFP Tier', enrichmentData?.carnivalVifpTier || currentValues.carnivalVifpTier, '#CC2232')}
         {renderValueCard('Players Club Tier', enrichmentData?.carnivalPlayersClubTier || currentValues.carnivalPlayersClubTier, '#FFB400')}
@@ -340,12 +349,12 @@ export function UserProfileCard({
             />
           </View>
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Birthdate (YYYY-MM-DD)</Text>
+            <Text style={styles.inputLabel}>Birthdate (MM/DD/YYYY)</Text>
             <TextInput
               style={styles.input}
               value={formData.birthdate || ''}
               onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
-              placeholder="e.g. 1975-08-15"
+              placeholder="e.g. 08/15/1975"
               placeholderTextColor="#9CA3AF"
             />
           </View>
@@ -399,12 +408,12 @@ export function UserProfileCard({
             />
           </View>
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Birthdate (YYYY-MM-DD)</Text>
+            <Text style={styles.inputLabel}>Birthdate (MM/DD/YYYY)</Text>
             <TextInput
               style={styles.input}
               value={formData.birthdate || ''}
               onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
-              placeholder="e.g. 1975-08-15"
+              placeholder="e.g. 08/15/1975"
               placeholderTextColor="#9CA3AF"
             />
           </View>
@@ -482,12 +491,12 @@ export function UserProfileCard({
             />
           </View>
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Birthdate (YYYY-MM-DD)</Text>
+            <Text style={styles.inputLabel}>Birthdate (MM/DD/YYYY)</Text>
             <TextInput
               style={styles.input}
               value={formData.birthdate || ''}
               onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
-              placeholder="e.g. 1975-08-15"
+              placeholder="e.g. 08/15/1975"
               placeholderTextColor="#9CA3AF"
             />
           </View>
@@ -549,12 +558,12 @@ export function UserProfileCard({
             />
           </View>
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Birthdate (YYYY-MM-DD)</Text>
+            <Text style={styles.inputLabel}>Birthdate (MM/DD/YYYY)</Text>
             <TextInput
               style={styles.input}
               value={formData.birthdate || ''}
               onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
-              placeholder="e.g. 1975-08-15"
+              placeholder="e.g. 08/15/1975"
               placeholderTextColor="#9CA3AF"
             />
           </View>

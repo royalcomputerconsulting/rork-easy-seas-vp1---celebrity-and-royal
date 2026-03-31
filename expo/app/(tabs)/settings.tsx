@@ -50,7 +50,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { isDateInPast, normalizeBirthdateInput } from '@/lib/date';
+import { formatBirthdateForDisplay, isDateInPast, normalizeBirthdateInput } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import type { PlayingHours } from '@/state/UserProvider';
@@ -241,7 +241,7 @@ export default function SettingsScreen() {
     name: isProfileDisplayReady ? currentUser?.name || '' : '',
     email: isProfileDisplayReady ? currentUser?.email || authenticatedEmail || '' : authenticatedEmail || '',
     crownAnchorNumber: isProfileDisplayReady ? currentUser?.crownAnchorNumber || '' : '',
-    birthdate: isProfileDisplayReady ? currentUser?.birthdate || '' : '',
+    birthdate: isProfileDisplayReady ? formatBirthdateForDisplay(currentUser?.birthdate) || '' : '',
     clubRoyalePoints: isProfileDisplayReady ? loyaltyClubRoyalePoints : 0,
     clubRoyaleTier: isProfileDisplayReady ? loyaltyClubRoyaleTier : 'Choice',
     loyaltyPoints: isProfileDisplayReady ? loyaltyCrownAnchorPoints : 0,

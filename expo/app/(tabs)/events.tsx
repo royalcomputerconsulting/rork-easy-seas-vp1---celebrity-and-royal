@@ -108,7 +108,18 @@ export default function EventsScreen() {
   }, [bookedCruises, localData.booked]);
 
   const normalizedBirthdate = useMemo(() => {
-    return normalizeBirthdateInput(currentUser?.birthdate) ?? '';
+    const storedBirthdate = currentUser?.birthdate;
+    const normalized = normalizeBirthdateInput(storedBirthdate);
+    const fallbackBirthdate = typeof storedBirthdate === 'string' ? storedBirthdate.trim() : '';
+    const resolvedBirthdate = normalized ?? fallbackBirthdate;
+
+    console.log('[Events] Resolved birthdate for calendar luck:', {
+      rawBirthdate: storedBirthdate,
+      normalizedBirthdate: normalized,
+      resolvedBirthdate,
+    });
+
+    return resolvedBirthdate;
   }, [currentUser?.birthdate]);
 
   const getLuckScoreForDate = useCallback((date: Date): number | null => {
@@ -392,6 +403,8 @@ export default function EventsScreen() {
     const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
     const bgColor = getDayBackgroundColor(day);
     const luckBadgeColor = day.luckScore !== null ? getLuckDigitColor(day.luckScore) : null;
+    const hasLuckBadge = day.luckScore !== null && luckBadgeColor !== null;
+    const shouldHighlightAdjacentMonth = !day.isCurrentMonth && (hasEvents || hasLuckBadge);
     
     return (
       <TouchableOpacity
@@ -401,12 +414,12 @@ export default function EventsScreen() {
           { backgroundColor: bgColor },
           day.events.cruise > 0 && styles.cruiseDayCell,
           day.isToday && styles.todayCell,
-          !day.isCurrentMonth && styles.otherMonthCell,
+          !day.isCurrentMonth && (shouldHighlightAdjacentMonth ? styles.otherMonthCellActive : styles.otherMonthCell),
         ]}
         activeOpacity={0.7}
         onPress={() => handleDayPress(day)}
       >
-        {day.luckScore !== null && day.isCurrentMonth && luckBadgeColor ? (
+        {hasLuckBadge && luckBadgeColor ? (
           <View
             style={[styles.luckBadge, { backgroundColor: `${luckBadgeColor}1F`, borderColor: `${luckBadgeColor}66` }]}
             testID={`calendar-luck-badge-${day.date.toISOString().split('T')[0]}`}
@@ -418,8 +431,8 @@ export default function EventsScreen() {
         <Text style={[
           styles.dayNumber,
           day.isToday && styles.todayNumber,
-          !day.isCurrentMonth && styles.otherMonthNumber,
-          hasEvents && day.isCurrentMonth && styles.dayNumberWithEvents,
+          !day.isCurrentMonth && (shouldHighlightAdjacentMonth ? styles.otherMonthNumberActive : styles.otherMonthNumber),
+          (hasEvents || hasLuckBadge) && styles.dayNumberWithEvents,
         ]}>
           {day.dayNumber}
         </Text>
@@ -949,6 +962,9 @@ const styles = StyleSheet.create({
   otherMonthCell: {
     opacity: 0.35,
   },
+  otherMonthCellActive: {
+    opacity: 0.82,
+  },
   dayNumber: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
@@ -961,6 +977,10 @@ const styles = StyleSheet.create({
   otherMonthNumber: {
     color: COLORS.navyDeep,
     opacity: 0.4,
+  },
+  otherMonthNumberActive: {
+    color: COLORS.navyDeep,
+    opacity: 0.85,
   },
   dayNumberWithEvents: {
     fontWeight: TYPOGRAPHY.fontWeightBold,

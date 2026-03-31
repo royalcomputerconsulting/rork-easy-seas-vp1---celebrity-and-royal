@@ -141,7 +141,18 @@ export default function DayAgendaScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const normalizedBirthdate = useMemo(() => {
-    return normalizeBirthdateInput(currentUser?.birthdate) ?? '';
+    const storedBirthdate = currentUser?.birthdate;
+    const normalized = normalizeBirthdateInput(storedBirthdate);
+    const fallbackBirthdate = typeof storedBirthdate === 'string' ? storedBirthdate.trim() : '';
+    const resolvedBirthdate = normalized ?? fallbackBirthdate;
+
+    console.log('[DayAgenda] Resolved birthdate for daily luck:', {
+      rawBirthdate: storedBirthdate,
+      normalizedBirthdate: normalized,
+      resolvedBirthdate,
+    });
+
+    return resolvedBirthdate;
   }, [currentUser?.birthdate]);
 
   const selectedDate = useMemo(() => {

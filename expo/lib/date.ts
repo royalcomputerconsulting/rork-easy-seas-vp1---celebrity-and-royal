@@ -213,6 +213,18 @@ export function formatBirthdateForStorage(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+export function formatBirthdateForDisplay(input: string | Date | null | undefined): string {
+  const parsedDate = parseBirthdate(input);
+  if (!parsedDate) {
+    return typeof input === 'string' ? input.trim() : '';
+  }
+
+  const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+  const day = String(parsedDate.getDate()).padStart(2, '0');
+  const year = String(parsedDate.getFullYear());
+  return `${month}/${day}/${year}`;
+}
+
 export function parseBirthdate(input: string | Date | null | undefined): Date | null {
   if (!input) {
     return null;
@@ -234,8 +246,9 @@ export function parseBirthdate(input: string | Date | null | undefined): Date | 
   const normalizedDateOnly = trimmedInput.includes('T')
     ? trimmedInput.split('T')[0]
     : trimmedInput;
+  const compactInput = normalizedDateOnly.replace(/\s+/g, '');
 
-  const yearFirstMatch = normalizedDateOnly.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  const yearFirstMatch = compactInput.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
   if (yearFirstMatch) {
     const year = Number(yearFirstMatch[1]);
     const month = Number(yearFirstMatch[2]);
@@ -243,11 +256,61 @@ export function parseBirthdate(input: string | Date | null | undefined): Date | 
     return buildBirthdate(year, month, day);
   }
 
-  const monthFirstMatch = normalizedDateOnly.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  const monthFirstMatch = compactInput.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})$/);
   if (monthFirstMatch) {
     const month = Number(monthFirstMatch[1]);
     const day = Number(monthFirstMatch[2]);
-    const year = Number(monthFirstMatch[3]);
+    const yearSuffix = Number(monthFirstMatch[3]);
+    const currentYearSuffix = new Date().getFullYear() % 100;
+    const year = monthFirstMatch[3].length === 2
+      ? (yearSuffix > currentYearSuffix ? 1900 + yearSuffix : 2000 + yearSuffix)
+      : yearSuffix;
+    return buildBirthdate(year, month, day);
+  }
+
+  const numericParts = normalizedDateOnly.match(/\d+/g);
+  if (numericParts && numericParts.length >= 3) {
+    const [partOne, partTwo, partThree] = numericParts;
+
+    if (partOne && partTwo && partThree) {
+      if (partOne.length === 4) {
+        return buildBirthdate(Number(partOne), Number(partTwo), Number(partThree));
+      }
+
+      const yearSuffix = Number(partThree);
+      const currentYearSuffix = new Date().getFullYear() % 100;
+      const year = partThree.length === 2
+        ? (yearSuffix > currentYearSuffix ? 1900 + yearSuffix : 2000 + yearSuffix)
+        : yearSuffix;
+
+      return buildBirthdate(Number(partOne), Number(partTwo), year);
+    }
+  }
+
+  const compactDigits = compactInput.replace(/\D/g, '');
+  if (/^\d{8}$/.test(compactDigits)) {
+    const leadingYear = Number(compactDigits.slice(0, 4));
+    if (leadingYear >= 1900 && leadingYear <= 2100) {
+      return buildBirthdate(
+        leadingYear,
+        Number(compactDigits.slice(4, 6)),
+        Number(compactDigits.slice(6, 8)),
+      );
+    }
+
+    return buildBirthdate(
+      Number(compactDigits.slice(4, 8)),
+      Number(compactDigits.slice(0, 2)),
+      Number(compactDigits.slice(2, 4)),
+    );
+  }
+
+  if (/^\d{6}$/.test(compactDigits)) {
+    const month = Number(compactDigits.slice(0, 2));
+    const day = Number(compactDigits.slice(2, 4));
+    const yearSuffix = Number(compactDigits.slice(4, 6));
+    const currentYearSuffix = new Date().getFullYear() % 100;
+    const year = yearSuffix > currentYearSuffix ? 1900 + yearSuffix : 2000 + yearSuffix;
     return buildBirthdate(year, month, day);
   }
 
@@ -269,8 +332,22 @@ export function normalizeBirthdateInput(input: string | null | undefined): strin
     return undefined;
   }
 
+  const placeholderLikeInput =
+    /^m{1,2}[/.-]d{1,2}[/.-]y{2,4}$/i.test(trimmedInput) ||
+    /^y{4}[/.-]m{1,2}[/.-]d{1,2}$/i.test(trimmedInput);
+
+  if (placeholderLikeInput) {
+    console.warn('[date] Birthdate placeholder provided instead of a real date:', trimmedInput);
+    return undefined;
+  }
+
   const parsedDate = parseBirthdate(trimmedInput);
-  return parsedDate ? formatBirthdateForStorage(parsedDate) : trimmedInput;
+  if (!parsedDate) {
+    console.warn('[date] Could not normalize birthdate input:', trimmedInput);
+    return trimmedInput;
+  }
+
+  return formatBirthdateForStorage(parsedDate);
 }
 
 function getTarotLuck(birthdate: Date, selectedDate: Date): number {
