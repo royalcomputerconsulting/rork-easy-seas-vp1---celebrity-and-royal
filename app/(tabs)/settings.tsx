@@ -241,6 +241,7 @@ export default function SettingsScreen() {
     name: isProfileDisplayReady ? currentUser?.name || '' : '',
     email: isProfileDisplayReady ? currentUser?.email || authenticatedEmail || '' : authenticatedEmail || '',
     crownAnchorNumber: isProfileDisplayReady ? currentUser?.crownAnchorNumber || '' : '',
+    birthdate: isProfileDisplayReady ? currentUser?.birthdate || '' : '',
     clubRoyalePoints: isProfileDisplayReady ? loyaltyClubRoyalePoints : 0,
     clubRoyaleTier: isProfileDisplayReady ? loyaltyClubRoyaleTier : 'Choice',
     loyaltyPoints: isProfileDisplayReady ? loyaltyCrownAnchorPoints : 0,
@@ -1113,6 +1114,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     name: string;
     email: string;
     crownAnchorNumber: string;
+    birthdate?: string;
     clubRoyalePoints: number;
     clubRoyaleTier: string;
     loyaltyPoints: number;
@@ -1214,6 +1216,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       name: string;
       email: string;
       crownAnchorNumber: string;
+      birthdate?: string;
       clubRoyalePoints: number;
       clubRoyaleTier: string;
       loyaltyPoints: number;
@@ -1244,6 +1247,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           name: profileData.name,
           email: profileData.email,
           crownAnchorNumber: profileData.crownAnchorNumber,
+          birthdate: profileData.birthdate,
           celebrityEmail: profileData.celebrityEmail,
           celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
@@ -2148,13 +2152,13 @@ STEP 4: Optional Calendar Import
                 <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
                 () => { void entitlement.openManageSubscription(); }
               )}
-              {renderSettingRow(
+              {isAdmin && renderSettingRow(
                 <Calendar size={18} color={COLORS.navyDeep} />,
                 'Purchase a Monthly Subscription',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
                 () => router.push('/paywall-monthly' as any)
               )}
-              {renderSettingRow(
+              {isAdmin && renderSettingRow(
                 <Crown size={18} color={COLORS.navyDeep} />,
                 'Purchase an Annual Subscription',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,

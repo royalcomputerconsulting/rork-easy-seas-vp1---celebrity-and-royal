@@ -14,6 +14,7 @@ interface UserProfileData {
   name: string;
   email: string;
   crownAnchorNumber: string;
+  birthdate?: string;
   clubRoyalePoints: number;
   clubRoyaleTier: string;
   loyaltyPoints: number;
@@ -326,6 +327,16 @@ export function UserProfileCard({
               placeholder="Enter Crown & Anchor number"
               placeholderTextColor="#9CA3AF"
               keyboardType="numeric"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Birthdate (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.birthdate || ''}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
+              placeholder="e.g. 1975-08-15"
+              placeholderTextColor="#9CA3AF"
             />
           </View>
           <View style={styles.inputGroup}>

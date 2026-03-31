@@ -818,10 +818,10 @@ export default function AnalyticsScreen() {
             </View>
           </View>
           
-          {cruise.cabinType && (
+          {!!cruise.cabinType && (
             <View style={styles.portfolioCardFooter}>
               <Text style={styles.portfolioCardCabin}>{cruise.cabinType}</Text>
-              {cruise.offerCode && (
+              {!!cruise.offerCode && (
                 <View style={styles.portfolioOfferBadge}>
                   <Zap size={10} color={COLORS.goldDark} />
                   <Text style={styles.portfolioOfferCode}>{cruise.offerCode}</Text>
@@ -850,7 +850,6 @@ export default function AnalyticsScreen() {
         <CompactDashboardHeader
           hideLogo={true}
           memberName={clubRoyaleProfile?.memberName || 'Player'}
-          crownAnchorNumber={(clubRoyaleProfile as any)?.crownAnchorNumber}
           crewMemberCount={crewStats?.crewMemberCount || 0}
         />
       </View>
@@ -1335,7 +1334,7 @@ export default function AnalyticsScreen() {
                           {session.winLoss >= 0 ? '+' : ''}{formatCurrency(session.winLoss)}
                         </Text>
                       )}
-                      {session.notes && (
+                      {!!session.notes && (
                         <Text style={styles.recentSessionNotes} numberOfLines={2}>{session.notes}</Text>
                       )}
                     </View>
