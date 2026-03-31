@@ -2,49 +2,81 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Dimensions, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
+
 import { useAuth } from '@/state/AuthProvider';
+
 const { width, height } = Dimensions.get('window');
+
 const ADMIN_EMAIL = 'scott.merlis1@gmail.com';
+
 export function LoginScreen() {
-    const [email, setEmail] = useState<string>('');
-    const [password, setPassword] = useState<string>('');
-    const [error, setError] = useState<string>('');
-    const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
-    const [logoError] = useState<boolean>(false);
-    const { login } = useAuth();
-    const isAdminEmail = email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase();
-    const handleLogin = async () => {
-        setError('');
-        if (!email.trim()) {
-            setError('Please enter your email address.');
-            return;
-        }
-        if (!email.includes('@')) {
-            setError('Please enter a valid email address.');
-            return;
-        }
-        if (isAdminEmail && !password) {
-            setError('Please enter the admin password.');
-            return;
-        }
-        const success = await login(email, password || undefined);
-        if (!success) {
-            if (isAdminEmail) {
-                setError('Incorrect admin password.');
-            }
-            else {
-                setError('Unable to log in. Please check your email.');
-            }
-        }
-    };
-    return (<LinearGradient colors={['#001F54', '#003D82', '#0077B6']} style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [error, setError] = useState<string>('');
+  const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
+  const [logoError] = useState<boolean>(false);
+  const { login } = useAuth();
+
+  
+  
+  const isAdminEmail = email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase();
+
+  const handleLogin = async () => {
+    setError('');
+    
+    if (!email.trim()) {
+      setError('Please enter your email address.');
+      return;
+    }
+    
+    if (!email.includes('@')) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    
+    if (isAdminEmail && !password) {
+      setError('Please enter the admin password.');
+      return;
+    }
+    
+    const success = await login(email, password || undefined);
+    if (!success) {
+      if (isAdminEmail) {
+        setError('Incorrect admin password.');
+      } else {
+        setError('Unable to log in. Please check your email.');
+      }
+    }
+  };
+
+
+
+  return (
+    <LinearGradient
+      colors={['#001F54', '#003D82', '#0077B6']}
+      style={styles.container}
+    >
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.content}>
           <View style={styles.logoContainer}>
-            {!logoError ? (<Image source={require('@/assets/images/splash-icon.png')} style={styles.logoImage} resizeMode="contain"/>) : (<View style={styles.logoFallback}>
+            {!logoError ? (
+              <Image 
+                source={require('@/assets/images/splash-icon.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={styles.logoFallback}>
                 <Text style={styles.logoFallbackText}>Easy Seas</Text>
-              </View>)}
+              </View>
+            )}
           </View>
 
           <Text style={styles.brandTitle}>EASY SEAS™</Text>
@@ -62,21 +94,59 @@ export function LoginScreen() {
             
             <Text style={styles.loginLabel}>Please Enter your Email Address</Text>
             
-            <TextInput style={[styles.input, error ? styles.inputError : null]} value={email} onChangeText={(text) => {
-            setEmail(text);
-            setError('');
-        }} placeholder="Enter your email" placeholderTextColor={COLORS.textSecondary} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" onSubmitEditing={isAdminEmail ? undefined : handleLogin}/>
+            <TextInput
+              style={[styles.input, error ? styles.inputError : null]}
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                setError('');
+              }}
+              placeholder="Enter your email"
+              placeholderTextColor={COLORS.textSecondary}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              onSubmitEditing={isAdminEmail ? undefined : handleLogin}
+            />
 
-            
+            {isAdminEmail && (
+              <>
+                <Text style={styles.passwordLabel}>Admin Password</Text>
+                <TextInput
+                  style={[styles.input, error ? styles.inputError : null]}
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setError('');
+                  }}
+                  placeholder="Enter admin password"
+                  placeholderTextColor={COLORS.textSecondary}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onSubmitEditing={handleLogin}
+                />
+              </>
+            )}
 
-            {error ? (<Text style={styles.errorText}>{error}</Text>) : null}
+            {error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : null}
 
-            <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+            <TouchableOpacity 
+              style={styles.loginButton}
+              onPress={handleLogin}
+            >
               <Text style={styles.loginButtonText}>Login</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.aboutButton} onPress={() => setShowAboutModal(true)} testID="what-is-easy-seas-button">
+          <TouchableOpacity 
+            style={styles.aboutButton}
+            onPress={() => setShowAboutModal(true)}
+            testID="what-is-easy-seas-button"
+          >
             <Text style={styles.aboutButtonText}>What is Easy Seas?</Text>
           </TouchableOpacity>
 
@@ -90,16 +160,27 @@ export function LoginScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Modal visible={showAboutModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAboutModal(false)}>
+      <Modal
+        visible={showAboutModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowAboutModal(false)}
+      >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>What is Easy Seas?</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={() => setShowAboutModal(false)}>
+            <TouchableOpacity 
+              style={styles.closeButton}
+              onPress={() => setShowAboutModal(false)}
+            >
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
           </View>
           
-          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
+          <ScrollView 
+            style={styles.modalScroll}
+            contentContainerStyle={styles.modalContent}
+          >
             <Text style={styles.modalText}>
               <Text style={styles.modalHeading}>EasySeas™ Casino Cruise Intelligence Platform{"\n\n"}</Text>
               <Text style={styles.modalSubheading}>Your AI Casino Host & Cruise Planner — Working 24/7 for You{"\n\n"}</Text>
@@ -355,284 +436,315 @@ export function LoginScreen() {
             <View style={styles.screenshotsContainer}>
               <Text style={[styles.modalHeading, { marginBottom: SPACING.lg }]}>📱 APP SCREENSHOTS{"\n\n"}</Text>
               
-              <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/tlxq0q9o0gdcfngkokvlh' }} style={styles.screenshot} resizeMode="contain"/>
+              <Image 
+                source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/tlxq0q9o0gdcfngkokvlh' }}
+                style={styles.screenshot}
+                resizeMode="contain"
+              />
               
-              <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/w2zey3d6a8xckymbkgmf7' }} style={styles.screenshot} resizeMode="contain"/>
+              <Image 
+                source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/w2zey3d6a8xckymbkgmf7' }}
+                style={styles.screenshot}
+                resizeMode="contain"
+              />
               
-              <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/1z169xe4tqavkcqiktxni' }} style={styles.screenshot} resizeMode="contain"/>
+              <Image 
+                source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/1z169xe4tqavkcqiktxni' }}
+                style={styles.screenshot}
+                resizeMode="contain"
+              />
               
-              <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/0k28e2rkxtsc5ibb50cm2' }} style={styles.screenshot} resizeMode="contain"/>
+              <Image 
+                source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/0k28e2rkxtsc5ibb50cm2' }}
+                style={styles.screenshot}
+                resizeMode="contain"
+              />
               
-              <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/9un3tdosjhtruizi1kmzd' }} style={styles.screenshot} resizeMode="contain"/>
+              <Image 
+                source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/9un3tdosjhtruizi1kmzd' }}
+                style={styles.screenshot}
+                resizeMode="contain"
+              />
               
-              <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/atzqjf1eolsjstwtaxme2' }} style={styles.screenshot} resizeMode="contain"/>
+              <Image 
+                source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/atzqjf1eolsjstwtaxme2' }}
+                style={styles.screenshot}
+                resizeMode="contain"
+              />
               
-              <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/duyyqjq015nwztoutuvad' }} style={styles.screenshot} resizeMode="contain"/>
+              <Image 
+                source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/duyyqjq015nwztoutuvad' }}
+                style={styles.screenshot}
+                resizeMode="contain"
+              />
             </View>
           </ScrollView>
         </View>
       </Modal>
-    </LinearGradient>);
+    </LinearGradient>
+  );
 }
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    scrollContent: {
-        flexGrow: 1,
-    },
-    content: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: SPACING.xl,
-        paddingVertical: SPACING.xxl,
-    },
-    logoContainer: {
-        width: width * 0.7,
-        height: height * 0.35,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: SPACING.md,
-    },
-    logoImage: {
-        width: '100%',
-        height: '100%',
-    },
-    logoFallback: {
-        width: '100%',
-        height: '100%',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    logoFallbackText: {
-        fontSize: 48,
-        fontWeight: '800' as const,
-        color: COLORS.white,
-        textAlign: 'center',
-    },
-    card: {
-        backgroundColor: COLORS.white,
-        borderRadius: 20,
-        padding: SPACING.xl,
-        paddingVertical: SPACING.lg,
-        width: '100%',
-        maxWidth: 500,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 8,
-    },
-    title: {
-        fontSize: TYPOGRAPHY.fontSizeXXL * 1.3,
-        fontWeight: TYPOGRAPHY.fontWeightBold as any,
-        color: COLORS.textPrimary,
-        textAlign: 'center',
-        marginBottom: SPACING.xs,
-    },
-    description: {
-        fontSize: TYPOGRAPHY.fontSizeMD,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-        marginBottom: SPACING.md,
-        lineHeight: 22,
-    },
-    pricing: {
-        fontSize: TYPOGRAPHY.fontSizeLG,
-        fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
-        color: '#0077B6',
-        textAlign: 'center',
-        marginBottom: SPACING.lg,
-    },
-    purchaseButton: {
-        backgroundColor: '#001F54',
-        borderRadius: 12,
-        paddingVertical: SPACING.md,
-        paddingHorizontal: SPACING.lg,
-        alignItems: 'center',
-        marginBottom: SPACING.lg,
-    },
-    purchaseButtonText: {
-        color: COLORS.white,
-        fontSize: TYPOGRAPHY.fontSizeMD,
-        fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
-    },
-    loginLabel: {
-        fontSize: TYPOGRAPHY.fontSizeSM,
-        fontWeight: TYPOGRAPHY.fontWeightBold as any,
-        color: COLORS.textPrimary,
-        marginBottom: SPACING.sm,
-        letterSpacing: 0.5,
-    },
-    passwordLabel: {
-        fontSize: TYPOGRAPHY.fontSizeSM,
-        fontWeight: TYPOGRAPHY.fontWeightBold as any,
-        color: COLORS.textPrimary,
-        marginBottom: SPACING.sm,
-        marginTop: SPACING.md,
-        letterSpacing: 0.5,
-    },
-    input: {
-        backgroundColor: '#F5F5F5',
-        borderRadius: 8,
-        paddingVertical: SPACING.md,
-        paddingHorizontal: SPACING.md,
-        fontSize: TYPOGRAPHY.fontSizeMD,
-        color: COLORS.textPrimary,
-        borderWidth: 1,
-        borderColor: COLORS.borderLight,
-        marginBottom: SPACING.sm,
-    },
-    inputError: {
-        borderColor: COLORS.error,
-        borderWidth: 2,
-    },
-    errorText: {
-        color: COLORS.error,
-        fontSize: TYPOGRAPHY.fontSizeSM,
-        marginBottom: SPACING.md,
-        textAlign: 'center',
-    },
-    loginButton: {
-        backgroundColor: '#001F54',
-        borderRadius: 12,
-        paddingVertical: SPACING.md,
-        paddingHorizontal: SPACING.lg,
-        alignItems: 'center',
-        marginTop: SPACING.sm,
-    },
-    loginButtonText: {
-        color: COLORS.white,
-        fontSize: TYPOGRAPHY.fontSizeMD,
-        fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
-    },
-    aboutButton: {
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        borderRadius: 12,
-        paddingVertical: SPACING.sm,
-        paddingHorizontal: SPACING.lg,
-        marginTop: SPACING.lg,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-    },
-    aboutButtonText: {
-        color: COLORS.white,
-        fontSize: TYPOGRAPHY.fontSizeMD,
-        fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
-        textAlign: 'center',
-    },
-    tagline: {
-        fontSize: TYPOGRAPHY.fontSizeXL,
-        fontWeight: TYPOGRAPHY.fontWeightBold as any,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-        marginBottom: SPACING.lg,
-    },
-    brandTitle: {
-        fontSize: 36,
-        fontWeight: TYPOGRAPHY.fontWeightBold as any,
-        color: COLORS.white,
-        textAlign: 'center',
-        marginBottom: SPACING.xs,
-        letterSpacing: 2,
-        textShadowColor: 'rgba(0, 0, 0, 0.3)',
-        textShadowOffset: { width: 0, height: 2 },
-        textShadowRadius: 4,
-    },
-    brandTagline: {
-        fontSize: 18,
-        fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
-        color: COLORS.white,
-        textAlign: 'center',
-        marginBottom: SPACING.lg,
-        opacity: 0.95,
-    },
-    disclaimerSection: {
-        paddingHorizontal: SPACING.lg,
-        marginBottom: SPACING.lg,
-    },
-    disclaimerText: {
-        fontSize: 11,
-        color: COLORS.white,
-        textAlign: 'center',
-        lineHeight: 16,
-        opacity: 0.85,
-        marginBottom: SPACING.md,
-    },
-    trademarkText: {
-        fontSize: 10,
-        color: COLORS.white,
-        textAlign: 'center',
-        lineHeight: 14,
-        opacity: 0.8,
-    },
-    bottomDisclaimerSection: {
-        paddingHorizontal: SPACING.lg,
-        marginTop: SPACING.md,
-    },
-    modalContainer: {
-        flex: 1,
-        backgroundColor: COLORS.white,
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: SPACING.lg,
-        paddingVertical: SPACING.md,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.borderLight,
-        backgroundColor: '#0077B6',
-    },
-    modalTitle: {
-        fontSize: TYPOGRAPHY.fontSizeXL,
-        fontWeight: TYPOGRAPHY.fontWeightBold as any,
-        color: COLORS.white,
-    },
-    closeButton: {
-        padding: SPACING.sm,
-    },
-    closeButtonText: {
-        fontSize: 28,
-        color: COLORS.white,
-        fontWeight: TYPOGRAPHY.fontWeightBold as any,
-    },
-    modalScroll: {
-        flex: 1,
-    },
-    modalContent: {
-        padding: SPACING.lg,
-        paddingBottom: SPACING.xxl,
-    },
-    modalText: {
-        fontSize: TYPOGRAPHY.fontSizeMD,
-        color: COLORS.textPrimary,
-        lineHeight: 24,
-    },
-    modalHeading: {
-        fontSize: TYPOGRAPHY.fontSizeXL,
-        fontWeight: TYPOGRAPHY.fontWeightBold as any,
-        color: '#0077B6',
-    },
-    modalSubheading: {
-        fontSize: TYPOGRAPHY.fontSizeLG,
-        fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
-        color: COLORS.textPrimary,
-    },
-    modalBold: {
-        fontWeight: TYPOGRAPHY.fontWeightBold as any,
-        color: COLORS.textPrimary,
-    },
-    screenshotsContainer: {
-        marginTop: SPACING.xxl,
-        gap: SPACING.lg,
-    },
-    screenshot: {
-        width: '100%',
-        aspectRatio: 0.5,
-        borderRadius: 12,
-        backgroundColor: '#F5F5F5',
-        marginBottom: SPACING.md,
-    },
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.xxl,
+  },
+  logoContainer: {
+    width: width * 0.7,
+    height: height * 0.35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  logoFallback: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoFallbackText: {
+    fontSize: 48,
+    fontWeight: '800' as const,
+    color: COLORS.white,
+    textAlign: 'center',
+  },
+  card: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: SPACING.xl,
+    paddingVertical: SPACING.lg,
+    width: '100%',
+    maxWidth: 500,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  title: {
+    fontSize: TYPOGRAPHY.fontSizeXXL * 1.3,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    marginBottom: SPACING.xs,
+  },
+  description: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: SPACING.md,
+    lineHeight: 22,
+  },
+  pricing: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
+    color: '#0077B6',
+    textAlign: 'center',
+    marginBottom: SPACING.lg,
+  },
+  purchaseButton: {
+    backgroundColor: '#001F54',
+    borderRadius: 12,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  purchaseButtonText: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
+  },
+
+  loginLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
+    letterSpacing: 0.5,
+  },
+  passwordLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.md,
+    letterSpacing: 0.5,
+  },
+  input: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: COLORS.textPrimary,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    marginBottom: SPACING.sm,
+  },
+  inputError: {
+    borderColor: COLORS.error,
+    borderWidth: 2,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    marginBottom: SPACING.md,
+    textAlign: 'center',
+  },
+  loginButton: {
+    backgroundColor: '#001F54',
+    borderRadius: 12,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    alignItems: 'center',
+    marginTop: SPACING.sm,
+  },
+  loginButtonText: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
+  },
+  aboutButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    marginTop: SPACING.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  aboutButtonText: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
+    textAlign: 'center',
+  },
+  tagline: {
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: SPACING.lg,
+  },
+  brandTitle: {
+    fontSize: 36,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: COLORS.white,
+    textAlign: 'center',
+    marginBottom: SPACING.xs,
+    letterSpacing: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  brandTagline: {
+    fontSize: 18,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
+    color: COLORS.white,
+    textAlign: 'center',
+    marginBottom: SPACING.lg,
+    opacity: 0.95,
+  },
+  disclaimerSection: {
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+  },
+  disclaimerText: {
+    fontSize: 11,
+    color: COLORS.white,
+    textAlign: 'center',
+    lineHeight: 16,
+    opacity: 0.85,
+    marginBottom: SPACING.md,
+  },
+  trademarkText: {
+    fontSize: 10,
+    color: COLORS.white,
+    textAlign: 'center',
+    lineHeight: 14,
+    opacity: 0.8,
+  },
+  bottomDisclaimerSection: {
+    paddingHorizontal: SPACING.lg,
+    marginTop: SPACING.md,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+    backgroundColor: '#0077B6',
+  },
+  modalTitle: {
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: COLORS.white,
+  },
+  closeButton: {
+    padding: SPACING.sm,
+  },
+  closeButtonText: {
+    fontSize: 28,
+    color: COLORS.white,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalContent: {
+    padding: SPACING.lg,
+    paddingBottom: SPACING.xxl,
+  },
+  modalText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: COLORS.textPrimary,
+    lineHeight: 24,
+  },
+  modalHeading: {
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: '#0077B6',
+  },
+  modalSubheading: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
+    color: COLORS.textPrimary,
+  },
+  modalBold: {
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    color: COLORS.textPrimary,
+  },
+  screenshotsContainer: {
+    marginTop: SPACING.xxl,
+    gap: SPACING.lg,
+  },
+  screenshot: {
+    width: '100%',
+    aspectRatio: 0.5,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    marginBottom: SPACING.md,
+  },
 });

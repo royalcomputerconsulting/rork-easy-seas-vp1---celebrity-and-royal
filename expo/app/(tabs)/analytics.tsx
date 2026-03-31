@@ -69,7 +69,7 @@ import { AddSessionModal } from '@/components/AddSessionModal';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { CasinoIntelligenceCard } from '@/components/CasinoIntelligenceCard';
 import { GamificationCard } from '@/components/GamificationCard';
-import { useGamification, type WeeklyGoal } from '@/state/GamificationProvider';
+import { useGamification } from '@/state/GamificationProvider';
 import { PointsPerHourCard } from '@/components/PointsPerHourCard';
 import { CelebrationOverlay } from '@/components/ui/CelebrationOverlay';
 import { LivePPHTracker } from '@/components/LivePPHTracker';
@@ -85,7 +85,7 @@ import { usePPHAlerts } from '@/state/PPHAlertsProvider';
 import { W2GTracker } from '@/components/W2GTracker';
 import { CompValueCalculator } from '@/components/CompValueCalculator';
 import { useTax } from '@/state/TaxProvider';
-import type { MachineType, Denomination, CasinoSession } from '@/state/CasinoSessionProvider';
+import type { MachineType, Denomination } from '@/state/CasinoSessionProvider';
 import { SessionsSummaryCard } from '@/components/SessionsSummaryCard';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { useEntitlement } from '@/state/EntitlementProvider';
@@ -96,8 +96,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type AnalyticsTab = 'intelligence' | 'charts' | 'session' | 'calcs';
 type ROIFilter = 'all' | 'high' | 'medium' | 'low';
-type CruiseWithROI = BookedCruise & { calculatedROI: number; valuePerDollar: number; roiLevel: 'high' | 'medium' | 'low' };
-type GoldenTimeSlot = { id: string; startTime: string; endTime: string; durationMinutes: number; label: string };
 
 function calculateCruiseROI(cruise: BookedCruise): { roi: number; valuePerDollar: number } {
   const breakdown = calculateCruiseValue(cruise);
@@ -182,7 +180,7 @@ export default function AnalyticsScreen() {
     return getSessionAnalytics();
   }, [getSessionAnalytics]);
 
-  const bookedCruises = useMemo((): BookedCruise[] => {
+  const bookedCruises = useMemo(() => {
     const localBooked = localData.booked || [];
     if (localBooked.length > 0) return localBooked;
     if (storedBookedCruises && storedBookedCruises.length > 0) return storedBookedCruises;
@@ -197,11 +195,11 @@ export default function AnalyticsScreen() {
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
   const crownAnchorLevel = loyaltyCrownAnchorLevel || clubRoyaleProfile?.crownAnchorLevel || 'Gold';
 
-  const cruisesWithROI = useMemo((): CruiseWithROI[] => {
-    if (activeTab !== 'intelligence') return [] as CruiseWithROI[];
+  const cruisesWithROI = useMemo(() => {
+    if (activeTab !== 'intelligence') return [] as (BookedCruise & { calculatedROI: number; valuePerDollar: number; roiLevel: 'high' | 'medium' | 'low' })[];
     const today = new Date();
     return bookedCruises
-      .filter((cruise: BookedCruise) => {
+      .filter(cruise => {
         // Only include completed cruises in portfolio
         const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
         const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
@@ -211,7 +209,7 @@ export default function AnalyticsScreen() {
         const breakdown = calculateCruiseValue(cruise);
         return points > 0 || breakdown.taxesFees > 0 || breakdown.totalRetailValue > 0;
       })
-      .map((cruise: BookedCruise) => {
+      .map(cruise => {
         const { roi, valuePerDollar } = calculateCruiseROI(cruise);
         return {
           ...cruise,
@@ -220,20 +218,20 @@ export default function AnalyticsScreen() {
           roiLevel: getCruiseROILevel(roi)
         };
       })
-      .sort((a: CruiseWithROI, b: CruiseWithROI) => {
+      .sort((a, b) => {
         return b.valuePerDollar - a.valuePerDollar;
       });
   }, [activeTab, bookedCruises]);
 
-  const filteredCruises = useMemo((): CruiseWithROI[] => {
+  const filteredCruises = useMemo(() => {
     if (roiFilter === 'all') return cruisesWithROI;
-    return cruisesWithROI.filter((c: CruiseWithROI) => c.roiLevel === roiFilter);
+    return cruisesWithROI.filter(c => c.roiLevel === roiFilter);
   }, [cruisesWithROI, roiFilter]);
 
   const portfolioMetrics = useMemo(() => {
-    const highROI = cruisesWithROI.filter((c: CruiseWithROI) => c.roiLevel === 'high').length;
-    const mediumROI = cruisesWithROI.filter((c: CruiseWithROI) => c.roiLevel === 'medium').length;
-    const lowROI = cruisesWithROI.filter((c: CruiseWithROI) => c.roiLevel === 'low').length;
+    const highROI = cruisesWithROI.filter(c => c.roiLevel === 'high').length;
+    const mediumROI = cruisesWithROI.filter(c => c.roiLevel === 'medium').length;
+    const lowROI = cruisesWithROI.filter(c => c.roiLevel === 'low').length;
 
     return {
       highROI,
@@ -256,12 +254,12 @@ export default function AnalyticsScreen() {
       };
     }
     const avgPointsPerNight = bookedCruises.length > 0
-      ? bookedCruises.reduce((sum: number, c: BookedCruise) => sum + (c.earnedPoints || c.casinoPoints || 0), 0) / 
-        Math.max(1, bookedCruises.reduce((sum: number, c: BookedCruise) => sum + (c.nights || 0), 0))
+      ? bookedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0) / 
+        Math.max(1, bookedCruises.reduce((sum, c) => sum + (c.nights || 0), 0))
       : 150;
     
     const avgSpend = bookedCruises.length > 0
-      ? bookedCruises.reduce((sum: number, c: BookedCruise) => sum + (c.totalPrice || c.price || 0), 0) / bookedCruises.length
+      ? bookedCruises.reduce((sum, c) => sum + (c.totalPrice || c.price || 0), 0) / bookedCruises.length
       : 2000;
 
     return {
@@ -284,7 +282,7 @@ export default function AnalyticsScreen() {
     return today.toISOString().split('T')[0];
   }, []);
 
-  const goldenTimeSlots = useMemo((): GoldenTimeSlot[] => {
+  const goldenTimeSlots = useMemo(() => {
     return [
       {
         id: 'morning',
@@ -311,7 +309,7 @@ export default function AnalyticsScreen() {
   }, []);
 
   const totalGoldenMinutes = useMemo(() => {
-    return goldenTimeSlots.reduce((total: number, slot: GoldenTimeSlot) => total + slot.durationMinutes, 0);
+    return goldenTimeSlots.reduce((total, slot) => total + slot.durationMinutes, 0);
   }, [goldenTimeSlots]);
 
   const todaySessions = useMemo(() => {
@@ -357,8 +355,8 @@ export default function AnalyticsScreen() {
     }
     
     const newTotalSessions = sessions.length + 1;
-    const totalPoints = sessions.reduce((sum: number, s: CasinoSession) => sum + (s.pointsEarned || 0), 0) + (sessionData.pointsEarned || 0);
-    const jackpotCount = sessions.filter((s: CasinoSession) => s.jackpotHit).length;
+    const totalPoints = sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0) + (sessionData.pointsEarned || 0);
+    const jackpotCount = sessions.filter(s => s.jackpotHit).length;
     
     const unlockedAchievements = await checkAndUnlockAchievements({
       totalSessions: newTotalSessions,
@@ -371,7 +369,7 @@ export default function AnalyticsScreen() {
     });
     
     if (unlockedAchievements.length > 0) {
-      void haptics.success();
+      haptics.success();
       setCelebrationData({
         title: 'Achievement Unlocked!',
         subtitle: `You earned: ${unlockedAchievements[0].replace(/_/g, ' ').toUpperCase()}`,
@@ -510,30 +508,7 @@ export default function AnalyticsScreen() {
     console.log('[CasinoCruiseExport] Building CSV...', { cruiseCount: cruises.length });
 
     const escapeCsv = (value: unknown): string => {
-      const str = (() => {
-        if (value == null) {
-          return '';
-        }
-
-        if (typeof value === 'string') {
-          return value;
-        }
-
-        if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-          return String(value);
-        }
-
-        if (value instanceof Date) {
-          return value.toISOString();
-        }
-
-        try {
-          return JSON.stringify(value) ?? '';
-        } catch (error) {
-          console.error('[CasinoCruiseExport] Failed to stringify CSV value', error, value);
-          return '';
-        }
-      })();
+      const str = String(value ?? '');
       const needsQuotes = /[\n\r\t",]/.test(str);
       const escaped = str.replace(/"/g, '""');
       return needsQuotes ? `"${escaped}"` : escaped;
@@ -642,7 +617,9 @@ export default function AnalyticsScreen() {
       }
 
       const file = new ExpoFile(ExpoPaths.cache, filename);
-      file.write(csv);
+      await file.write(csv);
+
+      const fileUri = file.uri;
 
       const canShare = await Sharing.isAvailableAsync();
       if (!canShare) {
@@ -650,13 +627,13 @@ export default function AnalyticsScreen() {
         return;
       }
 
-      await Sharing.shareAsync(file.uri, {
+      await Sharing.shareAsync(fileUri, {
         mimeType: 'text/csv',
         UTI: 'public.comma-separated-values-text',
         dialogTitle: 'Export CasinoCruises.csv',
       });
 
-      console.log('[CasinoCruiseExport] Share sheet opened', { fileUri: file.uri });
+      console.log('[CasinoCruiseExport] Share sheet opened', { fileUri });
     } catch (e) {
       console.log('[CasinoCruiseExport] Export failed', e);
     }
@@ -705,7 +682,7 @@ export default function AnalyticsScreen() {
     </View>
   );
 
-  const renderPortfolioCard = (cruise: CruiseWithROI) => {
+  const renderPortfolioCard = (cruise: typeof cruisesWithROI[0]) => {
     const breakdown = calculateCruiseValue(cruise);
     const winnings = cruise.winnings || 0;
     const earnedPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
@@ -947,7 +924,7 @@ export default function AnalyticsScreen() {
 
       <View style={styles.section}>
         <CasinoMetricsCard
-          completedCruises={bookedCruises.filter((c: BookedCruise) => {
+          completedCruises={bookedCruises.filter(c => {
             if (c.completionState === 'completed' || c.status === 'completed') return true;
             if (c.returnDate) {
               const returnDate = new Date(c.returnDate);
@@ -1008,7 +985,7 @@ export default function AnalyticsScreen() {
           </View>
           
           <View style={styles.destinationsCard}>
-            {realAnalytics.destinationDistribution.slice(0, 5).map((item: { destination: string; count: number }, index: number) => (
+            {realAnalytics.destinationDistribution.slice(0, 5).map((item, index) => (
               <View key={index} style={[styles.destinationRow, index === realAnalytics.destinationDistribution.slice(0, 5).length - 1 && { marginBottom: 0 }]}>
                 <View style={[styles.destinationRank, index === 0 && styles.destinationRankTop]}>
                   <Text style={[styles.rankNumber, index === 0 && styles.rankNumberTop]}>{index + 1}</Text>
@@ -1053,7 +1030,7 @@ export default function AnalyticsScreen() {
       <View style={styles.section}>
         <CompValueCalculator
           initialItems={compItems}
-          onCompValueChange={(totalValue: number) => {
+          onCompValueChange={(totalValue) => {
             console.log('[Analytics] Comp value changed:', totalValue);
           }}
         />
@@ -1066,7 +1043,7 @@ export default function AnalyticsScreen() {
     pointsEarned: number;
     pph: number;
   }) => {
-    void handleAddSession({
+    handleAddSession({
       startTime: new Date(Date.now() - data.durationMinutes * 60 * 1000).toTimeString().slice(0, 5),
       endTime: new Date().toTimeString().slice(0, 5),
       durationMinutes: data.durationMinutes,
@@ -1079,7 +1056,7 @@ export default function AnalyticsScreen() {
     setIsGeneratingSessions(true);
     try {
       const today = new Date();
-      const completedCruises = bookedCruises.filter((cruise: BookedCruise) => {
+      const completedCruises = bookedCruises.filter(cruise => {
         const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
         const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
         const hasPointsData = cruise.earnedPoints || cruise.casinoPoints;
@@ -1102,10 +1079,10 @@ export default function AnalyticsScreen() {
       console.log('[Analytics] Total booked cruises:', bookedCruises.length);
       console.log('[Analytics] Completed cruises with points:', completedCruises.length);
       console.log('[Analytics] Current total sessions:', sessions.length);
-      console.log('[Analytics] Cruises list:', completedCruises.map((c: BookedCruise) => `${c.shipName} (${c.sailDate}) - ${c.earnedPoints || c.casinoPoints} pts`));
+      console.log('[Analytics] Cruises list:', completedCruises.map(c => `${c.shipName} (${c.sailDate}) - ${c.earnedPoints || c.casinoPoints} pts`));
       
-      const sessionsPerCruise = completedCruises.map((cruise: BookedCruise) => {
-        const existingSessions = sessions.filter((s: CasinoSession) => s.cruiseId === cruise.id);
+      const sessionsPerCruise = completedCruises.map(cruise => {
+        const existingSessions = sessions.filter(s => s.cruiseId === cruise.id);
         return {
           cruise: `${cruise.shipName} (${cruise.sailDate})`,
           existingSessions: existingSessions.length,
@@ -1122,7 +1099,7 @@ export default function AnalyticsScreen() {
       console.log('[Analytics] Total sessions after generation:', sessions.length + count);
       
       if (count > 0) {
-        void haptics.success();
+        haptics.success();
         setCelebrationData({
           title: forceRegenerate ? 'Sessions Regenerated!' : 'Historical Sessions Generated!',
           subtitle: `Created ${count} session records from ${completedCruises.length} cruises`,
@@ -1222,8 +1199,8 @@ export default function AnalyticsScreen() {
       <View style={styles.section}>
         <WeeklyGoalsCard
           compact={true}
-          onGoalComplete={(goal: WeeklyGoal) => {
-            void haptics.success();
+          onGoalComplete={(goal) => {
+            haptics.success();
             setCelebrationData({
               title: 'Goal Completed!',
               subtitle: `You completed: ${goal.type} goal`,
@@ -1252,7 +1229,7 @@ export default function AnalyticsScreen() {
       <View style={styles.section}>
         <CasinoIntelligenceCard 
           analytics={sessionAnalytics} 
-          completedCruises={bookedCruises.filter((c: BookedCruise) => {
+          completedCruises={bookedCruises.filter(c => {
             if (c.completionState === 'completed' || c.status === 'completed') return true;
             if (c.returnDate) {
               const returnDate = new Date(c.returnDate);
@@ -1321,8 +1298,8 @@ export default function AnalyticsScreen() {
           
           <View style={styles.recentSessionsScrollContainer}>
             {sessions
-              .sort((a: CasinoSession, b: CasinoSession) => (b.pointsEarned || 0) - (a.pointsEarned || 0))
-              .map((session: CasinoSession) => {
+              .sort((a, b) => (b.pointsEarned || 0) - (a.pointsEarned || 0))
+              .map((session) => {
                 const sessionPPH = session.pointsEarned && session.durationMinutes > 0 
                   ? ((session.pointsEarned || 0) / session.durationMinutes) * 60 
                   : 0;
@@ -1414,26 +1391,26 @@ export default function AnalyticsScreen() {
     const assumedHold = 0.08;
     const theoPerSession = coinInPerSession * assumedHold;
     
-    const morningSessionsData = sessions.filter((s: CasinoSession) => {
+    const morningSessionsData = sessions.filter(s => {
       const hour = parseInt(s.startTime.split(':')[0]);
       return hour >= 5 && hour < 12;
     });
-    const eveningSessionsData = sessions.filter((s: CasinoSession) => {
+    const eveningSessionsData = sessions.filter(s => {
       const hour = parseInt(s.startTime.split(':')[0]);
       return hour >= 17 || hour < 2;
     });
     
-    const morningCoinIn = morningSessionsData.reduce((sum: number, s: CasinoSession) => sum + ((s.buyIn || 0) * 5), 0);
-    const eveningCoinIn = eveningSessionsData.reduce((sum: number, s: CasinoSession) => sum + ((s.buyIn || 0) * 5), 0);
+    const morningCoinIn = morningSessionsData.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0);
+    const eveningCoinIn = eveningSessionsData.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0);
     const morningTheo = morningCoinIn * assumedHold;
     const eveningTheo = eveningCoinIn * assumedHold;
     const theoPerTimeBlock = morningTheo > eveningTheo ? 'Morning' : 'Evening';
     const theoTimeBlockValue = Math.max(morningTheo, eveningTheo);
     
-    const cruiseDates = new Set<string>(sessions.map((s: CasinoSession) => s.date));
-    const theoValues = Array.from(cruiseDates).map((date: string) => {
-      const daySessions = sessions.filter((s: CasinoSession) => s.date === date);
-      const dayCoinIn = daySessions.reduce((sum: number, s: CasinoSession) => sum + ((s.buyIn || 0) * 5), 0);
+    const cruiseDates = new Set(sessions.map(s => s.date));
+    const theoValues = Array.from(cruiseDates).map(date => {
+      const daySessions = sessions.filter(s => s.date === date);
+      const dayCoinIn = daySessions.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0);
       return dayCoinIn * assumedHold;
     });
     const avgTheo = theoValues.length > 0 ? theoValues.reduce((a, b) => a + b, 0) / theoValues.length : 0;
@@ -1448,15 +1425,15 @@ export default function AnalyticsScreen() {
     const stopGap = 200;
     const riskPerHour = avgSessionLength > 0 ? (stopGap / (avgSessionLength / 60)) : 0;
     
-    const winSessions = sessions.filter((s: CasinoSession) => (s.winLoss || 0) > 0);
-    const totalWinnings = winSessions.reduce((sum: number, s: CasinoSession) => sum + (s.winLoss || 0), 0);
-    const pressExposure = winSessions.reduce((sum: number, s: CasinoSession) => sum + ((s.buyIn || 0) * 0.3), 0);
+    const winSessions = sessions.filter(s => (s.winLoss || 0) > 0);
+    const totalWinnings = winSessions.reduce((sum, s) => sum + (s.winLoss || 0), 0);
+    const pressExposure = winSessions.reduce((sum, s) => sum + ((s.buyIn || 0) * 0.3), 0);
     const pressEfficiencyRatio = pressExposure > 0 ? totalWinnings / pressExposure : 0;
     
-    const sessionWinLoss = sessions.map((s: CasinoSession) => s.winLoss || 0);
-    const avgWinLoss = sessionWinLoss.length > 0 ? sessionWinLoss.reduce((a: number, b: number) => a + b, 0) / sessionWinLoss.length : 0;
+    const sessionWinLoss = sessions.map(s => s.winLoss || 0);
+    const avgWinLoss = sessionWinLoss.length > 0 ? sessionWinLoss.reduce((a, b) => a + b, 0) / sessionWinLoss.length : 0;
     const winLossVariance = sessionWinLoss.length > 0
-      ? sessionWinLoss.reduce((sum: number, v: number) => sum + Math.pow(v - avgWinLoss, 2), 0) / sessionWinLoss.length
+      ? sessionWinLoss.reduce((sum, v) => sum + Math.pow(v - avgWinLoss, 2), 0) / sessionWinLoss.length
       : 0;
     const winLossStdDev = Math.sqrt(winLossVariance);
     const consistencyScore = avgWinLoss !== 0 ? (avgWinLoss / Math.max(winLossStdDev, 1)) : 0;
@@ -1465,8 +1442,8 @@ export default function AnalyticsScreen() {
     
     const valuePerHourPlayed = totalHours > 0 ? totalRetailValue / totalHours : 0;
     
-    const recentProfit = sessions.slice(-10).reduce((sum: number, s: CasinoSession) => sum + (s.winLoss || 0), 0);
-    const earlyProfit = sessions.slice(0, 10).reduce((sum: number, s: CasinoSession) => sum + (s.winLoss || 0), 0);
+    const recentProfit = sessions.slice(-10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
+    const earlyProfit = sessions.slice(0, 10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
     const trendScore = earlyProfit !== 0 ? (recentProfit / Math.max(Math.abs(earlyProfit), 1)) : 1;
     const variabilityScore = 1 - Math.min(adtSmoothingFactor, 1);
     const sustainabilityScore = (trendScore * 0.6 + variabilityScore * 0.4) * 100;
@@ -1571,7 +1548,7 @@ export default function AnalyticsScreen() {
         </View>
 
         <View style={styles.calcsGrid}>
-          {highValueCalculations.map((calc: { id: number; label: string; value: string; description: string; color: string; icon: typeof BarChart3 }) => (
+          {highValueCalculations.map((calc) => (
             <View key={calc.id} style={styles.calcCard}>
               <View style={[styles.calcIconContainer, { backgroundColor: `${calc.color}15` }]}>
                 <calc.icon size={20} color={calc.color} />
