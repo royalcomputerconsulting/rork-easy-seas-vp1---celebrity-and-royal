@@ -572,20 +572,104 @@ function RoyalCaribbeanSyncScreen() {
                         We couldn&apos;t capture /guestAccounts/loyalty/info in time. Keep the in-app browser open for ~10 seconds, then try Sync again.
                       </Text>
                     </View>) : (<>
-                      {/* Crown & Anchor Society */}
-                      
+                      {(state.loyaltyData?.crownAndAnchorLevel || extendedLoyaltyData?.crownAndAnchorTier) ? (
+                        <View style={styles.loyaltySection}>
+                          <View style={styles.loyaltySectionHeader}>
+                            <Anchor size={16} color="#60a5fa"/>
+                            <Text style={styles.loyaltySectionTitle}>Crown &amp; Anchor Society</Text>
+                          </View>
+                          <View style={styles.loyaltyRow}>
+                            <Text style={styles.loyaltyLabel}>Level</Text>
+                            <Text style={styles.loyaltyValue}>
+                              {extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel || 'N/A'}
+                            </Text>
+                          </View>
+                          <View style={styles.loyaltyRow}>
+                            <Text style={styles.loyaltyLabel}>Points</Text>
+                            <Text style={styles.loyaltyValue}>
+                              {extendedLoyaltyData?.crownAndAnchorPointsFromApi?.toLocaleString() || state.loyaltyData?.crownAndAnchorPoints || '0'}
+                            </Text>
+                          </View>
+                        </View>
+                      ) : null}
 
-                      {/* Club Royale (Casino) */}
-                      
+                      {(state.loyaltyData?.clubRoyaleTier || extendedLoyaltyData?.clubRoyaleTierFromApi) ? (
+                        <View style={styles.loyaltySection}>
+                          <View style={styles.loyaltySectionHeader}>
+                            <Crown size={16} color="#f59e0b"/>
+                            <Text style={styles.loyaltySectionTitle}>Club Royale (Casino)</Text>
+                          </View>
+                          <View style={styles.loyaltyRow}>
+                            <Text style={styles.loyaltyLabel}>Tier</Text>
+                            <Text style={styles.loyaltyValue}>
+                              {extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier || 'N/A'}
+                            </Text>
+                          </View>
+                          <View style={styles.loyaltyRow}>
+                            <Text style={styles.loyaltyLabel}>Points</Text>
+                            <Text style={styles.loyaltyValue}>
+                              {extendedLoyaltyData?.clubRoyalePointsFromApi?.toLocaleString() || state.loyaltyData?.clubRoyalePoints || '0'}
+                            </Text>
+                          </View>
+                        </View>
+                      ) : null}
 
-                      {/* Captain's Club (Celebrity Cruises) */}
-                      
+                      {(extendedLoyaltyData?.captainsClubTier && extendedLoyaltyData.captainsClubPoints !== undefined && extendedLoyaltyData.captainsClubPoints > 0) ? (
+                        <View style={styles.loyaltySection}>
+                          <View style={styles.loyaltySectionHeader}>
+                            <Star size={16} color="#10b981"/>
+                            <Text style={styles.loyaltySectionTitle}>Captain&apos;s Club</Text>
+                          </View>
+                          <View style={styles.loyaltyRow}>
+                            <Text style={styles.loyaltyLabel}>Tier</Text>
+                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.captainsClubTier}</Text>
+                          </View>
+                          <View style={styles.loyaltyRow}>
+                            <Text style={styles.loyaltyLabel}>Points</Text>
+                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.captainsClubPoints.toLocaleString()}</Text>
+                          </View>
+                        </View>
+                      ) : null}
 
-                      {/* Celebrity Blue Chip */}
-                      
+                      {(extendedLoyaltyData?.celebrityBlueChipTier && extendedLoyaltyData.celebrityBlueChipPoints !== undefined && extendedLoyaltyData.celebrityBlueChipPoints > 0) ? (
+                        <View style={styles.loyaltySection}>
+                          <View style={styles.loyaltySectionHeader}>
+                            <Award size={16} color="#8b5cf6"/>
+                            <Text style={styles.loyaltySectionTitle}>Blue Chip Club</Text>
+                          </View>
+                          <View style={styles.loyaltyRow}>
+                            <Text style={styles.loyaltyLabel}>Tier</Text>
+                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.celebrityBlueChipTier}</Text>
+                          </View>
+                          <View style={styles.loyaltyRow}>
+                            <Text style={styles.loyaltyLabel}>Points</Text>
+                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.celebrityBlueChipPoints.toLocaleString()}</Text>
+                          </View>
+                        </View>
+                      ) : null}
 
-                      {/* Venetian Society */}
-                      
+                      {(extendedLoyaltyData?.venetianSocietyTier) ? (
+                        <View style={styles.loyaltySection}>
+                          <View style={styles.loyaltySectionHeader}>
+                            <Ship size={16} color="#cbd5e1"/>
+                            <Text style={styles.loyaltySectionTitle}>Venetian Society</Text>
+                          </View>
+                          <View style={styles.loyaltyRow}>
+                            <Text style={styles.loyaltyLabel}>Tier</Text>
+                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.venetianSocietyTier}</Text>
+                          </View>
+                        </View>
+                      ) : null}
+
+                      {!state.loyaltyData?.crownAndAnchorLevel && !extendedLoyaltyData?.crownAndAnchorTier && !state.loyaltyData?.clubRoyaleTier && !extendedLoyaltyData?.clubRoyaleTierFromApi ? (
+                        <View style={styles.loyaltySection}>
+                          <View style={styles.loyaltySectionHeader}>
+                            <CheckCircle size={16} color="#10b981"/>
+                            <Text style={styles.loyaltySectionTitle}>Loyalty data captured</Text>
+                          </View>
+                          <Text style={styles.loyaltyValueMuted}>Loyalty API responded but no tier/points data was found in the response.</Text>
+                        </View>
+                      ) : null}
                     </>)}
                 </View>
 

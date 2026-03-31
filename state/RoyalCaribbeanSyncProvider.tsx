@@ -95,6 +95,7 @@ interface SyncLoyaltyContext {
   setManualClubRoyalePoints?: (points: number) => Promise<void>;
   setManualCrownAnchorPoints?: (points: number) => Promise<void>;
   setExtendedLoyaltyData?: (data: ExtendedLoyaltyData) => Promise<void>;
+  syncFromStorage?: () => Promise<void>;
 }
 
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
@@ -2519,24 +2520,42 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       if (syncSource !== 'carnival' && preview.loyalty) {
         try {
-          if (preview.loyalty.clubRoyalePoints.changed) {
+          if (preview.loyalty.clubRoyalePoints.changed && typeof loyaltyContext.setManualClubRoyalePoints === 'function') {
             addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
             await loyaltyContext.setManualClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
+            console.log('[RoyalCaribbeanSync] ✓ Club Royale points updated via preview path');
+          } else if (preview.loyalty.clubRoyalePoints.changed) {
+            console.warn('[RoyalCaribbeanSync] setManualClubRoyalePoints not available on loyalty context');
           }
           
-          if (preview.loyalty.crownAndAnchorPoints.changed) {
+          if (preview.loyalty.crownAndAnchorPoints.changed && typeof loyaltyContext.setManualCrownAnchorPoints === 'function') {
             addLog(`Updating Crown & Anchor points: ${preview.loyalty.crownAndAnchorPoints.current} → ${preview.loyalty.crownAndAnchorPoints.synced}`, 'info');
             await loyaltyContext.setManualCrownAnchorPoints(preview.loyalty.crownAndAnchorPoints.synced);
+            console.log('[RoyalCaribbeanSync] ✓ Crown & Anchor points updated via preview path');
+          } else if (preview.loyalty.crownAndAnchorPoints.changed) {
+            console.warn('[RoyalCaribbeanSync] setManualCrownAnchorPoints not available on loyalty context');
           }
         } catch (loyaltyError) {
           console.error('[RoyalCaribbeanSync] Error updating loyalty points:', loyaltyError);
           addLog(`⚠️ Warning: Failed to update loyalty points: ${String(loyaltyError)}`, 'warning');
         }
+      } else if (syncSource !== 'carnival' && !preview.loyalty) {
+        console.log('[RoyalCaribbeanSync] preview.loyalty is null — loyalty data was not captured in state.loyaltyData');
+        addLog('⚠️ Loyalty preview was empty — will attempt extended loyalty sync path', 'warning');
       }
       
-      if (syncSource !== 'carnival' && effectiveExtendedLoyalty && loyaltyContext.setExtendedLoyaltyData) {
+      if (syncSource !== 'carnival' && effectiveExtendedLoyalty && typeof loyaltyContext.setExtendedLoyaltyData === 'function') {
         try {
           addLog('Syncing extended loyalty data...', 'info');
+          
+          console.log('[RoyalCaribbeanSync] Extended loyalty payload:', {
+            hasClubRoyalePoints: effectiveExtendedLoyalty.clubRoyalePointsFromApi !== undefined,
+            clubRoyalePoints: effectiveExtendedLoyalty.clubRoyalePointsFromApi,
+            clubRoyaleTier: effectiveExtendedLoyalty.clubRoyaleTierFromApi,
+            hasCrownAnchorPoints: effectiveExtendedLoyalty.crownAndAnchorPointsFromApi !== undefined,
+            crownAnchorPoints: effectiveExtendedLoyalty.crownAndAnchorPointsFromApi,
+            crownAnchorTier: effectiveExtendedLoyalty.crownAndAnchorTier,
+          });
           
           if (effectiveExtendedLoyalty.clubRoyalePointsFromApi !== undefined) {
             addLog(`  → Club Royale: ${effectiveExtendedLoyalty.clubRoyaleTierFromApi || 'N/A'} - ${effectiveExtendedLoyalty.clubRoyalePointsFromApi.toLocaleString()} points`, 'info');
@@ -2552,13 +2571,37 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
           
           await loyaltyContext.setExtendedLoyaltyData(effectiveExtendedLoyalty);
-          addLog('Extended loyalty data synced successfully', 'success');
+          addLog('✅ Extended loyalty data synced successfully', 'success');
+          console.log('[RoyalCaribbeanSync] ✓ Extended loyalty data persisted');
         } catch (extLoyaltyError) {
           console.error('[RoyalCaribbeanSync] Error syncing extended loyalty:', extLoyaltyError);
           addLog(`⚠️ Warning: Failed to sync extended loyalty data: ${String(extLoyaltyError)}`, 'warning');
+          
+          if (effectiveExtendedLoyalty.clubRoyalePointsFromApi !== undefined && typeof loyaltyContext.setManualClubRoyalePoints === 'function') {
+            try {
+              console.log('[RoyalCaribbeanSync] Fallback: setting Club Royale points directly');
+              await loyaltyContext.setManualClubRoyalePoints(effectiveExtendedLoyalty.clubRoyalePointsFromApi);
+              addLog(`  → Fallback: Club Royale points set to ${effectiveExtendedLoyalty.clubRoyalePointsFromApi}`, 'info');
+            } catch (fallbackErr) {
+              console.error('[RoyalCaribbeanSync] Fallback Club Royale set failed:', fallbackErr);
+            }
+          }
+          if (effectiveExtendedLoyalty.crownAndAnchorPointsFromApi !== undefined && typeof loyaltyContext.setManualCrownAnchorPoints === 'function') {
+            try {
+              console.log('[RoyalCaribbeanSync] Fallback: setting Crown & Anchor points directly');
+              await loyaltyContext.setManualCrownAnchorPoints(effectiveExtendedLoyalty.crownAndAnchorPointsFromApi);
+              addLog(`  → Fallback: Crown & Anchor points set to ${effectiveExtendedLoyalty.crownAndAnchorPointsFromApi}`, 'info');
+            } catch (fallbackErr) {
+              console.error('[RoyalCaribbeanSync] Fallback Crown & Anchor set failed:', fallbackErr);
+            }
+          }
         }
-      } else if (syncSource !== 'carnival') {
-        addLog('⚠️ No extended loyalty payload available at sync time', 'warning');
+      } else if (syncSource !== 'carnival' && !effectiveExtendedLoyalty) {
+        console.warn('[RoyalCaribbeanSync] No extended loyalty data available at sync time');
+        console.warn('[RoyalCaribbeanSync] extendedLoyaltyData state:', extendedLoyaltyData);
+        console.warn('[RoyalCaribbeanSync] state.loyaltyData:', state.loyaltyData);
+        addLog('⚠️ No extended loyalty payload available at sync time — loyalty was not captured', 'warning');
+        addLog('💡 Tip: Keep the browser open for ~10 seconds on any page before syncing', 'info');
       }
 
       if (typeof coreDataContext.syncToBackend === 'function') {
@@ -2622,6 +2665,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         } catch (carnivalLoyaltyError) {
           console.error('[CarnivalSync] Error syncing Carnival loyalty to profile:', carnivalLoyaltyError);
           addLog(`⚠️ Warning: Failed to sync Carnival loyalty: ${String(carnivalLoyaltyError)}`, 'warning');
+        }
+      }
+
+      if (syncSource !== 'carnival' && typeof loyaltyContext.syncFromStorage === 'function') {
+        try {
+          console.log('[RoyalCaribbeanSync] Triggering loyalty provider syncFromStorage to reload persisted values...');
+          await loyaltyContext.syncFromStorage();
+          console.log('[RoyalCaribbeanSync] ✓ Loyalty provider reloaded from storage');
+        } catch (reloadErr) {
+          console.warn('[RoyalCaribbeanSync] syncFromStorage failed (non-critical):', reloadErr);
         }
       }
 
