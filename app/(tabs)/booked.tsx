@@ -11,7 +11,6 @@ import {
   Image,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { useDeferredRender } from '@/hooks/useDeferredRender';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Ship,
@@ -49,6 +48,7 @@ import { useLoyalty } from '@/state/LoyaltyProvider';
 import { formatCurrency, formatNumber as formatNum } from '@/lib/format';
 import { calculatePortfolioValue } from '@/lib/valueCalculator';
 import { CrownAnchorTimeline } from '@/components/CrownAnchorTimeline';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
@@ -674,10 +674,11 @@ export default function BookedScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Stack.Screen options={{ headerShown: false }} />
-      
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <ErrorBoundary>
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
         <FlatList
           data={viewMode === 'list' ? filteredCruises : ([] as BookedCruise[])}
           renderItem={renderCruiseCard}
@@ -702,12 +703,13 @@ export default function BookedScreen() {
         />
       </SafeAreaView>
 
-      <AddBookedCruiseModal
-        visible={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onSave={handleSaveNewCruise}
-      />
-    </View>
+        <AddBookedCruiseModal
+          visible={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSave={handleSaveNewCruise}
+        />
+      </View>
+    </ErrorBoundary>
   );
 }
 

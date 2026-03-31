@@ -90,6 +90,7 @@ import { SessionsSummaryCard } from '@/components/SessionsSummaryCard';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -1611,13 +1612,14 @@ export default function AnalyticsScreen() {
   );
 
   return (
-    <LinearGradient
-      colors={['#E3F2FD', '#90CAF9']}
-      style={styles.container}
-    >
-      <Stack.Screen options={{ headerShown: false }} />
-      
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <ErrorBoundary>
+      <LinearGradient
+        colors={['#E3F2FD', '#90CAF9']}
+        style={styles.container}
+      >
+        <Stack.Screen options={{ headerShown: false }} />
+        
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
           <View style={styles.brandingRow}>
             <View style={styles.titleContainer}>
@@ -1743,13 +1745,14 @@ export default function AnalyticsScreen() {
         />
       )}
 
-      {pphAlerts.length > 0 && (
-        <PPHAlertContainer 
-          alerts={pphAlerts} 
-          onDismissAlert={dismissPPHAlert} 
-        />
-      )}
-    </LinearGradient>
+        {pphAlerts.length > 0 && (
+          <PPHAlertContainer 
+            alerts={pphAlerts} 
+            onDismissAlert={dismissPPHAlert} 
+          />
+        )}
+      </LinearGradient>
+    </ErrorBoundary>
   );
 }
 

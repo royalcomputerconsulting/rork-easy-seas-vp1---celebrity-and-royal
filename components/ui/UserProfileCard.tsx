@@ -232,7 +232,8 @@ export function UserProfileCard({
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.email, undefined, true)}
-        {renderValueCard('Crown & Anchor #', enrichmentData?.crownAndAnchorId || currentValues.crownAnchorNumber, undefined, true)}
+        {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
+        {renderValueCard('Crown & Anchor #', currentValues.crownAnchorNumber || enrichmentData?.crownAndAnchorId, undefined, true)}
         {renderValueCard('C&A Level', enrichmentData?.crownAndAnchorTier || calculatedLevel, calculatedLevelInfo?.color)}
         {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
         {renderValueCard('Club Royale Tier', enrichmentData?.clubRoyaleTierFromApi || calculatedTier, calculatedTierInfo?.color)}
@@ -250,7 +251,8 @@ export function UserProfileCard({
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.celebrityEmail, undefined, true)}
-        {renderValueCard("Captain's Club #", enrichmentData?.captainsClubId || currentValues.celebrityCaptainsClubNumber, undefined, true)}
+        {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
+        {renderValueCard("Captain's Club #", currentValues.celebrityCaptainsClubNumber || enrichmentData?.captainsClubId, undefined, true)}
         {renderValueCard("Captain's Level", enrichmentData?.captainsClubTier || calculatedCelebrityLevel, calculatedCelebrityLevelInfo?.color)}
         {renderValueCard('Club Points', enrichmentData?.captainsClubPoints ?? currentValues.celebrityCaptainsClubPoints, COLORS.loyalty)}
         {renderValueCard('Blue Chip Tier', enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier, calculatedCelebrityTierInfo?.color)}
@@ -268,7 +270,8 @@ export function UserProfileCard({
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.silverseaEmail, undefined, true)}
-        {renderValueCard('Venetian Member #', enrichmentData?.venetianSocietyMemberNumber || currentValues.silverseaVenetianNumber, undefined, true)}
+        {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
+        {renderValueCard('Venetian Member #', currentValues.silverseaVenetianNumber || enrichmentData?.venetianSocietyMemberNumber, undefined, true)}
         {renderValueCard('Enrolled', enrichmentData?.venetianSocietyEnrolled ? 'Yes' : 'No', enrichmentData?.venetianSocietyEnrolled ? COLORS.success : undefined)}
         {renderValueCard('Tier', enrichmentData?.venetianSocietyTier || currentValues.silverseaVenetianTier)}
         {renderValueCard('Points', currentValues.silverseaVenetianPoints, COLORS.loyalty)}
@@ -283,7 +286,8 @@ export function UserProfileCard({
       <View style={styles.valuesGrid}>
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
-        {renderValueCard('VIFP Club #', enrichmentData?.carnivalVifpNumber || currentValues.carnivalVifpNumber, undefined, true)}
+        {renderValueCard('Birthdate', currentValues.birthdate, undefined, true)}
+        {renderValueCard('VIFP Club #', currentValues.carnivalVifpNumber || enrichmentData?.carnivalVifpNumber, undefined, true)}
         {renderValueCard('VIFP Tier', enrichmentData?.carnivalVifpTier || currentValues.carnivalVifpTier, '#CC2232')}
         {renderValueCard('Players Club Tier', enrichmentData?.carnivalPlayersClubTier || currentValues.carnivalPlayersClubTier, '#FFB400')}
         {renderValueCard('Players Club Points', enrichmentData?.carnivalPlayersClubPoints ?? currentValues.carnivalPlayersClubPoints, COLORS.points)}
@@ -389,6 +393,16 @@ export function UserProfileCard({
             />
           </View>
           <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Birthdate (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.birthdate || ''}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
+              placeholder="e.g. 1975-08-15"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+          <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Celebrity Email</Text>
             <TextInput
               style={styles.input}
@@ -462,6 +476,16 @@ export function UserProfileCard({
             />
           </View>
           <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Birthdate (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.birthdate || ''}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
+              placeholder="e.g. 1975-08-15"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+          <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>VIFP Club #</Text>
             <TextInput
               style={styles.input}
@@ -515,6 +539,16 @@ export function UserProfileCard({
               value={formData.name}
               onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
               placeholder="Enter your name"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Birthdate (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.birthdate || ''}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
+              placeholder="e.g. 1975-08-15"
               placeholderTextColor="#9CA3AF"
             />
           </View>

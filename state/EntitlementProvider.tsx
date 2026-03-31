@@ -64,7 +64,8 @@ const BASE_KEYS = {
 } as const;
 
 const TRIAL_DURATION_DAYS = 5;
-const GRANDFATHERING_CUTOFF_DATE = new Date('2027-03-31T23:59:59.999Z');
+const CURRENT_USER_ACCESS_LOCKIN_DATE = new Date('2026-03-31T23:59:59.999Z');
+const CURRENT_USER_ACCESS_END_DATE = new Date('2027-03-31T23:59:59.999Z');
 
 const DEFAULT_TIMEOUT_MS = 10000 as const;
 const PURCHASE_TIMEOUT_MS = 120000 as const;
@@ -261,7 +262,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         const hasImportedData = await AsyncStorage.getItem('easyseas_has_imported_data');
         
         if (storedTrialStart || hasImportedData) {
-          const existingUserDate = storedTrialStart ? new Date(storedTrialStart) : new Date('2026-01-01T00:00:00.000Z');
+          const existingUserDate = storedTrialStart ? new Date(storedTrialStart) : new Date(CURRENT_USER_ACCESS_LOCKIN_DATE);
           accountDate = existingUserDate;
           console.log('[Entitlement] Existing user detected (has trial or data) - setting account creation to:', accountDate.toISOString());
         } else {
@@ -274,15 +275,22 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       
       setAccountCreatedAt(accountDate);
       
-      const isGrandfatheredUser = accountDate <= GRANDFATHERING_CUTOFF_DATE;
+      const now = new Date();
+      const isGrandfatheredUser = accountDate <= CURRENT_USER_ACCESS_LOCKIN_DATE && now <= CURRENT_USER_ACCESS_END_DATE;
       setIsGrandfathered(isGrandfatheredUser);
       
       if (isGrandfatheredUser) {
-        console.log('[Entitlement] ✅ GRANDFATHERED USER - Account created before cutoff date');
+        console.log('[Entitlement] ✅ CURRENT USER ACCESS ACTIVE - account qualifies for one-year legacy access');
         console.log('[Entitlement] Account created:', accountDate.toISOString());
-        console.log('[Entitlement] Cutoff date:', GRANDFATHERING_CUTOFF_DATE.toISOString());
+        console.log('[Entitlement] Access lock-in date:', CURRENT_USER_ACCESS_LOCKIN_DATE.toISOString());
+        console.log('[Entitlement] Access end date:', CURRENT_USER_ACCESS_END_DATE.toISOString());
       } else {
-        console.log('[Entitlement] Not grandfathered - account created after:', GRANDFATHERING_CUTOFF_DATE.toISOString());
+        console.log('[Entitlement] Current-user access inactive for this account', {
+          accountCreatedAt: accountDate.toISOString(),
+          accessLockInDate: CURRENT_USER_ACCESS_LOCKIN_DATE.toISOString(),
+          accessEndDate: CURRENT_USER_ACCESS_END_DATE.toISOString(),
+          now: now.toISOString(),
+        });
       }
       
       return isGrandfatheredUser;
@@ -335,7 +343,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     if (subType === 'annual') return 'annual';
     if (subType === 'monthly') return 'monthly';
     
-    if (currentIsGrandfathered) return 'monthly';
+    if (currentIsGrandfathered) return 'annual';
     
     if (computedIsPro || computedIsBasic) return 'monthly';
     
@@ -618,6 +626,13 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     actionInFlightRef.current = true;
     setError(null);
 
+    if (!auth.isAdmin) {
+      console.warn('[Entitlement] Purchase attempt blocked for non-admin user');
+      actionInFlightRef.current = false;
+      Alert.alert('Admin Only', 'Purchasing subscriptions is temporarily restricted to admin users.');
+      return;
+    }
+
     if (Platform.OS === 'web') {
       try {
         await AsyncStorage.setItem(storageKeys.WEB_IS_PRO, 'true');
@@ -680,7 +695,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setIsLoading(false);
       }
     }
-  }, [ensurePurchasesLoaded, findPackageByProductId, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO]);
+  }, [auth.isAdmin, ensurePurchasesLoaded, findPackageByProductId, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO]);
 
   const subscribeBasicMonthly = useCallback(async () => {
     await subscribeToProduct(BASIC_PRODUCT_ID_MONTHLY, 'Basic monthly subscription');
@@ -705,8 +720,18 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     setError(null);
 
     if (Platform.OS === 'web') {
-      actionInFlightRef.current = false;
-      Alert.alert('Not Supported', 'Restore purchases is not supported in web preview.');
+      try {
+        await refresh();
+        const accessRecovered = auth.isWhitelisted || isGrandfathered || lastIsProRef.current;
+        Alert.alert(
+          'Restore Complete',
+          accessRecovered
+            ? 'Your access status has been refreshed for this account.'
+            : 'No active purchase was found in this web preview. If you purchased on mobile, use Manage Subscriptions or restore on that device.'
+        );
+      } finally {
+        actionInFlightRef.current = false;
+      }
       return;
     }
 
@@ -793,11 +818,28 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setIsLoading(false);
       }
     }
-  }, [auth.authenticatedEmail, auth.isWhitelisted, ensurePurchasesLoaded, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END]);
+  }, [auth.authenticatedEmail, auth.isWhitelisted, ensurePurchasesLoaded, isGrandfathered, refresh, setStateFromCustomerInfo, storageKeys.TRIAL_END]);
 
   const openManageSubscription = useCallback(async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Not Available', 'Subscription management is available on your mobile device.');
+      Alert.alert('Manage Subscriptions', 'Choose the store where you purchased Easy Seas.', [
+        {
+          text: 'Apple ID',
+          onPress: () => {
+            void safeOpenURL(MANAGE_SUBS_IOS_URL);
+          },
+        },
+        {
+          text: 'Google Play',
+          onPress: () => {
+            void safeOpenURL(MANAGE_SUBS_ANDROID_URL);
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]);
       return;
     }
     const url = Platform.OS === 'android' ? MANAGE_SUBS_ANDROID_URL : MANAGE_SUBS_IOS_URL;
