@@ -5,10 +5,13 @@ import { ExternalLink, RefreshCcw, Shield } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
 import { COLORS } from '@/constants/theme';
 import { useEntitlement } from '@/state/EntitlementProvider';
+import { useAuth } from '@/state/AuthProvider';
 
 export default function PaywallMonthlyScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
+  const { isAdmin } = useAuth();
+  const isPurchaseDisabled = entitlement.isLoading || entitlement.isPro || !isAdmin;
 
   const handleClose = useCallback(() => {
     console.log('[PaywallMonthly] Close requested');
@@ -32,10 +35,10 @@ export default function PaywallMonthlyScreen() {
             <Text style={styles.priceHero}>$9.99<Text style={styles.priceUnit}> / month</Text></Text>
 
             <TouchableOpacity
-              style={[styles.purchaseButton, (entitlement.isLoading || entitlement.isPro) && styles.purchaseButtonDisabled]}
+              style={[styles.purchaseButton, isPurchaseDisabled && styles.purchaseButtonDisabled]}
               onPress={() => entitlement.subscribeProMonthly()}
               activeOpacity={0.85}
-              disabled={entitlement.isLoading || entitlement.isPro}
+              disabled={isPurchaseDisabled}
               testID="paywall-monthly.subscribe-pro-monthly"
             >
               {entitlement.isLoading ? (
@@ -44,12 +47,21 @@ export default function PaywallMonthlyScreen() {
                 <Text style={styles.purchaseButtonText}>
                   {entitlement.isPro
                     ? 'Subscribed'
-                    : Platform.OS === 'android'
-                      ? 'Subscribe via Google Play'
-                      : 'Subscribe Now'}
+                    : !isAdmin
+                      ? 'Admin Only'
+                      : Platform.OS === 'android'
+                        ? 'Subscribe via Google Play'
+                        : 'Subscribe Now'}
                 </Text>
               )}
             </TouchableOpacity>
+
+            {!isAdmin && (
+              <View style={styles.errorBox} testID="paywall-monthly.admin-only">
+                <Text style={styles.errorTitle}>Admin only</Text>
+                <Text style={styles.errorBody}>Monthly in-app purchases are temporarily restricted to admin users.</Text>
+              </View>
+            )}
 
             {!!entitlement.error && (
               <View style={styles.errorBox} testID="paywall-monthly.error">

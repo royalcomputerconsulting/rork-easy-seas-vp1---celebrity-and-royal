@@ -11,7 +11,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
@@ -90,6 +90,7 @@ import { SessionsSummaryCard } from '@/components/SessionsSummaryCard';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -616,10 +617,8 @@ export default function AnalyticsScreen() {
         return;
       }
 
-      const file = new ExpoFile(ExpoPaths.cache, filename);
-      await file.write(csv);
-
-      const fileUri = file.uri;
+      const fileUri = (FileSystem.cacheDirectory || '') + filename;
+      await FileSystem.writeAsStringAsync(fileUri, csv);
 
       const canShare = await Sharing.isAvailableAsync();
       if (!canShare) {
@@ -820,10 +819,10 @@ export default function AnalyticsScreen() {
             </View>
           </View>
           
-          {cruise.cabinType && (
+          {!!cruise.cabinType && (
             <View style={styles.portfolioCardFooter}>
               <Text style={styles.portfolioCardCabin}>{cruise.cabinType}</Text>
-              {cruise.offerCode && (
+              {!!cruise.offerCode && (
                 <View style={styles.portfolioOfferBadge}>
                   <Zap size={10} color={COLORS.goldDark} />
                   <Text style={styles.portfolioOfferCode}>{cruise.offerCode}</Text>
@@ -852,7 +851,6 @@ export default function AnalyticsScreen() {
         <CompactDashboardHeader
           hideLogo={true}
           memberName={clubRoyaleProfile?.memberName || 'Player'}
-          crownAnchorNumber={(clubRoyaleProfile as any)?.crownAnchorNumber}
           crewMemberCount={crewStats?.crewMemberCount || 0}
         />
       </View>
@@ -1337,7 +1335,7 @@ export default function AnalyticsScreen() {
                           {session.winLoss >= 0 ? '+' : ''}{formatCurrency(session.winLoss)}
                         </Text>
                       )}
-                      {session.notes && (
+                      {!!session.notes && (
                         <Text style={styles.recentSessionNotes} numberOfLines={2}>{session.notes}</Text>
                       )}
                     </View>
@@ -1614,13 +1612,14 @@ export default function AnalyticsScreen() {
   );
 
   return (
-    <LinearGradient
-      colors={['#E3F2FD', '#90CAF9']}
-      style={styles.container}
-    >
-      <Stack.Screen options={{ headerShown: false }} />
-      
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <ErrorBoundary>
+      <LinearGradient
+        colors={['#E3F2FD', '#90CAF9']}
+        style={styles.container}
+      >
+        <Stack.Screen options={{ headerShown: false }} />
+        
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
           <View style={styles.brandingRow}>
             <View style={styles.titleContainer}>
@@ -1746,13 +1745,14 @@ export default function AnalyticsScreen() {
         />
       )}
 
-      {pphAlerts.length > 0 && (
-        <PPHAlertContainer 
-          alerts={pphAlerts} 
-          onDismissAlert={dismissPPHAlert} 
-        />
-      )}
-    </LinearGradient>
+        {pphAlerts.length > 0 && (
+          <PPHAlertContainer 
+            alerts={pphAlerts} 
+            onDismissAlert={dismissPPHAlert} 
+          />
+        )}
+      </LinearGradient>
+    </ErrorBoundary>
   );
 }
 

@@ -74,13 +74,6 @@ import {
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
-import {
-  getImportedSource,
-  getImportedSourceLabel,
-  mergeImportedBookedCruises,
-  mergeImportedCruises,
-  mergeImportedOffers,
-} from '@/lib/importMerge';
 import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
 
 
@@ -248,6 +241,7 @@ export default function SettingsScreen() {
     name: isProfileDisplayReady ? currentUser?.name || '' : '',
     email: isProfileDisplayReady ? currentUser?.email || authenticatedEmail || '' : authenticatedEmail || '',
     crownAnchorNumber: isProfileDisplayReady ? currentUser?.crownAnchorNumber || '' : '',
+    birthdate: isProfileDisplayReady ? currentUser?.birthdate || '' : '',
     clubRoyalePoints: isProfileDisplayReady ? loyaltyClubRoyalePoints : 0,
     clubRoyaleTier: isProfileDisplayReady ? loyaltyClubRoyaleTier : 'Choice',
     loyaltyPoints: isProfileDisplayReady ? loyaltyCrownAnchorPoints : 0,
@@ -402,38 +396,21 @@ export default function SettingsScreen() {
         fieldsFixed: healingReport.fieldsFixed.length,
       });
 
-      const existingCruises = cruises.length > 0 ? cruises : (localData.cruises || []);
-      const existingOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
-      const importedSource = getImportedSource({ cruises: parsedCruises, offers: parsedOffers });
-      const mergedCruises = mergeImportedCruises(existingCruises, parsedCruises);
-      const mergedOffers = mergeImportedOffers(existingOffers, parsedOffers);
-
-      console.log('[Settings] Merged imported offers CSV:', {
-        importedSource,
-        existingCruises: existingCruises.length,
-        existingOffers: existingOffers.length,
-        parsedCruises: parsedCruises.length,
-        parsedOffers: parsedOffers.length,
-        mergedCruises: mergedCruises.length,
-        mergedOffers: mergedOffers.length,
-      });
-
-      await setCruises(mergedCruises);
-      await setCasinoOffers(mergedOffers);
+      await setCruises(parsedCruises);
+      await setCasinoOffers(parsedOffers);
       await setLocalData({
-        cruises: mergedCruises,
-        offers: mergedOffers,
+        cruises: parsedCruises,
+        offers: parsedOffers,
       });
 
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
       console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
-      const sourceLabel = getImportedSourceLabel(importedSource);
       const healNote = healingReport.fieldsFixed.length > 0 ? `\n\nData healing fixed ${healingReport.fieldsFixed.length} field(s).` : '';
       setLastImportResult({ type: 'offers', count: parsedCruises.length });
       Alert.alert(
         'Import Successful', 
-        `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}`
+        `Imported ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}${healNote}`
       );
       console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {
@@ -458,7 +435,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [casinoOffers, cruises, localData.cruises, localData.offers, setCruises, setCasinoOffers, setLocalData]);
+  }, [setCruises, setCasinoOffers, setLocalData]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
@@ -754,22 +731,16 @@ export default function SettingsScreen() {
       const existingBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
       console.log('[Settings] Existing booked cruises:', existingBooked.length);
       
-      const parsedBooked = parseBookedCSV(result.content, []);
+      const parsedBooked = parseBookedCSV(result.content, existingBooked);
       
       if (parsedBooked.length === 0) {
-        Alert.alert('Import Failed', 'No valid booked cruise data was found in the CSV file.');
+        Alert.alert('No New Cruises', 'All cruises in the file already exist in your database, or the file contains no valid data.');
         setIsImporting(false);
         return;
       }
 
-      const importedSource = getImportedSource({ bookedCruises: parsedBooked });
-      const mergedBooked = mergeImportedBookedCruises(existingBooked, parsedBooked);
-      console.log('[Settings] Merged booked cruises:', {
-        importedSource,
-        existingBooked: existingBooked.length,
-        parsedBooked: parsedBooked.length,
-        mergedBooked: mergedBooked.length,
-      });
+      const mergedBooked = [...existingBooked, ...parsedBooked];
+      console.log('[Settings] Merged booked cruises:', mergedBooked.length, '(added:', parsedBooked.length, ')');
 
       await setBookedCruises(mergedBooked);
       await setLocalData({
@@ -779,14 +750,13 @@ export default function SettingsScreen() {
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
       console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
-      const sourceLabel = getImportedSourceLabel(importedSource);
       setLastImportResult({ type: 'booked', count: parsedBooked.length });
       
       Alert.alert(
         'Import Successful', 
-        `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).`
+        `Added ${parsedBooked.length} new cruises from ${result.fileName}`
       );
-      console.log('[Settings] Booked import complete:', parsedBooked.length, 'cruise rows imported');
+      console.log('[Settings] Booked import complete:', parsedBooked.length, 'new cruises added');
     } catch (error) {
       console.error('[Settings] Booked import error:', error);
       
@@ -1144,6 +1114,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     name: string;
     email: string;
     crownAnchorNumber: string;
+    birthdate?: string;
     clubRoyalePoints: number;
     clubRoyaleTier: string;
     loyaltyPoints: number;
@@ -1245,6 +1216,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       name: string;
       email: string;
       crownAnchorNumber: string;
+      birthdate?: string;
       clubRoyalePoints: number;
       clubRoyaleTier: string;
       loyaltyPoints: number;
@@ -1275,6 +1247,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           name: profileData.name,
           email: profileData.email,
           crownAnchorNumber: profileData.crownAnchorNumber,
+          birthdate: profileData.birthdate,
           celebrityEmail: profileData.celebrityEmail,
           celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
@@ -1295,6 +1268,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           name: profileData.name,
           email: profileData.email,
           crownAnchorNumber: profileData.crownAnchorNumber,
+          birthdate: profileData.birthdate,
           celebrityEmail: profileData.celebrityEmail,
           celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
@@ -1672,6 +1646,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
+            {isAdmin && (
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/carnival-sync' as any)}
@@ -1683,6 +1658,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Sync Carnival Cruises</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
+            )}
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/pricing-summary' as any)}
@@ -2177,13 +2153,13 @@ STEP 4: Optional Calendar Import
                 <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
                 () => { void entitlement.openManageSubscription(); }
               )}
-              {renderSettingRow(
+              {isAdmin && renderSettingRow(
                 <Calendar size={18} color={COLORS.navyDeep} />,
                 'Purchase a Monthly Subscription',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
                 () => router.push('/paywall-monthly' as any)
               )}
-              {renderSettingRow(
+              {isAdmin && renderSettingRow(
                 <Crown size={18} color={COLORS.navyDeep} />,
                 'Purchase an Annual Subscription',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,

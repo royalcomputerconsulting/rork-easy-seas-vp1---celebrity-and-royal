@@ -92,88 +92,6 @@ export interface ParsedBookedRow {
   cruisePointsEarned: number;
 }
 
-function inferCruiseSourceFromText(...values: string[]): BookedCruise['cruiseSource'] | undefined {
-  const joined = values
-    .map(value => value.toLowerCase())
-    .join(' ');
-
-  if (!joined) return undefined;
-  if (joined.includes('carnival') || joined.includes('vifp') || joined.includes('players club')) return 'carnival';
-  if (joined.includes('celebrity') || joined.includes('blue chip') || joined.includes("captain's club")) return 'celebrity';
-  if (joined.includes('royal caribbean') || joined.includes('club royale') || joined.includes('crown & anchor') || joined.includes(' of the seas')) return 'royal';
-  return undefined;
-}
-
-function inferCruiseSourceFromShipName(shipName: string): BookedCruise['cruiseSource'] | undefined {
-  const normalizedShipName = shipName.toLowerCase().trim();
-  if (!normalizedShipName) return undefined;
-  if (normalizedShipName.startsWith('carnival ') || normalizedShipName === 'mardi gras') return 'carnival';
-  if (normalizedShipName.startsWith('celebrity ')) return 'celebrity';
-  if (normalizedShipName.includes(' of the seas')) return 'royal';
-  return undefined;
-}
-
-function parseBookedState(value: string): {
-  isBooked: boolean;
-  status: BookedCruise['status'];
-  completionState: BookedCruise['completionState'];
-  isCourtesyHold: boolean;
-} {
-  const normalizedValue = value.trim().toLowerCase();
-
-  if (!normalizedValue) {
-    return {
-      isBooked: true,
-      status: 'booked',
-      completionState: 'upcoming',
-      isCourtesyHold: false,
-    };
-  }
-
-  if (['false', 'no', '0', 'cancelled', 'canceled'].includes(normalizedValue)) {
-    return {
-      isBooked: false,
-      status: 'cancelled',
-      completionState: 'upcoming',
-      isCourtesyHold: false,
-    };
-  }
-
-  if (normalizedValue.includes('courtesy hold') || normalizedValue === 'hold' || normalizedValue === 'offer') {
-    return {
-      isBooked: true,
-      status: 'Courtesy Hold',
-      completionState: 'upcoming',
-      isCourtesyHold: true,
-    };
-  }
-
-  if (normalizedValue.includes('completed') || normalizedValue.includes('past')) {
-    return {
-      isBooked: true,
-      status: 'completed',
-      completionState: 'completed',
-      isCourtesyHold: false,
-    };
-  }
-
-  if (['true', 'yes', '1', 'booked', 'upcoming', 'confirmed'].includes(normalizedValue)) {
-    return {
-      isBooked: true,
-      status: 'booked',
-      completionState: 'upcoming',
-      isCourtesyHold: false,
-    };
-  }
-
-  return {
-    isBooked: true,
-    status: 'booked',
-    completionState: 'upcoming',
-    isCourtesyHold: false,
-  };
-}
-
 function isDuplicateCruise(cruise: BookedCruise, existingCruises: BookedCruise[]): boolean {
   return existingCruises.some(existing => {
     if (cruise.reservationNumber && existing.reservationNumber && 
@@ -254,12 +172,10 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     totalRetailCost: getColumnIndex(headerMap, ['totalretailcost', 'total retail cost', 'total_retail_cost', 'retail cost', 'retailcost']),
     totalCasinoDiscount: getColumnIndex(headerMap, ['totalcasinodiscount', 'total casino discount', 'total_casino_discount', 'casino discount', 'casinodiscount', 'discount', 'offer value']),
     portTaxesFees: getColumnIndex(headerMap, ['port taxes & fees', 'port taxes and fees', 'porttaxes', 'port_taxes', 'taxes & fees', 'taxes and fees', 'taxes', 'fees', 'port charges', 'portcharges']),
-    source: getColumnIndex(headerMap, ['cruise line', 'cruiseline', 'brand', 'line']),
   };
 
   console.log('[BookedParser] Booked column indices:', colIndices);
 
-  const detectedSourceFromHeaders = inferCruiseSourceFromText(headers.join(' '));
   const bookedCruises: BookedCruise[] = [];
 
   for (let i = 1; i < lines.length; i++) {
@@ -290,6 +206,11 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
       const val = getValue(idx).replace(/[,$]/g, '');
       const num = parseFloat(val);
       return isNaN(num) ? 0 : num;
+    };
+
+    const getBooleanValue = (idx: number): boolean => {
+      const val = getValue(idx).toLowerCase();
+      return val === 'true' || val === 'yes' || val === '1';
     };
 
     const id = getValue(colIndices.id) || `booked_${Date.now()}_${i}`;
@@ -326,8 +247,7 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     const guests = Number.isFinite(guestsParsed) && guestsParsed > 0 ? guestsParsed : (getNumericValue(colIndices.guests) || 2);
     const bookingId = getValue(colIndices.bookingId) || reservationNumber;
     const isBookedValue = getValue(colIndices.isBooked);
-    const sourceValue = getValue(colIndices.source);
-    const parsedState = parseBookedState(isBookedValue);
+    const isBooked = isBookedValue ? getBooleanValue(colIndices.isBooked) : true;
     const winningsBroughtHome = getNumericValue(colIndices.winningsBroughtHome);
     const cruisePointsEarned = getNumericValue(colIndices.cruisePointsEarned);
     const cabinCategory = getValue(colIndices.cabinCategory);
@@ -342,14 +262,10 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
       continue;
     }
 
-    if (!parsedState.isBooked) {
-      console.log(`[BookedParser] Skipping unbooked cruise row ${i}: ${ship} - status value was ${isBookedValue || 'FALSE'}`);
+    if (!isBooked) {
+      console.log(`[BookedParser] Skipping unbooked cruise row ${i}: ${ship} - isBooked is FALSE`);
       continue;
     }
-
-    const parsedSource = inferCruiseSourceFromShipName(ship)
-      ?? inferCruiseSourceFromText(sourceValue, itineraryName, departurePort)
-      ?? detectedSourceFromHeaders;
 
     // Use already calculated sailDate and returnDate, or calculate returnDate from nights
     const finalReturnDate = returnDate || calculateReturnDate(sailDate, nights);
@@ -361,9 +277,9 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
           .filter(Boolean)
       : [];
 
-    const completionState = parsedState.completionState === 'completed'
-      ? 'completed'
-      : (new Date(sailDate) < new Date() ? 'completed' : 'upcoming');
+    const completionState = isBooked 
+      ? (new Date(sailDate) < new Date() ? 'completed' : 'upcoming')
+      : 'upcoming';
 
     const bookedCruise: BookedCruise = {
       id,
@@ -378,9 +294,8 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
       guests,
       reservationNumber,
       bookingId,
-      status: completionState === 'completed' ? 'completed' : parsedState.status,
+      status: isBooked ? 'booked' : 'available',
       completionState,
-      isCourtesyHold: parsedState.isCourtesyHold,
       winnings: winningsBroughtHome || undefined,
       earnedPoints: cruisePointsEarned || undefined,
       cabinCategory: cabinCategory || undefined,
@@ -389,9 +304,7 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
       totalRetailCost: totalRetailCost > 0 ? totalRetailCost : undefined,
       totalCasinoDiscount: totalCasinoDiscount > 0 ? totalCasinoDiscount : undefined,
       taxes: portTaxesFees > 0 ? portTaxesFees : undefined,
-      cruiseSource: parsedSource,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     };
 
     if (isDuplicateCruise(bookedCruise, [...existingCruises, ...bookedCruises])) {

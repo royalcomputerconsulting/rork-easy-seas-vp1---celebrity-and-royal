@@ -17,7 +17,7 @@ import {
   RefreshCcw,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
@@ -28,8 +28,8 @@ import { createDateFromString } from '@/lib/date';
 import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
+import { DailyLuckReport } from '@/components/DailyLuckReport';
 
 const EVENT_COLORS = {
   cruise: '#3B82F6',
@@ -1019,7 +1019,12 @@ export default function DayAgendaScreen() {
             <TimeZoneConverter />
           </View>
 
-          <CrewRecognitionSection />
+          <View style={styles.sectionContainer}>
+            <DailyLuckReport
+              birthdate={currentUser?.birthdate || ''}
+              selectedDate={selectedDate}
+            />
+          </View>
         </ScrollView>
       </SafeAreaView>
       

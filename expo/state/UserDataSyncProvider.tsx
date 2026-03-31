@@ -2,6 +2,13 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { trpc, trpcClient, isBackendReachable } from "@/lib/trpc";
+import {
+  getCloudUserDataFallback,
+  isDirectCloudStoreConfigured,
+  isDirectCloudStoreReachable,
+  saveCloudUserDataFallback,
+  type CloudUserDataPayload,
+} from "@/lib/cloudUserDataStore";
 import { useAuth } from "@/state/AuthProvider";
 import { getUserScopedKey, ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
@@ -122,10 +129,53 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     retry: false,
   });
 
+  const canUseCloudDataStore = useCallback(async (): Promise<boolean> => {
+    const backendReachable = await isBackendReachable();
+    if (backendReachable) {
+      return true;
+    }
+
+    if (!isDirectCloudStoreConfigured()) {
+      console.log("[UserDataSync] Direct cloud store is not configured");
+      return false;
+    }
+
+    const directCloudReachable = await isDirectCloudStoreReachable();
+    console.log("[UserDataSync] Direct cloud store reachability:", directCloudReachable);
+    return directCloudReachable;
+  }, []);
+
+  const saveAllUserDataToCloud = useCallback(async (payload: CloudUserDataPayload) => {
+    try {
+      return await saveAllMutation.mutateAsync(payload);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.log("[UserDataSync] Primary cloud save failed, trying direct cloud store:", errorMessage);
+
+      if (!isDirectCloudStoreConfigured()) {
+        throw error;
+      }
+
+      return saveCloudUserDataFallback(payload);
+    }
+  }, [saveAllMutation]);
+
   const fetchAllUserDataByEmail = useCallback(async (email: string) => {
     const normalizedEmail = email.toLowerCase().trim();
     console.log("[UserDataSync] Fetching cloud data for:", normalizedEmail);
-    return trpcClient.data.getAllUserData.query({ email: normalizedEmail });
+
+    try {
+      return await trpcClient.data.getAllUserData.query({ email: normalizedEmail });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.log("[UserDataSync] Primary cloud fetch failed, trying direct cloud store:", errorMessage);
+
+      if (!isDirectCloudStoreConfigured()) {
+        throw error;
+      }
+
+      return getCloudUserDataFallback(normalizedEmail);
+    }
   }, []);
 
   const gatherAllLocalData = useCallback(async () => {
@@ -407,9 +457,9 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
   const checkCloudDataExists = useCallback(async (email: string): Promise<boolean> => {
     if (!email) return false;
-    const reachable = await isBackendReachable();
+    const reachable = await canUseCloudDataStore();
     if (!reachable) {
-      console.log("[UserDataSync] Backend not reachable, skipping cloud check");
+      console.log("[UserDataSync] No cloud store is reachable, skipping cloud check");
       return false;
     }
 
@@ -425,7 +475,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       console.log("[UserDataSync] Error checking cloud data (backend may be unavailable):", error);
       return false;
     }
-  }, [fetchAllUserDataByEmail]);
+  }, [canUseCloudDataStore, fetchAllUserDataByEmail]);
 
   const loadFromCloud = useCallback(async (): Promise<boolean> => {
     if (!authenticatedEmail) {
@@ -455,12 +505,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     }
 
     const reachable = await withTimeout(
-      isBackendReachable(),
+      canUseCloudDataStore(),
       ASYNC_OPERATION_TIMEOUT_MS,
-      '[UserDataSync] Checking backend reachability during cloud load'
+      '[UserDataSync] Checking cloud store reachability during cloud load'
     );
     if (!reachable) {
-      console.log("[UserDataSync] Backend not reachable, skipping cloud load");
+      console.log("[UserDataSync] No cloud store is reachable, skipping cloud load");
       setInitialCheckComplete(true);
       return false;
     }
@@ -553,7 +603,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         setIsSyncing(false);
       }
     }
-  }, [authenticatedEmail, fetchAllUserDataByEmail, restoreDataToLocal]);
+  }, [authenticatedEmail, canUseCloudDataStore, fetchAllUserDataByEmail, restoreDataToLocal]);
 
   const syncToCloud = useCallback(async () => {
     if (!authenticatedEmail) {
@@ -561,9 +611,9 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return;
     }
 
-    const reachable = await isBackendReachable();
+    const reachable = await canUseCloudDataStore();
     if (!reachable) {
-      console.log("[UserDataSync] Backend not reachable, skipping cloud sync");
+      console.log("[UserDataSync] No cloud store is reachable, skipping cloud sync");
       return;
     }
 
@@ -605,10 +655,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         return;
       }
 
-      await saveAllMutation.mutateAsync({
+      const payload: CloudUserDataPayload = {
         email: authenticatedEmail,
         ...localData,
-      });
+      };
+
+      await saveAllUserDataToCloud(payload);
 
       if (!isMountedRef.current) return;
 
@@ -643,7 +695,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         setIsSyncing(false);
       }
     }
-  }, [authenticatedEmail, gatherAllLocalData, saveAllMutation]);
+  }, [authenticatedEmail, canUseCloudDataStore, gatherAllLocalData, saveAllUserDataToCloud]);
 
   const forceSyncNow = useCallback(async () => {
     if (syncTimeoutRef.current) {
@@ -700,12 +752,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     
     const initSync = async () => {
       const reachable = await withTimeout(
-        isBackendReachable(),
+        canUseCloudDataStore(),
         ASYNC_OPERATION_TIMEOUT_MS,
-        '[UserDataSync] Checking backend reachability during initialization'
+        '[UserDataSync] Checking cloud store reachability during initialization'
       );
       if (!reachable) {
-        console.log("[UserDataSync] Backend not reachable, skipping initial sync");
+        console.log("[UserDataSync] No cloud store is reachable, skipping initial sync");
         setInitialCheckComplete(true);
         if (safetyTimeoutRef.current) {
           clearTimeout(safetyTimeoutRef.current);
@@ -738,7 +790,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     };
 
     void initSync();
-  }, [isAuthenticated, authenticatedEmail, loadFromCloud, syncToCloud, initialCheckComplete]);
+  }, [isAuthenticated, authenticatedEmail, canUseCloudDataStore, loadFromCloud, syncToCloud, initialCheckComplete]);
 
   // Removed automatic storage change listener to prevent continuous sync loops
   // Users can manually trigger sync via forceSyncNow() if needed

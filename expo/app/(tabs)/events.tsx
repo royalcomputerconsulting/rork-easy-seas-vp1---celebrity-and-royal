@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import type { CalendarEvent, BookedCruise } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -43,7 +44,6 @@ export default function EventsScreen() {
   const { bookedCruises } = coreData;
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [refreshKey, setRefreshKey] = useState(0);
 
   const calendarEvents = useMemo(() => {
     const events = [...(localData.calendar || []), ...(localData.tripit || [])];
@@ -51,58 +51,42 @@ export default function EventsScreen() {
     return events;
   }, [localData.calendar, localData.tripit]);
 
-  useEffect(() => {
-    console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', bookedCruises.length);
-    setRefreshKey(prev => prev + 1);
-  }, [calendarEvents.length, bookedCruises.length]);
-
-  const eventCounts = useMemo(() => {
-    let cruise = 0;
-    let travel = 0;
-    let personal = 0;
-    const countedCruiseIds = new Set<string>();
-
-    calendarEvents.forEach(event => {
-      if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
-        cruise++;
-        if ((event as any).cruiseId) countedCruiseIds.add((event as any).cruiseId);
-      } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
-        travel++;
-      } else {
-        personal++;
-      }
-    });
-
-    bookedCruises.forEach((bc) => {
-      if (!countedCruiseIds.has(bc.id)) {
-        cruise++;
-      }
-    });
-
-    return { cruise, travel, personal };
-  }, [calendarEvents, bookedCruises]);
+  console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', bookedCruises.length);
 
   const totalEventsThisMonth = useMemo(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     let count = 0;
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
 
     calendarEvents.forEach(event => {
       const eventStart = event.startDate || event.start || '';
-      if (eventStart) {
-        const eventDate = new Date(eventStart);
-        if (eventDate.getFullYear() === year && eventDate.getMonth() === month) {
-          count++;
-        }
+      const eventEnd = event.endDate || event.end || eventStart;
+      if (!eventStart) {
+        return;
+      }
+
+      const startDate = createDateFromString(eventStart.split('T')[0]);
+      const endDate = createDateFromString((eventEnd || eventStart).split('T')[0]);
+      endDate.setHours(23, 59, 59, 999);
+
+      if (startDate <= monthEnd && endDate >= monthStart) {
+        count++;
       }
     });
 
     bookedCruises.forEach((bc: BookedCruise) => {
-      if (bc.sailDate) {
-        const sailDate = new Date(bc.sailDate);
-        if (sailDate.getFullYear() === year && sailDate.getMonth() === month) {
-          count++;
-        }
+      if (!bc.sailDate || !bc.returnDate) {
+        return;
+      }
+
+      const sailDate = createDateFromString(bc.sailDate);
+      const returnDate = createDateFromString(bc.returnDate);
+      returnDate.setHours(23, 59, 59, 999);
+
+      if (sailDate <= monthEnd && returnDate >= monthStart) {
+        count++;
       }
     });
 
@@ -110,8 +94,8 @@ export default function EventsScreen() {
   }, [calendarEvents, bookedCruises, currentDate]);
 
   const isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
-    const start = new Date(startStr);
-    const end = new Date(endStr);
+    const start = createDateFromString(startStr);
+    const end = createDateFromString(endStr);
     const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
@@ -149,11 +133,21 @@ export default function EventsScreen() {
       }
     });
 
+    bookedCruises.forEach((cruiseBooking: BookedCruise) => {
+      if (!cruiseBooking.sailDate || !cruiseBooking.returnDate) {
+        return;
+      }
+
+      if (isDateInRange(date, cruiseBooking.sailDate, cruiseBooking.returnDate)) {
+        cruise++;
+      }
+    });
+
     return { cruise, travel, personal };
-  }, [calendarEvents]);
+  }, [bookedCruises, calendarEvents, isDateInRange]);
 
   const calendarDays = useMemo((): DayData[][] => {
-    console.log('[Events] Recalculating calendar days, refreshKey:', refreshKey);
+    console.log('[Events] Recalculating calendar days for month:', currentDate.toISOString());
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     
@@ -213,7 +207,7 @@ export default function EventsScreen() {
     }
     
     return weeks;
-  }, [currentDate, getEventsForDate, refreshKey]);
+  }, [currentDate, getEventsForDate]);
 
   const weekDays = useMemo(() => {
     const today = new Date();
@@ -234,7 +228,7 @@ export default function EventsScreen() {
       });
     }
     return days;
-  }, [getEventsForDate, refreshKey]);
+  }, [getEventsForDate]);
 
   const next90Days = useMemo(() => {
     const today = new Date();
@@ -253,7 +247,7 @@ export default function EventsScreen() {
       });
     }
     return days;
-  }, [getEventsForDate, refreshKey]);
+  }, [getEventsForDate]);
 
   const navigateMonth = useCallback((direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
@@ -283,7 +277,6 @@ export default function EventsScreen() {
           onPress: () => {
             console.log('[Events] Clearing all calendar events');
             coreData.setCalendarEvents([]);
-            setRefreshKey(prev => prev + 1);
           },
         },
       ]
@@ -443,9 +436,9 @@ export default function EventsScreen() {
             <Text style={styles.eventCardType}>{event.type}</Text>
           </View>
           <Text style={styles.eventCardTitle}>{event.title}</Text>
-          {event.location && (
+          {event.location ? (
             <Text style={styles.eventCardSubtitle}>{event.location}</Text>
-          )}
+          ) : null}
           <Text style={styles.eventCardDate}>
             {item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
           </Text>
@@ -455,10 +448,11 @@ export default function EventsScreen() {
   }, [router]);
 
   return (
-    <View style={styles.container}>
-      <Stack.Screen options={{ headerShown: false }} />
-      
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <ErrorBoundary>
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView 
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
@@ -684,10 +678,11 @@ export default function EventsScreen() {
             <CrewRecognitionSection />
           </View>
           
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
-      </SafeAreaView>
-    </View>
+            <View style={styles.bottomSpacer} />
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    </ErrorBoundary>
   );
 }
 

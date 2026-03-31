@@ -43,6 +43,7 @@ export interface UserProfile {
   isOwner?: boolean;
   avatarUrl?: string;
   crownAnchorNumber?: string;
+  birthdate?: string;
   playingHours?: PlayingHours;
   celebrityEmail?: string;
   celebrityCaptainsClubNumber?: string;
@@ -188,6 +189,7 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     isOwner: userRecord.isOwner === true,
     avatarUrl: typeof userRecord.avatarUrl === 'string' ? userRecord.avatarUrl : undefined,
     crownAnchorNumber: typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber,
+    birthdate: typeof userRecord.birthdate === 'string' ? userRecord.birthdate : undefined,
     playingHours: sanitizePlayingHours(userRecord.playingHours),
     celebrityEmail: typeof userRecord.celebrityEmail === 'string' ? userRecord.celebrityEmail : DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: typeof userRecord.celebrityCaptainsClubNumber === 'string' ? userRecord.celebrityCaptainsClubNumber : DEFAULT_OWNER.celebrityCaptainsClubNumber,

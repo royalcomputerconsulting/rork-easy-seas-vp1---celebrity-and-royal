@@ -2,6 +2,12 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { trpc, isBackendAvailable } from "@/lib/trpc";
+import {
+  getCloudUserDataFallback,
+  isDirectCloudStoreConfigured,
+  saveCloudUserDataFallback,
+  type CloudUserDataPayload,
+} from "@/lib/cloudUserDataStore";
 import { useAuth } from "@/state/AuthProvider";
 import { useUserDataSync } from "@/state/UserDataSyncProvider";
 import type { Cruise, BookedCruise, CasinoOffer, CalendarEvent, ClubRoyaleProfile, CruiseFilter } from "@/types/models";
@@ -348,8 +354,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, []);
 
   const syncToBackend = useCallback(async () => {
-    if (!isBackendAvailable() || !authenticatedEmail) {
-      console.log('[CoreData] Backend sync skipped - not authenticated or backend unavailable');
+    if (!authenticatedEmail) {
+      console.log('[CoreData] Backend sync skipped - not authenticated');
+      return;
+    }
+
+    if (!isBackendAvailable() && !isDirectCloudStoreConfigured()) {
+      console.log('[CoreData] Backend sync skipped - no cloud store configured');
       return;
     }
     
@@ -395,16 +406,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
                 }
               : undefined
           );
-      
-      console.log('[CoreData] Syncing to backend:', {
-        email: authenticatedEmail,
-        availableCruises: parsedCruises.length,
-        cruises: parsedBooked.length,
-        offers: parsedOffers.length,
-        events: parsedEvents.length,
-      });
-      
-      await saveAllUserDataMutateAsync({
+
+      const payload: CloudUserDataPayload = {
         email: authenticatedEmail,
         cruises: parsedCruises,
         bookedCruises: parsedBooked,
@@ -414,9 +417,34 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         userPoints: parsedPoints,
         clubRoyaleProfile: parsedProfile,
         loyaltyData: parsedExtendedLoyalty,
-      });
+      };
       
-      console.log('[CoreData] ✅ Backend sync successful');
+      console.log('[CoreData] Syncing to backend:', {
+        email: authenticatedEmail,
+        availableCruises: parsedCruises.length,
+        cruises: parsedBooked.length,
+        offers: parsedOffers.length,
+        events: parsedEvents.length,
+      });
+
+      if (isBackendAvailable()) {
+        try {
+          await saveAllUserDataMutateAsync(payload);
+          console.log('[CoreData] ✅ Backend sync successful via primary API');
+          return;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.log('[CoreData] Primary backend sync failed, trying direct cloud store:', errorMessage);
+        }
+      }
+
+      if (!isDirectCloudStoreConfigured()) {
+        console.log('[CoreData] Direct cloud store is not configured, skipping fallback sync');
+        return;
+      }
+
+      await saveCloudUserDataFallback(payload);
+      console.log('[CoreData] ✅ Backend sync successful via direct cloud store fallback');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorString = String(error);
@@ -432,17 +460,37 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, [saveAllUserDataMutateAsync, authenticatedEmail]);
 
   const loadFromBackend = useCallback(async () => {
-    if (!isBackendAvailable() || !authenticatedEmail) {
-      console.log('[CoreData] Backend load skipped - not authenticated or backend unavailable');
+    if (!authenticatedEmail) {
+      console.log('[CoreData] Backend load skipped - not authenticated');
+      return false;
+    }
+
+    if (!isBackendAvailable() && !isDirectCloudStoreConfigured()) {
+      console.log('[CoreData] Backend load skipped - no cloud store configured');
       return false;
     }
     
     try {
       console.log('[CoreData] 🔄 Loading data from backend for:', authenticatedEmail);
-      const result = await refetchBackendData();
+
+      let cloudResult: { found: boolean; data: any } | null = null;
+
+      if (isBackendAvailable()) {
+        try {
+          const result = await refetchBackendData();
+          cloudResult = result.data ?? null;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.log('[CoreData] Primary backend load failed, trying direct cloud store:', errorMessage);
+        }
+      }
+
+      if ((!cloudResult || !cloudResult.found) && isDirectCloudStoreConfigured()) {
+        cloudResult = await getCloudUserDataFallback(authenticatedEmail);
+      }
       
-      if (result.data && result.data.found && result.data.data) {
-        const userData = result.data.data;
+      if (cloudResult?.found && cloudResult.data) {
+        const userData = cloudResult.data;
         console.log('[CoreData] ✅ Backend data found:', {
           email: authenticatedEmail,
           availableCruises: userData.cruises?.length || 0,
