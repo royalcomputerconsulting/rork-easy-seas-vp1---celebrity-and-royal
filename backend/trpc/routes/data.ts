@@ -19,6 +19,8 @@ const UserDataSchema = z.object({
   loyaltyData: z.any().optional(),
   bankrollData: z.any().optional(),
   celebrityData: z.any().optional(),
+  crewRecognitionEntries: z.array(z.any()).optional(),
+  crewRecognitionSailings: z.array(z.any()).optional(),
 });
 
 interface StoredUserData {
@@ -38,6 +40,8 @@ interface StoredUserData {
   loyaltyData?: any;
   bankrollData?: any;
   celebrityData?: any;
+  crewRecognitionEntries?: any[];
+  crewRecognitionSailings?: any[];
   updatedAt: string;
   createdAt?: string;
   [key: string]: any;
@@ -135,6 +139,8 @@ export const dataRouter = createTRPCRouter({
         loyaltyData: input.loyaltyData ?? existingData?.loyaltyData,
         bankrollData: input.bankrollData ?? existingData?.bankrollData,
         celebrityData: input.celebrityData ?? existingData?.celebrityData,
+        crewRecognitionEntries: input.crewRecognitionEntries ?? existingData?.crewRecognitionEntries ?? [],
+        crewRecognitionSailings: input.crewRecognitionSailings ?? existingData?.crewRecognitionSailings ?? [],
         updatedAt: now,
         createdAt: existingData?.createdAt ?? now,
       };
@@ -157,6 +163,8 @@ export const dataRouter = createTRPCRouter({
             loyaltyData = $loyaltyData,
             bankrollData = $bankrollData,
             celebrityData = $celebrityData,
+            crewRecognitionEntries = $crewRecognitionEntries,
+            crewRecognitionSailings = $crewRecognitionSailings,
             updatedAt = $updatedAt
           WHERE email = $email`,
           dataToSave as Record<string, unknown>
@@ -177,6 +185,8 @@ export const dataRouter = createTRPCRouter({
         offers: dataToSave.casinoOffers?.length ?? 0,
         events: dataToSave.calendarEvents?.length ?? 0,
         sessions: dataToSave.casinoSessions?.length ?? 0,
+        crewEntries: dataToSave.crewRecognitionEntries?.length ?? 0,
+        crewSailings: dataToSave.crewRecognitionSailings?.length ?? 0,
       });
 
       return { success: true, updatedAt: now };
@@ -204,6 +214,8 @@ export const dataRouter = createTRPCRouter({
           offers: data.casinoOffers?.length ?? 0,
           events: data.calendarEvents?.length ?? 0,
           sessions: data.casinoSessions?.length ?? 0,
+          crewEntries: data.crewRecognitionEntries?.length ?? 0,
+          crewSailings: data.crewRecognitionSailings?.length ?? 0,
           updatedAt: data.updatedAt,
         });
         return {
@@ -224,6 +236,8 @@ export const dataRouter = createTRPCRouter({
             loyaltyData: data.loyaltyData,
             bankrollData: data.bankrollData,
             celebrityData: data.celebrityData,
+            crewRecognitionEntries: data.crewRecognitionEntries ?? [],
+            crewRecognitionSailings: data.crewRecognitionSailings ?? [],
             updatedAt: data.updatedAt,
             createdAt: data.createdAt,
           },
