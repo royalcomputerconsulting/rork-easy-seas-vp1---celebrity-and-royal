@@ -449,7 +449,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorString = String(error);
       
-      if (['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage)) {
+      if (['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage)) {
         console.log('[CoreData] Backend sync skipped:', errorMessage);
       } else if (errorString.includes('Failed to fetch') || errorString.includes('Network request failed')) {
         console.log('[CoreData] Backend sync skipped: Network error - backend may be unavailable');
@@ -564,7 +564,16 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.log('[CoreData] No backend data found for:', authenticatedEmail);
       return false;
     } catch (error) {
-      console.error('[CoreData] Backend load failed:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorString = String(error);
+
+      if (['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage)) {
+        console.log('[CoreData] Backend load skipped:', errorMessage);
+      } else if (errorString.includes('Failed to fetch') || errorString.includes('Network request failed')) {
+        console.log('[CoreData] Backend load skipped: Network error - backend may be unavailable');
+      } else {
+        console.error('[CoreData] Backend load failed:', error);
+      }
       return false;
     }
   }, [refetchBackendData, authenticatedEmail]);

@@ -5,6 +5,39 @@ let isConnecting = false;
 let lastConnectionTime = 0;
 const CONNECTION_TIMEOUT = 5000;
 const CONNECTION_RETRY_DELAY = 1000;
+const RPC_SUFFIX = '/rpc';
+const DATABASE_UNAVAILABLE = 'DATABASE_UNAVAILABLE';
+
+function normalizeEndpoint(endpoint: string): string {
+  const trimmedEndpoint = endpoint.trim().replace(/\/+$/, '');
+
+  if (!trimmedEndpoint) {
+    return trimmedEndpoint;
+  }
+
+  if (trimmedEndpoint.endsWith(RPC_SUFFIX)) {
+    return trimmedEndpoint;
+  }
+
+  return `${trimmedEndpoint}${RPC_SUFFIX}`;
+}
+
+function getDatabaseErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeDatabaseConnectionError(error: unknown): Error {
+  const errorMessage = getDatabaseErrorMessage(error);
+  const isUnsupportedVersionResponse =
+    errorMessage.includes('reported by the engine is not supported by this library') &&
+    (errorMessage.includes('"code":"not_found"') || errorMessage.includes('The requested resource was not found'));
+
+  if (isUnsupportedVersionResponse) {
+    return new Error(DATABASE_UNAVAILABLE);
+  }
+
+  return error instanceof Error ? error : new Error(errorMessage);
+}
 
 async function createConnection(): Promise<Surreal> {
   const endpoint = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
@@ -17,7 +50,7 @@ async function createConnection(): Promise<Surreal> {
 
   const newDb = new Surreal();
   
-  const connectPromise = newDb.connect(endpoint, {
+  const connectPromise = newDb.connect(normalizeEndpoint(endpoint), {
     namespace,
     database: 'easyseas',
     auth: token,
@@ -77,9 +110,16 @@ export async function getDb(): Promise<Surreal> {
     lastConnectionTime = Date.now();
     return db;
   } catch (error) {
+    const normalizedError = normalizeDatabaseConnectionError(error);
     db = null;
-    console.error('[DB] Failed to connect:', error instanceof Error ? error.message : String(error));
-    throw new Error('Database connection failed: ' + (error instanceof Error ? error.message : String(error)));
+
+    if (normalizedError.message === DATABASE_UNAVAILABLE) {
+      console.log('[DB] Database unavailable - endpoint did not return a supported SurrealDB RPC response');
+      throw normalizedError;
+    }
+
+    console.error('[DB] Failed to connect:', normalizedError.message);
+    throw new Error('Database connection failed: ' + normalizedError.message);
   } finally {
     isConnecting = false;
   }

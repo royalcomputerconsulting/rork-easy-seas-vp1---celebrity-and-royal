@@ -590,7 +590,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         errorMessage.includes('fetch') ||
         errorMessage.includes('timeout') ||
         errorMessage.includes('AbortError') ||
-        ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage);
+        ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage);
       
       if (!isNetworkError) {
         setSyncError(errorMessage);
@@ -683,7 +683,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         errorMessage.includes('fetch') ||
         errorMessage.includes('timeout') ||
         errorMessage.includes('AbortError') ||
-        ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage);
+        ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage);
       
       if (!isNetworkError) {
         if (isMountedRef.current) {

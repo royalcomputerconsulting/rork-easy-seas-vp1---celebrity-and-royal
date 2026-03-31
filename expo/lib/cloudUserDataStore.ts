@@ -5,6 +5,8 @@ const CLOUD_USER_TABLE = "user_profiles";
 const CLOUD_CONNECTION_TIMEOUT_MS = 6000;
 const CLOUD_CONNECTION_RETRY_DELAY_MS = 250;
 const CLOUD_HEALTH_CACHE_MS = 60_000;
+const CLOUD_RPC_SUFFIX = "/rpc";
+const DIRECT_CLOUD_STORE_UNAVAILABLE = "DIRECT_CLOUD_STORE_UNAVAILABLE";
 
 export interface CloudUserDataRecord {
   email: string;
@@ -64,13 +66,44 @@ function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
 }
 
+function normalizeCloudEndpoint(endpoint: string): string {
+  const trimmedEndpoint = endpoint.trim().replace(/\/+$/, "");
+
+  if (!trimmedEndpoint) {
+    return trimmedEndpoint;
+  }
+
+  if (trimmedEndpoint.endsWith(CLOUD_RPC_SUFFIX)) {
+    return trimmedEndpoint;
+  }
+
+  return `${trimmedEndpoint}${CLOUD_RPC_SUFFIX}`;
+}
+
+function getCloudStoreErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeCloudStoreConnectionError(error: unknown): Error {
+  const errorMessage = getCloudStoreErrorMessage(error);
+  const isUnsupportedVersionResponse =
+    errorMessage.includes('reported by the engine is not supported by this library') &&
+    (errorMessage.includes('"code":"not_found"') || errorMessage.includes('The requested resource was not found'));
+
+  if (isUnsupportedVersionResponse) {
+    return new Error(DIRECT_CLOUD_STORE_UNAVAILABLE);
+  }
+
+  return error instanceof Error ? error : new Error(errorMessage);
+}
+
 function getCloudConfig() {
   const endpoint = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
   const namespace = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
   const token = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
 
   return {
-    endpoint,
+    endpoint: endpoint ? normalizeCloudEndpoint(endpoint) : endpoint,
     namespace,
     token,
   };
@@ -160,11 +193,18 @@ async function getCloudDb(): Promise<Surreal> {
     lastCloudReachable = true;
     return cloudDb;
   } catch (error) {
+    const normalizedError = normalizeCloudStoreConnectionError(error);
     cloudDb = null;
     lastCloudReachable = false;
     lastCloudHealthCheck = Date.now();
-    console.error("[CloudStore] Direct cloud store connection failed:", error instanceof Error ? error.message : String(error));
-    throw error;
+
+    if (normalizedError.message === DIRECT_CLOUD_STORE_UNAVAILABLE) {
+      console.log("[CloudStore] Direct cloud store unavailable - endpoint did not return a supported SurrealDB RPC response");
+    } else {
+      console.error("[CloudStore] Direct cloud store connection failed:", normalizedError.message);
+    }
+
+    throw normalizedError;
   } finally {
     isConnectingCloudDb = false;
   }
