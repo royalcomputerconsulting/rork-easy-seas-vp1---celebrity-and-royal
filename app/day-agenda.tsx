@@ -17,7 +17,7 @@ import {
   RefreshCcw,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
@@ -25,10 +25,11 @@ import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
-import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
+import { getLuckForDatePersonalized, isScottUser } from '@/constants/luckScores';
+import { useAuth } from '@/state/AuthProvider';
+import { determineCasinoHoursWithContext, determineSeaDay, getResolvedCruiseItinerary, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 
 const EVENT_COLORS = {
@@ -65,6 +66,7 @@ interface MergedCruiseData {
   departurePort?: string;
   nights: number;
   itinerary?: ItineraryDay[];
+  ports?: string[];
   bookings: {
     reservationNumber?: string;
     cabinNumber?: string;
@@ -88,6 +90,50 @@ interface TimelineEvent {
   isOpportune?: boolean;
 }
 
+function formatAgendaDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function getCruiseRangeEndDate(sailDate: string, returnDate: string | undefined, nights: number | undefined): string {
+  if (returnDate && returnDate.trim().length > 0) {
+    return returnDate;
+  }
+
+  const fallbackEndDate = createDateFromString(sailDate);
+  fallbackEndDate.setHours(0, 0, 0, 0);
+  fallbackEndDate.setDate(fallbackEndDate.getDate() + Math.max(1, nights ?? 0));
+  const computedReturnDate = formatAgendaDateKey(fallbackEndDate);
+
+  console.log('[DayAgenda] Derived fallback return date', {
+    sailDate,
+    returnDate,
+    nights,
+    computedReturnDate,
+  });
+
+  return computedReturnDate;
+}
+
+function getItineraryWindowText(itineraryDay: ItineraryDay | undefined | null): string | undefined {
+  if (!itineraryDay || itineraryDay.isSeaDay) {
+    return undefined;
+  }
+
+  if (itineraryDay.arrival && itineraryDay.departure) {
+    return `${itineraryDay.arrival} - ${itineraryDay.departure}`;
+  }
+
+  if (itineraryDay.arrival) {
+    return `From ${itineraryDay.arrival} • Overnight`;
+  }
+
+  if (itineraryDay.departure) {
+    return `Until ${itineraryDay.departure}`;
+  }
+
+  return itineraryDay.notes || 'Port day';
+}
+
 export default function DayAgendaScreen() {
   const router = useRouter();
   const { date } = useLocalSearchParams<{ date: string }>();
@@ -97,6 +143,8 @@ export default function DayAgendaScreen() {
   const { bookedCruises } = coreData;
 
   const playingHours: PlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
+  const { isAdmin, authenticatedEmail } = useAuth();
+  const useScottData = isScottUser(isAdmin, authenticatedEmail);
   const { getSessionsForDate, getDailySummary, addSession, removeSession } = useCasinoSessions();
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -151,13 +199,28 @@ export default function DayAgendaScreen() {
 
   const mergedCruiseBookings = useMemo((): MergedCruiseData[] => {
     const cruiseMap = new Map<string, MergedCruiseData>();
-    
+
     bookedCruises.forEach((cruise: BookedCruise) => {
-      if (!cruise.sailDate || !cruise.returnDate) return;
-      if (!isDateInRange(selectedDate, cruise.sailDate, cruise.returnDate)) return;
-      
-      const key = `${cruise.shipName}-${cruise.sailDate}`;
-      
+      if (!cruise.sailDate) {
+        return;
+      }
+
+      const computedReturnDate = getCruiseRangeEndDate(cruise.sailDate, cruise.returnDate, cruise.nights);
+
+      if (!isDateInRange(selectedDate, cruise.sailDate, computedReturnDate)) {
+        return;
+      }
+
+      const key = `${cruise.shipName}-${cruise.sailDate}-${computedReturnDate}`;
+
+      console.log('[DayAgenda] Matching cruise for selected date', {
+        selectedDate: formatAgendaDateKey(selectedDate),
+        shipName: cruise.shipName,
+        sailDate: cruise.sailDate,
+        computedReturnDate,
+        cruiseId: cruise.id,
+      });
+
       if (cruiseMap.has(key)) {
         const existing = cruiseMap.get(key)!;
         existing.bookings.push({
@@ -172,12 +235,13 @@ export default function DayAgendaScreen() {
           id: cruise.id,
           shipName: cruise.shipName || 'Unknown Ship',
           sailDate: cruise.sailDate,
-          returnDate: cruise.returnDate,
+          returnDate: computedReturnDate,
           destination: cruise.destination,
           itineraryName: cruise.itineraryName,
           departurePort: cruise.departurePort,
           nights: cruise.nights || 0,
-          itinerary: cruise.itinerary,
+          itinerary: getResolvedCruiseItinerary(cruise),
+          ports: cruise.ports,
           bookings: [{
             reservationNumber: cruise.reservationNumber,
             cabinNumber: cruise.cabinNumber,
@@ -188,7 +252,7 @@ export default function DayAgendaScreen() {
         });
       }
     });
-    
+
     return Array.from(cruiseMap.values());
   }, [bookedCruises, selectedDate, isDateInRange]);
 
@@ -203,8 +267,7 @@ export default function DayAgendaScreen() {
   }, [selectedDate]);
 
   const getItineraryForDay = useCallback((cruise: MergedCruiseData, dayNum: number): ItineraryDay | undefined => {
-    if (!cruise.itinerary) return undefined;
-    return cruise.itinerary.find(d => d.day === dayNum);
+    return cruise.itinerary?.find((day) => day.day === dayNum);
   }, []);
 
   const getCasinoContext = useCallback((cruise: MergedCruiseData, dayNum: number): CasinoDayContext => {
@@ -232,6 +295,10 @@ export default function DayAgendaScreen() {
       port: currentDay?.port || 'Unknown',
     };
   }, []);
+
+  const mergedCruiseBookingIds = useMemo(() => {
+    return new Set<string>(mergedCruiseBookings.map((cruise) => cruise.id));
+  }, [mergedCruiseBookings]);
 
   const timelineEvents = useMemo((): TimelineEvent[] => {
     const events: TimelineEvent[] = [];
@@ -282,6 +349,22 @@ export default function DayAgendaScreen() {
             });
           }
         } else {
+          const portWindowText = getItineraryWindowText(itineraryDay);
+
+          if (itineraryDay.arrival || itineraryDay.departure) {
+            events.push({
+              id: `port-window-${cruise.id}`,
+              type: 'port',
+              title: `In Port: ${itineraryDay.port}`,
+              subtitle: portWindowText || 'Port window',
+              startTime: itineraryDay.arrival || '00:00',
+              endTime: itineraryDay.departure || (itineraryDay.arrival ? '23:59' : undefined),
+              color: '#FFFFFF',
+              icon: 'port',
+              notes: itineraryDay.notes,
+            });
+          }
+
           if (itineraryDay.arrival) {
             events.push({
               id: `arrival-${cruise.id}`,
@@ -412,8 +495,15 @@ export default function DayAgendaScreen() {
     });
     
     calendarEvents.forEach(event => {
+      if (event.sourceType === 'cruise' && event.cruiseId && mergedCruiseBookingIds.has(event.cruiseId)) {
+        return;
+      }
+
       const eventStart = event.startDate || event.start || '';
-      const eventEnd = event.endDate || event.end || eventStart;
+      const rawEventEnd = event.endDate || event.end;
+      const eventEnd = event.type === 'cruise'
+        ? getCruiseRangeEndDate(eventStart, rawEventEnd, undefined)
+        : (rawEventEnd || eventStart);
       
       if (eventStart) {
         const startDateStr = eventStart.split('T')[0];
@@ -443,15 +533,22 @@ export default function DayAgendaScreen() {
     });
     
     return events;
-  }, [selectedDate, mergedCruiseBookings, calendarEvents, getDayOfCruise, getItineraryForDay, getCasinoContext]);
+  }, [selectedDate, mergedCruiseBookings, mergedCruiseBookingIds, calendarEvents, getDayOfCruise, getItineraryForDay, getCasinoContext]);
 
   const agendaItems = useMemo((): AgendaItem[] => {
     const items: AgendaItem[] = [];
     const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
 
     calendarEvents.forEach(event => {
+      if (event.sourceType === 'cruise' && event.cruiseId && mergedCruiseBookingIds.has(event.cruiseId)) {
+        return;
+      }
+
       const eventStart = event.startDate || event.start || '';
-      const eventEnd = event.endDate || event.end || eventStart;
+      const rawEventEnd = event.endDate || event.end;
+      const eventEnd = event.type === 'cruise'
+        ? getCruiseRangeEndDate(eventStart, rawEventEnd, undefined)
+        : (rawEventEnd || eventStart);
       
       if (eventStart) {
         const startDateStr = eventStart.split('T')[0];
@@ -484,12 +581,20 @@ export default function DayAgendaScreen() {
     });
 
     mergedCruiseBookings.forEach((cruise) => {
+      const dayNum = getDayOfCruise(cruise);
+      const itineraryDay = getItineraryForDay(cruise, dayNum);
+      const itineraryWindow = getItineraryWindowText(itineraryDay);
+
       items.push({
         id: `cruise-${cruise.id}`,
         type: 'cruise',
         title: cruise.shipName,
-        subtitle: cruise.destination || cruise.itineraryName,
-        location: cruise.departurePort,
+        subtitle: itineraryDay
+          ? itineraryDay.isSeaDay
+            ? `At Sea • ${cruise.destination || cruise.itineraryName || 'Cruise day'}`
+            : `${itineraryDay.port}${itineraryWindow ? ` • ${itineraryWindow}` : ''}`
+          : cruise.destination || cruise.itineraryName,
+        location: itineraryDay && !itineraryDay.isSeaDay ? itineraryDay.port : cruise.departurePort,
         isAllDay: true,
         color: EVENT_COLORS.cruise,
         data: cruise,
@@ -505,7 +610,7 @@ export default function DayAgendaScreen() {
     });
 
     return items;
-  }, [selectedDate, calendarEvents, mergedCruiseBookings, getDayStatus]);
+  }, [selectedDate, calendarEvents, mergedCruiseBookingIds, mergedCruiseBookings, getDayOfCruise, getDayStatus, getItineraryForDay]);
 
   const handleItemPress = useCallback((item: AgendaItem) => {
     if (item.type === 'cruise' && 'sailDate' in item.data) {
@@ -643,6 +748,8 @@ export default function DayAgendaScreen() {
     return `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
   }, [selectedDate]);
 
+  const dayLuck = useMemo(() => getLuckForDatePersonalized(dateStr, useScottData), [dateStr, useScottData]);
+
   const goldenTimeSlots = useMemo(() => {
     return opportunePlayingTimes.map(t => ({
       id: t.id,
@@ -699,21 +806,27 @@ export default function DayAgendaScreen() {
     try {
       const existingEvents = coreData.calendarEvents.filter(e => e.sourceType !== 'cruise');
       
-      const cruiseEvents: CalendarEvent[] = bookedCruises.map(cruise => ({
-        id: `cruise-event-${cruise.id}`,
-        title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
-        startDate: cruise.sailDate,
-        endDate: cruise.returnDate,
-        start: cruise.sailDate,
-        end: cruise.returnDate,
-        type: 'cruise' as const,
-        sourceType: 'cruise' as const,
-        location: cruise.departurePort,
-        description: `${cruise.nights} night cruise${cruise.reservationNumber ? ` - Res# ${cruise.reservationNumber}` : ''}${cruise.cabinNumber ? ` - Cabin ${cruise.cabinNumber}` : ''}`,
-        cruiseId: cruise.id,
-        allDay: true,
-        source: 'import' as const,
-      }));
+      const cruiseEvents: CalendarEvent[] = bookedCruises
+        .filter((cruise) => Boolean(cruise.sailDate))
+        .map((cruise) => {
+          const computedReturnDate = getCruiseRangeEndDate(cruise.sailDate, cruise.returnDate, cruise.nights);
+
+          return {
+            id: `cruise-event-${cruise.id}`,
+            title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
+            startDate: cruise.sailDate,
+            endDate: computedReturnDate,
+            start: cruise.sailDate,
+            end: computedReturnDate,
+            type: 'cruise' as const,
+            sourceType: 'cruise' as const,
+            location: cruise.departurePort,
+            description: `${cruise.nights} night cruise${cruise.reservationNumber ? ` - Res# ${cruise.reservationNumber}` : ''}${cruise.cabinNumber ? ` - Cabin ${cruise.cabinNumber}` : ''}`,
+            cruiseId: cruise.id,
+            allDay: true,
+            source: 'import' as const,
+          };
+        });
       
       const allEvents = [...existingEvents, ...cruiseEvents];
       coreData.setCalendarEvents(allEvents);
@@ -856,9 +969,9 @@ export default function DayAgendaScreen() {
                     <View style={styles.portDayBadge}>
                       <Anchor size={14} color={EVENT_COLORS.port} />
                       <Text style={styles.portDayText}>{itineraryDay.port}</Text>
-                      {itineraryDay.arrival && itineraryDay.departure && (
+                      {getItineraryWindowText(itineraryDay) && (
                         <Text style={styles.portTimes}>
-                          {itineraryDay.arrival} - {itineraryDay.departure}
+                          {getItineraryWindowText(itineraryDay)}
                         </Text>
                       )}
                     </View>
@@ -951,9 +1064,17 @@ export default function DayAgendaScreen() {
 
         <View style={styles.dateHeader}>
           <Text style={styles.dateText}>{formattedDate}</Text>
-          <Text style={styles.eventCount}>
-            {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
-          </Text>
+          <View style={styles.dateSubRow}>
+            <Text style={styles.eventCount}>
+              {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
+            </Text>
+            {dayLuck ? (
+              <View style={[styles.luckBadge, { backgroundColor: `${dayLuck.hex}22`, borderColor: `${dayLuck.hex}55` }]}>
+                <Text style={[styles.luckBadgeScore, { color: dayLuck.hex }]}>{String(dayLuck.score)}</Text>
+                <Text style={[styles.luckBadgeLabel, { color: dayLuck.hex }]}>{dayLuck.label}</Text>
+              </View>
+            ) : null}
+          </View>
         </View>
 
         <ScrollView 
@@ -1018,8 +1139,6 @@ export default function DayAgendaScreen() {
           <View style={styles.sectionContainer}>
             <TimeZoneConverter />
           </View>
-
-          <CrewRecognitionSection />
         </ScrollView>
       </SafeAreaView>
       
@@ -1085,11 +1204,36 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  dateSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   eventCount: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: '#FFFFFF',
+  },
+  luckBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 99,
+    borderWidth: 1,
+  },
+  luckBadgeScore: {
+    fontSize: 15,
+    fontWeight: '900' as const,
+    lineHeight: 18,
+  },
+  luckBadgeLabel: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.4,
   },
   scrollView: {
     flex: 1,
