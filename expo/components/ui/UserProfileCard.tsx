@@ -90,12 +90,20 @@ export function UserProfileCard({
   isSaving = false,
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
+  const resolveVisibleBrand = (brand?: BrandType): BrandType => {
+    if (!brand || brand === 'carnival') {
+      return 'royal';
+    }
+
+    return brand;
+  };
+
   const [formData, setFormData] = useState<UserProfileData>({
     ...currentValues,
     birthdate: formatBirthdateForDisplay(currentValues.birthdate) || '',
   });
   const [activeBrand, setActiveBrand] = useState<BrandType>(
-    (currentValues.preferredBrand as BrandType) || 'royal'
+    resolveVisibleBrand(currentValues.preferredBrand as BrandType | undefined)
   );
   const [isModalVisible, setIsModalVisible] = useState(false);
 
@@ -104,7 +112,7 @@ export function UserProfileCard({
       ...currentValues,
       birthdate: formatBirthdateForDisplay(currentValues.birthdate) || '',
     });
-    setActiveBrand((currentValues.preferredBrand as BrandType) || 'royal');
+    setActiveBrand(resolveVisibleBrand(currentValues.preferredBrand as BrandType | undefined));
   }, [currentValues]);
 
   const calculatedLevel = getLevelByNights(formData.loyaltyPoints);
@@ -638,7 +646,13 @@ export function UserProfileCard({
       </LinearGradient>
 
       <View style={styles.brandToggleContainer}>
-        <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} showSilversea={true} />
+        <BrandToggle
+          activeBrand={activeBrand}
+          onToggle={handleBrandToggle}
+          showSilversea={true}
+          showCarnival={false}
+          variant="playerCard"
+        />
       </View>
 
       <View style={styles.currentValuesSection}>

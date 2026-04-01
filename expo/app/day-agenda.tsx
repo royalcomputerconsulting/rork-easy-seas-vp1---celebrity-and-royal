@@ -30,6 +30,7 @@ import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { DailyLuckReport } from '@/components/DailyLuckReport';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { mergeBookedCruiseSources } from '@/lib/calendar/bookedCruises';
 
 const EVENT_COLORS = {
@@ -987,20 +988,21 @@ export default function DayAgendaScreen() {
   }, [handleItemPress, getIcon, renderDayStatusBadge, getDayOfCruise, getItineraryForDay]);
 
   return (
-    <View style={styles.container}>
-      <Stack.Screen 
-        options={{ 
-          headerShown: false,
-        }} 
-      />
-      <LinearGradient
-        colors={[COLORS.navyDeep, COLORS.navyMedium, COLORS.navyLight]}
-        locations={[0, 0.6, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.header}>
+    <ErrorBoundary>
+      <View style={styles.container}>
+        <Stack.Screen 
+          options={{ 
+            headerShown: false,
+          }} 
+        />
+        <LinearGradient
+          colors={[COLORS.navyDeep, COLORS.navyMedium, COLORS.navyLight]}
+          locations={[0, 0.6, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+        
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
@@ -1097,27 +1099,28 @@ export default function DayAgendaScreen() {
             </>
           )}
           
-          <View style={styles.sectionContainer}>
+          <View style={styles.sectionContainer} testID="day-agenda-time-zone-section">
             <TimeZoneConverter />
           </View>
 
-          <View style={styles.sectionContainer}>
+          <View style={styles.sectionContainer} testID="day-agenda-daily-luck-section">
             <DailyLuckReport
               birthdate={normalizedBirthdate}
               selectedDate={selectedDate}
             />
           </View>
         </ScrollView>
-      </SafeAreaView>
-      
-      <AddSessionModal
-        visible={showAddSessionModal}
-        onClose={() => setShowAddSessionModal(false)}
-        onSave={handleSaveSession}
-        date={dateStr}
-        goldenTimeSlots={goldenTimeSlots}
-      />
-    </View>
+        </SafeAreaView>
+        
+        <AddSessionModal
+          visible={showAddSessionModal}
+          onClose={() => setShowAddSessionModal(false)}
+          onSave={handleSaveSession}
+          date={dateStr}
+          goldenTimeSlots={goldenTimeSlots}
+        />
+      </View>
+    </ErrorBoundary>
   );
 }
 

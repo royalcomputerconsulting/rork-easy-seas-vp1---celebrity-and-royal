@@ -310,11 +310,12 @@ export function TimeZoneConverter() {
   }, [localTz, remoteTz]);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="time-zone-converter-card">
       <TouchableOpacity
         style={styles.headerRow}
         onPress={toggleExpanded}
         activeOpacity={0.7}
+        testID="time-zone-converter-toggle"
       >
         <View style={styles.headerLeft}>
           <View style={styles.iconBadge}>
@@ -509,16 +510,16 @@ export function TimeZoneConverter() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#08213D',
+    backgroundColor: '#071A2F',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
+    borderColor: 'rgba(255, 255, 255, 0.26)',
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOpacity: 0.28,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 12,
+    shadowColor: '#02101F',
+    shadowOpacity: 0.34,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 14,
   },
   headerRow: {
     flexDirection: 'row',
@@ -527,7 +528,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#0A2342',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -543,10 +545,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#FFFFFF',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
   },
   headerRight: {
     flexDirection: 'row',
@@ -597,11 +599,11 @@ const styles = StyleSheet.create({
   },
   clockCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   clockLabelRow: {
     flexDirection: 'row',
@@ -671,13 +673,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     marginTop: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   offsetBannerText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
