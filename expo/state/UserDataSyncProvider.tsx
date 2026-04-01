@@ -421,14 +421,14 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         }
       }
 
-      if (cloudData.crewRecognitionEntries?.length > 0) {
+      if (cloudData.crewRecognitionEntries !== undefined) {
         savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), JSON.stringify(cloudData.crewRecognitionEntries))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), JSON.stringify(cloudData.crewRecognitionEntries ?? []))
         );
       }
-      if (cloudData.crewRecognitionSailings?.length > 0) {
+      if (cloudData.crewRecognitionSailings !== undefined) {
         savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), JSON.stringify(cloudData.crewRecognitionSailings))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), JSON.stringify(cloudData.crewRecognitionSailings ?? []))
         );
       }
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -132,7 +132,7 @@ export default function DayAgendaScreen() {
   const router = useRouter();
   const { date } = useLocalSearchParams<{ date: string }>();
   const { localData } = useAppState();
-  const { currentUser } = useUser();
+  const { currentUser, ensureDailyLuckYear, getDailyLuckEntry } = useUser();
   const coreData = useCoreData();
   const { bookedCruises } = coreData;
 
@@ -172,9 +172,17 @@ export default function DayAgendaScreen() {
     });
   }, [selectedDate]);
 
+  useEffect(() => {
+    void ensureDailyLuckYear(selectedDate.getFullYear());
+  }, [ensureDailyLuckYear, selectedDate]);
+
+  const storedDailyLuckEntry = useMemo(() => {
+    return getDailyLuckEntry(selectedDate);
+  }, [getDailyLuckEntry, selectedDate]);
+
   const dailyLuckDigit = useMemo(() => {
-    return getDailyLuckDigitForDate(normalizedBirthdate, selectedDate);
-  }, [normalizedBirthdate, selectedDate]);
+    return storedDailyLuckEntry?.luckNumber ?? getDailyLuckDigitForDate(normalizedBirthdate, selectedDate);
+  }, [normalizedBirthdate, selectedDate, storedDailyLuckEntry?.luckNumber]);
 
   const dailyLuckColor = useMemo(() => {
     return dailyLuckDigit !== null ? getLuckDigitColor(dailyLuckDigit) : '#FFFFFF';
@@ -1049,6 +1057,7 @@ export default function DayAgendaScreen() {
             <DailyLuckReport
               birthdate={normalizedBirthdate}
               selectedDate={selectedDate}
+              entry={storedDailyLuckEntry}
             />
           </View>
 

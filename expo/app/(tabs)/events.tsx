@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -87,7 +87,7 @@ export default function EventsScreen() {
   const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
   const coreData = useCoreData();
   const { bookedCruises } = coreData;
-  const { currentUser } = useUser();
+  const { currentUser, ensureDailyLuckYear, getDailyLuckEntry } = useUser();
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -122,9 +122,13 @@ export default function EventsScreen() {
     return resolvedBirthdate;
   }, [currentUser?.birthdate]);
 
+  useEffect(() => {
+    void ensureDailyLuckYear(currentDate.getFullYear());
+  }, [currentDate, ensureDailyLuckYear]);
+
   const getLuckScoreForDate = useCallback((date: Date): number | null => {
-    return getDailyLuckDigitForDate(normalizedBirthdate, date);
-  }, [normalizedBirthdate]);
+    return getDailyLuckEntry(date)?.luckNumber ?? getDailyLuckDigitForDate(normalizedBirthdate, date);
+  }, [getDailyLuckEntry, normalizedBirthdate]);
 
   console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', mergedBookedCruises.length);
 

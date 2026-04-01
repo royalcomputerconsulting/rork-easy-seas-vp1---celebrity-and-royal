@@ -3,7 +3,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { useAuth } from "./AuthProvider";
 import { normalizeBirthdateInput } from "@/lib/date";
+import { generateDailyLuckEntriesForYear, getDailyLuckDateKey } from "@/lib/dailyLuck";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
+import type { DailyLuckEntry } from "@/types/daily-luck";
 
 export interface PlayingHours {
   enabled: boolean;
@@ -45,6 +47,9 @@ export interface UserProfile {
   avatarUrl?: string;
   crownAnchorNumber?: string;
   birthdate?: string;
+  dailyLuckByDate?: Record<string, DailyLuckEntry>;
+  dailyLuckYears?: number[];
+  dailyLuckLastGeneratedAt?: string;
   playingHours?: PlayingHours;
   celebrityEmail?: string;
   celebrityCaptainsClubNumber?: string;
@@ -68,10 +73,13 @@ interface UserState {
   currentUserId: string | null;
   currentUser: UserProfile | null;
   isLoading: boolean;
+  isCalculatingDailyLuck: boolean;
   addUser: (user: { id?: string; name: string; email: string; avatarUrl?: string }) => Promise<UserProfile>;
   switchUser: (userId: string) => Promise<void>;
   removeUser: (userId: string) => Promise<void>;
   updateUser: (userId: string, updates: Partial<UserProfile>) => Promise<void>;
+  ensureDailyLuckYear: (year: number) => Promise<void>;
+  getDailyLuckEntry: (date: Date) => DailyLuckEntry | null;
   ensureOwner: () => Promise<UserProfile>;
   syncFromStorage: () => Promise<void>;
 }
@@ -152,6 +160,60 @@ function sanitizePlayingSession(session: unknown, index: number): PlayingSession
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizeDailyLuckMap(value: unknown): Record<string, DailyLuckEntry> | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const sanitizedEntries: Record<string, DailyLuckEntry> = {};
+
+  Object.entries(value).forEach(([key, entry]) => {
+    if (!isRecord(entry) || !isRecord(entry.readings)) {
+      return;
+    }
+
+    const readings = entry.readings;
+    if (
+      typeof entry.dateKey !== 'string' ||
+      typeof entry.birthdate !== 'string' ||
+      typeof entry.year !== 'number' ||
+      typeof entry.generatedAt !== 'string' ||
+      (entry.source !== 'ai' && entry.source !== 'fallback') ||
+      typeof entry.westernSign !== 'string' ||
+      typeof entry.chineseSign !== 'string' ||
+      typeof entry.tarotCard !== 'string' ||
+      typeof entry.luckNumber !== 'number' ||
+      typeof entry.luckScore !== 'number' ||
+      typeof readings.chinese !== 'string' ||
+      typeof readings.western !== 'string' ||
+      typeof readings.tarot !== 'string' ||
+      typeof readings.synthesis !== 'string'
+    ) {
+      return;
+    }
+
+    sanitizedEntries[key] = entry as unknown as DailyLuckEntry;
+  });
+
+  return Object.keys(sanitizedEntries).length > 0 ? sanitizedEntries : undefined;
+}
+
+function sanitizeDailyLuckYears(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const validYears = value
+    .filter((item): item is number => typeof item === 'number' && Number.isFinite(item))
+    .sort((a, b) => a - b);
+
+  return validYears.length > 0 ? Array.from(new Set(validYears)) : undefined;
+}
+
 function sanitizePlayingHours(value: unknown): PlayingHours | undefined {
   if (!value || typeof value !== 'object') {
     return undefined;
@@ -191,6 +253,9 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     avatarUrl: typeof userRecord.avatarUrl === 'string' ? userRecord.avatarUrl : undefined,
     crownAnchorNumber: typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber,
     birthdate: typeof userRecord.birthdate === 'string' ? userRecord.birthdate : undefined,
+    dailyLuckByDate: sanitizeDailyLuckMap(userRecord.dailyLuckByDate),
+    dailyLuckYears: sanitizeDailyLuckYears(userRecord.dailyLuckYears),
+    dailyLuckLastGeneratedAt: typeof userRecord.dailyLuckLastGeneratedAt === 'string' ? userRecord.dailyLuckLastGeneratedAt : undefined,
     playingHours: sanitizePlayingHours(userRecord.playingHours),
     celebrityEmail: typeof userRecord.celebrityEmail === 'string' ? userRecord.celebrityEmail : DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: typeof userRecord.celebrityCaptainsClubNumber === 'string' ? userRecord.celebrityCaptainsClubNumber : DEFAULT_OWNER.celebrityCaptainsClubNumber,
@@ -240,7 +305,9 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isCalculatingDailyLuck, setIsCalculatingDailyLuck] = useState<boolean>(false);
   const lastAuthenticatedEmailRef = useRef<string | null>(normalizedAuthenticatedEmail);
+  const dailyLuckGenerationRef = useRef<Record<string, Promise<void>>>({});
 
   const currentUser = useMemo(() => {
     const resolvedUser = users.find((user) => user.id === currentUserId) || users.find((user) => user.isOwner) || null;
@@ -459,6 +526,115 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     void loadUsers();
   }, [loadUsers]);
 
+  const generateAndPersistDailyLuckYear = useCallback(async (
+    userId: string,
+    birthdate: string,
+    year: number,
+    sourceUsers?: UserProfile[],
+  ): Promise<void> => {
+    const generationKey = `${userId}:${birthdate}:${year}`;
+    const existingGeneration = dailyLuckGenerationRef.current[generationKey];
+
+    if (existingGeneration) {
+      await existingGeneration;
+      return;
+    }
+
+    const generationPromise = (async () => {
+      setIsCalculatingDailyLuck(true);
+
+      try {
+        console.log('[UserProvider] Generating daily luck year:', {
+          userId,
+          birthdate,
+          year,
+        });
+
+        const generatedEntries = await generateDailyLuckEntriesForYear(birthdate, year);
+        if (Object.keys(generatedEntries).length === 0) {
+          return;
+        }
+
+        const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+        const storedUsersRaw = await AsyncStorage.getItem(scopedKeys.USERS);
+        const baseUsers = storedUsersRaw
+          ? parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail)
+          : (sourceUsers ?? users);
+
+        const updatedUsers = baseUsers.map((user) => {
+          if (user.id !== userId) {
+            return user;
+          }
+
+          return {
+            ...user,
+            birthdate,
+            dailyLuckByDate: {
+              ...(user.dailyLuckByDate ?? {}),
+              ...generatedEntries,
+            },
+            dailyLuckYears: Array.from(new Set([...(user.dailyLuckYears ?? []), year])).sort((a, b) => a - b),
+            dailyLuckLastGeneratedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        });
+
+        await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(updatedUsers));
+        setUsers(updatedUsers);
+
+        console.log('[UserProvider] Daily luck year persisted:', {
+          userId,
+          year,
+          totalEntries: Object.keys(generatedEntries).length,
+        });
+      } catch (error) {
+        console.error('[UserProvider] Failed to generate daily luck year:', error);
+      } finally {
+        delete dailyLuckGenerationRef.current[generationKey];
+        setIsCalculatingDailyLuck(false);
+      }
+    })();
+
+    dailyLuckGenerationRef.current[generationKey] = generationPromise;
+    await generationPromise;
+  }, [normalizedAuthenticatedEmail, users]);
+
+  const ensureDailyLuckYear = useCallback(async (year: number): Promise<void> => {
+    if (!currentUser?.id) {
+      return;
+    }
+
+    const normalizedBirthdate = normalizeBirthdateInput(currentUser.birthdate);
+    if (!normalizedBirthdate) {
+      return;
+    }
+
+    if (currentUser.dailyLuckYears?.includes(year)) {
+      return;
+    }
+
+    await generateAndPersistDailyLuckYear(currentUser.id, normalizedBirthdate, year);
+  }, [currentUser, generateAndPersistDailyLuckYear]);
+
+  const getDailyLuckEntry = useCallback((date: Date): DailyLuckEntry | null => {
+    if (!currentUser) {
+      return null;
+    }
+
+    return currentUser.dailyLuckByDate?.[getDailyLuckDateKey(date)] ?? null;
+  }, [currentUser]);
+
+  useEffect(() => {
+    const normalizedBirthdate = normalizeBirthdateInput(currentUser?.birthdate);
+    const currentYear = new Date().getFullYear();
+
+    if (!currentUser?.id || !normalizedBirthdate || currentUser.dailyLuckYears?.includes(currentYear)) {
+      return;
+    }
+
+    void generateAndPersistDailyLuckYear(currentUser.id, normalizedBirthdate, currentYear, users);
+  }, [currentUser?.birthdate, currentUser?.dailyLuckYears, currentUser?.id, generateAndPersistDailyLuckYear, users]);
+
   const addUser = useCallback(async (user: { id?: string; name: string; email: string; avatarUrl?: string }): Promise<UserProfile> => {
     const now = new Date().toISOString();
     const normalizedEmail = normalizeEmail(user.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email;
@@ -549,14 +725,32 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
         birthdate: updates.birthdate !== undefined ? normalizeBirthdateInput(updates.birthdate) : updates.birthdate,
       };
 
+      const existingUser = currentUsers.find((user) => user.id === userId) ?? null;
+      const birthdateChanged = normalizedUpdates.birthdate !== undefined && normalizedUpdates.birthdate !== existingUser?.birthdate;
+
       const updatedUsers = currentUsers.map((user) => (
         user.id === userId
-          ? { ...user, ...normalizedUpdates, updatedAt: new Date().toISOString() }
+          ? {
+              ...user,
+              ...normalizedUpdates,
+              ...(birthdateChanged
+                ? {
+                    dailyLuckByDate: undefined,
+                    dailyLuckYears: undefined,
+                    dailyLuckLastGeneratedAt: undefined,
+                  }
+                : {}),
+              updatedAt: new Date().toISOString(),
+            }
           : user
       ));
 
       await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(updatedUsers));
       setUsers(updatedUsers);
+
+      if (birthdateChanged && normalizedUpdates.birthdate) {
+        void generateAndPersistDailyLuckYear(userId, normalizedUpdates.birthdate, new Date().getFullYear(), updatedUsers);
+      }
 
       console.log('[UserProvider] Updated scoped user:', {
         authenticatedEmail: normalizedAuthenticatedEmail,
@@ -577,7 +771,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
           : user
       )));
     }
-  }, [normalizedAuthenticatedEmail, users]);
+  }, [generateAndPersistDailyLuckYear, normalizedAuthenticatedEmail, users]);
 
   const ensureOwner = useCallback(async (): Promise<UserProfile> => {
     const existingOwner = users.find((user) => {
@@ -640,11 +834,28 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     currentUserId,
     currentUser,
     isLoading,
+    isCalculatingDailyLuck,
     addUser,
     switchUser,
     removeUser,
     updateUser,
+    ensureDailyLuckYear,
+    getDailyLuckEntry,
     ensureOwner,
     syncFromStorage: loadUsers,
-  }), [users, currentUserId, currentUser, isLoading, addUser, switchUser, removeUser, updateUser, ensureOwner, loadUsers]);
+  }), [
+    users,
+    currentUserId,
+    currentUser,
+    isLoading,
+    isCalculatingDailyLuck,
+    addUser,
+    switchUser,
+    removeUser,
+    updateUser,
+    ensureDailyLuckYear,
+    getDailyLuckEntry,
+    ensureOwner,
+    loadUsers,
+  ]);
 });

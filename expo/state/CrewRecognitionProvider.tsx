@@ -118,6 +118,28 @@ function dedupeSailings(sailings: Sailing[]): Sailing[] {
   return Array.from(sailingMap.values());
 }
 
+function mergeRecognitionEntries(primaryEntries: RecognitionEntryWithCrew[], secondaryEntries: RecognitionEntryWithCrew[]): RecognitionEntryWithCrew[] {
+  const entryMap = new Map<string, RecognitionEntryWithCrew>();
+
+  [...primaryEntries, ...secondaryEntries].forEach((entry) => {
+    const identity = buildRecognitionEntryIdentity({
+      fullName: entry.fullName,
+      crewMemberId: entry.crewMemberId,
+      shipName: entry.shipName,
+      sailStartDate: entry.sailStartDate,
+      sailEndDate: entry.sailEndDate,
+      department: entry.department,
+      roleTitle: entry.roleTitle,
+    });
+
+    if (!entryMap.has(identity)) {
+      entryMap.set(identity, entry);
+    }
+  });
+
+  return Array.from(entryMap.values()).sort((a, b) => (b.sailStartDate || '').localeCompare(a.sailStartDate || ''));
+}
+
 function parseCSVToEntries(csvText: string): ParsedCrewImport {
   const lines = csvText.split('\n').filter(line => line.trim());
   if (lines.length < 2) {
@@ -746,6 +768,24 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   }, [entriesQuery.data?.entries]);
   const backendTotal = entriesQuery.data?.total || 0;
 
+  const mergedEntries = useMemo(() => {
+    return mergeRecognitionEntries(filteredLocalEntries, backendEntries);
+  }, [backendEntries, filteredLocalEntries]);
+
+  const mergedSailings = useMemo(() => {
+    return dedupeSailings([...(sailingsQuery.data || []), ...localSailings]);
+  }, [localSailings, sailingsQuery.data]);
+
+  const mergedStats = useMemo(() => {
+    const backendStats = statsQuery.data || { crewMemberCount: 0, recognitionEntryCount: 0 };
+    const uniqueCrewIds = new Set(mergedEntries.map((entry) => entry.crewMemberId));
+
+    return {
+      crewMemberCount: Math.max(backendStats.crewMemberCount, uniqueCrewIds.size),
+      recognitionEntryCount: Math.max(backendStats.recognitionEntryCount, mergedEntries.length),
+    };
+  }, [mergedEntries, statsQuery.data]);
+
   const refetch = useCallback(() => {
     void statsQuery.refetch();
     void entriesQuery.refetch();
@@ -762,12 +802,12 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     nextPage,
     previousPage,
     goToPage,
-    stats: useLocal ? localStats : (statsQuery.data || { crewMemberCount: 0, recognitionEntryCount: 0 }),
+    stats: useLocal ? localStats : mergedStats,
     statsLoading: !useLocal && statsQuery.isLoading,
-    entries: useLocal ? filteredLocalEntries : backendEntries,
-    entriesTotal: useLocal ? filteredLocalEntries.length : backendTotal,
+    entries: useLocal ? filteredLocalEntries : mergedEntries,
+    entriesTotal: useLocal ? filteredLocalEntries.length : Math.max(backendTotal, mergedEntries.length),
     entriesLoading: !useLocal && entriesQuery.isLoading,
-    sailings: useLocal ? localSailings : (sailingsQuery.data || []),
+    sailings: useLocal ? localSailings : mergedSailings,
     sailingsLoading: !useLocal && sailingsQuery.isLoading,
     isOfflineMode: useLocal,
     syncFromCSVLocally,
@@ -782,8 +822,8 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     refetch,
   }), [
     userId, filters, updateFilters, resetFilters, page, pageSize, nextPage, previousPage, goToPage,
-    useLocal, localStats, statsQuery.data, statsQuery.isLoading, filteredLocalEntries, backendEntries, backendTotal,
-    entriesQuery.isLoading, localSailings, sailingsQuery.data, sailingsQuery.isLoading,
+    useLocal, localStats, mergedStats, statsQuery.isLoading, filteredLocalEntries, mergedEntries, backendTotal,
+    entriesQuery.isLoading, localSailings, mergedSailings, sailingsQuery.isLoading,
     syncFromCSVLocally, addCrewMemberWithFallback, updateCrewMemberMutation.mutateAsync,
     deleteCrewMemberWithFallback, createRecognitionEntryMutation.mutateAsync,
     updateRecognitionEntryWithFallback, deleteRecognitionEntryWithFallback,
