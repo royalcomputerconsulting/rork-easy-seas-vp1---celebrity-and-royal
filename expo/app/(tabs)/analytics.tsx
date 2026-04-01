@@ -88,6 +88,7 @@ import { useTax } from '@/state/TaxProvider';
 import type { MachineType, Denomination } from '@/state/CasinoSessionProvider';
 import { SessionsSummaryCard } from '@/components/SessionsSummaryCard';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
+import { CasinoOverviewCard } from '@/components/CasinoOverviewCard';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -505,6 +506,46 @@ export default function AnalyticsScreen() {
     ];
   }, [activeTab, realAnalytics, currentPoints]);
 
+  const casinoOverviewStats = useMemo(() => {
+    const today = new Date();
+    const completedCruises = bookedCruises.filter((cruise) => {
+      const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
+      return returnDate ? returnDate < today : cruise.completionState === 'completed';
+    });
+
+    const upcomingCruises = bookedCruises.filter((cruise) => {
+      const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
+      return returnDate ? returnDate >= today : cruise.completionState !== 'completed';
+    });
+
+    const completedPortfolio = calculatePortfolioValue(completedCruises);
+    const upcomingPortfolio = calculatePortfolioValue(upcomingCruises);
+    const totalWinnings = completedCruises.reduce((sum, cruise) => sum + (cruise.winnings || 0), 0);
+    const totalRetailValue = upcomingPortfolio.totalRetailValue || 0;
+    const totalTaxesFees = upcomingPortfolio.totalTaxesFees || 0;
+    const totalProfit = (totalRetailValue - totalTaxesFees) + totalWinnings;
+
+    console.log('[Analytics] Casino overview stats prepared:', {
+      completedCount: completedCruises.length,
+      upcomingCount: upcomingCruises.length,
+      totalRetailValue,
+      totalTaxesFees,
+      totalWinnings,
+      totalProfit,
+    });
+
+    return {
+      totalCoinIn: casinoAnalytics.totalCoinIn || completedPortfolio.totalCoinIn || 0,
+      netResult: casinoAnalytics.netResult || totalWinnings || 0,
+      avgCoinInPerCruise: casinoAnalytics.avgCoinInPerCruise || (completedCruises.length > 0 ? completedPortfolio.totalCoinIn / completedCruises.length : 0),
+      avgWinLossPerCruise: casinoAnalytics.avgWinLossPerCruise || (completedCruises.length > 0 ? totalWinnings / completedCruises.length : 0),
+      totalRetailValue,
+      totalTaxesFees,
+      totalProfit,
+      completedCount: completedCruises.length,
+    };
+  }, [bookedCruises, casinoAnalytics]);
+
   const buildCasinoCruisesCsv = useCallback((cruises: BookedCruise[]): string => {
     console.log('[CasinoCruiseExport] Building CSV...', { cruiseCount: cruises.length });
 
@@ -851,6 +892,22 @@ export default function AnalyticsScreen() {
             <Text style={styles.quickStatLabel}>{stat.label}</Text>
           </View>
         ))}
+      </View>
+
+      <View style={styles.section} testID="casino-overview-section">
+        <CasinoOverviewCard
+          tier={clubRoyaleTier}
+          currentPoints={currentPoints}
+          totalCoinIn={casinoOverviewStats.totalCoinIn}
+          netResult={casinoOverviewStats.netResult}
+          totalRetailValue={casinoOverviewStats.totalRetailValue}
+          totalTaxesFees={casinoOverviewStats.totalTaxesFees}
+          totalProfit={casinoOverviewStats.totalProfit}
+          avgCoinInPerCruise={casinoOverviewStats.avgCoinInPerCruise}
+          avgWinLossPerCruise={casinoOverviewStats.avgWinLossPerCruise}
+          completedCount={casinoOverviewStats.completedCount}
+          testID="casino-overview-card"
+        />
       </View>
 
       <View style={styles.section} testID="casino-player-loyalty-section">

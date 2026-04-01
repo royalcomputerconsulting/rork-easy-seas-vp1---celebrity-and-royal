@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   PanResponder,
@@ -15,14 +16,16 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download, Crown, RefreshCcw, ExternalLink } from 'lucide-react-native';
+import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions, type CasinoSession } from '@/state/CasinoSessionProvider';
 import { AtlasCard } from '@/components/AtlasCard';
-import { useEntitlement } from '@/state/EntitlementProvider';
 import { useAuth } from '@/state/AuthProvider';
+import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
+import type { PlayingHours } from '@/state/UserProvider';
+import { PlayingHoursCard } from '@/components/ui/PlayingHoursCard';
 import { exportFavoriteMachinesToDocx, exportAllMachinesIncrementallyToDocx } from '@/lib/exportMachinesToDocx';
 import { MachineSessionStats } from '@/components/MachineSessionStats';
 import { MachineSessionsList } from '@/components/MachineSessionsList';
@@ -34,8 +37,13 @@ type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 
 export default function AtlasScreen() {
   const router = useRouter();
-  const entitlement = useEntitlement();
-  const auth = useAuth();
+  const { authenticatedEmail } = useAuth();
+  const {
+    currentUser,
+    updateUser,
+    ensureOwner,
+    isLoading: isUserLoading,
+  } = useUser();
 
 
 
@@ -164,7 +172,60 @@ export default function AtlasScreen() {
   const [showQuickSessionModal, setShowQuickSessionModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
+  const [isSavingPlayingHours, setIsSavingPlayingHours] = useState(false);
 
+  const normalizedAuthenticatedEmail = useMemo(() => authenticatedEmail?.toLowerCase().trim() ?? null, [authenticatedEmail]);
+  const normalizedCurrentUserEmail = useMemo(() => currentUser?.email?.toLowerCase().trim() ?? null, [currentUser?.email]);
+  const isPlayingHoursReady = useMemo(() => {
+    if (!normalizedAuthenticatedEmail) {
+      return false;
+    }
+
+    if (isUserLoading) {
+      return false;
+    }
+
+    if (!currentUser || !normalizedCurrentUserEmail) {
+      return false;
+    }
+
+    return normalizedCurrentUserEmail === normalizedAuthenticatedEmail;
+  }, [currentUser, isUserLoading, normalizedAuthenticatedEmail, normalizedCurrentUserEmail]);
+
+  const currentPlayingHours = useMemo(() => {
+    if (!isPlayingHoursReady) {
+      return DEFAULT_PLAYING_HOURS;
+    }
+
+    return currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
+  }, [currentUser?.playingHours, isPlayingHoursReady]);
+
+  const handleSavePlayingHours = useCallback(async (playingHours: PlayingHours) => {
+    if (!isPlayingHoursReady) {
+      console.log('[Atlas] Blocked playing-hours save while account data is still loading');
+      Alert.alert('Profile Loading', 'Please wait for your account data to finish loading.');
+      return;
+    }
+
+    try {
+      setIsSavingPlayingHours(true);
+      console.log('[Atlas] Saving playing hours:', playingHours);
+
+      if (currentUser) {
+        await updateUser(currentUser.id, { playingHours });
+      } else {
+        const owner = await ensureOwner();
+        await updateUser(owner.id, { playingHours });
+      }
+
+      Alert.alert('Playing Hours Saved', 'Your preferred playing times have been updated.');
+    } catch (error) {
+      console.error('[Atlas] Save playing hours error:', error);
+      Alert.alert('Save Error', 'Failed to save playing hours. Please try again.');
+    } finally {
+      setIsSavingPlayingHours(false);
+    }
+  }, [currentUser, ensureOwner, isPlayingHoursReady, updateUser]);
 
   const filteredMachines = useMemo(() => {
     let filtered = [...myAtlasMachines];
@@ -288,7 +349,7 @@ export default function AtlasScreen() {
   }, [router]);
 
   const handleToggleFavorite = useCallback((id: string) => {
-    toggleFavorite(id);
+    void toggleFavorite(id);
   }, [toggleFavorite]);
 
   const handleExportFavorites = useCallback(async () => {
@@ -457,6 +518,26 @@ export default function AtlasScreen() {
           </View>
         )}
 
+        <View style={styles.playingHoursSection} testID="machines.playing-hours-section">
+          {isPlayingHoursReady ? (
+            <PlayingHoursCard
+              currentValues={currentPlayingHours}
+              onSave={handleSavePlayingHours}
+              isSaving={isSavingPlayingHours}
+            />
+          ) : (
+            <View style={styles.playingHoursLoadingCard}>
+              <ActivityIndicator size="small" color={COLORS.navyDeep} />
+              <View style={styles.playingHoursLoadingCopy}>
+                <Text style={styles.playingHoursLoadingTitle}>My Playing Hours</Text>
+                <Text style={styles.playingHoursLoadingSubtitle}>
+                  {authenticatedEmail ? `Loading private playing hours for ${authenticatedEmail}` : 'Loading your private playing hours'}
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+
         <View style={styles.searchSection}>
           <View style={styles.searchBar}>
             <Search size={18} color={COLORS.textMuted} />
@@ -580,20 +661,23 @@ export default function AtlasScreen() {
     );
   }, [
     activeFilter,
-    entitlement,
+    authenticatedEmail,
+    currentPlayingHours,
     favoriteMachines.length,
     filteredMachines.length,
     handleClearFilters,
     handleExportFavorites,
     handleExportAll,
+    handleSavePlayingHours,
     hasActiveFilters,
     isExporting,
     exportProgress,
     isLoading,
     isLoadingIndex,
+    isPlayingHoursReady,
+    isSavingPlayingHours,
     myAtlasMachines.length,
     reload,
-    router,
     searchQuery,
     sessions,
     showSessionsSection,
@@ -951,6 +1035,32 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
+    color: COLORS.textDarkGrey,
+  },
+  playingHoursSection: {
+    paddingHorizontal: 20,
+    marginTop: 4,
+  },
+  playingHoursLoadingCard: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  playingHoursLoadingCopy: {
+    flex: 1,
+  },
+  playingHoursLoadingTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
+  },
+  playingHoursLoadingSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
     color: COLORS.textDarkGrey,
   },
   searchSection: {

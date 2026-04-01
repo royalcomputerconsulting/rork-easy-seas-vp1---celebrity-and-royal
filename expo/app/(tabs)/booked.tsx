@@ -89,6 +89,7 @@ export default function BookedScreen() {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showAddModal, setShowAddModal] = useState(false);
+  const showLegacyCasinoSection = searchQuery.trim() === '__show_legacy_casino_section__';
 
   const bookedCruises = useMemo(() => {
     const localBooked = localData.booked || [];
@@ -441,7 +442,7 @@ export default function BookedScreen() {
       </View>
 
       {/* Combined Casino Section */}
-      <View style={styles.casinoSection}>
+      {showLegacyCasinoSection && <View style={styles.casinoSection}>
         <LinearGradient
           colors={['#E0F2FE', '#DBEAFE', '#E0F7FA']}
           start={{ x: 0, y: 0 }}
@@ -534,7 +535,7 @@ export default function BookedScreen() {
             </View>
           )}
         </LinearGradient>
-      </View>
+      </View>}
 
       <View style={styles.viewModeRow}>
         <View style={styles.viewModeToggle}>

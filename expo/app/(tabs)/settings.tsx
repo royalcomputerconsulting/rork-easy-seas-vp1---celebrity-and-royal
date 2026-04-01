@@ -5,7 +5,6 @@ import {
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
-  Switch, 
   Alert, 
   Linking, 
   ActivityIndicator,
@@ -16,9 +15,6 @@ import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   Settings as SettingsIcon, 
-  Bell, 
-  Moon, 
-  DollarSign, 
   Download, 
   Upload,
   Trash2, 
@@ -52,8 +48,7 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from 
 import { LinearGradient } from 'expo-linear-gradient';
 import { formatBirthdateForDisplay, isDateInPast, normalizeBirthdateInput } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
-import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
-import type { PlayingHours } from '@/state/UserProvider';
+import { useUser } from '@/state/UserProvider';
 import { 
   pickAndReadFile, 
   parseOffersCSV, 
@@ -79,7 +74,6 @@ import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { UserProfileCard } from '@/components/ui/UserProfileCard';
-import { PlayingHoursCard } from '@/components/ui/PlayingHoursCard';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { saveMockData } from '@/lib/saveMockData';
@@ -102,7 +96,7 @@ function normalizeAccountEmail(email: string | null | undefined): string | null 
 export default function SettingsScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
-  const { settings, updateSettings, clearLocalData, setLocalData, localData } = useAppState();
+  const { clearLocalData, setLocalData, localData } = useAppState();
   const coreData = useCoreData();
   const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers } = coreData;
   const cruises = coreData.cruises;
@@ -135,7 +129,6 @@ export default function SettingsScreen() {
   const [isImportingAll, setIsImportingAll] = useState(false);
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
-  const [isSavingPlayingHours, setIsSavingPlayingHours] = useState(false);
   const [isImportingMachines, setIsImportingMachines] = useState(false);
   const [isExportingMachines, setIsExportingMachines] = useState(false);
   const [isSavingMockData, setIsSavingMockData] = useState(false);
@@ -270,22 +263,6 @@ export default function SettingsScreen() {
     loyaltyCrownAnchorLevel,
     loyaltyCrownAnchorPoints,
   ]);
-
-  const currentPlayingHours = useMemo(() => {
-    if (!isProfileDisplayReady) {
-      return DEFAULT_PLAYING_HOURS;
-    }
-
-    return currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
-  }, [currentUser?.playingHours, isProfileDisplayReady]);
-
-  const profileTransitionSubtitle = useMemo(() => {
-    if (authenticatedEmail) {
-      return `Loading private settings for ${authenticatedEmail}`;
-    }
-
-    return 'Securing your private settings';
-  }, [authenticatedEmail]);
 
   const enrichmentData = useMemo(() => {
     if (!isProfileDisplayReady) return null;
@@ -1351,33 +1328,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     });
   }, []);
 
-  const handleSavePlayingHours = useCallback(async (playingHours: PlayingHours) => {
-    if (!isProfileDisplayReady) {
-      console.log('[Settings] Blocked playing-hours save while account data is still loading');
-      Alert.alert('Profile Loading', 'Please wait for your account data to finish loading.');
-      return;
-    }
-
-    try {
-      setIsSavingPlayingHours(true);
-      console.log('[Settings] Saving playing hours:', playingHours);
-      
-      if (currentUser) {
-        await updateUser(currentUser.id, { playingHours });
-      } else {
-        const owner = await ensureOwner();
-        await updateUser(owner.id, { playingHours });
-      }
-      
-      Alert.alert('Playing Hours Saved', 'Your preferred playing times have been updated.');
-    } catch (error) {
-      console.error('[Settings] Save playing hours error:', error);
-      Alert.alert('Save Error', 'Failed to save playing hours. Please try again.');
-    } finally {
-      setIsSavingPlayingHours(false);
-    }
-  }, [currentUser, ensureOwner, isProfileDisplayReady, updateUser]);
-
   const handleImportMachinesJSON = useCallback(async () => {
     try {
       setIsImportingMachines(true);
@@ -1521,16 +1471,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         {onPress && <ChevronRight size={18} color={isDanger ? COLORS.error : CLEAN_THEME.text.secondary} />}
       </View>
     </TouchableOpacity>
-  );
-
-  const renderToggle = (value: boolean, onToggle: (val: boolean) => void) => (
-    <Switch
-      value={value}
-      onValueChange={onToggle}
-      trackColor={{ false: '#E5E7EB', true: 'rgba(0, 31, 63, 0.3)' }}
-      thumbColor={value ? COLORS.navyDeep : '#9CA3AF'}
-      ios_backgroundColor="#E5E7EB"
-    />
   );
 
   const renderSectionHeader = (
@@ -1725,82 +1665,24 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           </View>
 
           {isProfileDisplayReady ? (
-            <>
-              <UserProfileCard
-                key={`profile-${normalizedAuthenticatedEmail ?? 'guest'}`}
-                currentValues={currentProfileValues}
-                enrichmentData={enrichmentData}
-                onSave={handleSaveProfile}
-                isSaving={isSaving}
-              />
-
-              <PlayingHoursCard
-                key={`playing-hours-${normalizedAuthenticatedEmail ?? 'guest'}`}
-                currentValues={currentPlayingHours}
-                onSave={handleSavePlayingHours}
-                isSaving={isSavingPlayingHours}
-              />
-            </>
+            <UserProfileCard
+              key={`profile-${normalizedAuthenticatedEmail ?? 'guest'}`}
+              currentValues={currentProfileValues}
+              enrichmentData={enrichmentData}
+              onSave={handleSaveProfile}
+              isSaving={isSaving}
+            />
           ) : (
-            <>
-              <View style={styles.profileLoadingCard} testID="settings-profile-loading-card">
-                <View style={styles.profileLoadingIconWrap}>
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                </View>
-                <View style={styles.profileLoadingCopy}>
-                  <Text style={styles.profileLoadingTitle}>Securing your profile</Text>
-                  <Text style={styles.profileLoadingSubtitle}>{profileTransitionSubtitle}</Text>
-                </View>
+            <View style={styles.profileLoadingCard} testID="settings-profile-loading-card">
+              <View style={styles.profileLoadingIconWrap}>
+                <ActivityIndicator size="small" color={COLORS.navyDeep} />
               </View>
-
-              <View style={styles.profileLoadingCard} testID="settings-playing-hours-loading-card">
-                <View style={styles.profileLoadingIconWrap}>
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                </View>
-                <View style={styles.profileLoadingCopy}>
-                  <Text style={styles.profileLoadingTitle}>Refreshing playing hours</Text>
-                  <Text style={styles.profileLoadingSubtitle}>Your account preferences will appear as soon as the correct profile is loaded.</Text>
-                </View>
+              <View style={styles.profileLoadingCopy}>
+                <Text style={styles.profileLoadingTitle}>Securing your profile</Text>
+                <Text style={styles.profileLoadingSubtitle}>Your private profile is loading.</Text>
               </View>
-            </>
+            </View>
           )}
-
-          <View style={styles.section}>
-            <View style={styles.sectionCard}>
-              {renderSectionHeader(<Moon size={18} color={COLORS.white} />, 'Display Preferences', 'Customize how data appears')}
-              {renderSettingRow(
-                <DollarSign size={18} color={COLORS.navyDeep} />,
-                'Show Taxes in List',
-                renderToggle(settings.showTaxesInList, (val) => updateSettings({ showTaxesInList: val }))
-              )}
-              {renderSettingRow(
-                <DollarSign size={18} color={COLORS.navyDeep} />,
-                'Price Per Night',
-                renderToggle(settings.showPricePerNight, (val) => updateSettings({ showPricePerNight: val }))
-              )}
-              {renderSettingRow(
-                <Moon size={18} color={COLORS.navyDeep} />,
-                'Theme',
-                settings.theme === 'dark' ? 'Dark' : settings.theme === 'light' ? 'Light' : 'System'
-              )}
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionCard}>
-              {renderSectionHeader(<Bell size={18} color={COLORS.white} />, 'Notifications', 'Alert preferences')}
-              {renderSettingRow(
-                <Bell size={18} color={COLORS.navyDeep} />,
-                'Price Drop Alerts',
-                renderToggle(settings.priceDropAlerts, (val) => updateSettings({ priceDropAlerts: val }))
-              )}
-              {renderSettingRow(
-                <Bell size={18} color={COLORS.navyDeep} />,
-                'Daily Summary',
-                renderToggle(settings.dailySummaryNotifications || false, (val) => updateSettings({ dailySummaryNotifications: val }))
-              )}
-            </View>
-          </View>
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
