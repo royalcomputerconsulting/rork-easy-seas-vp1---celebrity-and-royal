@@ -119,6 +119,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSyncedEmailRef = useRef<string | null>(null);
+  const previousAuthenticatedEmailRef = useRef<string | null>(null);
   const retryCountRef = useRef(0);
   const lastSyncAttemptRef = useRef<number>(0);
   const isMountedRef = useRef(true);
@@ -723,14 +724,47 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated || !authenticatedEmail) {
-      console.log("[UserDataSync] User not authenticated, clearing sync state");
+    const normalizedAuthenticatedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
+    const didAuthenticatedEmailChange = previousAuthenticatedEmailRef.current !== normalizedAuthenticatedEmail;
+
+    if (didAuthenticatedEmailChange) {
+      console.log('[UserDataSync] Authenticated email changed, resetting sync state', {
+        previousEmail: previousAuthenticatedEmailRef.current,
+        nextEmail: normalizedAuthenticatedEmail,
+      });
+      previousAuthenticatedEmailRef.current = normalizedAuthenticatedEmail;
       setHasCloudData(false);
       setLastSyncTime(null);
+      setLastRestoreTime(null);
+      setSyncError(null);
       setInitialCheckComplete(false);
       lastSyncedEmailRef.current = null;
+      retryCountRef.current = 0;
+      lastSyncAttemptRef.current = 0;
       hasInitializedRef.current = false;
       initializationInFlightRef.current = false;
+
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+        syncTimeoutRef.current = null;
+      }
+
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+        safetyTimeoutRef.current = null;
+      }
+
+      if (normalizedAuthenticatedEmail) {
+        void AsyncStorage.getItem(getUserScopedKey(_BASE_LAST_SYNC_KEY, normalizedAuthenticatedEmail)).then((time) => {
+          if (time && isMountedRef.current && previousAuthenticatedEmailRef.current === normalizedAuthenticatedEmail) {
+            setLastSyncTime(time);
+          }
+        });
+      }
+    }
+
+    if (!isAuthenticated || !normalizedAuthenticatedEmail) {
+      console.log("[UserDataSync] User not authenticated, clearing sync state");
       return;
     }
 
@@ -812,29 +846,6 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       }
     };
   }, []);
-
-  useEffect(() => {
-    setHasCloudData(false);
-    setLastSyncTime(null);
-    setLastRestoreTime(null);
-    setSyncError(null);
-    setInitialCheckComplete(false);
-    lastSyncedEmailRef.current = null;
-    retryCountRef.current = 0;
-    lastSyncAttemptRef.current = 0;
-    hasInitializedRef.current = false;
-    initializationInFlightRef.current = false;
-
-    if (!authenticatedEmail) {
-      return;
-    }
-
-    void AsyncStorage.getItem(lastSyncKey()).then((time) => {
-      if (time) {
-        setLastSyncTime(time);
-      }
-    });
-  }, [authenticatedEmail]);
 
   return useMemo(() => ({
     isSyncing,

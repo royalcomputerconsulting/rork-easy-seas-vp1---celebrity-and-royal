@@ -29,7 +29,7 @@ export function LandingPage({ onContinue }: LandingPageProps) {
       >
         <View style={styles.content}>
           <Image 
-            source={require('@/assets/images/icon.png')}
+            source={require('../assets/images/icon.png')}
             style={styles.logo}
             resizeMode="contain"
           />

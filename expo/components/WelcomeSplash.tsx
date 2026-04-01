@@ -36,7 +36,7 @@ export function WelcomeSplash({ onAnimationComplete, duration = 2000 }: WelcomeS
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.background}>
         <Image
-          source={require('@/assets/images/story-post-1080x1920.png')}
+          source={require('../assets/images/story-post-1080x1920.png')}
           style={styles.bannerImage}
           resizeMode="cover"
         />

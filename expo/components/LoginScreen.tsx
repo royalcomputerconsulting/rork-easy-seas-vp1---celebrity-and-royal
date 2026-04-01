@@ -68,7 +68,7 @@ export function LoginScreen() {
           <View style={styles.logoContainer}>
             {!logoError ? (
               <Image 
-                source={require('@/assets/images/splash-icon.png')}
+                source={require('../assets/images/splash-icon.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
