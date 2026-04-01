@@ -434,14 +434,21 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   }, [computeDisplayStatus, computeTier]);
 
   const ensurePurchasesLoaded = useCallback(async (): Promise<PurchasesModule | null> => {
-    if (Platform.OS === 'web') return null;
-
     const isExpoGo = Constants.appOwnership === 'expo';
-    
+    const isWeb = Platform.OS === 'web';
+
     let apiKey = '';
     let keySource = '';
 
-    if (isExpoGo) {
+    if (isWeb) {
+      apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? '').trim();
+      keySource = 'test-store (web preview)';
+      if (!apiKey) {
+        purchasesInitError = 'RevenueCat web preview is not configured. Set EXPO_PUBLIC_REVENUECAT_TEST_API_KEY.';
+        console.warn('[Entitlement] RevenueCat web preview requires EXPO_PUBLIC_REVENUECAT_TEST_API_KEY.');
+        return null;
+      }
+    } else if (isExpoGo) {
       apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? '').trim();
       keySource = 'test-store (Expo Go)';
       if (!apiKey) {
@@ -557,9 +564,32 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
     if (Platform.OS === 'web') {
       try {
+        const purchases = await ensurePurchasesLoaded();
+        if (purchases) {
+          await syncPurchasesIdentity(purchases);
+
+          console.log('[Entitlement] Fetching web offerings');
+          try {
+            const offers = await withTimeout(purchases.getOfferings(), DEFAULT_TIMEOUT_MS, 'Loading subscription options');
+            const allOfferings = Object.values(offers.all ?? {});
+            console.log('[Entitlement] Web offerings fetched:', allOfferings.map(o => ({ identifier: o.identifier, packages: o.availablePackages?.length ?? 0 })));
+            if (!mountedRef.current) return;
+            setOfferings(allOfferings);
+          } catch (offerError) {
+            console.warn('[Entitlement] Failed to fetch web offerings, continuing anyway:', offerError);
+          }
+
+          console.log('[Entitlement] Fetching web customer info');
+          const info = await withTimeout(purchases.getCustomerInfo(), DEFAULT_TIMEOUT_MS, 'Checking subscription status');
+          if (!mountedRef.current) return;
+          setStateFromCustomerInfo(info, currentTrialEnd, currentIsGrandfathered, hasPrivilegedAccess);
+          setError(null);
+          return;
+        }
+
         const stored = await AsyncStorage.getItem(storageKeys.WEB_IS_PRO);
         const storedIsPro = stored === 'true';
-        console.log('[Entitlement] web refresh: storedIsPro', storedIsPro, 'isGrandfathered', currentIsGrandfathered);
+        console.log('[Entitlement] web refresh fallback: storedIsPro', storedIsPro, 'isGrandfathered', currentIsGrandfathered);
         if (!mountedRef.current) return;
         const finalIsPro = currentIsGrandfathered || storedIsPro || hasPrivilegedAccess;
         setIsPro(finalIsPro);
@@ -835,6 +865,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         return;
       }
 
+      await syncPurchasesIdentity(purchases);
       console.log(`[Entitlement] Restoring purchases via ${restoreStoreName}`);
       const info = await withTimeout(purchases.restorePurchases(), DEFAULT_TIMEOUT_MS, 'Restoring purchases');
       console.log('[Entitlement] restorePurchases customerInfo', {
@@ -877,7 +908,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setIsLoading(false);
       }
     }
-  }, [auth.authenticatedEmail, auth.isWhitelisted, ensurePurchasesLoaded, hasPrivilegedAccess, isGrandfathered, refresh, setStateFromCustomerInfo, storageKeys.TRIAL_END]);
+  }, [auth.authenticatedEmail, auth.isWhitelisted, ensurePurchasesLoaded, hasPrivilegedAccess, isGrandfathered, refresh, setStateFromCustomerInfo, storageKeys.TRIAL_END, syncPurchasesIdentity]);
 
   const openManageSubscription = useCallback(async () => {
     if (Platform.OS === 'web') {
