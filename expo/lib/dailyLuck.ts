@@ -139,6 +139,135 @@ const monthlyLuckSchema = z.object({
   ),
 });
 
+interface MonthlyLuckyNumberAIResult {
+  scoreBreakdown: DailyLuckScoreBreakdown;
+  synthesis: string;
+}
+
+const DAILY_LUCK_AI_BATCH_SIZE = 8;
+
+function chunkItems<T>(items: T[], size: number): T[][] {
+  const normalizedSize = Math.max(1, Math.floor(size));
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += normalizedSize) {
+    chunks.push(items.slice(index, index + normalizedSize));
+  }
+
+  return chunks;
+}
+
+function getErrorDetails(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = 'cause' in error ? (error as Error & { cause?: unknown }).cause : undefined;
+    const causeDetails = cause ? ` | cause: ${getErrorDetails(cause)}` : '';
+    return `${error.name}: ${error.message}${causeDetails}`;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    try {
+      return JSON.stringify(error, Object.getOwnPropertyNames(error));
+    } catch {
+      return Object.prototype.toString.call(error);
+    }
+  }
+
+  return String(error);
+}
+
+function buildMonthlySynthesisPrompt(
+  birthdateLabel: string,
+  monthLabel: string,
+  batchEntries: DailyLuckEntry[],
+): string {
+  return `You are rating day-by-day luck from 1 to 9.
+
+Birthdate: ${birthdateLabel}
+Month: ${monthLabel}
+
+For each day below, read the Chinese horoscope, Western zodiac/planetary reading, and tarot reading together.
+Score each system separately from 1 to 9, then write one concise synthesis sentence.
+The final Lucky Day # will be calculated from your three component scores, so your scores must stay internally consistent.
+
+Scale:
+- 1 to 3 = warning, obstruction, low momentum, or clear caution
+- 4 to 6 = mixed, balanced, moderate, or usable with restraint
+- 7 to 9 = aligned, unusually supportive, high momentum, or strong timing
+
+Rules:
+- Return exactly ${batchEntries.length} days in the days array.
+- Use each date exactly once and do not invent or skip dates.
+- Use the full range naturally. Do not make most days high luck.
+- Let 4, 5, and 6 be the most common values.
+- If the text stresses pacing, restraint, boundaries, or caution, do not score that system above 6.
+- Use 7 to 9 only when the specific reading is clearly favorable, expansive, or unusually supportive.
+- Return one concise synthesis sentence per day explaining the blend.
+- Keep every synthesis under 240 characters.
+
+Days:
+${batchEntries.map((entry) => `Date: ${entry.dateKey}\nChinese: ${entry.readings.chinese}\nWestern: ${entry.readings.western}\nTarot: ${entry.readings.tarot}`).join('\n\n')}`;
+}
+
+async function generateMonthlyLuckyNumbersBatchWithAI(
+  birthdate: Date,
+  monthLabel: string,
+  batchEntries: DailyLuckEntry[],
+): Promise<Record<string, MonthlyLuckyNumberAIResult>> {
+  if (batchEntries.length === 0) {
+    return {};
+  }
+
+  const birthdateLabel = formatBirthdateForDisplay(birthdate);
+  const expectedDateKeys = new Set(batchEntries.map((entry) => entry.dateKey));
+
+  try {
+    const result = await generateObject({
+      messages: [
+        {
+          role: 'user',
+          content: buildMonthlySynthesisPrompt(birthdateLabel, monthLabel, batchEntries),
+        },
+      ],
+      schema: monthlyLuckSchema,
+    });
+
+    const batchMap: Record<string, MonthlyLuckyNumberAIResult> = {};
+    result.days.forEach((day) => {
+      if (!expectedDateKeys.has(day.dateKey)) {
+        return;
+      }
+
+      batchMap[day.dateKey] = {
+        scoreBreakdown: createScoreBreakdown(day.chineseScore, day.westernScore, day.tarotScore),
+        synthesis: day.synthesis.trim(),
+      };
+    });
+
+    console.log('[DailyLuck] AI batch synthesis complete:', {
+      monthLabel,
+      requestedDays: batchEntries.length,
+      returnedDays: Object.keys(batchMap).length,
+      startDate: batchEntries[0]?.dateKey,
+      endDate: batchEntries[batchEntries.length - 1]?.dateKey,
+    });
+
+    return batchMap;
+  } catch (error) {
+    console.error('[DailyLuck] AI batch synthesis failed:', {
+      monthLabel,
+      requestedDays: batchEntries.length,
+      startDate: batchEntries[0]?.dateKey,
+      endDate: batchEntries[batchEntries.length - 1]?.dateKey,
+      errorDetails: getErrorDetails(error),
+    });
+    return {};
+  }
+}
+
 function normalizeDate(date: Date): Date {
   const normalizedDate = new Date(date);
   normalizedDate.setHours(12, 0, 0, 0);
@@ -399,69 +528,28 @@ export function buildLocalDailyLuckEntry(
 async function generateMonthlyLuckyNumbersWithAI(
   birthdate: Date,
   monthEntries: DailyLuckEntry[],
-): Promise<Record<string, { scoreBreakdown: DailyLuckScoreBreakdown; synthesis: string }>> {
+): Promise<Record<string, MonthlyLuckyNumberAIResult>> {
   if (monthEntries.length === 0) {
     return {};
   }
 
   const monthLabel = monthEntries[0]?.dateKey.slice(0, 7) ?? 'unknown-month';
-  const birthdateLabel = formatBirthdateForDisplay(birthdate);
+  const monthlyMap: Record<string, MonthlyLuckyNumberAIResult> = {};
+  const batches = chunkItems(monthEntries, DAILY_LUCK_AI_BATCH_SIZE);
 
-  try {
-    const result = await generateObject({
-      messages: [
-        {
-          role: 'user',
-          content: `You are rating day-by-day luck from 1 to 9.
-
-Birthdate: ${birthdateLabel}
-Month: ${monthLabel}
-
-For each day below, read the Chinese horoscope, Western zodiac/planetary reading, and tarot reading together.
-Score each system separately from 1 to 9, then write one concise synthesis sentence.
-The final Lucky Day # will be calculated from your three component scores, so your scores must stay internally consistent.
-
-Scale:
-- 1 to 3 = warning, obstruction, low momentum, or clear caution
-- 4 to 6 = mixed, balanced, moderate, or usable with restraint
-- 7 to 9 = aligned, unusually supportive, high momentum, or strong timing
-
-Rules:
-- Use the full range naturally. Do not make most days high luck.
-- Let 4, 5, and 6 be the most common values.
-- If the text stresses pacing, restraint, boundaries, or caution, do not score that system above 6.
-- Use 7 to 9 only when the specific reading is clearly favorable, expansive, or unusually supportive.
-- Return one concise synthesis sentence per day explaining the blend.
-- Keep every synthesis under 240 characters.
-
-Days:
-${monthEntries.map((entry) => `Date: ${entry.dateKey}\nChinese: ${entry.readings.chinese}\nWestern: ${entry.readings.western}\nTarot: ${entry.readings.tarot}`).join('\n\n')}`,
-        },
-      ],
-      schema: monthlyLuckSchema,
-    });
-
-    const monthlyMap: Record<string, { scoreBreakdown: DailyLuckScoreBreakdown; synthesis: string }> = {};
-    result.days.forEach((day) => {
-      monthlyMap[day.dateKey] = {
-        scoreBreakdown: createScoreBreakdown(day.chineseScore, day.westernScore, day.tarotScore),
-        synthesis: day.synthesis,
-      };
-    });
-
-    console.log('[DailyLuck] AI monthly synthesis complete:', {
-      monthLabel,
-      days: Object.keys(monthlyMap).length,
-    });
-
-    return monthlyMap;
-  } catch (error) {
-    console.error('[DailyLuck] AI monthly synthesis failed:', {
-      monthLabel,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return {};
+  for (const batchEntries of batches) {
+    const batchMap = await generateMonthlyLuckyNumbersBatchWithAI(birthdate, monthLabel, batchEntries);
+    Object.assign(monthlyMap, batchMap);
   }
+
+  console.log('[DailyLuck] AI monthly synthesis complete:', {
+    monthLabel,
+    requestedDays: monthEntries.length,
+    resolvedDays: Object.keys(monthlyMap).length,
+    batches: batches.length,
+  });
+
+  return monthlyMap;
 }
 
 export async function generateDailyLuckEntriesForYear(
