@@ -305,7 +305,7 @@ export const OfferCard = React.memo(function OfferCard({
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.94} testID="offer-card">
-      <LinearGradient colors={['#FFFCF6', '#F6EFD8', '#E4F8FB']} style={styles.shellGradient}>
+      <LinearGradient colors={['#FFFDF9', '#F8F0DB', '#E8F8FC']} style={styles.shellGradient}>
         <View style={styles.headerStrip}>
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>{inferredOfferName}</Text>
@@ -395,7 +395,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: 'rgba(214, 184, 111, 0.22)',
+    borderColor: 'rgba(255,255,255,0.34)',
     ...SHADOW.lg,
   },
   shellGradient: {
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.md,
-    backgroundColor: 'rgba(255, 246, 229, 0.96)',
+    backgroundColor: 'rgba(255, 249, 241, 0.84)',
   },
   headerCopy: {
     flex: 1,
@@ -432,9 +432,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 250, 238, 0.96)',
+    backgroundColor: 'rgba(255, 252, 247, 0.74)',
     borderWidth: 1,
-    borderColor: 'rgba(214, 184, 111, 0.18)',
+    borderColor: 'rgba(255,255,255,0.30)',
     minWidth: 120,
   },
   headerValueLabel: {
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   contentSection: {
     padding: SPACING.lg,
     gap: SPACING.md,
-    backgroundColor: 'rgba(255, 251, 243, 0.92)',
+    backgroundColor: 'rgba(255, 252, 247, 0.82)',
   },
   primaryRow: {
     flexDirection: 'row',
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
   },
   infoDivider: {
     width: 1,
-    backgroundColor: 'rgba(214, 184, 111, 0.18)',
+    backgroundColor: 'rgba(17,17,17,0.08)',
     marginVertical: 8,
   },
   infoLabel: {

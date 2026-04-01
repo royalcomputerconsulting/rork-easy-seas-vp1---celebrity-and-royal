@@ -150,12 +150,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   const formatMemberDisplayName = (value: string): string => {
     const trimmed = value.trim();
     if (!trimmed) return 'Player';
-
-    const parts = trimmed.split(/\s+/);
-    if (parts.length < 2) return trimmed;
-
-    const lastName = parts.pop() ?? '';
-    return `${parts.join(' ')} ${lastName.toUpperCase()}`;
+    return trimmed;
   };
 
   const renderStandoutBadge = (
@@ -167,30 +162,35 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     const displayValue = type === 'club'
       ? getDisplayClubRoyaleTier(value)
       : getDisplayCrownAnchorLevel(value);
+    const isLoyalty = type === 'loyalty';
+    const badgeTextColor = isLoyalty ? '#111111' : accentColor;
+    const badgeLabelColor = isLoyalty ? 'rgba(17,17,17,0.72)' : 'rgba(15, 36, 57, 0.68)';
+    const badgeBorderColor = isLoyalty ? 'rgba(17,17,17,0.08)' : `${accentColor}28`;
+    const badgeIconColor = isLoyalty ? '#111111' : accentColor;
 
     return (
-      <View style={[styles.spotlightBadge, { borderColor: `${accentColor}28` }]}>
+      <View style={[styles.spotlightBadge, { borderColor: badgeBorderColor }]}>
         <View
           style={[
             styles.spotlightBadgeIcon,
             type === 'club'
               ? { backgroundColor: accentColor }
               : {
-                  backgroundColor: `${accentColor}14`,
+                  backgroundColor: isLoyalty ? 'rgba(255,255,255,0.70)' : `${accentColor}14`,
                   borderWidth: 1,
-                  borderColor: `${accentColor}30`,
+                  borderColor: isLoyalty ? 'rgba(17,17,17,0.08)' : `${accentColor}30`,
                 },
           ]}
         >
           {type === 'club' ? (
             <Star size={12} color={COLORS.white} fill={COLORS.white} />
           ) : (
-            <Crown size={14} color={accentColor} />
+            <Crown size={14} color={badgeIconColor} />
           )}
         </View>
         <View style={styles.spotlightBadgeContent}>
-          <Text style={styles.spotlightBadgeLabel}>{label}</Text>
-          <Text style={[styles.spotlightBadgeValue, { color: accentColor }]} numberOfLines={1}>
+          <Text style={[styles.spotlightBadgeLabel, { color: badgeLabelColor }]}>{label}</Text>
+          <Text style={[styles.spotlightBadgeValue, { color: badgeTextColor }]} numberOfLines={1}>
             {displayValue.toUpperCase()}
           </Text>
         </View>
@@ -238,13 +238,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         resizeMode="cover"
       />
       <LinearGradient
-        colors={['rgba(255,255,255,0.02)', 'rgba(9, 42, 66, 0.18)', 'rgba(9, 42, 66, 0.36)']}
+        colors={['rgba(255,255,255,0.56)', 'rgba(255,248,236,0.34)', 'rgba(255,255,255,0.12)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 0.85, y: 1 }}
         style={styles.backgroundOverlay}
       />
       <LinearGradient
-        colors={['rgba(255,255,255,0.1)', 'rgba(246,214,142,0.16)', 'rgba(103, 232, 249, 0.16)']}
+        colors={['rgba(255,255,255,0.18)', 'rgba(246,214,142,0.16)', 'rgba(103, 232, 249, 0.10)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.atmosphereOverlay}
@@ -272,7 +272,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               onPress={onAlertsPress}
               activeOpacity={0.7}
             >
-              <Bell size={18} color="#F8FBFF" />
+              <Bell size={18} color="#111111" />
               {alertCount > 0 && (
                 <View style={styles.alertBadge}>
                   <Text style={styles.alertBadgeText}>
@@ -288,7 +288,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               onPress={onLogoutPress}
               activeOpacity={0.7}
             >
-              <LogOut size={18} color="#F8FBFF" />
+              <LogOut size={18} color="#111111" />
             </TouchableOpacity>
           )}
           {onSettingsPress && (
@@ -297,7 +297,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               onPress={onSettingsPress}
               activeOpacity={0.7}
             >
-              <Settings size={18} color="#F8FBFF" />
+              <Settings size={18} color="#111111" />
             </TouchableOpacity>
           )}
         </View>
@@ -1010,7 +1010,7 @@ const styles = StyleSheet.create({
   },
   contentLayer: {
     padding: SPACING.lg,
-    backgroundColor: 'rgba(255, 248, 236, 0.08)',
+    backgroundColor: 'rgba(255, 248, 236, 0.12)',
   },
   topRow: {
     flexDirection: 'row',
@@ -1036,12 +1036,12 @@ const styles = StyleSheet.create({
   memberGreeting: {
     fontSize: 24,
     fontWeight: '800' as const,
-    color: COLORS.white,
+    color: '#111111',
     letterSpacing: -0.3,
   },
   memberSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.76)',
+    color: 'rgba(17,17,17,0.72)',
     marginTop: 4,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
@@ -1053,14 +1053,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 252, 246, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.26)',
+    borderColor: 'rgba(17, 17, 17, 0.08)',
     shadowColor: '#03111F',
-    shadowOpacity: 0.14,
+    shadowOpacity: 0.10,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,

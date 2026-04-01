@@ -35,7 +35,7 @@ interface OfferSummaryCardProps {
   activeSortMode?: 'soonest' | 'highestValue';
 }
 
-const JACKPOT_BG = 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=1200&q=80';
+const JACKPOT_BG = 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1200&q=80';
 
 export const OfferSummaryCard = React.memo(function OfferSummaryCard({
   totalValue,
@@ -48,7 +48,7 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
   return (
     <View style={summaryStyles.container}>
       <Image source={{ uri: JACKPOT_BG }} style={summaryStyles.backgroundImage} resizeMode="cover" />
-      <LinearGradient colors={['rgba(6, 27, 44, 0.56)', 'rgba(6, 27, 44, 0.9)']} style={summaryStyles.overlay}>
+      <LinearGradient colors={['rgba(14, 52, 86, 0.18)', 'rgba(27, 41, 76, 0.48)', 'rgba(18, 28, 58, 0.62)']} style={summaryStyles.overlay}>
         <GlassSurface style={summaryStyles.summaryGlass} contentStyle={summaryStyles.summaryGlassContent}>
           <View style={summaryStyles.summaryHeader}>
             <View>
@@ -295,7 +295,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.94} testID="casino-offer-card">
-      <LinearGradient colors={['#FFFCF6', '#F6EFD8', '#E4F8FB']} style={styles.shellGradient}>
+      <LinearGradient colors={['#FFFDF9', '#F8F0DB', '#E8F8FC']} style={styles.shellGradient}>
         <View style={styles.headerStrip}>
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>{offerName}</Text>
@@ -382,9 +382,12 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
 const summaryStyles = StyleSheet.create({
   container: {
+    width: '100%',
+    alignSelf: 'stretch',
     borderRadius: 30,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
+    backgroundColor: '#F9F4EC',
     ...SHADOW.lg,
   },
   backgroundImage: {
@@ -395,6 +398,8 @@ const summaryStyles = StyleSheet.create({
   },
   summaryGlass: {
     borderRadius: 28,
+    backgroundColor: 'rgba(255, 248, 239, 0.94)',
+    borderColor: 'rgba(255,255,255,0.30)',
   },
   summaryGlassContent: {
     padding: SPACING.lg,
@@ -411,13 +416,13 @@ const summaryStyles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
     letterSpacing: 1.1,
     textTransform: 'uppercase' as const,
-    color: 'rgba(255,255,255,0.72)',
+    color: 'rgba(17,17,17,0.56)',
   },
   summaryTitle: {
     marginTop: 6,
     fontSize: TYPOGRAPHY.fontSizeXXL,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#111111',
   },
   summaryChip: {
     flexDirection: 'row',
@@ -426,12 +431,14 @@ const summaryStyles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.round,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.64)',
+    borderWidth: 1,
+    borderColor: 'rgba(17,17,17,0.06)',
   },
   summaryChipText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#111111',
   },
   statRow: {
     flexDirection: 'row',
@@ -441,28 +448,28 @@ const summaryStyles = StyleSheet.create({
     flex: 1,
     borderRadius: 22,
     padding: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.56)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(17,17,17,0.06)',
   },
   statLabel: {
     fontSize: 10,
     fontWeight: '700' as const,
     textTransform: 'uppercase' as const,
     letterSpacing: 1,
-    color: 'rgba(255,255,255,0.66)',
+    color: 'rgba(17,17,17,0.56)',
   },
   statValue: {
     marginTop: 8,
     fontSize: 24,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#111111',
   },
   statValueMoney: {
     marginTop: 8,
     fontSize: 22,
     fontWeight: '800' as const,
-    color: '#C4F2D5',
+    color: '#0F766E',
   },
   summaryActionRow: {
     flexDirection: 'row',
@@ -474,20 +481,20 @@ const summaryStyles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: BORDER_RADIUS.round,
     paddingVertical: 14,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.58)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(17,17,17,0.06)',
   },
   summaryActionActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#111111',
   },
   summaryActionText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#111111',
   },
   summaryActionTextActive: {
-    color: COLORS.navyDark,
+    color: '#FFFFFF',
   },
 });
 
@@ -512,7 +519,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.md,
-    backgroundColor: 'rgba(255, 246, 229, 0.96)',
+    backgroundColor: 'rgba(255, 249, 241, 0.84)',
   },
   headerCopy: {
     flex: 1,
@@ -534,9 +541,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 250, 238, 0.96)',
+    backgroundColor: 'rgba(255, 252, 247, 0.74)',
     borderWidth: 1,
-    borderColor: 'rgba(214, 184, 111, 0.18)',
+    borderColor: 'rgba(255,255,255,0.30)',
     minWidth: 126,
   },
   headerValueLabel: {
@@ -615,7 +622,7 @@ const styles = StyleSheet.create({
   contentSection: {
     padding: SPACING.lg,
     gap: SPACING.md,
-    backgroundColor: 'rgba(255, 251, 243, 0.92)',
+    backgroundColor: 'rgba(255, 252, 247, 0.82)',
   },
   primaryRow: {
     flexDirection: 'row',
@@ -679,7 +686,7 @@ const styles = StyleSheet.create({
   },
   infoDivider: {
     width: 1,
-    backgroundColor: 'rgba(214, 184, 111, 0.18)',
+    backgroundColor: 'rgba(17,17,17,0.08)',
     marginVertical: 8,
   },
   infoLabel: {

@@ -1,8 +1,10 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Bot, TrendingUp, Award, DollarSign, RefreshCw, MessageSquare } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
+import { GlassSurface } from '@/components/premium/GlassSurface';
+import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 
@@ -10,7 +12,7 @@ import type { BookedCruise } from '@/types/models';
 
 interface AgentXAnalysisCardProps {
   onViewDetails?: () => void;
-  onRefresh?: () => void;
+  onRefresh?: () => Promise<void> | void;
 }
 
 export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisCardProps) {
@@ -25,12 +27,12 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
   const handleRefresh = useCallback(async () => {
     console.log('[AgentX Analysis] Manual refresh triggered');
     setIsRefreshing(true);
-    
+
     try {
-      await syncFromStorage();
+      await Promise.resolve(syncFromStorage());
 
       if (onRefresh) {
-        await onRefresh();
+        await Promise.resolve(onRefresh());
       }
     } catch (error) {
       console.error('[AgentX Analysis] Refresh error:', error);
@@ -42,42 +44,39 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
   const analysis = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const allCompletedCruises = bookedCruises.filter((cruise: BookedCruise) => {
-      // Explicitly marked as completed
       if (cruise.completionState === 'completed') return true;
-      
-      // Or sail date is in the past (cruise has ended)
+
       if (cruise.returnDate) {
         const returnDate = new Date(cruise.returnDate);
         returnDate.setHours(0, 0, 0, 0);
         if (returnDate < today) return true;
       } else if (cruise.sailDate && cruise.nights) {
-        // Calculate return date from sail date + nights
         const sailDate = new Date(cruise.sailDate);
         const returnDate = new Date(sailDate);
         returnDate.setDate(returnDate.getDate() + cruise.nights);
         returnDate.setHours(0, 0, 0, 0);
         if (returnDate < today) return true;
       }
-      
+
       return false;
     });
-    
+
     const totalNights = allCompletedCruises.reduce(
-      (sum: number, c: BookedCruise) => sum + (c.nights || 0),
+      (sum: number, cruise: BookedCruise) => sum + (cruise.nights || 0),
       0
     );
 
     const earnedPointsFromCruises = allCompletedCruises.reduce(
-      (sum: number, c: BookedCruise) => sum + (c.earnedPoints || c.casinoPoints || 0),
+      (sum: number, cruise: BookedCruise) => sum + (cruise.earnedPoints || cruise.casinoPoints || 0),
       0
     );
-    
+
     const totalPoints = clubRoyalePoints > 0 ? clubRoyalePoints : earnedPointsFromCruises;
 
     const totalWinnings = allCompletedCruises.reduce(
-      (sum: number, c: BookedCruise) => sum + (c.winnings || 0),
+      (sum: number, cruise: BookedCruise) => sum + (cruise.winnings || 0),
       0
     );
 
@@ -121,79 +120,112 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
     };
   }, [bookedCruises, clubRoyalePoints]);
 
+  const marbleConfig = MARBLE_TEXTURES.purple;
+
   const formatCurrency = (value: number): string => {
     const sign = value >= 0 ? '+' : '';
     return `${sign}$${Math.abs(value).toLocaleString()}`;
   };
 
+  const renderActionButton = (
+    label: string,
+    icon: React.ReactNode,
+    onPress: (() => void) | undefined,
+    disabled = false,
+    testID?: string
+  ) => {
+    if (!onPress) {
+      return null;
+    }
+
+    return (
+      <GlassSurface style={styles.actionGlass} contentStyle={styles.actionGlassContent} testID={testID}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={onPress}
+          activeOpacity={0.82}
+          disabled={disabled}
+        >
+          {icon}
+          <Text style={styles.actionButtonText}>{label}</Text>
+        </TouchableOpacity>
+      </GlassSurface>
+    );
+  };
+
   if (analysis.cruiseCount === 0 && analysis.totalBookedCount === 0) {
     return (
-      <View style={styles.container}>
-        <ImageBackground 
-          source={{ uri: OCEAN_BG }} 
-          style={styles.backgroundImage}
-          resizeMode="cover"
-        >
-          <LinearGradient
-            colors={['rgba(30, 58, 95, 0.85)', 'rgba(123, 45, 142, 0.85)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.gradientOverlay}
-          >
-            <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                <View style={styles.iconContainer}>
-                  <Bot size={18} color="#FFFFFF" />
-                </View>
-                <View>
-                  <Text style={styles.title}>AI Analysis</Text>
-                  <Text style={styles.subtitle}>No Recent Data</Text>
-                </View>
+      <LinearGradient
+        colors={marbleConfig.gradientColors as unknown as [string, string, ...string[]]}
+        locations={marbleConfig.gradientLocations}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.container}
+      >
+        <LinearGradient
+          colors={['rgba(90, 49, 132, 0.18)', 'rgba(46, 26, 92, 0.44)', 'rgba(18, 25, 52, 0.54)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.backgroundTint}
+        />
+        <View style={styles.backgroundOrbPrimary} />
+        <View style={styles.backgroundOrbSecondary} />
+        <View style={styles.contentLayer}>
+          <GlassSurface style={styles.headerGlass} contentStyle={styles.headerGlassContent}>
+            <View style={styles.headerRow}>
+              <View style={styles.iconContainer}>
+                <Bot size={18} color="#111111" />
+              </View>
+              <View style={styles.headerCopy}>
+                <Text style={styles.title}>AI Analysis</Text>
+                <Text style={styles.subtitle}>No Recent Data</Text>
               </View>
             </View>
+          </GlassSurface>
 
+          <GlassSurface style={styles.panelGlass} contentStyle={styles.panelGlassContent}>
             <Text style={styles.emptyText}>
               No completed cruises found. Complete some cruises to see your performance analysis.
             </Text>
-            
-            <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={handleRefresh}
-              activeOpacity={0.7}
-              disabled={isRefreshing}
-            >
-              {isRefreshing ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <RefreshCw size={14} color="#FFFFFF" />
-              )}
-              <Text style={styles.refreshButtonText}>{isRefreshing ? 'Refreshing...' : 'Refresh Analysis'}</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-        </ImageBackground>
-      </View>
+          </GlassSurface>
+
+          {renderActionButton(
+            isRefreshing ? 'Refreshing...' : 'Refresh Analysis',
+            isRefreshing ? <ActivityIndicator size="small" color="#111111" /> : <RefreshCw size={14} color="#111111" />,
+            handleRefresh,
+            isRefreshing,
+            'ai-analysis-refresh-button'
+          )}
+        </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <ImageBackground 
-        source={{ uri: OCEAN_BG }} 
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <LinearGradient
-          colors={['rgba(30, 58, 95, 0.88)', 'rgba(123, 45, 142, 0.88)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.gradientOverlay}
-        >
-          <View style={styles.header}>
+    <LinearGradient
+      colors={marbleConfig.gradientColors as unknown as [string, string, ...string[]]}
+      locations={marbleConfig.gradientLocations}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
+      <LinearGradient
+        colors={['rgba(90, 49, 132, 0.18)', 'rgba(46, 26, 92, 0.44)', 'rgba(18, 25, 52, 0.54)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.backgroundTint}
+      />
+      <View style={styles.backgroundOrbPrimary} />
+      <View style={styles.backgroundOrbSecondary} />
+
+      <View style={styles.contentLayer}>
+        <GlassSurface style={styles.headerGlass} contentStyle={styles.headerGlassContent}>
+          <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <View style={styles.iconContainer}>
-                <Bot size={18} color="#FFFFFF" />
+                <Bot size={18} color="#111111" />
               </View>
-              <View>
+              <View style={styles.headerCopy}>
                 <Text style={styles.title}>AI Analysis</Text>
                 <Text style={styles.subtitle}>
                   {analysis.totalBookedCount} Total • {analysis.cruiseCount} Completed • {analysis.totalPoints.toLocaleString()} Points
@@ -201,72 +233,59 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
               </View>
             </View>
           </View>
+          <Text style={styles.summaryText}>
+            {analysis.totalNights} nights cruised. Net result: {formatCurrency(analysis.totalWinnings)}.
+          </Text>
+        </GlassSurface>
 
-          <View style={styles.summarySection}>
-            <Text style={styles.summaryText}>
-              {analysis.totalNights} nights cruised. Net result: {formatCurrency(analysis.totalWinnings)}.
+        <GlassSurface style={styles.panelGlass} contentStyle={styles.metricsGlassContent}>
+          <View style={styles.metricItem}>
+            <Award size={15} color="#8A6200" />
+            <Text style={styles.metricLabel}>Avg pts/night</Text>
+            <Text style={styles.metricValue}>{analysis.avgPointsPerNight}</Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricItem}>
+            <DollarSign size={15} color="#0F766E" />
+            <Text style={styles.metricLabel}>Est. coin-in</Text>
+            <Text style={styles.metricValue}>${(analysis.estimatedCoinIn / 1000).toFixed(0)}k</Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricItem}>
+            <TrendingUp size={15} color={analysis.winRate >= 0 ? '#0F766E' : '#B91C1C'} />
+            <Text style={styles.metricLabel}>Win rate</Text>
+            <Text style={[styles.metricValue, { color: analysis.winRate >= 0 ? '#0F766E' : '#B91C1C' }]}>
+              {analysis.winRate >= 0 ? '+' : ''}
+              {analysis.winRate.toFixed(1)}%
             </Text>
           </View>
+        </GlassSurface>
 
-          <View style={styles.metricsRow}>
-            <View style={styles.metricItem}>
-              <Award size={14} color="#FEF3C7" />
-              <Text style={styles.metricLabel}>Avg pts/night</Text>
-              <Text style={styles.metricValue}>{analysis.avgPointsPerNight}</Text>
-            </View>
-            <View style={styles.metricDivider} />
-            <View style={styles.metricItem}>
-              <DollarSign size={14} color="#A7F3D0" />
-              <Text style={styles.metricLabel}>Est. coin-in</Text>
-              <Text style={styles.metricValue}>${(analysis.estimatedCoinIn / 1000).toFixed(0)}k</Text>
-            </View>
-            <View style={styles.metricDivider} />
-            <View style={styles.metricItem}>
-              <TrendingUp size={14} color={analysis.winRate >= 0 ? '#A7F3D0' : '#FCA5A5'} />
-              <Text style={styles.metricLabel}>Win rate</Text>
-              <Text style={[styles.metricValue, { color: analysis.winRate >= 0 ? '#A7F3D0' : '#FCA5A5' }]}>
-                {analysis.winRate >= 0 ? '+' : ''}{analysis.winRate.toFixed(1)}%
-              </Text>
-            </View>
-          </View>
+        <GlassSurface style={styles.panelGlass} contentStyle={styles.panelGlassContent}>
+          <Text style={styles.assessmentLabel}>Read on the table</Text>
+          <Text style={styles.assessmentText}>{analysis.assessment}</Text>
+        </GlassSurface>
 
-          <View style={styles.assessmentSection}>
-            <Text style={styles.assessmentText}>{analysis.assessment}</Text>
-          </View>
-
-          <View style={styles.actionsRow}>
-            {onViewDetails && (
-              <TouchableOpacity
-                style={styles.fullChatButton}
-                onPress={onViewDetails}
-                activeOpacity={0.7}
-              >
-                <MessageSquare size={14} color={COLORS.navyDeep} />
-                <Text style={styles.fullChatButtonText}>Full Chat</Text>
-              </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={handleRefresh}
-              activeOpacity={0.7}
-              disabled={isRefreshing}
-            >
-              {isRefreshing ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <RefreshCw size={14} color="#FFFFFF" />
-              )}
-              <Text style={styles.refreshButtonText}>{isRefreshing ? 'Refreshing...' : 'Refresh'}</Text>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </ImageBackground>
-    </View>
+        <View style={styles.actionsRow}>
+          {renderActionButton(
+            'Full Chat',
+            <MessageSquare size={14} color={COLORS.navyDeep} />,
+            onViewDetails,
+            false,
+            'ai-analysis-full-chat-button'
+          )}
+          {renderActionButton(
+            isRefreshing ? 'Refreshing...' : 'Refresh',
+            isRefreshing ? <ActivityIndicator size="small" color="#111111" /> : <RefreshCw size={14} color="#111111" />,
+            handleRefresh,
+            isRefreshing,
+            'ai-analysis-refresh-button'
+          )}
+        </View>
+      </View>
+    </LinearGradient>
   );
 }
-
-const OCEAN_BG = 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=600&q=80';
 
 const styles = StyleSheet.create({
   container: {
@@ -274,140 +293,166 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     overflow: 'hidden',
   },
-  backgroundImage: {
-    width: '100%',
+  backgroundTint: {
+    ...StyleSheet.absoluteFillObject,
   },
-  gradientOverlay: {
+  backgroundOrbPrimary: {
+    position: 'absolute',
+    top: -34,
+    right: -18,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  backgroundOrbSecondary: {
+    position: 'absolute',
+    bottom: -52,
+    left: -18,
+    width: 176,
+    height: 176,
+    borderRadius: 88,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  contentLayer: {
+    padding: SPACING.md,
+    gap: SPACING.sm,
+  },
+  headerGlass: {
+    borderRadius: 26,
+    backgroundColor: 'rgba(255, 250, 242, 0.90)',
+    borderColor: 'rgba(255,255,255,0.36)',
+  },
+  headerGlassContent: {
+    padding: SPACING.md,
+    gap: SPACING.sm,
+  },
+  panelGlass: {
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 250, 242, 0.84)',
+    borderColor: 'rgba(255,255,255,0.30)',
+  },
+  panelGlassContent: {
     padding: SPACING.md,
   },
-  header: {
+  metricsGlassContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  headerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
   },
   headerLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    flex: 1,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.64)',
+    borderWidth: 1,
+    borderColor: 'rgba(17,17,17,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerCopy: {
+    flex: 1,
   },
   title: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    color: '#111111',
   },
   subtitle: {
+    marginTop: 2,
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 1,
-  },
-  summarySection: {
-    marginBottom: SPACING.sm,
-    paddingBottom: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.2)',
+    color: 'rgba(17,17,17,0.70)',
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   summaryText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#FFFFFF',
-    lineHeight: 18,
-    fontWeight: '500' as const,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    color: '#1F2937',
+    lineHeight: 19,
+    fontWeight: '600' as const,
   },
   metricItem: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.sm,
   },
   metricDivider: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: SPACING.xs,
+    backgroundColor: 'rgba(17,17,17,0.10)',
+    marginVertical: 6,
   },
   metricLabel: {
+    marginTop: 4,
     fontSize: 10,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
+    color: 'rgba(17,17,17,0.62)',
+    fontWeight: '700' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
   },
   metricValue: {
+    marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
-    marginTop: 2,
+    color: '#111111',
   },
-  assessmentSection: {
-    marginBottom: SPACING.sm,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.sm,
+  assessmentLabel: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: 'rgba(17,17,17,0.56)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 1,
   },
   assessmentText: {
+    marginTop: 8,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#FEF3C7',
-    lineHeight: 18,
-    fontStyle: 'italic' as const,
+    color: '#1F2937',
+    lineHeight: 19,
+    fontWeight: '600' as const,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.9)',
-    lineHeight: 18,
+    color: '#1F2937',
+    lineHeight: 19,
     textAlign: 'center',
-    paddingVertical: SPACING.sm,
-    marginBottom: SPACING.sm,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   actionsRow: {
     flexDirection: 'row',
     gap: SPACING.sm,
   },
-  fullChatButton: {
+  actionGlass: {
     flex: 1,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 250, 242, 0.92)',
+    borderColor: 'rgba(255,255,255,0.32)',
+  },
+  actionGlassContent: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 0,
+  },
+  actionButton: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.xs,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: '#FFFFFF',
   },
-  fullChatButtonText: {
+  actionButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-  },
-  refreshButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xs,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  refreshButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#FFFFFF',
+    color: '#111111',
   },
 });

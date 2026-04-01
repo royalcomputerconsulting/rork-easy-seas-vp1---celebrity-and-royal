@@ -90,25 +90,94 @@ function resolvePurchasesModule(moduleValue: unknown): PurchasesModule | null {
     return null;
   }
 
-  const candidate =
+  const candidates: unknown[] = [];
+  let currentValue: unknown = moduleValue;
+
+  for (let depth = 0; depth < 3 && currentValue; depth += 1) {
+    candidates.push(currentValue);
+
+    if (typeof currentValue === 'object' && currentValue !== null && 'default' in currentValue) {
+      currentValue = (currentValue as { default?: unknown }).default;
+      continue;
+    }
+
+    break;
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    if (typeof candidate !== 'object' && typeof candidate !== 'function') {
+      continue;
+    }
+
+    const typedCandidate = candidate as Partial<PurchasesModule>;
+    if (
+      typeof typedCandidate.configure === 'function' &&
+      typeof typedCandidate.getOfferings === 'function' &&
+      typeof typedCandidate.getCustomerInfo === 'function' &&
+      typeof typedCandidate.getAppUserID === 'function' &&
+      typeof typedCandidate.logIn === 'function' &&
+      typeof typedCandidate.logOut === 'function' &&
+      typeof typedCandidate.purchasePackage === 'function' &&
+      typeof typedCandidate.restorePurchases === 'function'
+    ) {
+      return typedCandidate as PurchasesModule;
+    }
+  }
+
+  return null;
+}
+
+function describePurchasesModuleShape(moduleValue: unknown): Record<string, unknown> {
+  if (!moduleValue) {
+    return { kind: 'empty' };
+  }
+
+  const describeCandidate = (candidate: unknown, label: string) => {
+    if (!candidate) {
+      return {
+        label,
+        type: typeof candidate,
+        keys: [],
+      };
+    }
+
+    if (typeof candidate !== 'object' && typeof candidate !== 'function') {
+      return {
+        label,
+        type: typeof candidate,
+        keys: [],
+      };
+    }
+
+    return {
+      label,
+      type: typeof candidate,
+      keys: Object.keys(candidate as Record<string, unknown>).slice(0, 20),
+      hasConfigure: typeof (candidate as Partial<PurchasesModule>).configure === 'function',
+      hasGetOfferings: typeof (candidate as Partial<PurchasesModule>).getOfferings === 'function',
+      hasGetCustomerInfo: typeof (candidate as Partial<PurchasesModule>).getCustomerInfo === 'function',
+    };
+  };
+
+  const directDefault =
     typeof moduleValue === 'object' && moduleValue !== null && 'default' in moduleValue
       ? (moduleValue as { default?: unknown }).default
-      : moduleValue;
+      : null;
 
-  if (!candidate || typeof candidate !== 'object') {
-    return null;
-  }
+  const nestedDefault =
+    typeof directDefault === 'object' && directDefault !== null && 'default' in directDefault
+      ? (directDefault as { default?: unknown }).default
+      : null;
 
-  const typedCandidate = candidate as Partial<PurchasesModule>;
-  if (
-    typeof typedCandidate.configure !== 'function' ||
-    typeof typedCandidate.getOfferings !== 'function' ||
-    typeof typedCandidate.getCustomerInfo !== 'function'
-  ) {
-    return null;
-  }
-
-  return typedCandidate as PurchasesModule;
+  return {
+    root: describeCandidate(moduleValue, 'root'),
+    defaultExport: describeCandidate(directDefault, 'default'),
+    nestedDefaultExport: describeCandidate(nestedDefault, 'default.default'),
+  };
 }
 
 export type EntitlementSource = 'iap' | 'dev' | 'grandfathered' | 'unknown';
@@ -648,7 +717,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
       if (!Purchases) {
         purchasesInitError = 'Failed to initialize purchases.';
-        console.error('[Entitlement] react-native-purchases resolved to an invalid module shape');
+        console.error('[Entitlement] react-native-purchases resolved to an invalid module shape', describePurchasesModuleShape(mod));
         return null;
       }
 
