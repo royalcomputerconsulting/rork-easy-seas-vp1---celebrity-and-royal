@@ -45,9 +45,84 @@ interface CSVRow {
   endDate: string;
 }
 
-function parseCSVToEntries(csvText: string): { entries: RecognitionEntryWithCrew[]; sailings: Sailing[] } {
+interface ParsedCrewImport {
+  entries: RecognitionEntryWithCrew[];
+  sailings: Sailing[];
+  totalRows: number;
+  duplicateCount: number;
+}
+
+function normalizeCrewImportValue(value: string | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function createLocalIdPart(value: string, fallback: string): string {
+  const normalized = normalizeCrewImportValue(value)
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  return normalized || fallback;
+}
+
+function buildSailingIdentity(input: { sailingId?: string; shipName?: string; startDate?: string; endDate?: string }): string {
+  const shipName = normalizeCrewImportValue(input.shipName);
+  const startDate = normalizeCrewImportValue(input.startDate);
+  const endDate = normalizeCrewImportValue(input.endDate || input.startDate);
+
+  if (shipName || startDate || endDate) {
+    return [shipName, startDate, endDate].join('__');
+  }
+
+  return normalizeCrewImportValue(input.sailingId);
+}
+
+function buildRecognitionEntryIdentity(input: {
+  fullName: string;
+  crewMemberId?: string;
+  shipName: string;
+  sailStartDate: string;
+  sailEndDate?: string;
+  department: string;
+  roleTitle?: string;
+}): string {
+  const crewIdentity = normalizeCrewImportValue(input.fullName) || normalizeCrewImportValue(input.crewMemberId);
+  return [
+    crewIdentity,
+    normalizeCrewImportValue(input.shipName),
+    normalizeCrewImportValue(input.sailStartDate),
+    normalizeCrewImportValue(input.sailEndDate || input.sailStartDate),
+    normalizeCrewImportValue(input.department),
+    normalizeCrewImportValue(input.roleTitle),
+  ].join('__');
+}
+
+function dedupeSailings(sailings: Sailing[]): Sailing[] {
+  const sailingMap = new Map<string, Sailing>();
+
+  sailings.forEach((sailing) => {
+    const sailingIdentity = buildSailingIdentity({
+      shipName: sailing.shipName,
+      startDate: sailing.sailStartDate,
+      endDate: sailing.sailEndDate,
+    });
+
+    if (!sailingIdentity) {
+      return;
+    }
+
+    if (!sailingMap.has(sailingIdentity)) {
+      sailingMap.set(sailingIdentity, sailing);
+    }
+  });
+
+  return Array.from(sailingMap.values());
+}
+
+function parseCSVToEntries(csvText: string): ParsedCrewImport {
   const lines = csvText.split('\n').filter(line => line.trim());
-  if (lines.length < 2) return { entries: [], sailings: [] };
+  if (lines.length < 2) {
+    return { entries: [], sailings: [], totalRows: 0, duplicateCount: 0 };
+  }
 
   const headers = lines[0]
     .split(',')
@@ -73,14 +148,17 @@ function parseCSVToEntries(csvText: string): { entries: RecognitionEntryWithCrew
   }).filter(r => r.crewName && r.department);
 
   const sailingsMap = new Map<string, Sailing>();
+  const recognitionEntryKeys = new Set<string>();
   const entries: RecognitionEntryWithCrew[] = [];
+  let duplicateCount = 0;
 
   rows.forEach((row, index) => {
-    const sailingKey = row.sailingId || `${row.shipName}_${row.startDate}`;
+    const sailingIdentity = buildSailingIdentity(row) || `${row.shipName}_${row.startDate}_${index}`;
+    const sailingIdPart = createLocalIdPart(sailingIdentity, `sailing_${index}`);
 
-    if (!sailingsMap.has(sailingKey) && row.shipName) {
-      sailingsMap.set(sailingKey, {
-        id: `local_sailing_${sailingKey}`,
+    if (!sailingsMap.has(sailingIdentity) && row.shipName) {
+      sailingsMap.set(sailingIdentity, {
+        id: `local_sailing_${sailingIdPart}`,
         shipName: row.shipName,
         sailStartDate: row.startDate || '',
         sailEndDate: row.endDate || row.startDate || '',
@@ -88,18 +166,41 @@ function parseCSVToEntries(csvText: string): { entries: RecognitionEntryWithCrew
       });
     }
 
-    const sailing = sailingsMap.get(sailingKey);
+    const sailing = sailingsMap.get(sailingIdentity);
     const startDate = row.startDate || '';
+    const endDate = row.endDate || startDate;
     const sailingMonth = startDate.substring(0, 7);
     const sailingYear = startDate ? parseInt(startDate.substring(0, 4), 10) : 0;
-
-    entries.push({
-      id: `local_entry_${row.crewId}_${sailingKey}_${index}`,
-      crewMemberId: `local_crew_${row.crewId}`,
-      sailingId: sailing?.id || `local_sailing_${sailingKey}`,
+    const crewIdPart = createLocalIdPart(row.crewId || row.crewName, `crew_${index}`);
+    const recognitionEntryIdentity = buildRecognitionEntryIdentity({
+      fullName: row.crewName,
       shipName: row.shipName,
       sailStartDate: startDate,
-      sailEndDate: row.endDate || startDate,
+      sailEndDate: endDate,
+      department: row.department,
+      roleTitle: row.roleTitle || undefined,
+    });
+
+    if (recognitionEntryKeys.has(recognitionEntryIdentity)) {
+      duplicateCount += 1;
+      console.log('[CrewRecognition] Skipping duplicate CSV row:', {
+        crewName: row.crewName,
+        shipName: row.shipName,
+        startDate,
+        department: row.department,
+      });
+      return;
+    }
+
+    recognitionEntryKeys.add(recognitionEntryIdentity);
+
+    entries.push({
+      id: `local_entry_${crewIdPart}_${sailingIdPart}_${index}`,
+      crewMemberId: `local_crew_${crewIdPart}`,
+      sailingId: sailing?.id || `local_sailing_${sailingIdPart}`,
+      shipName: row.shipName,
+      sailStartDate: startDate,
+      sailEndDate: endDate,
       sailingMonth,
       sailingYear,
       department: row.department,
@@ -116,6 +217,8 @@ function parseCSVToEntries(csvText: string): { entries: RecognitionEntryWithCrew
   return {
     entries,
     sailings: Array.from(sailingsMap.values()),
+    totalRows: rows.length,
+    duplicateCount,
   };
 }
 
@@ -544,21 +647,75 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
   const syncFromCSVLocally = useCallback(async () => {
     console.log('[CrewRecognition] Parsing CSV locally...');
-    const { entries: parsedEntries, sailings: parsedSailings } = parseCSVToEntries(CREW_RECOGNITION_CSV);
-    console.log('[CrewRecognition] Parsed', parsedEntries.length, 'entries,', parsedSailings.length, 'sailings');
+    const parsedImport = parseCSVToEntries(CREW_RECOGNITION_CSV);
+    console.log('[CrewRecognition] Parsed import summary:', {
+      parsedEntries: parsedImport.entries.length,
+      parsedSailings: parsedImport.sailings.length,
+      totalRows: parsedImport.totalRows,
+      duplicateRowsSkipped: parsedImport.duplicateCount,
+    });
 
-    setLocalEntries(parsedEntries);
-    setLocalSailings(parsedSailings);
+    const existingEntryKeys = new Set(
+      localEntries.map((entry) => buildRecognitionEntryIdentity({
+        fullName: entry.fullName,
+        crewMemberId: entry.crewMemberId,
+        shipName: entry.shipName,
+        sailStartDate: entry.sailStartDate,
+        sailEndDate: entry.sailEndDate,
+        department: entry.department,
+        roleTitle: entry.roleTitle,
+      }))
+    );
+
+    const newEntries = parsedImport.entries.filter((entry) => {
+      const entryIdentity = buildRecognitionEntryIdentity({
+        fullName: entry.fullName,
+        crewMemberId: entry.crewMemberId,
+        shipName: entry.shipName,
+        sailStartDate: entry.sailStartDate,
+        sailEndDate: entry.sailEndDate,
+        department: entry.department,
+        roleTitle: entry.roleTitle,
+      });
+
+      if (existingEntryKeys.has(entryIdentity)) {
+        console.log('[CrewRecognition] Skipping duplicate against existing local entries:', {
+          fullName: entry.fullName,
+          shipName: entry.shipName,
+          sailStartDate: entry.sailStartDate,
+        });
+        return false;
+      }
+
+      existingEntryKeys.add(entryIdentity);
+      return true;
+    });
+
+    const duplicateCount = parsedImport.duplicateCount + (parsedImport.entries.length - newEntries.length);
+    const mergedEntries = [...newEntries, ...localEntries];
+    const mergedSailings = dedupeSailings([...parsedImport.sailings, ...localSailings]);
+
+    setLocalEntries(mergedEntries);
+    setLocalSailings(mergedSailings);
     setIsOfflineMode(true);
 
     await Promise.all([
-      AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(parsedEntries)),
-      AsyncStorage.setItem(skSailingsRef.current, JSON.stringify(parsedSailings)),
+      AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(mergedEntries)),
+      AsyncStorage.setItem(skSailingsRef.current, JSON.stringify(mergedSailings)),
     ]);
-    console.log('[CrewRecognition] Saved to local storage');
+    console.log('[CrewRecognition] Saved deduped import to local storage:', {
+      importedCount: newEntries.length,
+      totalEntries: mergedEntries.length,
+      totalSailings: mergedSailings.length,
+      duplicateCount,
+    });
 
-    return { importedCount: parsedEntries.length, totalRows: parsedEntries.length };
-  }, []);
+    return {
+      importedCount: newEntries.length,
+      totalRows: parsedImport.totalRows,
+      duplicateCount,
+    };
+  }, [localEntries, localSailings]);
 
   const updateFilters = useCallback((newFilters: Partial<CrewRecognitionFilters>) => {
     setFilters(prev => ({ ...prev, ...newFilters }));

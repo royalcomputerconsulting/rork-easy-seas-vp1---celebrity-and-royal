@@ -380,79 +380,59 @@ export default function EventsScreen() {
     });
   }, [router]);
 
-  const getDayBackgroundColor = useCallback((day: DayData) => {
-    const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
-    if (!hasEvents) return 'transparent';
-    
-    if (day.events.cruise > 0 && day.events.travel > 0) {
-      return 'rgba(16, 185, 129, 0.38)';
-    }
-    if (day.events.cruise > 0) {
-      return 'rgba(34, 197, 94, 0.32)';
-    }
-    if (day.events.travel > 0) {
-      return 'rgba(59, 130, 246, 0.2)';
-    }
-    if (day.events.personal > 0) {
-      return 'rgba(168, 85, 247, 0.15)';
-    }
-    return 'transparent';
-  }, []);
-
   const renderDayCell = useCallback((day: DayData) => {
     const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
     const hasCruise = day.events.cruise > 0;
-    const bgColor = getDayBackgroundColor(day);
-    const luckBadgeColor = day.luckScore !== null ? getLuckDigitColor(day.luckScore) : null;
-    const hasLuckBadge = day.luckScore !== null && luckBadgeColor !== null;
-    const shouldHighlightAdjacentMonth = !day.isCurrentMonth && (hasEvents || hasLuckBadge);
+    const luckScore = day.luckScore;
+    const hasLuckNumber = luckScore !== null;
+    const luckNumberColor = luckScore !== null ? (getLuckDigitColor(luckScore) ?? COLORS.navyDeep) : COLORS.navyDeep;
+    const shouldHighlightAdjacentMonth = !day.isCurrentMonth && (hasEvents || hasLuckNumber);
+    const dayKey = day.date.toISOString().split('T')[0];
 
     return (
       <TouchableOpacity
         key={day.date.toISOString()}
         style={[
           styles.dayCell,
-          { backgroundColor: bgColor },
-          hasLuckBadge && styles.dayCellWithLuckBadge,
-          hasCruise && styles.cruiseDayCell,
+          hasCruise ? styles.cruiseDayCell : styles.standardDayCell,
           day.isToday && styles.todayCell,
           !day.isCurrentMonth && (shouldHighlightAdjacentMonth ? styles.otherMonthCellActive : styles.otherMonthCell),
-          !day.isCurrentMonth && hasCruise && styles.otherMonthCruiseCell,
         ]}
         activeOpacity={0.7}
         onPress={() => handleDayPress(day)}
+        testID={`calendar-day-${dayKey}`}
       >
-        {hasLuckBadge && luckBadgeColor ? (
-          <View
-            style={[
-              styles.luckBadge,
-              { backgroundColor: `${luckBadgeColor}22`, borderColor: `${luckBadgeColor}88` },
-              !day.isCurrentMonth && styles.luckBadgeOtherMonth,
-            ]}
-            testID={`calendar-luck-badge-${day.date.toISOString().split('T')[0]}`}
-          >
-            <View style={styles.luckBadgeRow}>
-              <Text style={[styles.luckBadgeLabel, { color: luckBadgeColor }]}>LUCK#</Text>
-              <Text style={[styles.luckBadgeNumber, { color: luckBadgeColor }]}>{day.luckScore}</Text>
-            </View>
-          </View>
-        ) : null}
         <Text style={[
           styles.dayNumber,
           day.isToday && styles.todayNumber,
           !day.isCurrentMonth && (shouldHighlightAdjacentMonth ? styles.otherMonthNumberActive : styles.otherMonthNumber),
-          (hasEvents || hasLuckBadge) && styles.dayNumberWithEvents,
         ]}>
           {day.dayNumber}
         </Text>
-        {hasEvents && (
+
+        {hasLuckNumber ? (
+          <View style={styles.luckNumberContainer}>
+            <Text
+              style={[
+                styles.luckNumber,
+                { color: luckNumberColor },
+                !day.isCurrentMonth && !shouldHighlightAdjacentMonth && styles.luckNumberOtherMonth,
+              ]}
+              testID={`calendar-luck-number-${dayKey}`}
+            >
+              {day.luckScore}
+            </Text>
+          </View>
+        ) : null}
+
+        {hasEvents ? (
           <View style={styles.eventDotsContainer}>
             {renderEventDots(day.events)}
           </View>
-        )}
+        ) : null}
       </TouchableOpacity>
     );
-  }, [renderEventDots, handleDayPress, getDayBackgroundColor]);
+  }, [handleDayPress, renderEventDots]);
 
   const upcomingEvents = useMemo(() => {
     const today = new Date();
@@ -955,90 +935,76 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: BORDER_RADIUS.sm,
     margin: 2,
     overflow: 'hidden',
-  },
-  dayCellWithLuckBadge: {
-    paddingTop: 12,
-  },
-  cruiseDayCell: {
-    borderWidth: 1.5,
-    borderColor: 'rgba(34, 197, 94, 0.5)',
-  },
-  todayCell: {
-    borderWidth: 2,
-    borderColor: '#F59E0B',
-    backgroundColor: 'transparent',
-  },
-  otherMonthCell: {
-    backgroundColor: 'rgba(0, 31, 63, 0.03)',
-  },
-  otherMonthCellActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    position: 'relative',
+    backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.12)',
+    minWidth: 0,
   },
-  otherMonthCruiseCell: {
-    borderColor: 'rgba(34, 197, 94, 0.55)',
+  standardDayCell: {
+    borderColor: 'rgba(0, 31, 63, 0.12)',
+  },
+  cruiseDayCell: {
+    borderWidth: 2,
+    borderColor: '#22C55E',
+  },
+  todayCell: {
+    shadowColor: '#F59E0B',
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    elevation: 2,
+  },
+  otherMonthCell: {
+    backgroundColor: COLORS.white,
+    borderColor: 'rgba(0, 31, 63, 0.07)',
+  },
+  otherMonthCellActive: {
+    backgroundColor: COLORS.white,
+    borderColor: 'rgba(0, 31, 63, 0.12)',
   },
   dayNumber: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.navyDeep,
   },
   todayNumber: {
-    fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#F59E0B',
   },
   otherMonthNumber: {
     color: COLORS.navyDeep,
-    opacity: 0.52,
+    opacity: 0.44,
   },
   otherMonthNumberActive: {
     color: COLORS.navyDeep,
-    opacity: 1,
+    opacity: 0.82,
   },
-  dayNumberWithEvents: {
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  luckBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    minWidth: 44,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
+  luckNumberContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1,
   },
-  luckBadgeOtherMonth: {
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-  },
-  luckBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  luckBadgeLabel: {
-    fontSize: 7,
-    lineHeight: 9,
+  luckNumber: {
+    fontSize: 18,
+    lineHeight: 20,
     fontWeight: '800' as const,
-    letterSpacing: 0.35,
+    letterSpacing: 0.2,
   },
-  luckBadgeNumber: {
-    fontSize: 11,
-    lineHeight: 12,
-    fontWeight: '800' as const,
+  luckNumberOtherMonth: {
+    opacity: 0.56,
   },
   eventDotsContainer: {
     flexDirection: 'row',
     position: 'absolute',
-    bottom: 4,
+    bottom: 6,
     gap: 2,
   },
   eventDot: {

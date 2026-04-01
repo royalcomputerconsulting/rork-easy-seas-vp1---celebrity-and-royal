@@ -99,7 +99,11 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
       setSyncProgress({ current: result.totalRows, total: result.totalRows });
       console.log('[CrewRecognition] Local sync complete:', result.importedCount, 'entries');
 
-      Alert.alert('Success', `Loaded ${result.importedCount} crew recognition entries from CSV`);
+      const duplicateMessage = result.duplicateCount > 0
+        ? `\nSkipped ${result.duplicateCount} duplicate entr${result.duplicateCount === 1 ? 'y' : 'ies'}.`
+        : '';
+
+      Alert.alert('Success', `Loaded ${result.importedCount} crew recognition entries from CSV.${duplicateMessage}`);
     } catch (error) {
       console.error('[CrewRecognition] Sync error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
