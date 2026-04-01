@@ -1,103 +1,78 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 
 export type BrandType = 'royal' | 'celebrity' | 'silversea' | 'carnival';
+export type BrandToggleVariant = 'default' | 'playerCard';
 
 interface BrandToggleProps {
   activeBrand: BrandType;
   onToggle: (brand: BrandType) => void;
   showSilversea?: boolean;
   showCarnival?: boolean;
+  variant?: BrandToggleVariant;
 }
 
-export function BrandToggle({ activeBrand, onToggle, showSilversea = true, showCarnival = true }: BrandToggleProps) {
+interface BrandOption {
+  key: BrandType;
+  label: string;
+}
+
+export function BrandToggle({
+  activeBrand,
+  onToggle,
+  showSilversea = true,
+  showCarnival = true,
+  variant = 'default',
+}: BrandToggleProps) {
+  const isPlayerCard = variant === 'playerCard';
+
+  const options = useMemo((): BrandOption[] => {
+    const visibleOptions: BrandOption[] = [
+      { key: 'royal', label: 'Royal Caribbean' },
+      { key: 'celebrity', label: 'Celebrity' },
+      ...(showSilversea ? [{ key: 'silversea' as const, label: 'Silversea' }] : []),
+      ...(showCarnival ? [{ key: 'carnival' as const, label: 'Carnival' }] : []),
+    ];
+
+    return visibleOptions;
+  }, [showCarnival, showSilversea]);
+
   return (
-    <View style={styles.container}>
-      <View style={styles.toggleContainer}>
-        <TouchableOpacity
-          style={[
-            styles.toggleButton,
-            styles.leftButton,
-            activeBrand === 'royal' && styles.activeButton,
-          ]}
-          onPress={() => onToggle('royal')}
-          activeOpacity={0.7}
-        >
-          <Text
-            style={[
-              styles.toggleText,
-              activeBrand === 'royal' && styles.activeText,
-            ]}
-            numberOfLines={1}
-          >
-            Royal Caribbean
-          </Text>
-        </TouchableOpacity>
+    <View style={[styles.container, isPlayerCard && styles.containerPlayerCard]}>
+      <View style={[styles.toggleContainer, isPlayerCard && styles.toggleContainerPlayerCard]}>
+        {options.map((option, index) => {
+          const isActive = activeBrand === option.key;
+          const isCarnival = option.key === 'carnival';
+          const isOnlyOption = options.length === 1;
 
-        <TouchableOpacity
-          style={[
-            styles.toggleButton,
-            styles.middleButton,
-            activeBrand === 'celebrity' && styles.activeButton,
-          ]}
-          onPress={() => onToggle('celebrity')}
-          activeOpacity={0.7}
-        >
-          <Text
-            style={[
-              styles.toggleText,
-              activeBrand === 'celebrity' && styles.activeText,
-            ]}
-            numberOfLines={1}
-          >
-            Celebrity
-          </Text>
-        </TouchableOpacity>
-
-        {showSilversea && (
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              styles.middleButton,
-              activeBrand === 'silversea' && styles.activeButton,
-            ]}
-            onPress={() => onToggle('silversea')}
-            activeOpacity={0.7}
-          >
-            <Text
+          return (
+            <TouchableOpacity
+              key={option.key}
               style={[
-                styles.toggleText,
-                activeBrand === 'silversea' && styles.activeText,
+                styles.toggleButton,
+                isPlayerCard && styles.toggleButtonPlayerCard,
+                !isOnlyOption && index === 0 && styles.leftButton,
+                !isOnlyOption && index > 0 && index < options.length - 1 && styles.middleButton,
+                !isOnlyOption && index === options.length - 1 && styles.rightButton,
+                isActive && (isCarnival ? styles.carnivalActiveButton : isPlayerCard ? styles.activeButtonPlayerCard : styles.activeButton),
               ]}
-              numberOfLines={1}
+              onPress={() => onToggle(option.key)}
+              activeOpacity={0.78}
+              testID={`brand-toggle-${option.key}`}
             >
-              Silversea
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {showCarnival && (
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              styles.rightButton,
-              activeBrand === 'carnival' && styles.carnivalActiveButton,
-            ]}
-            onPress={() => onToggle('carnival')}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.toggleText,
-                activeBrand === 'carnival' && styles.activeText,
-              ]}
-              numberOfLines={1}
-            >
-              Carnival
-            </Text>
-          </TouchableOpacity>
-        )}
+              <Text
+                style={[
+                  styles.toggleText,
+                  isPlayerCard && styles.toggleTextPlayerCard,
+                  isActive && styles.activeText,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -108,6 +83,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
   },
+  containerPlayerCard: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    marginBottom: SPACING.md,
+  },
   toggleContainer: {
     flexDirection: 'row',
     backgroundColor: COLORS.bgSecondary,
@@ -116,13 +96,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
+  toggleContainerPlayerCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderRadius: 18,
+    padding: 6,
+    borderColor: 'rgba(30, 58, 95, 0.12)',
+    ...SHADOW.sm,
+  },
   toggleButton: {
     flex: 1,
+    minHeight: 40,
     paddingVertical: SPACING.sm,
     paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: BORDER_RADIUS.md,
+  },
+  toggleButtonPlayerCard: {
+    minHeight: 46,
+    paddingHorizontal: 8,
+    borderRadius: 14,
   },
   leftButton: {
     marginRight: 2,
@@ -136,6 +129,14 @@ const styles = StyleSheet.create({
   activeButton: {
     backgroundColor: COLORS.textNavy,
   },
+  activeButtonPlayerCard: {
+    backgroundColor: COLORS.navyDeep,
+    shadowColor: 'rgba(15, 36, 57, 0.35)',
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
   carnivalActiveButton: {
     backgroundColor: '#CC2232',
   },
@@ -143,6 +144,13 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.textDarkGrey,
+    textAlign: 'center',
+  },
+  toggleTextPlayerCard: {
+    fontSize: 10,
+    lineHeight: 12,
+    color: COLORS.navyDeep,
+    letterSpacing: 0.1,
   },
   activeText: {
     color: COLORS.white,

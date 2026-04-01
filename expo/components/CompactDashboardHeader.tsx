@@ -59,10 +59,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     projectedBookedPoints,
   } = useLoyalty();
   const { currentUser } = useUser();
-  const [activeBrand, setActiveBrand] = useState<BrandType>(currentUser?.preferredBrand || 'royal');
+  const preferredBrand = currentUser?.preferredBrand === 'carnival' ? 'royal' : currentUser?.preferredBrand || 'royal';
+  const [activeBrand, setActiveBrand] = useState<BrandType>(preferredBrand);
 
   useEffect(() => {
-    setActiveBrand(currentUser?.preferredBrand || 'royal');
+    setActiveBrand(currentUser?.preferredBrand === 'carnival' ? 'royal' : currentUser?.preferredBrand || 'royal');
   }, [currentUser?.preferredBrand]);
 
   const celebrityCaptainsClubPoints = currentUser?.celebrityCaptainsClubPoints || 0;
@@ -97,15 +98,50 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
   const marbleConfig = MARBLE_TEXTURES.lightBlue;
 
-  const displayName = currentUser?.name || memberName;
+  const formatMemberDisplayName = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) return 'Player';
+
+    const parts = trimmed.split(/\s+/);
+    if (parts.length < 2) return trimmed;
+
+    const lastName = parts.pop() ?? '';
+    return `${parts.join(' ')} ${lastName.toUpperCase()}`;
+  };
+
+  const renderStandoutBadge = (
+    label: string,
+    value: string,
+    accentColor: string,
+    type: 'club' | 'loyalty'
+  ) => (
+    <View style={[styles.spotlightBadge, { backgroundColor: `${accentColor}16`, borderColor: `${accentColor}2E` }]}>
+      <View style={[styles.spotlightBadgeIcon, { backgroundColor: accentColor }]}>
+        {type === 'club' ? (
+          <Star size={12} color={COLORS.white} fill={COLORS.white} />
+        ) : (
+          <Anchor size={12} color={COLORS.white} />
+        )}
+      </View>
+      <View style={styles.spotlightBadgeContent}>
+        <Text style={styles.spotlightBadgeLabel}>{label}</Text>
+        <Text style={[styles.spotlightBadgeValue, { color: accentColor }]} numberOfLines={1}>
+          {value.toUpperCase()}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const displayName = formatMemberDisplayName(currentUser?.name || memberName);
+  const royalMemberNumber = crownAnchorNumber || currentUser?.crownAnchorNumber;
   const displayNumber = activeBrand === 'royal'
-    ? maskSensitiveMemberNumber(crownAnchorNumber || currentUser?.crownAnchorNumber, 'Not set')
+    ? royalMemberNumber || 'Not set'
     : activeBrand === 'celebrity'
     ? maskSensitiveMemberNumber(currentUser?.celebrityCaptainsClubNumber, 'Not set')
     : activeBrand === 'silversea'
     ? maskSensitiveMemberNumber(currentUser?.silverseaVenetianNumber, 'Not set')
     : maskSensitiveMemberNumber(currentUser?.carnivalVifpNumber, 'Not set');
-  const displayNumberLabel = activeBrand === 'royal' ? 'C&A #'
+  const displayNumberLabel = activeBrand === 'royal' ? 'Crown & Anchor #'
     : activeBrand === 'celebrity' ? 'Captain\'s Club #'
     : activeBrand === 'silversea' ? 'Venetian Society #'
     : 'VIFP Club #';
@@ -178,18 +214,14 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </View>
       </View>
 
-      <BrandToggle activeBrand={activeBrand} onToggle={setActiveBrand} />
+      <BrandToggle activeBrand={activeBrand} onToggle={setActiveBrand} showCarnival={false} variant="playerCard" />
 
       {activeBrand === 'royal' ? (
         <>
       {/* === ROYAL CARIBBEAN === */}
       <View style={styles.tierRow}>
-        <View style={[styles.tierBadge, { backgroundColor: '#FFFFFF', borderColor: 'rgba(0, 31, 63, 0.2)' }]}>
-          <Text style={[styles.tierText, { color: COLORS.navyDeep }]}>{clubRoyaleTier.toUpperCase()}</Text>
-        </View>
-        <View style={[styles.tierBadge, { backgroundColor: '#FFFFFF', borderColor: 'rgba(0, 31, 63, 0.2)' }]}>
-          <Text style={[styles.tierText, { color: COLORS.navyDeep }]}>{crownAnchorLevel.toUpperCase()}</Text>
-        </View>
+        {renderStandoutBadge('Club Royale', clubRoyaleTier, CLUB_ROYALE_TIERS[clubRoyaleTier]?.color || COLORS.tierSignature, 'club')}
+        {renderStandoutBadge('Crown & Anchor', crownAnchorLevel, CROWN_ANCHOR_LEVELS[crownAnchorLevel]?.color || COLORS.navyDeep, 'loyalty')}
       </View>
       {crewMemberCount > 0 && (
         <View style={styles.crewCountRow}>
@@ -867,14 +899,16 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   memberGreeting: {
-    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontSize: 22,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: CLEAN_THEME.text.primary,
+    color: COLORS.navyDeep,
+    letterSpacing: 0.2,
   },
   memberSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: CLEAN_THEME.text.secondary,
-    marginTop: 2,
+    color: COLORS.navyMedium,
+    marginTop: 3,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   actionsSection: {
     flexDirection: 'row',
@@ -927,6 +961,40 @@ const styles = StyleSheet.create({
   },
   tierText: {
     fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.6,
+  },
+  spotlightBadge: {
+    flex: 1,
+    minWidth: 124,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    ...SHADOW.sm,
+  },
+  spotlightBadgeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  spotlightBadgeContent: {
+    flex: 1,
+    gap: 2,
+  },
+  spotlightBadgeLabel: {
+    fontSize: 10,
+    color: COLORS.navyMedium,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    letterSpacing: 0.3,
+  },
+  spotlightBadgeValue: {
+    fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     letterSpacing: 0.6,
   },
@@ -1088,18 +1156,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.sm,
     justifyContent: 'center',
-    marginTop: 2,
+    marginTop: 4,
+    padding: 6,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.42)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
   },
   quickStatPill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderRadius: BORDER_RADIUS.round,
+    paddingVertical: 11,
     paddingHorizontal: SPACING.sm,
-    gap: 4,
+    gap: 5,
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.1)',
     ...SHADOW.sm,
