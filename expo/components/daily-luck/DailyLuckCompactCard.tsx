@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Sparkles, ShieldCheck } from 'lucide-react-native';
@@ -9,7 +9,26 @@ interface DailyLuckCompactCardProps {
   analysis: DailyLuckAnalysisResponse;
 }
 
+const LONG_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+};
+
+function formatReadableDate(value: string): string {
+  const trimmedValue = value.trim();
+  const isoMatch = trimmedValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const parsedDate = new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
+    return parsedDate.toLocaleDateString('en-US', LONG_DATE_OPTIONS);
+  }
+
+  return trimmedValue;
+}
+
 export const DailyLuckCompactCard = React.memo(function DailyLuckCompactCard({ analysis }: DailyLuckCompactCardProps) {
+  const requestedDateText = useMemo(() => formatReadableDate(analysis.date), [analysis.date]);
+
   return (
     <LinearGradient
       colors={['rgba(10, 28, 49, 0.96)', 'rgba(15, 53, 78, 0.94)', 'rgba(28, 42, 74, 0.92)']}
@@ -23,8 +42,9 @@ export const DailyLuckCompactCard = React.memo(function DailyLuckCompactCard({ a
             <View style={styles.iconBubble}>
               <Sparkles size={16} color="#F8D56B" />
             </View>
-            <Text style={styles.eyebrow}>Live Daily Luck</Text>
+            <Text style={styles.eyebrow}>Daily Luck</Text>
           </View>
+          <Text style={styles.dateText}>{requestedDateText}</Text>
           <Text style={styles.label}>{analysis.uiCard.label}</Text>
           <Text style={styles.oneLiner}>{analysis.uiCard.oneLiner}</Text>
         </View>
@@ -40,7 +60,7 @@ export const DailyLuckCompactCard = React.memo(function DailyLuckCompactCard({ a
           <ShieldCheck size={13} color="#D7F4E4" />
           <Text style={styles.confidenceText}>{Math.round(analysis.confidence * 100)}% confidence</Text>
         </View>
-        <Text style={styles.dateText}>{analysis.date}</Text>
+        <Text style={styles.signText}>{analysis.profile.westernSign} • {analysis.profile.chineseSign}</Text>
       </View>
     </LinearGradient>
   );
@@ -85,7 +105,13 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: 'uppercase' as const,
   },
+  dateText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: 'rgba(255,255,255,0.68)',
+  },
   label: {
+    marginTop: 6,
     fontSize: 24,
     fontWeight: '800' as const,
     color: COLORS.white,
@@ -140,9 +166,10 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#D7F4E4',
   },
-  dateText: {
+  signText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: 'rgba(255,255,255,0.62)',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    textTransform: 'capitalize' as const,
   },
 });
