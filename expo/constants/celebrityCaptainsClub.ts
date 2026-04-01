@@ -82,6 +82,30 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
 
 export const CELEBRITY_LEVEL_ORDER = ['Preview', 'Classic', 'Select', 'Elite', 'Elite Plus', 'Zenith'];
 
+const CELEBRITY_CAPTAINS_CLUB_LEVEL_ALIASES: Record<string, string> = {
+  preview: 'Preview',
+  classic: 'Classic',
+  select: 'Select',
+  elite: 'Elite',
+  'elite plus': 'Elite Plus',
+  'elite+': 'Elite Plus',
+  zenith: 'Zenith',
+};
+
+export function resolveCelebrityCaptainsClubLevelKey(levelName: string | undefined | null): string {
+  if (!levelName) {
+    return 'Preview';
+  }
+
+  const normalized = levelName
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  return CELEBRITY_CAPTAINS_CLUB_LEVEL_ALIASES[normalized] || levelName;
+}
+
 export function getNextCelebrityLevel(currentLevel: string): string | null {
   const currentIndex = CELEBRITY_LEVEL_ORDER.indexOf(currentLevel);
   if (currentIndex === -1 || currentIndex === CELEBRITY_LEVEL_ORDER.length - 1) {
@@ -121,7 +145,7 @@ export function getCelebrityCaptainsClubLevelByPoints(points: number): string {
 }
 
 export function getCelebrityCaptainsClubLevelInfo(levelName: string): CelebrityCaptainsClubLevelInfo {
-  return CELEBRITY_CAPTAINS_CLUB_LEVELS[levelName] || CELEBRITY_CAPTAINS_CLUB_LEVELS.Preview;
+  return CELEBRITY_CAPTAINS_CLUB_LEVELS[resolveCelebrityCaptainsClubLevelKey(levelName)] || CELEBRITY_CAPTAINS_CLUB_LEVELS.Preview;
 }
 
 export function calculatePointsToZenith(currentPoints: number): number {

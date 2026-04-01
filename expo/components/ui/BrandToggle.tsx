@@ -55,7 +55,17 @@ export function BrandToggle({
                 !isOnlyOption && index === 0 && styles.leftButton,
                 !isOnlyOption && index > 0 && index < options.length - 1 && styles.middleButton,
                 !isOnlyOption && index === options.length - 1 && styles.rightButton,
-                isActive && (isCarnival ? styles.carnivalActiveButton : isPlayerCard ? styles.activeButtonPlayerCard : styles.activeButton),
+                isActive && (
+                  isCarnival
+                    ? styles.carnivalActiveButton
+                    : option.key === 'celebrity'
+                      ? styles.celebrityActiveButton
+                      : option.key === 'silversea'
+                        ? styles.silverseaActiveButton
+                        : isPlayerCard
+                          ? styles.activeButtonPlayerCard
+                          : styles.activeButton
+                ),
               ]}
               onPress={() => onToggle(option.key)}
               activeOpacity={0.78}
@@ -143,6 +153,22 @@ const styles = StyleSheet.create({
   },
   carnivalActiveButton: {
     backgroundColor: '#CC2232',
+  },
+  celebrityActiveButton: {
+    backgroundColor: '#111827',
+    shadowColor: '#111827',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
+  silverseaActiveButton: {
+    backgroundColor: '#6B4F3A',
+    shadowColor: '#6B4F3A',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
   toggleText: {
     fontSize: 9,

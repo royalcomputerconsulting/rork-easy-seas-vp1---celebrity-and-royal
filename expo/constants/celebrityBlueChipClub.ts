@@ -97,6 +97,30 @@ export const CELEBRITY_BLUE_CHIP_TIERS: Record<string, CelebrityBlueChipTierInfo
 
 export const CELEBRITY_TIER_ORDER = ['Pearl', 'Onyx', 'Amethyst', 'Sapphire', 'Sapphire Plus', 'Ruby'];
 
+const CELEBRITY_BLUE_CHIP_TIER_ALIASES: Record<string, string> = {
+  pearl: 'Pearl',
+  onyx: 'Onyx',
+  amethyst: 'Amethyst',
+  sapphire: 'Sapphire',
+  'sapphire plus': 'Sapphire Plus',
+  'sapphire+': 'Sapphire Plus',
+  ruby: 'Ruby',
+};
+
+export function resolveCelebrityBlueChipTierKey(tierName: string | undefined | null): string {
+  if (!tierName) {
+    return 'Pearl';
+  }
+
+  const normalized = tierName
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  return CELEBRITY_BLUE_CHIP_TIER_ALIASES[normalized] || tierName;
+}
+
 export function getNextCelebrityTier(currentTier: string): string | null {
   const currentIndex = CELEBRITY_TIER_ORDER.indexOf(currentTier);
   if (currentIndex === -1 || currentIndex === CELEBRITY_TIER_ORDER.length - 1) {
@@ -124,5 +148,5 @@ export function getCelebrityBlueChipTierByPoints(points: number): string {
 }
 
 export function getCelebrityBlueChipTierInfo(tierName: string): CelebrityBlueChipTierInfo {
-  return CELEBRITY_BLUE_CHIP_TIERS[tierName] || CELEBRITY_BLUE_CHIP_TIERS.Pearl;
+  return CELEBRITY_BLUE_CHIP_TIERS[resolveCelebrityBlueChipTierKey(tierName)] || CELEBRITY_BLUE_CHIP_TIERS.Pearl;
 }

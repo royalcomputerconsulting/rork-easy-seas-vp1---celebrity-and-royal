@@ -5,8 +5,8 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/
 import { LinearGradient } from 'expo-linear-gradient';
 import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
 import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
-import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS } from '@/constants/celebrityCaptainsClub';
-import { getCelebrityBlueChipTierByPoints, CELEBRITY_BLUE_CHIP_TIERS } from '@/constants/celebrityBlueChipClub';
+import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS, resolveCelebrityCaptainsClubLevelKey } from '@/constants/celebrityCaptainsClub';
+import { getCelebrityBlueChipTierByPoints, CELEBRITY_BLUE_CHIP_TIERS, resolveCelebrityBlueChipTierKey } from '@/constants/celebrityBlueChipClub';
 import { BrandToggle, BrandType } from './BrandToggle';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useAuth } from '@/state/AuthProvider';
@@ -146,12 +146,12 @@ export function UserProfileCard({
 
   const calculatedCelebrityLevel = getCelebrityCaptainsClubLevelByPoints(formData.celebrityCaptainsClubPoints || 0);
   const calculatedCelebrityLevelInfo = CELEBRITY_CAPTAINS_CLUB_LEVELS[calculatedCelebrityLevel];
-  const displayedCelebrityLevel = enrichmentData?.captainsClubTier || calculatedCelebrityLevel;
+  const displayedCelebrityLevel = resolveCelebrityCaptainsClubLevelKey(enrichmentData?.captainsClubTier || calculatedCelebrityLevel);
   const displayedCelebrityLevelInfo = CELEBRITY_CAPTAINS_CLUB_LEVELS[displayedCelebrityLevel] || calculatedCelebrityLevelInfo;
 
   const calculatedCelebrityTier = getCelebrityBlueChipTierByPoints(formData.celebrityBlueChipPoints || 0);
   const calculatedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[calculatedCelebrityTier];
-  const displayedCelebrityTier = enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier;
+  const displayedCelebrityTier = resolveCelebrityBlueChipTierKey(enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier);
   const displayedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[displayedCelebrityTier] || calculatedCelebrityTierInfo;
 
   const handleSave = () => {
@@ -205,7 +205,7 @@ export function UserProfileCard({
   );
 
   const renderValueCard = (label: string, value: string | number | undefined, color?: string, wide?: boolean) => (
-    <View style={[styles.valueCard, wide && styles.valueCardWide]}>
+    <View style={[styles.valueCard, brandSurfaceTheme.valueCard, wide && styles.valueCardWide]}>
       <Text style={styles.valueCardLabel}>{label}</Text>
       <Text style={[styles.valueCardValue, color ? { color } : null]}>
         {value !== undefined && value !== null && value !== '' ? (typeof value === 'number' ? value.toLocaleString() : value) : 'Not set'}
@@ -248,7 +248,7 @@ export function UserProfileCard({
       case 'royal':
         return ['#0369A1', '#0284C7'] as [string, string];
       case 'celebrity':
-        return ['#1E40AF', '#2563EB'] as [string, string];
+        return ['#111827', '#374151'] as [string, string];
       case 'silversea':
         return ['#78350F', '#92400E'] as [string, string];
       case 'carnival':
@@ -257,6 +257,37 @@ export function UserProfileCard({
         return ['#0369A1', '#0284C7'] as [string, string];
     }
   };
+
+  const getBrandSurfaceTheme = () => {
+    switch (activeBrand) {
+      case 'celebrity':
+        return {
+          accent: '#111827',
+          container: { backgroundColor: '#F8FAFC', borderColor: 'rgba(17, 24, 39, 0.16)' },
+          headerIcon: { backgroundColor: 'rgba(255, 255, 255, 0.18)' },
+          valueCard: { backgroundColor: 'rgba(255, 255, 255, 0.96)', borderColor: 'rgba(17, 24, 39, 0.12)' },
+          editButton: { backgroundColor: 'rgba(17, 24, 39, 0.06)', borderColor: 'rgba(17, 24, 39, 0.18)' },
+        };
+      case 'silversea':
+        return {
+          accent: '#7C5A37',
+          container: { backgroundColor: '#FAF7F2', borderColor: 'rgba(124, 90, 55, 0.16)' },
+          headerIcon: { backgroundColor: 'rgba(255, 255, 255, 0.18)' },
+          valueCard: { backgroundColor: 'rgba(255, 255, 255, 0.96)', borderColor: 'rgba(124, 90, 55, 0.12)' },
+          editButton: { backgroundColor: 'rgba(124, 90, 55, 0.08)', borderColor: 'rgba(124, 90, 55, 0.2)' },
+        };
+      default:
+        return {
+          accent: '#0369A1',
+          container: { backgroundColor: '#F0F9FF', borderColor: 'rgba(3, 105, 161, 0.2)' },
+          headerIcon: { backgroundColor: 'rgba(255, 255, 255, 0.25)' },
+          valueCard: { backgroundColor: COLORS.white, borderColor: 'rgba(3, 105, 161, 0.15)' },
+          editButton: { backgroundColor: 'rgba(3, 105, 161, 0.08)', borderColor: 'rgba(3, 105, 161, 0.3)' },
+        };
+    }
+  };
+
+  const brandSurfaceTheme = getBrandSurfaceTheme();
 
   const hasSyncedData = activeBrand === 'royal' 
     ? !!enrichmentData?.crownAndAnchorId 
@@ -664,13 +695,13 @@ export function UserProfileCard({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, brandSurfaceTheme.container]}>
       <LinearGradient
         colors={getBrandGradient()}
         style={styles.header}
       >
         <View style={styles.headerContent}>
-          <View style={styles.headerIcon}>
+          <View style={[styles.headerIcon, brandSurfaceTheme.headerIcon]}>
             {getBrandIcon()}
           </View>
           <View style={styles.headerText}>
@@ -708,12 +739,12 @@ export function UserProfileCard({
 
       <View style={styles.editButtonContainer}>
         <TouchableOpacity 
-          style={styles.editButton}
+          style={[styles.editButton, brandSurfaceTheme.editButton]}
           onPress={() => setIsModalVisible(true)}
           activeOpacity={0.7}
         >
-          <Edit2 size={16} color={getBrandGradient()[0]} />
-          <Text style={[styles.editButtonText, { color: getBrandGradient()[0] }]}>Edit Profile</Text>
+          <Edit2 size={16} color={brandSurfaceTheme.accent} />
+          <Text style={[styles.editButtonText, { color: brandSurfaceTheme.accent }]}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
 

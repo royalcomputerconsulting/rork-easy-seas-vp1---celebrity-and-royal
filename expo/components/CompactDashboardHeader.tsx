@@ -6,8 +6,8 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/const
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS, LEVEL_ORDER } from '@/constants/crownAnchor';
-import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER, getCelebrityCaptainsClubLevelByPoints } from '@/constants/celebrityCaptainsClub';
-import { CELEBRITY_BLUE_CHIP_TIERS, CELEBRITY_TIER_ORDER, getCelebrityBlueChipTierByPoints } from '@/constants/celebrityBlueChipClub';
+import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER, getCelebrityCaptainsClubLevelByPoints, resolveCelebrityCaptainsClubLevelKey } from '@/constants/celebrityCaptainsClub';
+import { CELEBRITY_BLUE_CHIP_TIERS, CELEBRITY_TIER_ORDER, getCelebrityBlueChipTierByPoints, resolveCelebrityBlueChipTierKey } from '@/constants/celebrityBlueChipClub';
 import { SILVERSEA_VENETIAN_TIERS, SILVERSEA_TIER_ORDER, getSilverseaTierByDays, getNextSilverseaTier } from '@/constants/silverseaVenetianSociety';
 import { CARNIVAL_VIFP_TIERS, CARNIVAL_VIFP_TIER_ORDER, CARNIVAL_PLAYERS_CLUB_TIERS } from '@/constants/carnivalVifpClub';
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -121,8 +121,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
   const celebrityCaptainsClubPoints = captainsClub.points ?? currentUser?.celebrityCaptainsClubPoints ?? 0;
   const celebrityBlueChipPoints = extendedLoyalty?.celebrityBlueChipPoints ?? currentUser?.celebrityBlueChipPoints ?? 0;
-  const celebrityLevel = captainsClub.tier ?? getCelebrityCaptainsClubLevelByPoints(celebrityCaptainsClubPoints);
-  const celebrityTier = extendedLoyalty?.celebrityBlueChipTier ?? getCelebrityBlueChipTierByPoints(celebrityBlueChipPoints);
+  const celebrityLevel = resolveCelebrityCaptainsClubLevelKey(captainsClub.tier ?? getCelebrityCaptainsClubLevelByPoints(celebrityCaptainsClubPoints));
+  const celebrityTier = resolveCelebrityBlueChipTierKey(extendedLoyalty?.celebrityBlueChipTier ?? getCelebrityBlueChipTierByPoints(celebrityBlueChipPoints));
 
   const formatETAFromDate = (date: Date | null): string => {
     if (!date) return 'TBD';
@@ -149,7 +149,35 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     return `${mm}-${dd}-${yy}`;
   };
 
-  const marbleConfig = MARBLE_TEXTURES.lightBlue;
+  const playerCardTheme = (() => {
+    switch (activeBrand) {
+      case 'celebrity':
+        return {
+          marbleConfig: MARBLE_TEXTURES.white,
+          borderColor: 'rgba(17, 24, 39, 0.16)',
+          backgroundOverlayColors: ['rgba(255,255,255,0.62)', 'rgba(244,244,245,0.42)', 'rgba(255,255,255,0.16)'] as [string, string, string],
+          atmosphereOverlayColors: ['rgba(17,24,39,0.12)', 'rgba(161,161,170,0.08)', 'rgba(255,255,255,0.06)'] as [string, string, string],
+          contentBackground: 'rgba(255, 255, 255, 0.18)',
+        };
+      case 'silversea':
+        return {
+          marbleConfig: MARBLE_TEXTURES.gold,
+          borderColor: 'rgba(124, 90, 55, 0.16)',
+          backgroundOverlayColors: ['rgba(255,252,246,0.58)', 'rgba(255,244,214,0.38)', 'rgba(255,255,255,0.14)'] as [string, string, string],
+          atmosphereOverlayColors: ['rgba(124,90,55,0.10)', 'rgba(255,255,255,0.08)', 'rgba(255,236,179,0.06)'] as [string, string, string],
+          contentBackground: 'rgba(255, 248, 236, 0.14)',
+        };
+      default:
+        return {
+          marbleConfig: MARBLE_TEXTURES.lightBlue,
+          borderColor: 'rgba(255, 255, 255, 0.26)',
+          backgroundOverlayColors: ['rgba(255,255,255,0.56)', 'rgba(255,248,236,0.34)', 'rgba(255,255,255,0.12)'] as [string, string, string],
+          atmosphereOverlayColors: ['rgba(255,255,255,0.18)', 'rgba(246,214,142,0.16)', 'rgba(103, 232, 249, 0.10)'] as [string, string, string],
+          contentBackground: 'rgba(255, 248, 236, 0.12)',
+        };
+    }
+  })();
+  const marbleConfig = playerCardTheme.marbleConfig;
 
   const formatMemberDisplayName = (value: string): string => {
     const trimmed = value.trim();
@@ -234,7 +262,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       locations={marbleConfig.gradientLocations}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.container}
+      style={[styles.container, { borderColor: playerCardTheme.borderColor }]}
     >
       <Image
         source={{ uri: scenicHeroUri }}
@@ -242,18 +270,18 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         resizeMode="cover"
       />
       <LinearGradient
-        colors={['rgba(255,255,255,0.56)', 'rgba(255,248,236,0.34)', 'rgba(255,255,255,0.12)']}
+        colors={playerCardTheme.backgroundOverlayColors}
         start={{ x: 0, y: 0 }}
         end={{ x: 0.85, y: 1 }}
         style={styles.backgroundOverlay}
       />
       <LinearGradient
-        colors={['rgba(255,255,255,0.18)', 'rgba(246,214,142,0.16)', 'rgba(103, 232, 249, 0.10)']}
+        colors={playerCardTheme.atmosphereOverlayColors}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.atmosphereOverlay}
       />
-      <View style={styles.contentLayer}>
+      <View style={[styles.contentLayer, { backgroundColor: playerCardTheme.contentBackground }]}>
       <View style={styles.topRow}>
         <View style={styles.memberInfoInline}>
           {!hideLogo && (
