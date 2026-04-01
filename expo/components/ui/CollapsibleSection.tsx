@@ -13,6 +13,7 @@ import { ChevronUp } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
+import { renderViewContent } from '@/lib/renderViewContent';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -88,7 +89,7 @@ export function CollapsibleSection({
           activeOpacity={0.7}
         >
           <View style={styles.headerLeft}>
-            {icon && <View style={styles.iconContainer}>{icon}</View>}
+            {icon && <View style={styles.iconContainer}>{renderViewContent(icon)}</View>}
             <View style={styles.titleContainer}>
               <Text style={[styles.title, headerStyle === 'compact' && styles.titleCompact]}>
                 {title}
@@ -103,7 +104,7 @@ export function CollapsibleSection({
         </TouchableOpacity>
       </LinearGradient>
       
-      {expanded && <View style={styles.content}>{children}</View>}
+      {expanded && <View style={styles.content}>{renderViewContent(children)}</View>}
     </View>
   );
 }

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { COLORS, BORDER_RADIUS, SHADOW } from '@/constants/theme';
+import { renderViewContent } from '@/lib/renderViewContent';
 
 interface PressableCardProps {
   children: ReactNode;
@@ -78,7 +79,7 @@ export function PressableCard({
   if (!onPress) {
     return (
       <Animated.View style={[styles.card, style]}>
-        {children}
+        {renderViewContent(children)}
       </Animated.View>
     );
   }
@@ -102,7 +103,7 @@ export function PressableCard({
         testID={testID}
         style={[styles.card, style]}
       >
-        {children}
+        {renderViewContent(children)}
       </TouchableOpacity>
     </Animated.View>
   );
@@ -200,7 +201,7 @@ export function AnimatedIconButton({
           style,
         ]}
       >
-        {children}
+        {renderViewContent(children)}
       </TouchableOpacity>
     </Animated.View>
   );

@@ -29,6 +29,7 @@ import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useGamification, WeeklyGoal } from '@/state/GamificationProvider';
 import { formatNumber } from '@/lib/format';
+import { renderViewContent } from '@/lib/renderViewContent';
 
 interface WeeklyGoalsCardProps {
   onGoalComplete?: (goal: WeeklyGoal) => void;
@@ -148,7 +149,7 @@ function CircularProgress({
           alignItems: 'center',
         }}
       >
-        {children}
+        {renderViewContent(children)}
       </View>
     </View>
   );
@@ -208,7 +209,7 @@ function GoalProgressRing({
 
   const handlePress = useCallback(() => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     onEdit();
   }, [onEdit]);
@@ -345,7 +346,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
       setEditValues(prev => ({ ...prev, [goalType]: goal.target.toString() }));
       setEditingGoal(goalType);
       if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     }
   }, [weeklyGoals]);
@@ -355,7 +356,7 @@ export const WeeklyGoalsCard = React.memo(function WeeklyGoalsCard({ onGoalCompl
     if (!isNaN(newTarget) && newTarget > 0) {
       console.log('[WeeklyGoalsCard] Would update goal target:', goalType, newTarget);
       if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
     setEditingGoal(null);

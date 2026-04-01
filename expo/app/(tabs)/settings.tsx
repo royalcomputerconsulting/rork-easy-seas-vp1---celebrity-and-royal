@@ -45,6 +45,7 @@ import {
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
+import { renderViewContent } from '@/lib/renderViewContent';
 import { LinearGradient } from 'expo-linear-gradient';
 import { formatBirthdateForDisplay, isDateInPast, normalizeBirthdateInput } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
@@ -1463,10 +1464,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         <Text style={[styles.settingLabel, isDanger && styles.dangerLabel]}>{label}</Text>
       </View>
       <View style={styles.settingRight}>
-        {typeof value === 'string' ? (
+        {typeof value === 'string' || typeof value === 'number' ? (
           <Text style={styles.settingValue}>{value}</Text>
         ) : (
-          value
+          renderViewContent(value)
         )}
         {onPress && <ChevronRight size={18} color={isDanger ? COLORS.error : CLEAN_THEME.text.secondary} />}
       </View>

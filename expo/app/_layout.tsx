@@ -41,6 +41,7 @@ import { CrewRecognitionProvider } from "@/state/CrewRecognitionProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 import { composeProviders } from "@/lib/composeProviders";
 import { ensureStorageHealthy } from "@/lib/storage/storageRecovery";
+import { renderViewContent } from "@/lib/renderViewContent";
 
 try {
   void SplashScreen.preventAutoHideAsync();
@@ -233,7 +234,7 @@ function WebResponsiveWrapper({ children }: { children: React.ReactNode }) {
       <View style={[webStyles.phoneFrame, { maxHeight: height - 40 }]}> 
         <View style={webStyles.phoneNotch} />
         <View style={webStyles.phoneContent}>
-          {children}
+          {renderViewContent(children)}
         </View>
       </View>
     </View>

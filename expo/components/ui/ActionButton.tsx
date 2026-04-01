@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import type { LucideIcon } from 'lucide-react-native';
+import { renderViewContent } from '@/lib/renderViewContent';
 
 interface ActionButtonProps {
   label: string;
@@ -209,7 +210,7 @@ export function ActionButtonGroup({ children, columns = 3 }: ActionButtonGroupPr
           }}
           key={index}
         >
-          {child}
+          {renderViewContent(child)}
         </View>
       ))}
     </View>

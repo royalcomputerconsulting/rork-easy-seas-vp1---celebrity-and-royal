@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import type { LucideIcon } from 'lucide-react-native';
+import { renderViewContent } from '@/lib/renderViewContent';
 
 interface AnimatedActionButtonProps {
   label: string;
@@ -254,7 +255,7 @@ export function AnimatedActionButtonGroup({
           }}
           key={index}
         >
-          {child}
+          {renderViewContent(child)}
         </View>
       ))}
     </View>
