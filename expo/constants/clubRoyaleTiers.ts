@@ -11,8 +11,8 @@ export const CLUB_ROYALE_TIERS: Record<string, ClubRoyaleTierInfo> = {
   Choice: {
     name: 'Choice',
     threshold: 0,
-    color: '#6B7280',
-    bgColor: 'rgba(107, 114, 128, 0.15)',
+    color: '#BFC7D4',
+    bgColor: 'rgba(191, 199, 212, 0.18)',
     benefits: [
       'Basic casino privileges',
       'Access to Club Royale lounge',
@@ -22,8 +22,8 @@ export const CLUB_ROYALE_TIERS: Record<string, ClubRoyaleTierInfo> = {
   Prime: {
     name: 'Prime',
     threshold: 2501,
-    color: '#3B82F6',
-    bgColor: 'rgba(59, 130, 246, 0.15)',
+    color: '#D4AF37',
+    bgColor: 'rgba(212, 175, 55, 0.16)',
     benefits: [
       'Priority boarding',
       'Complimentary specialty dining',
@@ -49,8 +49,8 @@ export const CLUB_ROYALE_TIERS: Record<string, ClubRoyaleTierInfo> = {
   Masters: {
     name: 'Masters',
     threshold: 100001,
-    color: '#F59E0B',
-    bgColor: 'rgba(245, 158, 11, 0.15)',
+    color: '#16A34A',
+    bgColor: 'rgba(22, 163, 74, 0.16)',
     benefits: [
       'All Signature benefits',
       'Complimentary suite upgrades',

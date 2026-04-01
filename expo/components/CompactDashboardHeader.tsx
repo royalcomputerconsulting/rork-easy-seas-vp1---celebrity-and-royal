@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users } from 'lucide-react-native';
+import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users, Crown } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/clubRoyaleTiers';
@@ -31,6 +31,55 @@ interface CompactDashboardHeaderProps {
   onOffersPress?: () => void;
   hideLogo?: boolean;
   crewMemberCount?: number;
+}
+
+type GradientPair = [string, string];
+
+function getDisplayClubRoyaleTier(value: string): string {
+  return value === 'Choice' ? 'Classic' : value;
+}
+
+function getDisplayCrownAnchorLevel(value: string): string {
+  return value === 'Pinnacle' ? 'Pinnacle Club' : value;
+}
+
+function getClubRoyaleTierAccentColor(value: string): string {
+  switch (value) {
+    case 'Choice':
+    case 'Classic':
+      return '#BFC7D4';
+    case 'Prime':
+      return '#D4AF37';
+    case 'Signature':
+      return '#7B2D8E';
+    case 'Masters':
+      return '#16A34A';
+    default:
+      return CLUB_ROYALE_TIERS[value]?.color || COLORS.tierSignature;
+  }
+}
+
+function getClubRoyaleProgressColors(currentTier: string, nextTier: string | null): GradientPair {
+  if (currentTier === 'Choice' && nextTier === 'Prime') {
+    return ['#C7CED9', '#D4AF37'];
+  }
+
+  if (currentTier === 'Prime' && nextTier === 'Signature') {
+    return ['#4B7BF5', '#7B2D8E'];
+  }
+
+  if (currentTier === 'Signature' && nextTier === 'Masters') {
+    return ['#7B2D8E', '#D4AF37'];
+  }
+
+  if (currentTier === 'Masters') {
+    return ['#16A34A', '#6DD3A0'];
+  }
+
+  const currentColor = getClubRoyaleTierAccentColor(currentTier);
+  const nextColor = nextTier ? getClubRoyaleTierAccentColor(nextTier) : currentColor;
+
+  return [currentColor, nextColor];
 }
 
 export const CompactDashboardHeader = React.memo(function CompactDashboardHeader({
@@ -114,23 +163,40 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     value: string,
     accentColor: string,
     type: 'club' | 'loyalty'
-  ) => (
-    <View style={[styles.spotlightBadge, { backgroundColor: `${accentColor}16`, borderColor: `${accentColor}2E` }]}>
-      <View style={[styles.spotlightBadgeIcon, { backgroundColor: accentColor }]}>
-        {type === 'club' ? (
-          <Star size={12} color={COLORS.white} fill={COLORS.white} />
-        ) : (
-          <Anchor size={12} color={COLORS.white} />
-        )}
+  ) => {
+    const displayValue = type === 'club'
+      ? getDisplayClubRoyaleTier(value)
+      : getDisplayCrownAnchorLevel(value);
+
+    return (
+      <View style={[styles.spotlightBadge, { backgroundColor: `${accentColor}16`, borderColor: `${accentColor}2E` }]}>
+        <View
+          style={[
+            styles.spotlightBadgeIcon,
+            type === 'club'
+              ? { backgroundColor: accentColor }
+              : {
+                  backgroundColor: `${accentColor}14`,
+                  borderWidth: 1,
+                  borderColor: `${accentColor}30`,
+                },
+          ]}
+        >
+          {type === 'club' ? (
+            <Star size={12} color={COLORS.white} fill={COLORS.white} />
+          ) : (
+            <Crown size={14} color={accentColor} />
+          )}
+        </View>
+        <View style={styles.spotlightBadgeContent}>
+          <Text style={styles.spotlightBadgeLabel}>{label}</Text>
+          <Text style={[styles.spotlightBadgeValue, { color: accentColor }]} numberOfLines={1}>
+            {displayValue.toUpperCase()}
+          </Text>
+        </View>
       </View>
-      <View style={styles.spotlightBadgeContent}>
-        <Text style={styles.spotlightBadgeLabel}>{label}</Text>
-        <Text style={[styles.spotlightBadgeValue, { color: accentColor }]} numberOfLines={1}>
-          {value.toUpperCase()}
-        </Text>
-      </View>
-    </View>
-  );
+    );
+  };
 
   const displayName = formatMemberDisplayName(currentUser?.name || memberName);
   const royalMemberNumber = crownAnchorNumber || currentUser?.crownAnchorNumber;
@@ -220,7 +286,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <>
       {/* === ROYAL CARIBBEAN === */}
       <View style={styles.tierRow}>
-        {renderStandoutBadge('Club Royale', clubRoyaleTier, CLUB_ROYALE_TIERS[clubRoyaleTier]?.color || COLORS.tierSignature, 'club')}
+        {renderStandoutBadge('Club Royale', clubRoyaleTier, getClubRoyaleTierAccentColor(clubRoyaleTier), 'club')}
         {renderStandoutBadge('Crown & Anchor', crownAnchorLevel, CROWN_ANCHOR_LEVELS[crownAnchorLevel]?.color || COLORS.navyDeep, 'loyalty')}
       </View>
       {crewMemberCount > 0 && (
@@ -246,16 +312,25 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           
           const levelColor = CROWN_ANCHOR_LEVELS[crownAnchorLevel]?.color || COLORS.points;
           const nextLevelColor = nextLevel ? CROWN_ANCHOR_LEVELS[nextLevel]?.color : levelColor;
+          const currentDisplayLevel = getDisplayCrownAnchorLevel(crownAnchorLevel);
+          const nextDisplayLevel = nextLevel ? getDisplayCrownAnchorLevel(nextLevel) : null;
           
           return (
             <View style={styles.progressCard}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
-                  {isPinnacle 
-                    ? `Pinnacle (${crownAnchorPoints}/700)`
-                    : `${crownAnchorLevel} → ${nextLevel} (${crownAnchorPoints}/${nextThreshold})`
-                  }
-                </Text>
+                <View style={styles.progressLabelRow}>
+                  <Crown size={13} color={levelColor} />
+                  <Text style={styles.progressLabel}>
+                    <Text style={[styles.progressLabelTier, { color: levelColor }]}>{currentDisplayLevel}</Text>
+                    {!isPinnacle && nextDisplayLevel ? (
+                      <>
+                        <Text style={styles.progressLabelMeta}> → </Text>
+                        <Text style={[styles.progressLabelTier, { color: nextLevelColor }]}>{nextDisplayLevel}</Text>
+                      </>
+                    ) : null}
+                    <Text style={styles.progressLabelMeta}>{` (${crownAnchorPoints}/${nextThreshold})`}</Text>
+                  </Text>
+                </View>
                 {isPinnacle ? (
                   <View style={styles.achievedBadge}>
                     <Text style={styles.achievedBadgeText}>MAX LEVEL</Text>
@@ -329,18 +404,32 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const percentComplete = isMasters ? 100 : (rangeSize > 0 ? Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100)) : 100);
           const pointsToNext = isMasters ? 0 : Math.max(0, nextThreshold - clubRoyalePoints);
           
-          const tierColor = CLUB_ROYALE_TIERS[currentTier]?.color || '#8B5CF6';
-          const nextTierColor = nextTier ? CLUB_ROYALE_TIERS[nextTier]?.color : tierColor;
+          const tierColor = getClubRoyaleTierAccentColor(currentTier);
+          const nextTierColor = nextTier ? getClubRoyaleTierAccentColor(nextTier) : tierColor;
+          const currentTierDisplay = getDisplayClubRoyaleTier(currentTier);
+          const nextTierDisplay = nextTier ? getDisplayClubRoyaleTier(nextTier) : null;
+          const tierProgressColors = getClubRoyaleProgressColors(currentTier, nextTier);
           
           return (
             <View style={styles.progressCard}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
-                  {isMasters 
-                    ? `Masters (${clubRoyalePoints.toLocaleString()})`
-                    : `${currentTier} → ${nextTier} (${clubRoyalePoints.toLocaleString()}/${nextThreshold.toLocaleString()})`
-                  }
-                </Text>
+                <View style={styles.progressLabelRow}>
+                  <Star size={13} color={tierColor} fill={tierColor} />
+                  <Text style={styles.progressLabel}>
+                    <Text style={[styles.progressLabelTier, { color: tierColor }]}>{currentTierDisplay}</Text>
+                    {!isMasters && nextTierDisplay ? (
+                      <>
+                        <Text style={styles.progressLabelMeta}> → </Text>
+                        <Text style={[styles.progressLabelTier, { color: nextTierColor }]}>{nextTierDisplay}</Text>
+                      </>
+                    ) : null}
+                    <Text style={styles.progressLabelMeta}>
+                      {isMasters
+                        ? ` (${clubRoyalePoints.toLocaleString()})`
+                        : ` (${clubRoyalePoints.toLocaleString()}/${nextThreshold.toLocaleString()})`}
+                    </Text>
+                  </Text>
+                </View>
                 {isMasters ? (
                   <View style={styles.achievedBadge}>
                     <Text style={styles.achievedBadgeText}>MAX TIER</Text>
@@ -351,7 +440,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <View style={styles.progressBarBg}>
                 <LinearGradient
-                  colors={[tierColor, nextTierColor]}
+                  colors={tierProgressColors}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
@@ -360,7 +449,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               <Text style={styles.progressEta}>
                 {isMasters 
                   ? 'Masters tier achieved! Maximum Club Royale tier'
-                  : `ETA: ${formatETAFromDate(mastersProgress.projectedDate)} • ${pointsToNext.toLocaleString()} pts to ${nextTier} • Resets April 1`
+                  : `ETA: ${formatETAFromDate(mastersProgress.projectedDate)} • ${pointsToNext.toLocaleString()} pts to ${nextTierDisplay} • Resets April 1`
                 }
               </Text>
             </View>
@@ -379,17 +468,23 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           
           // The "achieved" bar shows the transition TO the current tier
           const priorTier = TIER_ORDER[currentTierIndex - 1];
-          const priorTierColor = CLUB_ROYALE_TIERS[priorTier]?.color || '#6B7280';
-          const currentTierColor = CLUB_ROYALE_TIERS[currentTier]?.color || '#8B5CF6';
+          const priorTierColor = getClubRoyaleTierAccentColor(priorTier);
+          const currentTierColor = getClubRoyaleTierAccentColor(currentTier);
           const achievedThreshold = CLUB_ROYALE_TIERS[currentTier]?.threshold || 0;
+          const priorTierDisplay = getDisplayClubRoyaleTier(priorTier);
+          const currentTierDisplay = getDisplayClubRoyaleTier(currentTier);
+          const achievedProgressColors = getClubRoyaleProgressColors(priorTier, currentTier);
           
           return (
             <View style={[styles.progressCard, styles.achievedCard]}>
               <View style={styles.progressHeader}>
                 <View style={styles.achievedLabelRow}>
-                  <CheckCircle2 size={14} color={CLEAN_THEME.badge.achieved.text} />
+                  <CheckCircle2 size={14} color={currentTierColor} />
                   <Text style={styles.progressLabel}>
-                    {priorTier} → {currentTier} ({achievedThreshold.toLocaleString()} pts)
+                    <Text style={[styles.progressLabelTier, { color: priorTierColor }]}>{priorTierDisplay}</Text>
+                    <Text style={styles.progressLabelMeta}> → </Text>
+                    <Text style={[styles.progressLabelTier, { color: currentTierColor }]}>{currentTierDisplay}</Text>
+                    <Text style={styles.progressLabelMeta}>{` (${achievedThreshold.toLocaleString()} pts)`}</Text>
                   </Text>
                 </View>
                 <View style={styles.achievedBadge}>
@@ -398,14 +493,14 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <View style={styles.progressBarBg}>
                 <LinearGradient
-                  colors={[priorTierColor, currentTierColor]}
+                  colors={achievedProgressColors}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressBarFill, { width: '100%' }]}
                 />
               </View>
               <Text style={styles.progressEta}>
-                {currentTier} tier achieved! You have earned this status.
+                {currentTierDisplay} tier achieved! You have earned this status.
               </Text>
             </View>
           );
@@ -1016,12 +1111,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  progressLabelRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: SPACING.sm,
+  },
   progressLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: CLEAN_THEME.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     flex: 1,
-    paddingRight: SPACING.sm,
+  },
+  progressLabelTier: {
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  progressLabelMeta: {
+    color: CLEAN_THEME.text.primary,
   },
   progressPercent: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -1111,9 +1218,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   achievedCard: {
-    borderColor: 'rgba(5, 150, 105, 0.28)',
+    borderColor: 'rgba(0, 31, 63, 0.14)',
     borderWidth: 1.5,
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: 'rgba(248, 250, 252, 0.96)',
   },
   achievedLabelRow: {
     flexDirection: 'row',

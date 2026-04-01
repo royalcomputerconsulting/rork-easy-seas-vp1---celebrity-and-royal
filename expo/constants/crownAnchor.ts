@@ -21,8 +21,8 @@ export const CROWN_ANCHOR_LEVELS: Record<string, CrownAnchorLevelInfo> = {
   Platinum: {
     name: 'Platinum',
     cruiseNights: 30,
-    color: '#E5E4E2',
-    bgColor: 'rgba(229, 228, 226, 0.15)',
+    color: '#B8C0CC',
+    bgColor: 'rgba(184, 192, 204, 0.18)',
     benefits: [
       'All Gold benefits',
       'Priority check-in',
@@ -45,8 +45,8 @@ export const CROWN_ANCHOR_LEVELS: Record<string, CrownAnchorLevelInfo> = {
   Diamond: {
     name: 'Diamond',
     cruiseNights: 80,
-    color: '#B9F2FF',
-    bgColor: 'rgba(185, 242, 255, 0.15)',
+    color: '#7DD3FC',
+    bgColor: 'rgba(125, 211, 252, 0.18)',
     benefits: [
       'All Emerald benefits',
       'Behind-the-scenes tour',
@@ -58,8 +58,8 @@ export const CROWN_ANCHOR_LEVELS: Record<string, CrownAnchorLevelInfo> = {
   'Diamond Plus': {
     name: 'Diamond Plus',
     cruiseNights: 175,
-    color: '#0097A7',
-    bgColor: 'rgba(0, 151, 167, 0.12)',
+    color: '#7B2D8E',
+    bgColor: 'rgba(123, 45, 142, 0.14)',
     benefits: [
       'All Diamond benefits',
       'Four complimentary beverages per day',
@@ -68,10 +68,10 @@ export const CROWN_ANCHOR_LEVELS: Record<string, CrownAnchorLevelInfo> = {
     ],
   },
   Pinnacle: {
-    name: 'Pinnacle',
+    name: 'Pinnacle Club',
     cruiseNights: 700,
-    color: '#1C1C1C',
-    bgColor: 'rgba(28, 28, 28, 0.25)',
+    color: '#173B6C',
+    bgColor: 'rgba(23, 59, 108, 0.16)',
     benefits: [
       'All Diamond Plus benefits',
       'Annual Pinnacle cruise experience',
