@@ -304,6 +304,8 @@ export default function SettingsScreen() {
     silverseaVenetianNumber: isProfileDisplayReady ? currentUser?.silverseaVenetianNumber || '' : '',
     silverseaVenetianTier: isProfileDisplayReady ? currentUser?.silverseaVenetianTier || '' : '',
     silverseaVenetianPoints: isProfileDisplayReady ? currentUser?.silverseaVenetianPoints || 0 : 0,
+    silverseaCasinoTier: isProfileDisplayReady ? currentUser?.silverseaCasinoTier || 'Rock Star' : 'Rock Star',
+    silverseaCasinoPoints: isProfileDisplayReady ? currentUser?.silverseaCasinoPoints || 0 : 0,
     carnivalVifpNumber: isProfileDisplayReady ? currentUser?.carnivalVifpNumber || '' : '',
     carnivalVifpTier: isProfileDisplayReady ? currentUser?.carnivalVifpTier || '' : '',
     carnivalPlayersClubTier: isProfileDisplayReady ? currentUser?.carnivalPlayersClubTier || '' : '',
@@ -935,8 +937,10 @@ export default function SettingsScreen() {
                   celebrityBlueChipPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
                   silverseaEmail: '',
                   silverseaVenetianNumber: '',
-                  silverseaVenetianTier: '',
+                  silverseaVenetianTier: '1 VS Day',
                   silverseaVenetianPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
+                  silverseaCasinoTier: 'Rock Star',
+                  silverseaCasinoPoints: 0,
                 });
                 
                 console.log('[Settings] Setting loyalty points to 1 for all three cruise lines (sample data)...');
@@ -944,7 +948,7 @@ export default function SettingsScreen() {
                 await setManualCrownAnchorPoints(SAMPLE_LOYALTY_POINTS.crownAnchor);
                 console.log('[Settings] ✓ Royal Caribbean: Club Royale & Crown & Anchor reset to 1');
                 console.log('[Settings] ✓ Celebrity: Captain\'s Club & Blue Chip reset to 1');
-                console.log('[Settings] ✓ Silversea: Venetian Society reset to 1');
+                console.log('[Settings] ✓ Silversea: Venetian Society reset to 1 VS Day and casino reset to Rock Star');
                 
                 console.log('[Settings] Generating sample demo data...');
                 const sampleData = generateSampleData();
@@ -1158,6 +1162,8 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     silverseaVenetianNumber?: string;
     silverseaVenetianTier?: string;
     silverseaVenetianPoints?: number;
+    silverseaCasinoTier?: string;
+    silverseaCasinoPoints?: number;
     carnivalVifpNumber?: string;
     carnivalVifpTier?: string;
     carnivalPlayersClubTier?: string;
@@ -1260,6 +1266,8 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       silverseaVenetianNumber?: string;
       silverseaVenetianTier?: string;
       silverseaVenetianPoints?: number;
+      silverseaCasinoTier?: string;
+      silverseaCasinoPoints?: number;
       carnivalVifpNumber?: string;
       carnivalVifpTier?: string;
       carnivalPlayersClubTier?: string;
@@ -1291,6 +1299,8 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           silverseaVenetianNumber: profileData.silverseaVenetianNumber,
           silverseaVenetianTier: profileData.silverseaVenetianTier,
           silverseaVenetianPoints: profileData.silverseaVenetianPoints,
+          silverseaCasinoTier: profileData.silverseaCasinoTier,
+          silverseaCasinoPoints: profileData.silverseaCasinoPoints,
           carnivalVifpNumber: profileData.carnivalVifpNumber,
           carnivalVifpTier: profileData.carnivalVifpTier,
           carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
@@ -1312,6 +1322,8 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           silverseaVenetianNumber: profileData.silverseaVenetianNumber,
           silverseaVenetianTier: profileData.silverseaVenetianTier,
           silverseaVenetianPoints: profileData.silverseaVenetianPoints,
+          silverseaCasinoTier: profileData.silverseaCasinoTier,
+          silverseaCasinoPoints: profileData.silverseaCasinoPoints,
           carnivalVifpNumber: profileData.carnivalVifpNumber,
           carnivalVifpTier: profileData.carnivalVifpTier,
           carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
@@ -1336,7 +1348,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       // Ensure Silversea loyalty data is persisted
       console.log('[Settings] ✓ Updated Silversea loyalty:', {
         venetianTier: profileData.silverseaVenetianTier,
-        venetianPoints: profileData.silverseaVenetianPoints
+        venetianPoints: profileData.silverseaVenetianPoints,
+        casinoTier: profileData.silverseaCasinoTier,
+        casinoPoints: profileData.silverseaCasinoPoints,
       });
       
       console.log('[Settings] ✓ Updated Carnival loyalty:', {

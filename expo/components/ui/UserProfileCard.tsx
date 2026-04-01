@@ -7,6 +7,8 @@ import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
 import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
 import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS, resolveCelebrityCaptainsClubLevelKey } from '@/constants/celebrityCaptainsClub';
 import { getCelebrityBlueChipTierByPoints, CELEBRITY_BLUE_CHIP_TIERS, resolveCelebrityBlueChipTierKey } from '@/constants/celebrityBlueChipClub';
+import { SILVERSEA_VENETIAN_TIERS, getSilverseaTierByDays, getNextSilverseaTier, resolveSilverseaTierKey } from '@/constants/silverseaVenetianSociety';
+import { SILVERSEA_CASINO_TIERS, getNextSilverseaCasinoTier, getSilverseaCasinoTierByPoints, resolveSilverseaCasinoTierKey } from '@/constants/silverseaCasinoClub';
 import { BrandToggle, BrandType } from './BrandToggle';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useAuth } from '@/state/AuthProvider';
@@ -33,6 +35,8 @@ interface UserProfileData {
   silverseaVenetianNumber?: string;
   silverseaVenetianTier?: string;
   silverseaVenetianPoints?: number;
+  silverseaCasinoTier?: string;
+  silverseaCasinoPoints?: number;
   carnivalVifpNumber?: string;
   carnivalVifpTier?: string;
   carnivalPlayersClubTier?: string;
@@ -154,6 +158,16 @@ export function UserProfileCard({
   const displayedCelebrityTier = resolveCelebrityBlueChipTierKey(enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier);
   const displayedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[displayedCelebrityTier] || calculatedCelebrityTierInfo;
 
+  const calculatedSilverseaTier = getSilverseaTierByDays(formData.silverseaVenetianPoints || 0);
+  const displayedSilverseaTier = resolveSilverseaTierKey(enrichmentData?.venetianSocietyTier || currentValues.silverseaVenetianTier || calculatedSilverseaTier);
+  const displayedSilverseaTierInfo = SILVERSEA_VENETIAN_TIERS[displayedSilverseaTier] || SILVERSEA_VENETIAN_TIERS['1 VS Day'];
+  const displayedSilverseaNextTier = enrichmentData?.venetianSocietyNextTier ? resolveSilverseaTierKey(enrichmentData.venetianSocietyNextTier) : getNextSilverseaTier(displayedSilverseaTier);
+
+  const calculatedSilverseaCasinoTier = getSilverseaCasinoTierByPoints(formData.silverseaCasinoPoints || 0);
+  const displayedSilverseaCasinoTier = resolveSilverseaCasinoTierKey(currentValues.silverseaCasinoTier || calculatedSilverseaCasinoTier);
+  const displayedSilverseaCasinoTierInfo = SILVERSEA_CASINO_TIERS[displayedSilverseaCasinoTier] || SILVERSEA_CASINO_TIERS['Rock Star'];
+  const displayedSilverseaCasinoNextTier = getNextSilverseaCasinoTier(displayedSilverseaCasinoTier);
+
   const handleSave = () => {
     onSave({
       ...formData,
@@ -161,6 +175,8 @@ export function UserProfileCard({
       crownAnchorLevel: calculatedLevel,
       celebrityBlueChipTier: calculatedCelebrityTier,
       celebrityCaptainsClubLevel: calculatedCelebrityLevel,
+      silverseaVenetianTier: calculatedSilverseaTier,
+      silverseaCasinoTier: calculatedSilverseaCasinoTier,
       preferredBrand: activeBrand,
     });
     setIsModalVisible(false);
@@ -351,11 +367,14 @@ export function UserProfileCard({
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.silverseaEmail, undefined, true)}
         {renderValueCard('Birthdate', displayBirthdate, undefined, true)}
-        {renderValueCard('Venetian Member #', getMaskedRoyalNumber(currentValues.silverseaVenetianNumber || enrichmentData?.venetianSocietyMemberNumber), undefined, true)}
+        {renderValueCard('Venetian Society #', getMaskedRoyalNumber(currentValues.silverseaVenetianNumber || enrichmentData?.venetianSocietyMemberNumber), undefined, true)}
+        {renderValueCard('Venetian Tier', displayedSilverseaTier, displayedSilverseaTierInfo.color)}
+        {renderValueCard('VS Days', currentValues.silverseaVenetianPoints, COLORS.loyalty)}
+        {renderValueCard('Rock Star Tier', displayedSilverseaCasinoTier, displayedSilverseaCasinoTierInfo.color)}
+        {renderValueCard('Casino Points', currentValues.silverseaCasinoPoints, COLORS.points)}
         {renderValueCard('Enrolled', enrichmentData?.venetianSocietyEnrolled ? 'Yes' : 'No', enrichmentData?.venetianSocietyEnrolled ? COLORS.success : undefined)}
-        {renderValueCard('Tier', enrichmentData?.venetianSocietyTier || currentValues.silverseaVenetianTier)}
-        {renderValueCard('Points', currentValues.silverseaVenetianPoints, COLORS.loyalty)}
-        {enrichmentData?.venetianSocietyNextTier && renderValueCard('Next Tier', enrichmentData.venetianSocietyNextTier)}
+        {displayedSilverseaNextTier && renderValueCard('Next VS Tier', displayedSilverseaNextTier)}
+        {displayedSilverseaCasinoNextTier && renderValueCard('Next Rock Star Tier', displayedSilverseaCasinoNextTier)}
       </View>
     );
   };
@@ -669,25 +688,38 @@ export function UserProfileCard({
             />
           </View>
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Venetian Tier</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.silverseaVenetianTier || ''}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, silverseaVenetianTier: text }))}
-              placeholder="e.g., Silver, Gold, Platinum"
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Venetian Points</Text>
+            <Text style={styles.inputLabel}>Venetian Society Days</Text>
             <TextInput
               style={styles.input}
               value={(formData.silverseaVenetianPoints || 0).toString()}
               onChangeText={(text) => setFormData(prev => ({ ...prev, silverseaVenetianPoints: parseInt(text) || 0 }))}
-              placeholder="Enter points"
+              placeholder="Enter VS days"
               placeholderTextColor="#9CA3AF"
               keyboardType="numeric"
             />
+            <View style={styles.levelHint}>
+              <View style={[styles.levelHintDot, { backgroundColor: SILVERSEA_VENETIAN_TIERS[calculatedSilverseaTier]?.color || COLORS.loyalty }]} />
+              <Text style={styles.levelHintText}>
+                Tier: <Text style={[styles.levelHintLevel, { color: SILVERSEA_VENETIAN_TIERS[calculatedSilverseaTier]?.color || COLORS.loyalty }]}>{calculatedSilverseaTier}</Text>
+              </Text>
+            </View>
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Rock Star Casino Points</Text>
+            <TextInput
+              style={styles.input}
+              value={(formData.silverseaCasinoPoints || 0).toString()}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, silverseaCasinoPoints: parseInt(text) || 0 }))}
+              placeholder="Enter casino points"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numeric"
+            />
+            <View style={styles.levelHint}>
+              <View style={[styles.levelHintDot, { backgroundColor: SILVERSEA_CASINO_TIERS[calculatedSilverseaCasinoTier]?.color || COLORS.points }]} />
+              <Text style={styles.levelHintText}>
+                Tier: <Text style={[styles.levelHintLevel, { color: SILVERSEA_CASINO_TIERS[calculatedSilverseaCasinoTier]?.color || COLORS.points }]}>{calculatedSilverseaCasinoTier}</Text>
+              </Text>
+            </View>
           </View>
         </>
       );

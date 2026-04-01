@@ -7,94 +7,112 @@ export interface SilverseaVenetianTierInfo {
 }
 
 export const SILVERSEA_VENETIAN_TIERS: Record<string, SilverseaVenetianTierInfo> = {
-  Member: {
-    name: 'Member',
-    cruiseDays: 0,
-    color: '#708090',
-    bgColor: 'rgba(112, 128, 144, 0.15)',
+  '1 VS Day': {
+    name: '1 VS Day',
+    cruiseDays: 1,
+    color: '#8C5A3C',
+    bgColor: 'rgba(140, 90, 60, 0.14)',
     benefits: [
-      'Venetian Society membership',
-      'Exclusive member savings',
-      'Priority notification of new voyages',
+      'Pre-sale access to new itineraries',
+      'Access to Venetian Society events on reunion voyage',
+      '5% off Venetian Society sailings',
     ],
   },
-  Silver: {
-    name: 'Silver',
-    cruiseDays: 50,
-    color: '#C0C0C0',
-    bgColor: 'rgba(192, 192, 192, 0.15)',
-    benefits: [
-      'All Member benefits',
-      '5% savings on select voyages',
-      'Complimentary pressing service',
-      'Venetian Society events onboard',
-    ],
-  },
-  Gold: {
-    name: 'Gold',
+  '100 VS Days': {
+    name: '100 VS Days',
     cruiseDays: 100,
-    color: '#D4AF37',
-    bgColor: 'rgba(212, 175, 55, 0.15)',
+    color: '#A87345',
+    bgColor: 'rgba(168, 115, 69, 0.16)',
     benefits: [
-      'All Silver benefits',
-      '10% savings on select voyages',
-      'Complimentary specialty dining',
-      'Private Venetian Society shore event',
+      'All 1 VS Day benefits',
+      '5% Venetian Society member savings on all future sailings',
+      'Complimentary laundry & pressing',
     ],
   },
-  Platinum: {
-    name: 'Platinum',
-    cruiseDays: 200,
-    color: '#E5E4E2',
-    bgColor: 'rgba(229, 228, 226, 0.20)',
+  '250 VS Days': {
+    name: '250 VS Days',
+    cruiseDays: 250,
+    color: '#C18E52',
+    bgColor: 'rgba(193, 142, 82, 0.16)',
     benefits: [
-      'All Gold benefits',
-      '15% savings on select voyages',
-      'Complimentary spa treatment',
-      'Priority suite upgrades',
+      'All 100 VS Days benefits',
+      '10% Venetian Society member savings on all future sailings',
+      'Upgrade Champagne Welcome in Suite',
     ],
   },
-  Diamond: {
-    name: 'Diamond',
+  '350 VS Days': {
+    name: '350 VS Days',
     cruiseDays: 350,
-    color: '#B9F2FF',
-    bgColor: 'rgba(185, 242, 255, 0.15)',
+    color: '#7C5A37',
+    bgColor: 'rgba(124, 90, 55, 0.18)',
     benefits: [
-      'All Platinum benefits',
-      '20% savings on select voyages',
-      'Complimentary shore excursion',
-      'Exclusive Diamond reception with Captain',
+      'All 250 VS Days benefits',
+      'Complimentary laundry & pressing',
+      'Complimentary 7-day cruise',
     ],
   },
-  'Diamond Elite': {
-    name: 'Diamond Elite',
+  '500 VS Days': {
+    name: '500 VS Days',
     cruiseDays: 500,
-    color: '#0097A7',
-    bgColor: 'rgba(0, 151, 167, 0.15)',
+    color: '#5A3723',
+    bgColor: 'rgba(90, 55, 35, 0.2)',
     benefits: [
-      'All Diamond benefits',
-      '25% savings on select voyages',
-      'Complimentary suite upgrade guarantee',
-      'Annual voyage gift',
-      'Personal voyage consultant',
+      'All 350 VS Days benefits',
+      'Complimentary laundry & pressing',
+      'Complimentary 14-day cruise',
     ],
   },
 };
 
-export const SILVERSEA_TIER_ORDER = ['Member', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Diamond Elite'];
+export const SILVERSEA_TIER_ORDER = ['1 VS Day', '100 VS Days', '250 VS Days', '350 VS Days', '500 VS Days'];
+
+const SILVERSEA_TIER_ALIASES: Record<string, string> = {
+  member: '1 VS Day',
+  silver: '100 VS Days',
+  gold: '250 VS Days',
+  platinum: '350 VS Days',
+  diamond: '500 VS Days',
+  'diamond elite': '500 VS Days',
+  '1 vs day': '1 VS Day',
+  '1 vs days': '1 VS Day',
+  '100 vs day': '100 VS Days',
+  '100 vs days': '100 VS Days',
+  '250 vs day': '250 VS Days',
+  '250 vs days': '250 VS Days',
+  '350 vs day': '350 VS Days',
+  '350 vs days': '350 VS Days',
+  '500 vs day': '500 VS Days',
+  '500 vs days': '500 VS Days',
+};
+
+export function resolveSilverseaTierKey(tierName: string | undefined | null): string {
+  if (!tierName) {
+    return '1 VS Day';
+  }
+
+  const normalized = tierName
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  return SILVERSEA_TIER_ALIASES[normalized] || tierName;
+}
 
 export function getSilverseaTierByDays(days: number): string {
-  for (let i = SILVERSEA_TIER_ORDER.length - 1; i >= 0; i--) {
+  for (let i = SILVERSEA_TIER_ORDER.length - 1; i >= 0; i -= 1) {
     const tier = SILVERSEA_TIER_ORDER[i];
     if (days >= SILVERSEA_VENETIAN_TIERS[tier].cruiseDays) {
       return tier;
     }
   }
-  return 'Member';
+
+  return '1 VS Day';
 }
 
 export function getNextSilverseaTier(currentTier: string): string | null {
-  const currentIndex = SILVERSEA_TIER_ORDER.indexOf(currentTier);
+  const resolvedTier = resolveSilverseaTierKey(currentTier);
+  const currentIndex = SILVERSEA_TIER_ORDER.indexOf(resolvedTier);
   if (currentIndex === -1 || currentIndex === SILVERSEA_TIER_ORDER.length - 1) {
     return null;
   }
@@ -106,15 +124,16 @@ export function getSilverseaTierProgress(currentDays: number, currentTier: strin
   daysToNext: number;
   percentComplete: number;
 } {
-  const nextTier = getNextSilverseaTier(currentTier);
+  const resolvedTier = resolveSilverseaTierKey(currentTier);
+  const nextTier = getNextSilverseaTier(resolvedTier);
   if (!nextTier) {
     return { nextTier: null, daysToNext: 0, percentComplete: 100 };
   }
 
-  const currentThreshold = SILVERSEA_VENETIAN_TIERS[currentTier]?.cruiseDays || 0;
+  const currentThreshold = SILVERSEA_VENETIAN_TIERS[resolvedTier]?.cruiseDays || 0;
   const nextThreshold = SILVERSEA_VENETIAN_TIERS[nextTier]?.cruiseDays || 0;
   const daysInRange = currentDays - currentThreshold;
-  const rangeSize = nextThreshold - currentThreshold;
+  const rangeSize = Math.max(1, nextThreshold - currentThreshold);
   const percentComplete = Math.min(100, Math.max(0, (daysInRange / rangeSize) * 100));
   const daysToNext = Math.max(0, nextThreshold - currentDays);
 

@@ -8,7 +8,8 @@ import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/club
 import { CROWN_ANCHOR_LEVELS, LEVEL_ORDER } from '@/constants/crownAnchor';
 import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER, getCelebrityCaptainsClubLevelByPoints, resolveCelebrityCaptainsClubLevelKey } from '@/constants/celebrityCaptainsClub';
 import { CELEBRITY_BLUE_CHIP_TIERS, CELEBRITY_TIER_ORDER, getCelebrityBlueChipTierByPoints, resolveCelebrityBlueChipTierKey } from '@/constants/celebrityBlueChipClub';
-import { SILVERSEA_VENETIAN_TIERS, SILVERSEA_TIER_ORDER, getSilverseaTierByDays, getNextSilverseaTier } from '@/constants/silverseaVenetianSociety';
+import { SILVERSEA_VENETIAN_TIERS, SILVERSEA_TIER_ORDER, getSilverseaTierByDays, resolveSilverseaTierKey } from '@/constants/silverseaVenetianSociety';
+import { SILVERSEA_CASINO_TIERS, SILVERSEA_CASINO_TIER_ORDER, getSilverseaCasinoTierByPoints, resolveSilverseaCasinoTierKey } from '@/constants/silverseaCasinoClub';
 import { CARNIVAL_VIFP_TIERS, CARNIVAL_VIFP_TIER_ORDER, CARNIVAL_PLAYERS_CLUB_TIERS } from '@/constants/carnivalVifpClub';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
@@ -251,8 +252,10 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     : activeBrand === 'silversea' ? 'Venetian Society #'
     : 'VIFP Club #';
 
-  const silverseaTier = currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints || 0);
   const silverseaPoints = currentUser?.silverseaVenetianPoints || 0;
+  const silverseaTier = resolveSilverseaTierKey(currentUser?.silverseaVenetianTier || getSilverseaTierByDays(silverseaPoints));
+  const silverseaCasinoPoints = currentUser?.silverseaCasinoPoints || 0;
+  const silverseaCasinoTier = resolveSilverseaCasinoTierKey(currentUser?.silverseaCasinoTier || getSilverseaCasinoTierByPoints(silverseaCasinoPoints));
 
   const carnivalVifpTier = currentUser?.carnivalVifpTier || 'Blue';
   const carnivalPlayersClubTier = currentUser?.carnivalPlayersClubTier || 'Blue';
@@ -799,28 +802,25 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </>
       ) : activeBrand === 'silversea' ? (
         <>
-      {/* === SILVERSEA === */}
       <View style={styles.tierRow}>
-        {renderStandoutBadge('Venetian Society', silverseaTier, SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color || '#708090', 'loyalty')}
-        {renderStandoutBadge('Cruise Days', String(silverseaPoints), '#8B6B49', 'metric', `${silverseaPoints} days`)}
+        {renderStandoutBadge('Venetian Society', silverseaTier, SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color || '#8C5A3C', 'loyalty')}
+        {renderStandoutBadge('Rock Star Casino', silverseaCasinoTier, SILVERSEA_CASINO_TIERS[silverseaCasinoTier]?.color || '#2F2F34', 'club')}
       </View>
 
       <View style={styles.progressGrid}>
         {(() => {
           const currentTierIndex = SILVERSEA_TIER_ORDER.indexOf(silverseaTier);
           const nextTier = currentTierIndex < SILVERSEA_TIER_ORDER.length - 1 ? SILVERSEA_TIER_ORDER[currentTierIndex + 1] : null;
-          const isMax = silverseaTier === 'Diamond Elite';
-          
+          const isMax = silverseaTier === '500 VS Days';
           const currentThreshold = SILVERSEA_VENETIAN_TIERS[silverseaTier]?.cruiseDays || 0;
           const nextThreshold = nextTier ? SILVERSEA_VENETIAN_TIERS[nextTier]?.cruiseDays : 500;
-          const rangeSize = nextThreshold - currentThreshold;
+          const rangeSize = Math.max(1, nextThreshold - currentThreshold);
           const progressInRange = silverseaPoints - currentThreshold;
           const percentComplete = isMax ? 100 : Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100));
           const daysToNext = isMax ? 0 : Math.max(0, nextThreshold - silverseaPoints);
-          
-          const tierColor = SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color || '#708090';
+          const tierColor = SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color || '#8C5A3C';
           const nextTierColor = nextTier ? SILVERSEA_VENETIAN_TIERS[nextTier]?.color : tierColor;
-          
+
           return (
             <View style={styles.progressCard} testID="silversea-venetian-progress-card">
               <View style={styles.progressHeader}>
@@ -836,8 +836,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                     ) : null}
                     <Text style={styles.progressLabelMeta}>
                       {isMax
-                        ? ` (${silverseaPoints.toLocaleString()} days)`
-                        : ` (${silverseaPoints.toLocaleString()}/${nextThreshold.toLocaleString()} days)`}
+                        ? ` (${silverseaPoints.toLocaleString()} VS days)`
+                        : ` (${silverseaPoints.toLocaleString()}/${nextThreshold.toLocaleString()} VS days)`}
                     </Text>
                   </Text>
                 </View>
@@ -859,8 +859,67 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <Text style={styles.progressEta}>
                 {isMax
-                  ? 'Diamond Elite achieved! Maximum Venetian Society tier'
-                  : `${daysToNext.toLocaleString()} cruise days to ${nextTier}`
+                  ? '500 VS Days achieved! Maximum Venetian Society milestone'
+                  : `${daysToNext.toLocaleString()} VS days to ${nextTier}`
+                }
+              </Text>
+            </View>
+          );
+        })()}
+
+        {(() => {
+          const currentTierIndex = SILVERSEA_CASINO_TIER_ORDER.indexOf(silverseaCasinoTier);
+          const nextTier = currentTierIndex < SILVERSEA_CASINO_TIER_ORDER.length - 1 ? SILVERSEA_CASINO_TIER_ORDER[currentTierIndex + 1] : null;
+          const isMax = silverseaCasinoTier === 'Icon';
+          const currentThreshold = SILVERSEA_CASINO_TIERS[silverseaCasinoTier]?.qualifyPoints || 0;
+          const nextThreshold = nextTier ? SILVERSEA_CASINO_TIERS[nextTier]?.qualifyPoints : currentThreshold;
+          const rangeSize = Math.max(1, nextThreshold - currentThreshold);
+          const progressInRange = silverseaCasinoPoints - currentThreshold;
+          const percentComplete = isMax ? 100 : Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100));
+          const pointsToNext = isMax ? 0 : Math.max(0, nextThreshold - silverseaCasinoPoints);
+          const tierColor = SILVERSEA_CASINO_TIERS[silverseaCasinoTier]?.color || '#2F2F34';
+          const nextTierColor = nextTier ? SILVERSEA_CASINO_TIERS[nextTier]?.color : tierColor;
+
+          return (
+            <View style={styles.progressCard} testID="silversea-rock-star-progress-card">
+              <View style={styles.progressHeader}>
+                <View style={styles.progressLabelRow}>
+                  <Star size={13} color={tierColor} fill={tierColor} />
+                  <Text style={styles.progressLabel}>
+                    <Text style={[styles.progressLabelTier, { color: tierColor }]}>{silverseaCasinoTier}</Text>
+                    {!isMax && nextTier ? (
+                      <>
+                        <Text style={styles.progressLabelMeta}> → </Text>
+                        <Text style={[styles.progressLabelTier, { color: nextTierColor }]}>{nextTier}</Text>
+                      </>
+                    ) : null}
+                    <Text style={styles.progressLabelMeta}>
+                      {isMax
+                        ? ` (${silverseaCasinoPoints.toLocaleString()} pts)`
+                        : ` (${silverseaCasinoPoints.toLocaleString()}/${nextThreshold.toLocaleString()} pts)`}
+                    </Text>
+                  </Text>
+                </View>
+                {isMax ? (
+                  <View style={styles.achievedBadge}>
+                    <Text style={styles.achievedBadgeText}>MAX TIER</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.progressPercent}>{percentComplete.toFixed(1)}%</Text>
+                )}
+              </View>
+              <View style={styles.progressBarBg}>
+                <LinearGradient
+                  colors={[tierColor, nextTierColor]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
+                />
+              </View>
+              <Text style={styles.progressEta}>
+                {isMax
+                  ? 'Icon achieved! Maximum Rock Star tier'
+                  : `${pointsToNext.toLocaleString()} pts to ${nextTier} • ~${(pointsToNext * 3).toLocaleString()} coin-in`
                 }
               </Text>
             </View>
@@ -871,26 +930,22 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{silverseaPoints}</Text>
-          <Text style={styles.statLabel}>Cruise Days</Text>
+          <Text style={styles.statLabel}>VS Days</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{silverseaCasinoPoints.toLocaleString()}</Text>
+          <Text style={styles.statLabel}>Rock Star Pts</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text
-            style={[styles.statValue, silverseaTier.length > 10 ? styles.statValueCompact : null]}
+            style={[styles.statValue, silverseaCasinoTier.length > 10 ? styles.statValueCompact : null]}
             numberOfLines={1}
           >
-            {silverseaTier}
+            {silverseaCasinoTier}
           </Text>
-          <Text style={styles.statLabel}>Venetian Tier</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{(() => {
-            const nextTier = getNextSilverseaTier(silverseaTier);
-            if (!nextTier) return 0;
-            return Math.max(0, (SILVERSEA_VENETIAN_TIERS[nextTier]?.cruiseDays || 0) - silverseaPoints);
-          })()}</Text>
-          <Text style={styles.statLabel}>To Next Tier</Text>
+          <Text style={styles.statLabel}>Casino Tier</Text>
         </View>
       </View>
 

@@ -61,6 +61,8 @@ export interface UserProfile {
   silverseaVenetianNumber?: string;
   silverseaVenetianTier?: string;
   silverseaVenetianPoints?: number;
+  silverseaCasinoTier?: string;
+  silverseaCasinoPoints?: number;
   carnivalVifpNumber?: string;
   carnivalVifpTier?: string;
   carnivalPlayersClubTier?: string;
@@ -103,6 +105,8 @@ const DEFAULT_OWNER = {
   silverseaVenetianNumber: '',
   silverseaVenetianTier: '',
   silverseaVenetianPoints: 0,
+  silverseaCasinoTier: '',
+  silverseaCasinoPoints: 0,
 };
 
 function normalizeEmail(email: string | null | undefined): string | null {
@@ -139,6 +143,8 @@ function createOwnerProfile(email: string | null): UserProfile {
     silverseaVenetianNumber: DEFAULT_OWNER.silverseaVenetianNumber,
     silverseaVenetianTier: DEFAULT_OWNER.silverseaVenetianTier,
     silverseaVenetianPoints: DEFAULT_OWNER.silverseaVenetianPoints,
+    silverseaCasinoTier: DEFAULT_OWNER.silverseaCasinoTier,
+    silverseaCasinoPoints: DEFAULT_OWNER.silverseaCasinoPoints,
     createdAt: now,
     updatedAt: now,
   };
@@ -276,6 +282,8 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     silverseaVenetianNumber: typeof userRecord.silverseaVenetianNumber === 'string' ? userRecord.silverseaVenetianNumber : DEFAULT_OWNER.silverseaVenetianNumber,
     silverseaVenetianTier: typeof userRecord.silverseaVenetianTier === 'string' ? userRecord.silverseaVenetianTier : DEFAULT_OWNER.silverseaVenetianTier,
     silverseaVenetianPoints: typeof userRecord.silverseaVenetianPoints === 'number' ? userRecord.silverseaVenetianPoints : DEFAULT_OWNER.silverseaVenetianPoints,
+    silverseaCasinoTier: typeof userRecord.silverseaCasinoTier === 'string' ? userRecord.silverseaCasinoTier : DEFAULT_OWNER.silverseaCasinoTier,
+    silverseaCasinoPoints: typeof userRecord.silverseaCasinoPoints === 'number' ? userRecord.silverseaCasinoPoints : DEFAULT_OWNER.silverseaCasinoPoints,
     carnivalVifpNumber: typeof userRecord.carnivalVifpNumber === 'string' ? userRecord.carnivalVifpNumber : '',
     carnivalVifpTier: typeof userRecord.carnivalVifpTier === 'string' ? userRecord.carnivalVifpTier : '',
     carnivalPlayersClubTier: typeof userRecord.carnivalPlayersClubTier === 'string' ? userRecord.carnivalPlayersClubTier : '',
