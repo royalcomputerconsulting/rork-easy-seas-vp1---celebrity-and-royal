@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 
 export type BrandType = 'royal' | 'celebrity' | 'silversea' | 'carnival';
 export type BrandToggleVariant = 'default' | 'playerCard';
@@ -97,11 +97,15 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderLight,
   },
   toggleContainerPlayerCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderRadius: 20,
     padding: 6,
-    borderColor: 'rgba(30, 58, 95, 0.12)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255, 255, 255, 0.26)',
+    shadowColor: '#03111F',
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
   toggleButton: {
     flex: 1,
@@ -131,11 +135,11 @@ const styles = StyleSheet.create({
   },
   activeButtonPlayerCard: {
     backgroundColor: COLORS.navyDeep,
-    shadowColor: 'rgba(15, 36, 57, 0.35)',
-    shadowOpacity: 0.24,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 4,
+    shadowColor: '#03111F',
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
   carnivalActiveButton: {
     backgroundColor: '#CC2232',
@@ -150,7 +154,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 12,
     color: COLORS.navyDeep,
-    letterSpacing: 0.1,
+    letterSpacing: 0.2,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   activeText: {
     color: COLORS.white,

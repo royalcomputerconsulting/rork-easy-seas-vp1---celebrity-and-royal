@@ -1,11 +1,14 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Sparkles, Stars, SunMoon, ScrollText } from 'lucide-react-native';
-import { BORDER_RADIUS, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { buildLocalDailyLuckEntry } from '@/lib/dailyLuck';
-import { formatBirthdateForDisplay } from '@/lib/date';
+import { useQuery } from '@tanstack/react-query';
+import { Sparkles } from 'lucide-react-native';
+import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
+import { buildLocalDailyLuckEntry, fetchLiveDailyLuckAnalysis, getDailyLuckDateKey } from '@/lib/dailyLuck';
+import { deriveChineseSignFromBirthDate, deriveWesternSignFromBirthDate } from '@/lib/dailyLuck/signs';
 import type { DailyLuckEntry } from '@/types/daily-luck';
+import { DailyLuckCompactCard } from '@/components/daily-luck/DailyLuckCompactCard';
+import { DailyLuckExpandedCard } from '@/components/daily-luck/DailyLuckExpandedCard';
 
 interface DailyLuckReportProps {
   birthdate: string;
@@ -13,149 +16,77 @@ interface DailyLuckReportProps {
   entry?: DailyLuckEntry | null;
 }
 
-interface ReadingSectionProps {
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-  accentColor: string;
-  testID: string;
-}
-
-function ReadingSection({ icon, title, body, accentColor, testID }: ReadingSectionProps) {
-  return (
-    <View style={styles.sectionCard} testID={testID}>
-      <View style={styles.sectionHeader}>
-        <View style={[styles.sectionIconShell, { borderColor: `${accentColor}44`, backgroundColor: `${accentColor}18` }]}>
-          {icon}
-        </View>
-        <Text style={styles.sectionTitle}>{title}</Text>
-      </View>
-      <Text style={styles.sectionBody}>{body}</Text>
-    </View>
-  );
-}
-
 export function DailyLuckReport({ birthdate, selectedDate, entry }: DailyLuckReportProps) {
-  const fallbackEntry = useMemo(() => buildLocalDailyLuckEntry(birthdate, selectedDate), [birthdate, selectedDate]);
-  const resolvedEntry = entry ?? fallbackEntry;
-  const birthdateDisplay = useMemo(() => formatBirthdateForDisplay(birthdate), [birthdate]);
-  const scoreBreakdown = resolvedEntry?.scoreBreakdown;
+  const fallbackEntry = useMemo(() => entry ?? buildLocalDailyLuckEntry(birthdate, selectedDate), [birthdate, entry, selectedDate]);
+  const dateKey = useMemo(() => getDailyLuckDateKey(selectedDate), [selectedDate]);
+  const westernSign = useMemo(() => deriveWesternSignFromBirthDate(birthdate) ?? undefined, [birthdate]);
+  const chineseSign = useMemo(() => deriveChineseSignFromBirthDate(birthdate) ?? undefined, [birthdate]);
 
-  const formattedDate = useMemo(() => (
-    selectedDate.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      timeZone: 'UTC',
-    })
-  ), [selectedDate]);
+  const liveQuery = useQuery({
+    queryKey: ['daily-luck-live', dateKey, birthdate, westernSign, chineseSign],
+    queryFn: async () => fetchLiveDailyLuckAnalysis({
+      date: dateKey,
+      birthDate: birthdate,
+      westernSign,
+      chineseSign,
+    }),
+    enabled: birthdate.trim().length > 0,
+    staleTime: 1000 * 60 * 30,
+    gcTime: 1000 * 60 * 60,
+    retry: 1,
+  });
 
-  if (!birthdateDisplay || !resolvedEntry) {
+  if (!birthdate.trim()) {
     return (
-      <View style={styles.emptyCard}>
-        <LinearGradient colors={['rgba(13, 28, 54, 0.96)', 'rgba(23, 51, 92, 0.94)']} style={styles.emptyGradient}>
+      <View style={styles.emptyCard} testID="daily-luck-empty-card">
+        <LinearGradient colors={['#0D1C36', '#17335C', '#0C5061']} style={styles.emptyGradient}>
           <View style={styles.emptyIconShell}>
             <Sparkles size={20} color="#D4B15A" />
           </View>
-          <Text style={styles.emptyTitle}>Daily Luck Report</Text>
-          <Text style={styles.emptyText}>
-            Add your birthdate in Settings → Profile using MM/DD/YYYY to unlock your Chinese horoscope, Western zodiac and planetary reading, tarot pull, and Lucky Day #.
-          </Text>
+          <Text style={styles.emptyTitle}>Daily Luck</Text>
+          <Text style={styles.emptyText}>Add your birthdate in Settings → Profile to unlock the live Daily Luck Engine and source-backed score.</Text>
         </LinearGradient>
       </View>
     );
   }
 
-  const readingSourceLabel = resolvedEntry.source === 'ai' ? 'AI Lucky Day # Synthesis' : 'Lucky Day Summary';
-
-  return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={['#0D1C36', '#17335C', '#0C5061']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.heroCard}
-      >
-        <View style={styles.heroHeader}>
-          <View style={styles.heroIconShell}>
-            <Sparkles size={22} color="#D4B15A" />
-          </View>
-          <View style={styles.heroTextWrap}>
-            <Text style={styles.overline}>Daily Luck Report</Text>
-            <Text style={styles.heroTitle}>{formattedDate}</Text>
-            <Text style={styles.heroSubtitle}>Saved to your profile and reused across the calendar and day agenda.</Text>
-          </View>
-        </View>
-
-        <View style={styles.metricGrid}>
-          <View style={[styles.metricCard, styles.metricCardPrimary]}>
-            <Text style={styles.metricLabel}>Lucky Day #</Text>
-            <Text style={styles.metricValue}>{resolvedEntry.luckNumber}</Text>
-            <Text style={styles.metricSubvalue}>{resolvedEntry.source === 'ai' ? 'Weighted from AI component scores' : 'Weighted from local component scores'}</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Chinese</Text>
-            <Text style={styles.metricValueSmall}>{resolvedEntry.chineseSign}</Text>
-            <Text style={styles.metricSubvalue}>{scoreBreakdown ? `${scoreBreakdown.chinese}/9 score` : 'Birth animal'}</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Western</Text>
-            <Text style={styles.metricValueSmall}>{resolvedEntry.westernSign}</Text>
-            <Text style={styles.metricSubvalue}>{scoreBreakdown ? `${scoreBreakdown.western}/9 score` : 'Zodiac sign'}</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Tarot</Text>
-            <Text style={styles.metricValueSmall}>{resolvedEntry.tarotCard}</Text>
-            <Text style={styles.metricSubvalue}>{scoreBreakdown ? `${scoreBreakdown.tarot}/9 score` : 'Daily card'}</Text>
-          </View>
-        </View>
-
-        {scoreBreakdown ? (
-          <View style={styles.breakdownCard} testID="daily-luck-breakdown-card">
-            <Text style={styles.breakdownLabel}>Why this number</Text>
-            <Text style={styles.breakdownText}>
-              Chinese {scoreBreakdown.chinese}/9 + Western {scoreBreakdown.western}/9 + Tarot {scoreBreakdown.tarot}/9 weighted together = Lucky Day #{resolvedEntry.luckNumber}
-            </Text>
-          </View>
-        ) : null}
-      </LinearGradient>
-
-      <ReadingSection
-        icon={<Stars size={16} color="#D4B15A" />}
-        title="Chinese Horoscope"
-        body={resolvedEntry.readings.chinese}
-        accentColor="#D4B15A"
-        testID="daily-luck-chinese-section"
-      />
-
-      <ReadingSection
-        icon={<SunMoon size={16} color="#60A5FA" />}
-        title="Western Zodiac + Planetary Alignments"
-        body={resolvedEntry.readings.western}
-        accentColor="#60A5FA"
-        testID="daily-luck-western-section"
-      />
-
-      <ReadingSection
-        icon={<ScrollText size={16} color="#A78BFA" />}
-        title="Tarot Card Reading"
-        body={resolvedEntry.readings.tarot}
-        accentColor="#A78BFA"
-        testID="daily-luck-tarot-section"
-      />
-
-      <View style={styles.sectionCard} testID="daily-luck-synthesis-section">
-        <View style={styles.sectionHeader}>
-          <View style={[styles.sectionIconShell, styles.synthesisIconShell]}>
-            <Sparkles size={16} color="#34D399" />
-          </View>
-          <Text style={styles.sectionTitle}>{readingSourceLabel}</Text>
-        </View>
-        <Text style={styles.sectionBody}>{resolvedEntry.readings.synthesis}</Text>
+  if (liveQuery.isLoading && !liveQuery.data) {
+    return (
+      <View style={styles.loadingCard} testID="daily-luck-loading-card">
+        <ActivityIndicator size="small" color="#FFFFFF" />
+        <Text style={styles.loadingTitle}>Fetching live astrology sources</Text>
+        <Text style={styles.loadingText}>Pulling the Chinese daily, Western daily, sky today, love daily, and yearly overview now.</Text>
       </View>
-    </View>
-  );
+    );
+  }
+
+  if (liveQuery.data) {
+    return (
+      <View style={styles.container}>
+        <DailyLuckCompactCard analysis={liveQuery.data} />
+        <DailyLuckExpandedCard analysis={liveQuery.data} />
+      </View>
+    );
+  }
+
+  if (fallbackEntry) {
+    return (
+      <View style={styles.container} testID="daily-luck-fallback-card">
+        <LinearGradient colors={['rgba(13,28,54,0.96)', 'rgba(23,51,92,0.94)', 'rgba(13,93,100,0.88)']} style={styles.fallbackHero}>
+          <View style={styles.fallbackBadge}>
+            <Sparkles size={14} color="#F8D56B" />
+            <Text style={styles.fallbackBadgeText}>Fallback score</Text>
+          </View>
+          <Text style={styles.fallbackScore}>{fallbackEntry.luckNumber} / 9</Text>
+          <Text style={styles.fallbackTitle}>{fallbackEntry.readings.synthesis}</Text>
+          <Text style={styles.fallbackBody}>The live engine could not complete right now, so the app is using its saved local daily luck data to keep the calendar and agenda usable.</Text>
+          {liveQuery.error ? <Text style={styles.fallbackError}>{liveQuery.error instanceof Error ? liveQuery.error.message : 'Live engine unavailable'}</Text> : null}
+        </LinearGradient>
+      </View>
+    );
+  }
+
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -163,159 +94,14 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     gap: SPACING.md,
   },
-  heroCard: {
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 177, 90, 0.22)',
-  },
-  heroHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  heroIconShell: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(212, 177, 90, 0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 177, 90, 0.24)',
-  },
-  heroTextWrap: {
-    flex: 1,
-  },
-  overline: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#D4B15A',
-    letterSpacing: 1.6,
-    marginBottom: 6,
-    textTransform: 'uppercase' as const,
-  },
-  heroTitle: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
-    lineHeight: 28,
-  },
-  heroSubtitle: {
-    marginTop: 6,
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.72)',
-    lineHeight: 20,
-  },
-  metricGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap' as const,
-    gap: SPACING.sm,
-  },
-  metricCard: {
-    flexGrow: 1,
-    flexBasis: '47%',
-    minHeight: 84,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  metricCardPrimary: {
-    backgroundColor: 'rgba(212, 177, 90, 0.14)',
-    borderColor: 'rgba(212, 177, 90, 0.32)',
-  },
-  metricLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(255,255,255,0.62)',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 1.1,
-  },
-  metricValue: {
-    marginTop: 8,
-    fontSize: 34,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#D4B15A',
-  },
-  metricValueSmall: {
-    marginTop: 10,
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
-  },
-  metricSubvalue: {
-    marginTop: 4,
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.66)',
-  },
-  breakdownCard: {
-    marginTop: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  breakdownLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#D4B15A',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 1.1,
-    marginBottom: 6,
-  },
-  breakdownText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.84)',
-    lineHeight: 20,
-  },
-  sectionCard: {
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.lg,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(15, 23, 42, 0.08)',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  sectionIconShell: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  synthesisIconShell: {
-    borderColor: 'rgba(52, 211, 153, 0.28)',
-    backgroundColor: 'rgba(52, 211, 153, 0.14)',
-  },
-  sectionTitle: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#0F172A',
-  },
-  sectionBody: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#334155',
-    lineHeight: 23,
-  },
   emptyCard: {
     marginTop: SPACING.md,
   },
   emptyGradient: {
-    borderRadius: BORDER_RADIUS.xl,
+    borderRadius: BORDER_RADIUS.xxl,
     padding: SPACING.lg,
     borderWidth: 1,
-    borderColor: 'rgba(212, 177, 90, 0.18)',
+    borderColor: 'rgba(212,177,90,0.18)',
   },
   emptyIconShell: {
     width: 40,
@@ -323,18 +109,91 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(212, 177, 90, 0.14)',
+    backgroundColor: 'rgba(212,177,90,0.14)',
     marginBottom: SPACING.md,
   },
   emptyTitle: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: COLORS.white,
     marginBottom: SPACING.sm,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.74)',
     lineHeight: 22,
+    color: 'rgba(255,255,255,0.76)',
+  },
+  loadingCard: {
+    marginTop: SPACING.md,
+    borderRadius: BORDER_RADIUS.xxl,
+    padding: SPACING.lg,
+    backgroundColor: 'rgba(15, 36, 57, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    ...SHADOW.md,
+  },
+  loadingTitle: {
+    marginTop: SPACING.md,
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 20,
+    textAlign: 'center' as const,
+    color: 'rgba(255,255,255,0.72)',
+  },
+  fallbackHero: {
+    borderRadius: BORDER_RADIUS.xxl,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    ...SHADOW.lg,
+  },
+  fallbackBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  fallbackBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: 'rgba(255,255,255,0.72)',
+    letterSpacing: 1,
+    textTransform: 'uppercase' as const,
+  },
+  fallbackScore: {
+    marginTop: SPACING.md,
+    fontSize: 34,
+    fontWeight: '800' as const,
+    color: COLORS.white,
+  },
+  fallbackTitle: {
+    marginTop: 6,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    lineHeight: 22,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#D7E9FF',
+  },
+  fallbackBody: {
+    marginTop: SPACING.sm,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 22,
+    color: 'rgba(255,255,255,0.78)',
+  },
+  fallbackError: {
+    marginTop: SPACING.sm,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: '#FECACA',
   },
 });

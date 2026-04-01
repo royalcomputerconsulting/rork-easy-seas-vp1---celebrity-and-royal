@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users, Crown } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS, LEVEL_ORDER } from '@/constants/crownAnchor';
@@ -218,6 +218,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   const carnivalVifpTier = currentUser?.carnivalVifpTier || 'Blue';
   const carnivalPlayersClubTier = currentUser?.carnivalPlayersClubTier || 'Blue';
   const carnivalPlayersClubPoints = currentUser?.carnivalPlayersClubPoints || 0;
+  const scenicHeroUri = activeBrand === 'celebrity'
+    ? 'https://images.unsplash.com/photo-1493558103817-58b2924bce98?auto=format&fit=crop&w=1400&q=80'
+    : activeBrand === 'silversea'
+      ? 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1400&q=80'
+      : 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80';
 
   return (
     <LinearGradient
@@ -227,6 +232,24 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
+      <Image
+        source={{ uri: scenicHeroUri }}
+        style={styles.backgroundImage}
+        resizeMode="cover"
+      />
+      <LinearGradient
+        colors={['rgba(5, 18, 32, 0.18)', 'rgba(7, 20, 38, 0.58)', 'rgba(8, 16, 30, 0.92)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.85, y: 1 }}
+        style={styles.backgroundOverlay}
+      />
+      <LinearGradient
+        colors={['rgba(96, 165, 250, 0.12)', 'rgba(255,255,255,0.04)', 'rgba(123, 45, 142, 0.12)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.atmosphereOverlay}
+      />
+      <View style={styles.contentLayer}>
       <View style={styles.topRow}>
         <View style={styles.memberInfoInline}>
           {!hideLogo && (
@@ -249,7 +272,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               onPress={onAlertsPress}
               activeOpacity={0.7}
             >
-              <Bell size={18} color={CLEAN_THEME.text.primary} />
+              <Bell size={18} color="#F8FBFF" />
               {alertCount > 0 && (
                 <View style={styles.alertBadge}>
                   <Text style={styles.alertBadgeText}>
@@ -265,7 +288,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               onPress={onLogoutPress}
               activeOpacity={0.7}
             >
-              <LogOut size={18} color={CLEAN_THEME.text.primary} />
+              <LogOut size={18} color="#F8FBFF" />
             </TouchableOpacity>
           )}
           {onSettingsPress && (
@@ -274,7 +297,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               onPress={onSettingsPress}
               activeOpacity={0.7}
             >
-              <Settings size={18} color={CLEAN_THEME.text.primary} />
+              <Settings size={18} color="#F8FBFF" />
             </TouchableOpacity>
           )}
         </View>
@@ -958,19 +981,36 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       </View>
         </>
       )}
+      </View>
     </LinearGradient>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.lg,
+    borderRadius: 34,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.18)',
-    marginBottom: SPACING.md,
-    ...SHADOW.lg,
+    borderColor: 'rgba(255, 255, 255, 0.26)',
+    marginBottom: SPACING.lg,
+    shadowColor: '#03111F',
+    shadowOpacity: 0.26,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 10,
+  },
+  backgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  backgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  atmosphereOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  contentLayer: {
+    padding: SPACING.lg,
+    backgroundColor: 'rgba(4, 16, 31, 0.08)',
   },
   topRow: {
     flexDirection: 'row',
@@ -994,15 +1034,15 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   memberGreeting: {
-    fontSize: 22,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    letterSpacing: 0.2,
+    fontSize: 24,
+    fontWeight: '800' as const,
+    color: COLORS.white,
+    letterSpacing: -0.3,
   },
   memberSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyMedium,
-    marginTop: 3,
+    color: 'rgba(255,255,255,0.76)',
+    marginTop: 4,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   actionsSection: {
@@ -1010,15 +1050,20 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   iconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.26)',
+    shadowColor: '#03111F',
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   alertBadge: {
     position: 'absolute',
@@ -1065,10 +1110,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    borderRadius: 18,
+    paddingVertical: 14,
+    borderRadius: 24,
     borderWidth: 1,
-    ...SHADOW.sm,
+    backgroundColor: 'rgba(255,255,255,0.58)',
+    borderColor: 'rgba(255,255,255,0.28)',
+    shadowColor: '#03111F',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
   spotlightBadgeIcon: {
     width: 32,
@@ -1084,7 +1135,7 @@ const styles = StyleSheet.create({
   },
   spotlightBadgeLabel: {
     fontSize: 10,
-    color: COLORS.navyMedium,
+    color: 'rgba(15, 36, 57, 0.68)',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     letterSpacing: 0.3,
   },
@@ -1098,12 +1149,16 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   progressCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.97)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.66)',
+    borderRadius: 28,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.12)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#03111F',
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -1120,7 +1175,7 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.primary,
+    color: '#102132',
     fontWeight: TYPOGRAPHY.fontWeightBold,
     flex: 1,
   },
@@ -1132,16 +1187,16 @@ const styles = StyleSheet.create({
   },
   progressPercent: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.primary,
+    color: '#102132',
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    backgroundColor: 'rgba(30, 58, 95, 0.08)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.74)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: BORDER_RADIUS.round,
   },
   progressBarBg: {
     height: 10,
-    backgroundColor: 'rgba(30, 58, 95, 0.1)',
+    backgroundColor: 'rgba(7, 23, 43, 0.12)',
     borderRadius: 999,
     overflow: 'hidden',
   },
@@ -1151,7 +1206,7 @@ const styles = StyleSheet.create({
   },
   progressEta: {
     fontSize: 11,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(16, 33, 50, 0.72)',
     marginTop: 10,
     lineHeight: 16,
   },
@@ -1229,13 +1284,17 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.64)',
+    borderRadius: 26,
     padding: SPACING.md,
     marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+    shadowColor: '#03111F',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
   statItem: {
     flex: 1,
@@ -1245,16 +1304,16 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    backgroundColor: 'rgba(0, 31, 63, 0.08)',
+    backgroundColor: 'rgba(16, 33, 50, 0.1)',
   },
   statValue: {
-    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontSize: 26,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: CLEAN_THEME.data.value,
+    color: '#102132',
   },
   statLabel: {
     fontSize: 10,
-    color: CLEAN_THEME.data.label,
+    color: 'rgba(16, 33, 50, 0.66)',
     marginTop: 4,
     textAlign: 'center',
     letterSpacing: 0.3,
@@ -1263,26 +1322,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.sm,
     justifyContent: 'center',
-    marginTop: 4,
-    padding: 6,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.42)',
+    marginTop: 8,
+    padding: 8,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.18)',
   },
   quickStatPill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
     borderRadius: BORDER_RADIUS.round,
-    paddingVertical: 11,
+    paddingVertical: 12,
     paddingHorizontal: SPACING.sm,
-    gap: 5,
+    gap: 6,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255, 255, 255, 0.24)',
+    shadowColor: '#03111F',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
   quickStatPillValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -1298,17 +1361,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginBottom: SPACING.md,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(255, 255, 255, 0.78)',
+    backgroundColor: 'rgba(255, 255, 255, 0.62)',
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.22)',
   },
   crewCountText: {
     fontSize: 11,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(16, 33, 50, 0.68)',
     fontWeight: '500' as const,
   },
 });

@@ -1,19 +1,14 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  CheckCircle,
-  ChevronRight,
-  Clock,
-  Ship,
-} from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
-import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
+import { CheckCircle, ChevronRight, Clock, Ship, Sparkles } from 'lucide-react-native';
+import { GlassSurface } from '@/components/premium/GlassSurface';
+import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
+import { DEFAULT_CRUISE_IMAGE, getUniqueImageForCruise } from '@/constants/cruiseImages';
+import { createDateFromString, getDaysUntil } from '@/lib/date';
 import { formatCurrency } from '@/lib/format';
-import { getDaysUntil, createDateFromString } from '@/lib/date';
-import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
+import { calculateCruiseValue, calculateOfferAggregateValue, getCabinPriceFromEntity, GUEST_COUNT_DEFAULT, type OfferAggregateValue, type ValueBreakdown } from '@/lib/valueCalculator';
 import type { Cruise } from '@/types/models';
-import { calculateCruiseValue, calculateOfferAggregateValue, getCabinPriceFromEntity, GUEST_COUNT_DEFAULT, type ValueBreakdown, type OfferAggregateValue } from '@/lib/valueCalculator';
 
 interface OfferCardProps {
   offer: Cruise;
@@ -27,16 +22,70 @@ interface OfferCardProps {
   showValueBreakdown?: boolean;
 }
 
-
-
 function getOfferImage(offer: Cruise): string {
-  if (offer.imageUrl) return offer.imageUrl;
+  if (offer.imageUrl) {
+    return offer.imageUrl;
+  }
+
   return getUniqueImageForCruise(
     offer.id,
     offer.destination,
     offer.sailDate,
     offer.shipName,
   );
+}
+
+function formatOfferDate(value: string | undefined): string {
+  if (!value) {
+    return 'TBD';
+  }
+
+  return createDateFromString(value).toLocaleDateString('en-US', {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function splitDestinationLines(destination: string | undefined): string[] {
+  const cleaned = (destination ?? '').trim();
+  if (!cleaned) {
+    return [];
+  }
+
+  const pieces = cleaned
+    .split(/\s*[•|]|\s*,\s*/)
+    .map((piece) => piece.trim())
+    .filter((piece) => piece.length > 0);
+
+  if (pieces.length >= 3) {
+    return pieces.slice(0, 3);
+  }
+
+  if (cleaned.length > 70) {
+    const words = cleaned.split(/\s+/);
+    const lines: string[] = [];
+    let currentLine = '';
+
+    words.forEach((word) => {
+      const candidate = currentLine ? `${currentLine} ${word}` : word;
+      if (candidate.length > 26 && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = candidate;
+      }
+    });
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    return lines.slice(0, 3);
+  }
+
+  return [cleaned];
 }
 
 export const OfferCard = React.memo(function OfferCard({
@@ -62,7 +111,10 @@ export const OfferCard = React.memo(function OfferCard({
   }, [imageUrl]);
 
   const valueBreakdown = useMemo((): ValueBreakdown | null => {
-    if (!showValueBreakdown) return null;
+    if (!showValueBreakdown) {
+      return null;
+    }
+
     try {
       return calculateCruiseValue(offer);
     } catch (error) {
@@ -93,7 +145,7 @@ export const OfferCard = React.memo(function OfferCard({
     }
 
     if (offer.offerCode && allCruises.length > 0) {
-      const match = allCruises.find(c => c.offerCode === offer.offerCode && (c.offerName || '').trim().length > 0);
+      const match = allCruises.find((item) => item.offerCode === offer.offerCode && (item.offerName || '').trim().length > 0);
       const inferred = (match?.offerName || '').trim();
       if (inferred.length > 0) {
         console.log('[OfferCard] Inferred offer name from other cruises with same offerCode:', {
@@ -105,8 +157,8 @@ export const OfferCard = React.memo(function OfferCard({
       }
     }
 
-    return '';
-  }, [offer.id, offer.offerCode, offer.offerName, offerNameOverride, allCruises]);
+    return 'Casino Offer';
+  }, [allCruises, offer.id, offer.offerCode, offer.offerName, offerNameOverride]);
 
   const aggregateValue = useMemo((): OfferAggregateValue | null => {
     try {
@@ -118,61 +170,69 @@ export const OfferCard = React.memo(function OfferCard({
       console.log('[OfferCard] Error calculating aggregate value:', error);
       return null;
     }
-  }, [offer, allCruises]);
+  }, [allCruises, offer]);
+
+  const availableCruiseCount = useMemo(() => {
+    if (aggregateValue && aggregateValue.cruiseCount > 0) {
+      return aggregateValue.cruiseCount;
+    }
+
+    if (offer.offerCode) {
+      const relatedCruises = allCruises.filter((item) => item.offerCode === offer.offerCode);
+      if (relatedCruises.length > 0) {
+        return relatedCruises.length;
+      }
+    }
+
+    return 1;
+  }, [aggregateValue, allCruises, offer.offerCode]);
 
   const totalValue = useMemo(() => {
     if (aggregateValue && aggregateValue.cruiseCount > 0 && aggregateValue.aggregateTotalValue > 0) {
       console.log('[OfferCard] Using aggregate value:', aggregateValue.aggregateTotalValue);
       return aggregateValue.aggregateTotalValue;
     }
-    
-    // Always try valueBreakdown first as it includes estimated pricing
+
     if (valueBreakdown && valueBreakdown.totalValueReceived > 0) {
       console.log('[OfferCard] Using valueBreakdown total:', valueBreakdown.totalValueReceived);
       return valueBreakdown.totalValueReceived;
     }
-    
-    // Fallback: calculate manually using getCabinPriceFromEntity which supports estimation
+
     const roomType = offer.cabinType || 'Balcony';
     let cabinPrice = getCabinPriceFromEntity(offer, roomType) || offer.price || 0;
-    
-    // If still no price, estimate based on cabin type and nights
+
     if (cabinPrice === 0 && offer.nights > 0) {
       const baseRates: Record<string, number> = {
-        'Interior': 100,
+        Interior: 100,
         'Interior GTY': 80,
-        'Oceanview': 140,
+        Oceanview: 140,
         'Oceanview GTY': 120,
-        'Balcony': 180,
+        Balcony: 180,
         'Balcony GTY': 150,
-        'Suite': 350,
+        Suite: 350,
         'Suite GTY': 280,
         'Junior Suite': 320,
         'Grand Suite': 500,
         "Owner's Suite": 600,
       };
-      const typeKey = Object.keys(baseRates).find(key => 
-        roomType.toLowerCase().includes(key.toLowerCase())
-      ) || 'Balcony';
+      const typeKey = Object.keys(baseRates).find((key) => roomType.toLowerCase().includes(key.toLowerCase())) || 'Balcony';
       cabinPrice = (baseRates[typeKey] || 180) * (offer.nights || 7);
       console.log('[OfferCard] Using estimated cabin price:', { roomType, cabinPrice });
     }
-    
+
     const guestCount = offer.guests || GUEST_COUNT_DEFAULT;
     const cabinValueForTwo = cabinPrice * guestCount;
-    
-    // Estimate taxes if not provided (roughly $30/night per guest)
     let taxes = offer.taxes || 0;
+
     if (taxes === 0 && offer.nights > 0) {
       taxes = Math.round((offer.nights || 7) * 30 * guestCount);
     }
-    
+
     const freePlay = offer.freePlay || 0;
     const obc = offer.freeOBC || 0;
     const tradeIn = offer.tradeInValue || 0;
-    
     const total = cabinValueForTwo + taxes + freePlay + obc + tradeIn;
-    
+
     console.log('[OfferCard] Total value calculated:', {
       offerId: offer.id,
       offerCode: offer.offerCode,
@@ -185,190 +245,145 @@ export const OfferCard = React.memo(function OfferCard({
       tradeIn,
       total,
     });
-    
+
     return total;
-  }, [offer, valueBreakdown, aggregateValue]);
+  }, [aggregateValue, offer, valueBreakdown]);
 
-  const getStatusBadge = () => {
+  const statusBadge = useMemo(() => {
     if (isBooked) {
-      return { text: 'BOOKED', bg: COLORS.money };
+      return { text: 'BOOKED', colors: ['#059669', '#10B981'] as [string, string] };
     }
+
     if (recommended) {
-      return { text: 'RECOMMENDED', bg: COLORS.gold };
+      return { text: 'RECOMMENDED', colors: ['#D4A00A', '#F59E0B'] as [string, string] };
     }
 
-    const badgeName = (offerNameOverride || offer.offerName || inferredOfferName || 'CASINO OFFER').trim();
-    return { text: badgeName.length > 0 ? badgeName : 'CASINO OFFER', bg: COLORS.loyalty };
-  };
+    return { text: 'ACTIVE', colors: ['#0097A7', '#0EA5B7'] as [string, string] };
+  }, [isBooked, recommended]);
 
-  const statusBadge = getStatusBadge();
+  const displayValue = totalValue > 0
+    ? `$${Math.round(totalValue).toLocaleString()}`
+    : formatCurrency(offer.retailValue || valueBreakdown?.totalRetailValue || 0);
+
+  const destinationLines = useMemo(() => splitDestinationLines(offer.destination), [offer.destination]);
+  const roomTypeText = (offer.cabinType || 'Balcony').trim() || 'Balcony';
+  const shipLabel = offer.shipName || 'Cruise Offer';
+  const expiryLabel = formatOfferDate(offer.offerExpiry);
 
   if (compact) {
     return (
       <TouchableOpacity
-        style={[styles.compactContainer, isBooked && styles.compactBooked]}
+        style={styles.compactContainer}
         onPress={onPress}
-        activeOpacity={0.7}
+        activeOpacity={0.9}
         testID="offer-card-compact"
       >
-        <View style={styles.compactContent}>
-          <View style={styles.compactLeft}>
-            <View style={styles.compactShipRow}>
-              <Ship size={12} color={COLORS.navyDeep} />
-              <Text style={styles.compactShipName} numberOfLines={1}>
-                {offer.shipName}
-              </Text>
+        <Image source={{ uri: heroImageUri }} style={styles.compactImage} resizeMode="cover" onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)} />
+        <LinearGradient colors={['rgba(8, 19, 37, 0.1)', 'rgba(8, 19, 37, 0.88)']} style={styles.compactOverlay}>
+          <View style={styles.compactTopRow}>
+            <View style={styles.compactBadge}>
+              <Ship size={12} color="#FFFFFF" />
+              <Text style={styles.compactBadgeText}>{shipLabel}</Text>
             </View>
-            <Text style={styles.compactDestination} numberOfLines={1}>
-              {offer.destination}
-            </Text>
-            <View style={styles.compactDetails}>
-              <Text style={styles.compactDate}>
-                {createDateFromString(offer.sailDate).toLocaleDateString('en-US', {
-                  timeZone: 'UTC',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </Text>
-              <View style={styles.compactDot} />
-              <Text style={styles.compactNights}>{offer.nights} nights</Text>
-            </View>
-          </View>
-
-          <View style={styles.compactRight}>
-            {offer.price !== undefined && (
-              <Text style={styles.compactPrice}>{formatCurrency(offer.price)}</Text>
-            )}
-            {isBooked && (
+            {isBooked ? (
               <View style={styles.compactBookedBadge}>
-                <CheckCircle size={10} color={COLORS.white} />
+                <CheckCircle size={11} color="#FFFFFF" />
                 <Text style={styles.compactBookedText}>Booked</Text>
               </View>
-            )}
-            <ChevronRight size={16} color={COLORS.navyDeep} />
+            ) : null}
           </View>
-        </View>
+          <Text style={styles.compactTitle} numberOfLines={1}>{inferredOfferName}</Text>
+          <Text style={styles.compactDestination} numberOfLines={1}>{offer.destination || 'Scenic sailings available'}</Text>
+          <View style={styles.compactFooter}>
+            <Text style={styles.compactPrice}>{offer.price !== undefined ? formatCurrency(offer.price) : displayValue}</Text>
+            <ChevronRight size={16} color="#FFFFFF" />
+          </View>
+        </LinearGradient>
       </TouchableOpacity>
     );
   }
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={onPress}
-      activeOpacity={0.9}
-      testID="offer-card"
-    >
-      <LinearGradient
-        colors={MARBLE_TEXTURES.lightBlue.gradientColors}
-        locations={MARBLE_TEXTURES.lightBlue.gradientLocations}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.marbleBackground}
-      >
-      {/* OFFER NAME & CODE - BLACK BOLD AT TOP */}
-      {(offer.offerName || offer.offerCode) && (
-        <View style={styles.offerHeaderSection}>
-          <Text style={styles.offerNameHeader}>
-            {(offerNameOverride || inferredOfferName || 'Casino Offer').trim().length > 0
-              ? (offerNameOverride || inferredOfferName || 'Casino Offer')
-              : 'Casino Offer'}
-          </Text>
-          <View style={styles.offerCodeRow}>
-            {offer.offerCode && (
-              <View style={styles.offerCodeHeaderBadge}>
-                <Text style={styles.offerCodeHeaderText}>CODE: {offer.offerCode}</Text>
+    <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.94} testID="offer-card">
+      <LinearGradient colors={['#EEF1FF', '#DDEAFF', '#EEF7F8']} style={styles.shellGradient}>
+        <View style={styles.headerStrip}>
+          <View style={styles.headerCopy}>
+            <Text style={styles.headerTitle}>{inferredOfferName}</Text>
+            {offer.offerCode ? <Text style={styles.headerCode}>Code {offer.offerCode}</Text> : null}
+          </View>
+          <View style={styles.headerValueBlock}>
+            <Text style={styles.headerValueLabel}>Total Value{availableCruiseCount > 1 ? ` (${availableCruiseCount})` : ''}</Text>
+            <Text style={styles.headerValueText}>{displayValue}</Text>
+          </View>
+        </View>
+
+        {showImage ? (
+          <View style={styles.heroSection}>
+            <Image source={{ uri: heroImageUri }} style={styles.heroImage} resizeMode="cover" onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)} />
+            <LinearGradient
+              colors={['rgba(7, 20, 36, 0.08)', 'rgba(8, 24, 41, 0.42)', 'rgba(7, 18, 34, 0.92)']}
+              start={{ x: 0.1, y: 0 }}
+              end={{ x: 0.9, y: 1 }}
+              style={styles.heroOverlay}
+            />
+            <LinearGradient colors={statusBadge.colors} style={styles.statusPill}>
+              <Text style={styles.statusPillText}>{statusBadge.text}</Text>
+            </LinearGradient>
+            {isExpiringSoon ? (
+              <View style={styles.urgentPill}>
+                <Clock size={12} color="#FFFFFF" />
+                <Text style={styles.urgentPillText}>Expires in {getDaysUntil(offer.offerExpiry || '')} days</Text>
               </View>
-            )}
-            <View style={styles.totalValueHeaderCard}>
-              <Text style={styles.totalValueHeaderLabel}>
-                TOTAL VALUE{aggregateValue && aggregateValue.cruiseCount > 1 ? ` (${aggregateValue.cruiseCount})` : ''}
-              </Text>
-              <Text
-                style={styles.totalValueHeaderAmount}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
-              >
-                ${totalValue > 0
-                  ? Math.round(totalValue).toLocaleString()
-                  : Math.round(offer.retailValue || valueBreakdown?.totalRetailValue || 0).toLocaleString()}
-              </Text>
+            ) : null}
+            <GlassSurface style={styles.heroInfoPill} contentStyle={styles.heroInfoPillContent}>
+              <Sparkles size={13} color="#FFFFFF" />
+              <Text style={styles.heroInfoText}>View all {availableCruiseCount} cruises</Text>
+            </GlassSurface>
+          </View>
+        ) : null}
+
+        <View style={styles.contentSection}>
+          <View style={styles.primaryRow}>
+            <View style={styles.destinationBlock}>
+              <Text style={styles.eyebrow}>Destinations</Text>
+              {destinationLines.length > 0 ? destinationLines.map((line, index) => (
+                <Text key={`${line}-${index}`} style={styles.destinationLine} numberOfLines={1}>{line}</Text>
+              )) : (
+                <Text style={styles.destinationLine} numberOfLines={1}>Curated casino sailings</Text>
+              )}
+            </View>
+
+            <View style={styles.valueBlock}>
+              <Text style={styles.valueEyebrow}>Value</Text>
+              <Text style={styles.valueText}>{displayValue}</Text>
+              <Text style={styles.valueHint}>{availableCruiseCount} sailing{availableCruiseCount === 1 ? '' : 's'}</Text>
             </View>
           </View>
+
+          <GlassSurface style={styles.infoPanel} contentStyle={styles.infoPanelContent}>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Room Type</Text>
+              <Text style={styles.infoValue} numberOfLines={1}>{roomTypeText}</Text>
+            </View>
+            <View style={styles.infoDivider} />
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Expires</Text>
+              <Text style={[styles.infoValue, isExpiringSoon && styles.infoValueUrgent]} numberOfLines={1}>{expiryLabel}</Text>
+            </View>
+            <View style={styles.infoDivider} />
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Ship</Text>
+              <Text style={styles.infoValue} numberOfLines={1}>{shipLabel}</Text>
+            </View>
+          </GlassSurface>
+
+          <LinearGradient colors={['#0E3554', '#0A4C62', '#12706D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaButton}>
+            <TouchableOpacity style={styles.ctaButtonInner} onPress={onPress} activeOpacity={0.85} testID="offer-card-view-all-button">
+              <Text style={styles.ctaText}>View all {availableCruiseCount} cruises</Text>
+              <ChevronRight size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          </LinearGradient>
         </View>
-      )}
-
-      {showImage && (
-        <View style={styles.imageSection}>
-          <Image
-            source={{ uri: heroImageUri }}
-            style={styles.heroImage}
-            resizeMode="cover"
-            onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)}
-          />
-          
-          <View style={styles.saleBadge}>
-            <Text style={styles.saleBadgeText}>{statusBadge.text}</Text>
-          </View>
-
-          {isExpiringSoon && (
-            <View style={styles.expiresUrgentBadge}>
-              <Clock size={12} color="#DC2626" />
-              <Text style={styles.expiresUrgentText}>Expires in {getDaysUntil(offer.offerExpiry || '')} days</Text>
-            </View>
-          )}
-
-          <View style={styles.cruiseCountBadge}>
-            <Text style={styles.cruiseCountText}>
-              {aggregateValue && aggregateValue.cruiseCount > 0 
-                ? `${aggregateValue.cruiseCount} cruises available${aggregateValue.cruisesWithDetailedPricing > 0 ? ` ${aggregateValue.cruisesWithDetailedPricing} with detailed pricing` : ''}`
-                : `${offer.nights} cruises available`}
-            </Text>
-          </View>
-        </View>
-      )}
-
-      <View style={styles.contentSection}>
-        {offer.destination && (
-          <View style={styles.destinationsSection}>
-            <Text style={styles.destinationsLabel}>DESTINATIONS</Text>
-            <Text style={styles.destinationsText} numberOfLines={2}>
-              {offer.destination}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.metaRow}>
-          {offer.cabinType && (
-            <View style={styles.metaInfoBox}>
-              <Text style={styles.metaInfoLabel}>ROOM TYPE</Text>
-              <Text style={styles.metaInfoValue} numberOfLines={1}>{offer.cabinType}</Text>
-            </View>
-          )}
-          {offer.offerExpiry && (
-            <View style={styles.metaInfoBox}>
-              <Text style={styles.metaInfoLabel}>EXPIRES</Text>
-              <Text
-                style={[styles.metaInfoValue, isExpiringSoon && styles.metaInfoValueUrgent]}
-                numberOfLines={1}
-              >
-                {createDateFromString(offer.offerExpiry).toLocaleDateString('en-US', {
-                  timeZone: 'UTC',
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <TouchableOpacity style={styles.viewAllCruisesButton} onPress={onPress}>
-          <Text style={styles.viewAllCruisesText}>View All Cruises</Text>
-          <ChevronRight size={16} color={COLORS.white} />
-        </TouchableOpacity>
-      </View>
       </LinearGradient>
     </TouchableOpacity>
   );
@@ -376,448 +391,299 @@ export const OfferCard = React.memo(function OfferCard({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: 30,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
-    ...SHADOW.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    ...SHADOW.lg,
   },
-  marbleBackground: {
-    borderRadius: BORDER_RADIUS.lg,
+  shellGradient: {
+    borderRadius: 30,
+    backgroundColor: '#E9EEF7',
   },
-  offerHeaderSection: {
-    backgroundColor: COLORS.white,
+  headerStrip: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
-    paddingBottom: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingBottom: SPACING.md,
+    backgroundColor: 'rgba(238, 230, 255, 0.92)',
   },
-  offerNameHeader: {
+  headerCopy: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '800' as const,
+    color: '#171630',
+    letterSpacing: -0.5,
+  },
+  headerCode: {
+    marginTop: 4,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#62568A',
+  },
+  headerValueBlock: {
+    alignItems: 'flex-end',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+    backgroundColor: 'rgba(245, 255, 247, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(5, 150, 105, 0.18)',
+    minWidth: 120,
+  },
+  headerValueLabel: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: '#2F7558',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase' as const,
+  },
+  headerValueText: {
+    marginTop: 2,
     fontSize: 18,
     fontWeight: '800' as const,
-    color: '#000000',
-    marginBottom: 6,
-  },
-  offerCodeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: SPACING.sm,
-  },
-  offerCodeHeaderBadge: {
-    backgroundColor: COLORS.navyDeep,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 5,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  offerCodeHeaderText: {
-    fontSize: 12,
-    fontWeight: '700' as const,
-    color: COLORS.white,
-    letterSpacing: 0.5,
-  },
-  totalValueHeaderCard: {
-    backgroundColor: COLORS.moneyBg,
-    borderWidth: 1,
-    borderColor: COLORS.money,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.sm,
-    alignItems: 'flex-end',
-  },
-  totalValueHeaderLabel: {
-    fontSize: 9,
-    fontWeight: '700' as const,
     color: COLORS.moneyDark,
-    letterSpacing: 0.5,
   },
-  totalValueHeaderAmount: {
-    fontSize: 16,
-    fontWeight: '800' as const,
-    color: COLORS.money,
-  },
-  imageSection: {
-    height: 80,
+  heroSection: {
+    height: 196,
     position: 'relative',
   },
   heroImage: {
     width: '100%',
     height: '100%',
   },
-  saleBadge: {
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  statusPill: {
     position: 'absolute',
-    top: SPACING.xs,
-    left: SPACING.xs,
-    backgroundColor: COLORS.loyalty,
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 3,
-    borderRadius: BORDER_RADIUS.xs,
+    top: SPACING.md,
+    right: SPACING.md,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  saleBadgeText: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    color: COLORS.white,
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
   },
-  nightsBadge: {
+  urgentPill: {
     position: 'absolute',
-    bottom: SPACING.xs,
-    left: SPACING.xs,
-    backgroundColor: 'rgba(0, 31, 63, 0.85)',
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 2,
-    borderRadius: BORDER_RADIUS.xs,
+    top: SPACING.md,
+    left: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(220, 38, 38, 0.92)',
   },
-  nightsBadgeText: {
+  urgentPillText: {
     fontSize: 11,
     fontWeight: '700' as const,
-    color: COLORS.white,
+    color: '#FFFFFF',
+  },
+  heroInfoPill: {
+    position: 'absolute',
+    left: SPACING.md,
+    bottom: SPACING.md,
+    borderRadius: 18,
+  },
+  heroInfoPillContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  heroInfoText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
   },
   contentSection: {
-    padding: SPACING.md,
+    padding: SPACING.lg,
+    gap: SPACING.md,
+    backgroundColor: 'rgba(246,249,252,0.74)',
   },
-  actionIcons: {
+  primaryRow: {
     flexDirection: 'row',
-    gap: SPACING.xs,
-  },
-  iconButton: {
-    padding: 4,
-  },
-  expiresUrgentBadge: {
-    position: 'absolute',
-    top: SPACING.xs,
-    right: SPACING.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEF2F2',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.round,
-    borderWidth: 1,
-    borderColor: '#DC2626',
-  },
-  expiresUrgentText: {
-    fontSize: 11,
-    fontWeight: '700' as const,
-    color: '#DC2626',
-  },
-  cruiseCountBadge: {
-    position: 'absolute',
-    bottom: SPACING.xs,
-    left: SPACING.xs,
-    backgroundColor: 'rgba(0, 31, 63, 0.9)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.xs,
-  },
-  cruiseCountText: {
-    fontSize: 11,
-    fontWeight: '700' as const,
-    color: COLORS.white,
-  },
-  destinationsSection: {
-    marginBottom: SPACING.md,
-  },
-  destinationsLabel: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    color: '#6B7280',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  destinationsText: {
-    fontSize: 13,
-    fontWeight: '500' as const,
-    color: COLORS.navyDeep,
-    lineHeight: 18,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  metaInfoBox: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.sm,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  metaInfoLabel: {
-    fontSize: 9,
-    fontWeight: '700' as const,
-    color: '#6B7280',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  metaInfoValue: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: COLORS.navyDeep,
-  },
-  metaInfoValueUrgent: {
-    color: '#DC2626',
-  },
-
-  viewAllCruisesButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: COLORS.navyDeep,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: BORDER_RADIUS.sm,
-    marginTop: SPACING.sm,
-  },
-  viewAllCruisesText: {
-    fontSize: 14,
-    fontWeight: '700' as const,
-    color: COLORS.white,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginBottom: SPACING.md,
-  },
-  valueSectionLarge: {
-    backgroundColor: '#F0F9FF',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-  valueRow: {
-    flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    gap: SPACING.md,
   },
-  valueColumn: {},
-  valueLabelLarge: {
+  destinationBlock: {
+    flex: 1,
+  },
+  eyebrow: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: COLORS.navyDeep,
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    color: 'rgba(17, 33, 52, 0.54)',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase' as const,
   },
-  valueAmountRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  valueDollarLarge: {
-    fontSize: 20,
+  destinationLine: {
+    marginTop: 6,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
-    marginTop: 4,
+    color: '#12263C',
   },
-  valueAmountLarge: {
-    fontSize: 36,
-    fontWeight: '800' as const,
-    color: COLORS.navyDeep,
-  },
-  tradeInColumn: {
+  valueBlock: {
+    minWidth: 118,
     alignItems: 'flex-end',
   },
-  tradeInValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  tradeInAmountLarge: {
-    fontSize: 24,
+  valueEyebrow: {
+    fontSize: 11,
     fontWeight: '800' as const,
-    color: COLORS.navyDeep,
+    color: 'rgba(17, 33, 52, 0.54)',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase' as const,
   },
-  valueBreakdownSection: {
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  retailValueSubRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  retailValueSubLabel: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: COLORS.navyDeep,
-  },
-  retailValueSubAmount: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: COLORS.navyDeep,
-  },
-  perksSectionLarge: {
-    marginBottom: SPACING.md,
-  },
-  perksHeaderLabel: {
-    fontSize: 12,
+  valueText: {
+    marginTop: 6,
+    fontSize: 32,
     fontWeight: '800' as const,
-    color: COLORS.navyDeep,
-    letterSpacing: 0.5,
-    marginBottom: SPACING.sm,
+    color: COLORS.moneyDark,
+    letterSpacing: -1,
   },
-  perksGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
+  valueHint: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(18, 38, 60, 0.58)',
   },
-  perkItemLarge: {
+  infoPanel: {
+    borderRadius: 24,
+  },
+  infoPanelContent: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    backgroundColor: '#E0F2F1',
+    alignItems: 'stretch',
     paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    borderRadius: BORDER_RADIUS.sm,
-    minWidth: '45%',
-    borderWidth: 1,
-    borderColor: COLORS.navyDeep,
+    paddingVertical: SPACING.sm,
   },
-  perkTextContainer: {},
-  perkLabelLarge: {
-    fontSize: 12,
-    fontWeight: '600' as const,
-    color: COLORS.navyDeep,
-  },
-  perkValueLarge: {
-    fontSize: 14,
-    fontWeight: '800' as const,
-    color: COLORS.navyDeep,
-  },
-  casinoInfoRow: {
-    marginBottom: SPACING.md,
-  },
-  casinoInfoItem: {},
-  casinoInfoLabel: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    color: COLORS.navyDeep,
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  casinoInfoValue: {
-    fontSize: 12,
-    fontWeight: '500' as const,
-    color: COLORS.navyDeep,
-  },
-  actionRowLarge: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  primaryButtonLarge: {
-    flex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: COLORS.navyDeep,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  primaryButtonTextLarge: {
-    fontSize: 15,
-    fontWeight: '700' as const,
-    color: COLORS.white,
-  },
-  secondaryButtonLarge: {
+  infoItem: {
     flex: 1,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: 4,
+  },
+  infoDivider: {
+    width: 1,
+    backgroundColor: 'rgba(18, 38, 60, 0.1)',
+    marginVertical: 8,
+  },
+  infoLabel: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: 'rgba(18, 38, 60, 0.56)',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase' as const,
+  },
+  infoValue: {
+    marginTop: 4,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#12263C',
+  },
+  infoValueUrgent: {
+    color: COLORS.error,
+  },
+  ctaButton: {
+    borderRadius: BORDER_RADIUS.round,
+    overflow: 'hidden',
+  },
+  ctaButtonInner: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.white,
-    paddingVertical: SPACING.md,
+    gap: 8,
+    paddingVertical: 16,
     paddingHorizontal: SPACING.lg,
-    borderRadius: BORDER_RADIUS.sm,
-    borderWidth: 2,
-    borderColor: COLORS.navyDeep,
   },
-  secondaryButtonTextLarge: {
-    fontSize: 15,
-    fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+  ctaText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
   },
   compactContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: 24,
     overflow: 'hidden',
-    marginBottom: SPACING.sm,
-    ...SHADOW.sm,
-  },
-  compactBooked: {
+    marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: COLORS.success,
+    borderColor: 'rgba(255,255,255,0.24)',
+    ...SHADOW.md,
   },
-  compactContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  compactImage: {
+    width: '100%',
+    height: 132,
+  },
+  compactOverlay: {
+    ...StyleSheet.absoluteFillObject,
     padding: SPACING.md,
+    justifyContent: 'space-between',
   },
-  compactLeft: {
-    flex: 1,
+  compactTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
-  compactShipRow: {
+  compactBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
-  compactShipName: {
+  compactBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-  },
-  compactDestination: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  compactDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  compactDate: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#6B7280',
-  },
-  compactDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#9CA3AF',
-    marginHorizontal: SPACING.xs,
-  },
-  compactNights: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#6B7280',
-  },
-  compactRight: {
-    alignItems: 'flex-end',
-    gap: SPACING.xs,
-  },
-  compactPrice: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
   },
   compactBookedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.success,
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 2,
-    borderRadius: BORDER_RADIUS.xs,
-    gap: 2,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(5,150,105,0.88)',
   },
   compactBookedText: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: '#FFFFFF',
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  compactTitle: {
+    marginTop: 'auto',
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+  },
+  compactDestination: {
+    marginTop: 4,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255,255,255,0.84)',
+  },
+  compactFooter: {
+    marginTop: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  compactPrice: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
   },
 });
