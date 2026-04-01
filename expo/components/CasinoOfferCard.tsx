@@ -295,7 +295,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.94} testID="casino-offer-card">
-      <LinearGradient colors={['#EEF1FF', '#DDEAFF', '#EEF7F8']} style={styles.shellGradient}>
+      <LinearGradient colors={['#FFFCF6', '#F6EFD8', '#E4F8FB']} style={styles.shellGradient}>
         <View style={styles.headerStrip}>
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>{offerName}</Text>
@@ -497,12 +497,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: 'rgba(214, 184, 111, 0.22)',
     ...SHADOW.lg,
   },
   shellGradient: {
     borderRadius: 30,
-    backgroundColor: '#E9EEF7',
+    backgroundColor: '#FFF9EF',
   },
   headerStrip: {
     flexDirection: 'row',
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.md,
-    backgroundColor: 'rgba(238, 230, 255, 0.92)',
+    backgroundColor: 'rgba(255, 246, 229, 0.96)',
   },
   headerCopy: {
     flex: 1,
@@ -527,22 +527,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#62568A',
+    color: '#7B6541',
   },
   headerValueBlock: {
     alignItems: 'flex-end',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
-    backgroundColor: 'rgba(245, 255, 247, 0.94)',
+    backgroundColor: 'rgba(255, 250, 238, 0.96)',
     borderWidth: 1,
-    borderColor: 'rgba(5, 150, 105, 0.18)',
+    borderColor: 'rgba(214, 184, 111, 0.18)',
     minWidth: 126,
   },
   headerValueLabel: {
     fontSize: 10,
     fontWeight: '700' as const,
-    color: '#2F7558',
+    color: '#846A1F',
     letterSpacing: 0.8,
     textTransform: 'uppercase' as const,
   },
@@ -615,7 +615,7 @@ const styles = StyleSheet.create({
   contentSection: {
     padding: SPACING.lg,
     gap: SPACING.md,
-    backgroundColor: 'rgba(246,249,252,0.74)',
+    backgroundColor: 'rgba(255, 251, 243, 0.92)',
   },
   primaryRow: {
     flexDirection: 'row',
@@ -679,7 +679,7 @@ const styles = StyleSheet.create({
   },
   infoDivider: {
     width: 1,
-    backgroundColor: 'rgba(18, 38, 60, 0.1)',
+    backgroundColor: 'rgba(214, 184, 111, 0.18)',
     marginVertical: 8,
   },
   infoLabel: {

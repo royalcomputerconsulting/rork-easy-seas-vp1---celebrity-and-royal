@@ -169,7 +169,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       : getDisplayCrownAnchorLevel(value);
 
     return (
-      <View style={[styles.spotlightBadge, { backgroundColor: `${accentColor}16`, borderColor: `${accentColor}2E` }]}>
+      <View style={[styles.spotlightBadge, { borderColor: `${accentColor}28` }]}>
         <View
           style={[
             styles.spotlightBadgeIcon,
@@ -219,10 +219,10 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   const carnivalPlayersClubTier = currentUser?.carnivalPlayersClubTier || 'Blue';
   const carnivalPlayersClubPoints = currentUser?.carnivalPlayersClubPoints || 0;
   const scenicHeroUri = activeBrand === 'celebrity'
-    ? 'https://images.unsplash.com/photo-1493558103817-58b2924bce98?auto=format&fit=crop&w=1400&q=80'
+    ? 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?auto=format&fit=crop&w=1600&q=80'
     : activeBrand === 'silversea'
-      ? 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1400&q=80'
-      : 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80';
+      ? 'https://images.unsplash.com/photo-1512100356356-de1b84283e18?auto=format&fit=crop&w=1600&q=80'
+      : 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80';
 
   return (
     <LinearGradient
@@ -238,13 +238,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         resizeMode="cover"
       />
       <LinearGradient
-        colors={['rgba(5, 18, 32, 0.18)', 'rgba(7, 20, 38, 0.58)', 'rgba(8, 16, 30, 0.92)']}
+        colors={['rgba(255,255,255,0.02)', 'rgba(9, 42, 66, 0.18)', 'rgba(9, 42, 66, 0.36)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 0.85, y: 1 }}
         style={styles.backgroundOverlay}
       />
       <LinearGradient
-        colors={['rgba(96, 165, 250, 0.12)', 'rgba(255,255,255,0.04)', 'rgba(123, 45, 142, 0.12)']}
+        colors={['rgba(255,255,255,0.1)', 'rgba(246,214,142,0.16)', 'rgba(103, 232, 249, 0.16)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.atmosphereOverlay}
@@ -1010,7 +1010,7 @@ const styles = StyleSheet.create({
   },
   contentLayer: {
     padding: SPACING.lg,
-    backgroundColor: 'rgba(4, 16, 31, 0.08)',
+    backgroundColor: 'rgba(255, 248, 236, 0.08)',
   },
   topRow: {
     flexDirection: 'row',
@@ -1113,8 +1113,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 24,
     borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.58)',
-    borderColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: 'rgba(255, 249, 240, 0.94)',
+    borderColor: 'rgba(214, 184, 111, 0.22)',
     shadowColor: '#03111F',
     shadowOpacity: 0.12,
     shadowRadius: 16,
@@ -1149,11 +1149,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   progressCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.66)',
+    backgroundColor: 'rgba(255, 250, 242, 0.94)',
     borderRadius: 28,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: 'rgba(214, 184, 111, 0.18)',
     shadowColor: '#03111F',
     shadowOpacity: 0.12,
     shadowRadius: 18,
@@ -1189,7 +1189,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: '#102132',
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    backgroundColor: 'rgba(255, 255, 255, 0.74)',
+    backgroundColor: 'rgba(255, 244, 214, 0.96)',
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: BORDER_RADIUS.round,
@@ -1218,12 +1218,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: SPACING.xs,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    backgroundColor: 'rgba(255, 248, 236, 0.92)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(214, 184, 111, 0.16)',
   },
   pinnacleIconBadge: {
     width: 20,
@@ -1273,9 +1273,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   achievedCard: {
-    borderColor: 'rgba(0, 31, 63, 0.14)',
+    borderColor: 'rgba(214, 184, 111, 0.22)',
     borderWidth: 1.5,
-    backgroundColor: 'rgba(248, 250, 252, 0.96)',
+    backgroundColor: 'rgba(255, 248, 236, 0.96)',
   },
   achievedLabelRow: {
     flexDirection: 'row',
@@ -1284,12 +1284,12 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.64)',
+    backgroundColor: 'rgba(255, 248, 236, 0.94)',
     borderRadius: 26,
     padding: SPACING.md,
     marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.28)',
+    borderColor: 'rgba(214, 184, 111, 0.2)',
     shadowColor: '#03111F',
     shadowOpacity: 0.1,
     shadowRadius: 16,
@@ -1334,13 +1334,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    backgroundColor: 'rgba(255, 250, 242, 0.96)',
     borderRadius: BORDER_RADIUS.round,
     paddingVertical: 12,
     paddingHorizontal: SPACING.sm,
     gap: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.24)',
+    borderColor: 'rgba(214, 184, 111, 0.18)',
     shadowColor: '#03111F',
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1364,10 +1364,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(255, 255, 255, 0.62)',
+    backgroundColor: 'rgba(255, 248, 236, 0.94)',
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
+    borderColor: 'rgba(214, 184, 111, 0.18)',
   },
   crewCountText: {
     fontSize: 11,
