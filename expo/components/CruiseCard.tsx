@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { GlassSurface } from '@/components/premium/GlassSurface';
 
 import { createDateFromString } from '@/lib/date';
-import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 
@@ -35,10 +36,10 @@ function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'acti
   return 'upcoming';
 }
 
-export const CruiseCard = React.memo(function CruiseCard({ 
-  cruise, 
-  onPress, 
-  showPricePerNight = true, 
+export const CruiseCard = React.memo(function CruiseCard({
+  cruise,
+  onPress,
+  showPricePerNight: _showPricePerNight = true,
   compact = false,
   mini = false,
   variant = 'default',
@@ -81,7 +82,6 @@ export const CruiseCard = React.memo(function CruiseCard({
   const retailValue = useMemo(() => {
     if (!showRetailValue) return null;
     
-    const cabinType = cruise.cabinType || 'Balcony';
     const guestCount = cruise.guests || 2;
     let cabinValueForTwo = 0;
     
@@ -185,210 +185,244 @@ export const CruiseCard = React.memo(function CruiseCard({
   if (mini) {
     const miniPorts = bookedCruise.itinerary?.map((day: ItineraryDay) => day.port).filter(Boolean) || bookedCruise.ports || [];
     const guestCount = bookedCruise.guestNames?.length || bookedCruise.guests || 2;
-    
+
     return (
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <TouchableOpacity 
-        style={styles.miniContainer}
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        activeOpacity={1}
-        testID="cruise-card-mini"
-      >
-        <Image 
-          source={{ uri: compactImageUri }} 
-          style={styles.miniImage}
-          resizeMode="cover"
-          onError={() => {
-            console.log('Mini image load error, using default');
-            setCompactImageUri(DEFAULT_CRUISE_IMAGE);
-          }}
-        />
-        <View style={styles.miniContent}>
-          <View style={styles.miniTopRow}>
-            <View style={styles.miniShipRow}>
-              <Ship size={13} color={COLORS.navyDeep} />
-              <Text style={styles.miniShipName} numberOfLines={1}>{cruise.shipName}</Text>
-            </View>
-            <View style={[styles.miniStatusBadge, { backgroundColor: statusBadge.bg }]}>
-              <Text style={[
-                styles.miniStatusBadgeText,
-                statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
-                  ? { color: COLORS.navyDeep } 
-                  : { color: COLORS.white }
-              ]}>
-                {statusBadge.text}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.miniItinerary} numberOfLines={1}>{getItineraryName()}</Text>
-          <Text style={styles.miniDestination} numberOfLines={1}>
-            {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
-          </Text>
-          {miniPorts.length > 0 && (
-            <Text style={styles.miniPorts}>
-              {miniPorts.join(' • ')}
-            </Text>
-          )}
-          <View style={styles.miniBottomRow}>
-            <View style={styles.miniMetaRow}>
-              <View style={styles.miniMeta}>
-                <Calendar size={13} color={COLORS.navyDeep} />
-                <Text style={styles.miniDate}>
-                  {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
-                </Text>
+        <TouchableOpacity
+          style={styles.miniPressable}
+          onPress={onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          activeOpacity={1}
+          testID="cruise-card-mini"
+        >
+          <GlassSurface style={styles.miniContainer} contentStyle={styles.miniSurfaceContent}>
+            <Image
+              source={{ uri: heroImageUri }}
+              style={styles.miniBackgroundImage}
+              resizeMode="cover"
+              onError={() => {
+                console.log('Mini background image load error, using default');
+                setHeroImageUri(DEFAULT_CRUISE_IMAGE);
+              }}
+            />
+            <LinearGradient
+              colors={['rgba(255,255,255,0.24)', 'rgba(248,251,255,0.84)', 'rgba(248,251,255,0.96)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.miniBackgroundOverlay}
+            />
+            <View style={styles.miniContentRow}>
+              <View style={styles.miniImageShell}>
+                <Image
+                  source={{ uri: compactImageUri }}
+                  style={styles.miniImage}
+                  resizeMode="cover"
+                  onError={() => {
+                    console.log('Mini image load error, using default');
+                    setCompactImageUri(DEFAULT_CRUISE_IMAGE);
+                  }}
+                />
+                <LinearGradient
+                  colors={['rgba(3,17,31,0.04)', 'rgba(3,17,31,0.26)']}
+                  start={{ x: 0.1, y: 0 }}
+                  end={{ x: 0.9, y: 1 }}
+                  style={styles.miniImageOverlay}
+                />
               </View>
-              <View style={styles.miniMeta}>
-                <Users size={13} color={COLORS.navyDeep} />
-                <Text style={styles.miniDate}>{guestCount}G</Text>
-              </View>
-            </View>
-            <Text style={styles.miniNights}>{cruise.nights}N</Text>
-          </View>
-          <View style={styles.miniValueRow}>
-            {showRetailValue && retailValue !== null && retailValue > 0 && (
-              <Text style={styles.miniRetailValue}>${Math.round(retailValue).toLocaleString()}</Text>
-            )}
-            {!!bookedCruise.cabinType && (
-              <View style={styles.miniCabinRow}>
-                <Text style={styles.miniCabin}>{bookedCruise.cabinType}</Text>
-                {cruise.nights != null && cruise.nights > 0 && (
-                  <Text style={styles.miniExpectedPoints}>• {cruise.nights * 2} pts</Text>
-                )}
-              </View>
-            )}
-            {!!(bookedCruise.offerCode || cruise.offerCode) && (
-              <View style={styles.miniOfferBadge}>
-                <Sparkles size={10} color={COLORS.goldDark} />
-                <Text style={styles.miniOfferCode}>{bookedCruise.offerCode || cruise.offerCode}</Text>
-              </View>
-            )}
-          </View>
-          {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
-            (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
-             bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined || 
-             bookedCruise.usedNextCruiseCertificate) && (
-              <View style={styles.miniFpObcRow}>
-                {(bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined) && (
-                  <View style={styles.miniFpBadge}>
-                    <Text style={styles.miniFpLabel}>FreePlay:</Text>
-                    <Text style={styles.miniFpValue}>${(bookedCruise.freePlay ?? cruise.freePlay ?? 0).toLocaleString()}</Text>
+              <View style={styles.miniContent}>
+                <View style={styles.miniTopRow}>
+                  <View style={styles.miniShipRow}>
+                    <Ship size={13} color="#0F2742" />
+                    <Text style={styles.miniShipName} numberOfLines={1}>{cruise.shipName}</Text>
                   </View>
-                )}
-                {(bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined) && (
-                  <View style={styles.miniObcBadge}>
-                    <Text style={styles.miniObcLabel}>OBC:</Text>
-                    <Text style={styles.miniObcValue}>${(bookedCruise.freeOBC ?? cruise.freeOBC ?? 0).toLocaleString()}</Text>
-                  </View>
-                )}
-                {bookedCruise.usedNextCruiseCertificate && (
-                  <View style={styles.miniNccBadge}>
-                    <Ticket size={11} color="#7C3AED" />
-                    <Text style={styles.miniNccLabel}>NCC</Text>
-                  </View>
-                )}
-              </View>
-            )
-          )}
-          {!!((cruise.interiorPrice && cruise.interiorPrice > 0) || (cruise.oceanviewPrice && cruise.oceanviewPrice > 0) || (cruise.balconyPrice && cruise.balconyPrice > 0) || (cruise.suitePrice && cruise.suitePrice > 0)) && (
-            <View style={styles.miniPricingRow}>
-              {cruise.interiorPrice != null && cruise.interiorPrice > 0 && (
-                <View style={styles.miniPricingItem}>
-                  <Text style={styles.miniPricingLabel}>Int:</Text>
-                  <Text style={styles.miniPricingValue}>${Math.round(cruise.interiorPrice).toLocaleString()}</Text>
-                </View>
-              )}
-              {cruise.oceanviewPrice != null && cruise.oceanviewPrice > 0 && (
-                <View style={styles.miniPricingItem}>
-                  <Text style={styles.miniPricingLabel}>OV:</Text>
-                  <Text style={styles.miniPricingValue}>${Math.round(cruise.oceanviewPrice).toLocaleString()}</Text>
-                </View>
-              )}
-              {cruise.balconyPrice != null && cruise.balconyPrice > 0 && (
-                <View style={styles.miniPricingItem}>
-                  <Text style={styles.miniPricingLabel}>Bal:</Text>
-                  <Text style={styles.miniPricingValue}>${Math.round(cruise.balconyPrice).toLocaleString()}</Text>
-                </View>
-              )}
-              {cruise.suitePrice != null && cruise.suitePrice > 0 && (
-                <View style={styles.miniPricingItem}>
-                  <Text style={styles.miniPricingLabel}>Suite:</Text>
-                  <Text style={styles.miniPricingValue}>${Math.round(cruise.suitePrice).toLocaleString()}</Text>
-                </View>
-              )}
-            </View>
-          )}
-          {((bookedCruise.taxes ?? cruise.taxes ?? 0) > 0) && (
-            <View style={styles.miniTaxesRow}>
-              <Text style={styles.miniTaxesLabel}>Port Taxes & Fees:</Text>
-              <Text style={styles.miniTaxesValue}>${Math.round(bookedCruise.taxes ?? cruise.taxes ?? 0).toLocaleString()}</Text>
-            </View>
-          )}
-          {/* Booking Enrichment Data from Sync */}
-          {isBooked && !!(bookedCruise.musterStation || bookedCruise.bookingStatus || bookedCruise.packageCode || bookedCruise.stateroomNumber || bookedCruise.stateroomCategoryCode) && (
-            <View style={styles.miniEnrichmentSection}>
-              {!!bookedCruise.bookingStatus && (
-                <View style={styles.miniEnrichmentRow}>
-                  <Text style={styles.miniEnrichmentLabel}>Status:</Text>
-                  <View style={[
-                    styles.miniEnrichmentBadge,
-                    { backgroundColor: bookedCruise.bookingStatus === 'BK' ? '#DCFCE7' : bookedCruise.bookingStatus === 'OF' ? '#FEF3C7' : '#E0E7FF' }
-                  ]}>
-                    <Text style={[
-                      styles.miniEnrichmentBadgeText,
-                      { color: bookedCruise.bookingStatus === 'BK' ? '#15803D' : bookedCruise.bookingStatus === 'OF' ? '#92400E' : '#4338CA' }
-                    ]}>
-                      {bookedCruise.bookingStatus === 'BK' ? 'Confirmed' : bookedCruise.bookingStatus === 'OF' ? 'Offer/Hold' : bookedCruise.bookingStatus}
+                  <View style={[styles.miniStatusBadge, { backgroundColor: statusBadge.bg }]}>
+                    <Text
+                      style={[
+                        styles.miniStatusBadgeText,
+                        statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent
+                          ? { color: COLORS.navyDeep }
+                          : { color: COLORS.white },
+                      ]}
+                    >
+                      {statusBadge.text}
                     </Text>
                   </View>
                 </View>
-              )}
-              {!!bookedCruise.stateroomNumber && bookedCruise.stateroomNumber !== 'GTY' && (
-                <View style={styles.miniEnrichmentRow}>
-                  <Text style={styles.miniEnrichmentLabel}>Cabin #:</Text>
-                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.stateroomNumber}</Text>
-                </View>
-              )}
-              {!!bookedCruise.stateroomCategoryCode && (
-                <View style={styles.miniEnrichmentRow}>
-                  <Text style={styles.miniEnrichmentLabel}>Category:</Text>
-                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.stateroomCategoryCode}</Text>
-                </View>
-              )}
-              {!!bookedCruise.stateroomType && (
-                <View style={styles.miniEnrichmentRow}>
-                  <Text style={styles.miniEnrichmentLabel}>Type:</Text>
-                  <Text style={styles.miniEnrichmentValue}>
-                    {bookedCruise.stateroomType === 'B' ? 'Balcony' : bookedCruise.stateroomType === 'O' ? 'Ocean View' : bookedCruise.stateroomType === 'I' ? 'Interior' : bookedCruise.stateroomType === 'S' ? 'Suite' : bookedCruise.stateroomType}
+                <Text style={styles.miniItinerary} numberOfLines={1}>{getItineraryName()}</Text>
+                <Text style={styles.miniDestination} numberOfLines={1}>
+                  {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
+                </Text>
+                {miniPorts.length > 0 && (
+                  <Text style={styles.miniPorts} numberOfLines={2}>
+                    {miniPorts.join(' • ')}
                   </Text>
+                )}
+                <View style={styles.miniBottomRow}>
+                  <View style={styles.miniMetaRow}>
+                    <View style={styles.miniMeta}>
+                      <Calendar size={13} color="#17324F" />
+                      <Text style={styles.miniDate}>
+                        {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
+                      </Text>
+                    </View>
+                    <View style={styles.miniMeta}>
+                      <Users size={13} color="#17324F" />
+                      <Text style={styles.miniDate}>{guestCount}G</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.miniNights}>{cruise.nights}N</Text>
                 </View>
-              )}
-              {!!bookedCruise.musterStation && (
-                <View style={styles.miniEnrichmentRow}>
-                  <Text style={styles.miniEnrichmentLabel}>Muster:</Text>
-                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.musterStation}</Text>
+                <View style={styles.miniValueRow}>
+                  {showRetailValue && retailValue !== null && retailValue > 0 && (
+                    <Text style={styles.miniRetailValue}>${Math.round(retailValue).toLocaleString()}</Text>
+                  )}
+                  {!!bookedCruise.cabinType && (
+                    <View style={styles.miniCabinRow}>
+                      <Text style={styles.miniCabin}>{bookedCruise.cabinType}</Text>
+                      {cruise.nights != null && cruise.nights > 0 && (
+                        <Text style={styles.miniExpectedPoints}>• {cruise.nights * 2} pts</Text>
+                      )}
+                    </View>
+                  )}
+                  {!!(bookedCruise.offerCode || cruise.offerCode) && (
+                    <View style={styles.miniOfferBadge}>
+                      <Sparkles size={10} color={COLORS.goldDark} />
+                      <Text style={styles.miniOfferCode}>{bookedCruise.offerCode || cruise.offerCode}</Text>
+                    </View>
+                  )}
                 </View>
-              )}
-              {!!bookedCruise.packageCode && (
-                <View style={styles.miniEnrichmentRow}>
-                  <Text style={styles.miniEnrichmentLabel}>Offer Code:</Text>
-                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.packageCode}</Text>
-                </View>
-              )}
-              {!!bookedCruise.passengerStatus && (
-                <View style={styles.miniEnrichmentRow}>
-                  <Text style={styles.miniEnrichmentLabel}>Pax Status:</Text>
-                  <Text style={styles.miniEnrichmentValue}>
-                    {bookedCruise.passengerStatus === 'AC' ? 'Active' : bookedCruise.passengerStatus}
-                  </Text>
-                </View>
-              )}
+                {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
+                  (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined ||
+                    bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined ||
+                    bookedCruise.usedNextCruiseCertificate) && (
+                    <View style={styles.miniFpObcRow}>
+                      {(bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined) && (
+                        <View style={styles.miniFpBadge}>
+                          <Text style={styles.miniFpLabel}>FreePlay:</Text>
+                          <Text style={styles.miniFpValue}>${(bookedCruise.freePlay ?? cruise.freePlay ?? 0).toLocaleString()}</Text>
+                        </View>
+                      )}
+                      {(bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined) && (
+                        <View style={styles.miniObcBadge}>
+                          <Text style={styles.miniObcLabel}>OBC:</Text>
+                          <Text style={styles.miniObcValue}>${(bookedCruise.freeOBC ?? cruise.freeOBC ?? 0).toLocaleString()}</Text>
+                        </View>
+                      )}
+                      {bookedCruise.usedNextCruiseCertificate && (
+                        <View style={styles.miniNccBadge}>
+                          <Ticket size={11} color="#7C3AED" />
+                          <Text style={styles.miniNccLabel}>NCC</Text>
+                        </View>
+                      )}
+                    </View>
+                  )
+                )}
+                {!!((cruise.interiorPrice && cruise.interiorPrice > 0) || (cruise.oceanviewPrice && cruise.oceanviewPrice > 0) || (cruise.balconyPrice && cruise.balconyPrice > 0) || (cruise.suitePrice && cruise.suitePrice > 0)) && (
+                  <View style={styles.miniPricingRow}>
+                    {cruise.interiorPrice != null && cruise.interiorPrice > 0 && (
+                      <View style={styles.miniPricingItem}>
+                        <Text style={styles.miniPricingLabel}>Int:</Text>
+                        <Text style={styles.miniPricingValue}>${Math.round(cruise.interiorPrice).toLocaleString()}</Text>
+                      </View>
+                    )}
+                    {cruise.oceanviewPrice != null && cruise.oceanviewPrice > 0 && (
+                      <View style={styles.miniPricingItem}>
+                        <Text style={styles.miniPricingLabel}>OV:</Text>
+                        <Text style={styles.miniPricingValue}>${Math.round(cruise.oceanviewPrice).toLocaleString()}</Text>
+                      </View>
+                    )}
+                    {cruise.balconyPrice != null && cruise.balconyPrice > 0 && (
+                      <View style={styles.miniPricingItem}>
+                        <Text style={styles.miniPricingLabel}>Bal:</Text>
+                        <Text style={styles.miniPricingValue}>${Math.round(cruise.balconyPrice).toLocaleString()}</Text>
+                      </View>
+                    )}
+                    {cruise.suitePrice != null && cruise.suitePrice > 0 && (
+                      <View style={styles.miniPricingItem}>
+                        <Text style={styles.miniPricingLabel}>Suite:</Text>
+                        <Text style={styles.miniPricingValue}>${Math.round(cruise.suitePrice).toLocaleString()}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+                {((bookedCruise.taxes ?? cruise.taxes ?? 0) > 0) && (
+                  <View style={styles.miniTaxesRow}>
+                    <Text style={styles.miniTaxesLabel}>Port Taxes & Fees:</Text>
+                    <Text style={styles.miniTaxesValue}>${Math.round(bookedCruise.taxes ?? cruise.taxes ?? 0).toLocaleString()}</Text>
+                  </View>
+                )}
+                {isBooked && !!(bookedCruise.musterStation || bookedCruise.bookingStatus || bookedCruise.packageCode || bookedCruise.stateroomNumber || bookedCruise.stateroomCategoryCode) && (
+                  <View style={styles.miniEnrichmentSection}>
+                    {!!bookedCruise.bookingStatus && (
+                      <View style={styles.miniEnrichmentRow}>
+                        <Text style={styles.miniEnrichmentLabel}>Status:</Text>
+                        <View
+                          style={[
+                            styles.miniEnrichmentBadge,
+                            { backgroundColor: bookedCruise.bookingStatus === 'BK' ? '#DCFCE7' : bookedCruise.bookingStatus === 'OF' ? '#FEF3C7' : '#E0E7FF' },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.miniEnrichmentBadgeText,
+                              { color: bookedCruise.bookingStatus === 'BK' ? '#15803D' : bookedCruise.bookingStatus === 'OF' ? '#92400E' : '#4338CA' },
+                            ]}
+                          >
+                            {bookedCruise.bookingStatus === 'BK' ? 'Confirmed' : bookedCruise.bookingStatus === 'OF' ? 'Offer/Hold' : bookedCruise.bookingStatus}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    {!!bookedCruise.stateroomNumber && bookedCruise.stateroomNumber !== 'GTY' && (
+                      <View style={styles.miniEnrichmentRow}>
+                        <Text style={styles.miniEnrichmentLabel}>Cabin #:</Text>
+                        <Text style={styles.miniEnrichmentValue}>{bookedCruise.stateroomNumber}</Text>
+                      </View>
+                    )}
+                    {!!bookedCruise.stateroomCategoryCode && (
+                      <View style={styles.miniEnrichmentRow}>
+                        <Text style={styles.miniEnrichmentLabel}>Category:</Text>
+                        <Text style={styles.miniEnrichmentValue}>{bookedCruise.stateroomCategoryCode}</Text>
+                      </View>
+                    )}
+                    {!!bookedCruise.stateroomType && (
+                      <View style={styles.miniEnrichmentRow}>
+                        <Text style={styles.miniEnrichmentLabel}>Type:</Text>
+                        <Text style={styles.miniEnrichmentValue}>
+                          {bookedCruise.stateroomType === 'B' ? 'Balcony' : bookedCruise.stateroomType === 'O' ? 'Ocean View' : bookedCruise.stateroomType === 'I' ? 'Interior' : bookedCruise.stateroomType === 'S' ? 'Suite' : bookedCruise.stateroomType}
+                        </Text>
+                      </View>
+                    )}
+                    {!!bookedCruise.musterStation && (
+                      <View style={styles.miniEnrichmentRow}>
+                        <Text style={styles.miniEnrichmentLabel}>Muster:</Text>
+                        <Text style={styles.miniEnrichmentValue}>{bookedCruise.musterStation}</Text>
+                      </View>
+                    )}
+                    {!!bookedCruise.packageCode && (
+                      <View style={styles.miniEnrichmentRow}>
+                        <Text style={styles.miniEnrichmentLabel}>Offer Code:</Text>
+                        <Text style={styles.miniEnrichmentValue}>{bookedCruise.packageCode}</Text>
+                      </View>
+                    )}
+                    {!!bookedCruise.passengerStatus && (
+                      <View style={styles.miniEnrichmentRow}>
+                        <Text style={styles.miniEnrichmentLabel}>Pax Status:</Text>
+                        <Text style={styles.miniEnrichmentValue}>
+                          {bookedCruise.passengerStatus === 'AC' ? 'Active' : bookedCruise.passengerStatus}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+              <View style={styles.miniChevronWrap}>
+                <ChevronRight size={20} color="#17324F" style={styles.miniChevron} />
+              </View>
             </View>
-          )}
-        </View>
-        <ChevronRight size={20} color={COLORS.navyDeep} style={styles.miniChevron} />
-      </TouchableOpacity>
+          </GlassSurface>
+        </TouchableOpacity>
       </Animated.View>
     );
   }
@@ -614,32 +648,55 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
     ...SHADOW.md,
   },
-  miniContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
-    overflow: 'hidden',
+  miniPressable: {
     marginBottom: SPACING.sm,
+  },
+  miniContainer: {
+    borderRadius: 22,
+    minHeight: 134,
+  },
+  miniSurfaceContent: {
+    position: 'relative',
+  },
+  miniBackgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  miniBackgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  miniContentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: SPACING.sm,
-    ...SHADOW.sm,
+    padding: SPACING.sm,
+    paddingRight: SPACING.xs,
+    gap: 10,
+  },
+  miniImageShell: {
+    width: 96,
+    height: 114,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.48)',
+    backgroundColor: 'rgba(255,255,255,0.28)',
   },
   miniImage: {
-    width: 91,
-    height: 110,
-    borderRadius: BORDER_RADIUS.sm,
-    margin: SPACING.sm,
+    width: '100%',
+    height: '100%',
+  },
+  miniImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   miniContent: {
     flex: 1,
-    paddingVertical: SPACING.sm,
-    paddingRight: SPACING.sm,
+    paddingVertical: 2,
+    paddingRight: SPACING.xs,
   },
   miniTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   miniShipRow: {
     flexDirection: 'row',
@@ -650,20 +707,22 @@ const styles = StyleSheet.create({
   miniShipName: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: '#0F2742',
     flex: 1,
     marginRight: 4,
   },
   miniItinerary: {
     fontSize: 15,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: '#05101F',
     marginBottom: 2,
   },
   miniStatusBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
   },
   miniStatusBadgeText: {
     fontSize: 10,
@@ -672,24 +731,26 @@ const styles = StyleSheet.create({
   },
   miniDestination: {
     fontSize: 13,
-    color: COLORS.navyDeep,
+    color: '#1F3A56',
     marginBottom: 2,
   },
   miniPorts: {
     fontSize: 11,
-    color: '#4B5563',
-    marginBottom: 3,
+    color: '#546477',
+    marginBottom: 4,
+    lineHeight: 15,
   },
   miniBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   miniMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flexWrap: 'wrap',
   },
   miniMeta: {
     flexDirection: 'row',
@@ -698,16 +759,18 @@ const styles = StyleSheet.create({
   },
   miniDate: {
     fontSize: 12,
-    color: COLORS.navyDeep,
+    color: '#17324F',
   },
   miniNights: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    backgroundColor: '#E0F2F1',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    color: '#102A46',
+    backgroundColor: 'rgba(255,255,255,0.68)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.62)',
   },
   miniValueRow: {
     flexDirection: 'row',
@@ -718,106 +781,120 @@ const styles = StyleSheet.create({
   miniRetailValue: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: '#081423',
   },
   miniCabinRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#E0F2F1',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.58)',
   },
   miniCabin: {
     fontSize: 10,
-    color: COLORS.navyDeep,
+    color: '#14314D',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   miniExpectedPoints: {
     fontSize: 10,
-    color: '#059669',
+    color: '#047857',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniOfferBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#FFFBEB',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 3,
+    backgroundColor: 'rgba(255,250,235,0.86)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.48)',
   },
   miniOfferCode: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#92400E',
   },
+  miniChevronWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    paddingHorizontal: 4,
+  },
   miniChevron: {
-    marginLeft: 2,
+    marginLeft: 0,
   },
   miniPricingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 4,
-    paddingTop: 4,
+    marginTop: 6,
+    paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: 'rgba(15,39,66,0.12)',
   },
   miniPricingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: 'rgba(255,255,255,0.68)',
     paddingHorizontal: 6,
     paddingVertical: 3,
-    borderRadius: 4,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: 'rgba(255,255,255,0.58)',
   },
   miniPricingLabel: {
     fontSize: 10,
-    color: '#0369A1',
+    color: '#0F4C81',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniPricingValue: {
     fontSize: 10,
-    color: COLORS.navyDeep,
+    color: '#16314D',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniTaxesRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
+    marginTop: 5,
+    flexWrap: 'wrap',
   },
   miniTaxesLabel: {
     fontSize: 10,
-    color: '#6B7280',
+    color: '#5A6B7E',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   miniTaxesValue: {
     fontSize: 10,
-    color: COLORS.navyDeep,
+    color: '#16314D',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniFpObcRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 4,
+    marginTop: 5,
     marginBottom: 2,
+    flexWrap: 'wrap',
   },
   miniFpBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: 'rgba(220,252,231,0.86)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.48)',
   },
   miniFpLabel: {
     fontSize: 10,
@@ -833,10 +910,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: 'rgba(219,234,254,0.86)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.48)',
   },
   miniObcLabel: {
     fontSize: 10,
@@ -852,10 +931,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#F3E8FF',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: 'rgba(243,232,255,0.88)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.48)',
   },
   miniNccLabel: {
     fontSize: 10,
@@ -871,7 +952,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: 'rgba(15,39,66,0.12)',
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
@@ -883,18 +964,18 @@ const styles = StyleSheet.create({
   },
   miniEnrichmentLabel: {
     fontSize: 9,
-    color: '#6B7280',
+    color: '#5A6B7E',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   miniEnrichmentValue: {
     fontSize: 9,
-    color: COLORS.navyDeep,
+    color: '#16314D',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   miniEnrichmentBadge: {
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 999,
   },
   miniEnrichmentBadgeText: {
     fontSize: 9,
