@@ -1,3 +1,5 @@
+import { getEarthRoosterLuck2026Digit } from '@/constants/earthRoosterLuck2026';
+
 export function createDateFromString(dateString: string): Date {
   if (!dateString) {
     console.warn('[date] Empty date string provided');
@@ -544,6 +546,15 @@ export function getDailyLuckScoreForDate(
   }
 
   const normalizedDate = normalizeLuckDate(selectedDate);
+  const earthRoosterDigit = getEarthRoosterLuck2026Digit(normalizedDate);
+  if (earthRoosterDigit !== null) {
+    console.log('[date] Using Earth Rooster 2026 luck calendar override:', {
+      date: getLuckDateKey(normalizedDate),
+      luckNumber: earthRoosterDigit,
+    });
+    return Math.round((earthRoosterDigit / 9) * 100);
+  }
+
   const yearlyScores = getYearlyLuckScoreMap(birthdate, normalizedDate.getFullYear());
   return yearlyScores.get(getLuckDateKey(normalizedDate)) ?? null;
 }
@@ -552,7 +563,17 @@ export function getDailyLuckDigitForDate(
   birthdateInput: string | Date | null | undefined,
   selectedDate: Date,
 ): number | null {
-  const overallScore = getDailyLuckScoreForDate(birthdateInput, selectedDate);
+  if (Number.isNaN(selectedDate.getTime())) {
+    return null;
+  }
+
+  const normalizedDate = normalizeLuckDate(selectedDate);
+  const earthRoosterDigit = getEarthRoosterLuck2026Digit(normalizedDate);
+  if (earthRoosterDigit !== null) {
+    return earthRoosterDigit;
+  }
+
+  const overallScore = getDailyLuckScoreForDate(birthdateInput, normalizedDate);
   if (overallScore === null) {
     return null;
   }

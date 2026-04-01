@@ -3,6 +3,7 @@ import {
   getDailyLuckDigitForDate,
   parseBirthdate,
 } from '@/lib/date';
+import { getEarthRoosterLuck2026Entry } from '@/constants/earthRoosterLuck2026';
 import { deriveChineseSignFromBirthDate, deriveWesternSignFromBirthDate } from '@/lib/dailyLuck/signs';
 import { trpcClient } from '@/lib/trpc';
 import type { DailyLuckAnalysisResponse, DailyLuckEntry, DailyLuckReadings, DailyLuckScoreBreakdown } from '@/types/daily-luck';
@@ -62,7 +63,8 @@ export function buildLocalDailyLuckEntry(
   const dateKey = getDailyLuckDateKey(normalizedDate);
   const westernSign = deriveWesternSignFromBirthDate(birthdate) ?? 'aries';
   const chineseSign = deriveChineseSignFromBirthDate(birthdate) ?? 'rooster';
-  const luckNumber = clampScore(getDailyLuckDigitForDate(birthdate, normalizedDate) ?? 5);
+  const earthRoosterEntry = getEarthRoosterLuck2026Entry(normalizedDate);
+  const luckNumber = clampScore(earthRoosterEntry?.luckNumber ?? getDailyLuckDigitForDate(birthdate, normalizedDate) ?? 5);
   const scoreBreakdown = buildFallbackScoreBreakdown(luckNumber);
 
   console.log('[DailyLuck] Built fallback daily luck entry:', {
@@ -80,11 +82,17 @@ export function buildLocalDailyLuckEntry(
     source: 'fallback',
     westernSign,
     chineseSign,
-    tarotCard: 'Local fallback',
+    tarotCard: earthRoosterEntry ? 'Earth Rooster 2026' : 'Local fallback',
     luckNumber,
     luckScore: Math.round((luckNumber / 9) * 100),
     scoreBreakdown,
-    readings: buildFallbackReadings(westernSign, chineseSign, luckNumber),
+    readings: earthRoosterEntry
+      ? {
+          ...buildFallbackReadings(westernSign, chineseSign, luckNumber),
+          tarot: earthRoosterEntry.description,
+          synthesis: `Lucky Day # ${luckNumber}: ${earthRoosterEntry.color.charAt(0).toUpperCase()}${earthRoosterEntry.color.slice(1)} ${earthRoosterEntry.tone} Earth Rooster day.`,
+        }
+      : buildFallbackReadings(westernSign, chineseSign, luckNumber),
   };
 }
 

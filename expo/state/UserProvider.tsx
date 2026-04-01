@@ -4,6 +4,7 @@ import createContextHook from "@nkzw/create-context-hook";
 import { useAuth } from "./AuthProvider";
 import { normalizeBirthdateInput } from "@/lib/date";
 import { generateDailyLuckEntriesForYear, getDailyLuckDateKey, hasTransparentDailyLuckEntry } from "@/lib/dailyLuck";
+import { getEarthRoosterLuck2026Entry } from "@/constants/earthRoosterLuck2026";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import type { DailyLuckEntry } from "@/types/daily-luck";
 
@@ -642,11 +643,32 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     }
 
     const entry = currentUser.dailyLuckByDate?.[getDailyLuckDateKey(date)] ?? null;
-    if (!hasTransparentDailyLuckEntry(entry)) {
+    if (!entry || !hasTransparentDailyLuckEntry(entry)) {
       return null;
     }
 
-    return entry;
+    const earthRoosterEntry = getEarthRoosterLuck2026Entry(date);
+    if (!earthRoosterEntry) {
+      return entry;
+    }
+
+    console.log('[UserProvider] Applying Earth Rooster 2026 luck override to stored entry:', {
+      dateKey: earthRoosterEntry.dateKey,
+      storedLuckNumber: entry.luckNumber,
+      overrideLuckNumber: earthRoosterEntry.luckNumber,
+    });
+
+    return {
+      ...entry,
+      tarotCard: 'Earth Rooster 2026',
+      luckNumber: earthRoosterEntry.luckNumber,
+      luckScore: Math.round((earthRoosterEntry.luckNumber / 9) * 100),
+      readings: {
+        ...entry.readings,
+        tarot: earthRoosterEntry.description,
+        synthesis: `Lucky Day # ${earthRoosterEntry.luckNumber}: ${earthRoosterEntry.color.charAt(0).toUpperCase()}${earthRoosterEntry.color.slice(1)} ${earthRoosterEntry.tone} Earth Rooster day.`,
+      },
+    };
   }, [currentUser]);
 
   useEffect(() => {
