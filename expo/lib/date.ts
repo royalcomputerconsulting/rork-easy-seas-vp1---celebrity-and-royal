@@ -207,10 +207,10 @@ function buildBirthdate(year: number, month: number, day: number): Date | null {
 }
 
 export function formatBirthdateForStorage(date: Date): string {
-  const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const year = String(date.getFullYear());
+  return `${month}/${day}/${year}`;
 }
 
 export function formatBirthdateForDisplay(input: string | Date | null | undefined): string {
@@ -283,7 +283,7 @@ export function parseBirthdate(input: string | Date | null | undefined): Date | 
         ? (yearSuffix > currentYearSuffix ? 1900 + yearSuffix : 2000 + yearSuffix)
         : yearSuffix;
 
-      return buildBirthdate(Number(partOne), Number(partTwo), year);
+      return buildBirthdate(year, Number(partOne), Number(partTwo));
     }
   }
 

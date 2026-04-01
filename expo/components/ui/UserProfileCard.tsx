@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { Save, CheckCircle, AlertCircle, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -10,7 +10,7 @@ import { getCelebrityBlueChipTierByLevel, CELEBRITY_BLUE_CHIP_TIERS } from '@/co
 import { BrandToggle, BrandType } from './BrandToggle';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { maskSensitiveMemberNumber } from '@/lib/privacy';
-import { formatBirthdateForDisplay } from '@/lib/date';
+import { formatBirthdateForDisplay, normalizeBirthdateInput } from '@/lib/date';
 
 interface UserProfileData {
   name: string;
@@ -106,6 +106,27 @@ export function UserProfileCard({
     resolveVisibleBrand(currentValues.preferredBrand as BrandType | undefined)
   );
   const [isModalVisible, setIsModalVisible] = useState(false);
+
+  const handleBirthdateChange = useCallback((text: string) => {
+    setFormData((prev) => ({ ...prev, birthdate: text }));
+  }, []);
+
+  const handleBirthdateBlur = useCallback(() => {
+    setFormData((prev) => {
+      const normalizedBirthdate = normalizeBirthdateInput(prev.birthdate);
+      const fallbackBirthdate = typeof prev.birthdate === 'string' ? prev.birthdate.trim() : '';
+      const resolvedBirthdate = normalizedBirthdate ?? fallbackBirthdate;
+
+      if (resolvedBirthdate === (prev.birthdate ?? '')) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        birthdate: resolvedBirthdate,
+      };
+    });
+  }, []);
 
   useEffect(() => {
     setFormData({
@@ -361,9 +382,12 @@ export function UserProfileCard({
             <TextInput
               style={styles.input}
               value={formData.birthdate || ''}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
+              onChangeText={handleBirthdateChange}
+              onBlur={handleBirthdateBlur}
               placeholder="e.g. 08/15/1975"
               placeholderTextColor="#9CA3AF"
+              keyboardType="number-pad"
+              maxLength={10}
             />
           </View>
           <View style={styles.inputGroup}>
@@ -420,9 +444,12 @@ export function UserProfileCard({
             <TextInput
               style={styles.input}
               value={formData.birthdate || ''}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
+              onChangeText={handleBirthdateChange}
+              onBlur={handleBirthdateBlur}
               placeholder="e.g. 08/15/1975"
               placeholderTextColor="#9CA3AF"
+              keyboardType="number-pad"
+              maxLength={10}
             />
           </View>
           <View style={styles.inputGroup}>
@@ -503,9 +530,12 @@ export function UserProfileCard({
             <TextInput
               style={styles.input}
               value={formData.birthdate || ''}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
+              onChangeText={handleBirthdateChange}
+              onBlur={handleBirthdateBlur}
               placeholder="e.g. 08/15/1975"
               placeholderTextColor="#9CA3AF"
+              keyboardType="number-pad"
+              maxLength={10}
             />
           </View>
           <View style={styles.inputGroup}>
@@ -570,9 +600,12 @@ export function UserProfileCard({
             <TextInput
               style={styles.input}
               value={formData.birthdate || ''}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
+              onChangeText={handleBirthdateChange}
+              onBlur={handleBirthdateBlur}
               placeholder="e.g. 08/15/1975"
               placeholderTextColor="#9CA3AF"
+              keyboardType="number-pad"
+              maxLength={10}
             />
           </View>
           <View style={styles.inputGroup}>

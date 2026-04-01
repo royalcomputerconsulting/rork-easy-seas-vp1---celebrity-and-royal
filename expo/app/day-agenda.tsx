@@ -1045,6 +1045,13 @@ export default function DayAgendaScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.sectionContainer} testID="day-agenda-daily-luck-section">
+            <DailyLuckReport
+              birthdate={normalizedBirthdate}
+              selectedDate={selectedDate}
+            />
+          </View>
+
           {agendaItems.length === 0 && timelineEvents.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconContainer}>
@@ -1101,13 +1108,6 @@ export default function DayAgendaScreen() {
           
           <View style={styles.sectionContainer} testID="day-agenda-time-zone-section">
             <TimeZoneConverter />
-          </View>
-
-          <View style={styles.sectionContainer} testID="day-agenda-daily-luck-section">
-            <DailyLuckReport
-              birthdate={normalizedBirthdate}
-              selectedDate={selectedDate}
-            />
           </View>
         </ScrollView>
         </SafeAreaView>

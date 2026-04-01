@@ -401,31 +401,40 @@ export default function EventsScreen() {
 
   const renderDayCell = useCallback((day: DayData) => {
     const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
+    const hasCruise = day.events.cruise > 0;
     const bgColor = getDayBackgroundColor(day);
     const luckBadgeColor = day.luckScore !== null ? getLuckDigitColor(day.luckScore) : null;
     const hasLuckBadge = day.luckScore !== null && luckBadgeColor !== null;
     const shouldHighlightAdjacentMonth = !day.isCurrentMonth && (hasEvents || hasLuckBadge);
-    
+
     return (
       <TouchableOpacity
         key={day.date.toISOString()}
         style={[
           styles.dayCell,
           { backgroundColor: bgColor },
-          day.events.cruise > 0 && styles.cruiseDayCell,
+          hasLuckBadge && styles.dayCellWithLuckBadge,
+          hasCruise && styles.cruiseDayCell,
           day.isToday && styles.todayCell,
           !day.isCurrentMonth && (shouldHighlightAdjacentMonth ? styles.otherMonthCellActive : styles.otherMonthCell),
+          !day.isCurrentMonth && hasCruise && styles.otherMonthCruiseCell,
         ]}
         activeOpacity={0.7}
         onPress={() => handleDayPress(day)}
       >
         {hasLuckBadge && luckBadgeColor ? (
           <View
-            style={[styles.luckBadge, { backgroundColor: `${luckBadgeColor}1F`, borderColor: `${luckBadgeColor}66` }]}
+            style={[
+              styles.luckBadge,
+              { backgroundColor: `${luckBadgeColor}22`, borderColor: `${luckBadgeColor}88` },
+              !day.isCurrentMonth && styles.luckBadgeOtherMonth,
+            ]}
             testID={`calendar-luck-badge-${day.date.toISOString().split('T')[0]}`}
           >
-            <Text style={[styles.luckBadgeLabel, { color: luckBadgeColor }]}>LUCK#</Text>
-            <Text style={[styles.luckBadgeText, { color: luckBadgeColor }]}>{day.luckScore}</Text>
+            <View style={styles.luckBadgeRow}>
+              <Text style={[styles.luckBadgeLabel, { color: luckBadgeColor }]}>LUCK#</Text>
+              <Text style={[styles.luckBadgeNumber, { color: luckBadgeColor }]}>{day.luckScore}</Text>
+            </View>
           </View>
         ) : null}
         <Text style={[
@@ -950,6 +959,9 @@ const styles = StyleSheet.create({
     margin: 2,
     overflow: 'hidden',
   },
+  dayCellWithLuckBadge: {
+    paddingTop: 12,
+  },
   cruiseDayCell: {
     borderWidth: 1.5,
     borderColor: 'rgba(34, 197, 94, 0.5)',
@@ -960,10 +972,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   otherMonthCell: {
-    opacity: 0.35,
+    backgroundColor: 'rgba(0, 31, 63, 0.03)',
   },
   otherMonthCellActive: {
-    opacity: 0.82,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.12)',
+  },
+  otherMonthCruiseCell: {
+    borderColor: 'rgba(34, 197, 94, 0.55)',
   },
   dayNumber: {
     fontSize: TYPOGRAPHY.fontSizeMD,
@@ -976,11 +993,11 @@ const styles = StyleSheet.create({
   },
   otherMonthNumber: {
     color: COLORS.navyDeep,
-    opacity: 0.4,
+    opacity: 0.52,
   },
   otherMonthNumberActive: {
     color: COLORS.navyDeep,
-    opacity: 0.85,
+    opacity: 1,
   },
   dayNumberWithEvents: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
@@ -990,23 +1007,32 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    minWidth: 28,
-    paddingHorizontal: 5,
-    paddingVertical: 3,
-    borderRadius: 10,
+    minWidth: 44,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1,
+  },
+  luckBadgeOtherMonth: {
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+  },
+  luckBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
   },
   luckBadgeLabel: {
-    fontSize: 6,
-    lineHeight: 7,
+    fontSize: 7,
+    lineHeight: 9,
     fontWeight: '800' as const,
-    letterSpacing: 0.3,
+    letterSpacing: 0.35,
   },
-  luckBadgeText: {
-    fontSize: 10,
-    lineHeight: 11,
+  luckBadgeNumber: {
+    fontSize: 11,
+    lineHeight: 12,
     fontWeight: '800' as const,
   },
   eventDotsContainer: {

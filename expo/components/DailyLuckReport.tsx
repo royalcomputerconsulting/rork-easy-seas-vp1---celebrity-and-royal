@@ -11,7 +11,7 @@ import {
   getLuckDigitLabel,
   parseBirthdate,
 } from '@/lib/date';
-import { Moon, Sparkles, Star, Sun, Waves } from 'lucide-react-native';
+import { Sparkles } from 'lucide-react-native';
 
 interface DailyLuckReportProps {
   birthdate: string;
@@ -385,13 +385,21 @@ export function DailyLuckReport({ birthdate, selectedDate }: DailyLuckReportProp
       luckDigit,
     });
 
+    const opening = buildOpeningParagraph(context);
+    const tarot = buildTarotParagraph(context);
+    const western = buildWesternParagraph(context);
+    const chinese = buildChineseParagraph(context);
+    const lesson = buildLessonParagraph(context);
+    const closing = buildClosingParagraph(context);
+
     return {
-      opening: buildOpeningParagraph(context),
-      tarot: buildTarotParagraph(context),
-      western: buildWesternParagraph(context),
-      chinese: buildChineseParagraph(context),
-      lesson: buildLessonParagraph(context),
-      closing: buildClosingParagraph(context),
+      opening,
+      tarot,
+      western,
+      chinese,
+      lesson,
+      closing,
+      full: [opening, tarot, western, chinese, lesson, closing].join('\n\n'),
     };
   }, [birthdateDisplay, birthdateObj, chineseProfile, formattedDate, luckDigit, luckScore, selectedDate, tarotCard, westernSign]);
 
@@ -468,53 +476,13 @@ export function DailyLuckReport({ birthdate, selectedDate }: DailyLuckReportProp
       </LinearGradient>
 
       <View style={styles.articleCard}>
-        <View style={styles.sectionBlock}>
+        <View style={styles.fullReadingCard}>
           <View style={styles.sectionHeadingRow}>
             <Sparkles size={16} color="#D4B15A" />
-            <Text style={styles.sectionHeading}>Opening Energy</Text>
+            <Text style={styles.sectionHeading}>Full Daily Reading</Text>
           </View>
-          <Text style={styles.paragraph}>{reading.opening}</Text>
+          <Text style={styles.fullReadingText}>{reading.full}</Text>
         </View>
-
-        <View style={styles.sectionBlock}>
-          <View style={styles.sectionHeadingRow}>
-            <Star size={16} color="#A8C7FF" />
-            <Text style={styles.sectionHeading}>Tarot Reading</Text>
-          </View>
-          <Text style={styles.paragraph}>{reading.tarot}</Text>
-        </View>
-
-        <View style={styles.sectionBlock}>
-          <View style={styles.sectionHeadingRow}>
-            <Sun size={16} color="#F5B450" />
-            <Text style={styles.sectionHeading}>Western Zodiac Forecast</Text>
-          </View>
-          <Text style={styles.paragraph}>{reading.western}</Text>
-        </View>
-
-        <View style={styles.sectionBlock}>
-          <View style={styles.sectionHeadingRow}>
-            <Moon size={16} color="#8EC5FF" />
-            <Text style={styles.sectionHeading}>Chinese Horoscope</Text>
-          </View>
-          <Text style={styles.paragraph}>{reading.chinese}</Text>
-        </View>
-
-        <View style={styles.sectionBlock}>
-          <View style={styles.sectionHeadingRow}>
-            <Waves size={16} color="#5ED7C4" />
-            <Text style={styles.sectionHeading}>Deeper Lesson</Text>
-          </View>
-          <Text style={styles.paragraph}>{reading.lesson}</Text>
-        </View>
-
-        <LinearGradient
-          colors={['rgba(212, 177, 90, 0.12)', 'rgba(94, 215, 196, 0.08)']}
-          style={styles.closingCard}
-        >
-          <Text style={styles.closingTitle}>Closing Reflection</Text>
-          <Text style={styles.closingText}>{reading.closing}</Text>
-        </LinearGradient>
       </View>
     </View>
   );
@@ -636,7 +604,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(10, 20, 38, 0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    gap: SPACING.lg,
+  },
+  fullReadingCard: {
+    gap: SPACING.md,
   },
   sectionBlock: {
     gap: SPACING.sm,
@@ -656,6 +626,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     lineHeight: 23,
     color: 'rgba(255,255,255,0.84)',
+  },
+  fullReadingText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 24,
+    color: 'rgba(255,255,255,0.88)',
   },
   closingCard: {
     borderRadius: BORDER_RADIUS.lg,
