@@ -2,19 +2,14 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  Platform,
   Pressable,
   ScrollView,
-  StyleProp,
   StyleSheet,
   Text,
   View,
-  ViewStyle,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import {
   Bell,
   Calendar,
@@ -26,6 +21,7 @@ import {
   Star,
 } from 'lucide-react-native';
 import { COLORS } from '@/constants/theme';
+import { GlassSurface } from '@/components/premium/GlassSurface';
 
 type BrandTab = 'royal' | 'celebrity' | 'silversea';
 type PreviewTone = 'coral' | 'amber' | 'gold';
@@ -52,12 +48,6 @@ type ProgressPreview = {
     title: string;
     detail: string;
   }>;
-};
-
-type GlassSurfaceProps = {
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-  contentStyle?: StyleProp<ViewStyle>;
 };
 
 const SCREEN_BACKGROUND = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80';
@@ -270,41 +260,6 @@ const BRANDS: Record<BrandTab, BrandPreview> = {
     ],
   },
 };
-
-function getGlassAvailable(): boolean {
-  if (Platform.OS !== 'ios') {
-    return false;
-  }
-
-  try {
-    return isLiquidGlassAvailable();
-  } catch (error) {
-    console.log('[DesignPreview] Native glass availability check failed:', error);
-    return false;
-  }
-}
-
-const glassSupported = getGlassAvailable();
-
-function GlassSurface({ children, style, contentStyle }: GlassSurfaceProps) {
-  return (
-    <View style={[styles.glassShell, style]} testID="glass-surface">
-      {glassSupported ? (
-        <GlassView style={styles.absoluteFill} glassEffectStyle="regular" tintColor="rgba(255,255,255,0.18)" />
-      ) : Platform.OS !== 'web' ? (
-        <BlurView intensity={28} tint="light" style={styles.absoluteFill} />
-      ) : null}
-      <LinearGradient
-        colors={['rgba(255,255,255,0.66)', 'rgba(255,255,255,0.20)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.absoluteFill}
-      />
-      <View style={styles.glassStroke} pointerEvents="none" />
-      <View style={contentStyle}>{children}</View>
-    </View>
-  );
-}
 
 function PreviewBadge({ label, tint }: { label: string; tint: string }) {
   return (
