@@ -189,23 +189,28 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     label: string,
     value: string,
     accentColor: string,
-    type: 'club' | 'loyalty'
+    type: 'club' | 'loyalty' | 'metric',
+    displayValueOverride?: string
   ) => {
-    const displayValue = type === 'club'
+    const displayValue = displayValueOverride ?? (type === 'club'
       ? getDisplayClubRoyaleTier(value)
-      : getDisplayCrownAnchorLevel(value);
+      : type === 'loyalty'
+        ? getDisplayCrownAnchorLevel(value)
+        : value);
     const isLoyalty = type === 'loyalty';
+    const isClub = type === 'club';
     const badgeTextColor = isLoyalty ? '#111111' : accentColor;
     const badgeLabelColor = isLoyalty ? 'rgba(17,17,17,0.72)' : 'rgba(15, 36, 57, 0.68)';
     const badgeBorderColor = isLoyalty ? 'rgba(17,17,17,0.08)' : `${accentColor}28`;
-    const badgeIconColor = isLoyalty ? '#111111' : accentColor;
+    const badgeIconColor = isClub ? COLORS.white : accentColor;
+    const badgeTestId = `player-card-badge-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
     return (
-      <View style={[styles.spotlightBadge, { borderColor: badgeBorderColor }]}>
+      <View style={[styles.spotlightBadge, { borderColor: badgeBorderColor }]} testID={badgeTestId}>
         <View
           style={[
             styles.spotlightBadgeIcon,
-            type === 'club'
+            isClub
               ? { backgroundColor: accentColor }
               : {
                   backgroundColor: isLoyalty ? 'rgba(255,255,255,0.70)' : `${accentColor}14`,
@@ -214,8 +219,10 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 },
           ]}
         >
-          {type === 'club' ? (
+          {isClub ? (
             <Star size={12} color={COLORS.white} fill={COLORS.white} />
+          ) : type === 'metric' ? (
+            <Anchor size={13} color={badgeIconColor} />
           ) : (
             <Crown size={14} color={badgeIconColor} />
           )}
@@ -615,12 +622,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <>
       {/* === CELEBRITY CRUISES === */}
       <View style={styles.tierRow}>
-        <View style={[styles.tierBadge, { backgroundColor: (CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color ?? '#F0EAD6') + '30', borderColor: CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color ?? '#F0EAD6' }]}>
-          <Text style={[styles.tierText, { color: CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#F0EAD6' }]}>{celebrityTier.toUpperCase()}</Text>
-        </View>
-        <View style={[styles.tierBadge, { backgroundColor: (CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color ?? '#708090') + '30', borderColor: CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color ?? '#708090' }]}>
-          <Text style={[styles.tierText, { color: CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color || '#708090' }]}>{celebrityLevel.toUpperCase()}</Text>
-        </View>
+        {renderStandoutBadge('Blue Chip Club', celebrityTier, CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#B9BCC2', 'club')}
+        {renderStandoutBadge("Captain's Club", celebrityLevel, CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color || '#708090', 'loyalty')}
       </View>
 
       <View style={styles.progressGrid}>
@@ -640,14 +643,25 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextLevelColor = nextLevel ? CELEBRITY_CAPTAINS_CLUB_LEVELS[nextLevel]?.color : levelColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={styles.progressCard} testID="celebrity-captains-club-progress-card">
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
-                  {isZenith 
-                    ? `Zenith (${celebrityCaptainsClubPoints}/3,000)`
-                    : `${celebrityLevel} → ${nextLevel} (${celebrityCaptainsClubPoints}/${nextThreshold})`
-                  }
-                </Text>
+                <View style={styles.progressLabelRow}>
+                  <Crown size={13} color={levelColor} />
+                  <Text style={styles.progressLabel}>
+                    <Text style={[styles.progressLabelTier, { color: levelColor }]}>{celebrityLevel}</Text>
+                    {!isZenith && nextLevel ? (
+                      <>
+                        <Text style={styles.progressLabelMeta}> → </Text>
+                        <Text style={[styles.progressLabelTier, { color: nextLevelColor }]}>{nextLevel}</Text>
+                      </>
+                    ) : null}
+                    <Text style={styles.progressLabelMeta}>
+                      {isZenith
+                        ? ` (${celebrityCaptainsClubPoints.toLocaleString()}/3,000)`
+                        : ` (${celebrityCaptainsClubPoints.toLocaleString()}/${nextThreshold.toLocaleString()})`}
+                    </Text>
+                  </Text>
+                </View>
                 {isZenith ? (
                   <View style={styles.achievedBadge}>
                     <Text style={styles.achievedBadgeText}>MAX LEVEL</Text>
@@ -665,9 +679,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 />
               </View>
               <Text style={styles.progressEta}>
-                {isZenith 
+                {isZenith
                   ? 'Zenith achieved! Maximum Captain\'s Club level'
-                  : `${pointsToNext} pts to ${nextLevel}`
+                  : `${pointsToNext.toLocaleString()} pts to ${nextLevel}`
                 }
               </Text>
             </View>
@@ -678,25 +692,41 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const currentTierIndex = CELEBRITY_TIER_ORDER.indexOf(celebrityTier);
           const nextTier = currentTierIndex < CELEBRITY_TIER_ORDER.length - 1 ? CELEBRITY_TIER_ORDER[currentTierIndex + 1] : null;
           const isRuby = celebrityTier === 'Ruby';
-          
-          const tierColor = CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#F0EAD6';
+          const currentThreshold = CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.qualifyPoints || 0;
+          const nextThreshold = nextTier ? CELEBRITY_BLUE_CHIP_TIERS[nextTier]?.qualifyPoints : currentThreshold;
+          const rangeSize = Math.max(1, nextThreshold - currentThreshold);
+          const progressInRange = celebrityBlueChipPoints - currentThreshold;
+          const percentComplete = isRuby ? 100 : Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100));
+          const pointsToNext = isRuby ? 0 : Math.max(0, nextThreshold - celebrityBlueChipPoints);
+          const tierColor = CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#B9BCC2';
           const nextTierColor = nextTier ? CELEBRITY_BLUE_CHIP_TIERS[nextTier]?.color : tierColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={styles.progressCard} testID="celebrity-blue-chip-progress-card">
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
-                  {isRuby 
-                    ? `Ruby (${celebrityBlueChipPoints.toLocaleString()} pts)`
-                    : `${celebrityTier} → ${nextTier} (${celebrityBlueChipPoints.toLocaleString()} pts)`
-                  }
-                </Text>
+                <View style={styles.progressLabelRow}>
+                  <Star size={13} color={tierColor} fill={tierColor} />
+                  <Text style={styles.progressLabel}>
+                    <Text style={[styles.progressLabelTier, { color: tierColor }]}>{celebrityTier}</Text>
+                    {!isRuby && nextTier ? (
+                      <>
+                        <Text style={styles.progressLabelMeta}> → </Text>
+                        <Text style={[styles.progressLabelTier, { color: nextTierColor }]}>{nextTier}</Text>
+                      </>
+                    ) : null}
+                    <Text style={styles.progressLabelMeta}>
+                      {isRuby
+                        ? ` (${celebrityBlueChipPoints.toLocaleString()} pts)`
+                        : ` (${celebrityBlueChipPoints.toLocaleString()}/${nextThreshold.toLocaleString()} pts)`}
+                    </Text>
+                  </Text>
+                </View>
                 {isRuby ? (
                   <View style={styles.achievedBadge}>
                     <Text style={styles.achievedBadgeText}>MAX TIER</Text>
                   </View>
                 ) : (
-                  <Text style={styles.progressPercent}>--</Text>
+                  <Text style={styles.progressPercent}>{percentComplete.toFixed(1)}%</Text>
                 )}
               </View>
               <View style={styles.progressBarBg}>
@@ -704,13 +734,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   colors={[tierColor, nextTierColor]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={[styles.progressBarFill, { width: isRuby ? '100%' : '0%' }]}
+                  style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
                 />
               </View>
               <Text style={styles.progressEta}>
-                {isRuby 
+                {isRuby
                   ? 'Ruby tier achieved! Maximum Blue Chip tier'
-                  : 'Play in the casino to earn tier progress'
+                  : `${pointsToNext.toLocaleString()} pts to ${nextTier}`
                 }
               </Text>
             </View>
@@ -771,9 +801,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <>
       {/* === SILVERSEA === */}
       <View style={styles.tierRow}>
-        <View style={[styles.tierBadge, { backgroundColor: (SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color ?? '#708090') + '30', borderColor: SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color ?? '#708090' }]}>
-          <Text style={[styles.tierText, { color: SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color || '#708090' }]}>{silverseaTier.toUpperCase()}</Text>
-        </View>
+        {renderStandoutBadge('Venetian Society', silverseaTier, SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color || '#708090', 'loyalty')}
+        {renderStandoutBadge('Cruise Days', String(silverseaPoints), '#8B6B49', 'metric', `${silverseaPoints} days`)}
       </View>
 
       <View style={styles.progressGrid}>
@@ -793,14 +822,25 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextTierColor = nextTier ? SILVERSEA_VENETIAN_TIERS[nextTier]?.color : tierColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={styles.progressCard} testID="silversea-venetian-progress-card">
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
-                  {isMax 
-                    ? `Diamond Elite (${silverseaPoints} days)`
-                    : `${silverseaTier} → ${nextTier} (${silverseaPoints}/${nextThreshold} days)`
-                  }
-                </Text>
+                <View style={styles.progressLabelRow}>
+                  <Crown size={13} color={tierColor} />
+                  <Text style={styles.progressLabel}>
+                    <Text style={[styles.progressLabelTier, { color: tierColor }]}>{silverseaTier}</Text>
+                    {!isMax && nextTier ? (
+                      <>
+                        <Text style={styles.progressLabelMeta}> → </Text>
+                        <Text style={[styles.progressLabelTier, { color: nextTierColor }]}>{nextTier}</Text>
+                      </>
+                    ) : null}
+                    <Text style={styles.progressLabelMeta}>
+                      {isMax
+                        ? ` (${silverseaPoints.toLocaleString()} days)`
+                        : ` (${silverseaPoints.toLocaleString()}/${nextThreshold.toLocaleString()} days)`}
+                    </Text>
+                  </Text>
+                </View>
                 {isMax ? (
                   <View style={styles.achievedBadge}>
                     <Text style={styles.achievedBadgeText}>MAX TIER</Text>
@@ -818,9 +858,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 />
               </View>
               <Text style={styles.progressEta}>
-                {isMax 
+                {isMax
                   ? 'Diamond Elite achieved! Maximum Venetian Society tier'
-                  : `${daysToNext} cruise days to ${nextTier}`
+                  : `${daysToNext.toLocaleString()} cruise days to ${nextTier}`
                 }
               </Text>
             </View>
@@ -835,7 +875,12 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{silverseaTier}</Text>
+          <Text
+            style={[styles.statValue, silverseaTier.length > 10 ? styles.statValueCompact : null]}
+            numberOfLines={1}
+          >
+            {silverseaTier}
+          </Text>
           <Text style={styles.statLabel}>Venetian Tier</Text>
         </View>
         <View style={styles.statDivider} />
@@ -1342,6 +1387,9 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#102132',
+  },
+  statValueCompact: {
+    fontSize: 20,
   },
   statLabel: {
     fontSize: 10,
