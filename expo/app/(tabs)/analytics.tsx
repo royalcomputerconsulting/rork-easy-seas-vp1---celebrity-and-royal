@@ -92,6 +92,7 @@ import { CasinoOverviewCard } from '@/components/CasinoOverviewCard';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { GlassSurface } from '@/components/premium/GlassSurface';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -792,92 +793,101 @@ export default function AnalyticsScreen() {
     return (
       <TouchableOpacity
         key={cruise.id}
-        style={styles.portfolioCard}
+        style={styles.portfolioCardPressable}
         onPress={() => handleCruisePress(cruise.id)}
-        activeOpacity={0.85}
+        activeOpacity={0.88}
+        testID={`casino-portfolio-card-${cruise.id}`}
       >
-        <View style={styles.portfolioImageContainer}>
-          <Image 
-            source={{ uri: cruiseImage }} 
-            style={styles.portfolioCardImage}
-            resizeMode="cover"
-            defaultSource={{ uri: DEFAULT_CRUISE_IMAGE }}
-          />
-          {earnedPoints > 0 && (
-            <View style={styles.pointsOverlay}>
-              <Award size={14} color={COLORS.white} />
-              <Text style={styles.pointsOverlayText}>{formatNumber(earnedPoints)} pts</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.portfolioCardContent}>
-          <View style={styles.portfolioCardTopRow}>
-            <View style={styles.portfolioCardShipRow}>
-              <Ship size={13} color={COLORS.navyDeep} />
-              <Text style={styles.portfolioCardShipName} numberOfLines={1}>
-                {cruise.shipName || 'Unknown Ship'}
-              </Text>
-            </View>
-            <View style={[styles.roiBadge, { backgroundColor: `${roiColor}15` }]}>
-              <Text style={[styles.roiBadgeText, { color: roiColor }]}>
-                {valuePerDollarDisplay}/$
-              </Text>
-            </View>
+        <GlassSurface style={styles.portfolioCard} contentStyle={styles.portfolioCardGlassContent}>
+          <View style={styles.portfolioImageContainer}>
+            <Image
+              source={{ uri: cruiseImage }}
+              style={styles.portfolioCardImage}
+              resizeMode="cover"
+              defaultSource={{ uri: DEFAULT_CRUISE_IMAGE }}
+            />
+            <LinearGradient
+              colors={['rgba(234,244,255,0.08)', 'rgba(22,53,87,0.24)', 'rgba(7,17,31,0.66)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0.9, y: 1 }}
+              style={styles.portfolioImageOverlay}
+            />
+            {earnedPoints > 0 && (
+              <View style={styles.pointsOverlay}>
+                <Award size={14} color={COLORS.white} />
+                <Text style={styles.pointsOverlayText}>{formatNumber(earnedPoints)} pts</Text>
+              </View>
+            )}
           </View>
-          
-          <Text style={styles.portfolioCardItinerary} numberOfLines={1}>
-            {getItineraryName()}
-          </Text>
-          
-          <Text style={styles.portfolioCardDestination} numberOfLines={1}>
-            {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
-          </Text>
-          
-          <View style={styles.portfolioCardMetaRow}>
-            <View style={styles.portfolioCardMeta}>
-              <Calendar size={12} color={COLORS.navyDeep} />
-              <Text style={styles.portfolioCardMetaText}>
-                {cruise.sailDate ? formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights) : 'No date'}
-              </Text>
+          <View style={styles.portfolioCardContent}>
+            <View style={styles.portfolioCardTopRow}>
+              <View style={styles.portfolioCardShipRow}>
+                <Ship size={13} color={COLORS.navyDeep} />
+                <Text style={styles.portfolioCardShipName} numberOfLines={1}>
+                  {cruise.shipName || 'Unknown Ship'}
+                </Text>
+              </View>
+              <View style={[styles.roiBadge, { borderColor: `${roiColor}30` }]}>
+                <Text style={[styles.roiBadgeText, { color: roiColor }]}>
+                  {valuePerDollarDisplay}/$
+                </Text>
+              </View>
             </View>
-            <Text style={styles.portfolioCardNights}>{cruise.nights || 0}N</Text>
+
+            <Text style={styles.portfolioCardItinerary} numberOfLines={1}>
+              {getItineraryName()}
+            </Text>
+
+            <Text style={styles.portfolioCardDestination} numberOfLines={1}>
+              {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
+            </Text>
+
+            <View style={styles.portfolioCardMetaRow}>
+              <View style={styles.portfolioCardMeta}>
+                <Calendar size={12} color={COLORS.navyDeep} />
+                <Text style={styles.portfolioCardMetaText}>
+                  {cruise.sailDate ? formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights) : 'No date'}
+                </Text>
+              </View>
+              <Text style={styles.portfolioCardNights}>{cruise.nights || 0}N</Text>
+            </View>
+
+            <View style={styles.portfolioCardMetrics}>
+              <View style={styles.portfolioMetric}>
+                <Text style={styles.portfolioMetricLabel}>Retail</Text>
+                <Text style={styles.portfolioMetricValue}>{formatCurrency(breakdown.cabinValueForTwo)}</Text>
+              </View>
+              <View style={styles.portfolioMetric}>
+                <Text style={styles.portfolioMetricLabel}>Taxes</Text>
+                <Text style={styles.portfolioMetricValue}>{formatCurrency(breakdown.taxesFees)}</Text>
+              </View>
+              <View style={styles.portfolioMetric}>
+                <Text style={styles.portfolioMetricLabel}>Win</Text>
+                <Text style={[styles.portfolioMetricValue, { color: winnings >= 0 ? COLORS.success : COLORS.error }]}>
+                  {winnings >= 0 ? '+' : ''}{formatCurrency(winnings)}
+                </Text>
+              </View>
+              <View style={styles.portfolioMetric}>
+                <Text style={styles.portfolioMetricLabel}>Profit</Text>
+                <Text style={[styles.portfolioMetricValue, { color: breakdown.totalProfit >= 0 ? COLORS.success : COLORS.error }]}>
+                  {formatCurrency(breakdown.totalProfit)}
+                </Text>
+              </View>
+            </View>
+
+            {(!!cruise.cabinType || !!cruise.offerCode) && (
+              <View style={styles.portfolioCardFooter}>
+                {!!cruise.cabinType && <Text style={styles.portfolioCardCabin}>{cruise.cabinType}</Text>}
+                {!!cruise.offerCode && (
+                  <View style={styles.portfolioOfferBadge}>
+                    <Zap size={10} color={COLORS.goldDark} />
+                    <Text style={styles.portfolioOfferCode}>{cruise.offerCode}</Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
-          
-          <View style={styles.portfolioCardMetrics}>
-            <View style={styles.portfolioMetric}>
-              <Text style={styles.portfolioMetricLabel}>Retail</Text>
-              <Text style={styles.portfolioMetricValue}>{formatCurrency(breakdown.cabinValueForTwo)}</Text>
-            </View>
-            <View style={styles.portfolioMetric}>
-              <Text style={styles.portfolioMetricLabel}>Taxes</Text>
-              <Text style={styles.portfolioMetricValue}>{formatCurrency(breakdown.taxesFees)}</Text>
-            </View>
-            <View style={styles.portfolioMetric}>
-              <Text style={styles.portfolioMetricLabel}>Win</Text>
-              <Text style={[styles.portfolioMetricValue, { color: winnings >= 0 ? COLORS.success : COLORS.error }]}>
-                {winnings >= 0 ? '+' : ''}{formatCurrency(winnings)}
-              </Text>
-            </View>
-            <View style={styles.portfolioMetric}>
-              <Text style={styles.portfolioMetricLabel}>Profit</Text>
-              <Text style={[styles.portfolioMetricValue, { color: breakdown.totalProfit >= 0 ? COLORS.success : COLORS.error }]}>
-                {formatCurrency(breakdown.totalProfit)}
-              </Text>
-            </View>
-          </View>
-          
-          {!!cruise.cabinType && (
-            <View style={styles.portfolioCardFooter}>
-              <Text style={styles.portfolioCardCabin}>{cruise.cabinType}</Text>
-              {!!cruise.offerCode && (
-                <View style={styles.portfolioOfferBadge}>
-                  <Zap size={10} color={COLORS.goldDark} />
-                  <Text style={styles.portfolioOfferCode}>{cruise.offerCode}</Text>
-                </View>
-              )}
-            </View>
-          )}
-        </View>
+        </GlassSurface>
       </TouchableOpacity>
     );
   };
@@ -2320,29 +2330,31 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontStyle: 'italic' as const,
   },
+  portfolioCardPressable: {
+    borderRadius: 26,
+  },
   portfolioCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
-    overflow: 'hidden',
+    borderRadius: 26,
+  },
+  portfolioCardGlassContent: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
   },
   portfolioImageContainer: {
     position: 'relative',
     width: 90,
     minHeight: 130,
+    overflow: 'hidden',
+    borderTopLeftRadius: 26,
+    borderBottomLeftRadius: 26,
   },
   portfolioCardImage: {
     width: 90,
     height: '100%',
     minHeight: 130,
-    borderTopLeftRadius: BORDER_RADIUS.md,
-    borderBottomLeftRadius: BORDER_RADIUS.md,
+  },
+  portfolioImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   pointsOverlay: {
     position: 'absolute',
@@ -2353,10 +2365,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    backgroundColor: 'rgba(139, 92, 246, 0.92)',
+    backgroundColor: 'rgba(123, 45, 142, 0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
     paddingVertical: 6,
     paddingHorizontal: 4,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   pointsOverlayText: {
     fontSize: 14,
@@ -2368,7 +2382,8 @@ const styles = StyleSheet.create({
   },
   portfolioCardContent: {
     flex: 1,
-    padding: SPACING.sm,
+    paddingVertical: 10,
+    paddingLeft: SPACING.sm,
     paddingRight: SPACING.md,
   },
   portfolioCardTopRow: {
@@ -2376,6 +2391,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 2,
+    gap: 8,
   },
   portfolioCardShipRow: {
     flexDirection: 'row',
@@ -2386,14 +2402,16 @@ const styles = StyleSheet.create({
   portfolioCardShipName: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: '#0F2439',
     flex: 1,
     marginRight: 4,
   },
   roiBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.58)',
+    borderWidth: 1,
   },
   roiBadgeText: {
     fontSize: 10,
@@ -2407,7 +2425,7 @@ const styles = StyleSheet.create({
   },
   portfolioCardDestination: {
     fontSize: 12,
-    color: COLORS.navyDeep,
+    color: 'rgba(15,36,57,0.74)',
     marginBottom: 4,
   },
   portfolioCardMetaRow: {
@@ -2415,68 +2433,81 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 6,
+    gap: 8,
   },
   portfolioCardMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
+    flex: 1,
   },
   portfolioCardMetaText: {
     fontSize: 11,
-    color: COLORS.navyDeep,
+    color: 'rgba(15,36,57,0.8)',
+    flexShrink: 1,
   },
   portfolioCardNights: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    backgroundColor: '#E0F2F1',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    color: '#0F2439',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
   portfolioCardMetrics: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: CLEAN_THEME.background.tertiary,
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.xs,
+    backgroundColor: 'rgba(255,255,255,0.38)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+    paddingVertical: 7,
     paddingHorizontal: SPACING.sm,
   },
   portfolioMetric: {
     alignItems: 'center',
+    flex: 1,
   },
   portfolioMetricLabel: {
     fontSize: 9,
-    color: CLEAN_THEME.text.secondary,
+    color: 'rgba(15,36,57,0.58)',
     marginBottom: 1,
   },
   portfolioMetricValue: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: '#0F2439',
   },
   portfolioCardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginTop: 6,
+    flexWrap: 'wrap',
   },
   portfolioCardCabin: {
     fontSize: 10,
-    color: COLORS.navyDeep,
-    backgroundColor: '#E0F2F1',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 3,
+    color: '#0F2439',
+    backgroundColor: 'rgba(255,255,255,0.52)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
   portfolioOfferBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#FFFBEB',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 3,
+    backgroundColor: 'rgba(255,248,235,0.66)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,160,10,0.18)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
   portfolioOfferCode: {
     fontSize: 10,
