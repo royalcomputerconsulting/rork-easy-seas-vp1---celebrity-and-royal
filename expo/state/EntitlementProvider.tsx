@@ -25,9 +25,36 @@ type PurchasesModule = {
 
 let Purchases: PurchasesModule | null = null;
 let purchasesInitError: string | null = null;
+let purchasesRuntimeUnavailable = false;
+let hasLoggedPurchasesRuntimeUnavailable = false;
+
+function markPurchasesRuntimeUnavailable(message: string, error?: unknown): void {
+  purchasesRuntimeUnavailable = true;
+  purchasesInitError = message;
+
+  if (hasLoggedPurchasesRuntimeUnavailable) {
+    return;
+  }
+
+  hasLoggedPurchasesRuntimeUnavailable = true;
+
+  if (error) {
+    console.warn('[Entitlement] RevenueCat native module is unavailable in this runtime. Skipping react-native-purchases initialization.', error);
+    return;
+  }
+
+  console.warn('[Entitlement] RevenueCat native module is unavailable in this runtime. Skipping react-native-purchases initialization.');
+}
 
 function isExpoGoPurchasesRuntime(): boolean {
-  return Platform.OS !== 'web' && Constants.appOwnership === 'expo';
+  if (Platform.OS === 'web') {
+    return false;
+  }
+
+  const executionEnvironment = Constants.executionEnvironment;
+  const appOwnership = Constants.appOwnership;
+
+  return executionEnvironment === 'storeClient' || appOwnership === 'expo' || appOwnership === 'guest';
 }
 
 function isPurchasesModuleUnavailableError(error: unknown): boolean {
@@ -299,7 +326,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     [normalizedAuthenticatedEmail]
   );
   const billingDetails = useMemo(() => {
-    const isExpoGo = Constants.appOwnership === 'expo';
+    const isExpoGo = isExpoGoPurchasesRuntime();
 
     if (Platform.OS === 'web' || isExpoGo) {
       return {
@@ -569,6 +596,11 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     const isExpoGo = isExpoGoPurchasesRuntime();
     const isWeb = Platform.OS === 'web';
 
+    if (!isWeb && purchasesRuntimeUnavailable) {
+      purchasesInitError = purchasesInitError ?? 'In-app purchases are not available in this runtime. Use the web preview or a development build to test purchases on device.';
+      return null;
+    }
+
     let apiKey = '';
     let keySource = '';
 
@@ -581,8 +613,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         return null;
       }
     } else if (isExpoGo) {
-      purchasesInitError = 'In-app purchases are not available in Expo Go. Use the web preview or a development build to test purchases on device.';
-      console.warn('[Entitlement] RevenueCat native module is unavailable in Expo Go. Skipping react-native-purchases initialization.');
+      markPurchasesRuntimeUnavailable('In-app purchases are not available in Expo Go. Use the web preview or a development build to test purchases on device.');
       return null;
     } else if (Platform.OS === 'android') {
       apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '').trim();
@@ -637,7 +668,14 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       console.log(`[Entitlement] RevenueCat initialized successfully for ${Platform.OS} via ${keySource}`);
       return Purchases;
     } catch (e) {
-      purchasesInitError = formatPurchasesInitializationError(e);
+      const formattedError = formatPurchasesInitializationError(e);
+      purchasesInitError = formattedError;
+
+      if (!isWeb && isPurchasesModuleUnavailableError(e)) {
+        markPurchasesRuntimeUnavailable(formattedError, e);
+        return null;
+      }
+
       console.error('[Entitlement] Failed to load/initialize react-native-purchases', e);
       return null;
     }
