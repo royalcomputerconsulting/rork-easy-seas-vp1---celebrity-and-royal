@@ -12,6 +12,7 @@ import { SILVERSEA_VENETIAN_TIERS, SILVERSEA_TIER_ORDER, getSilverseaTierByDays,
 import { CARNIVAL_VIFP_TIERS, CARNIVAL_VIFP_TIER_ORDER, CARNIVAL_PLAYERS_CLUB_TIERS } from '@/constants/carnivalVifpClub';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
+import { useAuth } from '@/state/AuthProvider';
 import { BrandToggle, BrandType } from '@/components/ui/BrandToggle';
 import { IMAGES } from '@/constants/images';
 import { maskSensitiveMemberNumber } from '@/lib/privacy';
@@ -110,6 +111,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     captainsClub,
   } = useLoyalty();
   const { currentUser } = useUser();
+  const { isAdmin } = useAuth();
   const preferredBrand = currentUser?.preferredBrand === 'carnival' ? 'royal' : currentUser?.preferredBrand || 'royal';
   const [activeBrand, setActiveBrand] = useState<BrandType>(preferredBrand);
 
@@ -203,12 +205,12 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   const displayName = formatMemberDisplayName(currentUser?.name || memberName);
   const royalMemberNumber = crownAnchorNumber || currentUser?.crownAnchorNumber;
   const displayNumber = activeBrand === 'royal'
-    ? royalMemberNumber || 'Not set'
+    ? maskSensitiveMemberNumber(royalMemberNumber, 'Not set', { reveal: isAdmin })
     : activeBrand === 'celebrity'
-    ? maskSensitiveMemberNumber(currentUser?.celebrityCaptainsClubNumber, 'Not set')
+    ? maskSensitiveMemberNumber(currentUser?.celebrityCaptainsClubNumber, 'Not set', { reveal: isAdmin })
     : activeBrand === 'silversea'
-    ? maskSensitiveMemberNumber(currentUser?.silverseaVenetianNumber, 'Not set')
-    : maskSensitiveMemberNumber(currentUser?.carnivalVifpNumber, 'Not set');
+    ? maskSensitiveMemberNumber(currentUser?.silverseaVenetianNumber, 'Not set', { reveal: isAdmin })
+    : maskSensitiveMemberNumber(currentUser?.carnivalVifpNumber, 'Not set', { reveal: isAdmin });
   const displayNumberLabel = activeBrand === 'royal' ? 'Crown & Anchor #'
     : activeBrand === 'celebrity' ? 'Captain\'s Club #'
     : activeBrand === 'silversea' ? 'Venetian Society #'

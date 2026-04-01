@@ -9,6 +9,7 @@ import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS }
 import { getCelebrityBlueChipTierByPoints, CELEBRITY_BLUE_CHIP_TIERS } from '@/constants/celebrityBlueChipClub';
 import { BrandToggle, BrandType } from './BrandToggle';
 import { useEntitlement } from '@/state/EntitlementProvider';
+import { useAuth } from '@/state/AuthProvider';
 import { maskSensitiveMemberNumber } from '@/lib/privacy';
 import { formatBirthdateForDisplay, normalizeBirthdateInput } from '@/lib/date';
 
@@ -90,6 +91,7 @@ export function UserProfileCard({
   isSaving = false,
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
+  const { isAdmin } = useAuth();
   const resolveVisibleBrand = (brand?: BrandType): BrandType => {
     if (!brand || brand === 'carnival') {
       return 'royal';
@@ -184,7 +186,7 @@ export function UserProfileCard({
   };
 
   const getMaskedRoyalNumber = (value?: string) => {
-    return maskSensitiveMemberNumber(value);
+    return maskSensitiveMemberNumber(value, 'Not set', { reveal: isAdmin });
   };
 
   const displayBirthdate = formatBirthdateForDisplay(currentValues.birthdate) || undefined;

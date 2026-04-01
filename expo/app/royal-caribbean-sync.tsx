@@ -12,11 +12,13 @@ import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
 import { trpc, isWebSyncAvailable, RENDER_BACKEND_URL } from '@/lib/trpc';
 import { syncCruisePricing } from '@/lib/cruisePricingSync';
+import { useAuth } from '@/state/AuthProvider';
 import { maskSensitiveMemberNumber } from '@/lib/privacy';
 function RoyalCaribbeanSyncScreen() {
   const router = useRouter();
   const coreData = useCoreData();
   const loyalty = useLoyalty();
+  const { isAdmin } = useAuth();
   
   const {
     state,
@@ -891,7 +893,7 @@ function RoyalCaribbeanSyncScreen() {
                           {extendedLoyaltyData.venetianSocietyMemberNumber && (
                             <View style={styles.loyaltyRow}>
                               <Text style={styles.loyaltyLabel}>Member #:</Text>
-                              <Text style={styles.loyaltyValueMuted}>{maskSensitiveMemberNumber(extendedLoyaltyData.venetianSocietyMemberNumber)}</Text>
+                              <Text style={styles.loyaltyValueMuted}>{maskSensitiveMemberNumber(extendedLoyaltyData.venetianSocietyMemberNumber, 'Not set', { reveal: isAdmin })}</Text>
                             </View>
                           )}
                         </View>
