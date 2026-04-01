@@ -39,6 +39,7 @@ export function DailyLuckReport({ birthdate, selectedDate, entry }: DailyLuckRep
   const fallbackEntry = useMemo(() => buildLocalDailyLuckEntry(birthdate, selectedDate), [birthdate, selectedDate]);
   const resolvedEntry = entry ?? fallbackEntry;
   const birthdateDisplay = useMemo(() => formatBirthdateForDisplay(birthdate), [birthdate]);
+  const scoreBreakdown = resolvedEntry?.scoreBreakdown;
 
   const formattedDate = useMemo(() => (
     selectedDate.toLocaleDateString('en-US', {
@@ -91,24 +92,33 @@ export function DailyLuckReport({ birthdate, selectedDate, entry }: DailyLuckRep
           <View style={[styles.metricCard, styles.metricCardPrimary]}>
             <Text style={styles.metricLabel}>Lucky Day #</Text>
             <Text style={styles.metricValue}>{resolvedEntry.luckNumber}</Text>
-            <Text style={styles.metricSubvalue}>{resolvedEntry.source === 'ai' ? 'AI Rated' : 'Fallback Rated'}</Text>
+            <Text style={styles.metricSubvalue}>{resolvedEntry.source === 'ai' ? 'Weighted from AI component scores' : 'Weighted from local component scores'}</Text>
           </View>
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Chinese</Text>
             <Text style={styles.metricValueSmall}>{resolvedEntry.chineseSign}</Text>
-            <Text style={styles.metricSubvalue}>Birth animal</Text>
+            <Text style={styles.metricSubvalue}>{scoreBreakdown ? `${scoreBreakdown.chinese}/9 score` : 'Birth animal'}</Text>
           </View>
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Western</Text>
             <Text style={styles.metricValueSmall}>{resolvedEntry.westernSign}</Text>
-            <Text style={styles.metricSubvalue}>Zodiac sign</Text>
+            <Text style={styles.metricSubvalue}>{scoreBreakdown ? `${scoreBreakdown.western}/9 score` : 'Zodiac sign'}</Text>
           </View>
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Tarot</Text>
             <Text style={styles.metricValueSmall}>{resolvedEntry.tarotCard}</Text>
-            <Text style={styles.metricSubvalue}>Daily card</Text>
+            <Text style={styles.metricSubvalue}>{scoreBreakdown ? `${scoreBreakdown.tarot}/9 score` : 'Daily card'}</Text>
           </View>
         </View>
+
+        {scoreBreakdown ? (
+          <View style={styles.breakdownCard} testID="daily-luck-breakdown-card">
+            <Text style={styles.breakdownLabel}>Why this number</Text>
+            <Text style={styles.breakdownText}>
+              Chinese {scoreBreakdown.chinese}/9 + Western {scoreBreakdown.western}/9 + Tarot {scoreBreakdown.tarot}/9 weighted together = Lucky Day #{resolvedEntry.luckNumber}
+            </Text>
+          </View>
+        ) : null}
       </LinearGradient>
 
       <ReadingSection
@@ -240,6 +250,27 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: 'rgba(255,255,255,0.66)',
+  },
+  breakdownCard: {
+    marginTop: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  breakdownLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#D4B15A',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 1.1,
+    marginBottom: 6,
+  },
+  breakdownText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255,255,255,0.84)',
+    lineHeight: 20,
   },
   sectionCard: {
     borderRadius: BORDER_RADIUS.xl,

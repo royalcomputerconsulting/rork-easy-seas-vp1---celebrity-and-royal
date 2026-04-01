@@ -1,5 +1,11 @@
 export type DailyLuckSource = 'ai' | 'fallback';
 
+export interface DailyLuckScoreBreakdown {
+  chinese: number;
+  western: number;
+  tarot: number;
+}
+
 export interface DailyLuckReadings {
   chinese: string;
   western: string;
@@ -18,5 +24,6 @@ export interface DailyLuckEntry {
   tarotCard: string;
   luckNumber: number;
   luckScore: number;
+  scoreBreakdown?: DailyLuckScoreBreakdown;
   readings: DailyLuckReadings;
 }

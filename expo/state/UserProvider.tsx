@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { useAuth } from "./AuthProvider";
 import { normalizeBirthdateInput } from "@/lib/date";
-import { generateDailyLuckEntriesForYear, getDailyLuckDateKey } from "@/lib/dailyLuck";
+import { generateDailyLuckEntriesForYear, getDailyLuckDateKey, hasTransparentDailyLuckEntry } from "@/lib/dailyLuck";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import type { DailyLuckEntry } from "@/types/daily-luck";
 
@@ -177,6 +177,8 @@ function sanitizeDailyLuckMap(value: unknown): Record<string, DailyLuckEntry> | 
     }
 
     const readings = entry.readings;
+    const scoreBreakdown = isRecord(entry.scoreBreakdown) ? entry.scoreBreakdown : undefined;
+
     if (
       typeof entry.dateKey !== 'string' ||
       typeof entry.birthdate !== 'string' ||
@@ -191,7 +193,12 @@ function sanitizeDailyLuckMap(value: unknown): Record<string, DailyLuckEntry> | 
       typeof readings.chinese !== 'string' ||
       typeof readings.western !== 'string' ||
       typeof readings.tarot !== 'string' ||
-      typeof readings.synthesis !== 'string'
+      typeof readings.synthesis !== 'string' ||
+      (scoreBreakdown !== undefined && (
+        typeof scoreBreakdown.chinese !== 'number' ||
+        typeof scoreBreakdown.western !== 'number' ||
+        typeof scoreBreakdown.tarot !== 'number'
+      ))
     ) {
       return;
     }
@@ -599,6 +606,19 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     await generationPromise;
   }, [normalizedAuthenticatedEmail, users]);
 
+  const hasTransparentDailyLuckYear = useCallback((year: number): boolean => {
+    if (!currentUser?.dailyLuckYears?.includes(year)) {
+      return false;
+    }
+
+    const yearEntries = Object.values(currentUser.dailyLuckByDate ?? {}).filter((entry) => entry.year === year);
+    if (yearEntries.length === 0) {
+      return false;
+    }
+
+    return yearEntries.every((entry) => hasTransparentDailyLuckEntry(entry));
+  }, [currentUser]);
+
   const ensureDailyLuckYear = useCallback(async (year: number): Promise<void> => {
     if (!currentUser?.id) {
       return;
@@ -609,31 +629,36 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       return;
     }
 
-    if (currentUser.dailyLuckYears?.includes(year)) {
+    if (hasTransparentDailyLuckYear(year)) {
       return;
     }
 
     await generateAndPersistDailyLuckYear(currentUser.id, normalizedBirthdate, year);
-  }, [currentUser, generateAndPersistDailyLuckYear]);
+  }, [currentUser, generateAndPersistDailyLuckYear, hasTransparentDailyLuckYear]);
 
   const getDailyLuckEntry = useCallback((date: Date): DailyLuckEntry | null => {
     if (!currentUser) {
       return null;
     }
 
-    return currentUser.dailyLuckByDate?.[getDailyLuckDateKey(date)] ?? null;
+    const entry = currentUser.dailyLuckByDate?.[getDailyLuckDateKey(date)] ?? null;
+    if (!hasTransparentDailyLuckEntry(entry)) {
+      return null;
+    }
+
+    return entry;
   }, [currentUser]);
 
   useEffect(() => {
     const normalizedBirthdate = normalizeBirthdateInput(currentUser?.birthdate);
     const currentYear = new Date().getFullYear();
 
-    if (!currentUser?.id || !normalizedBirthdate || currentUser.dailyLuckYears?.includes(currentYear)) {
+    if (!currentUser?.id || !normalizedBirthdate || hasTransparentDailyLuckYear(currentYear)) {
       return;
     }
 
     void generateAndPersistDailyLuckYear(currentUser.id, normalizedBirthdate, currentYear, users);
-  }, [currentUser?.birthdate, currentUser?.dailyLuckYears, currentUser?.id, generateAndPersistDailyLuckYear, users]);
+  }, [currentUser?.birthdate, currentUser?.id, generateAndPersistDailyLuckYear, hasTransparentDailyLuckYear, users]);
 
   const addUser = useCallback(async (user: { id?: string; name: string; email: string; avatarUrl?: string }): Promise<UserProfile> => {
     const now = new Date().toISOString();

@@ -6,7 +6,7 @@ import {
   getDailyLuckDigitForDate,
   parseBirthdate,
 } from '@/lib/date';
-import type { DailyLuckEntry, DailyLuckReadings } from '@/types/daily-luck';
+import type { DailyLuckEntry, DailyLuckReadings, DailyLuckScoreBreakdown } from '@/types/daily-luck';
 
 interface WesternSignProfile {
   name: string;
@@ -76,11 +76,64 @@ const TAROT_CARDS: TarotCardProfile[] = [
   { name: 'The World', number: 'XXI', upright: 'completion and earned arrival', shadow: 'unfinished business and loose ends', guidance: 'honor what is complete, then step forward whole' },
 ];
 
+const CHINESE_COMPATIBILITY_OFFSETS = [1, 2, 1, 0, -1, -2, -2] as const;
+const PLANETARY_DAY_OFFSETS: Record<(typeof PLANETARY_RULERS)[number], number> = {
+  Sun: 1,
+  Moon: 0,
+  Mars: -1,
+  Mercury: 0,
+  Jupiter: 1,
+  Venus: 1,
+  Saturn: -2,
+};
+const MOON_PHASE_OFFSETS: Record<(typeof MOON_PHASES)[number], number> = {
+  'new moon': -1,
+  'waxing crescent': 0,
+  'first quarter': 1,
+  'waxing gibbous': 1,
+  'full moon': 2,
+  'waning gibbous': 0,
+  'last quarter': -1,
+  'waning crescent': -2,
+};
+const ELEMENTALLY_FAVORED_PLANETS: Record<string, readonly (typeof PLANETARY_RULERS)[number][]> = {
+  Fire: ['Sun', 'Mars', 'Jupiter'],
+  Earth: ['Mercury', 'Venus', 'Saturn'],
+  Air: ['Mercury', 'Venus', 'Saturn'],
+  Water: ['Moon', 'Venus', 'Jupiter'],
+};
+const TAROT_TONE_OFFSETS: Record<string, number> = {
+  'The Fool': 0,
+  'The Magician': 1,
+  'The High Priestess': 0,
+  'The Empress': 2,
+  'The Emperor': 1,
+  'The Hierophant': 0,
+  'The Lovers': 1,
+  'The Chariot': 1,
+  Strength: 2,
+  'The Hermit': -1,
+  'Wheel of Fortune': 2,
+  Justice: 0,
+  'The Hanged Man': -1,
+  Death: -2,
+  Temperance: 1,
+  'The Devil': -2,
+  'The Tower': -3,
+  'The Star': 2,
+  'The Moon': -1,
+  'The Sun': 3,
+  Judgment: 1,
+  'The World': 2,
+};
+
 const monthlyLuckSchema = z.object({
   days: z.array(
     z.object({
       dateKey: z.string(),
-      luckNumber: z.number().int().min(1).max(9),
+      chineseScore: z.number().int().min(1).max(9),
+      westernScore: z.number().int().min(1).max(9),
+      tarotScore: z.number().int().min(1).max(9),
       synthesis: z.string().min(12).max(240),
     })
   ),
@@ -98,6 +151,89 @@ export function getDailyLuckDateKey(date: Date): string {
   const month = String(normalizedDate.getMonth() + 1).padStart(2, '0');
   const day = String(normalizedDate.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function clampLuckNumber(value: number): number {
+  return Math.max(1, Math.min(9, Math.round(value)));
+}
+
+function createScoreBreakdown(chinese: number, western: number, tarot: number): DailyLuckScoreBreakdown {
+  return {
+    chinese: clampLuckNumber(chinese),
+    western: clampLuckNumber(western),
+    tarot: clampLuckNumber(tarot),
+  };
+}
+
+function getWeightedLuckValue(breakdown: DailyLuckScoreBreakdown): number {
+  return breakdown.chinese * 0.3 + breakdown.western * 0.35 + breakdown.tarot * 0.35;
+}
+
+function getLuckNumberFromBreakdown(breakdown: DailyLuckScoreBreakdown): number {
+  return clampLuckNumber(getWeightedLuckValue(breakdown));
+}
+
+function getReadingLabel(key: keyof DailyLuckScoreBreakdown): string {
+  if (key === 'chinese') return 'Chinese';
+  if (key === 'western') return 'Western';
+  return 'Tarot';
+}
+
+function getHighestReadingKey(breakdown: DailyLuckScoreBreakdown): keyof DailyLuckScoreBreakdown {
+  const entries = Object.entries(breakdown) as [keyof DailyLuckScoreBreakdown, number][];
+  return entries.sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'western';
+}
+
+function getLowestReadingKey(breakdown: DailyLuckScoreBreakdown): keyof DailyLuckScoreBreakdown {
+  const entries = Object.entries(breakdown) as [keyof DailyLuckScoreBreakdown, number][];
+  return entries.sort((a, b) => a[1] - b[1])[0]?.[0] ?? 'western';
+}
+
+function buildLocalSynthesisReason(breakdown: DailyLuckScoreBreakdown): string {
+  const weightedLuckValue = getWeightedLuckValue(breakdown);
+  const scores = [breakdown.chinese, breakdown.western, breakdown.tarot];
+  const spread = Math.max(...scores) - Math.min(...scores);
+  const strongest = getReadingLabel(getHighestReadingKey(breakdown));
+  const weakest = getReadingLabel(getLowestReadingKey(breakdown));
+
+  if (weightedLuckValue >= 7.5) {
+    return `${strongest} carries the day and the other readings stay supportive, so this reads as a genuinely high-luck day.`;
+  }
+
+  if (weightedLuckValue >= 6.5) {
+    return `${strongest} is the strongest green light, but the day still rewards pacing more than overreaching.`;
+  }
+
+  if (weightedLuckValue >= 4.5 && spread <= 2) {
+    return 'The three systems stay close together, so the day reads balanced rather than extreme.';
+  }
+
+  if (weightedLuckValue >= 4.5) {
+    return `${strongest} helps, but ${weakest} keeps the day from reading like a peak-luck day.`;
+  }
+
+  if (weightedLuckValue >= 3) {
+    return `${weakest} weighs on the day enough that caution matters more than momentum.`;
+  }
+
+  return 'All three systems lean cautious, so this should be treated as a low-luck day.';
+}
+
+function buildTransparentSynthesis(
+  breakdown: DailyLuckScoreBreakdown,
+  providedSynthesis?: string,
+): string {
+  const luckNumber = getLuckNumberFromBreakdown(breakdown);
+  const normalizedSynthesis = typeof providedSynthesis === 'string' ? providedSynthesis.trim() : '';
+  const explanation = normalizedSynthesis.length > 0 ? normalizedSynthesis : buildLocalSynthesisReason(breakdown);
+  return `Lucky Day # ${luckNumber}: Chinese ${breakdown.chinese}/9, Western ${breakdown.western}/9, Tarot ${breakdown.tarot}/9. ${explanation}`;
+}
+
+export function hasTransparentDailyLuckEntry(entry: DailyLuckEntry | null | undefined): boolean {
+  return !!entry?.scoreBreakdown &&
+    typeof entry.scoreBreakdown.chinese === 'number' &&
+    typeof entry.scoreBreakdown.western === 'number' &&
+    typeof entry.scoreBreakdown.tarot === 'number';
 }
 
 function getChineseAnimal(year: number): string {
@@ -145,34 +281,68 @@ function getFallbackLuckNumber(birthdate: Date, selectedDate: Date): number {
   return getDailyLuckDigitForDate(birthdate, selectedDate) ?? 5;
 }
 
-function buildChineseReading(birthdate: Date, selectedDate: Date): { chineseSign: string; text: string } {
+function getChineseScore(birthAnimal: string, currentAnimal: string, weekdayPlanet: (typeof PLANETARY_RULERS)[number]): number {
+  const birthIndex = CHINESE_ANIMALS.indexOf(birthAnimal as (typeof CHINESE_ANIMALS)[number]);
+  const currentIndex = CHINESE_ANIMALS.indexOf(currentAnimal as (typeof CHINESE_ANIMALS)[number]);
+  const directDistance = Math.abs(birthIndex - currentIndex);
+  const wrappedDistance = Math.min(directDistance, CHINESE_ANIMALS.length - directDistance);
+  const compatibilityOffset = CHINESE_COMPATIBILITY_OFFSETS[wrappedDistance] ?? 0;
+  const planetaryOffset = PLANETARY_DAY_OFFSETS[weekdayPlanet] ?? 0;
+  return clampLuckNumber(5 + compatibilityOffset + planetaryOffset);
+}
+
+function getWesternScore(sign: WesternSignProfile, moonPhase: string, weekdayPlanet: (typeof PLANETARY_RULERS)[number]): number {
+  const favoredPlanets = ELEMENTALLY_FAVORED_PLANETS[sign.element] ?? [];
+  const phaseOffset = MOON_PHASE_OFFSETS[moonPhase as (typeof MOON_PHASES)[number]] ?? 0;
+  const rulerOffset = sign.ruler === weekdayPlanet ? 1 : 0;
+  const elementalOffset = favoredPlanets.includes(weekdayPlanet) ? 1 : 0;
+  return clampLuckNumber(5 + phaseOffset + rulerOffset + elementalOffset);
+}
+
+function getTarotScore(card: TarotCardProfile, fallbackLuckNumber: number): number {
+  const toneOffset = TAROT_TONE_OFFSETS[card.name] ?? 0;
+  const fallbackOffset = fallbackLuckNumber >= 7 ? 1 : fallbackLuckNumber <= 3 ? -1 : 0;
+  return clampLuckNumber(5 + toneOffset + fallbackOffset);
+}
+
+function buildChineseReading(birthdate: Date, selectedDate: Date): { chineseSign: string; score: number; text: string } {
   const birthAnimal = getChineseAnimal(birthdate.getFullYear());
   const dayAnimal = getChineseAnimal(selectedDate.getFullYear());
   const weekdayPlanet = PLANETARY_RULERS[selectedDate.getDay()] ?? PLANETARY_RULERS[0];
+  const score = getChineseScore(birthAnimal, dayAnimal, weekdayPlanet);
 
   return {
     chineseSign: birthAnimal,
+    score,
     text: `Chinese horoscope: your ${birthAnimal} nature meets a ${dayAnimal} year current under ${weekdayPlanet}'s daily influence. This favors measured instincts, social awareness, and acting only after the pattern is clear. Luck rises when you stay observant, avoid overcommitting early, and trust the opening that feels earned instead of flashy.`,
   };
 }
 
-function buildWesternReading(birthdate: Date, selectedDate: Date): { westernSign: string; text: string } {
+function buildWesternReading(birthdate: Date, selectedDate: Date): { westernSign: string; score: number; text: string } {
   const sign = getWesternSign(birthdate.getMonth() + 1, birthdate.getDate());
   const weekdayPlanet = PLANETARY_RULERS[selectedDate.getDay()] ?? PLANETARY_RULERS[0];
   const moonPhase = getMoonPhase(selectedDate);
+  const score = getWesternScore(sign, moonPhase, weekdayPlanet);
 
   return {
     westernSign: sign.name,
+    score,
     text: `Western zodiac and planetary alignment: as a ${sign.name}, you naturally move through life with ${sign.gift}. Today the ${moonPhase} Moon sharpens emotional timing while ${weekdayPlanet} colors the day with extra emphasis on focus, communication, and pacing. The sky supports deliberate choices, clean boundaries, and quiet confidence far more than impulsive risk-taking.`,
   };
 }
 
-function buildTarotReading(birthdate: Date, selectedDate: Date, fallbackLuckNumber: number): { tarotCard: string; text: string } {
+function buildTarotReading(
+  birthdate: Date,
+  selectedDate: Date,
+  fallbackLuckNumber: number,
+): { tarotCard: string; score: number; text: string } {
   const card = getTarotCard(birthdate, selectedDate);
   const leaning = fallbackLuckNumber >= 6 ? card.upright : card.shadow;
+  const score = getTarotScore(card, fallbackLuckNumber);
 
   return {
     tarotCard: card.name,
+    score,
     text: `Tarot reading: ${card.name} (${card.number}) is your card for the day. Its strongest message centers on ${leaning}. The guidance here is direct: ${card.guidance}. If you respond with patience and clear intent, the card suggests stronger outcomes than if you push from stress or urgency.`,
   };
 }
@@ -193,13 +363,22 @@ export function buildLocalDailyLuckEntry(
   const chinese = buildChineseReading(birthdate, normalizedDate);
   const western = buildWesternReading(birthdate, normalizedDate);
   const tarot = buildTarotReading(birthdate, normalizedDate, fallbackLuckNumber);
+  const scoreBreakdown = createScoreBreakdown(chinese.score, western.score, tarot.score);
+  const luckNumber = getLuckNumberFromBreakdown(scoreBreakdown);
 
   const readings: DailyLuckReadings = {
     chinese: chinese.text,
     western: western.text,
     tarot: tarot.text,
-    synthesis: `Lucky Day # ${fallbackLuckNumber}: this is a balanced reading built from your Chinese horoscope, Western zodiac, and tarot card for the day.`,
+    synthesis: buildTransparentSynthesis(scoreBreakdown),
   };
+
+  console.log('[DailyLuck] Built local daily luck entry:', {
+    dateKey,
+    birthdate: normalizedBirthdate,
+    scoreBreakdown,
+    luckNumber,
+  });
 
   return {
     dateKey,
@@ -210,8 +389,9 @@ export function buildLocalDailyLuckEntry(
     westernSign: western.westernSign,
     chineseSign: chinese.chineseSign,
     tarotCard: tarot.tarotCard,
-    luckNumber: fallbackLuckNumber,
-    luckScore: Math.round((fallbackLuckNumber / 9) * 100),
+    luckNumber,
+    luckScore: Math.round((luckNumber / 9) * 100),
+    scoreBreakdown,
     readings,
   };
 }
@@ -219,7 +399,7 @@ export function buildLocalDailyLuckEntry(
 async function generateMonthlyLuckyNumbersWithAI(
   birthdate: Date,
   monthEntries: DailyLuckEntry[],
-): Promise<Record<string, { luckNumber: number; synthesis: string }>> {
+): Promise<Record<string, { scoreBreakdown: DailyLuckScoreBreakdown; synthesis: string }>> {
   if (monthEntries.length === 0) {
     return {};
   }
@@ -237,14 +417,21 @@ async function generateMonthlyLuckyNumbersWithAI(
 Birthdate: ${birthdateLabel}
 Month: ${monthLabel}
 
-For each day below, read the Chinese horoscope, Western zodiac/planetary reading, and tarot reading together, then assign a single Lucky Day number from 1 to 9.
+For each day below, read the Chinese horoscope, Western zodiac/planetary reading, and tarot reading together.
+Score each system separately from 1 to 9, then write one concise synthesis sentence.
+The final Lucky Day # will be calculated from your three component scores, so your scores must stay internally consistent.
+
+Scale:
+- 1 to 3 = warning, obstruction, low momentum, or clear caution
+- 4 to 6 = mixed, balanced, moderate, or usable with restraint
+- 7 to 9 = aligned, unusually supportive, high momentum, or strong timing
 
 Rules:
 - Use the full range naturally. Do not make most days high luck.
 - Let 4, 5, and 6 be the most common values.
-- Use 1-3 only when the readings clearly warn, obstruct, or advise caution.
-- Use 7-9 only when the readings clearly support momentum, alignment, or unusually favorable timing.
-- Return one concise synthesis sentence per day explaining why that number fits.
+- If the text stresses pacing, restraint, boundaries, or caution, do not score that system above 6.
+- Use 7 to 9 only when the specific reading is clearly favorable, expansive, or unusually supportive.
+- Return one concise synthesis sentence per day explaining the blend.
 - Keep every synthesis under 240 characters.
 
 Days:
@@ -254,10 +441,10 @@ ${monthEntries.map((entry) => `Date: ${entry.dateKey}\nChinese: ${entry.readings
       schema: monthlyLuckSchema,
     });
 
-    const monthlyMap: Record<string, { luckNumber: number; synthesis: string }> = {};
+    const monthlyMap: Record<string, { scoreBreakdown: DailyLuckScoreBreakdown; synthesis: string }> = {};
     result.days.forEach((day) => {
       monthlyMap[day.dateKey] = {
-        luckNumber: day.luckNumber,
+        scoreBreakdown: createScoreBreakdown(day.chineseScore, day.westernScore, day.tarotScore),
         synthesis: day.synthesis,
       };
     });
@@ -314,15 +501,17 @@ export async function generateDailyLuckEntriesForYear(
         return;
       }
 
+      const luckNumber = getLuckNumberFromBreakdown(aiEntry.scoreBreakdown);
       entriesByDate[entry.dateKey] = {
         ...entry,
         generatedAt: new Date().toISOString(),
         source: 'ai',
-        luckNumber: aiEntry.luckNumber,
-        luckScore: Math.round((aiEntry.luckNumber / 9) * 100),
+        luckNumber,
+        luckScore: Math.round((luckNumber / 9) * 100),
+        scoreBreakdown: aiEntry.scoreBreakdown,
         readings: {
           ...entry.readings,
-          synthesis: aiEntry.synthesis,
+          synthesis: buildTransparentSynthesis(aiEntry.scoreBreakdown, aiEntry.synthesis),
         },
       };
     });
