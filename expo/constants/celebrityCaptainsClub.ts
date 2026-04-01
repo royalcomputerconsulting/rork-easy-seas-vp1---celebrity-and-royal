@@ -10,8 +10,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   Preview: {
     name: 'Preview',
     cruisePoints: 0,
-    color: '#708090',
-    bgColor: 'rgba(112, 128, 144, 0.15)',
+    color: '#62881A',
+    bgColor: 'rgba(98, 136, 26, 0.16)',
     benefits: [
       'Enrollment before first cruise',
       'Access to Captain\'s Club member portal',
@@ -20,8 +20,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   Classic: {
     name: 'Classic',
     cruisePoints: 2,
-    color: '#CD7F32',
-    bgColor: 'rgba(205, 127, 50, 0.15)',
+    color: '#4F9BDB',
+    bgColor: 'rgba(79, 155, 219, 0.16)',
     benefits: [
       'Captain\'s Club welcome',
       'Member savings on future cruises',
@@ -31,8 +31,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   Select: {
     name: 'Select',
     cruisePoints: 150,
-    color: '#C0C0C0',
-    bgColor: 'rgba(192, 192, 192, 0.15)',
+    color: '#E9862D',
+    bgColor: 'rgba(233, 134, 45, 0.16)',
     benefits: [
       'All Classic benefits',
       'Priority check-in',
@@ -43,8 +43,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   Elite: {
     name: 'Elite',
     cruisePoints: 300,
-    color: '#FFD700',
-    bgColor: 'rgba(255, 215, 0, 0.15)',
+    color: '#55585D',
+    bgColor: 'rgba(85, 88, 93, 0.16)',
     benefits: [
       'All Select benefits',
       'Priority embarkation',
@@ -55,8 +55,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   'Elite Plus': {
     name: 'Elite Plus',
     cruisePoints: 750,
-    color: '#1C1C1C',
-    bgColor: 'rgba(229, 228, 226, 0.15)',
+    color: '#A64A33',
+    bgColor: 'rgba(166, 74, 51, 0.16)',
     benefits: [
       'All Elite benefits',
       'Complimentary laundry service',
@@ -68,8 +68,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   Zenith: {
     name: 'Zenith',
     cruisePoints: 3000,
-    color: '#4169E1',
-    bgColor: 'rgba(65, 105, 225, 0.15)',
+    color: '#2D2F33',
+    bgColor: 'rgba(45, 47, 51, 0.16)',
     benefits: [
       'All Elite Plus benefits',
       'Annual Zenith event',
@@ -118,6 +118,10 @@ export function getCelebrityCaptainsClubLevelByPoints(points: number): string {
     }
   }
   return 'Preview';
+}
+
+export function getCelebrityCaptainsClubLevelInfo(levelName: string): CelebrityCaptainsClubLevelInfo {
+  return CELEBRITY_CAPTAINS_CLUB_LEVELS[levelName] || CELEBRITY_CAPTAINS_CLUB_LEVELS.Preview;
 }
 
 export function calculatePointsToZenith(currentPoints: number): number {

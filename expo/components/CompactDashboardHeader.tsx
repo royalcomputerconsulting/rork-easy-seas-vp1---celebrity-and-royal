@@ -7,7 +7,7 @@ import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS, LEVEL_ORDER } from '@/constants/crownAnchor';
 import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER, getCelebrityCaptainsClubLevelByPoints } from '@/constants/celebrityCaptainsClub';
-import { CELEBRITY_BLUE_CHIP_TIERS, CELEBRITY_TIER_ORDER, getCelebrityBlueChipTierByLevel } from '@/constants/celebrityBlueChipClub';
+import { CELEBRITY_BLUE_CHIP_TIERS, CELEBRITY_TIER_ORDER, getCelebrityBlueChipTierByPoints } from '@/constants/celebrityBlueChipClub';
 import { SILVERSEA_VENETIAN_TIERS, SILVERSEA_TIER_ORDER, getSilverseaTierByDays, getNextSilverseaTier } from '@/constants/silverseaVenetianSociety';
 import { CARNIVAL_VIFP_TIERS, CARNIVAL_VIFP_TIER_ORDER, CARNIVAL_PLAYERS_CLUB_TIERS } from '@/constants/carnivalVifpClub';
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -106,6 +106,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     pinnacleProgress,
     mastersProgress,
     projectedBookedPoints,
+    extendedLoyalty,
+    captainsClub,
   } = useLoyalty();
   const { currentUser } = useUser();
   const preferredBrand = currentUser?.preferredBrand === 'carnival' ? 'royal' : currentUser?.preferredBrand || 'royal';
@@ -115,10 +117,10 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     setActiveBrand(currentUser?.preferredBrand === 'carnival' ? 'royal' : currentUser?.preferredBrand || 'royal');
   }, [currentUser?.preferredBrand]);
 
-  const celebrityCaptainsClubPoints = currentUser?.celebrityCaptainsClubPoints || 0;
-  const celebrityBlueChipPoints = currentUser?.celebrityBlueChipPoints || 0;
-  const celebrityLevel = getCelebrityCaptainsClubLevelByPoints(celebrityCaptainsClubPoints);
-  const celebrityTier = getCelebrityBlueChipTierByLevel(1);
+  const celebrityCaptainsClubPoints = captainsClub.points ?? currentUser?.celebrityCaptainsClubPoints ?? 0;
+  const celebrityBlueChipPoints = extendedLoyalty?.celebrityBlueChipPoints ?? currentUser?.celebrityBlueChipPoints ?? 0;
+  const celebrityLevel = captainsClub.tier ?? getCelebrityCaptainsClubLevelByPoints(celebrityCaptainsClubPoints);
+  const celebrityTier = extendedLoyalty?.celebrityBlueChipTier ?? getCelebrityBlueChipTierByPoints(celebrityBlueChipPoints);
 
   const formatETAFromDate = (date: Date | null): string => {
     if (!date) return 'TBD';

@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
 import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
 import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS } from '@/constants/celebrityCaptainsClub';
-import { getCelebrityBlueChipTierByLevel, CELEBRITY_BLUE_CHIP_TIERS } from '@/constants/celebrityBlueChipClub';
+import { getCelebrityBlueChipTierByPoints, CELEBRITY_BLUE_CHIP_TIERS } from '@/constants/celebrityBlueChipClub';
 import { BrandToggle, BrandType } from './BrandToggle';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { maskSensitiveMemberNumber } from '@/lib/privacy';
@@ -144,10 +144,13 @@ export function UserProfileCard({
 
   const calculatedCelebrityLevel = getCelebrityCaptainsClubLevelByPoints(formData.celebrityCaptainsClubPoints || 0);
   const calculatedCelebrityLevelInfo = CELEBRITY_CAPTAINS_CLUB_LEVELS[calculatedCelebrityLevel];
-  
-  const celebrityBlueChipLevel = 1;
-  const calculatedCelebrityTier = getCelebrityBlueChipTierByLevel(celebrityBlueChipLevel);
+  const displayedCelebrityLevel = enrichmentData?.captainsClubTier || calculatedCelebrityLevel;
+  const displayedCelebrityLevelInfo = CELEBRITY_CAPTAINS_CLUB_LEVELS[displayedCelebrityLevel] || calculatedCelebrityLevelInfo;
+
+  const calculatedCelebrityTier = getCelebrityBlueChipTierByPoints(formData.celebrityBlueChipPoints || 0);
   const calculatedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[calculatedCelebrityTier];
+  const displayedCelebrityTier = enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier;
+  const displayedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[displayedCelebrityTier] || calculatedCelebrityTierInfo;
 
   const handleSave = () => {
     onSave({
@@ -297,9 +300,9 @@ export function UserProfileCard({
         {renderValueCard('Email', currentValues.celebrityEmail, undefined, true)}
         {renderValueCard('Birthdate', displayBirthdate, undefined, true)}
         {renderValueCard("Captain's Club #", getMaskedRoyalNumber(currentValues.celebrityCaptainsClubNumber || enrichmentData?.captainsClubId), undefined, true)}
-        {renderValueCard("Captain's Level", enrichmentData?.captainsClubTier || calculatedCelebrityLevel, calculatedCelebrityLevelInfo?.color)}
+        {renderValueCard("Captain's Level", displayedCelebrityLevel, displayedCelebrityLevelInfo?.color)}
         {renderValueCard('Club Points', enrichmentData?.captainsClubPoints ?? currentValues.celebrityCaptainsClubPoints, COLORS.loyalty)}
-        {renderValueCard('Blue Chip Tier', enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier, calculatedCelebrityTierInfo?.color)}
+        {renderValueCard('Blue Chip Tier', displayedCelebrityTier, displayedCelebrityTierInfo?.color)}
         {renderValueCard('Casino Points', enrichmentData?.celebrityBlueChipPoints ?? currentValues.celebrityBlueChipPoints, COLORS.points)}
         {enrichmentData?.captainsClubNextTier && renderValueCard('Next Level', enrichmentData.captainsClubNextTier)}
         {enrichmentData?.captainsClubRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.captainsClubRemainingPoints)}
