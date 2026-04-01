@@ -26,6 +26,64 @@ type PurchasesModule = {
 let Purchases: PurchasesModule | null = null;
 let purchasesInitError: string | null = null;
 
+function isExpoGoPurchasesRuntime(): boolean {
+  return Platform.OS !== 'web' && Constants.appOwnership === 'expo';
+}
+
+function isPurchasesModuleUnavailableError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('requiring unknown module') ||
+    message.includes('unknown module') ||
+    message.includes('nativeeventemitter') ||
+    message.includes('non-null argument') ||
+    message.includes('native module') ||
+    message.includes('rnpurchases')
+  );
+}
+
+function formatPurchasesInitializationError(error: unknown): string {
+  if (isPurchasesModuleUnavailableError(error)) {
+    return 'In-app purchases are not available in this runtime. Use the web preview or a development build to test purchases on device.';
+  }
+
+  if (error instanceof Error) {
+    return `Failed to initialize purchases: ${error.message}`;
+  }
+
+  return 'Failed to initialize purchases.';
+}
+
+function resolvePurchasesModule(moduleValue: unknown): PurchasesModule | null {
+  if (!moduleValue) {
+    return null;
+  }
+
+  const candidate =
+    typeof moduleValue === 'object' && moduleValue !== null && 'default' in moduleValue
+      ? (moduleValue as { default?: unknown }).default
+      : moduleValue;
+
+  if (!candidate || typeof candidate !== 'object') {
+    return null;
+  }
+
+  const typedCandidate = candidate as Partial<PurchasesModule>;
+  if (
+    typeof typedCandidate.configure !== 'function' ||
+    typeof typedCandidate.getOfferings !== 'function' ||
+    typeof typedCandidate.getCustomerInfo !== 'function'
+  ) {
+    return null;
+  }
+
+  return typedCandidate as PurchasesModule;
+}
+
 export type EntitlementSource = 'iap' | 'dev' | 'grandfathered' | 'unknown';
 export type SubscriptionTier = 'trial' | 'view' | 'basic' | 'pro';
 export type SubscriptionDisplayStatus = 'grace_period' | 'monthly' | 'annual' | 'expired';
@@ -508,7 +566,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   }, [computeDisplayStatus, computeTier]);
 
   const ensurePurchasesLoaded = useCallback(async (): Promise<PurchasesModule | null> => {
-    const isExpoGo = Constants.appOwnership === 'expo';
+    const isExpoGo = isExpoGoPurchasesRuntime();
     const isWeb = Platform.OS === 'web';
 
     let apiKey = '';
@@ -523,13 +581,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         return null;
       }
     } else if (isExpoGo) {
-      apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? '').trim();
-      keySource = 'test-store (Expo Go)';
-      if (!apiKey) {
-        purchasesInitError = 'IAP not available in Expo Go. Use a development build or web preview for testing.';
-        console.warn('[Entitlement] RevenueCat IAP requires a development build or Test Store API Key for Expo Go.');
-        return null;
-      }
+      purchasesInitError = 'In-app purchases are not available in Expo Go. Use the web preview or a development build to test purchases on device.';
+      console.warn('[Entitlement] RevenueCat native module is unavailable in Expo Go. Skipping react-native-purchases initialization.');
+      return null;
     } else if (Platform.OS === 'android') {
       apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '').trim();
       keySource = 'android-production (Google Play)';
@@ -558,8 +612,14 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     if (Purchases) return Purchases;
 
     try {
-      const mod = (await import('react-native-purchases')) as unknown as { default: PurchasesModule };
-      Purchases = mod.default;
+      const mod = require('react-native-purchases') as unknown;
+      Purchases = resolvePurchasesModule(mod);
+
+      if (!Purchases) {
+        purchasesInitError = 'Failed to initialize purchases.';
+        console.error('[Entitlement] react-native-purchases resolved to an invalid module shape');
+        return null;
+      }
 
       console.log('[Entitlement] Configuring Purchases', {
         platform: Platform.OS,
@@ -577,10 +637,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       console.log(`[Entitlement] RevenueCat initialized successfully for ${Platform.OS} via ${keySource}`);
       return Purchases;
     } catch (e) {
-      purchasesInitError =
-        e instanceof Error
-          ? `Failed to initialize purchases: ${e.message}`
-          : 'Failed to initialize purchases.';
+      purchasesInitError = formatPurchasesInitializationError(e);
       console.error('[Entitlement] Failed to load/initialize react-native-purchases', e);
       return null;
     }
