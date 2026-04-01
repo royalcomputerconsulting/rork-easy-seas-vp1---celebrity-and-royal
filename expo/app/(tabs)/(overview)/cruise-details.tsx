@@ -14,6 +14,7 @@ import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 
 import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
+import { GlassSurface } from '@/components/premium/GlassSurface';
 
 type CompactFactProps = {
   icon: React.ComponentType<{ size?: number; color?: string }>;
@@ -701,23 +702,25 @@ export default function CruiseDetailsScreen() {
             )}
           </View>
 
-          <View style={styles.compactFactsRow} testID="cruise-facts-card">
-            <CompactFact icon={Calendar} value={formatDate(cruise.sailDate, 'short')} />
-            <Text style={styles.factDivider}>•</Text>
-            <CompactFact icon={Clock} value={formatNights(accurateNights)} />
-            <Text style={styles.factDivider}>•</Text>
-            <CompactFact icon={MapPin} value={cruise.departurePort || 'TBD'} />
-          </View>
-          <View style={styles.compactFactsRow}>
-            <CompactFact icon={Users} value={`${cruise.guests || 2} guests`} />
-            <Text style={styles.factDivider}>•</Text>
-            <CompactFact icon={Anchor} value={cruise.cabinType || 'TBD'} />
-            <Text style={styles.factDivider}>•</Text>
-            <CompactFact icon={Dice5} value={casinoAvailability ? `${casinoAvailability.casinoOpenDays}/${casinoAvailability.totalDays} casino` : '—'} />
-          </View>
+          <GlassSurface style={styles.overviewFactsCard} contentStyle={styles.overviewFactsContent} testID="cruise-facts-card">
+            <View style={styles.compactFactsRow}>
+              <CompactFact icon={Calendar} value={formatDate(cruise.sailDate, 'short')} />
+              <Text style={styles.factDivider}>•</Text>
+              <CompactFact icon={Clock} value={formatNights(accurateNights)} />
+              <Text style={styles.factDivider}>•</Text>
+              <CompactFact icon={MapPin} value={cruise.departurePort || 'TBD'} />
+            </View>
+            <View style={styles.compactFactsRow}>
+              <CompactFact icon={Users} value={`${cruise.guests || 2} guests`} />
+              <Text style={styles.factDivider}>•</Text>
+              <CompactFact icon={Anchor} value={cruise.cabinType || 'TBD'} />
+              <Text style={styles.factDivider}>•</Text>
+              <CompactFact icon={Dice5} value={casinoAvailability ? `${casinoAvailability.casinoOpenDays}/${casinoAvailability.totalDays} casino` : '—'} />
+            </View>
+          </GlassSurface>
 
           {isBooked && (
-            <View style={styles.cruiseDetailsSection}>
+            <GlassSurface style={styles.cruiseDetailsSection} contentStyle={styles.glassSectionContent}>
               <View style={styles.sectionHeader}>
                 <Ship size={20} color={COLORS.beigeWarm} />
                 <Text style={styles.sectionTitle}>Cruise Details</Text>
@@ -824,7 +827,7 @@ export default function CruiseDetailsScreen() {
                   </View>
                 )}
               </View>
-            </View>
+            </GlassSurface>
           )}
 
           {((cruise.freePlay ?? linkedOffer?.freePlay ?? linkedOffer?.freeplayAmount ?? 0) > 0 || (cruise.freeOBC ?? linkedOffer?.OBC ?? linkedOffer?.obcAmount ?? 0) > 0) && (
@@ -881,12 +884,13 @@ export default function CruiseDetailsScreen() {
 
           {isBooked && (
             <TouchableOpacity 
-              style={styles.bwoFpObcCard} 
+              style={styles.sectionTouchable}
               onPress={openFullEditModal}
               activeOpacity={0.7}
               testID="bwo-fp-obc-section"
             >
-              <View style={styles.bwoFpObcHeader}>
+              <GlassSurface style={styles.bwoFpObcCard} contentStyle={styles.glassCompactSectionContent}>
+                <View style={styles.bwoFpObcHeader}>
                 <Text style={styles.bwoFpObcTitle}>Cruise Receipt Details</Text>
                 <Edit3 size={14} color={COLORS.textSecondary} />
               </View>
@@ -919,11 +923,12 @@ export default function CruiseDetailsScreen() {
               ) : (
                 <Text style={styles.bwoFpObcPlaceholder}>Tap to add BWO#, FreePlay, or OBC from your receipt</Text>
               )}
+              </GlassSurface>
             </TouchableOpacity>
           )}
 
           {isBooked && (
-            <View style={styles.compactCasinoCard}>
+            <GlassSurface style={styles.compactCasinoCard} contentStyle={styles.glassCompactSectionContent}>
               <View style={styles.casinoResultsRow}>
                 <View style={styles.casinoResultCol}>
                   <Text style={styles.casinoResultLabel}>Win/Loss</Text>
@@ -954,11 +959,11 @@ export default function CruiseDetailsScreen() {
                   <Edit3 size={16} color={COLORS.navyDeep} />
                 </TouchableOpacity>
               </View>
-            </View>
+            </GlassSurface>
           )}
 
           {(hasPerks || cruise.offerCode || (cruise as any).offerCode) && (
-            <View style={styles.offersSectionCompact}>
+            <GlassSurface style={styles.offersSectionCompact} contentStyle={styles.glassCompactSectionContent}>
               <View style={styles.sectionHeaderCompact}>
                 <Gift size={16} color={COLORS.beigeWarm} />
                 <Text style={styles.sectionTitleCompact}>Special Offers & Perks</Text>
@@ -996,7 +1001,7 @@ export default function CruiseDetailsScreen() {
                   </View>
                 )}
               </View>
-            </View>
+            </GlassSurface>
           )}
 
           {isBooked && (cruise as BookedCruise).bookingId && (
@@ -1193,7 +1198,7 @@ export default function CruiseDetailsScreen() {
           )}
 
           {casinoAvailability && (
-            <View style={styles.casinoSectionCompact}>
+            <GlassSurface style={styles.casinoSectionCompact} contentStyle={styles.glassCompactSectionContent}>
               <View style={styles.sectionHeaderCompact}>
                 <MapPin size={16} color={COLORS.beigeWarm} />
                 <Text style={styles.sectionTitleCompact}>Itinerary & Casino</Text>
@@ -1228,11 +1233,11 @@ export default function CruiseDetailsScreen() {
                   <Text style={styles.itineraryMoreText}>+{casinoAvailability.dailyAvailability.length - 3} more days</Text>
                 )}
               </View>
-            </View>
+            </GlassSurface>
           )}
 
           {valueBreakdown && (
-            <View style={styles.valueSection}>
+            <GlassSurface style={styles.valueSection} contentStyle={styles.glassSectionContent}>
               <View style={styles.sectionHeader}>
                 <DollarSign size={20} color={COLORS.beigeWarm} />
                 <Text style={styles.sectionTitle}>Value Summary</Text>
@@ -1264,7 +1269,7 @@ export default function CruiseDetailsScreen() {
               
               <View style={styles.valueNetRow}>
                 <Text style={styles.valueNetLabel}>Net Value</Text>
-                <Text style={[styles.valueNetAmount, { color: valueBreakdown.netValue >= 0 ? COLORS.success : COLORS.error }]}>
+                <Text style={[styles.valueNetAmount, { color: valueBreakdown.netValue >= 0 ? COLORS.success : COLORS.error }]}> 
                   {valueBreakdown.netValue >= 0 ? '+' : ''}{formatCurrency(valueBreakdown.netValue)}
                 </Text>
               </View>
@@ -1281,7 +1286,7 @@ export default function CruiseDetailsScreen() {
                 {(valueBreakdown.coverageFraction * 100).toFixed(0)}% Coverage
                 {valueBreakdown.isFullyComped && ' • Fully Comped!'}
               </Text>
-            </View>
+            </GlassSurface>
           )}
 
 
@@ -1902,6 +1907,22 @@ const styles = StyleSheet.create({
   content: {
     padding: SPACING.lg,
   },
+  sectionTouchable: {
+    width: '100%',
+  },
+  overviewFactsCard: {
+    marginBottom: SPACING.md,
+  },
+  overviewFactsContent: {
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+  },
+  glassSectionContent: {
+    padding: SPACING.lg,
+  },
+  glassCompactSectionContent: {
+    padding: SPACING.md,
+  },
   headerSection: {
     marginBottom: SPACING.lg,
   },
@@ -2183,12 +2204,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   compactCasinoCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
     marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.08)',
   },
   casinoResultsRow: {
     flexDirection: 'row',
@@ -2550,13 +2566,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   valueSection: {
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
     marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    backgroundColor: '#E0F2FE',
-    ...SHADOW.sm,
   },
   valueCompactGrid: {
     gap: SPACING.xs,
@@ -2566,10 +2576,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    backgroundColor: '#DBEAFE',
-    borderRadius: BORDER_RADIUS.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: 'rgba(255,255,255,0.42)',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.30)',
   },
   valueCompactLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -2592,8 +2604,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: 'rgba(255,255,255,0.52)',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.34)',
     marginBottom: SPACING.sm,
   },
   valueNetLabel: {
@@ -3258,13 +3272,7 @@ const styles = StyleSheet.create({
     color: '#1E40AF',
   },
   bwoFpObcCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
     marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
-    ...SHADOW.sm,
   },
   bwoFpObcHeader: {
     flexDirection: 'row',
@@ -3421,13 +3429,7 @@ const styles = StyleSheet.create({
     color: 'rgba(30, 64, 175, 0.4)',
   },
   cruiseDetailsSection: {
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.lg,
     marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(11, 31, 58, 0.14)',
-    backgroundColor: '#F6FBFF',
-    ...SHADOW.md,
   },
   payloadDetailsSection: {
     borderRadius: BORDER_RADIUS.lg,
@@ -3479,13 +3481,12 @@ const styles = StyleSheet.create({
   detailHighlightChip: {
     flex: 1,
     minWidth: 96,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.48)',
     borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(2, 132, 199, 0.14)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(255,255,255,0.30)',
   },
   detailHighlightLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -3511,12 +3512,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.46)',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: 'rgba(2, 132, 199, 0.12)',
+    borderColor: 'rgba(255,255,255,0.28)',
     gap: 6,
-    ...SHADOW.sm,
   },
   detailRowWide: {
     width: '100%',
@@ -3558,12 +3558,7 @@ const styles = StyleSheet.create({
     color: COLORS.money,
   },
   offersSectionCompact: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
     marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.08)',
   },
   sectionHeaderCompact: {
     flexDirection: 'row',
@@ -3585,10 +3580,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: 'rgba(236,253,245,0.44)',
     paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.xs,
+    paddingVertical: 6,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
   },
   offerTextCompact: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -3596,12 +3593,7 @@ const styles = StyleSheet.create({
     color: COLORS.success,
   },
   casinoSectionCompact: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
     marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.08)',
   },
   casinoStatsRow: {
     flexDirection: 'row',
@@ -3610,10 +3602,12 @@ const styles = StyleSheet.create({
   },
   casinoStatBox: {
     flex: 1,
-    backgroundColor: 'rgba(0, 151, 167, 0.08)',
-    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: 'rgba(255,255,255,0.44)',
+    borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
   },
   casinoStatBoxLabel: {
     fontSize: 10,
@@ -3635,10 +3629,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    paddingVertical: SPACING.xs,
+    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
-    backgroundColor: 'rgba(0, 31, 63, 0.02)',
-    borderRadius: BORDER_RADIUS.xs,
+    backgroundColor: 'rgba(255,255,255,0.32)',
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
   },
   itineraryDayNumber: {
     fontSize: TYPOGRAPHY.fontSizeXS,
