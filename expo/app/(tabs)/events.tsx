@@ -13,6 +13,7 @@ import type { CalendarEvent, BookedCruise } from '@/types/models';
 import { createDateFromString, getDailyLuckDigitForDate, getLuckDigitColor, normalizeBirthdateInput } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
+import { CruiseCard } from '@/components/CruiseCard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { mergeBookedCruiseSources } from '@/lib/calendar/bookedCruises';
 
@@ -524,6 +525,28 @@ export default function EventsScreen() {
     );
   }, [router]);
 
+  const renderNextUpItem = useCallback((item: { event: CalendarEvent | BookedCruise; type: 'calendar' | 'cruise'; date: Date }, index: number) => {
+    if (item.type === 'cruise') {
+      const cruise = item.event as BookedCruise;
+
+      return (
+        <View key={`next-up-cruise-${cruise.id}-${index}`} style={styles.nextUpCruiseCard}>
+          <CruiseCard
+            cruise={cruise}
+            onPress={() => router.push({
+              pathname: '/(tabs)/(overview)/cruise-details' as any,
+              params: { id: cruise.id },
+            })}
+            variant="booked"
+            mini
+          />
+        </View>
+      );
+    }
+
+    return renderEventCard(item, index);
+  }, [renderEventCard, router]);
+
   return (
     <ErrorBoundary>
       <View style={styles.container}>
@@ -745,7 +768,7 @@ export default function EventsScreen() {
                 <Text style={styles.sectionTitle}>Next Up</Text>
               </View>
               <View style={styles.eventsList}>
-                {upcomingEvents.slice(0, 3).map((item, index) => renderEventCard(item, index))}
+                {upcomingEvents.slice(0, 3).map((item, index) => renderNextUpItem(item, index))}
               </View>
             </View>
           )}
@@ -1125,6 +1148,9 @@ const styles = StyleSheet.create({
   },
   eventsList: {
     gap: SPACING.sm,
+  },
+  nextUpCruiseCard: {
+    marginBottom: SPACING.xs,
   },
   eventCard: {
     flexDirection: 'row',

@@ -60,11 +60,11 @@ function getOffsetDifference(localOffset: number, remoteOffset: number): string 
     const diffHours = remoteOffset - localOffset;
     const sign = diffHours >= 0 ? '+' : '';
     if (diffHours % 1 === 0) {
-      return `${sign}${diffHours}h`;
+      return `${sign}${diffHours}H`;
     }
     const hours = Math.trunc(diffHours);
     const mins = Math.abs(Math.round((diffHours % 1) * 60));
-    return `${sign}${hours}h ${mins}m`;
+    return `${sign}${hours}H ${mins}M`;
   } catch {
     return '??';
   }
@@ -328,9 +328,9 @@ export function TimeZoneConverter() {
             <Text style={styles.offsetChipText}>{offset}</Text>
           </View>
           {expanded ? (
-            <ChevronUp size={18} color="rgba(255,255,255,0.6)" />
+            <ChevronUp size={18} color="rgba(17, 24, 39, 0.72)" />
           ) : (
-            <ChevronDown size={18} color="rgba(255,255,255,0.6)" />
+            <ChevronDown size={18} color="rgba(17, 24, 39, 0.72)" />
           )}
         </View>
       </TouchableOpacity>
@@ -341,7 +341,7 @@ export function TimeZoneConverter() {
             <Text style={styles.previewLabel}>{localTz.city}</Text>
             <Text style={styles.previewTime}>{localTime}</Text>
           </View>
-          <ArrowRightLeft size={14} color="rgba(255,255,255,0.3)" />
+          <ArrowRightLeft size={14} color="rgba(17, 24, 39, 0.38)" />
           <View style={styles.previewClock}>
             <Text style={styles.previewLabel}>{remoteTz.city}</Text>
             <Text style={styles.previewTime}>{remoteTime}</Text>
@@ -371,7 +371,7 @@ export function TimeZoneConverter() {
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.swapBtn} onPress={swapZones} activeOpacity={0.7}>
-              <ArrowRightLeft size={16} color="#FFFFFF" />
+              <ArrowRightLeft size={16} color="#111111" />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -394,7 +394,7 @@ export function TimeZoneConverter() {
           </View>
 
           <View style={styles.offsetBanner}>
-            <Clock size={14} color="#FFFFFF" />
+            <Clock size={14} color="#111111" />
             <Text style={styles.offsetBannerText}>
               {remoteTz.city} is{' '}
               <Text style={styles.offsetBannerHighlight}>{offset}</Text> from{' '}
@@ -412,7 +412,7 @@ export function TimeZoneConverter() {
               <TextInput
                 style={styles.meetingInput}
                 placeholder="e.g. 2:30 PM"
-                placeholderTextColor="rgba(255,255,255,0.3)"
+                placeholderTextColor="rgba(17, 24, 39, 0.4)"
                 value={meetingTimeInput}
                 onChangeText={(text) => {
                   setMeetingTimeInput(text);
@@ -475,7 +475,7 @@ export function TimeZoneConverter() {
                     <Text style={styles.meetingResultTime}>{meetingTimeInput.trim()}</Text>
                   </View>
                   <View style={styles.meetingResultArrow}>
-                    <ArrowRightLeft size={14} color="rgba(255,255,255,0.4)" />
+                    <ArrowRightLeft size={14} color="rgba(17, 24, 39, 0.4)" />
                   </View>
                   <View style={styles.meetingResultSide}>
                     <Text style={styles.meetingResultLabel}>
@@ -510,16 +510,16 @@ export function TimeZoneConverter() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#071A2F',
+    backgroundColor: '#E5E7EB',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.26)',
+    borderColor: '#D1D5DB',
     overflow: 'hidden',
-    shadowColor: '#02101F',
-    shadowOpacity: 0.34,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 14,
+    shadowColor: '#9CA3AF',
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
   headerRow: {
     flexDirection: 'row',
@@ -528,8 +528,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: '#0A2342',
+    borderBottomColor: 'rgba(17, 24, 39, 0.08)',
+    backgroundColor: '#F3F4F6',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#111111',
     letterSpacing: 0.5,
   },
   headerRight: {
@@ -560,11 +560,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: 3,
     borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
   },
   offsetChipText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#0B1F3A',
+    color: '#111111',
   },
   collapsedPreview: {
     flexDirection: 'row',
@@ -580,13 +582,13 @@ const styles = StyleSheet.create({
   },
   previewLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.68)',
+    color: 'rgba(17, 24, 39, 0.68)',
     marginBottom: 2,
   },
   previewTime: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#111111',
   },
   expandedContent: {
     paddingHorizontal: SPACING.md,
@@ -599,11 +601,11 @@ const styles = StyleSheet.create({
   },
   clockCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: '#D1D5DB',
   },
   clockLabelRow: {
     flexDirection: 'row',
@@ -614,36 +616,36 @@ const styles = StyleSheet.create({
   clockLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(255,255,255,0.82)',
+    color: 'rgba(17, 24, 39, 0.78)',
     letterSpacing: 1,
   },
   clockLabelRemote: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(255,255,255,0.82)',
+    color: 'rgba(17, 24, 39, 0.78)',
     letterSpacing: 1,
   },
   clockCity: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FFFFFF',
+    color: '#111111',
     marginBottom: 2,
   },
   clockTime: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#111111',
     marginBottom: 2,
   },
   clockTimeRemote: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#111111',
     marginBottom: 2,
   },
   clockDate: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.68)',
+    color: 'rgba(17, 24, 39, 0.68)',
     marginBottom: 4,
   },
   changeBtnRow: {
@@ -653,13 +655,13 @@ const styles = StyleSheet.create({
   },
   changeText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#FFFFFF',
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: '#111111',
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   changeTextRemote: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#FFFFFF',
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: '#111111',
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   swapBtn: {
     width: 32,
@@ -668,34 +670,36 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
   },
   offsetBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     marginTop: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: '#D1D5DB',
   },
   offsetBannerText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.82)',
+    color: 'rgba(17, 24, 39, 0.82)',
   },
   offsetBannerHighlight: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#111111',
   },
   meetingSection: {
     marginTop: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: '#D1D5DB',
   },
   meetingSectionHeader: {
     flexDirection: 'row',
@@ -706,7 +710,7 @@ const styles = StyleSheet.create({
   meetingSectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FFFFFF',
+    color: '#111111',
   },
   meetingInputRow: {
     flexDirection: 'row',
@@ -716,17 +720,17 @@ const styles = StyleSheet.create({
   },
   meetingInput: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: '#F3F4F6',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: Platform.OS === 'ios' ? SPACING.md : SPACING.sm,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#FFFFFF',
+    color: '#111111',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.26)',
+    borderColor: '#D1D5DB',
   },
   convertBtn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#111111',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.lg,
     paddingVertical: Platform.OS === 'ios' ? SPACING.md : SPACING.sm,
@@ -734,7 +738,7 @@ const styles = StyleSheet.create({
   convertBtnText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#0B1F3A',
+    color: '#FFFFFF',
   },
   meetingFromRow: {
     flexDirection: 'row',
@@ -744,39 +748,39 @@ const styles = StyleSheet.create({
   },
   meetingFromLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.72)',
+    color: 'rgba(17, 24, 39, 0.72)',
   },
   meetingFromChip: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: '#D1D5DB',
   },
   meetingFromChipActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FFFFFF',
+    backgroundColor: '#111111',
+    borderColor: '#111111',
   },
   meetingFromChipActiveRemote: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FFFFFF',
+    backgroundColor: '#111111',
+    borderColor: '#111111',
   },
   meetingFromChipText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.72)',
+    color: 'rgba(17, 24, 39, 0.72)',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   meetingFromChipTextActive: {
-    color: '#0B1F3A',
+    color: '#FFFFFF',
   },
   meetingResult: {
     marginTop: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#F3F4F6',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: '#D1D5DB',
   },
   meetingResultRow: {
     flexDirection: 'row',
@@ -788,13 +792,13 @@ const styles = StyleSheet.create({
   },
   meetingResultLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.72)',
+    color: 'rgba(17, 24, 39, 0.72)',
     marginBottom: 2,
   },
   meetingResultTime: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FFFFFF',
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#111111',
   },
   meetingResultArrow: {
     paddingHorizontal: SPACING.sm,
@@ -802,7 +806,7 @@ const styles = StyleSheet.create({
   meetingResultTimeHighlight: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#111111',
   },
 });
 
