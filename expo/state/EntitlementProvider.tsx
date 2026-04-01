@@ -29,6 +29,7 @@ let purchasesInitError: string | null = null;
 export type EntitlementSource = 'iap' | 'dev' | 'grandfathered' | 'unknown';
 export type SubscriptionTier = 'trial' | 'view' | 'basic' | 'pro';
 export type SubscriptionDisplayStatus = 'grace_period' | 'monthly' | 'annual' | 'expired';
+export type RevenueCatEnvironment = 'test_store' | 'app_store' | 'play_store' | 'unknown';
 
 export interface EntitlementState {
   isPro: boolean;
@@ -40,11 +41,17 @@ export interface EntitlementState {
   lastCheckedAt: string | null;
   customerInfo: CustomerInfo | null;
   offerings: PurchasesOffering[];
+  availableProductIds: string[];
+  hasAnyOffering: boolean;
   isLoading: boolean;
   error: string | null;
   isGrandfathered: boolean;
   accountCreatedAt: Date | null;
   subscriptionDisplayStatus: SubscriptionDisplayStatus;
+  billingStoreLabel: string;
+  billingEnvironment: RevenueCatEnvironment;
+  expectedRevenueCatKeyName: string;
+  revenueCatAppUserId: string | null;
   refresh: () => Promise<void>;
   subscribeBasicMonthly: () => Promise<void>;
   subscribeProMonthly: () => Promise<void>;
@@ -89,9 +96,20 @@ async function withTimeout<T>(
   }
 }
 
-export const BASIC_PRODUCT_ID_MONTHLY = 'easyseas_pro_monthly' as const;
+export const BASIC_PRODUCT_ID_MONTHLY = 'easyseas_basic_monthly' as const;
 export const PRO_PRODUCT_ID_MONTHLY = 'easyseas_pro_monthly' as const;
 export const PRO_PRODUCT_ID_ANNUAL = 'easyseas_pro_annual' as const;
+
+const MONTHLY_PRODUCT_IDS = ['easyseas_pro_monthly', 'easyseas_pro_monthly:monthly-base'] as const;
+const ANNUAL_PRODUCT_IDS = [
+  'easyseas_pro_annual',
+  'easyseas_pro_annual:annual-base',
+  'easyseas_pro_yearly',
+  'easyseas_pro_yearly:yearly-base',
+  'annualplan:annualplan',
+  'annual:easyseasmonthly',
+] as const;
+const BASIC_PRODUCT_IDS = ['easyseas_basic_monthly', 'easyseas_basic_monthly:monthly-base'] as const;
 
 const PRIVACY_URL = 'https://www.royalcomputerconsulting.com/privacy-policy' as const;
 const TERMS_URL = 'https://www.royalcomputerconsulting.com/support-policy' as const;
@@ -105,6 +123,34 @@ function normalizeEntitlementIdentity(email: string | null | undefined): string 
 
   const normalizedEmail = email.toLowerCase().trim();
   return normalizedEmail.length > 0 ? normalizedEmail : null;
+}
+
+function normalizeProductIdentifier(productId: string | null | undefined): string {
+  return (productId ?? '').toLowerCase().trim();
+}
+
+function productIdentifierMatches(productId: string | null | undefined, candidates: readonly string[]): boolean {
+  const normalizedProductId = normalizeProductIdentifier(productId);
+  if (!normalizedProductId) {
+    return false;
+  }
+
+  return candidates.some((candidate) => {
+    const normalizedCandidate = normalizeProductIdentifier(candidate);
+    return normalizedProductId === normalizedCandidate || normalizedProductId.startsWith(`${normalizedCandidate}:`);
+  });
+}
+
+function isProMonthlyProductId(productId: string | null | undefined): boolean {
+  return productIdentifierMatches(productId, MONTHLY_PRODUCT_IDS);
+}
+
+function isProAnnualProductId(productId: string | null | undefined): boolean {
+  return productIdentifierMatches(productId, ANNUAL_PRODUCT_IDS);
+}
+
+function isBasicProductId(productId: string | null | undefined): boolean {
+  return productIdentifierMatches(productId, BASIC_PRODUCT_IDS);
 }
 
 function getScopedEntitlementKeys(email: string | null) {
@@ -125,9 +171,7 @@ function computeIsProFromCustomerInfo(info: CustomerInfo | null): boolean {
     if (entitlementIds.includes('pro') || entitlementIds.includes('pro access')) return true;
 
     const active = (info.activeSubscriptions ?? []) as string[];
-    if (active.includes(PRO_PRODUCT_ID_MONTHLY) || active.includes(PRO_PRODUCT_ID_ANNUAL)) return true;
-
-    return false;
+    return active.some((subscriptionId) => isProMonthlyProductId(subscriptionId) || isProAnnualProductId(subscriptionId));
   } catch (e) {
     console.error('[Entitlement] computeIsProFromCustomerInfo failed', e);
     return false;
@@ -139,13 +183,13 @@ function detectActiveSubscriptionType(info: CustomerInfo | null): 'monthly' | 'a
   try {
     const active = (info.activeSubscriptions ?? []) as string[];
     console.log('[Entitlement] Detecting subscription type from active subs:', active);
-    if (active.includes(PRO_PRODUCT_ID_ANNUAL)) return 'annual';
-    if (active.includes(PRO_PRODUCT_ID_MONTHLY) || active.includes(BASIC_PRODUCT_ID_MONTHLY)) return 'monthly';
-    
+    if (active.some((subscriptionId) => isProAnnualProductId(subscriptionId))) return 'annual';
+    if (active.some((subscriptionId) => isProMonthlyProductId(subscriptionId) || isBasicProductId(subscriptionId))) return 'monthly';
+
     const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
     const entitlementIds = Object.keys(entitlements).map(k => k.toLowerCase().trim());
     if (entitlementIds.includes('pro') || entitlementIds.includes('pro access') || entitlementIds.includes('basic')) {
-      if (active.some(s => s.toLowerCase().includes('annual') || s.toLowerCase().includes('yearly'))) return 'annual';
+      if (active.some((subscriptionId) => isProAnnualProductId(subscriptionId) || subscriptionId.toLowerCase().includes('annual') || subscriptionId.toLowerCase().includes('yearly'))) return 'annual';
       return 'monthly';
     }
     return null;
@@ -164,9 +208,7 @@ function computeIsBasicFromCustomerInfo(info: CustomerInfo | null): boolean {
     if (entitlementIds.includes('basic')) return true;
 
     const active = (info.activeSubscriptions ?? []) as string[];
-    if (active.includes(BASIC_PRODUCT_ID_MONTHLY)) return true;
-
-    return false;
+    return active.some((subscriptionId) => isBasicProductId(subscriptionId));
   } catch (e) {
     console.error('[Entitlement] computeIsBasicFromCustomerInfo failed', e);
     return false;
@@ -198,6 +240,31 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     () => getScopedEntitlementKeys(normalizedAuthenticatedEmail),
     [normalizedAuthenticatedEmail]
   );
+  const billingDetails = useMemo(() => {
+    const isExpoGo = Constants.appOwnership === 'expo';
+
+    if (Platform.OS === 'web' || isExpoGo) {
+      return {
+        billingStoreLabel: 'RevenueCat Test Store',
+        billingEnvironment: 'test_store' as RevenueCatEnvironment,
+        expectedRevenueCatKeyName: 'EXPO_PUBLIC_REVENUECAT_TEST_API_KEY',
+      };
+    }
+
+    if (Platform.OS === 'android') {
+      return {
+        billingStoreLabel: 'Google Play',
+        billingEnvironment: 'play_store' as RevenueCatEnvironment,
+        expectedRevenueCatKeyName: 'EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY',
+      };
+    }
+
+    return {
+      billingStoreLabel: 'App Store',
+      billingEnvironment: 'app_store' as RevenueCatEnvironment,
+      expectedRevenueCatKeyName: 'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY',
+    };
+  }, []);
   const [isPro, setIsPro] = useState<boolean>(false);
   const [isBasic, setIsBasic] = useState<boolean>(false);
   const [tier, setTier] = useState<SubscriptionTier>('trial');
@@ -209,10 +276,16 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
+  const [revenueCatAppUserId, setRevenueCatAppUserId] = useState<string | null>(null);
   const [isGrandfathered, setIsGrandfathered] = useState<boolean>(false);
   const [accountCreatedAt, setAccountCreatedAt] = useState<Date | null>(null);
   const [subscriptionDisplayStatus, setSubscriptionDisplayStatus] = useState<SubscriptionDisplayStatus>('grace_period');
   const hasPrivilegedAccess = useMemo(() => auth.isAdmin || auth.isWhitelisted, [auth.isAdmin, auth.isWhitelisted]);
+  const availableProductIds = useMemo(
+    () => offerings.flatMap((offering) => (offering.availablePackages ?? []).map((pkg) => pkg.product.identifier)),
+    [offerings]
+  );
+  const hasAnyOffering = useMemo(() => availableProductIds.length > 0, [availableProductIds]);
 
   const mountedRef = useRef<boolean>(true);
   const actionInFlightRef = useRef<boolean>(false);
@@ -246,6 +319,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     setSource('unknown');
     setError(null);
     setLastCheckedAt(null);
+    setRevenueCatAppUserId(null);
     setOfferings([]);
     setIsLoading(true);
   }, [normalizedAuthenticatedEmail]);
@@ -522,9 +596,15 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     });
 
     if (!normalizedAuthenticatedEmail) {
+      if (mountedRef.current) {
+        setRevenueCatAppUserId(isAnonymous ? null : currentAppUserId);
+      }
       if (currentAppUserId && !isAnonymous) {
         try {
           await withTimeout(purchases.logOut(), DEFAULT_TIMEOUT_MS, 'Clearing purchase session');
+          if (mountedRef.current) {
+            setRevenueCatAppUserId(null);
+          }
         } catch (e) {
           console.warn('[Entitlement] logOut failed (user may already be anonymous):', e);
         }
@@ -533,6 +613,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     }
 
     if (currentAppUserId === normalizedAuthenticatedEmail) {
+      if (mountedRef.current) {
+        setRevenueCatAppUserId(currentAppUserId);
+      }
       return;
     }
 
@@ -541,6 +624,10 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       DEFAULT_TIMEOUT_MS,
       'Linking subscription to your email'
     );
+
+    if (mountedRef.current) {
+      setRevenueCatAppUserId(normalizedAuthenticatedEmail);
+    }
 
     console.log('[Entitlement] RevenueCat identity updated', {
       authenticatedEmail: normalizedAuthenticatedEmail,
@@ -683,30 +770,31 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     lastIsProRef.current = isPro;
   }, [isPro]);
 
-  const findPackageByProductId = useCallback((productId: string): PurchasesPackage | null => {
+  const findPackageByProductIds = useCallback((productIds: readonly string[], productName: string): PurchasesPackage | null => {
     try {
-      console.log('[Entitlement] Searching for product:', productId, 'across', offerings.length, 'offerings');
+      console.log('[Entitlement] Searching for products:', productIds, 'across', offerings.length, 'offerings');
       for (const offering of offerings) {
         console.log('[Entitlement] Checking offering:', offering.identifier, 'packages:', (offering.availablePackages ?? []).length);
         for (const p of offering.availablePackages ?? []) {
           const id = p.product.identifier;
           console.log('[Entitlement] Checking package product:', { id, priceString: p.product.priceString });
-          if (id === productId) {
+          if (productIdentifierMatches(id, productIds)) {
             console.log('[Entitlement] Found matching package in offering:', offering.identifier);
             return p;
           }
         }
       }
-      console.warn('[Entitlement] No package found with store product ID:', productId);
+      console.warn('[Entitlement] No package found with store product IDs:', productIds);
+      console.warn('[Entitlement] Requested product name:', productName);
       console.warn('[Entitlement] Available products:', offerings.flatMap(o => (o.availablePackages ?? []).map(p => p.product.identifier)));
       return null;
     } catch (e) {
-      console.error('[Entitlement] findPackageByProductId failed', e);
+      console.error('[Entitlement] findPackageByProductIds failed', e);
       return null;
     }
   }, [offerings]);
 
-  const subscribeToProduct = useCallback(async (productId: string, productName: string) => {
+  const subscribeToProduct = useCallback(async (productIds: readonly string[], productName: string) => {
     console.log(`[Entitlement] subscribeToProduct called for ${productName}`);
     if (actionInFlightRef.current) {
       console.log(`[Entitlement] subscribeToProduct ignored: action already in flight`);
@@ -751,7 +839,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         return;
       }
 
-      const pkg = findPackageByProductId(productId);
+      const pkg = findPackageByProductIds(productIds, productName);
       if (!pkg) {
         console.warn(`[Entitlement] ${productName} package not found in offerings`);
         Alert.alert('Not Available', 'Subscription is not available right now. Please try again later.');
@@ -784,18 +872,18 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setIsLoading(false);
       }
     }
-  }, [auth.isAdmin, ensurePurchasesLoaded, findPackageByProductId, hasPrivilegedAccess, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO]);
+  }, [auth.isAdmin, ensurePurchasesLoaded, findPackageByProductIds, hasPrivilegedAccess, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO]);
 
   const subscribeBasicMonthly = useCallback(async () => {
-    await subscribeToProduct(BASIC_PRODUCT_ID_MONTHLY, 'Basic monthly subscription');
+    await subscribeToProduct(BASIC_PRODUCT_IDS, 'Basic monthly subscription');
   }, [subscribeToProduct]);
 
   const subscribeProMonthly = useCallback(async () => {
-    await subscribeToProduct(PRO_PRODUCT_ID_MONTHLY, 'Pro monthly subscription');
+    await subscribeToProduct(MONTHLY_PRODUCT_IDS, 'Pro monthly subscription');
   }, [subscribeToProduct]);
 
   const subscribeProAnnual = useCallback(async () => {
-    await subscribeToProduct(PRO_PRODUCT_ID_ANNUAL, 'Pro annual subscription');
+    await subscribeToProduct(ANNUAL_PRODUCT_IDS, 'Pro annual subscription');
   }, [subscribeToProduct]);
 
   const restore = useCallback(async () => {
@@ -990,11 +1078,17 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       lastCheckedAt,
       customerInfo,
       offerings,
+      availableProductIds,
+      hasAnyOffering,
       isLoading,
       error,
       isGrandfathered,
       accountCreatedAt,
       subscriptionDisplayStatus,
+      billingStoreLabel: billingDetails.billingStoreLabel,
+      billingEnvironment: billingDetails.billingEnvironment,
+      expectedRevenueCatKeyName: billingDetails.expectedRevenueCatKeyName,
+      revenueCatAppUserId,
       refresh,
       subscribeBasicMonthly,
       subscribeProMonthly,
@@ -1015,11 +1109,17 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       lastCheckedAt,
       customerInfo,
       offerings,
+      availableProductIds,
+      hasAnyOffering,
       isLoading,
       error,
       isGrandfathered,
       accountCreatedAt,
       subscriptionDisplayStatus,
+      billingDetails.billingStoreLabel,
+      billingDetails.billingEnvironment,
+      billingDetails.expectedRevenueCatKeyName,
+      revenueCatAppUserId,
       refresh,
       subscribeBasicMonthly,
       subscribeProMonthly,

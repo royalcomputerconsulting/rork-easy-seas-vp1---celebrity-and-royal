@@ -168,8 +168,61 @@ export default function SettingsScreen() {
   const isProfileDisplayReady = useMemo(() => {
     return isProfileIdentityReady && !isLoyaltyLoading;
   }, [isProfileIdentityReady, isLoyaltyLoading]);
+  const subscriptionAccentColor = useMemo(() => {
+    if (isAdmin || entitlement.source === 'dev') return '#10B981';
+    if (entitlement.subscriptionDisplayStatus === 'annual') return '#10B981';
+    if (entitlement.subscriptionDisplayStatus === 'monthly') return '#2563EB';
+    if (entitlement.subscriptionDisplayStatus === 'grace_period') return '#F59E0B';
+    return '#EF4444';
+  }, [entitlement.source, entitlement.subscriptionDisplayStatus, isAdmin]);
+  const subscriptionStatusTitle = useMemo(() => {
+    if (isAdmin || entitlement.source === 'dev') return 'Admin Access';
+    if (entitlement.subscriptionDisplayStatus === 'annual') return 'Annual Subscription';
+    if (entitlement.subscriptionDisplayStatus === 'monthly') return 'Monthly Subscription';
+    if (entitlement.subscriptionDisplayStatus === 'grace_period') return '5-Day Grace Period';
+    return 'Subscription Expired';
+  }, [entitlement.source, entitlement.subscriptionDisplayStatus, isAdmin]);
+  const subscriptionStatusSubtitle = useMemo(() => {
+    if (isAdmin || entitlement.source === 'dev') {
+      return 'Admin access active — full app access stays unlocked and restore/licensing tools remain available.';
+    }
+    if (entitlement.subscriptionDisplayStatus === 'annual') {
+      return 'Annual plan active — all features unlocked.';
+    }
+    if (entitlement.subscriptionDisplayStatus === 'monthly') {
+      return 'Monthly plan active — all features unlocked.';
+    }
+    if (entitlement.subscriptionDisplayStatus === 'grace_period') {
+      return `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining — full access.`;
+    }
+    return 'Purchase a monthly or annual subscription to continue.';
+  }, [entitlement.source, entitlement.subscriptionDisplayStatus, entitlement.trialDaysRemaining, isAdmin]);
+  const subscriptionConnectionLabel = useMemo(() => {
+    if (entitlement.error) return 'Needs attention';
+    if (entitlement.isLoading && !entitlement.lastCheckedAt) return 'Checking';
+    if (entitlement.hasAnyOffering) return 'Connected';
+    return 'Ready';
+  }, [entitlement.error, entitlement.hasAnyOffering, entitlement.isLoading, entitlement.lastCheckedAt]);
+  const subscriptionLinkedAccountLabel = useMemo(() => {
+    return entitlement.revenueCatAppUserId ?? normalizedAuthenticatedEmail ?? 'Not linked yet';
+  }, [entitlement.revenueCatAppUserId, normalizedAuthenticatedEmail]);
+  const subscriptionProductsLabel = useMemo(() => {
+    if (!entitlement.hasAnyOffering) {
+      return entitlement.isLoading ? 'Loading products…' : 'No products loaded yet';
+    }
 
+    return `${entitlement.availableProductIds.length} product${entitlement.availableProductIds.length !== 1 ? 's' : ''} loaded`;
+  }, [entitlement.availableProductIds.length, entitlement.hasAnyOffering, entitlement.isLoading]);
+  const subscriptionLastCheckedLabel = useMemo(() => {
+    if (!entitlement.lastCheckedAt) return 'Not checked yet';
 
+    try {
+      return new Date(entitlement.lastCheckedAt).toLocaleString();
+    } catch (error) {
+      console.error('[Settings] Failed to format subscription last checked timestamp', error);
+      return entitlement.lastCheckedAt;
+    }
+  }, [entitlement.lastCheckedAt]);
 
   const loadWhitelist = useCallback(async () => {
     try {
@@ -2004,32 +2057,53 @@ STEP 4: Optional Calendar Import
           <View style={styles.section}>
             <View style={styles.sectionCard}>
               {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan')}
-              <View style={styles.subscriptionStatusBanner}>
-                <Crown size={18} color={
-                  (isAdmin || entitlement.source === 'dev') ? '#10B981' :
-                  entitlement.subscriptionDisplayStatus === 'annual' ? '#10B981' :
-                  entitlement.subscriptionDisplayStatus === 'monthly' ? '#3B82F6' :
-                  entitlement.subscriptionDisplayStatus === 'grace_period' ? '#F59E0B' :
-                  '#EF4444'
-                } />
+              <View style={styles.subscriptionStatusBanner} testID="settings.subscription.status-banner">
+                <Crown size={18} color={subscriptionAccentColor} />
                 <View style={styles.subscriptionStatusText}>
-                  <Text style={styles.subscriptionStatusTitle}>
-                    {(isAdmin || entitlement.source === 'dev') ? 'Admin Access' :
-                     entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual Subscription' :
-                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly Subscription' :
-                     entitlement.subscriptionDisplayStatus === 'grace_period' ? '5-Day Grace Period' :
-                     'Subscription Expired'}
-                  </Text>
-                  <Text style={styles.subscriptionStatusSubtitle}>
-                    {(isAdmin || entitlement.source === 'dev') ? 'Admin access active — full app access stays unlocked and purchase tools remain admin-only' :
-                     entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual plan active — all features unlocked' :
-                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly plan active — all features unlocked' :
-                     entitlement.subscriptionDisplayStatus === 'grace_period' ? `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining — full access` :
-                     'Purchase a monthly or annual subscription to continue'}
-                  </Text>
+                  <Text style={styles.subscriptionStatusTitle}>{subscriptionStatusTitle}</Text>
+                  <Text style={styles.subscriptionStatusSubtitle}>{subscriptionStatusSubtitle}</Text>
                 </View>
               </View>
+              <View style={styles.subscriptionLicenseCard} testID="settings.subscription.license-card">
+                <View style={styles.subscriptionLicenseRow}>
+                  <View style={styles.subscriptionLicenseItem}>
+                    <Text style={styles.subscriptionLicenseLabel}>Billing Store</Text>
+                    <Text style={styles.subscriptionLicenseValue}>{entitlement.billingStoreLabel}</Text>
+                  </View>
+                  <View style={styles.subscriptionLicenseItem}>
+                    <Text style={styles.subscriptionLicenseLabel}>Connection</Text>
+                    <Text style={[styles.subscriptionLicenseValue, { color: subscriptionAccentColor }]}>{subscriptionConnectionLabel}</Text>
+                  </View>
+                </View>
+                <View style={styles.subscriptionLicenseRow}>
+                  <View style={styles.subscriptionLicenseItem}>
+                    <Text style={styles.subscriptionLicenseLabel}>Linked Account</Text>
+                    <Text style={styles.subscriptionLicenseValue} numberOfLines={1}>{subscriptionLinkedAccountLabel}</Text>
+                  </View>
+                  <View style={styles.subscriptionLicenseItem}>
+                    <Text style={styles.subscriptionLicenseLabel}>Products</Text>
+                    <Text style={styles.subscriptionLicenseValue}>{subscriptionProductsLabel}</Text>
+                  </View>
+                </View>
+                <View style={styles.subscriptionLicenseRow}>
+                  <View style={styles.subscriptionLicenseItem}>
+                    <Text style={styles.subscriptionLicenseLabel}>RevenueCat Key</Text>
+                    <Text style={styles.subscriptionLicenseValue}>{entitlement.expectedRevenueCatKeyName}</Text>
+                  </View>
+                  <View style={styles.subscriptionLicenseItem}>
+                    <Text style={styles.subscriptionLicenseLabel}>Last Checked</Text>
+                    <Text style={styles.subscriptionLicenseValue}>{subscriptionLastCheckedLabel}</Text>
+                  </View>
+                </View>
+                {!!entitlement.error && <Text style={styles.subscriptionErrorText}>{entitlement.error}</Text>}
+              </View>
               <View style={styles.dataDivider} />
+              {renderSettingRow(
+                <RefreshCcw size={18} color={COLORS.navyDeep} />,
+                'Refresh Subscription Status',
+                entitlement.isLoading ? <ActivityIndicator size="small" color={COLORS.navyDeep} /> : subscriptionConnectionLabel,
+                () => { void entitlement.refresh(); }
+              )}
               {renderSettingRow(
                 <RefreshCcw size={18} color={COLORS.navyDeep} />,
                 'Restore Purchases',
@@ -2902,6 +2976,46 @@ const styles = StyleSheet.create({
     color: CLEAN_THEME.text.secondary,
     marginTop: SPACING.xs,
     marginHorizontal: SPACING.xs,
+    lineHeight: 16,
+  },
+  subscriptionLicenseCard: {
+    backgroundColor: '#FFFCF4',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(185, 143, 61, 0.2)',
+    padding: SPACING.md,
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  subscriptionLicenseRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  subscriptionLicenseItem: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(185, 143, 61, 0.12)',
+  },
+  subscriptionLicenseLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: CLEAN_THEME.text.secondary,
+    marginBottom: 4,
+  },
+  subscriptionLicenseValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  subscriptionErrorText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: COLORS.error,
     lineHeight: 16,
   },
   calendarFeedBanner: {

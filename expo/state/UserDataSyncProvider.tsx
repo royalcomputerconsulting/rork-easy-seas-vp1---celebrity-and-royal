@@ -123,7 +123,11 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const lastSyncAttemptRef = useRef<number>(0);
   const isMountedRef = useRef(true);
   const hasInitializedRef = useRef(false);
+  const initializationInFlightRef = useRef(false);
   const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canUseCloudDataStoreRef = useRef<() => Promise<boolean>>(async () => false);
+  const loadFromCloudRef = useRef<() => Promise<boolean>>(async () => false);
+  const syncToCloudRef = useRef<() => Promise<void>>(async () => {});
 
   const saveAllMutation = trpc.data.saveAllUserData.useMutation({
     retry: false,
@@ -604,6 +608,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       }
     }
   }, [authenticatedEmail, canUseCloudDataStore, fetchAllUserDataByEmail, restoreDataToLocal]);
+  loadFromCloudRef.current = loadFromCloud;
 
   const syncToCloud = useCallback(async () => {
     if (!authenticatedEmail) {
@@ -696,6 +701,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       }
     }
   }, [authenticatedEmail, canUseCloudDataStore, gatherAllLocalData, saveAllUserDataToCloud]);
+  canUseCloudDataStoreRef.current = canUseCloudDataStore;
+  syncToCloudRef.current = syncToCloud;
 
   const forceSyncNow = useCallback(async () => {
     if (syncTimeoutRef.current) {
@@ -723,23 +730,19 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       setInitialCheckComplete(false);
       lastSyncedEmailRef.current = null;
       hasInitializedRef.current = false;
+      initializationInFlightRef.current = false;
       return;
     }
 
-    // On hot reload, if initialCheckComplete is false but hasInitialized is true, reset
-    if (hasInitializedRef.current && !initialCheckComplete) {
-      console.log("[UserDataSync] Detected incomplete initialization (hot reload?), resetting");
-      hasInitializedRef.current = false;
-    }
-
-    if (hasInitializedRef.current && lastSyncedEmailRef.current === authenticatedEmail) {
-      console.log("[UserDataSync] Already initialized for this email, skipping");
+    if (hasInitializedRef.current || initializationInFlightRef.current) {
+      console.log("[UserDataSync] Initialization already started for this account, skipping duplicate run");
       return;
     }
 
     console.log("[UserDataSync] New user login detected, checking backend...");
     hasInitializedRef.current = true;
-    
+    initializationInFlightRef.current = true;
+
     if (safetyTimeoutRef.current) {
       clearTimeout(safetyTimeoutRef.current);
     }
@@ -749,48 +752,51 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         setInitialCheckComplete(true);
       }
     }, 6000);
-    
+
     const initSync = async () => {
-      const reachable = await withTimeout(
-        canUseCloudDataStore(),
-        ASYNC_OPERATION_TIMEOUT_MS,
-        '[UserDataSync] Checking cloud store reachability during initialization'
-      );
-      if (!reachable) {
-        console.log("[UserDataSync] No cloud store is reachable, skipping initial sync");
-        setInitialCheckComplete(true);
+      try {
+        const reachable = await withTimeout(
+          canUseCloudDataStoreRef.current(),
+          ASYNC_OPERATION_TIMEOUT_MS,
+          '[UserDataSync] Checking cloud store reachability during initialization'
+        );
+        if (!reachable) {
+          console.log("[UserDataSync] No cloud store is reachable, skipping initial sync");
+          setInitialCheckComplete(true);
+          return;
+        }
+
+        const cloudLoaded = await withTimeout(
+          loadFromCloudRef.current(),
+          ASYNC_OPERATION_TIMEOUT_MS + 2000,
+          '[UserDataSync] Initial cloud restore'
+        );
+
+        if (!cloudLoaded && isMountedRef.current) {
+          console.log("[UserDataSync] No cloud data, will sync local data after delay");
+          const timeoutId = setTimeout(() => {
+            if (isMountedRef.current) {
+              void syncToCloudRef.current();
+            }
+          }, 5000);
+          syncTimeoutRef.current = timeoutId;
+        }
+      } catch (error) {
+        console.error('[UserDataSync] Initial sync failed:', error);
+        if (isMountedRef.current) {
+          setInitialCheckComplete(true);
+        }
+      } finally {
+        initializationInFlightRef.current = false;
         if (safetyTimeoutRef.current) {
           clearTimeout(safetyTimeoutRef.current);
           safetyTimeoutRef.current = null;
         }
-        return;
-      }
-
-      const cloudLoaded = await withTimeout(
-        loadFromCloud(),
-        ASYNC_OPERATION_TIMEOUT_MS + 2000,
-        '[UserDataSync] Initial cloud restore'
-      );
-      
-      if (safetyTimeoutRef.current) {
-        clearTimeout(safetyTimeoutRef.current);
-        safetyTimeoutRef.current = null;
-      }
-      
-      if (!cloudLoaded && isMountedRef.current) {
-        console.log("[UserDataSync] No cloud data, will sync local data after delay");
-        const timeoutId = setTimeout(() => {
-          if (isMountedRef.current) {
-            void syncToCloud();
-          }
-        }, 5000);
-        
-        return () => clearTimeout(timeoutId);
       }
     };
 
     void initSync();
-  }, [isAuthenticated, authenticatedEmail, canUseCloudDataStore, loadFromCloud, syncToCloud, initialCheckComplete]);
+  }, [authenticatedEmail, initialCheckComplete, isAuthenticated]);
 
   // Removed automatic storage change listener to prevent continuous sync loops
   // Users can manually trigger sync via forceSyncNow() if needed
@@ -817,6 +823,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     retryCountRef.current = 0;
     lastSyncAttemptRef.current = 0;
     hasInitializedRef.current = false;
+    initializationInFlightRef.current = false;
 
     if (!authenticatedEmail) {
       return;
