@@ -7,6 +7,7 @@ const CLOUD_CONNECTION_RETRY_DELAY_MS = 250;
 const CLOUD_HEALTH_CACHE_MS = 60_000;
 const CLOUD_RPC_SUFFIX = "/rpc";
 const DIRECT_CLOUD_STORE_UNAVAILABLE = "DIRECT_CLOUD_STORE_UNAVAILABLE";
+const VERSION_RETRIEVAL_FAILURE_MESSAGE = "Failed to retrieve remote version";
 
 export interface CloudUserDataRecord {
   email: string;
@@ -89,8 +90,11 @@ function normalizeCloudStoreConnectionError(error: unknown): Error {
   const isUnsupportedVersionResponse =
     errorMessage.includes('reported by the engine is not supported by this library') &&
     (errorMessage.includes('"code":"not_found"') || errorMessage.includes('The requested resource was not found'));
+  const isVersionRetrievalFailure =
+    errorMessage.includes('VersionRetrievalFailure') ||
+    errorMessage.includes(VERSION_RETRIEVAL_FAILURE_MESSAGE);
 
-  if (isUnsupportedVersionResponse) {
+  if (isUnsupportedVersionResponse || isVersionRetrievalFailure) {
     return new Error(DIRECT_CLOUD_STORE_UNAVAILABLE);
   }
 
@@ -133,6 +137,7 @@ async function createCloudConnection(): Promise<Surreal> {
     namespace,
     database: CLOUD_DB_NAME,
     auth: token,
+    versionCheck: false,
   });
 
   const timeoutPromise = new Promise<never>((_, reject) => {
