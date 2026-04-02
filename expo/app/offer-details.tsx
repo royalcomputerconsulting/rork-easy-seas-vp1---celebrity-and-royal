@@ -5,8 +5,9 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
   ScrollView,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,7 +29,6 @@ import {
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
-import { IMAGES } from '@/constants/images';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -49,7 +49,7 @@ export default function OfferDetailsScreen() {
   const [filterShip, setFilterShip] = useState<string | null>(null);
   const [filterGuests, setFilterGuests] = useState<number | null>(null);
   const [filterRoomType, setFilterRoomType] = useState<string | null>(null);
-  const [showShipPicker, setShowShipPicker] = useState(false);
+  const [isSortModalVisible, setIsSortModalVisible] = useState<boolean>(false);
 
   const playingHoursConfig = useMemo(() => {
     const userPlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
@@ -197,15 +197,15 @@ export default function OfferDetailsScreen() {
       index === self.findIndex(c => c.id === cruise.id)
     );
 
-    const ships = [...new Set(uniqueCruises.map(c => c.shipName).filter(Boolean))].sort();
-    const guestCounts = [...new Set(uniqueCruises.map(c => c.guests || 2))].sort();
+    const ships = [...new Set(uniqueCruises.map(c => c.shipName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const guestCounts = [...new Set(uniqueCruises.map(c => c.guests || 2))].sort((a, b) => a - b);
     const roomTypes = [...new Set(
       uniqueCruises
         .map(c => c.cabinType)
         .filter((t): t is string => !!t)
-    )].sort();
+    )].sort((a, b) => a.localeCompare(b));
 
-    return { ships, guestCounts, roomTypes };
+    return { ships, guestCounts, roomTypes, totalCruises: uniqueCruises.length };
   }, [storeCruises, localData.cruises, offerCode]);
 
   const offerInfo = useMemo(() => {
@@ -326,6 +326,33 @@ export default function OfferDetailsScreen() {
 
   const daysUntilExpiry = offerInfo.expiryDate ? getDaysUntil(offerInfo.expiryDate) : null;
   const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry > 0 && daysUntilExpiry <= 7;
+  const totalCruisesForOffer = filterOptions.totalCruises;
+  const activeFilterCount = (filterShip ? 1 : 0) + (filterGuests !== null ? 1 : 0) + (filterRoomType ? 1 : 0);
+  const canMarkOffer = Boolean(
+    offerInfo.offerCode &&
+    offerData.offer &&
+    offerData.offer.status !== 'used' &&
+    offerData.offer.status !== 'booked'
+  );
+  const showOfferStatus = Boolean(
+    offerData.offer && (offerData.offer.status === 'used' || offerData.offer.status === 'booked')
+  );
+
+  const currentSortLabel = useMemo(() => {
+    switch (sortBy) {
+      case 'highest-value':
+        return 'Highest Value';
+      case 'lowest-price':
+        return 'Lowest Price';
+      case 'longest':
+        return 'Longest Cruise';
+      case 'shortest':
+        return 'Shortest Cruise';
+      case 'soonest':
+      default:
+        return 'Soonest Expiring';
+    }
+  }, [sortBy]);
 
   const handleCruisePress = useCallback((cruiseId: string) => {
     console.log('[OfferDetails] Cruise pressed:', cruiseId);
@@ -355,6 +382,21 @@ export default function OfferDetailsScreen() {
     console.log('[OfferDetails] Marked offer as booked/in-progress:', offer.offerCode);
     router.back();
   }, [offerData, router, updateCasinoOffer]);
+
+  const handleOpenSortModal = useCallback(() => {
+    setIsSortModalVisible(true);
+  }, []);
+
+  const handleCloseSortModal = useCallback(() => {
+    setIsSortModalVisible(false);
+  }, []);
+
+  const handleResetSortAndFilters = useCallback(() => {
+    setSortBy('soonest');
+    setFilterShip(null);
+    setFilterGuests(null);
+    setFilterRoomType(null);
+  }, []);
 
   const getCruiseSummary = useCallback((cruise: Cruise) => {
     const casinoAvail = calculateCasinoAvailabilityForCruise(cruise, storeOffers);
@@ -561,49 +603,27 @@ export default function OfferDetailsScreen() {
             <X size={24} color={COLORS.navyDeep} />
           </TouchableOpacity>
 
-          {/* Featured Offer Name & Code */}
           <View style={styles.featuredOfferSection}>
-            <Image 
-              source={{ uri: IMAGES.logo }}
-              style={styles.offerLogo}
-              resizeMode="contain"
-            />
-            <View style={styles.offerNameRow}>
-              <Text style={styles.featuredOfferName} numberOfLines={2}>{offerInfo.offerName}</Text>
-              {offerInfo.totalValue > 0 && (
-                <View style={styles.totalValueBadge}>
-                  <DollarSign size={18} color="#166534" />
-                  <View>
-                    <Text style={styles.totalValueLabel}>Total Value</Text>
-                    <Text style={styles.totalValueAmount}>${Math.round(offerInfo.totalValue).toLocaleString()}</Text>
-                  </View>
+            <Text style={styles.featuredOfferName} numberOfLines={2}>{offerInfo.offerName}</Text>
+            <View style={styles.featuredOfferMetaRow}>
+              <View style={styles.offerCodeBadge}>
+                <Text style={styles.offerCodeText}>{offerInfo.offerCode}</Text>
+              </View>
+              {showOfferStatus && (
+                <View style={[styles.statusMetaBadge, offerData.offer?.status === 'used' && styles.statusMetaBadgeUsed]}>
+                  {offerData.offer?.status === 'used' ? (
+                    <Ban size={12} color={COLORS.white} />
+                  ) : (
+                    <Archive size={12} color={COLORS.white} />
+                  )}
+                  <Text style={styles.statusMetaBadgeText}>
+                    {offerData.offer?.status === 'used' ? 'Used' : 'In Progress'}
+                  </Text>
                 </View>
               )}
-            </View>
-            <View style={styles.offerCodeBadge}>
-              <Text style={styles.offerCodeText}>{offerInfo.offerCode}</Text>
             </View>
           </View>
 
-          {/* FP/OBC Highlight Row */}
-          {((offerInfo.freePlay ?? 0) > 0 || (offerInfo.obc ?? 0) > 0) && (
-            <View style={styles.fpObcRow}>
-              {(offerInfo.freePlay ?? 0) > 0 && (
-                <View style={styles.fpBadgeOffer}>
-                  <Text style={styles.fpLabelOffer}>FreePlay</Text>
-                  <Text style={styles.fpValueOffer}>${(offerInfo.freePlay ?? 0).toLocaleString()}</Text>
-                </View>
-              )}
-              {(offerInfo.obc ?? 0) > 0 && (
-                <View style={styles.obcBadgeOffer}>
-                  <Text style={styles.obcLabelOffer}>Onboard Credit</Text>
-                  <Text style={styles.obcValueOffer}>${(offerInfo.obc ?? 0).toLocaleString()}</Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Stats Row - Expiry, Cruises */}
           <View style={styles.statsRow}>
             {offerInfo.expiryDate && (
               <View style={styles.statItem}>
@@ -621,181 +641,259 @@ export default function OfferDetailsScreen() {
               <Ship size={16} color={COLORS.navyDeep} />
               <View style={styles.statTextGroup}>
                 <Text style={styles.statLabel}>Cruises</Text>
-                <Text style={styles.statValue}>{offerData.cruises.length}</Text>
+                <Text style={styles.statValue}>{totalCruisesForOffer}</Text>
               </View>
             </View>
           </View>
 
-          {/* Status Actions */}
-          {offerInfo.offerCode && offerData.offer && offerData.offer.status !== 'used' && offerData.offer.status !== 'booked' && (
-            <View style={styles.statusActionsRow}>
-              <TouchableOpacity
-                style={styles.statusActionButton}
-                onPress={handleMarkAsInProgress}
-                activeOpacity={0.7}
-              >
-                <Archive size={16} color={COLORS.white} />
-                <Text style={styles.statusActionText}>Mark In Progress</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.statusActionButton, styles.statusActionButtonUsed]}
-                onPress={handleMarkAsUsed}
-                activeOpacity={0.7}
-              >
-                <Ban size={16} color={COLORS.white} />
-                <Text style={styles.statusActionText}>Mark as Used</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Status Badge if already marked */}
-          {offerData.offer && (offerData.offer.status === 'used' || offerData.offer.status === 'booked') && (
-            <View style={styles.statusBadgeContainer}>
-              <View style={[styles.statusBadge, offerData.offer.status === 'used' && styles.statusBadgeUsed]}>
-                {offerData.offer.status === 'used' ? (
-                  <Ban size={16} color={COLORS.white} />
-                ) : (
-                  <Archive size={16} color={COLORS.white} />
-                )}
-                <Text style={styles.statusBadgeText}>
-                  {offerData.offer.status === 'used' ? 'Used' : 'In Progress'}
-                </Text>
-              </View>
-            </View>
-          )}
+          <View style={styles.statusActionsRow}>
+            {canMarkOffer ? (
+              <>
+                <TouchableOpacity
+                  style={styles.statusActionButton}
+                  onPress={handleMarkAsInProgress}
+                  activeOpacity={0.7}
+                  testID="offer-mark-in-progress-button"
+                >
+                  <Archive size={14} color={COLORS.white} />
+                  <Text style={styles.statusActionText}>In Progress</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.statusActionButton, styles.statusActionButtonUsed]}
+                  onPress={handleMarkAsUsed}
+                  activeOpacity={0.7}
+                  testID="offer-mark-used-button"
+                >
+                  <Ban size={14} color={COLORS.white} />
+                  <Text style={styles.statusActionText}>Used</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.statusActionSpacer} />
+            )}
+            <TouchableOpacity
+              style={[
+                styles.statusActionButton,
+                styles.statusActionButtonSort,
+                !canMarkOffer && styles.statusActionButtonSortWide,
+              ]}
+              onPress={handleOpenSortModal}
+              activeOpacity={0.7}
+              testID="offer-open-sort-button"
+            >
+              <Filter size={14} color={COLORS.white} />
+              <Text style={styles.statusActionText} numberOfLines={1}>
+                {activeFilterCount > 0 ? `Sort By (${activeFilterCount})` : 'Sort By'}
+              </Text>
+              <ChevronDown size={14} color={COLORS.white} />
+            </TouchableOpacity>
+          </View>
         </LinearGradient>
 
-        {/* Sort Controls */}
-        <View style={styles.sortSection}>
-          <Text style={styles.sortLabel} testID="offer-sort-label">Sort by:</Text>
-          <View style={styles.sortRowCentered}>
-            <TouchableOpacity
-              style={[styles.sortPillMain, sortBy === 'soonest' && styles.sortPillMainActive]}
-              onPress={() => setSortBy('soonest')}
-              activeOpacity={0.7}
-              testID="sort-soonest"
-            >
-              <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Soonest Expiring</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.sortPillMain, sortBy === 'highest-value' && styles.sortPillMainActive]}
-              onPress={() => setSortBy('highest-value')}
-              activeOpacity={0.7}
-              testID="sort-highest-value"
-            >
-              <Text style={[styles.sortPillMainText, sortBy === 'highest-value' && styles.sortPillMainTextActive]}>Highest Value</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Filter: Ship */}
-          {filterOptions.ships.length > 1 && (
-            <View style={styles.filterRow}>
-              <View style={styles.filterLabelRow}>
-                <Ship size={14} color={COLORS.navyDeep} />
-                <Text style={styles.filterLabel}>Ship</Text>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollContent}>
+        <Modal
+          visible={isSortModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={handleCloseSortModal}
+        >
+          <SafeAreaView style={styles.filterModalRoot} edges={['bottom']}>
+            <Pressable
+              style={styles.filterModalBackdrop}
+              onPress={handleCloseSortModal}
+              testID="offer-sort-backdrop"
+            />
+            <View style={styles.filterModalSheet}>
+              <View style={styles.filterModalHandle} />
+              <View style={styles.filterModalHeader}>
+                <View>
+                  <Text style={styles.filterModalTitle}>Sort & Filter Cruises</Text>
+                  <Text style={styles.filterModalSubtitle}>{currentSortLabel}</Text>
+                </View>
                 <TouchableOpacity
-                  style={[styles.filterChip, !filterShip && styles.filterChipActive]}
-                  onPress={() => setFilterShip(null)}
+                  style={styles.filterModalCloseButton}
+                  onPress={handleCloseSortModal}
                   activeOpacity={0.7}
+                  testID="offer-sort-close-button"
                 >
-                  <Text style={[styles.filterChipText, !filterShip && styles.filterChipTextActive]}>All Ships</Text>
+                  <X size={18} color={COLORS.navyDeep} />
                 </TouchableOpacity>
-                {filterOptions.ships.map(ship => (
-                  <TouchableOpacity
-                    key={ship}
-                    style={[styles.filterChip, filterShip === ship && styles.filterChipActive]}
-                    onPress={() => setFilterShip(filterShip === ship ? null : ship)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.filterChipText, filterShip === ship && styles.filterChipTextActive]} numberOfLines={1}>{ship}</Text>
-                  </TouchableOpacity>
-                ))}
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.filterModalContent}>
+                <View style={styles.sortSection}>
+                  <Text style={styles.sortLabel} testID="offer-sort-label">Sort by</Text>
+                  <View style={styles.sortRowCentered}>
+                    <TouchableOpacity
+                      style={[styles.sortPillMain, sortBy === 'soonest' && styles.sortPillMainActive]}
+                      onPress={() => setSortBy('soonest')}
+                      activeOpacity={0.7}
+                      testID="sort-soonest"
+                    >
+                      <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Soonest Expiring</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sortPillMain, sortBy === 'highest-value' && styles.sortPillMainActive]}
+                      onPress={() => setSortBy('highest-value')}
+                      activeOpacity={0.7}
+                      testID="sort-highest-value"
+                    >
+                      <Text style={[styles.sortPillMainText, sortBy === 'highest-value' && styles.sortPillMainTextActive]}>Highest Value</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sortPillMain, sortBy === 'lowest-price' && styles.sortPillMainActive]}
+                      onPress={() => setSortBy('lowest-price')}
+                      activeOpacity={0.7}
+                      testID="sort-lowest-price"
+                    >
+                      <Text style={[styles.sortPillMainText, sortBy === 'lowest-price' && styles.sortPillMainTextActive]}>Lowest Price</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sortPillMain, sortBy === 'longest' && styles.sortPillMainActive]}
+                      onPress={() => setSortBy('longest')}
+                      activeOpacity={0.7}
+                      testID="sort-longest"
+                    >
+                      <Text style={[styles.sortPillMainText, sortBy === 'longest' && styles.sortPillMainTextActive]}>Longest Cruise</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sortPillMain, sortBy === 'shortest' && styles.sortPillMainActive]}
+                      onPress={() => setSortBy('shortest')}
+                      activeOpacity={0.7}
+                      testID="sort-shortest"
+                    >
+                      <Text style={[styles.sortPillMainText, sortBy === 'shortest' && styles.sortPillMainTextActive]}>Shortest Cruise</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {filterOptions.ships.length > 1 && (
+                    <View style={styles.filterRow}>
+                      <View style={styles.filterLabelRow}>
+                        <Ship size={14} color={COLORS.navyDeep} />
+                        <Text style={styles.filterLabel}>Ship</Text>
+                      </View>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollContent}>
+                        <TouchableOpacity
+                          style={[styles.filterChip, !filterShip && styles.filterChipActive]}
+                          onPress={() => setFilterShip(null)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.filterChipText, !filterShip && styles.filterChipTextActive]}>All Ships</Text>
+                        </TouchableOpacity>
+                        {filterOptions.ships.map(ship => (
+                          <TouchableOpacity
+                            key={ship}
+                            style={[styles.filterChip, filterShip === ship && styles.filterChipActive]}
+                            onPress={() => setFilterShip(filterShip === ship ? null : ship)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.filterChipText, filterShip === ship && styles.filterChipTextActive]} numberOfLines={1}>{ship}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {filterOptions.guestCounts.length > 1 && (
+                    <View style={styles.filterRow}>
+                      <View style={styles.filterLabelRow}>
+                        <Users size={14} color={COLORS.navyDeep} />
+                        <Text style={styles.filterLabel}>Guests</Text>
+                      </View>
+                      <View style={styles.filterChipRow}>
+                        <TouchableOpacity
+                          style={[styles.filterChip, filterGuests === null && styles.filterChipActive]}
+                          onPress={() => setFilterGuests(null)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.filterChipText, filterGuests === null && styles.filterChipTextActive]}>Any</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.filterChip, filterGuests === 1 && styles.filterChipActive]}
+                          onPress={() => setFilterGuests(filterGuests === 1 ? null : 1)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.filterChipText, filterGuests === 1 && styles.filterChipTextActive]}>1 Person</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.filterChip, filterGuests === 2 && styles.filterChipActive]}
+                          onPress={() => setFilterGuests(filterGuests === 2 ? null : 2)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.filterChipText, filterGuests === 2 && styles.filterChipTextActive]}>2 Person</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {filterOptions.roomTypes.length > 1 && (
+                    <View style={styles.filterRow}>
+                      <View style={styles.filterLabelRow}>
+                        <BedDouble size={14} color={COLORS.navyDeep} />
+                        <Text style={styles.filterLabel}>Room</Text>
+                      </View>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollContent}>
+                        <TouchableOpacity
+                          style={[styles.filterChip, !filterRoomType && styles.filterChipActive]}
+                          onPress={() => setFilterRoomType(null)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.filterChipText, !filterRoomType && styles.filterChipTextActive]}>All Rooms</Text>
+                        </TouchableOpacity>
+                        {filterOptions.roomTypes.map(room => (
+                          <TouchableOpacity
+                            key={room}
+                            style={[styles.filterChip, filterRoomType === room && styles.filterChipActive]}
+                            onPress={() => setFilterRoomType(filterRoomType === room ? null : room)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.filterChipText, filterRoomType === room && styles.filterChipTextActive]}>{room}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {(filterShip || filterGuests !== null || filterRoomType) && (
+                    <View style={styles.activeFilterRow}>
+                      <Filter size={13} color="#0EA5E9" />
+                      <Text style={styles.activeFilterText}>
+                        {offerData.cruises.length} of {totalCruisesForOffer} cruises
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.clearFiltersButton}
+                        onPress={handleResetSortAndFilters}
+                        activeOpacity={0.7}
+                        testID="offer-clear-filters-button"
+                      >
+                        <X size={12} color="#DC2626" />
+                        <Text style={styles.clearFiltersText}>Reset</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
               </ScrollView>
-            </View>
-          )}
 
-          {/* Filter: Guests */}
-          {filterOptions.guestCounts.length > 1 && (
-            <View style={styles.filterRow}>
-              <View style={styles.filterLabelRow}>
-                <Users size={14} color={COLORS.navyDeep} />
-                <Text style={styles.filterLabel}>Guests</Text>
-              </View>
-              <View style={styles.filterChipRow}>
+              <View style={styles.filterModalFooter}>
                 <TouchableOpacity
-                  style={[styles.filterChip, !filterGuests && styles.filterChipActive]}
-                  onPress={() => setFilterGuests(null)}
+                  style={styles.filterModalSecondaryButton}
+                  onPress={handleResetSortAndFilters}
                   activeOpacity={0.7}
+                  testID="offer-reset-sort-button"
                 >
-                  <Text style={[styles.filterChipText, !filterGuests && styles.filterChipTextActive]}>Any</Text>
+                  <Text style={styles.filterModalSecondaryButtonText}>Reset</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.filterChip, filterGuests === 1 && styles.filterChipActive]}
-                  onPress={() => setFilterGuests(filterGuests === 1 ? null : 1)}
+                  style={styles.filterModalPrimaryButton}
+                  onPress={handleCloseSortModal}
                   activeOpacity={0.7}
+                  testID="offer-done-sort-button"
                 >
-                  <Text style={[styles.filterChipText, filterGuests === 1 && styles.filterChipTextActive]}>1 Person</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.filterChip, filterGuests === 2 && styles.filterChipActive]}
-                  onPress={() => setFilterGuests(filterGuests === 2 ? null : 2)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.filterChipText, filterGuests === 2 && styles.filterChipTextActive]}>2 Person</Text>
+                  <Text style={styles.filterModalPrimaryButtonText}>Done</Text>
                 </TouchableOpacity>
               </View>
             </View>
-          )}
-
-          {/* Filter: Room Type */}
-          {filterOptions.roomTypes.length > 1 && (
-            <View style={styles.filterRow}>
-              <View style={styles.filterLabelRow}>
-                <BedDouble size={14} color={COLORS.navyDeep} />
-                <Text style={styles.filterLabel}>Room</Text>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollContent}>
-                <TouchableOpacity
-                  style={[styles.filterChip, !filterRoomType && styles.filterChipActive]}
-                  onPress={() => setFilterRoomType(null)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.filterChipText, !filterRoomType && styles.filterChipTextActive]}>All Rooms</Text>
-                </TouchableOpacity>
-                {filterOptions.roomTypes.map(room => (
-                  <TouchableOpacity
-                    key={room}
-                    style={[styles.filterChip, filterRoomType === room && styles.filterChipActive]}
-                    onPress={() => setFilterRoomType(filterRoomType === room ? null : room)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.filterChipText, filterRoomType === room && styles.filterChipTextActive]}>{room}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
-          {/* Active filter count */}
-          {(filterShip || filterGuests || filterRoomType) && (
-            <View style={styles.activeFilterRow}>
-              <Filter size={13} color="#0EA5E9" />
-              <Text style={styles.activeFilterText}>
-                {offerData.cruises.length} of {filterOptions.ships.length > 0 ? [...(storeCruises || []), ...(localData.cruises || [])].filter(c => c.offerCode === offerCode).length : 0} cruises
-              </Text>
-              <TouchableOpacity
-                style={styles.clearFiltersButton}
-                onPress={() => { setFilterShip(null); setFilterGuests(null); setFilterRoomType(null); }}
-                activeOpacity={0.7}
-              >
-                <X size={12} color="#DC2626" />
-                <Text style={styles.clearFiltersText}>Clear</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+          </SafeAreaView>
+        </Modal>
 
         <FlatList
           data={offerData.cruises}
@@ -839,7 +937,7 @@ const styles = StyleSheet.create({
   mergedHeader: {
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.sm,
-    paddingBottom: SPACING.md,
+    paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 31, 63, 0.1)',
   },
@@ -856,9 +954,17 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   featuredOfferSection: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingTop: SPACING.xs,
-    paddingBottom: SPACING.md,
+    paddingRight: 52,
+    paddingBottom: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  featuredOfferMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
   },
   offerNameRow: {
     flexDirection: 'row',
@@ -876,11 +982,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   featuredOfferName: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: '700' as const,
     color: COLORS.navyDeep,
     textAlign: 'left' as const,
-    flex: 1,
+    lineHeight: 34,
   },
   totalValueBadge: {
     flexDirection: 'row',
@@ -917,18 +1023,24 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    paddingVertical: SPACING.md,
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    backgroundColor: 'rgba(255, 255, 255, 0.78)',
+    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     marginTop: SPACING.xs,
+    gap: SPACING.sm,
   },
   statItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
   },
   statItemHighlight: {
     backgroundColor: 'rgba(22, 101, 52, 0.08)',
@@ -959,9 +1071,7 @@ const styles = StyleSheet.create({
     color: '#166534',
   },
   sortSection: {
-    marginHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    gap: SPACING.xs,
+    gap: SPACING.sm,
   },
   sortRowCentered: {
     flexDirection: 'row',
@@ -1074,6 +1184,92 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700' as const,
     color: '#DC2626',
+  },
+  filterModalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  filterModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(8, 15, 35, 0.42)',
+  },
+  filterModalSheet: {
+    backgroundColor: '#F8FBFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
+    maxHeight: '78%',
+    ...SHADOW.lg,
+  },
+  filterModalHandle: {
+    alignSelf: 'center',
+    width: 48,
+    height: 5,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(0, 31, 63, 0.18)',
+    marginBottom: SPACING.md,
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  filterModalTitle: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
+  },
+  filterModalSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: COLORS.textSecondary,
+  },
+  filterModalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  filterModalContent: {
+    paddingBottom: SPACING.md,
+  },
+  filterModalFooter: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    paddingTop: SPACING.sm,
+  },
+  filterModalSecondaryButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 31, 63, 0.07)',
+  },
+  filterModalSecondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
+  },
+  filterModalPrimaryButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.navyDeep,
+  },
+  filterModalPrimaryButtonText: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: COLORS.white,
   },
   listContent: {
     padding: SPACING.md,
@@ -1413,28 +1609,56 @@ const styles = StyleSheet.create({
   },
   statusActionsRow: {
     flexDirection: 'row',
-    gap: SPACING.md,
-    marginTop: SPACING.md,
+    alignItems: 'stretch',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  statusActionSpacer: {
+    flex: 2,
+  },
+  statusMetaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#0EA5E9',
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.round,
+  },
+  statusMetaBadgeUsed: {
+    backgroundColor: '#DC2626',
+  },
+  statusMetaBadgeText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: COLORS.white,
   },
   statusActionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.xs,
+    gap: 6,
     backgroundColor: '#0EA5E9',
-    paddingVertical: SPACING.md,
+    paddingVertical: 11,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     ...SHADOW.sm,
+  },
+  statusActionButtonSort: {
+    backgroundColor: COLORS.navyDeep,
+  },
+  statusActionButtonSortWide: {
+    flex: 1,
   },
   statusActionButtonUsed: {
     backgroundColor: '#DC2626',
   },
   statusActionText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700' as const,
     color: COLORS.white,
+    flexShrink: 1,
   },
   statusBadgeContainer: {
     marginTop: SPACING.md,
