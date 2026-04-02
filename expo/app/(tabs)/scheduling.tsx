@@ -855,16 +855,11 @@ export default function SchedulingScreen() {
             }
             showsVerticalScrollIndicator={true}
             persistentScrollbar={true}
-            removeClippedSubviews={Platform.OS === 'android'}
+            removeClippedSubviews={false}
             initialNumToRender={10}
             maxToRenderPerBatch={20}
             windowSize={21}
             updateCellsBatchingPeriod={50}
-            getItemLayout={(data, index) => ({
-              length: 140,
-              offset: 140 * index,
-              index,
-            })}
           />
         )}
       </SafeAreaView>

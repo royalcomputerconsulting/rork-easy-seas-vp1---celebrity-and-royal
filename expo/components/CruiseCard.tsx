@@ -201,6 +201,7 @@ export const CruiseCard = React.memo(function CruiseCard({
               source={{ uri: heroImageUri }}
               style={styles.miniBackgroundImage}
               resizeMode="cover"
+              fadeDuration={0}
               onError={() => {
                 console.log('Mini background image load error, using default');
                 setHeroImageUri(DEFAULT_CRUISE_IMAGE);
@@ -218,6 +219,7 @@ export const CruiseCard = React.memo(function CruiseCard({
                   source={{ uri: compactImageUri }}
                   style={styles.miniImage}
                   resizeMode="cover"
+                  fadeDuration={0}
                   onError={() => {
                     console.log('Mini image load error, using default');
                     setCompactImageUri(DEFAULT_CRUISE_IMAGE);
@@ -442,6 +444,7 @@ export const CruiseCard = React.memo(function CruiseCard({
           source={{ uri: compactImageUri }} 
           style={styles.compactImage}
           resizeMode="cover"
+          fadeDuration={0}
           onError={() => {
             console.log('Compact image load error, using default');
             setCompactImageUri(DEFAULT_CRUISE_IMAGE);
@@ -478,6 +481,7 @@ export const CruiseCard = React.memo(function CruiseCard({
           source={{ uri: heroImageUri }} 
           style={styles.heroImage}
           resizeMode="cover"
+          fadeDuration={0}
           onError={() => {
             console.log('Hero image load error, using default');
             setHeroImageUri(DEFAULT_CRUISE_IMAGE);

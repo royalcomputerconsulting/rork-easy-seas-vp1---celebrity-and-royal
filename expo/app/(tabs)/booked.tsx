@@ -697,7 +697,7 @@ export default function BookedScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={true}
+          removeClippedSubviews={false}
           initialNumToRender={6}
           maxToRenderPerBatch={5}
           windowSize={7}
