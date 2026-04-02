@@ -601,53 +601,55 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Text style={styles.royalStatValue}>{clubRoyalePoints.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>CR Points</Text>
+      <View style={styles.summarySection}>
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.royalStatValue}>{clubRoyalePoints.toLocaleString()}</Text>
+            <Text style={styles.statLabel}>CR Points</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.royalStatValue}>{crownAnchorPoints.toLocaleString()}</Text>
+            <Text style={styles.statLabel}>C&A</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.royalStatValue}>{pinnacleProgress.nightsToNext.toLocaleString()}</Text>
+            <Text style={styles.statLabel}>To Pinnacle</Text>
+          </View>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.royalStatValue}>{crownAnchorPoints.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>C&A</Text>
+
+        <View style={styles.quickStatsPillRow}>
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onCruisesPress}
+            activeOpacity={0.7}
+          >
+            <Anchor size={14} color={COLORS.points} />
+            <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
+            <Text style={styles.quickStatPillLabel}>Cruises</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onBookedPress}
+            activeOpacity={0.7}
+          >
+            <Ship size={14} color={COLORS.money} />
+            <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
+            <Text style={styles.quickStatPillLabel}>Booked</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onOffersPress}
+            activeOpacity={0.7}
+          >
+            <Tag size={14} color={COLORS.gold} />
+            <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
+            <Text style={styles.quickStatPillLabel}>Offers</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.royalStatValue}>{pinnacleProgress.nightsToNext.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>To Pinnacle</Text>
-        </View>
-      </View>
-
-      <View style={styles.quickStatsPillRow}>
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onCruisesPress}
-          activeOpacity={0.7}
-        >
-          <Anchor size={14} color={COLORS.points} />
-          <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Cruises</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onBookedPress}
-          activeOpacity={0.7}
-        >
-          <Ship size={14} color={COLORS.money} />
-          <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Booked</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onOffersPress}
-          activeOpacity={0.7}
-        >
-          <Tag size={14} color={COLORS.gold} />
-          <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
-          <Text style={styles.quickStatPillLabel}>Offers</Text>
-        </TouchableOpacity>
       </View>
         </>
       ) : activeBrand === 'celebrity' ? (
@@ -780,53 +782,55 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{celebrityBlueChipPoints.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>Blue Chip Pts</Text>
+      <View style={styles.summarySection}>
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{celebrityBlueChipPoints.toLocaleString()}</Text>
+            <Text style={styles.statLabel}>Blue Chip Pts</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{celebrityCaptainsClubPoints}</Text>
+            <Text style={styles.statLabel}>Captain&apos;s Club</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{Math.max(0, 3000 - celebrityCaptainsClubPoints)}</Text>
+            <Text style={styles.statLabel}>To Zenith</Text>
+          </View>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{celebrityCaptainsClubPoints}</Text>
-          <Text style={styles.statLabel}>Captain&apos;s Club</Text>
+
+        <View style={styles.quickStatsPillRow}>
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onCruisesPress}
+            activeOpacity={0.7}
+          >
+            <Anchor size={14} color={COLORS.points} />
+            <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
+            <Text style={styles.quickStatPillLabel}>Cruises</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onBookedPress}
+            activeOpacity={0.7}
+          >
+            <Ship size={14} color={COLORS.money} />
+            <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
+            <Text style={styles.quickStatPillLabel}>Booked</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onOffersPress}
+            activeOpacity={0.7}
+          >
+            <Tag size={14} color={COLORS.gold} />
+            <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
+            <Text style={styles.quickStatPillLabel}>Offers</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{Math.max(0, 3000 - celebrityCaptainsClubPoints)}</Text>
-          <Text style={styles.statLabel}>To Zenith</Text>
-        </View>
-      </View>
-
-      <View style={styles.quickStatsPillRow}>
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onCruisesPress}
-          activeOpacity={0.7}
-        >
-          <Anchor size={14} color={COLORS.points} />
-          <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Cruises</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onBookedPress}
-          activeOpacity={0.7}
-        >
-          <Ship size={14} color={COLORS.money} />
-          <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Booked</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onOffersPress}
-          activeOpacity={0.7}
-        >
-          <Tag size={14} color={COLORS.gold} />
-          <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
-          <Text style={styles.quickStatPillLabel}>Offers</Text>
-        </TouchableOpacity>
       </View>
         </>
       ) : activeBrand === 'silversea' ? (
@@ -956,58 +960,60 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{silverseaPoints}</Text>
-          <Text style={styles.statLabel}>VS Days</Text>
+      <View style={styles.summarySection}>
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{silverseaPoints}</Text>
+            <Text style={styles.statLabel}>VS Days</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{silverseaCasinoPoints.toLocaleString()}</Text>
+            <Text style={styles.statLabel}>Rock Star Pts</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text
+              style={[styles.statValue, silverseaCasinoTier.length > 10 ? styles.statValueCompact : null]}
+              numberOfLines={1}
+            >
+              {silverseaCasinoTier}
+            </Text>
+            <Text style={styles.statLabel}>Casino Tier</Text>
+          </View>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{silverseaCasinoPoints.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>Rock Star Pts</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text
-            style={[styles.statValue, silverseaCasinoTier.length > 10 ? styles.statValueCompact : null]}
-            numberOfLines={1}
+
+        <View style={styles.quickStatsPillRow}>
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onCruisesPress}
+            activeOpacity={0.7}
           >
-            {silverseaCasinoTier}
-          </Text>
-          <Text style={styles.statLabel}>Casino Tier</Text>
+            <Anchor size={14} color={COLORS.points} />
+            <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
+            <Text style={styles.quickStatPillLabel}>Cruises</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onBookedPress}
+            activeOpacity={0.7}
+          >
+            <Ship size={14} color={COLORS.money} />
+            <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
+            <Text style={styles.quickStatPillLabel}>Booked</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onOffersPress}
+            activeOpacity={0.7}
+          >
+            <Tag size={14} color={COLORS.gold} />
+            <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
+            <Text style={styles.quickStatPillLabel}>Offers</Text>
+          </TouchableOpacity>
         </View>
-      </View>
-
-      <View style={styles.quickStatsPillRow}>
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onCruisesPress}
-          activeOpacity={0.7}
-        >
-          <Anchor size={14} color={COLORS.points} />
-          <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Cruises</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onBookedPress}
-          activeOpacity={0.7}
-        >
-          <Ship size={14} color={COLORS.money} />
-          <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Booked</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onOffersPress}
-          activeOpacity={0.7}
-        >
-          <Tag size={14} color={COLORS.gold} />
-          <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
-          <Text style={styles.quickStatPillLabel}>Offers</Text>
-        </TouchableOpacity>
       </View>
         </>
       ) : (
@@ -1092,53 +1098,55 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{carnivalPlayersClubPoints.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>Players Pts</Text>
+      <View style={styles.summarySection}>
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{carnivalPlayersClubPoints.toLocaleString()}</Text>
+            <Text style={styles.statLabel}>Players Pts</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{carnivalVifpTier}</Text>
+            <Text style={styles.statLabel}>VIFP Tier</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{carnivalPlayersClubTier}</Text>
+            <Text style={styles.statLabel}>Players Tier</Text>
+          </View>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{carnivalVifpTier}</Text>
-          <Text style={styles.statLabel}>VIFP Tier</Text>
+
+        <View style={styles.quickStatsPillRow}>
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onCruisesPress}
+            activeOpacity={0.7}
+          >
+            <Anchor size={14} color={COLORS.points} />
+            <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
+            <Text style={styles.quickStatPillLabel}>Cruises</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onBookedPress}
+            activeOpacity={0.7}
+          >
+            <Ship size={14} color={COLORS.money} />
+            <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
+            <Text style={styles.quickStatPillLabel}>Booked</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.quickStatPill}
+            onPress={onOffersPress}
+            activeOpacity={0.7}
+          >
+            <Tag size={14} color={COLORS.gold} />
+            <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
+            <Text style={styles.quickStatPillLabel}>Offers</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{carnivalPlayersClubTier}</Text>
-          <Text style={styles.statLabel}>Players Tier</Text>
-        </View>
-      </View>
-
-      <View style={styles.quickStatsPillRow}>
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onCruisesPress}
-          activeOpacity={0.7}
-        >
-          <Anchor size={14} color={COLORS.points} />
-          <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Cruises</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onBookedPress}
-          activeOpacity={0.7}
-        >
-          <Ship size={14} color={COLORS.money} />
-          <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Booked</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.quickStatPill}
-          onPress={onOffersPress}
-          activeOpacity={0.7}
-        >
-          <Tag size={14} color={COLORS.gold} />
-          <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
-          <Text style={styles.quickStatPillLabel}>Offers</Text>
-        </TouchableOpacity>
       </View>
         </>
       )}
@@ -1170,50 +1178,50 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   contentLayer: {
-    padding: SPACING.lg,
+    padding: 14,
     backgroundColor: 'rgba(255, 248, 236, 0.12)',
   },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: 6,
   },
   memberInfoInline: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
+    gap: SPACING.sm,
   },
   headerLogo: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
   },
   memberTextInfo: {
     flex: 1,
-    gap: 2,
+    gap: 0,
   },
   memberGreeting: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '800' as const,
     color: '#111111',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   memberSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontSize: TYPOGRAPHY.fontSizeXS,
     color: 'rgba(17,17,17,0.72)',
-    marginTop: 4,
+    marginTop: 2,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   actionsSection: {
     flexDirection: 'row',
-    gap: SPACING.xs,
+    gap: 4,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(255, 252, 246, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1221,10 +1229,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(17, 17, 17, 0.08)',
     shadowColor: '#03111F',
-    shadowOpacity: 0.10,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   alertBadge: {
     position: 'absolute',
@@ -1246,8 +1254,8 @@ const styles = StyleSheet.create({
   tierRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.xs,
-    marginBottom: SPACING.sm,
+    gap: 6,
+    marginBottom: 6,
   },
   tierBadge: {
     paddingHorizontal: SPACING.md,
@@ -1267,43 +1275,43 @@ const styles = StyleSheet.create({
   },
   spotlightBadge: {
     flex: 1,
-    minWidth: 108,
+    minWidth: 96,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 18,
     borderWidth: 1,
     backgroundColor: 'rgba(255, 249, 240, 0.94)',
     borderColor: 'rgba(214, 184, 111, 0.22)',
     shadowColor: '#03111F',
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   spotlightBadgeIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SPACING.xs,
+    marginRight: 6,
   },
   spotlightBadgeContent: {
     flex: 1,
-    gap: 1,
+    gap: 0,
   },
   spotlightBadgeLabel: {
-    fontSize: 9,
+    fontSize: 8,
     color: 'rgba(15, 36, 57, 0.68)',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     letterSpacing: 0.2,
   },
   spotlightBadgeValue: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   progressGrid: {
     gap: SPACING.sm,
@@ -1443,32 +1451,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  statsRow: {
-    flexDirection: 'row',
+  summarySection: {
     backgroundColor: 'rgba(255, 248, 236, 0.94)',
-    borderRadius: 26,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
+    borderRadius: 24,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 2,
     borderWidth: 1,
     borderColor: 'rgba(214, 184, 111, 0.2)',
     shadowColor: '#03111F',
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 6,
+    marginBottom: 0,
+    borderWidth: 0,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 54,
+    minHeight: 40,
   },
   statDivider: {
     width: 1,
     backgroundColor: 'rgba(16, 33, 50, 0.1)',
   },
   statValue: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#102132',
   },
@@ -1479,25 +1501,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   statValueCompact: {
-    fontSize: 20,
+    fontSize: 18,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 9,
     color: 'rgba(16, 33, 50, 0.66)',
-    marginTop: 4,
+    marginTop: 2,
     textAlign: 'center',
-    letterSpacing: 0.3,
+    letterSpacing: 0.25,
   },
   quickStatsPillRow: {
     flexDirection: 'row',
-    gap: SPACING.xs,
+    gap: 6,
     justifyContent: 'center',
-    marginTop: 8,
-    padding: 6,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
+    marginTop: 0,
+    padding: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   quickStatPill: {
     flex: 1,
@@ -1506,24 +1528,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 250, 242, 0.96)',
     borderRadius: BORDER_RADIUS.round,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    gap: 3,
     borderWidth: 1,
-    borderColor: 'rgba(214, 184, 111, 0.18)',
+    borderColor: 'rgba(214, 184, 111, 0.16)',
     shadowColor: '#03111F',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
   quickStatPillValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: CLEAN_THEME.data.value,
   },
   quickStatPillLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontSize: 10,
     color: CLEAN_THEME.data.label,
   },
   crewCountRow: {

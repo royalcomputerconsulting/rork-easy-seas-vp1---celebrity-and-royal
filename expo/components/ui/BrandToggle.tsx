@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   containerPlayerCard: {
     paddingHorizontal: 0,
     paddingVertical: 0,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   toggleContainer: {
     flexDirection: 'row',
@@ -108,14 +108,14 @@ const styles = StyleSheet.create({
   },
   toggleContainerPlayerCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.88)',
-    borderRadius: 20,
-    padding: 6,
-    borderColor: 'rgba(255, 255, 255, 0.26)',
+    borderRadius: 18,
+    padding: 4,
+    borderColor: 'rgba(255, 255, 255, 0.24)',
     shadowColor: '#03111F',
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
   },
   toggleButton: {
     flex: 1,
@@ -127,9 +127,9 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
   },
   toggleButtonPlayerCard: {
-    minHeight: 46,
-    paddingHorizontal: 8,
-    borderRadius: 14,
+    minHeight: 38,
+    paddingHorizontal: 6,
+    borderRadius: 12,
   },
   leftButton: {
     marginRight: 2,
@@ -177,10 +177,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   toggleTextPlayerCard: {
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 9,
+    lineHeight: 11,
     color: COLORS.navyDeep,
-    letterSpacing: 0.2,
+    letterSpacing: 0.15,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   activeText: {
