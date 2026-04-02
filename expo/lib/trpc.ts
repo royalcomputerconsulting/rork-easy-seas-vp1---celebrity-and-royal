@@ -16,6 +16,10 @@ const RENDER_ROUTED_PREFIXES = [
   'calendar.',
   'royalCaribbeanSync.',
   'example.',
+  'data.',
+  'cruiseDeals.',
+  'crewRecognition.',
+  'dailyLuck.',
 ];
 
 const isRenderRoutedProcedure = (path: string): boolean => {
@@ -38,10 +42,53 @@ const HEALTH_CHECK_INTERVAL = 120_000;
 const HEALTH_CHECK_TIMEOUT = 5_000;
 let _healthCheckPromise: Promise<boolean> | null = null;
 
-const checkBackendHealth = async (): Promise<boolean> => {
-  const baseUrl = getBaseUrl();
-  if (baseUrl === "https://fallback.local") return false;
+type HealthTarget = {
+  baseUrl: string;
+  label: string;
+};
 
+const getHealthTargets = (): HealthTarget[] => {
+  const baseUrl = getBaseUrl();
+  const targets: HealthTarget[] = [];
+
+  if (baseUrl !== "https://fallback.local") {
+    targets.push({ baseUrl, label: 'System' });
+  }
+
+  targets.push({ baseUrl: RENDER_BACKEND_URL, label: 'Render' });
+
+  return targets.filter((target, index, list) => {
+    return list.findIndex(candidate => candidate.baseUrl === target.baseUrl) === index;
+  });
+};
+
+const checkHealthTarget = async (target: HealthTarget): Promise<boolean> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
+
+  try {
+    const res = await fetch(`${target.baseUrl}/`, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (res.ok) {
+      console.log(`[tRPC] ${target.label} backend health check passed`);
+      return true;
+    }
+
+    console.log(`[tRPC] ${target.label} backend returned non-ok status:`, res.status);
+    return false;
+  } catch (error) {
+    console.log(`[tRPC] ${target.label} backend unreachable:`, error instanceof Error ? error.message : String(error));
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+const checkBackendHealth = async (): Promise<boolean> => {
   const now = Date.now();
   if (_backendReachable !== null && now - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
     return _backendReachable;
@@ -50,32 +97,24 @@ const checkBackendHealth = async (): Promise<boolean> => {
   if (_healthCheckPromise) return _healthCheckPromise;
 
   _healthCheckPromise = (async () => {
-    try {
-      const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
-      const res = await fetch(`${baseUrl}/`, {
-        method: 'GET',
-        signal: controller.signal,
-        headers: { 'Accept': 'application/json' },
-      });
-      clearTimeout(tid);
-      _backendReachable = res.ok;
-      _lastHealthCheck = Date.now();
-      if (_backendReachable) {
-        console.log('[tRPC] Backend health check passed');
-      } else {
-        console.log('[tRPC] Backend returned non-ok status:', res.status);
+    const targets = getHealthTargets();
+
+    for (const target of targets) {
+      const reachable = await checkHealthTarget(target);
+      if (reachable) {
+        _backendReachable = true;
+        _lastHealthCheck = Date.now();
+        return true;
       }
-      return _backendReachable;
-    } catch {
-      _backendReachable = false;
-      _lastHealthCheck = Date.now();
-      console.log('[tRPC] Backend unreachable - operating in offline mode');
-      return false;
-    } finally {
-      _healthCheckPromise = null;
     }
-  })();
+
+    _backendReachable = false;
+    _lastHealthCheck = Date.now();
+    console.log('[tRPC] All backends unreachable - operating in offline mode');
+    return false;
+  })().finally(() => {
+    _healthCheckPromise = null;
+  });
 
   return _healthCheckPromise;
 };
