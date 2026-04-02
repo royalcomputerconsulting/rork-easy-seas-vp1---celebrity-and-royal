@@ -180,7 +180,14 @@ const ERROR_LOG_THROTTLE = 30_000;
 const BACKEND_NOT_FOUND_CODE = '"code":"not_found"';
 const BACKEND_NOT_FOUND_MESSAGE = 'The requested resource was not found';
 
+const isTrpcProcedureNotFound = (value: string): boolean => {
+  return value.includes('No procedure found on path') || value.includes('"code":"NOT_FOUND"');
+};
+
 const isBackendNotFoundPayload = (value: string): boolean => {
+  if (isTrpcProcedureNotFound(value)) {
+    return false;
+  }
   return value.includes(BACKEND_NOT_FOUND_CODE) || value.includes(BACKEND_NOT_FOUND_MESSAGE);
 };
 
@@ -192,6 +199,12 @@ const normalizeBackendResponseError = async (response: Response): Promise<Error 
   try {
     const responseBody = await response.clone().text();
     const trimmedResponseBody = responseBody.trim();
+
+    if (isTrpcProcedureNotFound(responseBody)) {
+      console.log('[tRPC] Procedure not found on backend (stale deploy) - passing through as normal tRPC error');
+      return null;
+    }
+
     const isUnavailableResponse =
       isBackendNotFoundPayload(responseBody) ||
       (response.status === 404 && trimmedResponseBody === '404 Not Found') ||
@@ -372,6 +385,13 @@ const fetchWithTrpcUrlFallback = async (
     }
 
     if (!lastResponse.ok && (lastResponse.status === 403 || lastResponse.status === 404)) {
+      try {
+        const body = await lastResponse.clone().text();
+        if (isTrpcProcedureNotFound(body)) {
+          console.log(`[tRPC:${label}] Procedure not found (stale deploy) - returning response as-is`);
+          return lastResponse;
+        }
+      } catch { }
       _backendReachable = false;
       _lastHealthCheck = Date.now();
       console.log(`[tRPC:${label}] All endpoint candidates returned an unavailable response - operating in offline mode`);
@@ -399,7 +419,29 @@ export const getTrpcClient = () => {
               const requestUrl = getFetchUrlString(url);
 
               try {
-                const response = await fetchWithTrpcUrlFallback([requestUrl], options, 'Render');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+                const existingSignal = options?.signal;
+                if (existingSignal?.aborted) {
+                  clearTimeout(timeoutId);
+                  throw new DOMException('Request was cancelled', 'AbortError');
+                }
+                existingSignal?.addEventListener('abort', () => {
+                  controller.abort();
+                  clearTimeout(timeoutId);
+                });
+
+                const requestHeaders = new Headers(options?.headers);
+                requestHeaders.set('Accept', 'application/json');
+
+                const response = await fetch(requestUrl, {
+                  ...options,
+                  signal: controller.signal,
+                  headers: requestHeaders,
+                });
+                clearTimeout(timeoutId);
+
                 return response;
               } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
