@@ -73,16 +73,59 @@ function isPurchasesModuleUnavailableError(error: unknown): boolean {
   );
 }
 
+function getErrorMessage(error: unknown, fallbackMessage: string): string {
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    return message.length > 0 ? message : fallbackMessage;
+  }
+
+  if (typeof error === 'string') {
+    const message = error.trim();
+    return message.length > 0 ? message : fallbackMessage;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const errorRecord = error as {
+      message?: unknown;
+      error?: unknown;
+      code?: unknown;
+    };
+
+    if (typeof errorRecord.message === 'string' && errorRecord.message.trim().length > 0) {
+      return errorRecord.message.trim();
+    }
+
+    if (typeof errorRecord.error === 'string' && errorRecord.error.trim().length > 0) {
+      return errorRecord.error.trim();
+    }
+
+    const formattedCode =
+      typeof errorRecord.code === 'string' || typeof errorRecord.code === 'number'
+        ? ` (${String(errorRecord.code)})`
+        : '';
+
+    try {
+      const serialized = JSON.stringify(error);
+      if (serialized && serialized !== '{}' && serialized !== '[object Object]') {
+        return `${serialized}${formattedCode}`;
+      }
+    } catch {}
+  }
+
+  const fallbackString = String(error);
+  if (fallbackString && fallbackString !== '[object Object]') {
+    return fallbackString;
+  }
+
+  return fallbackMessage;
+}
+
 function formatPurchasesInitializationError(error: unknown): string {
   if (isPurchasesModuleUnavailableError(error)) {
     return 'In-app purchases are not available in this runtime. Use the web preview or a development build to test purchases on device.';
   }
 
-  if (error instanceof Error) {
-    return `Failed to initialize purchases: ${error.message}`;
-  }
-
-  return 'Failed to initialize purchases.';
+  return `Failed to initialize purchases: ${getErrorMessage(error, 'Unknown initialization error')}`;
 }
 
 function resolvePurchasesModule(moduleValue: unknown): PurchasesModule | null {
@@ -661,6 +704,44 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     }
   }, [computeDisplayStatus, computeTier]);
 
+  const applyStoredWebEntitlementFallback = useCallback(async (
+    currentTrialEnd: Date | null,
+    currentIsGrandfathered: boolean,
+  ) => {
+    const stored = await AsyncStorage.getItem(storageKeys.WEB_IS_PRO);
+    const storedIsPro = stored === 'true';
+    console.log('[Entitlement] Applying stored web entitlement fallback', {
+      storedIsPro,
+      isGrandfathered: currentIsGrandfathered,
+      hasPrivilegedAccess,
+    });
+
+    if (!mountedRef.current) {
+      return;
+    }
+
+    const finalIsPro = currentIsGrandfathered || storedIsPro || hasPrivilegedAccess;
+    setIsPro(finalIsPro);
+    setIsBasic(false);
+    setTier(computeTier(finalIsPro, false, currentTrialEnd, currentIsGrandfathered));
+    setSource(currentIsGrandfathered ? 'grandfathered' : (finalIsPro ? 'dev' : 'unknown'));
+    setLastCheckedAt(new Date().toISOString());
+    setCustomerInfo(null);
+    setOfferings([]);
+    setRevenueCatAppUserId(null);
+    const webDisplayStatus = computeDisplayStatus(
+      null,
+      currentTrialEnd,
+      currentIsGrandfathered,
+      hasPrivilegedAccess,
+      finalIsPro,
+      false,
+    );
+    setSubscriptionDisplayStatus(webDisplayStatus);
+    setError(null);
+    console.log('[Entitlement] Web fallback display status set to:', webDisplayStatus);
+  }, [computeDisplayStatus, computeTier, hasPrivilegedAccess, storageKeys.WEB_IS_PRO]);
+
   const ensurePurchasesLoaded = useCallback(async (): Promise<PurchasesModule | null> => {
     const isExpoGo = isExpoGoPurchasesRuntime();
     const isWeb = Platform.OS === 'web';
@@ -838,32 +919,19 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
           return;
         }
 
-        const stored = await AsyncStorage.getItem(storageKeys.WEB_IS_PRO);
-        const storedIsPro = stored === 'true';
-        console.log('[Entitlement] web refresh fallback: storedIsPro', storedIsPro, 'isGrandfathered', currentIsGrandfathered);
-        if (!mountedRef.current) return;
-        const finalIsPro = currentIsGrandfathered || storedIsPro || hasPrivilegedAccess;
-        setIsPro(finalIsPro);
-        setIsBasic(false);
-        setTier(computeTier(finalIsPro, false, currentTrialEnd, currentIsGrandfathered));
-        setSource(currentIsGrandfathered ? 'grandfathered' : (finalIsPro ? 'dev' : 'unknown'));
-        setLastCheckedAt(new Date().toISOString());
-        setCustomerInfo(null);
-        setOfferings([]);
-        const webDisplayStatus = computeDisplayStatus(
-          null,
-          currentTrialEnd,
-          currentIsGrandfathered,
-          hasPrivilegedAccess,
-          finalIsPro,
-          false,
-        );
-        setSubscriptionDisplayStatus(webDisplayStatus);
-        console.log('[Entitlement] Web display status set to:', webDisplayStatus);
+        await applyStoredWebEntitlementFallback(currentTrialEnd, currentIsGrandfathered);
       } catch (e) {
-        console.error('[Entitlement] web refresh failed', e);
-        if (!mountedRef.current) return;
-        setError(e instanceof Error ? e.message : 'Failed to refresh entitlements.');
+        const message = getErrorMessage(e, 'Failed to refresh entitlements.');
+        console.error('[Entitlement] web refresh failed:', message, e);
+
+        try {
+          await applyStoredWebEntitlementFallback(currentTrialEnd, currentIsGrandfathered);
+        } catch (fallbackError) {
+          const fallbackMessage = getErrorMessage(fallbackError, 'Failed to load web entitlement fallback.');
+          console.error('[Entitlement] web entitlement fallback failed:', fallbackMessage, fallbackError);
+          if (!mountedRef.current) return;
+          setError(message);
+        }
       } finally {
         if (mountedRef.current) {
           setIsLoading(false);
@@ -915,15 +983,16 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       if (!mountedRef.current) return;
       setStateFromCustomerInfo(info, currentTrialEnd, currentIsGrandfathered, hasPrivilegedAccess);
     } catch (e) {
-      console.error('[Entitlement] refresh failed', e);
+      const message = getErrorMessage(e, 'Failed to refresh entitlements.');
+      console.error('[Entitlement] refresh failed:', message, e);
       if (!mountedRef.current) return;
-      setError(e instanceof Error ? e.message : 'Failed to refresh entitlements.');
+      setError(message);
     } finally {
       if (mountedRef.current) {
         setIsLoading(false);
       }
     }
-  }, [computeDisplayStatus, computeTier, ensurePurchasesLoaded, hasPrivilegedAccess, initializeAccountTracking, initializeTrial, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO, syncPurchasesIdentity]);
+  }, [applyStoredWebEntitlementFallback, computeDisplayStatus, computeTier, ensurePurchasesLoaded, hasPrivilegedAccess, initializeAccountTracking, initializeTrial, setStateFromCustomerInfo, storageKeys.TRIAL_END, syncPurchasesIdentity]);
 
   useEffect(() => {
     console.log('[Entitlement] Provider mounted - refreshing entitlements');
@@ -1025,8 +1094,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       const successStore = Platform.OS === 'android' ? 'Google Play' : 'App Store';
       Alert.alert('Success', `Full access unlocked via ${successStore}.`);
     } catch (e) {
-      console.error(`[Entitlement] subscribeToProduct failed`, e);
-      const message = e instanceof Error ? e.message : 'Subscription failed.';
+      const message = getErrorMessage(e, 'Subscription failed.');
+      console.error('[Entitlement] subscribeToProduct failed:', message, e);
       if (!mountedRef.current) return;
       setError(message);
       Alert.alert('Subscription Failed', message);
@@ -1149,8 +1218,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         Alert.alert('Restored', 'No active subscription found.');
       }
     } catch (e) {
-      console.error('[Entitlement] restore failed', e);
-      const message = e instanceof Error ? e.message : 'Restore failed.';
+      const message = getErrorMessage(e, 'Restore failed.');
+      console.error('[Entitlement] restore failed:', message, e);
       if (!mountedRef.current) return;
       setError(message);
       Alert.alert('Restore Failed', message);
