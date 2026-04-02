@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, Sc
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useState, useEffect } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, Download, FileDown, Cookie } from 'lucide-react-native';
@@ -39,7 +40,7 @@ function RoyalCaribbeanSyncScreen() {
     onPageLoaded
   } = useRoyalCaribbeanSync();
   
-  const [webViewVisible, setWebViewVisible] = useState(true);
+  const [webViewVisible, setWebViewVisible] = useState<boolean>(Platform.OS === 'web');
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [showCookieModal, setShowCookieModal] = useState(false);
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
@@ -54,6 +55,24 @@ function RoyalCaribbeanSyncScreen() {
   
   const isCelebrity = cruiseLine === 'celebrity';
   const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
+
+  const handleToggleBrowser = () => {
+    if (!webViewVisible) {
+      setWebViewVisible(true);
+      openLogin();
+      return;
+    }
+
+    setWebViewVisible(false);
+  };
+
+  const handleOpenLogin = () => {
+    if (!webViewVisible) {
+      setWebViewVisible(true);
+    }
+
+    openLogin();
+  };
 
   useEffect(() => {
     if (isRunningOrSyncing) {
@@ -378,7 +397,8 @@ function RoyalCaribbeanSyncScreen() {
 
         <Pressable 
           style={styles.webViewToggle}
-          onPress={() => setWebViewVisible(!webViewVisible)}
+          onPress={handleToggleBrowser}
+          testID="toggle-sync-browser-button"
         >
           <Text style={styles.webViewToggleText}>
             {webViewVisible ? 'Hide' : 'Show'} Browser
@@ -418,12 +438,11 @@ function RoyalCaribbeanSyncScreen() {
             ) : (
               <WebView
                 ref={(ref) => {
-                  if (ref) {
-                    webViewRef.current = ref;
-                  }
+                  webViewRef.current = ref ?? null;
                 }}
                 source={{ uri: webViewUrl }}
                 style={styles.webView}
+                testID="royal-caribbean-sync-webview"
                 onMessage={onMessage}
                 onLoadEnd={onPageLoaded}
                 javaScriptEnabled={true}
@@ -435,20 +454,19 @@ function RoyalCaribbeanSyncScreen() {
                 allowsInlineMediaPlayback={true}
                 mediaPlaybackRequiresUserAction={false}
                 allowsLinkPreview={false}
-                bounces={true}
+                bounces={false}
                 scrollEnabled={true}
-                nestedScrollEnabled={true}
-                automaticallyAdjustContentInsets={false}
-                contentInsetAdjustmentBehavior="never"
-                overScrollMode="always"
-                setBuiltInZoomControls={true}
-                scalesPageToFit={true}
+                startInLoadingState={true}
                 onError={(syntheticEvent) => {
                   const { nativeEvent } = syntheticEvent;
-                  console.warn('WebView error:', nativeEvent);
+                  console.warn('[RoyalCaribbeanSyncScreen] WebView error:', nativeEvent);
+                }}
+                onHttpError={(syntheticEvent) => {
+                  const { nativeEvent } = syntheticEvent;
+                  console.warn('[RoyalCaribbeanSyncScreen] WebView HTTP error:', nativeEvent);
                 }}
                 onContentProcessDidTerminate={() => {
-                  console.error('WebView content process terminated, reloading...');
+                  console.error('[RoyalCaribbeanSyncScreen] WebView content process terminated, reloading...');
                   if (webViewRef.current) {
                     webViewRef.current.reload();
                   }
@@ -557,7 +575,8 @@ function RoyalCaribbeanSyncScreen() {
             <View style={styles.quickActionsGrid}>
               <Pressable 
                 style={styles.quickActionButton}
-                onPress={openLogin}
+                onPress={handleOpenLogin}
+                testID="open-sync-login-button"
               >
                 <ExternalLink size={20} color="#60a5fa" />
                 <Text style={styles.quickActionLabel}>LOGIN</Text>
@@ -1966,8 +1985,10 @@ const styles = StyleSheet.create({
 
 export default function RoyalCaribbeanSyncScreenWrapper() {
   return (
-    <RoyalCaribbeanSyncProvider>
-      <RoyalCaribbeanSyncScreen />
-    </RoyalCaribbeanSyncProvider>
+    <ErrorBoundary>
+      <RoyalCaribbeanSyncProvider>
+        <RoyalCaribbeanSyncScreen />
+      </RoyalCaribbeanSyncProvider>
+    </ErrorBoundary>
   );
 }
