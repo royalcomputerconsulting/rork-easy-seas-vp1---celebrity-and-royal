@@ -768,11 +768,11 @@ function OverviewScreenContent() {
             />
           }
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={false}
-          disableVirtualization={Platform.OS === 'web'}
-          initialNumToRender={Platform.OS === 'web' ? sortedOffers.length : 5}
-          maxToRenderPerBatch={Platform.OS === 'web' ? Math.max(sortedOffers.length, 10) : 5}
-          windowSize={Platform.OS === 'web' ? Math.max(sortedOffers.length, 21) : 7}
+          removeClippedSubviews={Platform.OS !== 'web'}
+          disableVirtualization={false}
+          initialNumToRender={Platform.OS === 'web' ? 8 : 5}
+          maxToRenderPerBatch={Platform.OS === 'web' ? 8 : 5}
+          windowSize={Platform.OS === 'web' ? 9 : 7}
         />
       </SafeAreaView>
     </View>

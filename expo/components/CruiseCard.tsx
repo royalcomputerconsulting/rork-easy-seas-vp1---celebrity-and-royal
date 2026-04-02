@@ -8,7 +8,7 @@ import { GlassSurface } from '@/components/premium/GlassSurface';
 import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
 
 import { createDateFromString } from '@/lib/date';
-import { getStaticCruiseCardImage } from '@/constants/cruiseImages';
+import { getUniqueImageForCruise } from '@/constants/cruiseImages';
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 
 interface CruiseCardProps {
@@ -64,13 +64,19 @@ export const CruiseCard = React.memo(function CruiseCard({
     return 'upcoming';
   }, [variant, isBooked, bookedCruise]);
   
-  const cardImageSource = useMemo(
-    () => getStaticCruiseCardImage(
+  const cardImageUri = useMemo(() => {
+    const explicitImageUrl = cruise.imageUrl?.trim();
+    if (explicitImageUrl) {
+      return explicitImageUrl;
+    }
+
+    return getUniqueImageForCruise(
       cruise.id,
-      `${cruise.destination}-${cruise.sailDate ?? ''}-${cruise.shipName ?? ''}`
-    ),
-    [cruise.destination, cruise.id, cruise.sailDate, cruise.shipName]
-  );
+      cruise.destination || '',
+      cruise.sailDate,
+      cruise.shipName
+    );
+  }, [cruise.destination, cruise.id, cruise.imageUrl, cruise.sailDate, cruise.shipName]);
 
   const retailValue = useMemo(() => {
     if (!showRetailValue) return null;
@@ -191,7 +197,7 @@ export const CruiseCard = React.memo(function CruiseCard({
         >
           <GlassSurface style={styles.miniContainer} contentStyle={styles.miniSurfaceContent}>
             <StableRemoteImage
-              source={cardImageSource}
+              uri={cardImageUri}
               style={styles.miniBackgroundImage}
               testID="cruise-card-mini-background-image"
             />
@@ -204,7 +210,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             <View style={styles.miniContentRow}>
               <View style={styles.miniImageShell}>
                 <StableRemoteImage
-                  source={cardImageSource}
+                  uri={cardImageUri}
                   style={styles.miniImage}
                   testID="cruise-card-mini-image"
                 />
@@ -425,7 +431,7 @@ export const CruiseCard = React.memo(function CruiseCard({
         >
           <View style={styles.compactContainer}>
             <StableRemoteImage
-              source={cardImageSource}
+              uri={cardImageUri}
               style={styles.compactImage}
               testID="cruise-card-compact-image"
             />
@@ -459,7 +465,7 @@ export const CruiseCard = React.memo(function CruiseCard({
         <View style={styles.container}>
           <View style={styles.imageSection}>
             <StableRemoteImage
-              source={cardImageSource}
+              uri={cardImageUri}
               style={styles.heroImage}
               testID="cruise-card-hero-image"
             />

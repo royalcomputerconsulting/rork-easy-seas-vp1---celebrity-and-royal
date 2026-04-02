@@ -80,9 +80,17 @@ const GlassBackdrop = React.memo(function GlassBackdrop({ mode }: { mode: GlassB
 });
 
 export const GlassSurface = React.memo(function GlassSurface({ children, style, contentStyle, testID }: GlassSurfaceProps) {
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[styles.glassShell, styles.webGlassShell, style]} testID={testID ?? 'glass-surface'}>
+        <View style={[styles.glassClip, styles.webGlassClip, styles.contentLayer, contentStyle]}>{children}</View>
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.glassShell, Platform.OS === 'web' ? styles.webGlassShell : null, style]} testID={testID ?? 'glass-surface'}>
-      <View style={[styles.glassClip, Platform.OS === 'web' ? styles.webGlassClip : null]}>
+    <View style={[styles.glassShell, style]} testID={testID ?? 'glass-surface'}>
+      <View style={styles.glassClip}>
         <GlassBackdrop mode={backdropMode} />
         <View style={[styles.contentLayer, contentStyle]}>{children}</View>
       </View>

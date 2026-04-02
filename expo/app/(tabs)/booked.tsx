@@ -703,12 +703,12 @@ export default function BookedScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={false}
-          disableVirtualization={Platform.OS === 'web'}
-          initialNumToRender={Platform.OS === 'web' ? filteredCruises.length : 6}
-          maxToRenderPerBatch={Platform.OS === 'web' ? Math.max(filteredCruises.length, 12) : 5}
-          windowSize={Platform.OS === 'web' ? Math.max(filteredCruises.length, 21) : 7}
-          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS !== 'web'}
+          disableVirtualization={false}
+          initialNumToRender={Platform.OS === 'web' ? 8 : 6}
+          maxToRenderPerBatch={Platform.OS === 'web' ? 8 : 5}
+          windowSize={Platform.OS === 'web' ? 9 : 7}
+          updateCellsBatchingPeriod={Platform.OS === 'web' ? 16 : 50}
         />
       </SafeAreaView>
 

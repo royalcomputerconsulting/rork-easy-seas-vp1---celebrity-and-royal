@@ -5,7 +5,7 @@ import { CheckCircle, ChevronRight, Clock, Ship, Sparkles } from 'lucide-react-n
 import { GlassSurface } from '@/components/premium/GlassSurface';
 import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
 import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { getStaticCruiseCardImage } from '@/constants/cruiseImages';
+import { getUniqueImageForCruise } from '@/constants/cruiseImages';
 import { createDateFromString, getDaysUntil } from '@/lib/date';
 import { formatCurrency } from '@/lib/format';
 import { calculateCruiseValue, calculateOfferAggregateValue, getCabinPriceFromEntity, GUEST_COUNT_DEFAULT, type OfferAggregateValue, type ValueBreakdown } from '@/lib/valueCalculator';
@@ -31,12 +31,6 @@ const WEB_SHADOW_FIX = Platform.select<ViewStyle>({
     elevation: 0,
   },
 });
-
-function getOfferImageSeed(offer: Cruise): string {
-  return [offer.offerCode, offer.imageUrl, offer.destination, offer.sailDate, offer.shipName]
-    .filter((value): value is string => Boolean(value))
-    .join('-');
-}
 
 function formatOfferDate(value: string | undefined): string {
   if (!value) {
@@ -152,10 +146,19 @@ export const OfferCard = React.memo(function OfferCard({
     ? getDaysUntil(offer.offerExpiry) <= 7 && getDaysUntil(offer.offerExpiry) > 0
     : false;
 
-  const heroImageSource = useMemo(
-    () => getStaticCruiseCardImage(offer.id, getOfferImageSeed(offer)),
-    [offer]
-  );
+  const heroImageUri = useMemo(() => {
+    const explicitImageUrl = offer.imageUrl?.trim();
+    if (explicitImageUrl) {
+      return explicitImageUrl;
+    }
+
+    return getUniqueImageForCruise(
+      offer.id,
+      offer.destination || '',
+      offer.sailDate,
+      offer.shipName
+    );
+  }, [offer.destination, offer.id, offer.imageUrl, offer.sailDate, offer.shipName]);
 
   const valueBreakdown = useMemo((): ValueBreakdown | null => {
     if (!showValueBreakdown) {
@@ -354,7 +357,7 @@ export const OfferCard = React.memo(function OfferCard({
       >
         <View style={styles.compactContainer}>
           <StableRemoteImage
-            source={heroImageSource}
+            uri={heroImageUri}
             style={styles.compactImage}
             testID="offer-card-compact-image"
           />
@@ -401,7 +404,7 @@ export const OfferCard = React.memo(function OfferCard({
           {showImage ? (
             <View style={styles.heroSection}>
               <StableRemoteImage
-                source={heroImageSource}
+                uri={heroImageUri}
                 style={styles.heroImage}
                 testID="offer-card-hero-image"
               />

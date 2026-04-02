@@ -6,7 +6,7 @@ import { GlassSurface } from '@/components/premium/GlassSurface';
 import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
 import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { createDateFromString } from '@/lib/date';
-import { getStaticCruiseCardImage } from '@/constants/cruiseImages';
+import { getUniqueImageForCruise } from '@/constants/cruiseImages';
 import type { CasinoOffer, Cruise } from '@/types/models';
 import { useAppState } from '@/state/AppStateProvider';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
@@ -36,7 +36,7 @@ interface OfferSummaryCardProps {
   activeSortMode?: 'soonest' | 'highestValue';
 }
 
-const JACKPOT_BG_SOURCE = getStaticCruiseCardImage('offer-summary-background', 'offer-summary');
+const JACKPOT_BG_URI = getUniqueImageForCruise('offer-summary-background', 'caribbean');
 
 export const OfferSummaryCard = React.memo(function OfferSummaryCard({
   totalValue,
@@ -49,7 +49,7 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
   return (
     <View style={summaryStyles.container}>
       <StableRemoteImage
-        source={JACKPOT_BG_SOURCE}
+        uri={JACKPOT_BG_URI}
         style={summaryStyles.backgroundImage}
         testID="offer-summary-background-image"
       />
@@ -195,14 +195,18 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 }: CasinoOfferCardProps) {
   const { localData } = useAppState();
 
-  const cardImageSource = useMemo(() => {
+  const cardImageUri = useMemo(() => {
     const firstCruise = cruises[0];
+    const explicitImageUrl = firstCruise?.imageUrl?.trim();
+    if (explicitImageUrl) {
+      return explicitImageUrl;
+    }
 
-    return getStaticCruiseCardImage(
-      offerCode,
-      [offerName, firstCruise?.id, firstCruise?.destination, firstCruise?.sailDate, firstCruise?.shipName]
-        .filter((value): value is string => Boolean(value))
-        .join('-')
+    return getUniqueImageForCruise(
+      firstCruise?.id || offerCode,
+      firstCruise?.destination || offerName,
+      firstCruise?.sailDate,
+      firstCruise?.shipName
     );
   }, [cruises, offerCode, offerName]);
 
@@ -365,7 +369,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
         <View style={styles.heroSection}>
           <StableRemoteImage
-            source={cardImageSource}
+            uri={cardImageUri}
             style={styles.heroImage}
             testID="casino-offer-card-hero-image"
           />
