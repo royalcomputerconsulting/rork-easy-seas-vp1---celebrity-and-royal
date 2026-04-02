@@ -1,3 +1,5 @@
+import type { ImageSourcePropType } from 'react-native';
+
 export const DEFAULT_CRUISE_IMAGE = 'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&h=400&fit=crop';
 
 export const DESTINATION_IMAGES: Record<string, string[]> = {
@@ -162,6 +164,19 @@ export const CRUISE_SHIP_IMAGES = [
   'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&h=400&fit=crop',
 ];
 
+export const STATIC_CRUISE_CARD_IMAGES: ImageSourcePropType[] = [
+  require('../assets/images/nautical_1_SET_SAIL.png'),
+  require('../assets/images/nautical_2_CAST_OFF.png'),
+  require('../assets/images/nautical_3_BON_VOYAGE.png'),
+  require('../assets/images/nautical_4_OCEAN_BREEZE.png'),
+  require('../assets/images/nautical_5_SMOOTH_SAILING.png'),
+  require('../assets/images/nautical_6_HIGH_TIDE.png'),
+  require('../assets/images/nautical_7_DEEP_SEA.png'),
+  require('../assets/images/nautical_8_PORT_SIDE.png'),
+  require('../assets/images/nautical_9_STARBOARD.png'),
+  require('../assets/images/nautical_10_READY_TO_BOARD.png'),
+];
+
 export const PORT_IMAGES: Record<string, string> = {
   'cozumel': 'https://images.unsplash.com/photo-1518105779142-d975f22f1b0a?w=800&h=400&fit=crop',
   'costa maya': 'https://images.unsplash.com/photo-1570737543098-0c78f59d3a4b?w=800&h=400&fit=crop',
@@ -267,6 +282,22 @@ export function getUniqueImageForCruise(
   const index = Math.abs(hash);
   
   return getImageForDestination(destination || '', index);
+}
+
+function getStaticImageIndex(seed: string): number {
+  let hash = 0;
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = ((hash << 5) - hash) + seed.charCodeAt(index);
+    hash |= 0;
+  }
+
+  return Math.abs(hash) % STATIC_CRUISE_CARD_IMAGES.length;
+}
+
+export function getStaticCruiseCardImage(primarySeed: string, secondarySeed?: string): ImageSourcePropType {
+  const normalizedSeed = `${primarySeed || 'cruise'}-${secondarySeed || 'card'}`;
+  return STATIC_CRUISE_CARD_IMAGES[getStaticImageIndex(normalizedSeed)] ?? STATIC_CRUISE_CARD_IMAGES[0];
 }
 
 export function getCasinoImage(index: number = 0): string {

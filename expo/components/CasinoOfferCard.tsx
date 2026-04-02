@@ -6,7 +6,7 @@ import { GlassSurface } from '@/components/premium/GlassSurface';
 import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
 import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { createDateFromString } from '@/lib/date';
-import { DEFAULT_CRUISE_IMAGE, getUniqueImageForCruise } from '@/constants/cruiseImages';
+import { getStaticCruiseCardImage } from '@/constants/cruiseImages';
 import type { CasinoOffer, Cruise } from '@/types/models';
 import { useAppState } from '@/state/AppStateProvider';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
@@ -36,7 +36,7 @@ interface OfferSummaryCardProps {
   activeSortMode?: 'soonest' | 'highestValue';
 }
 
-const JACKPOT_BG = 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1200&q=80';
+const JACKPOT_BG_SOURCE = getStaticCruiseCardImage('offer-summary-background', 'offer-summary');
 
 export const OfferSummaryCard = React.memo(function OfferSummaryCard({
   totalValue,
@@ -49,10 +49,8 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
   return (
     <View style={summaryStyles.container}>
       <StableRemoteImage
-        uri={JACKPOT_BG}
-        fallbackUri={DEFAULT_CRUISE_IMAGE}
+        source={JACKPOT_BG_SOURCE}
         style={summaryStyles.backgroundImage}
-        recyclingKey="offer-summary-background"
         testID="offer-summary-background-image"
       />
       <LinearGradient colors={['rgba(14, 52, 86, 0.18)', 'rgba(27, 41, 76, 0.48)', 'rgba(18, 28, 58, 0.62)']} style={summaryStyles.overlay}>
@@ -197,21 +195,16 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 }: CasinoOfferCardProps) {
   const { localData } = useAppState();
 
-  const offerImageUrl = useMemo(() => {
-    if (cruises.length > 0) {
-      const firstCruise = cruises[0];
-      return getUniqueImageForCruise(
-        firstCruise.id,
-        firstCruise.destination,
-        firstCruise.sailDate,
-        firstCruise.shipName,
-      );
-    }
+  const cardImageSource = useMemo(() => {
+    const firstCruise = cruises[0];
 
-    return DEFAULT_CRUISE_IMAGE;
-  }, [cruises]);
-
-  const cardImageUri = offerImageUrl || DEFAULT_CRUISE_IMAGE;
+    return getStaticCruiseCardImage(
+      offerCode,
+      [offerName, firstCruise?.id, firstCruise?.destination, firstCruise?.sailDate, firstCruise?.shipName]
+        .filter((value): value is string => Boolean(value))
+        .join('-')
+    );
+  }, [cruises, offerCode, offerName]);
 
   const relatedOffers = useMemo(
     () => (localData.offers || []).filter((item: CasinoOffer) => item.offerCode === offerCode),
@@ -372,10 +365,8 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
         <View style={styles.heroSection}>
           <StableRemoteImage
-            uri={cardImageUri}
-            fallbackUri={DEFAULT_CRUISE_IMAGE}
+            source={cardImageSource}
             style={styles.heroImage}
-            recyclingKey={`${offerCode}-hero`}
             testID="casino-offer-card-hero-image"
           />
           <LinearGradient colors={['rgba(7, 20, 36, 0.08)', 'rgba(8, 24, 41, 0.42)', 'rgba(7, 18, 34, 0.92)']} style={styles.heroOverlay} />

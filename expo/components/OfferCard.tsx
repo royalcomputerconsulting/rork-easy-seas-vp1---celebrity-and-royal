@@ -5,7 +5,7 @@ import { CheckCircle, ChevronRight, Clock, Ship, Sparkles } from 'lucide-react-n
 import { GlassSurface } from '@/components/premium/GlassSurface';
 import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
 import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { DEFAULT_CRUISE_IMAGE, getUniqueImageForCruise } from '@/constants/cruiseImages';
+import { getStaticCruiseCardImage } from '@/constants/cruiseImages';
 import { createDateFromString, getDaysUntil } from '@/lib/date';
 import { formatCurrency } from '@/lib/format';
 import { calculateCruiseValue, calculateOfferAggregateValue, getCabinPriceFromEntity, GUEST_COUNT_DEFAULT, type OfferAggregateValue, type ValueBreakdown } from '@/lib/valueCalculator';
@@ -32,17 +32,10 @@ const WEB_SHADOW_FIX = Platform.select<ViewStyle>({
   },
 });
 
-function getOfferImage(offer: Cruise): string {
-  if (offer.imageUrl) {
-    return offer.imageUrl;
-  }
-
-  return getUniqueImageForCruise(
-    offer.id,
-    offer.destination,
-    offer.sailDate,
-    offer.shipName,
-  );
+function getOfferImageSeed(offer: Cruise): string {
+  return [offer.offerCode, offer.imageUrl, offer.destination, offer.sailDate, offer.shipName]
+    .filter((value): value is string => Boolean(value))
+    .join('-');
 }
 
 function formatOfferDate(value: string | undefined): string {
@@ -159,8 +152,10 @@ export const OfferCard = React.memo(function OfferCard({
     ? getDaysUntil(offer.offerExpiry) <= 7 && getDaysUntil(offer.offerExpiry) > 0
     : false;
 
-  const imageUrl = getOfferImage(offer);
-  const heroImageUri = imageUrl || DEFAULT_CRUISE_IMAGE;
+  const heroImageSource = useMemo(
+    () => getStaticCruiseCardImage(offer.id, getOfferImageSeed(offer)),
+    [offer]
+  );
 
   const valueBreakdown = useMemo((): ValueBreakdown | null => {
     if (!showValueBreakdown) {
@@ -359,10 +354,8 @@ export const OfferCard = React.memo(function OfferCard({
       >
         <View style={styles.compactContainer}>
           <StableRemoteImage
-            uri={heroImageUri}
-            fallbackUri={DEFAULT_CRUISE_IMAGE}
+            source={heroImageSource}
             style={styles.compactImage}
-            recyclingKey={`${offer.id}-compact`}
             testID="offer-card-compact-image"
           />
           <LinearGradient colors={['rgba(8, 19, 37, 0.1)', 'rgba(8, 19, 37, 0.88)']} style={styles.compactOverlay}>
@@ -408,10 +401,8 @@ export const OfferCard = React.memo(function OfferCard({
           {showImage ? (
             <View style={styles.heroSection}>
               <StableRemoteImage
-                uri={heroImageUri}
-                fallbackUri={DEFAULT_CRUISE_IMAGE}
+                source={heroImageSource}
                 style={styles.heroImage}
-                recyclingKey={`${offer.id}-hero`}
                 testID="offer-card-hero-image"
               />
               <LinearGradient

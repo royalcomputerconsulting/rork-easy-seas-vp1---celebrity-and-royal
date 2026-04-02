@@ -7,6 +7,7 @@ type StableImageCachePolicy = NonNullable<ExpoImageProps['cachePolicy']>;
 type StableImageContentFit = NonNullable<ExpoImageProps['contentFit']>;
 
 interface StableRemoteImageProps {
+  source?: ExpoImageProps['source'];
   uri?: string | null;
   fallbackUri?: string;
   style?: StyleProp<ImageStyle>;
@@ -28,6 +29,7 @@ function normalizeUri(uri?: string | null): string | undefined {
 }
 
 export const StableRemoteImage = React.memo(function StableRemoteImage({
+  source,
   uri,
   fallbackUri,
   style,
@@ -46,7 +48,9 @@ export const StableRemoteImage = React.memo(function StableRemoteImage({
     ? (normalizedFallbackUri && normalizedFallbackUri !== normalizedUri ? normalizedFallbackUri : undefined)
     : (normalizedUri ?? normalizedFallbackUri);
 
-  const resolvedRecyclingKey = Platform.OS === 'web'
+  const resolvedSource = source ?? (resolvedUri ? { uri: resolvedUri } : undefined);
+
+  const resolvedRecyclingKey = Platform.OS === 'web' || source
     ? undefined
     : (recyclingKey ?? normalizedUri ?? normalizedFallbackUri ?? 'stable-remote-image');
 
@@ -60,7 +64,7 @@ export const StableRemoteImage = React.memo(function StableRemoteImage({
 
   return (
     <Image
-      source={resolvedUri ? { uri: resolvedUri } : undefined}
+      source={resolvedSource}
       style={style}
       contentFit={contentFit}
       cachePolicy={cachePolicy}
