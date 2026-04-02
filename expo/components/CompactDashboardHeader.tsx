@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users, Crown } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
@@ -15,6 +15,7 @@ import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
 import { useAuth } from '@/state/AuthProvider';
 import { BrandToggle, BrandType } from '@/components/ui/BrandToggle';
+import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
 import { IMAGES } from '@/constants/images';
 import { maskSensitiveMemberNumber } from '@/lib/privacy';
 
@@ -303,10 +304,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       end={{ x: 1, y: 1 }}
       style={[styles.container, { borderColor: playerCardTheme.borderColor }]}
     >
-      <Image
-        source={{ uri: scenicHeroUri }}
+      <StableRemoteImage
+        uri={scenicHeroUri}
         style={styles.backgroundImage}
-        resizeMode="cover"
+        recyclingKey={`player-card-${activeBrand}-background`}
+        testID="player-card-background-image"
       />
       <LinearGradient
         colors={playerCardTheme.backgroundOverlayColors}
@@ -324,10 +326,12 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       <View style={styles.topRow}>
         <View style={styles.memberInfoInline}>
           {!hideLogo && (
-            <Image 
-              source={{ uri: IMAGES.logo }}
+            <StableRemoteImage
+              uri={IMAGES.logo}
               style={styles.headerLogo}
-              resizeMode="contain"
+              contentFit="contain"
+              recyclingKey="player-card-logo"
+              testID="player-card-logo-image"
             />
           )}
           <View style={styles.memberTextInfo}>

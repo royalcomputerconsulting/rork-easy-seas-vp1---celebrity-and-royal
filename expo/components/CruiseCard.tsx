@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
+import React, { useMemo, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { GlassSurface } from '@/components/premium/GlassSurface';
+import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
 
 import { createDateFromString } from '@/lib/date';
 import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
@@ -68,16 +69,8 @@ export const CruiseCard = React.memo(function CruiseCard({
     return getImageForDestination(cruise.destination, hash + 1);
   }, [cruise.id, cruise.destination]);
 
-  const [heroImageUri, setHeroImageUri] = useState<string>(shipImageUrl || DEFAULT_CRUISE_IMAGE);
-  const [compactImageUri, setCompactImageUri] = useState<string>(destinationImage || DEFAULT_CRUISE_IMAGE);
-
-  useEffect(() => {
-    setHeroImageUri(shipImageUrl || DEFAULT_CRUISE_IMAGE);
-  }, [shipImageUrl]);
-
-  useEffect(() => {
-    setCompactImageUri(destinationImage || DEFAULT_CRUISE_IMAGE);
-  }, [destinationImage]);
+  const heroImageUri = shipImageUrl || DEFAULT_CRUISE_IMAGE;
+  const compactImageUri = destinationImage || DEFAULT_CRUISE_IMAGE;
 
   const retailValue = useMemo(() => {
     if (!showRetailValue) return null;
@@ -197,15 +190,12 @@ export const CruiseCard = React.memo(function CruiseCard({
           testID="cruise-card-mini"
         >
           <GlassSurface style={styles.miniContainer} contentStyle={styles.miniSurfaceContent}>
-            <Image
-              source={{ uri: heroImageUri }}
+            <StableRemoteImage
+              uri={heroImageUri}
+              fallbackUri={DEFAULT_CRUISE_IMAGE}
               style={styles.miniBackgroundImage}
-              resizeMode="cover"
-              fadeDuration={0}
-              onError={() => {
-                console.log('Mini background image load error, using default');
-                setHeroImageUri(DEFAULT_CRUISE_IMAGE);
-              }}
+              recyclingKey={`${cruise.id}-mini-background`}
+              testID="cruise-card-mini-background-image"
             />
             <LinearGradient
               colors={['rgba(255,255,255,0.24)', 'rgba(248,251,255,0.84)', 'rgba(248,251,255,0.96)']}
@@ -215,15 +205,12 @@ export const CruiseCard = React.memo(function CruiseCard({
             />
             <View style={styles.miniContentRow}>
               <View style={styles.miniImageShell}>
-                <Image
-                  source={{ uri: compactImageUri }}
+                <StableRemoteImage
+                  uri={compactImageUri}
+                  fallbackUri={DEFAULT_CRUISE_IMAGE}
                   style={styles.miniImage}
-                  resizeMode="cover"
-                  fadeDuration={0}
-                  onError={() => {
-                    console.log('Mini image load error, using default');
-                    setCompactImageUri(DEFAULT_CRUISE_IMAGE);
-                  }}
+                  recyclingKey={`${cruise.id}-mini-compact`}
+                  testID="cruise-card-mini-image"
                 />
                 <LinearGradient
                   colors={['rgba(3,17,31,0.04)', 'rgba(3,17,31,0.26)']}
@@ -440,15 +427,12 @@ export const CruiseCard = React.memo(function CruiseCard({
         activeOpacity={1}
         testID="cruise-card-compact"
       >
-        <Image 
-          source={{ uri: compactImageUri }} 
+        <StableRemoteImage
+          uri={compactImageUri}
+          fallbackUri={DEFAULT_CRUISE_IMAGE}
           style={styles.compactImage}
-          resizeMode="cover"
-          fadeDuration={0}
-          onError={() => {
-            console.log('Compact image load error, using default');
-            setCompactImageUri(DEFAULT_CRUISE_IMAGE);
-          }}
+          recyclingKey={`${cruise.id}-compact`}
+          testID="cruise-card-compact-image"
         />
         <View style={styles.compactContent}>
           <Text style={styles.compactShipName}>{cruise.shipName}</Text>
@@ -477,15 +461,12 @@ export const CruiseCard = React.memo(function CruiseCard({
       testID="cruise-card"
     >
       <View style={styles.imageSection}>
-        <Image 
-          source={{ uri: heroImageUri }} 
+        <StableRemoteImage
+          uri={heroImageUri}
+          fallbackUri={DEFAULT_CRUISE_IMAGE}
           style={styles.heroImage}
-          resizeMode="cover"
-          fadeDuration={0}
-          onError={() => {
-            console.log('Hero image load error, using default');
-            setHeroImageUri(DEFAULT_CRUISE_IMAGE);
-          }}
+          recyclingKey={`${cruise.id}-hero`}
+          testID="cruise-card-hero-image"
         />
         
         {cruiseStatus === 'upcoming' && !isBooked && (

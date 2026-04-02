@@ -6,7 +6,6 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Platform,
   ActivityIndicator,
   Animated,
   Image,
@@ -768,7 +767,7 @@ function OverviewScreenContent() {
             />
           }
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews={false}
           initialNumToRender={5}
           maxToRenderPerBatch={5}
           windowSize={7}

@@ -8,7 +8,6 @@ import {
   RefreshControl,
   Platform,
   ActivityIndicator,
-  Image,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,6 +36,7 @@ import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
+import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
 import { isDateInPast, createDateFromString } from '@/lib/date';
 import { CruiseCard } from '@/components/CruiseCard';
 import type { BookedCruise } from '@/types/models';
@@ -387,7 +387,13 @@ export default function BookedScreen() {
     <View style={styles.headerContent}>
       {/* Colorful Hero Header */}
       <View style={styles.heroContainer}>
-        <Image source={{ uri: heroImage }} style={styles.heroImage} resizeMode="cover" />
+        <StableRemoteImage
+          uri={heroImage}
+          fallbackUri={DEFAULT_CRUISE_IMAGE}
+          style={styles.heroImage}
+          recyclingKey={`booked-hero-${nextCruise?.id ?? 'default'}`}
+          testID="booked-screen-hero-image"
+        />
         <LinearGradient
           colors={['rgba(0, 31, 63, 0.3)', 'rgba(0, 31, 63, 0.85)', 'rgba(0, 31, 63, 0.95)']}
           style={styles.heroOverlay}

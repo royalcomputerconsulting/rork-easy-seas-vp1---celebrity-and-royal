@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
-import { Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, Clock, ExternalLink, Sparkles } from 'lucide-react-native';
 import { GlassSurface } from '@/components/premium/GlassSurface';
+import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
 import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { createDateFromString } from '@/lib/date';
 import { DEFAULT_CRUISE_IMAGE, getUniqueImageForCruise } from '@/constants/cruiseImages';
@@ -47,7 +48,13 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
 }: OfferSummaryCardProps) {
   return (
     <View style={summaryStyles.container}>
-      <Image source={{ uri: JACKPOT_BG }} style={summaryStyles.backgroundImage} resizeMode="cover" />
+      <StableRemoteImage
+        uri={JACKPOT_BG}
+        fallbackUri={DEFAULT_CRUISE_IMAGE}
+        style={summaryStyles.backgroundImage}
+        recyclingKey="offer-summary-background"
+        testID="offer-summary-background-image"
+      />
       <LinearGradient colors={['rgba(14, 52, 86, 0.18)', 'rgba(27, 41, 76, 0.48)', 'rgba(18, 28, 58, 0.62)']} style={summaryStyles.overlay}>
         <GlassSurface style={summaryStyles.summaryGlass} contentStyle={summaryStyles.summaryGlassContent}>
           <View style={summaryStyles.summaryHeader}>
@@ -158,7 +165,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
     return DEFAULT_CRUISE_IMAGE;
   }, [cruises]);
 
-  const [cardImageUri, setCardImageUri] = useState<string>(offerImageUrl);
+  const cardImageUri = offerImageUrl || DEFAULT_CRUISE_IMAGE;
 
   const offerDetails = useMemo(() => {
     const offer = (localData.offers || []).find((item: CasinoOffer) => item.offerCode === offerCode);
@@ -308,7 +315,13 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
         </View>
 
         <View style={styles.heroSection}>
-          <Image source={{ uri: cardImageUri }} style={styles.heroImage} resizeMode="cover" onError={() => setCardImageUri(DEFAULT_CRUISE_IMAGE)} />
+          <StableRemoteImage
+            uri={cardImageUri}
+            fallbackUri={DEFAULT_CRUISE_IMAGE}
+            style={styles.heroImage}
+            recyclingKey={`${offerCode}-hero`}
+            testID="casino-offer-card-hero-image"
+          />
           <LinearGradient colors={['rgba(7, 20, 36, 0.08)', 'rgba(8, 24, 41, 0.42)', 'rgba(7, 18, 34, 0.92)']} style={styles.heroOverlay} />
           <LinearGradient colors={statusBadge.colors} style={styles.statusPill}>
             <Text style={styles.statusPillText}>{statusBadge.text}</Text>

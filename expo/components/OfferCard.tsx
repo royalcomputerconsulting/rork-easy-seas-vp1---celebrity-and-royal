@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CheckCircle, ChevronRight, Clock, Ship, Sparkles } from 'lucide-react-native';
 import { GlassSurface } from '@/components/premium/GlassSurface';
+import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
 import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { DEFAULT_CRUISE_IMAGE, getUniqueImageForCruise } from '@/constants/cruiseImages';
 import { createDateFromString, getDaysUntil } from '@/lib/date';
@@ -104,11 +105,7 @@ export const OfferCard = React.memo(function OfferCard({
     : false;
 
   const imageUrl = getOfferImage(offer);
-  const [heroImageUri, setHeroImageUri] = useState<string>(imageUrl || DEFAULT_CRUISE_IMAGE);
-
-  useEffect(() => {
-    setHeroImageUri(imageUrl || DEFAULT_CRUISE_IMAGE);
-  }, [imageUrl]);
+  const heroImageUri = imageUrl || DEFAULT_CRUISE_IMAGE;
 
   const valueBreakdown = useMemo((): ValueBreakdown | null => {
     if (!showValueBreakdown) {
@@ -278,7 +275,13 @@ export const OfferCard = React.memo(function OfferCard({
         activeOpacity={0.9}
         testID="offer-card-compact"
       >
-        <Image source={{ uri: heroImageUri }} style={styles.compactImage} resizeMode="cover" onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)} />
+        <StableRemoteImage
+          uri={heroImageUri}
+          fallbackUri={DEFAULT_CRUISE_IMAGE}
+          style={styles.compactImage}
+          recyclingKey={`${offer.id}-compact`}
+          testID="offer-card-compact-image"
+        />
         <LinearGradient colors={['rgba(8, 19, 37, 0.1)', 'rgba(8, 19, 37, 0.88)']} style={styles.compactOverlay}>
           <View style={styles.compactTopRow}>
             <View style={styles.compactBadge}>
@@ -319,7 +322,13 @@ export const OfferCard = React.memo(function OfferCard({
 
         {showImage ? (
           <View style={styles.heroSection}>
-            <Image source={{ uri: heroImageUri }} style={styles.heroImage} resizeMode="cover" onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)} />
+            <StableRemoteImage
+              uri={heroImageUri}
+              fallbackUri={DEFAULT_CRUISE_IMAGE}
+              style={styles.heroImage}
+              recyclingKey={`${offer.id}-hero`}
+              testID="offer-card-hero-image"
+            />
             <LinearGradient
               colors={['rgba(7, 20, 36, 0.08)', 'rgba(8, 24, 41, 0.42)', 'rgba(7, 18, 34, 0.92)']}
               start={{ x: 0.1, y: 0 }}
