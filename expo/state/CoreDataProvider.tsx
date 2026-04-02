@@ -84,6 +84,15 @@ function normalizeLoyaltySyncPayload(loyaltyData: unknown): {
   };
 }
 
+function isIgnorableBackendError(errorMessage: string, errorString: string): boolean {
+  return (
+    ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'BACKEND_OFFLINE', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage) ||
+    errorString.includes('Failed to retrieve remote version') ||
+    errorString.includes('"code":"not_found"') ||
+    errorString.includes('The requested resource was not found')
+  );
+}
+
 const getFirstTimeUserSampleData = (): { sampleCruises: BookedCruise[]; sampleOffers: CasinoOffer[] } => {
   const today = new Date();
   const futureDate = new Date(today);
@@ -449,10 +458,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorString = String(error);
       
-      if (
-        ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'BACKEND_OFFLINE', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage) ||
-        errorString.includes('Failed to retrieve remote version')
-      ) {
+      if (isIgnorableBackendError(errorMessage, errorString)) {
         console.log('[CoreData] Backend sync skipped:', errorMessage);
       } else if (errorString.includes('Failed to fetch') || errorString.includes('Network request failed')) {
         console.log('[CoreData] Backend sync skipped: Network error - backend may be unavailable');
@@ -570,10 +576,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorString = String(error);
 
-      if (
-        ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'BACKEND_OFFLINE', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage) ||
-        errorString.includes('Failed to retrieve remote version')
-      ) {
+      if (isIgnorableBackendError(errorMessage, errorString)) {
         console.log('[CoreData] Backend load skipped:', errorMessage);
       } else if (errorString.includes('Failed to fetch') || errorString.includes('Network request failed')) {
         console.log('[CoreData] Backend load skipped: Network error - backend may be unavailable');

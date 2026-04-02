@@ -87,14 +87,17 @@ function getCloudStoreErrorMessage(error: unknown): string {
 
 function normalizeCloudStoreConnectionError(error: unknown): Error {
   const errorMessage = getCloudStoreErrorMessage(error);
+  const isNotFoundResponse =
+    errorMessage.includes('"code":"not_found"') ||
+    errorMessage.includes('The requested resource was not found');
   const isUnsupportedVersionResponse =
     errorMessage.includes('reported by the engine is not supported by this library') &&
-    (errorMessage.includes('"code":"not_found"') || errorMessage.includes('The requested resource was not found'));
+    isNotFoundResponse;
   const isVersionRetrievalFailure =
     errorMessage.includes('VersionRetrievalFailure') ||
     errorMessage.includes(VERSION_RETRIEVAL_FAILURE_MESSAGE);
 
-  if (isUnsupportedVersionResponse || isVersionRetrievalFailure) {
+  if (isUnsupportedVersionResponse || isVersionRetrievalFailure || isNotFoundResponse) {
     return new Error(DIRECT_CLOUD_STORE_UNAVAILABLE);
   }
 

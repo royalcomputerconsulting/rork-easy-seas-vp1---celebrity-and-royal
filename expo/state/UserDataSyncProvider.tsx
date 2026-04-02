@@ -90,6 +90,19 @@ function normalizeSyncedLoyaltyPayload(loyaltyData: unknown): SyncedLoyaltyPaylo
   };
 }
 
+function isNonBlockingCloudError(errorMessage: string): boolean {
+  return (
+    errorMessage.includes('Failed to fetch') ||
+    errorMessage.includes('Network request failed') ||
+    errorMessage.includes('fetch') ||
+    errorMessage.includes('timeout') ||
+    errorMessage.includes('AbortError') ||
+    errorMessage.includes('"code":"not_found"') ||
+    errorMessage.includes('The requested resource was not found') ||
+    ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'BACKEND_OFFLINE', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage)
+  );
+}
+
 interface SyncState {
   isSyncing: boolean;
   lastSyncTime: string | null;
@@ -589,13 +602,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       console.log("[UserDataSync] Cloud load error (backend may be unavailable):", errorMessage);
       retryCountRef.current += 1;
       
-      const isNetworkError = 
-        errorMessage.includes('Failed to fetch') ||
-        errorMessage.includes('Network request failed') ||
-        errorMessage.includes('fetch') ||
-        errorMessage.includes('timeout') ||
-        errorMessage.includes('AbortError') ||
-        ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage);
+      const isNetworkError = isNonBlockingCloudError(errorMessage);
       
       if (!isNetworkError) {
         setSyncError(errorMessage);
@@ -683,13 +690,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       console.log("[UserDataSync] Cloud sync error (backend may be unavailable):", errorMessage);
       retryCountRef.current += 1;
       
-      const isNetworkError = 
-        errorMessage.includes('Failed to fetch') ||
-        errorMessage.includes('Network request failed') ||
-        errorMessage.includes('fetch') ||
-        errorMessage.includes('timeout') ||
-        errorMessage.includes('AbortError') ||
-        ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage);
+      const isNetworkError = isNonBlockingCloudError(errorMessage);
       
       if (!isNetworkError) {
         if (isMountedRef.current) {

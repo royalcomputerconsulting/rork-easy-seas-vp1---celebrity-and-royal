@@ -107,6 +107,48 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 let _lastErrorLogTime = 0;
 const ERROR_LOG_THROTTLE = 30_000;
+const BACKEND_NOT_FOUND_CODE = '"code":"not_found"';
+const BACKEND_NOT_FOUND_MESSAGE = 'The requested resource was not found';
+
+const isBackendNotFoundPayload = (value: string): boolean => {
+  return value.includes(BACKEND_NOT_FOUND_CODE) || value.includes(BACKEND_NOT_FOUND_MESSAGE);
+};
+
+const normalizeBackendResponseError = async (response: Response): Promise<Error | null> => {
+  if (response.ok) {
+    return null;
+  }
+
+  try {
+    const responseBody = await response.clone().text();
+    if (response.status === 404 && isBackendNotFoundPayload(responseBody)) {
+      _backendReachable = false;
+      _lastHealthCheck = Date.now();
+      console.log('[tRPC] Backend endpoint returned not_found payload - operating in offline mode');
+      return new Error('BACKEND_OFFLINE');
+    }
+  } catch (error) {
+    console.log('[tRPC] Failed reading backend error response:', error instanceof Error ? error.message : String(error));
+  }
+
+  return null;
+};
+
+const getFetchUrlString = (url: RequestInfo | URL): string => {
+  if (typeof url === 'string') {
+    return url;
+  }
+
+  if (url instanceof URL) {
+    return url.toString();
+  }
+
+  if ('url' in url && typeof url.url === 'string') {
+    return url.url;
+  }
+
+  throw new Error('INVALID_REQUEST_URL');
+};
 
 const fetchWithRetry = async (
   url: string,
@@ -131,13 +173,13 @@ const fetchWithRetry = async (
         clearTimeout(timeoutId);
       });
       
+      const requestHeaders = new Headers(options?.headers);
+      requestHeaders.set('Accept', 'application/json');
+
       const response = await fetch(url, {
         ...options,
         signal: controller.signal,
-        headers: {
-          ...options?.headers,
-          'Accept': 'application/json',
-        },
+        headers: requestHeaders,
       });
       
       clearTimeout(timeoutId);
@@ -152,6 +194,11 @@ const fetchWithRetry = async (
         }
       }
       
+      const normalizedError = await normalizeBackendResponseError(response);
+      if (normalizedError) {
+        throw normalizedError;
+      }
+
       if (response.ok) {
         _backendReachable = true;
         _lastHealthCheck = Date.now();
@@ -161,6 +208,10 @@ const fetchWithRetry = async (
     } catch (error) {
       lastError = error as Error;
       
+      if (lastError.message === 'BACKEND_OFFLINE') {
+        break;
+      }
+
       if (attempt < maxRetries) {
         const waitTime = Math.min(1000 * Math.pow(2, attempt), 5000);
         await sleep(waitTime);
@@ -192,7 +243,7 @@ export const getTrpcClient = () => {
             transformer: superjson,
             fetch: async (url, options) => {
               try {
-                const response = await fetchWithRetry(url.toString(), options);
+                const response = await fetchWithRetry(getFetchUrlString(url), options);
                 return response;
               } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
@@ -214,7 +265,7 @@ export const getTrpcClient = () => {
               }
               
               try {
-                const response = await fetchWithRetry(url.toString(), options);
+                const response = await fetchWithRetry(getFetchUrlString(url), options);
                 return response;
               } catch (error) {
                 const now = Date.now();

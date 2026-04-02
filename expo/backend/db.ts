@@ -28,11 +28,14 @@ function getDatabaseErrorMessage(error: unknown): string {
 
 function normalizeDatabaseConnectionError(error: unknown): Error {
   const errorMessage = getDatabaseErrorMessage(error);
+  const isNotFoundResponse =
+    errorMessage.includes('"code":"not_found"') ||
+    errorMessage.includes('The requested resource was not found');
   const isUnsupportedVersionResponse =
     errorMessage.includes('reported by the engine is not supported by this library') &&
-    (errorMessage.includes('"code":"not_found"') || errorMessage.includes('The requested resource was not found'));
+    isNotFoundResponse;
 
-  if (isUnsupportedVersionResponse) {
+  if (isUnsupportedVersionResponse || isNotFoundResponse) {
     return new Error(DATABASE_UNAVAILABLE);
   }
 
