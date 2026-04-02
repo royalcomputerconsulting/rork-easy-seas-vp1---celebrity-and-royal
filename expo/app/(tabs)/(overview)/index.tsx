@@ -10,6 +10,7 @@ import {
   Animated,
   Image,
   Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -768,9 +769,10 @@ function OverviewScreenContent() {
           }
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={false}
-          initialNumToRender={5}
-          maxToRenderPerBatch={5}
-          windowSize={7}
+          disableVirtualization={Platform.OS === 'web'}
+          initialNumToRender={Platform.OS === 'web' ? sortedOffers.length : 5}
+          maxToRenderPerBatch={Platform.OS === 'web' ? Math.max(sortedOffers.length, 10) : 5}
+          windowSize={Platform.OS === 'web' ? Math.max(sortedOffers.length, 21) : 7}
         />
       </SafeAreaView>
     </View>

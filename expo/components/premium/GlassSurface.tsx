@@ -37,6 +37,15 @@ function getBackdropMode(): GlassBackdropMode {
 const backdropMode = getBackdropMode();
 
 const GlassBackdrop = React.memo(function GlassBackdrop({ mode }: { mode: GlassBackdropMode }) {
+  if (Platform.OS === 'web') {
+    return (
+      <View pointerEvents="none" style={styles.backdropLayer}>
+        <View style={styles.webBackdropFill} />
+        <View style={styles.webGlassStroke} />
+      </View>
+    );
+  }
+
   return (
     <View pointerEvents="none" style={styles.backdropLayer}>
       {mode === 'liquid' ? (
@@ -72,8 +81,8 @@ const GlassBackdrop = React.memo(function GlassBackdrop({ mode }: { mode: GlassB
 
 export const GlassSurface = React.memo(function GlassSurface({ children, style, contentStyle, testID }: GlassSurfaceProps) {
   return (
-    <View style={[styles.glassShell, style]} testID={testID ?? 'glass-surface'}>
-      <View style={styles.glassClip}>
+    <View style={[styles.glassShell, Platform.OS === 'web' ? styles.webGlassShell : null, style]} testID={testID ?? 'glass-surface'}>
+      <View style={[styles.glassClip, Platform.OS === 'web' ? styles.webGlassClip : null]}>
         <GlassBackdrop mode={backdropMode} />
         <View style={[styles.contentLayer, contentStyle]}>{children}</View>
       </View>
@@ -105,6 +114,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
   },
+  webGlassShell: {
+    backgroundColor: 'rgba(248, 251, 255, 0.86)',
+  },
+  webGlassClip: {
+    backgroundColor: 'rgba(248, 251, 255, 0.94)',
+    borderColor: 'rgba(208, 221, 236, 0.9)',
+  },
   contentLayer: {
     zIndex: 1,
   },
@@ -123,6 +139,16 @@ const styles = StyleSheet.create({
     height: 132,
     borderRadius: 66,
     backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  webBackdropFill: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(248, 251, 255, 0.88)',
+  },
+  webGlassStroke: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(208, 221, 236, 0.92)',
   },
   glassStroke: {
     ...StyleSheet.absoluteFillObject,

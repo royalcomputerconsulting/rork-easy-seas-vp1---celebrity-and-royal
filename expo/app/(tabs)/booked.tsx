@@ -704,9 +704,10 @@ export default function BookedScreen() {
           }
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={false}
-          initialNumToRender={6}
-          maxToRenderPerBatch={5}
-          windowSize={7}
+          disableVirtualization={Platform.OS === 'web'}
+          initialNumToRender={Platform.OS === 'web' ? filteredCruises.length : 6}
+          maxToRenderPerBatch={Platform.OS === 'web' ? Math.max(filteredCruises.length, 12) : 5}
+          windowSize={Platform.OS === 'web' ? Math.max(filteredCruises.length, 21) : 7}
           updateCellsBatchingPeriod={50}
         />
       </SafeAreaView>

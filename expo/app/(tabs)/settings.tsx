@@ -197,32 +197,6 @@ export default function SettingsScreen() {
     }
     return 'Purchase a monthly or annual subscription to continue.';
   }, [entitlement.source, entitlement.subscriptionDisplayStatus, entitlement.trialDaysRemaining, isAdmin]);
-  const subscriptionConnectionLabel = useMemo(() => {
-    if (entitlement.error) return 'Needs attention';
-    if (entitlement.isLoading && !entitlement.lastCheckedAt) return 'Checking';
-    if (entitlement.hasAnyOffering) return 'Connected';
-    return 'Ready';
-  }, [entitlement.error, entitlement.hasAnyOffering, entitlement.isLoading, entitlement.lastCheckedAt]);
-  const subscriptionLinkedAccountLabel = useMemo(() => {
-    return entitlement.revenueCatAppUserId ?? normalizedAuthenticatedEmail ?? 'Not linked yet';
-  }, [entitlement.revenueCatAppUserId, normalizedAuthenticatedEmail]);
-  const subscriptionProductsLabel = useMemo(() => {
-    if (!entitlement.hasAnyOffering) {
-      return entitlement.isLoading ? 'Loading products…' : 'No products loaded yet';
-    }
-
-    return `${entitlement.availableProductIds.length} product${entitlement.availableProductIds.length !== 1 ? 's' : ''} loaded`;
-  }, [entitlement.availableProductIds.length, entitlement.hasAnyOffering, entitlement.isLoading]);
-  const subscriptionLastCheckedLabel = useMemo(() => {
-    if (!entitlement.lastCheckedAt) return 'Not checked yet';
-
-    try {
-      return new Date(entitlement.lastCheckedAt).toLocaleString();
-    } catch (error) {
-      console.error('[Settings] Failed to format subscription last checked timestamp', error);
-      return entitlement.lastCheckedAt;
-    }
-  }, [entitlement.lastCheckedAt]);
 
   const loadWhitelist = useCallback(async () => {
     try {
@@ -2078,44 +2052,12 @@ STEP 4: Optional Calendar Import
                   <Text style={styles.subscriptionStatusSubtitle}>{subscriptionStatusSubtitle}</Text>
                 </View>
               </View>
-              <View style={styles.subscriptionLicenseCard} testID="settings.subscription.license-card">
-                <View style={styles.subscriptionLicenseRow}>
-                  <View style={styles.subscriptionLicenseItem}>
-                    <Text style={styles.subscriptionLicenseLabel}>Billing Store</Text>
-                    <Text style={styles.subscriptionLicenseValue}>{entitlement.billingStoreLabel}</Text>
-                  </View>
-                  <View style={styles.subscriptionLicenseItem}>
-                    <Text style={styles.subscriptionLicenseLabel}>Connection</Text>
-                    <Text style={[styles.subscriptionLicenseValue, { color: subscriptionAccentColor }]}>{subscriptionConnectionLabel}</Text>
-                  </View>
-                </View>
-                <View style={styles.subscriptionLicenseRow}>
-                  <View style={styles.subscriptionLicenseItem}>
-                    <Text style={styles.subscriptionLicenseLabel}>Linked Account</Text>
-                    <Text style={styles.subscriptionLicenseValue} numberOfLines={1}>{subscriptionLinkedAccountLabel}</Text>
-                  </View>
-                  <View style={styles.subscriptionLicenseItem}>
-                    <Text style={styles.subscriptionLicenseLabel}>Products</Text>
-                    <Text style={styles.subscriptionLicenseValue}>{subscriptionProductsLabel}</Text>
-                  </View>
-                </View>
-                <View style={styles.subscriptionLicenseRow}>
-                  <View style={styles.subscriptionLicenseItem}>
-                    <Text style={styles.subscriptionLicenseLabel}>RevenueCat Key</Text>
-                    <Text style={styles.subscriptionLicenseValue}>{entitlement.expectedRevenueCatKeyName}</Text>
-                  </View>
-                  <View style={styles.subscriptionLicenseItem}>
-                    <Text style={styles.subscriptionLicenseLabel}>Last Checked</Text>
-                    <Text style={styles.subscriptionLicenseValue}>{subscriptionLastCheckedLabel}</Text>
-                  </View>
-                </View>
-                {!!entitlement.error && <Text style={styles.subscriptionErrorText}>{entitlement.error}</Text>}
-              </View>
+              {!!entitlement.error && <Text style={styles.subscriptionErrorText}>{entitlement.error}</Text>}
               <View style={styles.dataDivider} />
               {renderSettingRow(
                 <RefreshCcw size={18} color={COLORS.navyDeep} />,
                 'Refresh Subscription Status',
-                entitlement.isLoading ? <ActivityIndicator size="small" color={COLORS.navyDeep} /> : subscriptionConnectionLabel,
+                entitlement.isLoading ? <ActivityIndicator size="small" color={COLORS.navyDeep} /> : <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
                 () => { void entitlement.refresh(); }
               )}
               {renderSettingRow(
@@ -2991,40 +2933,6 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     marginHorizontal: SPACING.xs,
     lineHeight: 16,
-  },
-  subscriptionLicenseCard: {
-    backgroundColor: '#FFFCF4',
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'rgba(185, 143, 61, 0.2)',
-    padding: SPACING.md,
-    gap: SPACING.sm,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.xs,
-  },
-  subscriptionLicenseRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  subscriptionLicenseItem: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    borderRadius: BORDER_RADIUS.sm,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(185, 143, 61, 0.12)',
-  },
-  subscriptionLicenseLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: CLEAN_THEME.text.secondary,
-    marginBottom: 4,
-  },
-  subscriptionLicenseValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
   },
   subscriptionErrorText: {
     fontSize: TYPOGRAPHY.fontSizeXS,

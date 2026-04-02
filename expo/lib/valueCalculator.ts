@@ -181,7 +181,7 @@ export function calculateCasinoPayTable(
 
 export function calculateOfferValue(
   offer: CasinoOffer,
-  amountPaid: number = 0
+  _amountPaid: number = 0
 ): ValueBreakdown {
   const cabinType = offer.roomType || 'Balcony';
   const cabinPrice = getCabinPriceFromEntity(offer, cabinType) || 0;
@@ -689,7 +689,8 @@ export function calculateOfferAggregateValue(
   const allPerks = new Set<string>();
   
   matchingCruises.forEach(cruise => {
-    const cabinPrice = getCabinPriceFromEntity(cruise, roomType) || cruise.price || 0;
+    const cruiseRoomType = cruise.cabinType || roomType;
+    const cabinPrice = getCabinPriceFromEntity(cruise, cruiseRoomType) || cruise.price || 0;
     const cabinValueForTwo = cabinPrice * GUEST_COUNT_DEFAULT;
     const taxesFees = cruise.taxes || 0;
     

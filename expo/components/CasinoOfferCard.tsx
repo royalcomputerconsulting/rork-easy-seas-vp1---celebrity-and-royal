@@ -134,6 +134,52 @@ function splitDestinationLines(destinations: string[]): string[] {
   return (parts.length > 0 ? parts : [joined]).slice(0, 3);
 }
 
+function collectUniqueDisplayValues(values: Array<string | undefined | null>): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => (value ?? '').trim())
+        .filter((value) => value.length > 0)
+    )
+  );
+}
+
+function formatDisplayList(values: string[], fallback: string): string {
+  if (values.length === 0) {
+    return fallback;
+  }
+
+  if (values.length <= 3) {
+    return values.join(' • ');
+  }
+
+  return `${values.slice(0, 3).join(' • ')} +${values.length - 3} more`;
+}
+
+function getEarliestOfferExpiry(values: Array<string | undefined | null>): string | undefined {
+  const parsed = values
+    .map((value) => {
+      const normalized = (value ?? '').trim();
+      if (!normalized) {
+        return null;
+      }
+
+      const date = createDateFromString(normalized);
+      if (Number.isNaN(date.getTime())) {
+        return null;
+      }
+
+      return {
+        value: normalized,
+        time: date.getTime(),
+      };
+    })
+    .filter((entry): entry is { value: string; time: number } => entry !== null)
+    .sort((left, right) => left.time - right.time);
+
+  return parsed[0]?.value;
+}
+
 export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   offerCode,
   offerName,
@@ -167,46 +213,57 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
   const cardImageUri = offerImageUrl || DEFAULT_CRUISE_IMAGE;
 
-  const offerDetails = useMemo(() => {
-    const offer = (localData.offers || []).find((item: CasinoOffer) => item.offerCode === offerCode);
+  const relatedOffers = useMemo(
+    () => (localData.offers || []).filter((item: CasinoOffer) => item.offerCode === offerCode),
+    [localData.offers, offerCode]
+  );
 
-    if (!offer && cruises.length > 0) {
-      const firstCruise = cruises[0];
-      return {
-        roomType: firstCruise.cabinType,
-        perks: firstCruise.perks || [],
-        receivedDate: undefined,
-        tradeInValue: tradeInValue || 0,
-        totalCruises: cruises.length,
-      };
-    }
-
-    return {
-      roomType: offer?.roomType || cruises[0]?.cabinType || 'Balcony',
-      perks: offer?.perks || [],
-      receivedDate: offer?.received,
-      tradeInValue: offer?.tradeInValue || tradeInValue || 0,
-      totalCruises: cruises.length,
-    };
-  }, [cruises, localData.offers, offerCode, tradeInValue]);
+  const roomTypeValues = useMemo(
+    () => collectUniqueDisplayValues([...relatedOffers.map((item) => item.roomType), ...cruises.map((item) => item.cabinType)]),
+    [cruises, relatedOffers]
+  );
+  const primaryRoomType = roomTypeValues[0] || cruises[0]?.cabinType || relatedOffers[0]?.roomType || 'Balcony';
+  const roomTypeLabel = useMemo(
+    () => formatDisplayList(roomTypeValues, String(primaryRoomType)),
+    [primaryRoomType, roomTypeValues]
+  );
+  const shipValues = useMemo(
+    () => collectUniqueDisplayValues(cruises.map((item) => item.shipName)),
+    [cruises]
+  );
+  const shipLabel = useMemo(
+    () => formatDisplayList(shipValues, cruises[0]?.shipName || 'Cruise Offer'),
+    [cruises, shipValues]
+  );
+  const resolvedTradeInValue = useMemo(
+    () => relatedOffers.find((item) => item.tradeInValue != null)?.tradeInValue ?? tradeInValue ?? 0,
+    [relatedOffers, tradeInValue]
+  );
+  const resolvedExpiryDate = useMemo(
+    () => getEarliestOfferExpiry([
+      expiryDate,
+      ...relatedOffers.map((item) => item.expiryDate || item.expires || item.offerExpiryDate),
+      ...cruises.map((item) => item.offerExpiry),
+    ]),
+    [cruises, expiryDate, relatedOffers]
+  );
 
   const expiryDays = useMemo(() => {
-    if (!expiryDate) {
+    if (!resolvedExpiryDate) {
       return null;
     }
 
-    const expiry = createDateFromString(expiryDate);
+    const expiry = createDateFromString(resolvedExpiryDate);
     const today = new Date();
     const diffTime = expiry.getTime() - today.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  }, [expiryDate]);
+  }, [resolvedExpiryDate]);
 
   const aggregateValue = useMemo(() => {
     if (cruises.length === 0) {
       return null;
     }
 
-    const roomType = String(offerDetails.roomType || 'Balcony');
     const baseRates: Record<string, number> = {
       Interior: 100,
       'Interior GTY': 80,
@@ -226,10 +283,11 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
     let totalOfferValue = 0;
 
     cruises.forEach((cruise) => {
-      let cabinPrice = getCabinPriceFromEntity(cruise, roomType) || cruise.price || 0;
+      const cruiseRoomType = cruise.cabinType || primaryRoomType;
+      let cabinPrice = getCabinPriceFromEntity(cruise, cruiseRoomType) || cruise.price || 0;
 
       if (cabinPrice === 0 && cruise.nights > 0) {
-        const typeKey = Object.keys(baseRates).find((key) => roomType.toLowerCase().includes(key.toLowerCase())) || 'Balcony';
+        const typeKey = Object.keys(baseRates).find((key) => cruiseRoomType.toLowerCase().includes(key.toLowerCase())) || 'Balcony';
         cabinPrice = (baseRates[typeKey] || 180) * (cruise.nights || 7);
       }
 
@@ -249,11 +307,11 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
     const firstCruise = cruises[0];
     const totalFreePlay = firstCruise?.freePlay || freePlay || 0;
     const totalOBC = firstCruise?.freeOBC || obc || 0;
-    const aggregateTotalValue = totalCabinValue + totalTaxesFees + totalFreePlay + totalOBC + totalOfferValue + (offerDetails.tradeInValue || 0);
+    const aggregateTotalValue = totalCabinValue + totalTaxesFees + totalFreePlay + totalOBC + totalOfferValue + resolvedTradeInValue;
 
     console.log('[CasinoOfferCard] Aggregate value calculated:', {
       offerCode,
-      roomType,
+      roomTypes: roomTypeValues,
       cruiseCount: cruises.length,
       totalCabinValue,
       totalTaxesFees,
@@ -267,12 +325,10 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       aggregateTotalValue,
       cruiseCount: cruises.length,
     };
-  }, [cruises, freePlay, obc, offerCode, offerDetails.roomType, offerDetails.tradeInValue]);
+  }, [cruises, freePlay, obc, offerCode, primaryRoomType, resolvedTradeInValue, roomTypeValues]);
 
   const totalValue = aggregateValue?.aggregateTotalValue || 0;
   const destinationLines = useMemo(() => splitDestinationLines(cruises.map((cruise) => cruise.destination || '')), [cruises]);
-  const shipName = cruises[0]?.shipName || 'Cruise Offer';
-  const roomType = String(offerDetails.roomType || 'Balcony');
 
   const statusBadge = useMemo(() => {
     if (!isActive) {
@@ -360,18 +416,18 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
           <GlassSurface style={styles.infoPanel} contentStyle={styles.infoPanelContent}>
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Room Type</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{roomType}</Text>
+              <Text style={styles.infoLabel}>{roomTypeValues.length > 1 ? 'Room Types' : 'Room Type'}</Text>
+              <Text style={styles.infoValue} numberOfLines={2}>{roomTypeLabel}</Text>
             </View>
             <View style={styles.infoDivider} />
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Expires</Text>
-              <Text style={[styles.infoValue, expiryDays !== null && expiryDays <= 7 && expiryDays > 0 ? styles.infoValueUrgent : null]} numberOfLines={1}>{formatDisplayDate(expiryDate)}</Text>
+              <Text style={[styles.infoValue, expiryDays !== null && expiryDays <= 7 && expiryDays > 0 ? styles.infoValueUrgent : null]} numberOfLines={1}>{formatDisplayDate(resolvedExpiryDate)}</Text>
             </View>
             <View style={styles.infoDivider} />
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Ship</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{shipName}</Text>
+              <Text style={styles.infoLabel}>{shipValues.length > 1 ? 'Ships' : 'Ship'}</Text>
+              <Text style={styles.infoValue} numberOfLines={2}>{shipLabel}</Text>
             </View>
           </GlassSurface>
 

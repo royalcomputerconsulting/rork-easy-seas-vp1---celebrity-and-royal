@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { StyleProp, ImageStyle } from 'react-native';
+import { Platform, StyleProp, ImageStyle } from 'react-native';
 import { Image } from 'expo-image';
 
 type ExpoImageProps = React.ComponentProps<typeof Image>;
@@ -46,7 +46,9 @@ export const StableRemoteImage = React.memo(function StableRemoteImage({
     ? (normalizedFallbackUri && normalizedFallbackUri !== normalizedUri ? normalizedFallbackUri : undefined)
     : (normalizedUri ?? normalizedFallbackUri);
 
-  const resolvedRecyclingKey = recyclingKey ?? normalizedUri ?? normalizedFallbackUri ?? 'stable-remote-image';
+  const resolvedRecyclingKey = Platform.OS === 'web'
+    ? undefined
+    : (recyclingKey ?? normalizedUri ?? normalizedFallbackUri ?? 'stable-remote-image');
 
   const handleError = useCallback(() => {
     if (normalizedUri) {

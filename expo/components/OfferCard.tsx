@@ -98,6 +98,52 @@ function splitDestinationLines(destination: string | undefined): string[] {
   return [cleaned];
 }
 
+function collectUniqueDisplayValues(values: Array<string | undefined | null>): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => (value ?? '').trim())
+        .filter((value) => value.length > 0)
+    )
+  );
+}
+
+function formatDisplayList(values: string[], fallback: string): string {
+  if (values.length === 0) {
+    return fallback;
+  }
+
+  if (values.length <= 3) {
+    return values.join(' • ');
+  }
+
+  return `${values.slice(0, 3).join(' • ')} +${values.length - 3} more`;
+}
+
+function getEarliestOfferExpiry(values: Array<string | undefined | null>): string | undefined {
+  const parsed = values
+    .map((value) => {
+      const normalized = (value ?? '').trim();
+      if (!normalized) {
+        return null;
+      }
+
+      const date = createDateFromString(normalized);
+      if (Number.isNaN(date.getTime())) {
+        return null;
+      }
+
+      return {
+        value: normalized,
+        time: date.getTime(),
+      };
+    })
+    .filter((entry): entry is { value: string; time: number } => entry !== null)
+    .sort((left, right) => left.time - right.time);
+
+  return parsed[0]?.value;
+}
+
 export const OfferCard = React.memo(function OfferCard({
   offer,
   allCruises = [],
@@ -271,10 +317,37 @@ export const OfferCard = React.memo(function OfferCard({
     ? `$${Math.round(totalValue).toLocaleString()}`
     : formatCurrency(offer.retailValue || valueBreakdown?.totalRetailValue || 0);
 
+  const relatedOfferCruises = useMemo(() => {
+    if (!offer.offerCode) {
+      return [offer];
+    }
+
+    const matches = allCruises.filter((item) => item.offerCode === offer.offerCode);
+    return matches.length > 0 ? matches : [offer];
+  }, [allCruises, offer]);
+
   const destinationLines = useMemo(() => splitDestinationLines(offer.destination), [offer.destination]);
-  const roomTypeText = (offer.cabinType || 'Balcony').trim() || 'Balcony';
-  const shipLabel = offer.shipName || 'Cruise Offer';
-  const expiryLabel = formatOfferDate(offer.offerExpiry);
+  const roomTypeValues = useMemo(
+    () => collectUniqueDisplayValues([...relatedOfferCruises.map((item) => item.cabinType), offer.cabinType]),
+    [offer.cabinType, relatedOfferCruises]
+  );
+  const roomTypeText = useMemo(
+    () => formatDisplayList(roomTypeValues, (offer.cabinType || 'Balcony').trim() || 'Balcony'),
+    [offer.cabinType, roomTypeValues]
+  );
+  const shipValues = useMemo(
+    () => collectUniqueDisplayValues([...relatedOfferCruises.map((item) => item.shipName), offer.shipName]),
+    [offer.shipName, relatedOfferCruises]
+  );
+  const shipLabel = useMemo(
+    () => formatDisplayList(shipValues, offer.shipName || 'Cruise Offer'),
+    [offer.shipName, shipValues]
+  );
+  const resolvedExpiry = useMemo(
+    () => getEarliestOfferExpiry([...relatedOfferCruises.map((item) => item.offerExpiry), offer.offerExpiry]),
+    [offer.offerExpiry, relatedOfferCruises]
+  );
+  const expiryLabel = formatOfferDate(resolvedExpiry);
 
   if (compact) {
     return (
@@ -383,8 +456,8 @@ export const OfferCard = React.memo(function OfferCard({
 
             <GlassSurface style={styles.infoPanel} contentStyle={styles.infoPanelContent}>
               <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Room Type</Text>
-                <Text style={styles.infoValue} numberOfLines={1}>{roomTypeText}</Text>
+                <Text style={styles.infoLabel}>{roomTypeValues.length > 1 ? 'Room Types' : 'Room Type'}</Text>
+                <Text style={styles.infoValue} numberOfLines={2}>{roomTypeText}</Text>
               </View>
               <View style={styles.infoDivider} />
               <View style={styles.infoItem}>
@@ -393,8 +466,8 @@ export const OfferCard = React.memo(function OfferCard({
               </View>
               <View style={styles.infoDivider} />
               <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Ship</Text>
-                <Text style={styles.infoValue} numberOfLines={1}>{shipLabel}</Text>
+                <Text style={styles.infoLabel}>{shipValues.length > 1 ? 'Ships' : 'Ship'}</Text>
+                <Text style={styles.infoValue} numberOfLines={2}>{shipLabel}</Text>
               </View>
             </GlassSurface>
 
