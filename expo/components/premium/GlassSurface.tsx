@@ -12,6 +12,15 @@ interface GlassSurfaceProps {
 
 type GlassBackdropMode = 'liquid' | 'static';
 
+const WEB_SHADOW_FIX = Platform.select<ViewStyle>({
+  web: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+  },
+});
+
 function getBackdropMode(): GlassBackdropMode {
   if (Platform.OS !== 'ios') {
     return 'static';
@@ -64,8 +73,10 @@ const GlassBackdrop = React.memo(function GlassBackdrop({ mode }: { mode: GlassB
 export const GlassSurface = React.memo(function GlassSurface({ children, style, contentStyle, testID }: GlassSurfaceProps) {
   return (
     <View style={[styles.glassShell, style]} testID={testID ?? 'glass-surface'}>
-      <GlassBackdrop mode={backdropMode} />
-      <View style={[styles.contentLayer, contentStyle]}>{children}</View>
+      <View style={styles.glassClip}>
+        <GlassBackdrop mode={backdropMode} />
+        <View style={[styles.contentLayer, contentStyle]}>{children}</View>
+      </View>
     </View>
   );
 });
@@ -78,16 +89,21 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   glassShell: {
-    overflow: 'hidden',
     borderRadius: 24,
-    backgroundColor: 'rgba(244,248,255,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'transparent',
     shadowColor: '#03111F',
     shadowOpacity: 0.18,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 14 },
     elevation: 6,
+    ...(WEB_SHADOW_FIX ?? {}),
+  },
+  glassClip: {
+    overflow: 'hidden',
+    borderRadius: 24,
+    backgroundColor: 'rgba(244,248,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   contentLayer: {
     zIndex: 1,

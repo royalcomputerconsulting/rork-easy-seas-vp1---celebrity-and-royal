@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, type ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } from 'lucide-react-native';
@@ -20,6 +20,15 @@ interface CruiseCardProps {
   variant?: 'default' | 'booked' | 'available' | 'completed';
   showRetailValue?: boolean;
 }
+
+const WEB_SHADOW_FIX = Platform.select<ViewStyle>({
+  web: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+  },
+});
 
 function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'active' {
   const today = new Date();
@@ -419,206 +428,208 @@ export const CruiseCard = React.memo(function CruiseCard({
   if (compact) {
     return (
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <TouchableOpacity 
-        style={styles.compactContainer}
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        activeOpacity={1}
-        testID="cruise-card-compact"
-      >
-        <StableRemoteImage
-          uri={compactImageUri}
-          fallbackUri={DEFAULT_CRUISE_IMAGE}
-          style={styles.compactImage}
-          recyclingKey={`${cruise.id}-compact`}
-          testID="cruise-card-compact-image"
-        />
-        <View style={styles.compactContent}>
-          <Text style={styles.compactShipName}>{cruise.shipName}</Text>
-          <Text style={styles.compactDestination} numberOfLines={1}>{cruise.destination}</Text>
-          <View style={styles.compactMeta}>
-            <Calendar size={12} color="#6B7280" />
-            <Text style={styles.compactDate}>
-              {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
-            </Text>
+        <TouchableOpacity 
+          style={styles.compactShadowShell}
+          onPress={onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          activeOpacity={1}
+          testID="cruise-card-compact"
+        >
+          <View style={styles.compactContainer}>
+            <StableRemoteImage
+              uri={compactImageUri}
+              fallbackUri={DEFAULT_CRUISE_IMAGE}
+              style={styles.compactImage}
+              recyclingKey={`${cruise.id}-compact`}
+              testID="cruise-card-compact-image"
+            />
+            <View style={styles.compactContent}>
+              <Text style={styles.compactShipName}>{cruise.shipName}</Text>
+              <Text style={styles.compactDestination} numberOfLines={1}>{cruise.destination}</Text>
+              <View style={styles.compactMeta}>
+                <Calendar size={12} color="#6B7280" />
+                <Text style={styles.compactDate}>
+                  {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={20} color="#9CA3AF" style={styles.compactChevron} />
           </View>
-        </View>
-        <ChevronRight size={20} color="#9CA3AF" style={styles.compactChevron} />
-      </TouchableOpacity>
+        </TouchableOpacity>
       </Animated.View>
     );
   }
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-    <TouchableOpacity 
-      style={styles.container}
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      activeOpacity={1}
-      testID="cruise-card"
-    >
-      <View style={styles.imageSection}>
-        <StableRemoteImage
-          uri={heroImageUri}
-          fallbackUri={DEFAULT_CRUISE_IMAGE}
-          style={styles.heroImage}
-          recyclingKey={`${cruise.id}-hero`}
-          testID="cruise-card-hero-image"
-        />
-        
-        {cruiseStatus === 'upcoming' && !isBooked && (
-          <View style={styles.saleBadge}>
-            <Text style={styles.saleBadgeText}>Casino Offer</Text>
-          </View>
-        )}
-
-        <View style={styles.nightsBadge}>
-          <Text style={styles.nightsBadgeText}>{cruise.nights} Nights</Text>
-        </View>
-
-        <View style={styles.cruiseNameOverlay}>
-          <Text style={styles.cruiseNameText}>{getItineraryName()}</Text>
-        </View>
-      </View>
-      
-      <View style={styles.contentSection}>
-        <View style={styles.headerRow}>
-          <View style={styles.shipInfo}>
-            <Ship size={16} color={COLORS.navyDeep} />
-            <Text style={styles.shipName}>{cruise.shipName}</Text>
-            <View style={[styles.inlineStatusBadge, { backgroundColor: statusBadge.bg }]}>
-              <Text style={[
-                styles.inlineStatusBadgeText,
-                statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
-                  ? { color: COLORS.navyDeep } 
-                  : { color: COLORS.white }
-              ]}>
-                {statusBadge.text}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.actionIcons}>
-            <TouchableOpacity style={styles.iconButton}>
-              <Heart size={18} color="#9CA3AF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.routeInfo}>
-          <Text style={styles.routeLabel}>ROUNDTRIP FROM:</Text>
-          <Text style={styles.routeValue}>{cruise.departurePort || cruise.destination}</Text>
-        </View>
-
-        {bookedCruise.itinerary && bookedCruise.itinerary.length > 0 && (
-          <View style={styles.visitingSection}>
-            <Text style={styles.visitingLabel}>VISITING:</Text>
-            <Text style={styles.visitingPorts}>
-              {bookedCruise.itinerary.map((day: ItineraryDay) => day.port).join(' • ')}
-            </Text>
-            <TouchableOpacity>
-              <Text style={styles.viewPortsLink}>+ View Ports & Map</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {bookedCruise.ports && bookedCruise.ports.length > 0 && !bookedCruise.itinerary && (
-          <View style={styles.visitingSection}>
-            <Text style={styles.visitingLabel}>VISITING:</Text>
-            <Text style={styles.visitingPorts}>
-              {bookedCruise.ports.join(' • ')}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.dateGuestRow}>
-          <View style={styles.dateInfo}>
-            <Calendar size={14} color="#6B7280" />
-            <Text style={styles.dateText}>
-              {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
-            </Text>
-          </View>
-          <View style={styles.guestInfo}>
-            <Users size={14} color="#6B7280" />
-            <Text style={styles.guestText}>
-              {bookedCruise.guestNames?.length || bookedCruise.guests || 2} Guests
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.priceActionRow}>
-          <View style={styles.priceSection}>
-            {showRetailValue && retailValue !== null && retailValue > 0 && (
-              <>
-                <Text style={styles.priceLabel}>RETAIL VALUE*</Text>
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceDollar}>$</Text>
-                  <Text style={styles.priceValue}>{Math.round(retailValue).toLocaleString()}</Text>
-                </View>
-              </>
-            )}
-            {(bookedCruise.cabinType) && (
-              <Text style={styles.cabinType}>{bookedCruise.cabinType}</Text>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.compactActionRow}>
-          <TouchableOpacity style={styles.compactPrimaryButton} onPress={onPress}>
-            <Text style={styles.compactPrimaryButtonText}>Details</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.compactSecondaryButton}>
-            <Text style={styles.compactSecondaryButtonText}>Itinerary</Text>
-          </TouchableOpacity>
-        </View>
-
-        {!!(bookedCruise.offerName || cruise.offerName || cruise.offerCode) && (
-          <View style={styles.offerSection}>
-            <Sparkles size={14} color={COLORS.goldDark} />
-            <Text style={styles.offerText}>
-              {bookedCruise.offerName || cruise.offerName || `Offer ${cruise.offerCode}`}
-            </Text>
-            {!!(bookedCruise.offerCode || cruise.offerCode) && (
-              <View style={styles.offerCodeBadge}>
-                <Anchor size={10} color={COLORS.loyalty} />
-                <Text style={styles.offerCodeText}>{bookedCruise.offerCode || cruise.offerCode}</Text>
+      <TouchableOpacity 
+        style={styles.shadowShell}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+        testID="cruise-card"
+      >
+        <View style={styles.container}>
+          <View style={styles.imageSection}>
+            <StableRemoteImage
+              uri={heroImageUri}
+              fallbackUri={DEFAULT_CRUISE_IMAGE}
+              style={styles.heroImage}
+              recyclingKey={`${cruise.id}-hero`}
+              testID="cruise-card-hero-image"
+            />
+            
+            {cruiseStatus === 'upcoming' && !isBooked && (
+              <View style={styles.saleBadge}>
+                <Text style={styles.saleBadgeText}>Casino Offer</Text>
               </View>
             )}
-            {!!(cruise.offerValue && cruise.offerValue > 0) && (
-              <View style={styles.offerValueBadge}>
-                <Text style={styles.offerValueText}>${cruise.offerValue.toLocaleString()}</Text>
+
+            <View style={styles.nightsBadge}>
+              <Text style={styles.nightsBadgeText}>{cruise.nights} Nights</Text>
+            </View>
+
+            <View style={styles.cruiseNameOverlay}>
+              <Text style={styles.cruiseNameText}>{getItineraryName()}</Text>
+            </View>
+          </View>
+          
+          <View style={styles.contentSection}>
+            <View style={styles.headerRow}>
+              <View style={styles.shipInfo}>
+                <Ship size={16} color={COLORS.navyDeep} />
+                <Text style={styles.shipName}>{cruise.shipName}</Text>
+                <View style={[styles.inlineStatusBadge, { backgroundColor: statusBadge.bg }]}>
+                  <Text style={[
+                    styles.inlineStatusBadgeText,
+                    statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
+                      ? { color: COLORS.navyDeep } 
+                      : { color: COLORS.white }
+                  ]}>
+                    {statusBadge.text}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.actionIcons}>
+                <TouchableOpacity style={styles.iconButton}>
+                  <Heart size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.routeInfo}>
+              <Text style={styles.routeLabel}>ROUNDTRIP FROM:</Text>
+              <Text style={styles.routeValue}>{cruise.departurePort || cruise.destination}</Text>
+            </View>
+
+            {bookedCruise.itinerary && bookedCruise.itinerary.length > 0 && (
+              <View style={styles.visitingSection}>
+                <Text style={styles.visitingLabel}>VISITING:</Text>
+                <Text style={styles.visitingPorts}>
+                  {bookedCruise.itinerary.map((day: ItineraryDay) => day.port).join(' • ')}
+                </Text>
+                <TouchableOpacity>
+                  <Text style={styles.viewPortsLink}>+ View Ports & Map</Text>
+                </TouchableOpacity>
               </View>
             )}
-          </View>
-        )}
 
-        {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
-          (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
-           bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined) && (
-            <View style={styles.fpObcSection}>
-              {(bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined) && (
-                <View style={styles.fpContainer}>
-                  <Text style={styles.fpLabel}>FreePlay (FP$)</Text>
-                  <Text style={styles.fpValue}>${(bookedCruise.freePlay ?? cruise.freePlay ?? 0).toLocaleString()}</Text>
-                </View>
-              )}
-              {(bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined) && (
-                <View style={styles.obcContainer}>
-                  <Text style={styles.obcLabel}>Onboard Credit (OBC)</Text>
-                  <Text style={styles.obcValue}>${(bookedCruise.freeOBC ?? cruise.freeOBC ?? 0).toLocaleString()}</Text>
-                </View>
-              )}
+            {bookedCruise.ports && bookedCruise.ports.length > 0 && !bookedCruise.itinerary && (
+              <View style={styles.visitingSection}>
+                <Text style={styles.visitingLabel}>VISITING:</Text>
+                <Text style={styles.visitingPorts}>
+                  {bookedCruise.ports.join(' • ')}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.dateGuestRow}>
+              <View style={styles.dateInfo}>
+                <Calendar size={14} color="#6B7280" />
+                <Text style={styles.dateText}>
+                  {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
+                </Text>
+              </View>
+              <View style={styles.guestInfo}>
+                <Users size={14} color="#6B7280" />
+                <Text style={styles.guestText}>
+                  {bookedCruise.guestNames?.length || bookedCruise.guests || 2} Guests
+                </Text>
+              </View>
             </View>
-          )
-        )}
 
+            <View style={styles.divider} />
 
-      </View>
-    </TouchableOpacity>
+            <View style={styles.priceActionRow}>
+              <View style={styles.priceSection}>
+                {showRetailValue && retailValue !== null && retailValue > 0 && (
+                  <>
+                    <Text style={styles.priceLabel}>RETAIL VALUE*</Text>
+                    <View style={styles.priceRow}>
+                      <Text style={styles.priceDollar}>$</Text>
+                      <Text style={styles.priceValue}>{Math.round(retailValue).toLocaleString()}</Text>
+                    </View>
+                  </>
+                )}
+                {(bookedCruise.cabinType) && (
+                  <Text style={styles.cabinType}>{bookedCruise.cabinType}</Text>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.compactActionRow}>
+              <TouchableOpacity style={styles.compactPrimaryButton} onPress={onPress}>
+                <Text style={styles.compactPrimaryButtonText}>Details</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.compactSecondaryButton}>
+                <Text style={styles.compactSecondaryButtonText}>Itinerary</Text>
+              </TouchableOpacity>
+            </View>
+
+            {!!(bookedCruise.offerName || cruise.offerName || cruise.offerCode) && (
+              <View style={styles.offerSection}>
+                <Sparkles size={14} color={COLORS.goldDark} />
+                <Text style={styles.offerText}>
+                  {bookedCruise.offerName || cruise.offerName || `Offer ${cruise.offerCode}`}
+                </Text>
+                {!!(bookedCruise.offerCode || cruise.offerCode) && (
+                  <View style={styles.offerCodeBadge}>
+                    <Anchor size={10} color={COLORS.loyalty} />
+                    <Text style={styles.offerCodeText}>{bookedCruise.offerCode || cruise.offerCode}</Text>
+                  </View>
+                )}
+                {!!(cruise.offerValue && cruise.offerValue > 0) && (
+                  <View style={styles.offerValueBadge}>
+                    <Text style={styles.offerValueText}>${cruise.offerValue.toLocaleString()}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
+              (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
+              bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined) && (
+                <View style={styles.fpObcSection}>
+                  {(bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined) && (
+                    <View style={styles.fpContainer}>
+                      <Text style={styles.fpLabel}>FreePlay (FP$)</Text>
+                      <Text style={styles.fpValue}>${(bookedCruise.freePlay ?? cruise.freePlay ?? 0).toLocaleString()}</Text>
+                    </View>
+                  )}
+                  {(bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined) && (
+                    <View style={styles.obcContainer}>
+                      <Text style={styles.obcLabel}>Onboard Credit (OBC)</Text>
+                      <Text style={styles.obcValue}>${(bookedCruise.freeOBC ?? cruise.freeOBC ?? 0).toLocaleString()}</Text>
+                    </View>
+                  )}
+                </View>
+              )
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
     </Animated.View>
   );
 }
@@ -626,12 +637,16 @@ export const CruiseCard = React.memo(function CruiseCard({
 );
 
 const styles = StyleSheet.create({
+  shadowShell: {
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.lg,
+    ...SHADOW.md,
+    ...(WEB_SHADOW_FIX ?? {}),
+  },
   container: {
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
-    marginBottom: SPACING.lg,
-    ...SHADOW.md,
   },
   miniPressable: {
     marginBottom: SPACING.sm,
@@ -966,14 +981,18 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
+  compactShadowShell: {
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.sm,
+    ...SHADOW.sm,
+    ...(WEB_SHADOW_FIX ?? {}),
+  },
   compactContainer: {
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
-    marginBottom: SPACING.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    ...SHADOW.sm,
   },
   compactImage: {
     width: 80,

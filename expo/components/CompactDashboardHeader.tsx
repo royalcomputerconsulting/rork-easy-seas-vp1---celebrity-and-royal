@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Platform, View, Text, StyleSheet, TouchableOpacity, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users, Crown } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
@@ -37,6 +37,15 @@ interface CompactDashboardHeaderProps {
 }
 
 type GradientPair = [string, string];
+
+const WEB_SHADOW_FIX = Platform.select<ViewStyle>({
+  web: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+  },
+});
 
 function getDisplayClubRoyaleTier(value: string): string {
   return value === 'Choice' ? 'Classic' : value;
@@ -297,13 +306,14 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       : 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80';
 
   return (
-    <LinearGradient
-      colors={marbleConfig.gradientColors as unknown as [string, string, ...string[]]}
-      locations={marbleConfig.gradientLocations}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.container, { borderColor: playerCardTheme.borderColor }]}
-    >
+    <View style={styles.shadowShell}>
+      <LinearGradient
+        colors={marbleConfig.gradientColors as unknown as [string, string, ...string[]]}
+        locations={marbleConfig.gradientLocations}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.container, { borderColor: playerCardTheme.borderColor }]}
+      >
       <StableRemoteImage
         uri={scenicHeroUri}
         style={styles.backgroundImage}
@@ -1155,22 +1165,27 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </>
       )}
       </View>
-    </LinearGradient>
+      </LinearGradient>
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
-  container: {
+  shadowShell: {
     borderRadius: 34,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.26)',
     marginBottom: SPACING.lg,
     shadowColor: '#03111F',
     shadowOpacity: 0.26,
     shadowRadius: 26,
     shadowOffset: { width: 0, height: 18 },
     elevation: 10,
+    ...(WEB_SHADOW_FIX ?? {}),
+  },
+  container: {
+    borderRadius: 34,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.26)',
   },
   backgroundImage: {
     ...StyleSheet.absoluteFillObject,
@@ -1237,6 +1252,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
+    ...(WEB_SHADOW_FIX ?? {}),
   },
   alertBadge: {
     position: 'absolute',
@@ -1271,6 +1287,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
+    ...(WEB_SHADOW_FIX ?? {}),
   },
   tierText: {
     fontSize: 11,
@@ -1293,6 +1310,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
+    ...(WEB_SHADOW_FIX ?? {}),
   },
   spotlightBadgeIcon: {
     width: 24,
@@ -1332,6 +1350,7 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 5,
+    ...(WEB_SHADOW_FIX ?? {}),
   },
   progressHeader: {
     flexDirection: 'row',
@@ -1468,6 +1487,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },
     elevation: 3,
+    ...(WEB_SHADOW_FIX ?? {}),
   },
   statsRow: {
     flexDirection: 'row',
@@ -1542,6 +1562,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
+    ...(WEB_SHADOW_FIX ?? {}),
   },
   quickStatPillValue: {
     fontSize: 13,

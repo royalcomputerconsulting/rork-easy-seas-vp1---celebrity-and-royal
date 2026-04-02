@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CheckCircle, ChevronRight, Clock, Ship, Sparkles } from 'lucide-react-native';
 import { GlassSurface } from '@/components/premium/GlassSurface';
@@ -22,6 +22,15 @@ interface OfferCardProps {
   compact?: boolean;
   showValueBreakdown?: boolean;
 }
+
+const WEB_SHADOW_FIX = Platform.select<ViewStyle>({
+  web: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+  },
+});
 
 function getOfferImage(offer: Cruise): string {
   if (offer.imageUrl) {
@@ -270,142 +279,151 @@ export const OfferCard = React.memo(function OfferCard({
   if (compact) {
     return (
       <TouchableOpacity
-        style={styles.compactContainer}
+        style={styles.compactShadowShell}
         onPress={onPress}
         activeOpacity={0.9}
         testID="offer-card-compact"
       >
-        <StableRemoteImage
-          uri={heroImageUri}
-          fallbackUri={DEFAULT_CRUISE_IMAGE}
-          style={styles.compactImage}
-          recyclingKey={`${offer.id}-compact`}
-          testID="offer-card-compact-image"
-        />
-        <LinearGradient colors={['rgba(8, 19, 37, 0.1)', 'rgba(8, 19, 37, 0.88)']} style={styles.compactOverlay}>
-          <View style={styles.compactTopRow}>
-            <View style={styles.compactBadge}>
-              <Ship size={12} color="#FFFFFF" />
-              <Text style={styles.compactBadgeText}>{shipLabel}</Text>
-            </View>
-            {isBooked ? (
-              <View style={styles.compactBookedBadge}>
-                <CheckCircle size={11} color="#FFFFFF" />
-                <Text style={styles.compactBookedText}>Booked</Text>
+        <View style={styles.compactContainer}>
+          <StableRemoteImage
+            uri={heroImageUri}
+            fallbackUri={DEFAULT_CRUISE_IMAGE}
+            style={styles.compactImage}
+            recyclingKey={`${offer.id}-compact`}
+            testID="offer-card-compact-image"
+          />
+          <LinearGradient colors={['rgba(8, 19, 37, 0.1)', 'rgba(8, 19, 37, 0.88)']} style={styles.compactOverlay}>
+            <View style={styles.compactTopRow}>
+              <View style={styles.compactBadge}>
+                <Ship size={12} color="#FFFFFF" />
+                <Text style={styles.compactBadgeText}>{shipLabel}</Text>
               </View>
-            ) : null}
-          </View>
-          <Text style={styles.compactTitle} numberOfLines={1}>{inferredOfferName}</Text>
-          <Text style={styles.compactDestination} numberOfLines={1}>{offer.destination || 'Scenic sailings available'}</Text>
-          <View style={styles.compactFooter}>
-            <Text style={styles.compactPrice}>{offer.price !== undefined ? formatCurrency(offer.price) : displayValue}</Text>
-            <ChevronRight size={16} color="#FFFFFF" />
-          </View>
-        </LinearGradient>
+              {isBooked ? (
+                <View style={styles.compactBookedBadge}>
+                  <CheckCircle size={11} color="#FFFFFF" />
+                  <Text style={styles.compactBookedText}>Booked</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.compactTitle} numberOfLines={1}>{inferredOfferName}</Text>
+            <Text style={styles.compactDestination} numberOfLines={1}>{offer.destination || 'Scenic sailings available'}</Text>
+            <View style={styles.compactFooter}>
+              <Text style={styles.compactPrice}>{offer.price !== undefined ? formatCurrency(offer.price) : displayValue}</Text>
+              <ChevronRight size={16} color="#FFFFFF" />
+            </View>
+          </LinearGradient>
+        </View>
       </TouchableOpacity>
     );
   }
 
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.94} testID="offer-card">
-      <LinearGradient colors={['#FFFDF9', '#F8F0DB', '#E8F8FC']} style={styles.shellGradient}>
-        <View style={styles.headerStrip}>
-          <View style={styles.headerCopy}>
-            <Text style={styles.headerTitle}>{inferredOfferName}</Text>
-            {offer.offerCode ? <Text style={styles.headerCode}>Code {offer.offerCode}</Text> : null}
+    <TouchableOpacity style={styles.shadowShell} onPress={onPress} activeOpacity={0.94} testID="offer-card">
+      <View style={styles.container}>
+        <LinearGradient colors={['#FFFDF9', '#F8F0DB', '#E8F8FC']} style={styles.shellGradient}>
+          <View style={styles.headerStrip}>
+            <View style={styles.headerCopy}>
+              <Text style={styles.headerTitle}>{inferredOfferName}</Text>
+              {offer.offerCode ? <Text style={styles.headerCode}>Code {offer.offerCode}</Text> : null}
+            </View>
+            <View style={styles.headerValueBlock}>
+              <Text style={styles.headerValueLabel}>Total Value{availableCruiseCount > 1 ? ` (${availableCruiseCount})` : ''}</Text>
+              <Text style={styles.headerValueText}>{displayValue}</Text>
+            </View>
           </View>
-          <View style={styles.headerValueBlock}>
-            <Text style={styles.headerValueLabel}>Total Value{availableCruiseCount > 1 ? ` (${availableCruiseCount})` : ''}</Text>
-            <Text style={styles.headerValueText}>{displayValue}</Text>
-          </View>
-        </View>
 
-        {showImage ? (
-          <View style={styles.heroSection}>
-            <StableRemoteImage
-              uri={heroImageUri}
-              fallbackUri={DEFAULT_CRUISE_IMAGE}
-              style={styles.heroImage}
-              recyclingKey={`${offer.id}-hero`}
-              testID="offer-card-hero-image"
-            />
-            <LinearGradient
-              colors={['rgba(7, 20, 36, 0.08)', 'rgba(8, 24, 41, 0.42)', 'rgba(7, 18, 34, 0.92)']}
-              start={{ x: 0.1, y: 0 }}
-              end={{ x: 0.9, y: 1 }}
-              style={styles.heroOverlay}
-            />
-            <LinearGradient colors={statusBadge.colors} style={styles.statusPill}>
-              <Text style={styles.statusPillText}>{statusBadge.text}</Text>
-            </LinearGradient>
-            {isExpiringSoon ? (
-              <View style={styles.urgentPill}>
-                <Clock size={12} color="#FFFFFF" />
-                <Text style={styles.urgentPillText}>Expires in {getDaysUntil(offer.offerExpiry || '')} days</Text>
+          {showImage ? (
+            <View style={styles.heroSection}>
+              <StableRemoteImage
+                uri={heroImageUri}
+                fallbackUri={DEFAULT_CRUISE_IMAGE}
+                style={styles.heroImage}
+                recyclingKey={`${offer.id}-hero`}
+                testID="offer-card-hero-image"
+              />
+              <LinearGradient
+                colors={['rgba(7, 20, 36, 0.08)', 'rgba(8, 24, 41, 0.42)', 'rgba(7, 18, 34, 0.92)']}
+                start={{ x: 0.1, y: 0 }}
+                end={{ x: 0.9, y: 1 }}
+                style={styles.heroOverlay}
+              />
+              <LinearGradient colors={statusBadge.colors} style={styles.statusPill}>
+                <Text style={styles.statusPillText}>{statusBadge.text}</Text>
+              </LinearGradient>
+              {isExpiringSoon ? (
+                <View style={styles.urgentPill}>
+                  <Clock size={12} color="#FFFFFF" />
+                  <Text style={styles.urgentPillText}>Expires in {getDaysUntil(offer.offerExpiry || '')} days</Text>
+                </View>
+              ) : null}
+              <GlassSurface style={styles.heroInfoPill} contentStyle={styles.heroInfoPillContent}>
+                <Sparkles size={13} color="#FFFFFF" />
+                <Text style={styles.heroInfoText}>View all {availableCruiseCount} cruises</Text>
+              </GlassSurface>
+            </View>
+          ) : null}
+
+          <View style={styles.contentSection}>
+            <View style={styles.primaryRow}>
+              <View style={styles.destinationBlock}>
+                <Text style={styles.eyebrow}>Destinations</Text>
+                {destinationLines.length > 0 ? destinationLines.map((line, index) => (
+                  <Text key={`${line}-${index}`} style={styles.destinationLine} numberOfLines={1}>{line}</Text>
+                )) : (
+                  <Text style={styles.destinationLine} numberOfLines={1}>Curated casino sailings</Text>
+                )}
               </View>
-            ) : null}
-            <GlassSurface style={styles.heroInfoPill} contentStyle={styles.heroInfoPillContent}>
-              <Sparkles size={13} color="#FFFFFF" />
-              <Text style={styles.heroInfoText}>View all {availableCruiseCount} cruises</Text>
+
+              <View style={styles.valueBlock}>
+                <Text style={styles.valueEyebrow}>Value</Text>
+                <Text style={styles.valueText}>{displayValue}</Text>
+                <Text style={styles.valueHint}>{availableCruiseCount} sailing{availableCruiseCount === 1 ? '' : 's'}</Text>
+              </View>
+            </View>
+
+            <GlassSurface style={styles.infoPanel} contentStyle={styles.infoPanelContent}>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Room Type</Text>
+                <Text style={styles.infoValue} numberOfLines={1}>{roomTypeText}</Text>
+              </View>
+              <View style={styles.infoDivider} />
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Expires</Text>
+                <Text style={[styles.infoValue, isExpiringSoon && styles.infoValueUrgent]} numberOfLines={1}>{expiryLabel}</Text>
+              </View>
+              <View style={styles.infoDivider} />
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Ship</Text>
+                <Text style={styles.infoValue} numberOfLines={1}>{shipLabel}</Text>
+              </View>
             </GlassSurface>
+
+            <LinearGradient colors={['#0E3554', '#0A4C62', '#12706D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaButton}>
+              <TouchableOpacity style={styles.ctaButtonInner} onPress={onPress} activeOpacity={0.85} testID="offer-card-view-all-button">
+                <Text style={styles.ctaText}>View all {availableCruiseCount} cruises</Text>
+                <ChevronRight size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+            </LinearGradient>
           </View>
-        ) : null}
-
-        <View style={styles.contentSection}>
-          <View style={styles.primaryRow}>
-            <View style={styles.destinationBlock}>
-              <Text style={styles.eyebrow}>Destinations</Text>
-              {destinationLines.length > 0 ? destinationLines.map((line, index) => (
-                <Text key={`${line}-${index}`} style={styles.destinationLine} numberOfLines={1}>{line}</Text>
-              )) : (
-                <Text style={styles.destinationLine} numberOfLines={1}>Curated casino sailings</Text>
-              )}
-            </View>
-
-            <View style={styles.valueBlock}>
-              <Text style={styles.valueEyebrow}>Value</Text>
-              <Text style={styles.valueText}>{displayValue}</Text>
-              <Text style={styles.valueHint}>{availableCruiseCount} sailing{availableCruiseCount === 1 ? '' : 's'}</Text>
-            </View>
-          </View>
-
-          <GlassSurface style={styles.infoPanel} contentStyle={styles.infoPanelContent}>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Room Type</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{roomTypeText}</Text>
-            </View>
-            <View style={styles.infoDivider} />
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Expires</Text>
-              <Text style={[styles.infoValue, isExpiringSoon && styles.infoValueUrgent]} numberOfLines={1}>{expiryLabel}</Text>
-            </View>
-            <View style={styles.infoDivider} />
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Ship</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{shipLabel}</Text>
-            </View>
-          </GlassSurface>
-
-          <LinearGradient colors={['#0E3554', '#0A4C62', '#12706D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaButton}>
-            <TouchableOpacity style={styles.ctaButtonInner} onPress={onPress} activeOpacity={0.85} testID="offer-card-view-all-button">
-              <Text style={styles.ctaText}>View all {availableCruiseCount} cruises</Text>
-              <ChevronRight size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </View>
     </TouchableOpacity>
   );
 });
 
 const styles = StyleSheet.create({
+  shadowShell: {
+    borderRadius: 24,
+    marginBottom: SPACING.lg,
+    ...SHADOW.lg,
+    ...(WEB_SHADOW_FIX ?? {}),
+  },
   container: {
     borderRadius: 24,
     overflow: 'hidden',
-    marginBottom: SPACING.lg,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.34)',
-    ...SHADOW.lg,
+    backgroundColor: '#FFF9EF',
   },
   shellGradient: {
     borderRadius: 24,
@@ -622,13 +640,18 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
     color: '#FFFFFF',
   },
+  compactShadowShell: {
+    borderRadius: 24,
+    marginBottom: SPACING.lg,
+    ...SHADOW.md,
+    ...(WEB_SHADOW_FIX ?? {}),
+  },
   compactContainer: {
     borderRadius: 24,
     overflow: 'hidden',
-    marginBottom: SPACING.lg,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.24)',
-    ...SHADOW.md,
+    backgroundColor: '#0D1723',
   },
   compactImage: {
     width: '100%',
