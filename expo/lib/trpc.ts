@@ -53,6 +53,10 @@ const getSystemTrpcBaseCandidates = (baseUrl: string): string[] => {
   });
 };
 
+const getRenderTrpcBaseCandidates = (): string[] => {
+  return [`${RENDER_BACKEND_URL}${TRPC_SUFFIX}`];
+};
+
 const getBaseUrl = () => {
   const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
 
@@ -187,10 +191,16 @@ const normalizeBackendResponseError = async (response: Response): Promise<Error 
 
   try {
     const responseBody = await response.clone().text();
-    if (response.status === 404 && isBackendNotFoundPayload(responseBody)) {
+    const trimmedResponseBody = responseBody.trim();
+    const isUnavailableResponse =
+      isBackendNotFoundPayload(responseBody) ||
+      (response.status === 404 && trimmedResponseBody === '404 Not Found') ||
+      (response.status === 403 && responseBody.includes('Access Denied'));
+
+    if (isUnavailableResponse) {
       _backendReachable = false;
       _lastHealthCheck = Date.now();
-      console.log('[tRPC] Backend endpoint returned not_found payload - operating in offline mode');
+      console.log('[tRPC] Backend endpoint returned an unavailable response - operating in offline mode');
       return new Error('BACKEND_OFFLINE');
     }
   } catch (error) {
@@ -356,6 +366,18 @@ const fetchWithTrpcUrlFallback = async (
   }
 
   if (lastResponse) {
+    const normalizedError = await normalizeBackendResponseError(lastResponse);
+    if (normalizedError) {
+      throw normalizedError;
+    }
+
+    if (!lastResponse.ok && (lastResponse.status === 403 || lastResponse.status === 404)) {
+      _backendReachable = false;
+      _lastHealthCheck = Date.now();
+      console.log(`[tRPC:${label}] All endpoint candidates returned an unavailable response - operating in offline mode`);
+      throw new Error('BACKEND_OFFLINE');
+    }
+
     return lastResponse;
   }
 
@@ -374,8 +396,10 @@ export const getTrpcClient = () => {
             url: `${RENDER_BACKEND_URL}/trpc`,
             transformer: superjson,
             fetch: async (url, options) => {
+              const requestUrl = getFetchUrlString(url);
+
               try {
-                const response = await fetchWithRetry(getFetchUrlString(url), options);
+                const response = await fetchWithTrpcUrlFallback([requestUrl], options, 'Render');
                 return response;
               } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
@@ -398,12 +422,34 @@ export const getTrpcClient = () => {
               
               try {
                 const requestUrl = getFetchUrlString(url);
-                const candidateUrls = getTrpcRequestUrlCandidates(
+                const systemCandidateUrls = getTrpcRequestUrlCandidates(
                   requestUrl,
                   getSystemTrpcBaseCandidates(baseUrl)
                 );
-                const response = await fetchWithTrpcUrlFallback(candidateUrls, options, 'System');
-                return response;
+
+                try {
+                  const response = await fetchWithTrpcUrlFallback(systemCandidateUrls, options, 'System');
+                  return response;
+                } catch (error) {
+                  const normalizedError = error instanceof Error ? error : new Error(String(error));
+
+                  if (normalizedError.message === 'BACKEND_OFFLINE') {
+                    const renderCandidateUrls = getTrpcRequestUrlCandidates(
+                      requestUrl,
+                      getRenderTrpcBaseCandidates()
+                    );
+                    const hasAlternateRenderCandidate = renderCandidateUrls.some((candidateUrl) => {
+                      return !systemCandidateUrls.includes(candidateUrl);
+                    });
+
+                    if (hasAlternateRenderCandidate) {
+                      console.log('[tRPC:System] System backend unavailable, falling back to Render backend');
+                      return fetchWithTrpcUrlFallback(renderCandidateUrls, options, 'Render');
+                    }
+                  }
+
+                  throw normalizedError;
+                }
               } catch (error) {
                 const now = Date.now();
                 if (now - _lastErrorLogTime > ERROR_LOG_THROTTLE) {

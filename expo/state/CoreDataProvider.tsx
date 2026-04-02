@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
-import { trpc, isBackendAvailable } from "@/lib/trpc";
+import { trpc, trpcClient, isBackendAvailable } from "@/lib/trpc";
 import {
   getCloudUserDataFallback,
   isDirectCloudStoreConfigured,
@@ -328,10 +328,6 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const hasLocalData = cruises.length > 0 || bookedCruises.length > 0 || casinoOffers.length > 0 || calendarEvents.length > 0;
 
   const { mutateAsync: saveAllUserDataMutateAsync } = trpc.data.saveAllUserData.useMutation();
-  const { refetch: refetchBackendData } = trpc.data.getAllUserData.useQuery(
-    { email: authenticatedEmail || '' },
-    { enabled: false, retry: false, staleTime: 0 }
-  );
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -486,8 +482,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
       if (isBackendAvailable()) {
         try {
-          const result = await refetchBackendData();
-          cloudResult = result.data ?? null;
+          cloudResult = await trpcClient.data.getAllUserData.query({ email: authenticatedEmail });
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           console.log('[CoreData] Primary backend load failed, trying direct cloud store:', errorMessage);
@@ -585,7 +580,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       }
       return false;
     }
-  }, [refetchBackendData, authenticatedEmail]);
+  }, [authenticatedEmail]);
 
   const loadFromStorage = useCallback(async (force = false) => {
     console.log('[CoreData] === START LOADING FROM STORAGE ===', { force, alreadyAttempted: loadAttemptedRef.current });
