@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users, Crown } from 'lucide-react-native';
@@ -111,7 +111,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     extendedLoyalty,
     captainsClub,
   } = useLoyalty();
-  const { currentUser } = useUser();
+  const { currentUser, updateUser, ensureOwner } = useUser();
   const { isAdmin } = useAuth();
   const preferredBrand = currentUser?.preferredBrand === 'carnival' ? 'royal' : currentUser?.preferredBrand || 'royal';
   const [activeBrand, setActiveBrand] = useState<BrandType>(preferredBrand);
@@ -119,6 +119,35 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   useEffect(() => {
     setActiveBrand(currentUser?.preferredBrand === 'carnival' ? 'royal' : currentUser?.preferredBrand || 'royal');
   }, [currentUser?.preferredBrand]);
+
+  const handleBrandToggle = useCallback((brand: BrandType) => {
+    console.log('[CompactDashboardHeader] Brand toggle pressed:', {
+      previousBrand: activeBrand,
+      nextBrand: brand,
+      currentUserId: currentUser?.id,
+    });
+
+    setActiveBrand(brand);
+
+    void (async () => {
+      try {
+        const targetUser = currentUser ?? await ensureOwner();
+
+        if (targetUser.preferredBrand === brand) {
+          console.log('[CompactDashboardHeader] Preferred brand already persisted, skipping update');
+          return;
+        }
+
+        await updateUser(targetUser.id, { preferredBrand: brand });
+        console.log('[CompactDashboardHeader] Persisted preferred brand:', {
+          userId: targetUser.id,
+          preferredBrand: brand,
+        });
+      } catch (error) {
+        console.error('[CompactDashboardHeader] Failed to persist preferred brand:', error);
+      }
+    })();
+  }, [activeBrand, currentUser, ensureOwner, updateUser]);
 
   const celebrityCaptainsClubPoints = captainsClub.points ?? currentUser?.celebrityCaptainsClubPoints ?? 0;
   const celebrityBlueChipPoints = extendedLoyalty?.celebrityBlueChipPoints ?? currentUser?.celebrityBlueChipPoints ?? 0;
@@ -345,7 +374,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </View>
       </View>
 
-      <BrandToggle activeBrand={activeBrand} onToggle={setActiveBrand} showCarnival={false} variant="playerCard" />
+      <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} showCarnival={false} variant="playerCard" />
 
       {activeBrand === 'royal' ? (
         <>
