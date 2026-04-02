@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#7B6541',
+    color: '#2F2416',
   },
   headerValueBlock: {
     alignItems: 'flex-end',
@@ -540,7 +540,7 @@ const styles = StyleSheet.create({
   headerValueLabel: {
     fontSize: 9,
     fontWeight: '700' as const,
-    color: '#846A1F',
+    color: '#2F2416',
     letterSpacing: 0.7,
     textTransform: 'uppercase' as const,
   },
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: 'rgba(17, 33, 52, 0.54)',
+    color: '#314255',
     letterSpacing: 1.1,
     textTransform: 'uppercase' as const,
   },
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
   valueEyebrow: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: 'rgba(17, 33, 52, 0.54)',
+    color: '#314255',
     letterSpacing: 1.1,
     textTransform: 'uppercase' as const,
   },
@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
   valueHint: {
     marginTop: 2,
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(18, 38, 60, 0.58)',
+    color: '#405165',
   },
   infoPanel: {
     borderRadius: 20,
@@ -683,7 +683,7 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 10,
     fontWeight: '800' as const,
-    color: 'rgba(18, 38, 60, 0.56)',
+    color: '#405165',
     letterSpacing: 0.9,
     textTransform: 'uppercase' as const,
   },
