@@ -26,6 +26,33 @@ const isRenderRoutedProcedure = (path: string): boolean => {
   return RENDER_ROUTED_PREFIXES.some(prefix => path.startsWith(prefix));
 };
 
+const API_SUFFIX = '/api';
+const TRPC_SUFFIX = '/trpc';
+
+const trimTrailingSlash = (value: string): string => {
+  return value.replace(/\/+$/, '');
+};
+
+const getSystemTrpcBaseCandidates = (baseUrl: string): string[] => {
+  const normalizedBaseUrl = trimTrailingSlash(baseUrl);
+
+  if (!normalizedBaseUrl || normalizedBaseUrl === 'https://fallback.local') {
+    return [];
+  }
+
+  const candidates = [`${normalizedBaseUrl}${TRPC_SUFFIX}`];
+
+  if (normalizedBaseUrl.endsWith(API_SUFFIX)) {
+    candidates.push(`${normalizedBaseUrl.slice(0, -API_SUFFIX.length)}${TRPC_SUFFIX}`);
+  } else {
+    candidates.push(`${normalizedBaseUrl}${API_SUFFIX}${TRPC_SUFFIX}`);
+  }
+
+  return candidates.filter((candidate, index, list) => {
+    return list.indexOf(candidate) === index;
+  });
+};
+
 const getBaseUrl = () => {
   const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
 
@@ -189,6 +216,33 @@ const getFetchUrlString = (url: RequestInfo | URL): string => {
   throw new Error('INVALID_REQUEST_URL');
 };
 
+const getTrpcRequestUrlCandidates = (requestUrl: string, candidateBases: string[]): string[] => {
+  if (candidateBases.length === 0) {
+    return [requestUrl];
+  }
+
+  const matchingBase = candidateBases.find((candidateBase) => requestUrl.startsWith(candidateBase));
+  if (matchingBase) {
+    const suffix = requestUrl.slice(matchingBase.length);
+    return candidateBases.map((candidateBase) => `${candidateBase}${suffix}`).filter((candidateUrl, index, list) => {
+      return list.indexOf(candidateUrl) === index;
+    });
+  }
+
+  const trpcIndex = requestUrl.indexOf(TRPC_SUFFIX);
+  if (trpcIndex === -1) {
+    return [requestUrl];
+  }
+
+  const suffix = requestUrl.slice(trpcIndex + TRPC_SUFFIX.length);
+  const candidateUrls = candidateBases.map((candidateBase) => `${candidateBase}${suffix}`);
+  candidateUrls.push(requestUrl);
+
+  return candidateUrls.filter((candidateUrl, index, list) => {
+    return list.indexOf(candidateUrl) === index;
+  });
+};
+
 const fetchWithRetry = async (
   url: string,
   options: RequestInit | undefined,
@@ -269,6 +323,45 @@ const fetchWithRetry = async (
   throw lastError || new Error('Fetch failed after retries');
 };
 
+const fetchWithTrpcUrlFallback = async (
+  candidateUrls: string[],
+  options: RequestInit | undefined,
+  label: 'System' | 'Render'
+): Promise<Response> => {
+  let lastResponse: Response | null = null;
+  let lastError: Error | null = null;
+
+  for (let index = 0; index < candidateUrls.length; index++) {
+    const candidateUrl = candidateUrls[index];
+    try {
+      const response = await fetchWithRetry(candidateUrl, options);
+      if (response.status === 404 && index < candidateUrls.length - 1) {
+        console.log(`[tRPC:${label}] Endpoint candidate returned 404, retrying alternate path:`, candidateUrl);
+        lastResponse = response;
+        continue;
+      }
+
+      return response;
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error));
+      lastError = normalizedError;
+
+      if (normalizedError.message === 'BACKEND_OFFLINE' && index < candidateUrls.length - 1) {
+        console.log(`[tRPC:${label}] Endpoint candidate unavailable, retrying alternate path:`, candidateUrl);
+        continue;
+      }
+
+      throw normalizedError;
+    }
+  }
+
+  if (lastResponse) {
+    return lastResponse;
+  }
+
+  throw lastError ?? new Error('Fetch failed after retries');
+};
+
 export const getTrpcClient = () => {
   if (!_trpcClient) {
     const baseUrl = getBaseUrl();
@@ -304,7 +397,12 @@ export const getTrpcClient = () => {
               }
               
               try {
-                const response = await fetchWithRetry(getFetchUrlString(url), options);
+                const requestUrl = getFetchUrlString(url);
+                const candidateUrls = getTrpcRequestUrlCandidates(
+                  requestUrl,
+                  getSystemTrpcBaseCandidates(baseUrl)
+                );
+                const response = await fetchWithTrpcUrlFallback(candidateUrls, options, 'System');
                 return response;
               } catch (error) {
                 const now = Date.now();
