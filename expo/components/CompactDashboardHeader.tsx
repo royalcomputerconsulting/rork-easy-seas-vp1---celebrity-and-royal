@@ -603,17 +603,17 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{clubRoyalePoints.toLocaleString()}</Text>
+          <Text style={styles.royalStatValue}>{clubRoyalePoints.toLocaleString()}</Text>
           <Text style={styles.statLabel}>CR Points</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{crownAnchorPoints}</Text>
+          <Text style={styles.royalStatValue}>{crownAnchorPoints.toLocaleString()}</Text>
           <Text style={styles.statLabel}>C&A</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{pinnacleProgress.nightsToNext}</Text>
+          <Text style={styles.royalStatValue}>{pinnacleProgress.nightsToNext.toLocaleString()}</Text>
           <Text style={styles.statLabel}>To Pinnacle</Text>
         </View>
       </View>
@@ -1471,6 +1471,12 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#102132',
+  },
+  royalStatValue: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#102132',
+    textAlign: 'center',
   },
   statValueCompact: {
     fontSize: 20,
