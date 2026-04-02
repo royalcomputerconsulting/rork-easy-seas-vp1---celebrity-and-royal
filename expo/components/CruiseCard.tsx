@@ -231,7 +231,7 @@ export const CruiseCard = React.memo(function CruiseCard({
               <View style={styles.miniContent}>
                 <View style={styles.miniTopRow}>
                   <View style={styles.miniShipRow}>
-                    <Ship size={13} color="#0F2742" />
+                    <Ship size={13} color={COLORS.textBlack} />
                     <Text style={styles.miniShipName} numberOfLines={1}>{cruise.shipName}</Text>
                   </View>
                   <View style={[styles.miniStatusBadge, { backgroundColor: statusBadge.bg }]}>
@@ -259,13 +259,13 @@ export const CruiseCard = React.memo(function CruiseCard({
                 <View style={styles.miniBottomRow}>
                   <View style={styles.miniMetaRow}>
                     <View style={styles.miniMeta}>
-                      <Calendar size={13} color="#17324F" />
+                      <Calendar size={13} color={COLORS.textBlack} />
                       <Text style={styles.miniDate}>
                         {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
                       </Text>
                     </View>
                     <View style={styles.miniMeta}>
-                      <Users size={13} color="#17324F" />
+                      <Users size={13} color={COLORS.textBlack} />
                       <Text style={styles.miniDate}>{guestCount}G</Text>
                     </View>
                   </View>
@@ -416,7 +416,7 @@ export const CruiseCard = React.memo(function CruiseCard({
                 )}
               </View>
               <View style={styles.miniChevronWrap}>
-                <ChevronRight size={20} color="#17324F" style={styles.miniChevron} />
+                <ChevronRight size={20} color={COLORS.textBlack} style={styles.miniChevron} />
               </View>
             </View>
           </GlassSurface>
@@ -448,13 +448,13 @@ export const CruiseCard = React.memo(function CruiseCard({
               <Text style={styles.compactShipName}>{cruise.shipName}</Text>
               <Text style={styles.compactDestination} numberOfLines={1}>{cruise.destination}</Text>
               <View style={styles.compactMeta}>
-                <Calendar size={12} color="#6B7280" />
+                <Calendar size={12} color={COLORS.textBlack} />
                 <Text style={styles.compactDate}>
                   {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
                 </Text>
               </View>
             </View>
-            <ChevronRight size={20} color="#9CA3AF" style={styles.compactChevron} />
+            <ChevronRight size={20} color={COLORS.textBlack} style={styles.compactChevron} />
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -514,7 +514,7 @@ export const CruiseCard = React.memo(function CruiseCard({
               </View>
               <View style={styles.actionIcons}>
                 <TouchableOpacity style={styles.iconButton}>
-                  <Heart size={18} color="#9CA3AF" />
+                  <Heart size={18} color={COLORS.textBlack} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -547,13 +547,13 @@ export const CruiseCard = React.memo(function CruiseCard({
 
             <View style={styles.dateGuestRow}>
               <View style={styles.dateInfo}>
-                <Calendar size={14} color="#6B7280" />
+                <Calendar size={14} color={COLORS.textBlack} />
                 <Text style={styles.dateText}>
                   {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
                 </Text>
               </View>
               <View style={styles.guestInfo}>
-                <Users size={14} color="#6B7280" />
+                <Users size={14} color={COLORS.textBlack} />
                 <Text style={styles.guestText}>
                   {bookedCruise.guestNames?.length || bookedCruise.guests || 2} Guests
                 </Text>
@@ -707,14 +707,14 @@ const styles = StyleSheet.create({
   miniShipName: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#0F2742',
+    color: COLORS.textBlack,
     flex: 1,
     marginRight: 4,
   },
   miniItinerary: {
     fontSize: 15,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#05101F',
+    color: COLORS.textBlack,
     marginBottom: 2,
   },
   miniStatusBadge: {
@@ -731,12 +731,12 @@ const styles = StyleSheet.create({
   },
   miniDestination: {
     fontSize: 13,
-    color: '#1F3A56',
+    color: COLORS.textBlack,
     marginBottom: 2,
   },
   miniPorts: {
     fontSize: 11,
-    color: '#546477',
+    color: COLORS.textBlack,
     marginBottom: 4,
     lineHeight: 15,
   },
@@ -759,12 +759,12 @@ const styles = StyleSheet.create({
   },
   miniDate: {
     fontSize: 12,
-    color: '#17324F',
+    color: COLORS.textBlack,
   },
   miniNights: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#102A46',
+    color: COLORS.textBlack,
     backgroundColor: 'rgba(255,255,255,0.68)',
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -781,7 +781,7 @@ const styles = StyleSheet.create({
   miniRetailValue: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#081423',
+    color: COLORS.textBlack,
   },
   miniCabinRow: {
     flexDirection: 'row',
@@ -796,7 +796,7 @@ const styles = StyleSheet.create({
   },
   miniCabin: {
     fontSize: 10,
-    color: '#14314D',
+    color: COLORS.textBlack,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   miniExpectedPoints: {
@@ -818,7 +818,7 @@ const styles = StyleSheet.create({
   miniOfferCode: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#92400E',
+    color: COLORS.textBlack,
   },
   miniChevronWrap: {
     justifyContent: 'center',
@@ -852,12 +852,12 @@ const styles = StyleSheet.create({
   },
   miniPricingLabel: {
     fontSize: 10,
-    color: '#0F4C81',
+    color: COLORS.textBlack,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniPricingValue: {
     fontSize: 10,
-    color: '#16314D',
+    color: COLORS.textBlack,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniTaxesRow: {
@@ -869,12 +869,12 @@ const styles = StyleSheet.create({
   },
   miniTaxesLabel: {
     fontSize: 10,
-    color: '#5A6B7E',
+    color: COLORS.textBlack,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   miniTaxesValue: {
     fontSize: 10,
-    color: '#16314D',
+    color: COLORS.textBlack,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniFpObcRow: {
@@ -899,12 +899,12 @@ const styles = StyleSheet.create({
   miniFpLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#15803D',
+    color: COLORS.textBlack,
   },
   miniFpValue: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#15803D',
+    color: COLORS.textBlack,
   },
   miniObcBadge: {
     flexDirection: 'row',
@@ -920,12 +920,12 @@ const styles = StyleSheet.create({
   miniObcLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
+    color: COLORS.textBlack,
   },
   miniObcValue: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
+    color: COLORS.textBlack,
   },
   miniNccBadge: {
     flexDirection: 'row',
@@ -941,12 +941,12 @@ const styles = StyleSheet.create({
   miniNccLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#7C3AED',
+    color: COLORS.textBlack,
   },
   miniNccValue: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#7C3AED',
+    color: COLORS.textBlack,
   },
   miniEnrichmentSection: {
     marginTop: 6,
@@ -964,12 +964,12 @@ const styles = StyleSheet.create({
   },
   miniEnrichmentLabel: {
     fontSize: 9,
-    color: '#5A6B7E',
+    color: COLORS.textBlack,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   miniEnrichmentValue: {
     fontSize: 9,
-    color: '#16314D',
+    color: COLORS.textBlack,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   miniEnrichmentBadge: {
@@ -1008,13 +1008,13 @@ const styles = StyleSheet.create({
   compactShipName: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: COLORS.textBlack,
     marginBottom: 2,
   },
   compactDestination: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#1F2937',
+    color: COLORS.textBlack,
     marginBottom: 4,
   },
   compactMeta: {
@@ -1024,7 +1024,7 @@ const styles = StyleSheet.create({
   },
   compactDate: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#6B7280',
+    color: COLORS.textBlack,
   },
   compactChevron: {
     marginRight: SPACING.sm,
@@ -1097,7 +1097,7 @@ const styles = StyleSheet.create({
   shipName: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.textBlack,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -1108,7 +1108,7 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#6B7280',
+    color: COLORS.textBlack,
   },
   actionIcons: {
     flexDirection: 'row',
@@ -1123,13 +1123,13 @@ const styles = StyleSheet.create({
   routeLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#6B7280',
+    color: COLORS.textBlack,
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   routeValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#1F2937',
+    color: COLORS.textBlack,
   },
   visitingSection: {
     marginBottom: SPACING.sm,
@@ -1137,18 +1137,18 @@ const styles = StyleSheet.create({
   visitingLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#6B7280',
+    color: COLORS.textBlack,
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   visitingPorts: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#1F2937',
+    color: COLORS.textBlack,
     lineHeight: 20,
   },
   viewPortsLink: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.points,
+    color: COLORS.textBlack,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     marginTop: 4,
   },
@@ -1164,7 +1164,7 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#6B7280',
+    color: COLORS.textBlack,
   },
   guestInfo: {
     flexDirection: 'row',
@@ -1173,7 +1173,7 @@ const styles = StyleSheet.create({
   },
   guestText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#6B7280',
+    color: COLORS.textBlack,
   },
   divider: {
     height: 1,
@@ -1191,7 +1191,7 @@ const styles = StyleSheet.create({
   },
   priceLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#6B7280',
+    color: COLORS.textBlack,
     letterSpacing: 0.3,
     marginBottom: 2,
   },
@@ -1202,17 +1202,17 @@ const styles = StyleSheet.create({
   priceDollar: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.textBlack,
     marginTop: 4,
   },
   priceValue: {
     fontSize: TYPOGRAPHY.fontSizeHero,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.textBlack,
   },
   cabinType: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#6B7280',
+    color: COLORS.textBlack,
     marginTop: 2,
   },
   compactActionRow: {
@@ -1246,7 +1246,7 @@ const styles = StyleSheet.create({
   compactSecondaryButtonText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: COLORS.textBlack,
   },
   inlineStatusBadge: {
     paddingHorizontal: SPACING.xs,
@@ -1272,7 +1272,7 @@ const styles = StyleSheet.create({
   offerText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#92400E',
+    color: COLORS.textBlack,
     flex: 1,
   },
   offerCodeBadge: {
@@ -1287,7 +1287,7 @@ const styles = StyleSheet.create({
   offerCodeText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.loyalty,
+    color: COLORS.textBlack,
   },
   offerValueBadge: {
     backgroundColor: '#D1FAE5',
@@ -1299,7 +1299,7 @@ const styles = StyleSheet.create({
   offerValueText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#059669',
+    color: COLORS.textBlack,
   },
   fpObcSection: {
     flexDirection: 'row',
@@ -1317,14 +1317,14 @@ const styles = StyleSheet.create({
   fpLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#15803D',
+    color: COLORS.textBlack,
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   fpValue: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#15803D',
+    color: COLORS.textBlack,
   },
   obcContainer: {
     flex: 1,
@@ -1337,13 +1337,13 @@ const styles = StyleSheet.create({
   obcLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
+    color: COLORS.textBlack,
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   obcValue: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E40AF',
+    color: COLORS.textBlack,
   },
 });
