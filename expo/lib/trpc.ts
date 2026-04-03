@@ -101,13 +101,13 @@ type HealthTarget = {
 
 const getHealthTargets = (): HealthTarget[] => {
   const baseUrl = getBaseUrl();
-  const targets: HealthTarget[] = [];
+  const targets: HealthTarget[] = [
+    { baseUrl: RENDER_BACKEND_URL, label: 'Render' },
+  ];
 
   if (baseUrl !== "https://fallback.local") {
     targets.push({ baseUrl, label: 'System' });
   }
-
-  targets.push({ baseUrl: RENDER_BACKEND_URL, label: 'Render' });
 
   return targets.filter((target, index, list) => {
     return list.findIndex(candidate => candidate.baseUrl === target.baseUrl) === index;
@@ -177,8 +177,16 @@ const checkBackendHealth = async (): Promise<boolean> => {
 
 export const isBackendAvailable = (): boolean => {
   const baseUrl = getBaseUrl();
-  if (baseUrl === "https://fallback.local") return false;
-  if (_backendReachable === false && Date.now() - _lastHealthCheck < HEALTH_CHECK_INTERVAL) return false;
+  const hasConfiguredBackend = baseUrl !== "https://fallback.local" || Boolean(RENDER_BACKEND_URL);
+
+  if (!hasConfiguredBackend) {
+    return false;
+  }
+
+  if (_backendReachable === false && Date.now() - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
+    return false;
+  }
+
   return true;
 };
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
-import { trpc, trpcClient, isBackendAvailable } from "@/lib/trpc";
+import { trpc, trpcClient, isBackendReachable } from "@/lib/trpc";
 import {
   getCloudUserDataFallback,
   isDirectCloudStoreConfigured,
@@ -400,8 +400,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       return;
     }
 
-    if (!isBackendAvailable() && !isDirectCloudStoreConfigured()) {
-      console.log('[CoreData] Backend sync skipped - no cloud store configured');
+    const backendReachable = await isBackendReachable();
+    if (!backendReachable && !isDirectCloudStoreConfigured()) {
+      console.log('[CoreData] Backend sync skipped - no reachable cloud backend or direct cloud store configured');
       return;
     }
     
@@ -468,7 +469,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         events: parsedEvents.length,
       });
 
-      if (isBackendAvailable()) {
+      if (backendReachable) {
         try {
           await saveAllUserDataMutateAsync(payload);
           console.log('[CoreData] ✅ Backend sync successful via primary API');
@@ -507,8 +508,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       return false;
     }
 
-    if (!isBackendAvailable() && !isDirectCloudStoreConfigured()) {
-      console.log('[CoreData] Backend load skipped - no cloud store configured');
+    const backendReachable = await isBackendReachable();
+    if (!backendReachable && !isDirectCloudStoreConfigured()) {
+      console.log('[CoreData] Backend load skipped - no reachable cloud backend or direct cloud store configured');
       return false;
     }
     
@@ -517,7 +519,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
       let cloudResult: { found: boolean; data: any } | null = null;
 
-      if (isBackendAvailable()) {
+      if (backendReachable) {
         try {
           cloudResult = await trpcClient.data.getAllUserData.query({ email: authenticatedEmail });
         } catch (error) {
