@@ -428,6 +428,23 @@ export default function CruiseDetailsScreen() {
     return getCruiseValueBreakdown(cruise);
   }, [cruise, getCruiseValueBreakdown]);
 
+  const retailSummary = useMemo(() => {
+    if (!valueBreakdown) return null;
+
+    const retail = valueBreakdown.totalRetailValue;
+    const paid = valueBreakdown.amountPaid;
+    const net = retail - paid;
+    const coverage = retail > 0 ? Math.min(1, Math.max(0, net / retail)) : 0;
+
+    return {
+      retail,
+      paid,
+      net,
+      coverage,
+      isFullyComped: paid <= Math.max(valueBreakdown.taxesFees, retail * 0.1),
+    };
+  }, [valueBreakdown]);
+
   const casinoAvailability = useMemo(() => {
     if (!cruise) return null;
     return getCruiseCasinoAvailability(cruise);
@@ -1244,7 +1261,7 @@ export default function CruiseDetailsScreen() {
             </GlassSurface>
           )}
 
-          {valueBreakdown && (
+          {valueBreakdown && retailSummary && (
             <GlassSurface style={styles.valueSection} contentStyle={styles.glassSectionContent}>
               <View style={styles.sectionHeader}>
                 <DollarSign size={20} color={COLORS.beigeWarm} />
@@ -1260,7 +1277,7 @@ export default function CruiseDetailsScreen() {
               <View style={styles.valueCompactGrid}>
                 <View style={styles.valueCompactRow}>
                   <Text style={styles.valueCompactLabel}>Retail</Text>
-                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown.totalRetailValue)}</Text>
+                  <Text style={styles.valueCompactValue}>{formatCurrency(retailSummary.retail)}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.valueCompactRow}
@@ -1271,14 +1288,14 @@ export default function CruiseDetailsScreen() {
                     <Text style={styles.valueCompactLabel}>Paid</Text>
                     <Edit3 size={10} color={COLORS.textSecondary} />
                   </View>
-                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown.amountPaid)}</Text>
+                  <Text style={styles.valueCompactValue}>{formatCurrency(retailSummary.paid)}</Text>
                 </TouchableOpacity>
               </View>
               
               <View style={styles.valueNetRow}>
                 <Text style={styles.valueNetLabel}>Net Value</Text>
-                <Text style={[styles.valueNetAmount, { color: valueBreakdown.netValue >= 0 ? COLORS.success : COLORS.error }]}> 
-                  {valueBreakdown.netValue >= 0 ? '+' : ''}{formatCurrency(valueBreakdown.netValue)}
+                <Text style={[styles.valueNetAmount, { color: retailSummary.net >= 0 ? COLORS.success : COLORS.error }]}> 
+                  {retailSummary.net >= 0 ? '+' : ''}{formatCurrency(retailSummary.net)}
                 </Text>
               </View>
               
@@ -1286,13 +1303,13 @@ export default function CruiseDetailsScreen() {
                 <View 
                   style={[
                     styles.coverageFill, 
-                    { width: `${Math.min(100, valueBreakdown.coverageFraction * 100)}%` }
+                    { width: `${Math.min(100, retailSummary.coverage * 100)}%` }
                   ]} 
                 />
               </View>
               <Text style={styles.coverageText}>
-                {(valueBreakdown.coverageFraction * 100).toFixed(0)}% Coverage
-                {valueBreakdown.isFullyComped && ' • Fully Comped!'}
+                {(retailSummary.coverage * 100).toFixed(0)}% Coverage
+                {retailSummary.isFullyComped && ' • Fully Comped!'}
               </Text>
             </GlassSurface>
           )}

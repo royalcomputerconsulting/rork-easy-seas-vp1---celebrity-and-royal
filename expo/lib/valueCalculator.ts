@@ -265,92 +265,143 @@ export function calculateCruiseValue(
 ): ValueBreakdown {
   const bookedCruise = cruise as BookedCruise;
   const cabinType = cruise.cabinType || 'Balcony';
-  const guestCount = cruise.guests || GUEST_COUNT_DEFAULT;
-  
+  const guestCount = Math.max(1, cruise.guests || GUEST_COUNT_DEFAULT);
+  const syncedTaxesFees = typeof cruise.taxes === 'number' && Number.isFinite(cruise.taxes) ? cruise.taxes : 0;
+  const explicitAmountPaid = typeof amountPaid === 'number' && Number.isFinite(amountPaid) ? amountPaid : undefined;
+  const receiptRetailTotal = typeof bookedCruise.totalRetailCost === 'number' && Number.isFinite(bookedCruise.totalRetailCost)
+    ? bookedCruise.totalRetailCost
+    : 0;
+  const receiptPaidTotal = typeof bookedCruise.pricePaid === 'number' && Number.isFinite(bookedCruise.pricePaid)
+    ? bookedCruise.pricePaid
+    : undefined;
+  const receiptDiscountTotal = typeof bookedCruise.totalCasinoDiscount === 'number' && Number.isFinite(bookedCruise.totalCasinoDiscount)
+    ? bookedCruise.totalCasinoDiscount
+    : 0;
+
   let cabinValueForTwo = 0;
+  let totalRetailValue = 0;
   let trueOutOfPocket = 0;
   let casinoDiscount = 0;
+  let taxesFees = syncedTaxesFees;
   let hasReceiptData = false;
-  
-  if (bookedCruise.totalRetailCost && bookedCruise.pricePaid !== undefined) {
-    cabinValueForTwo = bookedCruise.totalRetailCost * 2;
-    trueOutOfPocket = bookedCruise.pricePaid * 2;
-    casinoDiscount = (bookedCruise.totalCasinoDiscount || 0) * 2;
+  let pricingSource = 'none';
+
+  if (receiptRetailTotal > 0) {
     hasReceiptData = true;
-    console.log('[ValueCalculator] Using ACTUAL receipt data (doubled for 2 people):', {
+    pricingSource = 'receipt_totals';
+    totalRetailValue = receiptRetailTotal;
+    trueOutOfPocket = explicitAmountPaid ?? receiptPaidTotal ?? Math.max(0, receiptRetailTotal - receiptDiscountTotal);
+    casinoDiscount = receiptDiscountTotal > 0 ? receiptDiscountTotal : Math.max(0, receiptRetailTotal - trueOutOfPocket);
+    cabinValueForTwo = Math.max(0, totalRetailValue - taxesFees);
+
+    if (cabinValueForTwo === 0 && totalRetailValue > 0) {
+      cabinValueForTwo = totalRetailValue;
+    }
+
+    console.log('[ValueCalculator] Using ACTUAL receipt totals:', {
       cruiseId: cruise.id,
       shipName: cruise.shipName,
-      totalRetailCostPerPerson: bookedCruise.totalRetailCost,
-      totalRetailCostForTwo: cabinValueForTwo,
-      pricePaidPerPerson: bookedCruise.pricePaid,
-      pricePaidForTwo: trueOutOfPocket,
-      casinoDiscountPerPerson: bookedCruise.totalCasinoDiscount || 0,
-      casinoDiscountForTwo: casinoDiscount,
+      totalRetailValue,
+      pricePaid: trueOutOfPocket,
+      casinoDiscount,
+      taxesFees,
     });
   } else {
-    let cabinPrice = getCabinPriceFromEntity(cruise, cabinType) || cruise.price || 0;
-    
-    if (cabinPrice === 0 && cruise.nights > 0) {
-      cabinPrice = estimateCabinRetailValue(cabinType, cruise.nights);
-      console.log('[ValueCalculator] Using estimated cabin price:', { cabinType, nights: cruise.nights, estimated: cabinPrice });
+    const syncedCabinPrice = getCabinPriceFromEntity(cruise, cabinType)
+      ?? cruise.balconyPrice
+      ?? cruise.oceanviewPrice
+      ?? cruise.interiorPrice
+      ?? cruise.suitePrice
+      ?? cruise.price;
+    const hasSyncedCabinPrice = typeof syncedCabinPrice === 'number' && Number.isFinite(syncedCabinPrice) && syncedCabinPrice > 0;
+    const storedRetailValue = cruise.retailValue || cruise.originalPrice || 0;
+
+    if (hasSyncedCabinPrice && syncedCabinPrice) {
+      pricingSource = 'synced_cabin_pricing';
+      cabinValueForTwo = syncedCabinPrice * guestCount;
+      totalRetailValue = cabinValueForTwo + taxesFees;
+    } else if (storedRetailValue > 0) {
+      pricingSource = cruise.retailValue ? 'stored_retail_value' : 'original_price';
+      totalRetailValue = storedRetailValue;
+      cabinValueForTwo = Math.max(0, totalRetailValue - taxesFees);
+
+      if (cabinValueForTwo === 0 && totalRetailValue > 0) {
+        cabinValueForTwo = totalRetailValue;
+      }
+    } else if (cruise.nights > 0) {
+      pricingSource = 'estimated_fallback';
+      cabinValueForTwo = estimateCabinRetailValue(cabinType, cruise.nights) * guestCount;
+      totalRetailValue = cabinValueForTwo + taxesFees;
+      console.log('[ValueCalculator] Falling back to estimated retail pricing:', {
+        cruiseId: cruise.id,
+        shipName: cruise.shipName,
+        cabinType,
+        guestCount,
+        nights: cruise.nights,
+        cabinValueForTwo,
+        taxesFees,
+      });
     }
-    
-    cabinValueForTwo = cabinPrice * guestCount;
-    let taxesFees = cruise.taxes || 0;
-    
-    if (taxesFees === 0 && cruise.nights > 0) {
-      taxesFees = Math.round(cruise.nights * 30 * guestCount);
-      console.log('[ValueCalculator] Using estimated taxes:', { nights: cruise.nights, guests: guestCount, estimated: taxesFees });
+
+    const storedPaidAmount = explicitAmountPaid
+      ?? receiptPaidTotal
+      ?? cruise.totalPrice
+      ?? cruise.price;
+
+    if (typeof storedPaidAmount === 'number' && Number.isFinite(storedPaidAmount) && storedPaidAmount > 0) {
+      trueOutOfPocket = storedPaidAmount;
+    } else {
+      trueOutOfPocket = taxesFees;
     }
-    
-    trueOutOfPocket = taxesFees;
-    console.log('[ValueCalculator] Using ESTIMATED values (no receipt data):', {
+
+    if (totalRetailValue > 0 && trueOutOfPocket > 0) {
+      casinoDiscount = Math.max(0, totalRetailValue - trueOutOfPocket);
+    }
+
+    console.log('[ValueCalculator] Using derived cruise value inputs:', {
       cruiseId: cruise.id,
+      shipName: cruise.shipName,
+      pricingSource,
+      cabinType,
+      guestCount,
+      totalRetailValue,
       cabinValueForTwo,
+      taxesFees,
       trueOutOfPocket,
+      casinoDiscount,
     });
   }
-  
+
   const cabinValue = cabinValueForTwo / guestCount;
-  const taxesFees = trueOutOfPocket;
-  
   const freePlayValue = cruise.freePlay || 0;
   const obcValue = cruise.freeOBC || 0;
   const tradeInValue = cruise.tradeInValue || 0;
   const freeInternetValue = cruise.freeWifi ? (cruise.nights || 7) * 30 : 0;
-  
   const winnings = casinoWinnings ?? bookedCruise.winnings ?? 0;
-  
   const clubRoyalePointsValue = (bookedCruise.earnedPoints || bookedCruise.casinoPoints || 0) * 0.01;
-  
-  const totalRetailValue = cabinValueForTwo;
-  
-  const totalValueReceived = cabinValueForTwo + casinoDiscount + freePlayValue + obcValue + tradeInValue + freeInternetValue + clubRoyalePointsValue;
-  
+  const totalValueReceived = totalRetailValue + freePlayValue + obcValue + tradeInValue + freeInternetValue + clubRoyalePointsValue;
   const totalProfit = totalValueReceived + winnings - trueOutOfPocket;
-  
-  const valuePerDollar = trueOutOfPocket > 0 
-    ? (totalValueReceived + winnings) / trueOutOfPocket 
+  const valuePerDollar = trueOutOfPocket > 0
+    ? (totalValueReceived + winnings) / trueOutOfPocket
     : (totalValueReceived + winnings > 0 ? Infinity : 0);
-  
-  const compValue = totalValueReceived;
-  const discountValue = totalRetailValue + casinoDiscount;
+  const compValue = casinoDiscount + freePlayValue + obcValue + tradeInValue + freeInternetValue + clubRoyalePointsValue;
+  const discountValue = cabinValueForTwo + casinoDiscount;
   const netValue = totalProfit;
-  
-  const isFullyComped = hasReceiptData ? (casinoDiscount > cabinValueForTwo * 0.9) : true;
+  const isFullyComped = totalRetailValue > 0 ? trueOutOfPocket <= Math.max(taxesFees, totalRetailValue * 0.1) : false;
   const is2Person = guestCount >= 2;
-  
-  const coverageFraction = hasReceiptData && cabinValueForTwo > 0 ? Math.min(1, casinoDiscount / cabinValueForTwo) : 1;
-  
-  const formula = hasReceiptData 
-    ? `Value Per $1 = (Retail ${cabinValueForTwo.toFixed(0)} + Discount ${casinoDiscount.toFixed(0)} + CR Points ${clubRoyalePointsValue.toFixed(0)} + Winnings ${winnings.toFixed(0)}) / Paid ${trueOutOfPocket.toFixed(2)}`
-    : `Value Per $1 = (Retail ${cabinValueForTwo.toFixed(0)} + FreePlay ${freePlayValue} + OBC ${obcValue} + Winnings ${winnings}) / Taxes ${trueOutOfPocket.toFixed(0)}`;
+  const coverageFraction = totalRetailValue > 0 ? Math.min(1, Math.max(0, casinoDiscount / totalRetailValue)) : 0;
+  const formula = hasReceiptData
+    ? `Value Per $1 = (Retail ${totalRetailValue.toFixed(0)} + FreePlay ${freePlayValue.toFixed(0)} + OBC ${obcValue.toFixed(0)} + Winnings ${winnings.toFixed(0)}) / Paid ${trueOutOfPocket.toFixed(2)}`
+    : `Value Per $1 = (Retail ${totalRetailValue.toFixed(0)} + FreePlay ${freePlayValue.toFixed(0)} + OBC ${obcValue.toFixed(0)} + Winnings ${winnings.toFixed(0)}) / Paid ${trueOutOfPocket.toFixed(2)}`;
 
   console.log('[ValueCalculator] Cruise value calculated:', {
     cruiseId: cruise.id,
     shipName: cruise.shipName,
     hasReceiptData,
+    pricingSource,
+    totalRetailValue,
     cabinValueForTwo,
+    taxesFees,
     casinoDiscount,
     clubRoyalePointsValue,
     totalValueReceived,
