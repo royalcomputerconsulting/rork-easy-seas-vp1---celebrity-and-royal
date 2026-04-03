@@ -1,0 +1,23 @@
+{
+  "name": "easy-seas-backend-v2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --import tsx src/server.ts",
+    "dev": "node --watch --import tsx src/server.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.12",
+    "@hono/trpc-server": "^0.4.2",
+    "@trpc/server": "^11.9.0",
+    "hono": "^4.11.7",
+    "superjson": "^2.2.6",
+    "zod": "^4.3.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.2"
+  }
+}
