@@ -135,6 +135,7 @@ export default function AnalyticsScreen() {
     clubRoyaleTier: loyaltyClubRoyaleTier,
     crownAnchorPoints: loyaltyCrownAnchorPoints,
     crownAnchorLevel: loyaltyCrownAnchorLevel,
+    clubRoyaleStatusExpiresAt,
   } = useLoyalty();
   
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('intelligence');
@@ -193,10 +194,10 @@ export default function AnalyticsScreen() {
 
 
 
-  const currentPoints = loyaltyClubRoyalePoints || clubRoyaleProfile?.tierPoints || analytics.totalPoints || 0;
-  const totalNights = loyaltyCrownAnchorPoints || clubRoyaleProfile?.lifetimeNights || analytics.totalNights || 0;
-  const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
-  const crownAnchorLevel = loyaltyCrownAnchorLevel || clubRoyaleProfile?.crownAnchorLevel || 'Gold';
+  const currentPoints = loyaltyClubRoyalePoints ?? clubRoyaleProfile?.tierPoints ?? analytics.totalPoints ?? 0;
+  const totalNights = loyaltyCrownAnchorPoints ?? clubRoyaleProfile?.lifetimeNights ?? analytics.totalNights ?? 0;
+  const clubRoyaleTier = loyaltyClubRoyaleTier ?? clubRoyaleProfile?.tier ?? 'Choice';
+  const crownAnchorLevel = loyaltyCrownAnchorLevel ?? clubRoyaleProfile?.crownAnchorLevel ?? 'Gold';
 
   const cruisesWithROI = useMemo(() => {
     if (activeTab !== 'intelligence') return [] as (BookedCruise & { calculatedROI: number; valuePerDollar: number; roiLevel: 'high' | 'medium' | 'low' })[];
@@ -245,24 +246,15 @@ export default function AnalyticsScreen() {
   }, [cruisesWithROI]);
 
   const playerContext: PlayerContext = useMemo(() => {
-    if (activeTab !== 'charts') {
-      return {
-        currentPoints: 0,
-        currentNights: 0,
-        currentTier: 'Choice',
-        currentLevel: 'Gold',
-        averagePointsPerNight: 0,
-        averageNightsPerMonth: 0,
-        averageSpendPerCruise: 0,
-      };
-    }
-    const avgPointsPerNight = bookedCruises.length > 0
-      ? bookedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0) / 
-        Math.max(1, bookedCruises.reduce((sum, c) => sum + (c.nights || 0), 0))
-      : 150;
-    
+    const completedCruises = bookedCruises.filter((cruise) => {
+      const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
+      return returnDate ? returnDate < new Date() : cruise.completionState === 'completed';
+    });
+    const completedPoints = completedCruises.reduce((sum, cruise) => sum + (cruise.earnedPoints || cruise.casinoPoints || 0), 0);
+    const completedNights = completedCruises.reduce((sum, cruise) => sum + (cruise.nights || 0), 0);
+    const avgPointsPerNight = completedNights > 0 ? completedPoints / completedNights : 150;
     const avgSpend = bookedCruises.length > 0
-      ? bookedCruises.reduce((sum, c) => sum + (c.totalPrice || c.price || 0), 0) / bookedCruises.length
+      ? bookedCruises.reduce((sum, cruise) => sum + (cruise.totalPrice || cruise.price || 0), 0) / bookedCruises.length
       : 2000;
 
     return {
@@ -273,8 +265,9 @@ export default function AnalyticsScreen() {
       averagePointsPerNight: avgPointsPerNight || 150,
       averageNightsPerMonth: 7,
       averageSpendPerCruise: avgSpend || 2000,
+      retainedTierUntil: clubRoyaleStatusExpiresAt ?? null,
     };
-  }, [activeTab, currentPoints, totalNights, clubRoyaleTier, crownAnchorLevel, bookedCruises]);
+  }, [bookedCruises, currentPoints, totalNights, clubRoyaleTier, crownAnchorLevel, clubRoyaleStatusExpiresAt]);
 
   const baselineSimulation = useMemo(() => {
     return runSimulation(playerContext, bookedCruises, { type: 'custom', customPoints: 0, customNights: 0 });
@@ -1450,81 +1443,103 @@ export default function AnalyticsScreen() {
 
   const highValueCalculations = useMemo(() => {
     if (activeTab !== 'calcs') return [] as { id: number; label: string; value: string; description: string; color: string; icon: any }[];
-    const totalCoinIn = casinoAnalytics.totalCoinIn;
-    const totalSessions = sessions.length;
+
+    const completedCruises = bookedCruises.filter((cruise) => {
+      const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
+      return returnDate ? returnDate < new Date() : cruise.completionState === 'completed';
+    });
+    const estimatedSessionCount = completedCruises.reduce((sum, cruise) => sum + Math.max(1, Math.ceil((cruise.nights || 0) / 2)), 0);
+    const totalSessions = sessions.length > 0 ? sessions.length : estimatedSessionCount;
+    const totalCoinIn = realAnalytics.completedCoinIn > 0 ? realAnalytics.completedCoinIn : casinoAnalytics.totalCoinIn;
     const totalProfit = realAnalytics.completedProfit;
-    const totalHours = sessionAnalytics.totalPlayTimeMinutes / 60;
+    const estimatedHoursFromCruises = completedCruises.reduce((sum, cruise) => sum + Math.max(2, (cruise.nights || 0) * 2.5), 0);
+    const totalHours = sessionAnalytics.totalPlayTimeMinutes > 0 ? sessionAnalytics.totalPlayTimeMinutes / 60 : estimatedHoursFromCruises;
     const totalRetailValue = realAnalytics.completedRetailValue;
-    const avgSessionLength = sessionAnalytics.avgSessionLength;
+    const avgSessionLengthMinutes = sessionAnalytics.avgSessionLength > 0
+      ? sessionAnalytics.avgSessionLength
+      : totalSessions > 0 && totalHours > 0
+        ? (totalHours / totalSessions) * 60
+        : 180;
 
     const coinInPerSession = totalSessions > 0 ? totalCoinIn / totalSessions : 0;
-    
     const assumedHold = 0.08;
     const theoPerSession = coinInPerSession * assumedHold;
-    
-    const morningSessionsData = sessions.filter(s => {
-      const hour = parseInt(s.startTime.split(':')[0]);
+
+    const morningSessionsData = sessions.filter((session) => {
+      const hour = parseInt(session.startTime.split(':')[0], 10);
       return hour >= 5 && hour < 12;
     });
-    const eveningSessionsData = sessions.filter(s => {
-      const hour = parseInt(s.startTime.split(':')[0]);
+    const eveningSessionsData = sessions.filter((session) => {
+      const hour = parseInt(session.startTime.split(':')[0], 10);
       return hour >= 17 || hour < 2;
     });
-    
-    const morningCoinIn = morningSessionsData.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0);
-    const eveningCoinIn = eveningSessionsData.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0);
+
+    const morningCoinIn = sessions.length > 0
+      ? morningSessionsData.reduce((sum, session) => sum + (((session.buyIn || 0) * 5) || ((session.pointsEarned || 0) * 5)), 0)
+      : totalCoinIn * 0.56;
+    const eveningCoinIn = sessions.length > 0
+      ? eveningSessionsData.reduce((sum, session) => sum + (((session.buyIn || 0) * 5) || ((session.pointsEarned || 0) * 5)), 0)
+      : totalCoinIn * 0.44;
     const morningTheo = morningCoinIn * assumedHold;
     const eveningTheo = eveningCoinIn * assumedHold;
-    const theoPerTimeBlock = morningTheo > eveningTheo ? 'Morning' : 'Evening';
+    const theoPerTimeBlock = morningTheo >= eveningTheo ? 'Morning' : 'Evening';
     const theoTimeBlockValue = Math.max(morningTheo, eveningTheo);
-    
-    const cruiseDates = new Set(sessions.map(s => s.date));
-    const theoValues = Array.from(cruiseDates).map(date => {
-      const daySessions = sessions.filter(s => s.date === date);
-      const dayCoinIn = daySessions.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0);
-      return dayCoinIn * assumedHold;
-    });
-    const avgTheo = theoValues.length > 0 ? theoValues.reduce((a, b) => a + b, 0) / theoValues.length : 0;
-    const theoVariance = theoValues.length > 0 
-      ? theoValues.reduce((sum, v) => sum + Math.pow(v - avgTheo, 2), 0) / theoValues.length 
+
+    const theoValues = sessions.length > 0
+      ? Array.from(new Set(sessions.map((session) => session.date))).map((date) => {
+          const daySessions = sessions.filter((session) => session.date === date);
+          const dayCoinIn = daySessions.reduce((sum, session) => sum + (((session.buyIn || 0) * 5) || ((session.pointsEarned || 0) * 5)), 0);
+          return dayCoinIn * assumedHold;
+        })
+      : completedCruises.map((cruise) => ((cruise.earnedPoints || cruise.casinoPoints || 0) * 5) * assumedHold);
+    const avgTheo = theoValues.length > 0 ? theoValues.reduce((sum, value) => sum + value, 0) / theoValues.length : 0;
+    const theoVariance = theoValues.length > 0
+      ? theoValues.reduce((sum, value) => sum + Math.pow(value - avgTheo, 2), 0) / theoValues.length
       : 0;
     const theoStdDev = Math.sqrt(theoVariance);
-    const adtSmoothingFactor = avgTheo > 0 ? (theoStdDev / avgTheo) : 0;
-    
+    const adtSmoothingFactor = avgTheo > 0 ? theoStdDev / avgTheo : 0;
+
     const profitPerSession = totalSessions > 0 ? totalProfit / totalSessions : 0;
-    
+
     const stopGap = 200;
-    const riskPerHour = avgSessionLength > 0 ? (stopGap / (avgSessionLength / 60)) : 0;
-    
-    const winSessions = sessions.filter(s => (s.winLoss || 0) > 0);
-    const totalWinnings = winSessions.reduce((sum, s) => sum + (s.winLoss || 0), 0);
-    const pressExposure = winSessions.reduce((sum, s) => sum + ((s.buyIn || 0) * 0.3), 0);
+    const avgSessionLengthHours = avgSessionLengthMinutes / 60;
+    const riskPerHour = avgSessionLengthHours > 0 ? stopGap / avgSessionLengthHours : 0;
+
+    const winSamples = sessions.length > 0
+      ? sessions.filter((session) => (session.winLoss || 0) > 0).map((session) => session.winLoss || 0)
+      : completedCruises.map((cruise) => Math.max(0, cruise.winnings || 0)).filter((value) => value > 0);
+    const totalWinnings = winSamples.reduce((sum, value) => sum + value, 0);
+    const pressExposure = sessions.length > 0
+      ? sessions.filter((session) => (session.winLoss || 0) > 0).reduce((sum, session) => sum + (((session.buyIn || 0) * 0.3) || ((session.pointsEarned || 0) * 1.5)), 0)
+      : totalCoinIn * 0.18;
     const pressEfficiencyRatio = pressExposure > 0 ? totalWinnings / pressExposure : 0;
-    
-    const sessionWinLoss = sessions.map(s => s.winLoss || 0);
-    const avgWinLoss = sessionWinLoss.length > 0 ? sessionWinLoss.reduce((a, b) => a + b, 0) / sessionWinLoss.length : 0;
-    const winLossVariance = sessionWinLoss.length > 0
-      ? sessionWinLoss.reduce((sum, v) => sum + Math.pow(v - avgWinLoss, 2), 0) / sessionWinLoss.length
+
+    const winLossSamples = sessions.length > 0
+      ? sessions.map((session) => session.winLoss || 0)
+      : completedCruises.map((cruise) => cruise.winnings || 0);
+    const avgWinLoss = winLossSamples.length > 0 ? winLossSamples.reduce((sum, value) => sum + value, 0) / winLossSamples.length : 0;
+    const winLossVariance = winLossSamples.length > 0
+      ? winLossSamples.reduce((sum, value) => sum + Math.pow(value - avgWinLoss, 2), 0) / winLossSamples.length
       : 0;
     const winLossStdDev = Math.sqrt(winLossVariance);
-    const consistencyScore = avgWinLoss !== 0 ? (avgWinLoss / Math.max(winLossStdDev, 1)) : 0;
-    const spikeRisk = sessionWinLoss.length > 0 ? (Math.max(...sessionWinLoss.map(Math.abs)) / Math.max(avgWinLoss, 1)) : 0;
-    const offerSafetyIndex = consistencyScore > 0 && spikeRisk > 0 ? consistencyScore / spikeRisk : 0;
-    
+    const consistencyScore = avgWinLoss !== 0 ? avgWinLoss / Math.max(winLossStdDev, 1) : 0;
+    const spikeRisk = winLossSamples.length > 0 ? Math.max(...winLossSamples.map((value) => Math.abs(value))) / Math.max(Math.abs(avgWinLoss), 1) : 0;
+    const offerSafetyIndex = consistencyScore !== 0 && spikeRisk > 0 ? Math.abs(consistencyScore) / spikeRisk : 0;
+
     const valuePerHourPlayed = totalHours > 0 ? totalRetailValue / totalHours : 0;
-    
-    const recentProfit = sessions.slice(-10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
-    const earlyProfit = sessions.slice(0, 10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
-    const trendScore = earlyProfit !== 0 ? (recentProfit / Math.max(Math.abs(earlyProfit), 1)) : 1;
+
+    const recentProfit = winLossSamples.slice(-Math.min(3, winLossSamples.length)).reduce((sum, value) => sum + value, 0);
+    const earlyProfit = winLossSamples.slice(0, Math.min(3, winLossSamples.length)).reduce((sum, value) => sum + value, 0);
+    const trendScore = earlyProfit !== 0 ? recentProfit / Math.max(Math.abs(earlyProfit), 1) : (recentProfit !== 0 ? 1.15 : 1);
     const variabilityScore = 1 - Math.min(adtSmoothingFactor, 1);
-    const sustainabilityScore = (trendScore * 0.6 + variabilityScore * 0.4) * 100;
+    const sustainabilityScore = Math.max(0, Math.min(100, (trendScore * 0.6 + variabilityScore * 0.4) * 100));
 
     return [
       {
         id: 1,
         label: 'Coin-in per session',
         value: formatCurrency(coinInPerSession),
-        description: 'Total coin-in ÷ total sessions',
+        description: `Completed coin-in ÷ ${totalSessions} session${totalSessions === 1 ? '' : 's'}`,
         color: COLORS.navyDeep,
         icon: Coins,
       },
@@ -1540,7 +1555,7 @@ export default function AnalyticsScreen() {
         id: 3,
         label: 'Theo per time block',
         value: `${theoPerTimeBlock}: ${formatCurrency(theoTimeBlockValue)}`,
-        description: 'Morning vs evening efficiency',
+        description: 'Morning vs evening theoretical value',
         color: '#F59E0B',
         icon: Dices,
       },
@@ -1548,7 +1563,7 @@ export default function AnalyticsScreen() {
         id: 4,
         label: 'ADT smoothing factor',
         value: adtSmoothingFactor.toFixed(3),
-        description: 'How evenly theo is spread across days',
+        description: 'Theo volatility across available play days',
         color: '#8B5CF6',
         icon: LineChart,
       },
@@ -1556,7 +1571,7 @@ export default function AnalyticsScreen() {
         id: 5,
         label: 'Profit per session',
         value: formatCurrency(profitPerSession),
-        description: `${formatCurrency(totalProfit)} ÷ ${totalSessions} sessions`,
+        description: `${formatCurrency(totalProfit)} ÷ ${totalSessions} session${totalSessions === 1 ? '' : 's'}`,
         color: profitPerSession >= 0 ? COLORS.success : COLORS.error,
         icon: TrendingUp,
       },
@@ -1571,8 +1586,8 @@ export default function AnalyticsScreen() {
       {
         id: 7,
         label: 'Press efficiency ratio',
-        value: pressEfficiencyRatio.toFixed(2) + 'x',
-        description: 'Profit during press spins ÷ press exposure',
+        value: `${pressEfficiencyRatio.toFixed(2)}x`,
+        description: 'Winning pressure exposure efficiency',
         color: COLORS.success,
         icon: PieChart,
       },
@@ -1588,7 +1603,7 @@ export default function AnalyticsScreen() {
         id: 9,
         label: 'Value per hour played',
         value: formatCurrency(valuePerHourPlayed),
-        description: 'Total value extracted ÷ total hours',
+        description: 'Completed retail value ÷ total play hours',
         color: COLORS.goldDark,
         icon: DollarSign,
       },
@@ -1596,12 +1611,12 @@ export default function AnalyticsScreen() {
         id: 10,
         label: 'Sustainability score',
         value: `${sustainabilityScore.toFixed(1)}%`,
-        description: 'Likelihood offers persist unchanged',
+        description: 'Trend and stability blended score',
         color: sustainabilityScore >= 70 ? COLORS.success : sustainabilityScore >= 40 ? '#F59E0B' : COLORS.error,
         icon: BarChart3,
       },
     ];
-  }, [activeTab, casinoAnalytics, sessions, realAnalytics, sessionAnalytics]);
+  }, [activeTab, bookedCruises, casinoAnalytics, sessions, realAnalytics, sessionAnalytics]);
 
   const renderCalcsTab = () => (
     <View style={styles.tabContent}>

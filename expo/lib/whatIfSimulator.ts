@@ -2,6 +2,7 @@ import type { BookedCruise, CasinoOffer } from '@/types/models';
 import { CLUB_ROYALE_TIERS, getTierByPoints, TIER_ORDER } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS, getLevelByNights, LEVEL_ORDER } from '@/constants/crownAnchor';
 import { DOLLARS_PER_POINT } from '@/types/models';
+import { resolveDisplayTierAtDate } from '@/lib/casinoProgram';
 
 
 export type ScenarioType = 
@@ -105,6 +106,7 @@ export interface PlayerContext {
   averagePointsPerNight: number;
   averageNightsPerMonth: number;
   averageSpendPerCruise: number;
+  retainedTierUntil?: Date | null;
 }
 
 export function calculateTierForecast(
@@ -115,13 +117,11 @@ export function calculateTierForecast(
   const projectedPoints = playerContext.currentPoints + additionalPoints;
   const projectedNights = playerContext.currentNights + additionalNights;
   
-  const currentTier = getTierByPoints(playerContext.currentPoints);
-  const projectedTier = getTierByPoints(projectedPoints);
-  const tierUpgrade = TIER_ORDER.indexOf(projectedTier) > TIER_ORDER.indexOf(currentTier);
-  
-  const currentTierIndex = TIER_ORDER.indexOf(projectedTier);
-  const nextTier = currentTierIndex < TIER_ORDER.length - 1 
-    ? TIER_ORDER[currentTierIndex + 1] 
+  const currentTier = playerContext.currentTier;
+  const projectedEarnedTier = getTierByPoints(projectedPoints);
+  const projectedTierIndex = TIER_ORDER.indexOf(projectedEarnedTier);
+  const nextTier = projectedTierIndex < TIER_ORDER.length - 1 
+    ? TIER_ORDER[projectedTierIndex + 1] 
     : null;
   const nextTierThreshold = nextTier ? CLUB_ROYALE_TIERS[nextTier].threshold : 0;
   const pointsToNextTier = nextTier ? Math.max(0, nextTierThreshold - projectedPoints) : 0;
@@ -133,6 +133,15 @@ export function calculateTierForecast(
   const projectedDate = monthsToNextTier > 0 
     ? new Date(Date.now() + monthsToNextTier * 30 * 24 * 60 * 60 * 1000)
     : null;
+  const projectedTier = resolveDisplayTierAtDate({
+    currentPoints: projectedPoints,
+    currentTier: playerContext.currentTier,
+    retainedTierUntil: playerContext.retainedTierUntil ?? null,
+    asOf: projectedDate ?? new Date(),
+    tierOrder: TIER_ORDER,
+    getTierByPoints,
+  });
+  const tierUpgrade = TIER_ORDER.indexOf(projectedTier) > TIER_ORDER.indexOf(currentTier);
   
   return {
     currentTier,
@@ -504,11 +513,21 @@ export function generateTimelineProjections(
       currentPoints = 0;
     }
     
+    const projectionDate = new Date(today);
+    projectionDate.setMonth(today.getMonth() + month);
+
     projections.push({
       month,
       points: currentPoints,
       nights: currentNights,
-      tier: getTierByPoints(currentPoints),
+      tier: resolveDisplayTierAtDate({
+        currentPoints,
+        currentTier: playerContext.currentTier,
+        retainedTierUntil: playerContext.retainedTierUntil ?? null,
+        asOf: projectionDate,
+        tierOrder: TIER_ORDER,
+        getTierByPoints,
+      }),
       level: getLevelByNights(currentNights),
     });
 
