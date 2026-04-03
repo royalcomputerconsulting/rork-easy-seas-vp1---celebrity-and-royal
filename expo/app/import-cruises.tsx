@@ -1,7 +1,9 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Linking, Platform, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
-import { Download, Ship, ExternalLink, CheckCircle, AlertCircle, FileText, Globe, Search, DollarSign, Calendar, Rss, Copy, RefreshCcw, Link2 } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Download, Ship, ExternalLink, CheckCircle, AlertCircle, FileText, Globe, Search, DollarSign, Calendar, Rss, Copy, RefreshCcw, Link2, Database } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
@@ -9,9 +11,12 @@ import type { BookedCruise } from '@/types/models';
 import { syncCruisePricing, SyncProgress, CruisePricing } from '@/lib/cruisePricingSync';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
 import { exportFile } from '@/lib/fileIO/fileOperations';
+import { importCompletedCruisesFromWorkbook, type WorkbookBinaryInput, type CompletedCruiseWorkbookSummary } from '@/lib/importers/completedCruiseWorkbook';
 import { getRenderCalendarFeedUrl, trpc } from '@/lib/trpc';
 
 type ScreenMode = 'auto' | 'manual' | 'calendar';
+
+const DEFAULT_COMPLETED_CRUISE_WORKBOOK_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/drmdbp2rbjky80lb6td5o.xlsx';
 
 interface SyncedCruiseResult {
   cruiseId: string;
@@ -26,9 +31,14 @@ interface SyncedCruiseResult {
   saved: boolean;
 }
 
+interface PickedWorkbookResult {
+  fileName: string;
+  workbookInput: WorkbookBinaryInput;
+}
+
 export default function ImportCruisesScreen() {
   const router = useRouter();
-  const { addBookedCruise, bookedCruises, updateBookedCruise, calendarEvents } = useCoreData();
+  const { addBookedCruise, bookedCruises, updateBookedCruise, setBookedCruises, calendarEvents } = useCoreData();
   const { currentUser } = useUser();
 
   const [importing, setImporting] = useState(false);
@@ -46,6 +56,8 @@ export default function ImportCruisesScreen() {
   const [feedLastUpdated, setFeedLastUpdated] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isExportingICS, setIsExportingICS] = useState(false);
+  const [workbookUrl, setWorkbookUrl] = useState<string>(DEFAULT_COMPLETED_CRUISE_WORKBOOK_URL);
+  const [workbookSummary, setWorkbookSummary] = useState<CompletedCruiseWorkbookSummary | null>(null);
 
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
 
@@ -72,6 +84,139 @@ export default function ImportCruisesScreen() {
   const addToLog = (message: string) => {
     setImportLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
   };
+
+  const readWorkbookFromUrl = useCallback(async (url: string): Promise<WorkbookBinaryInput> => {
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl) {
+      throw new Error('Please enter a workbook URL.');
+    }
+
+    console.log('[ImportCruises] Downloading completed cruise workbook from URL:', trimmedUrl);
+    const response = await fetch(trimmedUrl);
+    if (!response.ok) {
+      throw new Error(`Workbook download failed: ${response.status} ${response.statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    console.log('[ImportCruises] Workbook URL download complete, bytes:', arrayBuffer.byteLength);
+    return {
+      kind: 'array',
+      data: new Uint8Array(arrayBuffer),
+    };
+  }, []);
+
+  const pickWorkbookFile = useCallback(async (): Promise<PickedWorkbookResult | null> => {
+    console.log('[ImportCruises] Opening workbook file picker');
+    const result = await DocumentPicker.getDocumentAsync({
+      type: [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'application/octet-stream',
+      ],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) {
+      console.log('[ImportCruises] Workbook file picker cancelled');
+      return null;
+    }
+
+    const asset = result.assets[0];
+    console.log('[ImportCruises] Workbook file selected:', asset.name, asset.size, asset.uri);
+
+    if (Platform.OS === 'web') {
+      const response = await fetch(asset.uri);
+      const arrayBuffer = await response.arrayBuffer();
+      console.log('[ImportCruises] Workbook file loaded on web, bytes:', arrayBuffer.byteLength);
+      return {
+        fileName: asset.name,
+        workbookInput: {
+          kind: 'array',
+          data: new Uint8Array(arrayBuffer),
+        },
+      };
+    }
+
+    const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    console.log('[ImportCruises] Workbook file loaded on native, base64 length:', base64.length);
+    return {
+      fileName: asset.name,
+      workbookInput: {
+        kind: 'base64',
+        data: base64,
+      },
+    };
+  }, []);
+
+  const importCompletedCruiseWorkbook = useCallback(async (workbookInput: WorkbookBinaryInput, sourceName: string) => {
+    try {
+      setImporting(true);
+      setWorkbookSummary(null);
+      addToLog(`Importing completed cruise workbook from ${sourceName}...`);
+      console.log('[ImportCruises] Starting completed cruise workbook import from:', sourceName);
+
+      const result = importCompletedCruisesFromWorkbook(workbookInput, bookedCruises);
+      console.log('[ImportCruises] Completed cruise workbook summary:', result.summary);
+
+      if (result.summary.importedPastCruises === 0) {
+        setWorkbookSummary(result.summary);
+        addToLog('No past cruises were found in the workbook');
+        Alert.alert('No Past Cruises Found', 'This workbook did not contain any rows marked as Past.');
+        return;
+      }
+
+      await setBookedCruises(result.cruises);
+      setImportedCount(result.summary.addedNew + result.summary.matchedExisting);
+      setWorkbookSummary(result.summary);
+      addToLog(`Workbook parsed: ${result.summary.importedPastCruises} past cruises found`);
+      addToLog(`Matched ${result.summary.matchedExisting} existing cruises`);
+      addToLog(`Added ${result.summary.addedNew} new completed cruises`);
+      if (result.summary.duplicateWorkbookRows > 0) {
+        addToLog(`Skipped ${result.summary.duplicateWorkbookRows} duplicate workbook rows`);
+      }
+      if (result.summary.skippedNonPastRows > 0) {
+        addToLog(`Skipped ${result.summary.skippedNonPastRows} non-past workbook rows`);
+      }
+
+      Alert.alert(
+        'Completed Cruises Imported',
+        `Imported ${result.summary.importedPastCruises} past cruises from ${sourceName}.\n\nMatched existing: ${result.summary.matchedExisting}\nAdded new: ${result.summary.addedNew}\nSkipped non-past rows: ${result.summary.skippedNonPastRows}`
+      );
+    } catch (error) {
+      console.error('[ImportCruises] Completed cruise workbook import failed:', error);
+      const message = error instanceof Error ? error.message : 'Unknown workbook import error';
+      addToLog(`Workbook import failed: ${message}`);
+      Alert.alert('Workbook Import Failed', message);
+    } finally {
+      setImporting(false);
+    }
+  }, [bookedCruises, setBookedCruises]);
+
+  const handleImportWorkbookFromUrl = useCallback(async () => {
+    const workbookInput = await readWorkbookFromUrl(workbookUrl);
+    await importCompletedCruiseWorkbook(workbookInput, 'database URL');
+  }, [importCompletedCruiseWorkbook, readWorkbookFromUrl, workbookUrl]);
+
+  const handleImportWorkbookFromFile = useCallback(async () => {
+    try {
+      const pickedWorkbook = await pickWorkbookFile();
+      if (!pickedWorkbook) {
+        return;
+      }
+
+      await importCompletedCruiseWorkbook(pickedWorkbook.workbookInput, pickedWorkbook.fileName);
+    } catch (error) {
+      console.error('[ImportCruises] Workbook file import failed:', error);
+      const message = error instanceof Error ? error.message : 'Unknown workbook file error';
+      addToLog(`Workbook file import failed: ${message}`);
+      Alert.alert('Workbook Import Failed', message);
+      setImporting(false);
+    }
+  }, [importCompletedCruiseWorkbook, pickWorkbookFile]);
 
   const handlePublishCalendarFeed = useCallback(async () => {
     const email = currentUser?.email;
@@ -832,15 +977,23 @@ export default function ImportCruisesScreen() {
         <View style={styles.header}>
           {searchMode === 'calendar' ? (
             <Calendar size={32} color="#a78bfa" />
+          ) : searchMode === 'manual' ? (
+            <Database size={32} color="#38bdf8" />
           ) : (
             <Search size={32} color="#60a5fa" />
           )}
           <Text style={styles.title}>
-            {searchMode === 'calendar' ? 'Calendar Feed' : 'Web Price Search'}
+            {searchMode === 'calendar'
+              ? 'Calendar Feed'
+              : searchMode === 'manual'
+              ? 'Cruise Import'
+              : 'Web Price Search'}
           </Text>
           <Text style={styles.subtitle}>
             {searchMode === 'calendar'
               ? 'Publish and subscribe to your cruise calendar'
+              : searchMode === 'manual'
+              ? 'Import completed cruises from a workbook or paste sailings'
               : 'Search current cabin prices for your upcoming cruises'}
           </Text>
         </View>
@@ -995,8 +1148,81 @@ export default function ImportCruisesScreen() {
           </>
         ) : (
           <>
+            <View style={styles.databaseCard}>
+              <View style={styles.databaseHeader}>
+                <View style={styles.databaseIconWrap}>
+                  <Database size={18} color="#fff" />
+                </View>
+                <View style={styles.databaseHeaderText}>
+                  <Text style={styles.databaseTitle}>Import Completed Cruise Database</Text>
+                  <Text style={styles.databaseSubtitle}>
+                    Pull past cruises from your .xlsx workbook and merge anything already in your account.
+                  </Text>
+                </View>
+              </View>
+
+              <TextInput
+                style={styles.databaseInput}
+                placeholder="Paste workbook URL"
+                placeholderTextColor="#64748b"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={workbookUrl}
+                onChangeText={setWorkbookUrl}
+                editable={!importing}
+                testID="completed-cruise-workbook-url-input"
+              />
+
+              <View style={styles.databaseActions}>
+                <Pressable
+                  style={[styles.databasePrimaryButton, importing && styles.databaseButtonDisabled]}
+                  onPress={handleImportWorkbookFromUrl}
+                  disabled={importing || !workbookUrl.trim()}
+                  testID="completed-cruise-workbook-import-url-button"
+                >
+                  {importing ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Download size={16} color="#fff" />
+                  )}
+                  <Text style={styles.databasePrimaryButtonText}>Import from URL</Text>
+                </Pressable>
+
+                <Pressable
+                  style={[styles.databaseSecondaryButton, importing && styles.databaseButtonDisabled]}
+                  onPress={handleImportWorkbookFromFile}
+                  disabled={importing}
+                  testID="completed-cruise-workbook-import-file-button"
+                >
+                  <FileText size={16} color="#bfdbfe" />
+                  <Text style={styles.databaseSecondaryButtonText}>Choose .xlsx</Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.databaseHint}>
+                Past sailings are imported as completed. Exact or near matches are merged instead of duplicated.
+              </Text>
+
+              {workbookSummary ? (
+                <View style={styles.databaseSummaryRow}>
+                  <View style={styles.databaseSummaryChip}>
+                    <Text style={styles.databaseSummaryValue}>{workbookSummary.importedPastCruises}</Text>
+                    <Text style={styles.databaseSummaryLabel}>Workbook Past</Text>
+                  </View>
+                  <View style={styles.databaseSummaryChip}>
+                    <Text style={styles.databaseSummaryValue}>{workbookSummary.matchedExisting}</Text>
+                    <Text style={styles.databaseSummaryLabel}>Matched</Text>
+                  </View>
+                  <View style={styles.databaseSummaryChip}>
+                    <Text style={styles.databaseSummaryValue}>{workbookSummary.addedNew}</Text>
+                    <Text style={styles.databaseSummaryLabel}>Added</Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+
             <View style={styles.instructionsCard}>
-              <Text style={styles.instructionsTitle}>How to Import:</Text>
+              <Text style={styles.instructionsTitle}>Manual Paste Import</Text>
 
               <View style={styles.step}>
                 <Text style={styles.stepNumber}>1.</Text>
@@ -1056,6 +1282,7 @@ export default function ImportCruisesScreen() {
                 value={pastedData}
                 onChangeText={setPastedData}
                 editable={!importing}
+                testID="manual-cruise-data-input"
               />
 
               <Text style={styles.inputHint}>
@@ -1067,6 +1294,7 @@ export default function ImportCruisesScreen() {
               style={[styles.importButton, importing && styles.importButtonDisabled]}
               onPress={handleImport}
               disabled={importing || !pastedData.trim()}
+              testID="manual-cruise-import-button"
             >
               {importing ? (
                 <>
@@ -1187,6 +1415,126 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     fontSize: 13,
     fontWeight: '500' as const,
+  },
+  databaseCard: {
+    backgroundColor: '#082f49',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#0ea5e940',
+  },
+  databaseHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    marginBottom: 14,
+  },
+  databaseIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#0ea5e9',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  databaseHeaderText: {
+    flex: 1,
+  },
+  databaseTitle: {
+    fontSize: 17,
+    fontWeight: '700' as const,
+    color: '#f8fafc',
+  },
+  databaseSubtitle: {
+    fontSize: 13,
+    color: '#bae6fd',
+    marginTop: 3,
+    lineHeight: 18,
+  },
+  databaseInput: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#fff',
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#155e75',
+  },
+  databaseActions: {
+    flexDirection: 'row' as const,
+    gap: 10,
+    marginTop: 12,
+  },
+  databasePrimaryButton: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    backgroundColor: '#0ea5e9',
+    borderRadius: 12,
+    paddingVertical: 13,
+  },
+  databaseSecondaryButton: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    backgroundColor: '#082f49',
+    borderRadius: 12,
+    paddingVertical: 13,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  databaseButtonDisabled: {
+    opacity: 0.55,
+  },
+  databasePrimaryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700' as const,
+  },
+  databaseSecondaryButtonText: {
+    color: '#bfdbfe',
+    fontSize: 14,
+    fontWeight: '700' as const,
+  },
+  databaseHint: {
+    fontSize: 12,
+    color: '#bae6fd',
+    marginTop: 10,
+    lineHeight: 18,
+  },
+  databaseSummaryRow: {
+    flexDirection: 'row' as const,
+    gap: 8,
+    marginTop: 14,
+  },
+  databaseSummaryChip: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center' as const,
+    borderWidth: 1,
+    borderColor: '#155e75',
+  },
+  databaseSummaryValue: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: '#f8fafc',
+  },
+  databaseSummaryLabel: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: '#7dd3fc',
+    marginTop: 2,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.4,
   },
   inputCard: {
     backgroundColor: '#1e293b',
