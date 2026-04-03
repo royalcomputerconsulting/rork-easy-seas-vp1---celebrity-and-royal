@@ -145,7 +145,7 @@ export default function SettingsScreen() {
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
-  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail, authenticatedEmail } = useAuth();
+  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail, authenticatedEmail, isAdminEmailAddress, verifyAdminPassword } = useAuth();
   const { stats: crewStats } = useCrewRecognition();
 
   const normalizedAuthenticatedEmail = useMemo(() => normalizeAccountEmail(authenticatedEmail), [authenticatedEmail]);
@@ -1159,55 +1159,55 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       
       console.log('[Settings] Email change check:', { oldEmail, newEmail, emailChanged });
       
-      if (emailChanged) {
-        if (isAdmin) {
-          return new Promise<void>((resolve) => {
-            Alert.prompt(
-              'Admin Email Verification',
-              'You are an admin. Please enter the password to change your email:',
-              [
-                {
-                  text: 'Cancel',
-                  style: 'cancel',
-                  onPress: () => {
+      if (emailChanged && isAdminEmailAddress(newEmail)) {
+        return new Promise<void>((resolve) => {
+          Alert.prompt(
+            'Admin Email Verification',
+            'To switch this account to an admin email, enter the admin password.',
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+                onPress: () => {
+                  setIsSaving(false);
+                  resolve();
+                },
+              },
+              {
+                text: 'Verify',
+                onPress: async (password?: string) => {
+                  if (!verifyAdminPassword(password)) {
+                    Alert.alert('Invalid Password', 'The admin password you entered is incorrect.');
                     setIsSaving(false);
                     resolve();
-                  },
+                    return;
+                  }
+                  await continueProfileSave(profileData, oldEmail, newEmail, !!emailChanged);
+                  resolve();
                 },
-                {
-                  text: 'Verify',
-                  onPress: async (password?: string) => {
-                    if (password !== 'a1') {
-                      Alert.alert('Invalid Password', 'The password you entered is incorrect.');
-                      setIsSaving(false);
-                      resolve();
-                      return;
-                    }
-                    await continueProfileSave(profileData, oldEmail, newEmail, !!emailChanged);
-                    resolve();
-                  },
-                },
-              ],
-              'secure-text'
+              },
+            ],
+            'secure-text'
+          );
+        });
+      }
+
+      if (emailChanged) {
+        try {
+          const emailCheck = { exists: false };
+          if (emailCheck.exists) {
+            Alert.alert(
+              'Email Already Exists',
+              'This email is already associated with another account. Please use a different email address.'
             );
-          });
-        } else {
-          try {
-            const emailCheck = { exists: false };
-            if (emailCheck.exists) {
-              Alert.alert(
-                'Email Already Exists',
-                'This email is already associated with another account. Please use a different email address.'
-              );
-              setIsSaving(false);
-              return;
-            }
-          } catch (error) {
-            console.error('[Settings] Error checking email uniqueness:', error);
-            Alert.alert('Error', 'Failed to verify email. Please try again.');
             setIsSaving(false);
             return;
           }
+        } catch (error) {
+          console.error('[Settings] Error checking email uniqueness:', error);
+          Alert.alert('Error', 'Failed to verify email. Please try again.');
+          setIsSaving(false);
+          return;
         }
       }
       
@@ -2072,18 +2072,6 @@ STEP 4: Optional Calendar Import
                 <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
                 () => { void entitlement.openManageSubscription(); }
               )}
-              {isAdmin && renderSettingRow(
-                <Calendar size={18} color={COLORS.navyDeep} />,
-                'Purchase a Monthly Subscription',
-                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
-                () => router.push('/paywall-monthly' as any)
-              )}
-              {isAdmin && renderSettingRow(
-                <Crown size={18} color={COLORS.navyDeep} />,
-                'Purchase an Annual Subscription',
-                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
-                () => router.push('/paywall' as any)
-              )}
               <View style={styles.dataDivider} />
               {renderSettingRow(
                 <Shield size={18} color={COLORS.navyDeep} />,
@@ -2100,7 +2088,7 @@ STEP 4: Optional Calendar Import
             </View>
             <Text style={styles.subscriptionHint}>
               {(isAdmin || entitlement.source === 'dev')
-                ? 'Your account has privileged access. Restore and manage purchases still work, but new subscription purchases remain hidden for non-admin users.'
+                ? 'Your account has privileged access. Restore and subscription management tools remain available here.'
                 : 'Manage your subscription status, restore previous purchases, and review legal terms. The annual subscription renews automatically unless canceled at least 24 hours before the end of the current period.'}
             </Text>
           </View>

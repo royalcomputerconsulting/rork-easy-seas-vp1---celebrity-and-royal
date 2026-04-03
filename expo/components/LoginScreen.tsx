@@ -7,19 +7,15 @@ import { useAuth } from '@/state/AuthProvider';
 
 const { width, height } = Dimensions.get('window');
 
-const ADMIN_EMAIL = 'scott.merlis1@gmail.com';
-
 export function LoginScreen() {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
   const [logoError] = useState<boolean>(false);
-  const { login } = useAuth();
+  const { login, isAdminEmailAddress } = useAuth();
 
-  
-  
-  const isAdminEmail = email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase();
+  const isAdminEmail = isAdminEmailAddress(email);
 
   const handleLogin = async () => {
     setError('');

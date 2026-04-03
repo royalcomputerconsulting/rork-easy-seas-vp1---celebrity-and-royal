@@ -23,7 +23,7 @@ const DEFAULT_WHITELIST = [
   'dextretehkh@hotmail.sg',
 ] as const;
 
-function normalizeAuthEmail(email: string | null | undefined): string | null {
+export function normalizeAuthEmail(email: string | null | undefined): string | null {
   if (!email) {
     return null;
   }
@@ -32,13 +32,17 @@ function normalizeAuthEmail(email: string | null | undefined): string | null {
   return normalizedEmail.length > 0 ? normalizedEmail : null;
 }
 
-function isAdminEmail(email: string | null | undefined): boolean {
+export function isAdminEmail(email: string | null | undefined): boolean {
   const normalizedEmail = normalizeAuthEmail(email);
   if (!normalizedEmail) {
     return false;
   }
 
   return ADMIN_EMAILS.some((adminEmail) => adminEmail.toLowerCase() === normalizedEmail);
+}
+
+export function isValidAdminPassword(password: string | null | undefined): boolean {
+  return password === ADMIN_PASSWORD;
 }
 
 interface AuthState {
@@ -56,6 +60,8 @@ interface AuthState {
   removeFromWhitelist: (email: string) => Promise<void>;
   isEmailWhitelisted: (email: string) => Promise<boolean>;
   updateEmail: (newEmail: string) => Promise<void>;
+  isAdminEmailAddress: (email: string | null | undefined) => boolean;
+  verifyAdminPassword: (password: string | null | undefined) => boolean;
 }
 
 export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
@@ -65,6 +71,14 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
   const [authenticatedEmail, setAuthenticatedEmail] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isWhitelisted, setIsWhitelisted] = useState<boolean>(false);
+
+  const isAdminEmailAddress = useCallback((email: string | null | undefined): boolean => {
+    return isAdminEmail(email);
+  }, []);
+
+  const verifyAdminPassword = useCallback((password: string | null | undefined): boolean => {
+    return isValidAdminPassword(password);
+  }, []);
 
   const checkWhitelistStatus = useCallback(async (email: string | null): Promise<boolean> => {
     if (!email) return false;
@@ -218,7 +232,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     const isAdminAccount = isAdminEmail(normalizedEmail);
     
     if (isAdminAccount) {
-      if (password !== ADMIN_PASSWORD) {
+      if (!verifyAdminPassword(password)) {
         console.error('[AuthProvider] Invalid admin password');
         return false;
       }
@@ -269,7 +283,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     setIsWhitelisted(whitelisted);
     console.log('[AuthProvider] Login successful for:', normalizedEmail, 'isAdmin:', isAdminAccount, 'isWhitelisted:', whitelisted);
     return true;
-  }, [checkWhitelistStatus]);
+  }, [checkWhitelistStatus, verifyAdminPassword]);
 
   const updateEmail = useCallback(async (newEmail: string) => {
     const normalizedEmail = newEmail.toLowerCase().trim();
@@ -312,12 +326,15 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     removeFromWhitelist,
     isEmailWhitelisted,
     updateEmail,
+    isAdminEmailAddress,
+    verifyAdminPassword,
   }), [
     addToWhitelist,
     authenticatedEmail,
     clearFreshStartFlag,
     getWhitelist,
     isAdmin,
+    isAdminEmailAddress,
     isAuthenticated,
     isEmailWhitelisted,
     isFreshStart,
@@ -327,5 +344,6 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     logout,
     removeFromWhitelist,
     updateEmail,
+    verifyAdminPassword,
   ]);
 });
