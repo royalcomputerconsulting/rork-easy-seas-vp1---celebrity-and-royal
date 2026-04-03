@@ -42,6 +42,7 @@ import {
   Link2,
   Copy,
   Rss,
+  Ticket,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
@@ -2059,6 +2060,13 @@ STEP 4: Optional Calendar Import
             <View style={styles.section}>
               <View style={styles.sectionCard}>
                 {renderSectionHeader(<Shield size={18} color={COLORS.white} />, 'Admin', 'Email whitelist & data tools')}
+                {renderSettingRow(
+                  <Ticket size={18} color="#5A319F" />,
+                  'SeaPass Web Generator',
+                  'Locked Version 2 web pass',
+                  () => router.push('/seapass-generator' as any)
+                )}
+                <View style={styles.dataDivider} />
                 <View style={styles.adminHeader}>
                   <Text style={styles.adminHeaderText}>Manage user access</Text>
                   <Text style={styles.adminHeaderSubtext}>
