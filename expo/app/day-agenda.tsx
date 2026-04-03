@@ -91,6 +91,7 @@ interface TimelineEvent {
   isOpportune?: boolean;
 }
 
+const DAY_AGENDA_LAYOUT_VERSION = 'agenda_24h_v2';
 const MINUTES_PER_DAY = 24 * 60;
 const HOUR_ROW_HEIGHT = 76;
 const MIN_SCHEDULE_BLOCK_HEIGHT = 42;
@@ -370,6 +371,14 @@ export default function DayAgendaScreen() {
 
     return { start, end };
   }, [selectedDate]);
+
+  useEffect(() => {
+    console.log('[DayAgenda] Rendering layout version:', {
+      layoutVersion: DAY_AGENDA_LAYOUT_VERSION,
+      date,
+      formattedDate,
+    });
+  }, [date, formattedDate]);
 
   useEffect(() => {
     void ensureDailyLuckYear(selectedDate.getFullYear());
@@ -1540,7 +1549,7 @@ export default function DayAgendaScreen() {
 
   return (
     <ErrorBoundary>
-      <View style={styles.container}>
+      <View style={styles.container} testID={`day-agenda-screen-${DAY_AGENDA_LAYOUT_VERSION}`}>
         <Stack.Screen 
           options={{ 
             headerShown: false,

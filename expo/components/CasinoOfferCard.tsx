@@ -25,6 +25,7 @@ interface CasinoOfferCardProps {
   isActive?: boolean;
   isBestValue?: boolean;
   offerSource?: 'royal' | 'celebrity' | 'carnival';
+  compact?: boolean;
 }
 
 interface OfferSummaryCardProps {
@@ -192,6 +193,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   isActive = true,
   isBestValue = false,
   offerSource,
+  compact = false,
 }: CasinoOfferCardProps) {
   const { localData } = useAppState();
 
@@ -352,6 +354,93 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       onPress();
     }
   };
+
+  if (compact) {
+    return (
+      <TouchableOpacity
+        style={styles.compactContainer}
+        onPress={offerSource === 'carnival' ? handleOpenCarnival : onPress}
+        activeOpacity={0.94}
+        testID="casino-offer-card-compact"
+      >
+        <LinearGradient colors={['#FFFDF9', '#F8F0DB', '#E8F8FC']} style={styles.compactShellGradient}>
+          <View style={styles.compactBody}>
+            <View style={styles.compactThumbShell}>
+              <StableRemoteImage
+                uri={cardImageUri}
+                style={styles.compactThumbImage}
+                testID="casino-offer-card-compact-image"
+              />
+              <LinearGradient colors={statusBadge.colors} style={styles.compactStatusPill}>
+                <Text style={styles.compactStatusPillText}>{statusBadge.text}</Text>
+              </LinearGradient>
+              {expiryDays !== null && expiryDays <= 7 && expiryDays > 0 ? (
+                <View style={styles.compactUrgentPill}>
+                  <Clock size={11} color="#FFFFFF" />
+                  <Text style={styles.compactUrgentPillText}>{expiryDays}d</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.compactMainContent}>
+              <View style={styles.compactHeaderRow}>
+                <View style={styles.compactTitleBlock}>
+                  <Text style={styles.compactCardTitle} numberOfLines={2}>{offerName}</Text>
+                  <Text style={styles.compactCardSubtitle} numberOfLines={1}>
+                    {destinationLines[0] ?? shipLabel}
+                  </Text>
+                </View>
+                <View style={styles.compactValueBlock}>
+                  <Text style={styles.compactValueLabel}>Value</Text>
+                  <Text style={styles.compactValueText}>${totalValue > 0 ? Math.round(totalValue).toLocaleString() : '---'}</Text>
+                </View>
+              </View>
+
+              <View style={styles.compactMetaRow}>
+                <View style={styles.compactMetaPill}>
+                  <Text style={styles.compactMetaLabel}>Code</Text>
+                  <Text style={styles.compactMetaValue} numberOfLines={1}>{offerCode}</Text>
+                </View>
+                <View style={styles.compactMetaPill}>
+                  <Text style={styles.compactMetaLabel}>Room</Text>
+                  <Text style={styles.compactMetaValue} numberOfLines={1}>{roomTypeLabel}</Text>
+                </View>
+                <View style={styles.compactMetaPill}>
+                  <Text style={styles.compactMetaLabel}>Expires</Text>
+                  <Text
+                    style={[
+                      styles.compactMetaValue,
+                      expiryDays !== null && expiryDays <= 7 && expiryDays > 0 ? styles.compactMetaValueUrgent : null,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {formatDisplayDate(resolvedExpiryDate)}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.compactFooterRow}>
+                <View style={styles.compactShipTag}>
+                  <Sparkles size={12} color="#B7791F" />
+                  <Text style={styles.compactShipTagText} numberOfLines={1}>{shipLabel}</Text>
+                </View>
+                <View style={styles.compactLinkRow}>
+                  <Text style={styles.compactLinkText}>
+                    {offerSource === 'carnival' ? 'Carnival.com' : `View ${cruises.length} cruises`}
+                  </Text>
+                  {offerSource === 'carnival' ? (
+                    <ExternalLink size={15} color="#0E3554" />
+                  ) : (
+                    <ChevronRight size={16} color="#0E3554" />
+                  )}
+                </View>
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.94} testID="casino-offer-card">
@@ -785,5 +874,170 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '800' as const,
     color: '#FFFFFF',
+  },
+  compactContainer: {
+    borderRadius: 22,
+    overflow: 'hidden',
+    marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(214, 184, 111, 0.18)',
+    ...SHADOW.md,
+  },
+  compactShellGradient: {
+    borderRadius: 22,
+  },
+  compactBody: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    padding: SPACING.md,
+  },
+  compactThumbShell: {
+    width: 108,
+    height: 108,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    position: 'relative',
+  },
+  compactThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  compactStatusPill: {
+    position: 'absolute',
+    left: 8,
+    bottom: 8,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  compactStatusPillText: {
+    fontSize: 9,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  compactUrgentPill: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(220,38,38,0.92)',
+  },
+  compactUrgentPillText: {
+    fontSize: 9,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+  },
+  compactMainContent: {
+    flex: 1,
+    gap: SPACING.sm,
+  },
+  compactHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+  },
+  compactTitleBlock: {
+    flex: 1,
+    gap: 4,
+  },
+  compactCardTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '800' as const,
+    color: '#171630',
+    letterSpacing: -0.3,
+  },
+  compactCardSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#425466',
+  },
+  compactValueBlock: {
+    minWidth: 92,
+    alignItems: 'flex-end',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  compactValueLabel: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: '#2F2416',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+  },
+  compactValueText: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '800' as const,
+    color: COLORS.moneyDark,
+  },
+  compactMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  compactMetaPill: {
+    flexGrow: 1,
+    minWidth: 92,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.68)',
+  },
+  compactMetaLabel: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: '#425466',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+  },
+  compactMetaValue: {
+    marginTop: 3,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: '700' as const,
+    color: '#12263C',
+  },
+  compactMetaValueUrgent: {
+    color: COLORS.error,
+  },
+  compactFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  compactShipTag: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(255,255,255,0.62)',
+  },
+  compactShipTagText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: '700' as const,
+    color: '#12263C',
+  },
+  compactLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  compactLinkText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: '800' as const,
+    color: '#0E3554',
   },
 });

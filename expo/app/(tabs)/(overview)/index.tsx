@@ -677,6 +677,7 @@ function OverviewScreenContent() {
           bookedCruiseIds={bookedCruiseIds}
           isBestValue={index === 0}
           offerSource={item.offerSource}
+          compact
         />
       );
     }
@@ -699,6 +700,7 @@ function OverviewScreenContent() {
         onPress={() => handleOfferPress(item)} 
         isBooked={bookedCruiseIds.has(item.id)}
         recommended={index === 0}
+        showImage={false}
       />
     );
   }, [handleOfferPress, handleCruiseItemPress, bookedCruiseIds, cruisesData, offerNameByCode]);
