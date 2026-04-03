@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,7 +19,7 @@ import { Download, FileDown, RefreshCcw, Shield, Ship } from 'lucide-react-nativ
 import { SeaPassWebPass } from '@/components/seapass/SeaPassWebPass';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { SEA_PASS_DEFAULTS, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
+import { SEA_PASS_APPROVED_SCREENSHOT_URL, SEA_PASS_DEFAULTS, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
 import { exportSeaPassPdf, exportSeaPassPng } from '@/lib/seapassExport';
 import { useAuth } from '@/state/AuthProvider';
 
@@ -108,6 +109,13 @@ function SeaPassGeneratorScreen() {
 
   useEffect(() => {
     console.log('[SeaPassGenerator] Screen mounted');
+    Image.prefetch(SEA_PASS_APPROVED_SCREENSHOT_URL)
+      .then((didLoad) => {
+        console.log('[SeaPassGenerator] Approved SeaPass shell prefetched', { didLoad });
+      })
+      .catch((error: unknown) => {
+        console.error('[SeaPassGenerator] Failed to prefetch approved SeaPass shell', error);
+      });
   }, []);
 
   useEffect(() => {

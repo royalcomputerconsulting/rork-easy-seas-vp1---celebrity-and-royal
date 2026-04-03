@@ -13,6 +13,39 @@ export interface SeaPassBarcodeBar {
   width: number;
 }
 
+export type SeaPassOverlayKey = keyof SeaPassWebPassData | 'barcodeCaption';
+
+export interface SeaPassOverlayMask {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fill: string;
+  radius: number;
+}
+
+export interface SeaPassDynamicOverlay {
+  key: SeaPassOverlayKey;
+  value: string;
+  x: number;
+  y: number;
+  fill: string;
+  fontSize: number;
+  fontWeight: string;
+  textAnchor?: 'middle' | 'end';
+  mask: SeaPassOverlayMask;
+}
+
+interface SeaPassDynamicOverlayDefinition {
+  x: number;
+  y: number;
+  fill: string;
+  fontSize: number;
+  fontWeight: string;
+  textAnchor?: 'middle' | 'end';
+  mask: SeaPassOverlayMask;
+}
+
 export const SEA_PASS_VIEWBOX = {
   width: 1024,
   height: 1536,
@@ -40,6 +73,7 @@ export const SEA_PASS_LEGAL_LINES = [
 export const SEA_PASS_PREVIEW_BACKGROUND = '#EFF3F8';
 export const SEA_PASS_EXPORT_BACKGROUND = '#FFFFFF';
 export const SEA_PASS_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+export const SEA_PASS_APPROVED_SCREENSHOT_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/2odahwrylhqkr8gb1jwp4.png';
 
 export const SEA_PASS_LAYOUT = {
   cardX: 24,
@@ -64,6 +98,134 @@ export const ROYAL_CARIBBEAN_LOGO_PATHS = {
 
 export const BOARDING_KEY_RING_PATH = 'M42 76C22 76 6 60 6 40C6 20 22 4 42 4C61 4 77 18 78 36H184V48H204V36H222V68H210V48H196V60H184V36H78C77 56 61 76 42 76ZM42 56C51 56 58 49 58 40C58 31 51 24 42 24C33 24 26 31 26 40C26 49 33 56 42 56Z';
 
+const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDynamicOverlayDefinition> = {
+  time: {
+    x: 916,
+    y: 106,
+    fill: '#FFFFFF',
+    fontSize: 52,
+    fontWeight: '400',
+    textAnchor: 'end',
+    mask: {
+      x: 738,
+      y: 36,
+      width: 220,
+      height: 52,
+      fill: '#6B49AE',
+      radius: 10,
+    },
+  },
+  date: {
+    x: 916,
+    y: 176,
+    fill: '#FFFFFF',
+    fontSize: 72,
+    fontWeight: '300',
+    textAnchor: 'end',
+    mask: {
+      x: 730,
+      y: 98,
+      width: 228,
+      height: 82,
+      fill: '#6B49AE',
+      radius: 10,
+    },
+  },
+  deck: {
+    x: 60,
+    y: 716,
+    fill: '#30333A',
+    fontSize: 56,
+    fontWeight: '400',
+    mask: {
+      x: 56,
+      y: 662,
+      width: 96,
+      height: 70,
+      fill: '#F5F5F6',
+      radius: 8,
+    },
+  },
+  stateroom: {
+    x: 250,
+    y: 716,
+    fill: '#30333A',
+    fontSize: 56,
+    fontWeight: '400',
+    mask: {
+      x: 244,
+      y: 662,
+      width: 248,
+      height: 70,
+      fill: '#F5F5F6',
+      radius: 8,
+    },
+  },
+  muster: {
+    x: 912,
+    y: 716,
+    fill: '#30333A',
+    fontSize: 56,
+    fontWeight: '400',
+    textAnchor: 'end',
+    mask: {
+      x: 816,
+      y: 662,
+      width: 130,
+      height: 70,
+      fill: '#F5F5F6',
+      radius: 8,
+    },
+  },
+  reservation: {
+    x: 64,
+    y: 904,
+    fill: '#30333A',
+    fontSize: 56,
+    fontWeight: '400',
+    mask: {
+      x: 58,
+      y: 850,
+      width: 290,
+      height: 70,
+      fill: '#F7F7F8',
+      radius: 8,
+    },
+  },
+  ship: {
+    x: 912,
+    y: 904,
+    fill: '#30333A',
+    fontSize: 56,
+    fontWeight: '400',
+    textAnchor: 'end',
+    mask: {
+      x: 818,
+      y: 850,
+      width: 128,
+      height: 70,
+      fill: '#F7F7F8',
+      radius: 8,
+    },
+  },
+  barcodeCaption: {
+    x: 512,
+    y: 1350,
+    fill: '#30333A',
+    fontSize: 42,
+    fontWeight: '400',
+    textAnchor: 'middle',
+    mask: {
+      x: 322,
+      y: 1302,
+      width: 380,
+      height: 62,
+      fill: '#FAFAFA',
+      radius: 8,
+    },
+  },
+};
+
 function escapeXml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -76,6 +238,68 @@ function escapeXml(value: string): string {
 function normalizeField(value: string | null | undefined, fallback: string): string {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : fallback;
+}
+
+function getDynamicOverlayValue(key: SeaPassOverlayKey, data: SeaPassWebPassData, barcodeCaption: string): string {
+  if (key === 'barcodeCaption') {
+    return barcodeCaption;
+  }
+
+  return data[key];
+}
+
+function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string): boolean {
+  if (key === 'barcodeCaption') {
+    return value !== getSeaPassBarcodeCaption(SEA_PASS_DEFAULTS);
+  }
+
+  return value !== SEA_PASS_DEFAULTS[key];
+}
+
+async function fetchImageAsDataUrl(url: string): Promise<string> {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Unable to load approved SeaPass image (${response.status}).`);
+  }
+
+  const blob = await response.blob();
+
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      const result = reader.result;
+
+      if (typeof result === 'string') {
+        resolve(result);
+        return;
+      }
+
+      reject(new Error('Unable to convert approved SeaPass image for web export.'));
+    };
+
+    reader.onerror = () => reject(new Error('Unable to read approved SeaPass image for web export.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function buildSeaPassOverlaySvgMarkup(input: Partial<SeaPassWebPassData>): string {
+  const data = getSeaPassData(input);
+  const barcodeCaption = getSeaPassBarcodeCaption(data);
+  const overlays = getSeaPassDynamicOverlays(data);
+
+  return overlays
+    .map((overlay) => {
+      const mask = overlay.mask;
+      const textAnchor = overlay.textAnchor ? ` text-anchor="${overlay.textAnchor}"` : '';
+      const value = escapeXml(getDynamicOverlayValue(overlay.key, data, barcodeCaption));
+
+      return `
+  <rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" />
+  <text x="${overlay.x}" y="${overlay.y}"${textAnchor} font-family="${SEA_PASS_FONT_STACK}" font-size="${overlay.fontSize}" font-weight="${overlay.fontWeight}" fill="${overlay.fill}">${value}</text>`;
+    })
+    .join('');
 }
 
 export function getSeaPassData(input: Partial<SeaPassWebPassData>): SeaPassWebPassData {
@@ -93,6 +317,34 @@ export function getSeaPassData(input: Partial<SeaPassWebPassData>): SeaPassWebPa
 export function getSeaPassBarcodeCaption(input: Pick<SeaPassWebPassData, 'reservation' | 'stateroom'>): string {
   const normalized = getSeaPassData(input as Partial<SeaPassWebPassData>);
   return `${normalized.reservation}-${normalized.stateroom}`;
+}
+
+export function getSeaPassDynamicOverlays(input: Partial<SeaPassWebPassData>): SeaPassDynamicOverlay[] {
+  const data = getSeaPassData(input);
+  const barcodeCaption = getSeaPassBarcodeCaption(data);
+  const orderedKeys: SeaPassOverlayKey[] = ['time', 'date', 'deck', 'stateroom', 'muster', 'reservation', 'ship', 'barcodeCaption'];
+
+  return orderedKeys.reduce<SeaPassDynamicOverlay[]>((accumulator, key) => {
+    const overlayValue = getDynamicOverlayValue(key, data, barcodeCaption);
+
+    if (!shouldRenderDynamicOverlay(key, overlayValue)) {
+      return accumulator;
+    }
+
+    const definition = SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS[key];
+    accumulator.push({
+      key,
+      value: overlayValue,
+      x: definition.x,
+      y: definition.y,
+      fill: definition.fill,
+      fontSize: definition.fontSize,
+      fontWeight: definition.fontWeight,
+      textAnchor: definition.textAnchor,
+      mask: definition.mask,
+    });
+    return accumulator;
+  }, []);
 }
 
 function buildPatternForCharacter(character: string): number[] {
@@ -145,110 +397,24 @@ export function getSeaPassBarcodeBars(value: string, totalWidth: number): SeaPas
   }));
 }
 
-function buildBarcodeSvgMarkup(value: string): string {
-  const bars = getSeaPassBarcodeBars(value, SEA_PASS_LAYOUT.barcodeWidth);
-
-  return bars
-    .map((bar) => `<rect x="${(SEA_PASS_LAYOUT.barcodeX + bar.x).toFixed(2)}" y="${SEA_PASS_LAYOUT.barcodeY}" width="${bar.width.toFixed(2)}" height="${SEA_PASS_LAYOUT.barcodeHeight}" fill="#1E1F25" rx="1.4" />`)
-    .join('');
-}
-
-function buildLogoSvgMarkup(): string {
-  return `
-    <g transform="translate(58 58)">
-      <path d="${ROYAL_CARIBBEAN_LOGO_PATHS.crown}" fill="#FFFFFF" />
-      <path d="${ROYAL_CARIBBEAN_LOGO_PATHS.anchor}" fill="#FFFFFF" />
-      <text x="128" y="66" font-family="${SEA_PASS_FONT_STACK}" font-size="54" font-weight="600" fill="#FFFFFF">Royal Caribbean</text>
-    </g>
-  `;
-}
-
-function buildKeySvgMarkup(): string {
-  return `
-    <g transform="translate(58 446)">
-      <path d="${BOARDING_KEY_RING_PATH}" fill="#FFFFFF" />
-    </g>
-  `;
-}
-
-function buildWalletButtonSvgMarkup(): string {
-  return `
-    <g transform="translate(640 1340)">
-      <rect width="286" height="116" rx="18" fill="#25262B" />
-      <rect x="28" y="27" width="84" height="62" rx="14" fill="#F4F5F7" />
-      <rect x="34" y="34" width="72" height="10" rx="4" fill="#8DC7E7" />
-      <rect x="34" y="44" width="72" height="10" rx="4" fill="#C6D57E" />
-      <rect x="34" y="54" width="72" height="10" rx="4" fill="#E7C06A" />
-      <path d="M44 64H96V70C96 78 89 84 82 84H58C50 84 44 78 44 70V64Z" fill="#D3956F" />
-      <text x="130" y="58" font-family="${SEA_PASS_FONT_STACK}" font-size="24" font-weight="500" fill="#FFFFFF">Add to</text>
-      <text x="130" y="95" font-family="${SEA_PASS_FONT_STACK}" font-size="34" font-weight="400" fill="#FFFFFF">Apple Wallet</text>
-    </g>
-  `;
-}
-
-function buildHeaderPath(): string {
-  const { cardX, cardY, cardWidth, headerHeight, radius } = SEA_PASS_LAYOUT;
-  const top = cardY;
-  const left = cardX;
-  const right = cardX + cardWidth;
-  const bottom = cardY + headerHeight;
-  return `M${left + radius} ${top}H${right - radius}C${right - 12} ${top} ${right} ${top + 12} ${right} ${top + radius}V${bottom}H${left}V${top + radius}C${left} ${top + 12} ${left + 12} ${top} ${left + radius} ${top}Z`;
-}
-
-export function buildSeaPassSvgMarkup(input: Partial<SeaPassWebPassData>, backgroundColor: string = SEA_PASS_EXPORT_BACKGROUND): string {
-  const data = getSeaPassData(input);
-  const caption = getSeaPassBarcodeCaption(data);
-  const headerPath = buildHeaderPath();
+export function buildSeaPassSvgMarkup(
+  input: Partial<SeaPassWebPassData>,
+  backgroundColor: string = SEA_PASS_EXPORT_BACKGROUND,
+  approvedImageHref: string = SEA_PASS_APPROVED_SCREENSHOT_URL,
+): string {
   const background = escapeXml(backgroundColor);
+  const safeImageHref = escapeXml(approvedImageHref);
+  const overlayMarkup = buildSeaPassOverlaySvgMarkup(input);
 
   return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" viewBox="0 0 ${SEA_PASS_VIEWBOX.width} ${SEA_PASS_VIEWBOX.height}" fill="none">
-  <defs>
-    <linearGradient id="seaPassHeader" x1="0" y1="0" x2="1024" y2="548" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#4F2A95" />
-      <stop offset="0.52" stop-color="#6F49AE" />
-      <stop offset="1" stop-color="#5A319F" />
-    </linearGradient>
-    <linearGradient id="seaPassBody" x1="24" y1="572" x2="1000" y2="1512" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FAFAFB" />
-      <stop offset="1" stop-color="#F2F3F5" />
-    </linearGradient>
-  </defs>
-  <rect x="24" y="24" width="976" height="1488" rx="34" fill="url(#seaPassBody)" />
-  <path d="${headerPath}" fill="url(#seaPassHeader)" />
-  <circle cx="512" cy="24" r="36" fill="${background}" />
-  <circle cx="24" cy="556" r="34" fill="${background}" />
-  <circle cx="1000" cy="556" r="34" fill="${background}" />
-  ${buildLogoSvgMarkup()}
-  <text x="916" y="106" text-anchor="end" font-family="${SEA_PASS_FONT_STACK}" font-size="52" font-weight="400" fill="#FFFFFF">${escapeXml(data.time)}</text>
-  <text x="916" y="176" text-anchor="end" font-family="${SEA_PASS_FONT_STACK}" font-size="72" font-weight="300" fill="#FFFFFF">${escapeXml(data.date)}</text>
-  <text x="60" y="222" font-family="${SEA_PASS_FONT_STACK}" font-size="72" font-weight="700" fill="#FFFFFF">${SEA_PASS_NAME_LINES[0]}</text>
-  <text x="60" y="326" font-family="${SEA_PASS_FONT_STACK}" font-size="72" font-weight="700" fill="#FFFFFF">${SEA_PASS_NAME_LINES[1]}</text>
-  <text x="60" y="422" font-family="${SEA_PASS_FONT_STACK}" font-size="48" font-weight="400" fill="#F7F3FF">${SEA_PASS_STATUS}</text>
-  ${buildKeySvgMarkup()}
-  <text x="64" y="652" font-family="${SEA_PASS_FONT_STACK}" font-size="32" font-weight="500" fill="#8E929B">DECK</text>
-  <text x="64" y="716" font-family="${SEA_PASS_FONT_STACK}" font-size="56" font-weight="400" fill="#30333A">${escapeXml(data.deck)}</text>
-  <text x="250" y="652" font-family="${SEA_PASS_FONT_STACK}" font-size="32" font-weight="500" fill="#8E929B">STATEROOM</text>
-  <text x="250" y="716" font-family="${SEA_PASS_FONT_STACK}" font-size="56" font-weight="400" fill="#30333A">${escapeXml(data.stateroom)}</text>
-  <text x="912" y="652" text-anchor="end" font-family="${SEA_PASS_FONT_STACK}" font-size="32" font-weight="500" fill="#8E929B">MUSTER</text>
-  <text x="912" y="716" text-anchor="end" font-family="${SEA_PASS_FONT_STACK}" font-size="56" font-weight="400" fill="#30333A">${escapeXml(data.muster)}</text>
-  <text x="64" y="840" font-family="${SEA_PASS_FONT_STACK}" font-size="32" font-weight="500" fill="#8E929B">RESERVATION #</text>
-  <text x="64" y="904" font-family="${SEA_PASS_FONT_STACK}" font-size="56" font-weight="400" fill="#30333A">${escapeXml(data.reservation)}</text>
-  <text x="912" y="840" text-anchor="end" font-family="${SEA_PASS_FONT_STACK}" font-size="32" font-weight="500" fill="#8E929B">SHIP</text>
-  <text x="912" y="904" text-anchor="end" font-family="${SEA_PASS_FONT_STACK}" font-size="56" font-weight="400" fill="#30333A">${escapeXml(data.ship)}</text>
-  <text x="64" y="1030" font-family="${SEA_PASS_FONT_STACK}" font-size="32" font-weight="500" fill="#8E929B">PORT</text>
-  <text x="64" y="1096" font-family="${SEA_PASS_FONT_STACK}" font-size="58" font-weight="400" fill="#30333A">${SEA_PASS_PORT}</text>
-  <text x="64" y="1210" font-family="${SEA_PASS_FONT_STACK}" font-size="31" font-weight="400" fill="#42454D">${SEA_PASS_LEGAL_LINES[0]}</text>
-  <text x="64" y="1260" font-family="${SEA_PASS_FONT_STACK}" font-size="31" font-weight="400" fill="#42454D">${SEA_PASS_LEGAL_LINES[1]}</text>
-  <text x="64" y="1310" font-family="${SEA_PASS_FONT_STACK}" font-size="31" font-weight="400" fill="#42454D">${SEA_PASS_LEGAL_LINES[2]}</text>
-  ${buildBarcodeSvgMarkup(caption)}
-  <text x="512" y="1350" text-anchor="middle" font-family="${SEA_PASS_FONT_STACK}" font-size="42" font-weight="400" fill="#30333A">${escapeXml(caption)}</text>
-  ${buildWalletButtonSvgMarkup()}
+  <rect x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" fill="${background}" />
+  <image href="${safeImageHref}" x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" />${overlayMarkup}
 </svg>`.trim();
 }
 
 export function buildSeaPassPrintHtml(input: Partial<SeaPassWebPassData>): string {
-  const svg = buildSeaPassSvgMarkup(input, SEA_PASS_EXPORT_BACKGROUND);
+  const svg = buildSeaPassSvgMarkup(input, SEA_PASS_EXPORT_BACKGROUND, SEA_PASS_APPROVED_SCREENSHOT_URL);
 
   return `
 <!DOCTYPE html>
@@ -289,13 +455,22 @@ export function buildSeaPassPrintHtml(input: Partial<SeaPassWebPassData>): strin
 }
 
 export async function exportSeaPassPngOnWeb(input: Partial<SeaPassWebPassData>, fileName: string): Promise<void> {
-  const svgMarkup = buildSeaPassSvgMarkup(input, SEA_PASS_EXPORT_BACKGROUND);
+  let approvedImageHref = SEA_PASS_APPROVED_SCREENSHOT_URL;
+
+  try {
+    approvedImageHref = await fetchImageAsDataUrl(SEA_PASS_APPROVED_SCREENSHOT_URL);
+  } catch (error) {
+    console.warn('[SeaPassWebPass] Falling back to remote approved image URL for web PNG export', error);
+  }
+
+  const svgMarkup = buildSeaPassSvgMarkup(input, SEA_PASS_EXPORT_BACKGROUND, approvedImageHref);
   const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
   const objectUrl = URL.createObjectURL(svgBlob);
 
   try {
     await new Promise<void>((resolve, reject) => {
       const image = new Image();
+      image.crossOrigin = 'anonymous';
       image.onload = () => {
         try {
           const canvas = document.createElement('canvas');
