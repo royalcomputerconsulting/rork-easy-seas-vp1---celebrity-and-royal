@@ -9,7 +9,7 @@ import type { BookedCruise } from '@/types/models';
 import { syncCruisePricing, SyncProgress, CruisePricing } from '@/lib/cruisePricingSync';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
 import { exportFile } from '@/lib/fileIO/fileOperations';
-import { trpc, RENDER_BACKEND_URL } from '@/lib/trpc';
+import { getRenderCalendarFeedUrl, trpc } from '@/lib/trpc';
 
 type ScreenMode = 'auto' | 'manual' | 'calendar';
 
@@ -50,7 +50,6 @@ export default function ImportCruisesScreen() {
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
 
   const upcomingCruises = bookedCruises.filter(c => c.completionState === 'upcoming');
-  const completedCruises = bookedCruises.filter(c => c.completionState === 'completed' || c.status === 'completed');
 
   useEffect(() => {
     const loadFeedToken = async () => {
@@ -58,7 +57,7 @@ export default function ImportCruisesScreen() {
         const stored = await AsyncStorage.getItem('easyseas_calendar_feed_token');
         if (stored) {
           setCalendarFeedToken(stored);
-          setCalendarFeedUrl(`${RENDER_BACKEND_URL}/api/calendar-feed/${stored}`);
+          setCalendarFeedUrl(getRenderCalendarFeedUrl(stored));
           const lastUpdate = await AsyncStorage.getItem('easyseas_calendar_feed_updated');
           if (lastUpdate) setFeedLastUpdated(lastUpdate);
           console.log('[ImportCruises] Loaded calendar feed token:', stored.slice(0, 8) + '...');
@@ -67,7 +66,7 @@ export default function ImportCruisesScreen() {
         console.error('[ImportCruises] Error loading feed token:', error);
       }
     };
-    loadFeedToken();
+    void loadFeedToken();
   }, []);
 
   const addToLog = (message: string) => {
@@ -102,7 +101,7 @@ export default function ImportCruisesScreen() {
         icsContent,
       });
 
-      const feedUrl = `${RENDER_BACKEND_URL}/api/calendar-feed/${token}`;
+      const feedUrl = getRenderCalendarFeedUrl(token);
       setCalendarFeedUrl(feedUrl);
       const now = new Date().toISOString();
       setFeedLastUpdated(now);
@@ -609,7 +608,7 @@ export default function ImportCruisesScreen() {
       }
 
     } catch (error) {
-      addToLog(`Error parsing: ${error}`);
+      addToLog(`Error parsing: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return cruises;
@@ -635,7 +634,7 @@ export default function ImportCruisesScreen() {
       }
 
       for (const cruise of cruises) {
-        await addBookedCruise(cruise);
+        addBookedCruise(cruise);
         setImportedCount(prev => prev + 1);
       }
 
@@ -646,7 +645,7 @@ export default function ImportCruisesScreen() {
       }, 2000);
 
     } catch (error) {
-      addToLog(`Import failed: ${error}`);
+      addToLog(`Import failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setImporting(false);
     }

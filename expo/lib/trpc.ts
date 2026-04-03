@@ -8,6 +8,10 @@ export const trpc = createTRPCReact<AppRouter>();
 
 export const RENDER_BACKEND_URL = "https://rork-easy-seas-vp1-2nep.onrender.com";
 
+export const getRenderCalendarFeedUrl = (token: string): string => {
+  return `${trimTrailingSlash(RENDER_BACKEND_URL)}/calendar-feed/${encodeURIComponent(token)}`;
+};
+
 export const isRenderBackendAvailable = () => {
   return true;
 };

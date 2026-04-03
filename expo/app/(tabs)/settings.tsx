@@ -70,7 +70,7 @@ import {
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
-import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
+import { getRenderCalendarFeedUrl, trpc } from '@/lib/trpc';
 
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -451,7 +451,7 @@ export default function SettingsScreen() {
         const stored = await AsyncStorage.getItem('easyseas_calendar_feed_token');
         if (stored) {
           setCalendarFeedToken(stored);
-          setCalendarFeedUrl(`${RENDER_BACKEND_URL}/api/calendar-feed/${stored}`);
+          setCalendarFeedUrl(getRenderCalendarFeedUrl(stored));
           const lastUpdate = await AsyncStorage.getItem('easyseas_calendar_feed_updated');
           if (lastUpdate) setFeedLastUpdated(lastUpdate);
           console.log('[Settings] Loaded calendar feed token:', stored.slice(0, 8) + '...');
@@ -494,7 +494,7 @@ export default function SettingsScreen() {
         icsContent,
       });
 
-      const feedUrl = `${RENDER_BACKEND_URL}/api/calendar-feed/${token}`;
+      const feedUrl = getRenderCalendarFeedUrl(token);
       setCalendarFeedUrl(feedUrl);
       const now = new Date().toISOString();
       setFeedLastUpdated(now);
