@@ -52,26 +52,31 @@ export async function clearUserSpecificData(): Promise<void> {
   }
 }
 
-export async function clearAllAppData(): Promise<{
+interface ClearAllAppDataOptions {
+  preserveAuth?: boolean;
+}
+
+export async function clearAllAppData(options: ClearAllAppDataOptions = {}): Promise<{
   success: boolean;
   clearedKeys: string[];
   errors: string[];
 }> {
-  console.log('[StorageOps] Clearing ALL app data...');
+  const { preserveAuth = false } = options;
+  console.log('[StorageOps] Clearing ALL app data...', { preserveAuth });
   const errors: string[] = [];
   const clearedKeys: string[] = [];
 
   const hasLaunchedBefore = await AsyncStorage.getItem(ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE);
-  const authenticated = await AsyncStorage.getItem(ALL_STORAGE_KEYS.AUTHENTICATED);
-  const authEmail = await AsyncStorage.getItem('easyseas_auth_email');
+  const authenticated = preserveAuth ? await AsyncStorage.getItem(ALL_STORAGE_KEYS.AUTHENTICATED) : null;
+  const authEmail = preserveAuth ? await AsyncStorage.getItem('easyseas_auth_email') : null;
   const emailWhitelist = await AsyncStorage.getItem(ALL_STORAGE_KEYS.EMAIL_WHITELIST);
-  console.log('[StorageOps] Preserving authentication state:', { hasLaunchedBefore, authenticated: !!authenticated, email: !!authEmail });
+  console.log('[StorageOps] Preserved keys snapshot:', { hasLaunchedBefore: !!hasLaunchedBefore, authenticated: !!authenticated, email: !!authEmail, hasWhitelist: !!emailWhitelist });
 
   const allKeys = Object.values(ALL_STORAGE_KEYS);
   const preserveKeys = new Set<string>([
     ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE,
-    ALL_STORAGE_KEYS.AUTHENTICATED,
     ALL_STORAGE_KEYS.EMAIL_WHITELIST,
+    ...(preserveAuth ? [ALL_STORAGE_KEYS.AUTHENTICATED] : []),
   ]);
 
   for (const key of allKeys) {
@@ -97,9 +102,13 @@ export async function clearAllAppData(): Promise<{
     
     const preserveAdditionalKeys = new Set<string>([
       ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE,
-      ALL_STORAGE_KEYS.AUTHENTICATED,
       ALL_STORAGE_KEYS.EMAIL_WHITELIST,
-      'easyseas_auth_email',
+      ...(preserveAuth ? [
+        ALL_STORAGE_KEYS.AUTHENTICATED,
+        'easyseas_auth_email',
+        'easyseas_fresh_start',
+        'easyseas_pending_account_switch',
+      ] : []),
     ]);
     
     for (const key of easySeaKeys) {
@@ -130,7 +139,7 @@ export async function clearAllAppData(): Promise<{
     }
   }
   
-  if (authenticated) {
+  if (preserveAuth && authenticated) {
     try {
       await AsyncStorage.setItem(ALL_STORAGE_KEYS.AUTHENTICATED, authenticated);
       console.log('[StorageOps] Restored authentication state');
@@ -139,7 +148,7 @@ export async function clearAllAppData(): Promise<{
     }
   }
   
-  if (authEmail) {
+  if (preserveAuth && authEmail) {
     try {
       await AsyncStorage.setItem('easyseas_auth_email', authEmail);
       console.log('[StorageOps] Restored auth email');

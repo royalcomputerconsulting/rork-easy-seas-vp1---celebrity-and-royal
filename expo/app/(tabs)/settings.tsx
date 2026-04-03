@@ -78,7 +78,6 @@ import { UserProfileCard } from '@/components/ui/UserProfileCard';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { saveMockData } from '@/lib/saveMockData';
-import { generateSampleData, SAMPLE_LOYALTY_POINTS } from '@/lib/sampleData';
 import { useAuth } from '@/state/AuthProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
@@ -145,7 +144,7 @@ export default function SettingsScreen() {
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
-  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail, authenticatedEmail, isAdminEmailAddress, verifyAdminPassword } = useAuth();
+  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail, authenticatedEmail, isAdminEmailAddress, verifyAdminPassword, clearSession } = useAuth();
   const { stats: crewStats } = useCrewRecognition();
 
   const normalizedAuthenticatedEmail = useMemo(() => normalizeAccountEmail(authenticatedEmail), [authenticatedEmail]);
@@ -883,7 +882,7 @@ export default function SettingsScreen() {
   const handleClearData = useCallback(() => {
     Alert.alert(
       'Clear All Data',
-      'Are you sure you want to delete ALL app data including:\n\n• Cruises & Offers\n• Booked Cruises\n• Calendar Events\n• Certificates\n• User Profile (Name, C&A #)\n• Club Royale Points\n• Loyalty Points\n• Settings & Preferences\n\nSample demo data will be added so you can explore the app.\n\nThis action cannot be undone.',
+      'Are you sure you want to delete ALL app data including:\n\n• Cruises & Offers\n• Booked Cruises\n• Calendar Events\n• Certificates\n• User Profile\n• Loyalty Data\n• Settings & Preferences\n• Your saved sign-in session\n\nThis action cannot be undone and will sign you out.',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -894,59 +893,37 @@ export default function SettingsScreen() {
               console.log('[Settings] Clearing all app data...');
               const result = await clearAllAppData();
               
+              await clearAllData();
+              await clearLocalData();
+              setLastImportResult(null);
+
               if (result.success) {
-                await clearAllData();
-                await clearLocalData();
-                setLastImportResult(null);
-                
-                console.log('[Settings] Resetting user profile to blank for all cruise lines...');
-                await syncUserFromStorage();
-                const owner = await ensureOwner();
-                await updateUser(owner.id, { 
-                  name: '',
-                  crownAnchorNumber: '',
-                  celebrityEmail: '',
-                  celebrityCaptainsClubNumber: '',
-                  celebrityCaptainsClubPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
-                  celebrityBlueChipPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
-                  silverseaEmail: '',
-                  silverseaVenetianNumber: '',
-                  silverseaVenetianTier: '1 VS Day',
-                  silverseaVenetianPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
-                  silverseaCasinoTier: 'Rock Star',
-                  silverseaCasinoPoints: 0,
-                });
-                
-                console.log('[Settings] Setting loyalty points to 1 for all three cruise lines (sample data)...');
-                await setManualClubRoyalePoints(SAMPLE_LOYALTY_POINTS.clubRoyale);
-                await setManualCrownAnchorPoints(SAMPLE_LOYALTY_POINTS.crownAnchor);
-                console.log('[Settings] ✓ Royal Caribbean: Club Royale & Crown & Anchor reset to 1');
-                console.log('[Settings] ✓ Celebrity: Captain\'s Club & Blue Chip reset to 1');
-                console.log('[Settings] ✓ Silversea: Venetian Society reset to 1 VS Day and casino reset to Rock Star');
-                
-                console.log('[Settings] Generating sample demo data...');
-                const sampleData = generateSampleData();
-                
-                console.log('[Settings] Populating sample cruises, offers, and events...');
-                await setBookedCruises(sampleData.bookedCruises);
-                await setCasinoOffers(sampleData.casinoOffers);
-                await setLocalData({
-                  booked: sampleData.bookedCruises,
-                  offers: sampleData.casinoOffers,
-                  calendar: sampleData.calendarEvents,
-                });
-                
-                console.log('[Settings] Re-syncing loyalty provider from storage...');
-                await syncLoyaltyFromStorage();
-                
                 Alert.alert(
-                  'Data Reset Complete', 
-                  `Successfully cleared ${result.clearedKeys.length} data stores.\n\nSample demo data has been added:\n• 3 sample cruises (1 completed, 2 booked)\n• 2 sample casino offers\n• 1 sample calendar event\n• Crown & Anchor: 1 point\n• Club Royale: 1 point\n\nDelete the sample data and import your real data to get started!`
+                  'Data Reset Complete',
+                  `Successfully cleared ${result.clearedKeys.length} data stores. Press Continue to finish signing out.`,
+                  [
+                    {
+                      text: 'Continue',
+                      style: 'default',
+                      onPress: () => {
+                        void clearSession();
+                      },
+                    },
+                  ]
                 );
               } else {
                 Alert.alert(
-                  'Partial Clear', 
-                  `Cleared ${result.clearedKeys.length} items with ${result.errors.length} errors.`
+                  'Partial Clear',
+                  `Cleared ${result.clearedKeys.length} items with ${result.errors.length} errors. Press Continue to finish signing out.`,
+                  [
+                    {
+                      text: 'Continue',
+                      style: 'default',
+                      onPress: () => {
+                        void clearSession();
+                      },
+                    },
+                  ]
                 );
               }
             } catch (error) {
@@ -957,7 +934,7 @@ export default function SettingsScreen() {
         },
       ]
     );
-  }, [clearAllData, clearLocalData, syncUserFromStorage, ensureOwner, updateUser, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncLoyaltyFromStorage, setBookedCruises, setCasinoOffers, setLocalData]);
+  }, [clearAllData, clearLocalData, clearSession]);
 
 
 

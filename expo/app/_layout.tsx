@@ -172,7 +172,7 @@ function FreshStartHandler({ onComplete }: { onComplete: () => void }) {
         if (!hasLaunchedBefore) {
           if (__DEV__) console.log('[FreshStartHandler] First time user');
           setStatus('Setting up your profile...');
-          await clearAllAppData();
+          await clearAllAppData({ preserveAuth: true });
           await AsyncStorage.setItem(ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE, 'true');
         } else {
           setStatus('Loading your profile...');

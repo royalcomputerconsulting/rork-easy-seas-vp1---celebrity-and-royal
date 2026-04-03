@@ -54,6 +54,7 @@ interface AuthState {
   isWhitelisted: boolean;
   login: (email: string, password?: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  clearSession: () => Promise<void>;
   clearFreshStartFlag: () => Promise<void>;
   getWhitelist: () => Promise<string[]>;
   addToWhitelist: (email: string) => Promise<void>;
@@ -295,6 +296,22 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     setIsWhitelisted(whitelisted);
   }, [checkWhitelistStatus]);
 
+  const clearSession = useCallback(async () => {
+    console.log('[AuthProvider] Clearing authentication session state...');
+    await Promise.all([
+      AsyncStorage.removeItem(AUTH_KEY),
+      AsyncStorage.removeItem(AUTH_EMAIL_KEY),
+      AsyncStorage.removeItem(FRESH_START_KEY),
+      AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY),
+    ]);
+    setIsAuthenticated(false);
+    setAuthenticatedEmail(null);
+    setIsFreshStart(false);
+    setIsAdmin(false);
+    setIsWhitelisted(false);
+    console.log('[AuthProvider] Authentication session cleared');
+  }, []);
+
   const logout = useCallback(async () => {
     console.log('[AuthProvider] Logging out and clearing all user data...');
     await AsyncStorage.clear();
@@ -320,6 +337,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     isWhitelisted,
     login,
     logout,
+    clearSession,
     clearFreshStartFlag,
     getWhitelist,
     addToWhitelist,
@@ -332,6 +350,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     addToWhitelist,
     authenticatedEmail,
     clearFreshStartFlag,
+    clearSession,
     getWhitelist,
     isAdmin,
     isAdminEmailAddress,
