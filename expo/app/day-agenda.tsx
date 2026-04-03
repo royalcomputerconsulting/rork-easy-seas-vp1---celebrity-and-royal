@@ -91,6 +91,195 @@ interface TimelineEvent {
   isOpportune?: boolean;
 }
 
+const MINUTES_PER_DAY = 24 * 60;
+const HOUR_ROW_HEIGHT = 76;
+const MIN_SCHEDULE_BLOCK_HEIGHT = 42;
+const DAY_HOURS = Array.from({ length: 24 }, (_, index) => index);
+
+interface DayScheduleBlockInput {
+  id: string;
+  title: string;
+  subtitle?: string;
+  location?: string;
+  notes?: string;
+  startMinutes: number;
+  endMinutes: number;
+  color: string;
+  icon: TimelineEvent['icon'];
+  type: TimelineEvent['type'] | 'travel' | 'personal' | 'cruise';
+}
+
+interface DayScheduleBlock extends DayScheduleBlockInput {
+  overlapColumn: number;
+  overlapColumns: number;
+}
+
+interface AllDayScheduleItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  detail?: string;
+  color: string;
+  icon: TimelineEvent['icon'];
+}
+
+function parseScheduleTimeToMinutes(value?: string): number | null {
+  const normalizedValue = value?.trim();
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const upperValue = normalizedValue.toUpperCase();
+  if (upperValue === 'MIDNIGHT') {
+    return 0;
+  }
+  if (upperValue === 'NOON') {
+    return 12 * 60;
+  }
+
+  const twelveHourMatch = upperValue.match(/^(\d{1,2})(?::(\d{2}))?\s*([AP]M)$/);
+  if (twelveHourMatch) {
+    const parsedHours = parseInt(twelveHourMatch[1], 10);
+    const parsedMinutes = parseInt(twelveHourMatch[2] ?? '0', 10);
+    if (parsedHours < 1 || parsedHours > 12 || parsedMinutes < 0 || parsedMinutes > 59) {
+      return null;
+    }
+
+    const adjustedHours = parsedHours % 12 + (twelveHourMatch[3] === 'PM' ? 12 : 0);
+    return adjustedHours * 60 + parsedMinutes;
+  }
+
+  const twentyFourHourMatch = upperValue.match(/^(\d{1,2})(?::(\d{2}))$/);
+  if (twentyFourHourMatch) {
+    const parsedHours = parseInt(twentyFourHourMatch[1], 10);
+    const parsedMinutes = parseInt(twentyFourHourMatch[2], 10);
+    if (parsedHours === 24 && parsedMinutes === 0) {
+      return MINUTES_PER_DAY;
+    }
+    if (parsedHours < 0 || parsedHours > 23 || parsedMinutes < 0 || parsedMinutes > 59) {
+      return null;
+    }
+
+    return parsedHours * 60 + parsedMinutes;
+  }
+
+  return null;
+}
+
+function clampScheduleRange(startMinutes: number, endMinutes: number): { startMinutes: number; endMinutes: number } | null {
+  const safeStart = Math.max(0, Math.min(MINUTES_PER_DAY, startMinutes));
+  const safeEnd = Math.max(0, Math.min(MINUTES_PER_DAY, endMinutes));
+
+  if (safeEnd <= safeStart) {
+    return null;
+  }
+
+  return {
+    startMinutes: safeStart,
+    endMinutes: safeEnd,
+  };
+}
+
+function formatScheduleTime(minutes: number): string {
+  const safeMinutes = Math.max(0, Math.min(MINUTES_PER_DAY, minutes));
+  const normalizedMinutes = safeMinutes === MINUTES_PER_DAY ? 0 : safeMinutes;
+  const hours = Math.floor(normalizedMinutes / 60);
+  const mins = normalizedMinutes % 60;
+  const meridiem = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 === 0 ? 12 : hours % 12;
+
+  return `${displayHours}:${String(mins).padStart(2, '0')} ${meridiem}`;
+}
+
+function formatScheduleTimeRange(startMinutes: number, endMinutes: number): string {
+  const endLabel = endMinutes >= MINUTES_PER_DAY ? '12:00 AM' : formatScheduleTime(endMinutes);
+  return `${formatScheduleTime(startMinutes)} - ${endLabel}`;
+}
+
+function formatHourLabel(hour: number): string {
+  const meridiem = hour >= 12 ? 'PM' : 'AM';
+  const displayHours = hour % 12 === 0 ? 12 : hour % 12;
+  return `${displayHours} ${meridiem}`;
+}
+
+function formatDurationLabel(totalMinutes: number): string {
+  const safeMinutes = Math.max(0, totalMinutes);
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (hours > 0) {
+    return `${hours}h`;
+  }
+  return `${minutes}m`;
+}
+
+function layoutDayScheduleCluster(cluster: DayScheduleBlockInput[]): DayScheduleBlock[] {
+  const sortedCluster = [...cluster].sort((left, right) => {
+    return left.startMinutes - right.startMinutes || right.endMinutes - left.endMinutes;
+  });
+
+  const columnEndTimes: number[] = [];
+  const positionedBlocks = sortedCluster.map((block) => {
+    let columnIndex = columnEndTimes.findIndex((endTime) => endTime <= block.startMinutes);
+
+    if (columnIndex === -1) {
+      columnIndex = columnEndTimes.length;
+      columnEndTimes.push(block.endMinutes);
+    } else {
+      columnEndTimes[columnIndex] = block.endMinutes;
+    }
+
+    return {
+      ...block,
+      overlapColumn: columnIndex,
+      overlapColumns: 1,
+    };
+  });
+
+  const totalColumns = Math.max(1, columnEndTimes.length);
+  return positionedBlocks.map((block) => ({
+    ...block,
+    overlapColumns: totalColumns,
+  }));
+}
+
+function layoutDayScheduleBlocks(blocks: DayScheduleBlockInput[]): DayScheduleBlock[] {
+  const sortedBlocks = [...blocks].sort((left, right) => {
+    return left.startMinutes - right.startMinutes || right.endMinutes - left.endMinutes;
+  });
+
+  const laidOutBlocks: DayScheduleBlock[] = [];
+  let currentCluster: DayScheduleBlockInput[] = [];
+  let clusterEndMinutes = -1;
+
+  sortedBlocks.forEach((block) => {
+    if (currentCluster.length === 0) {
+      currentCluster = [block];
+      clusterEndMinutes = block.endMinutes;
+      return;
+    }
+
+    if (block.startMinutes < clusterEndMinutes) {
+      currentCluster.push(block);
+      clusterEndMinutes = Math.max(clusterEndMinutes, block.endMinutes);
+      return;
+    }
+
+    laidOutBlocks.push(...layoutDayScheduleCluster(currentCluster));
+    currentCluster = [block];
+    clusterEndMinutes = block.endMinutes;
+  });
+
+  if (currentCluster.length > 0) {
+    laidOutBlocks.push(...layoutDayScheduleCluster(currentCluster));
+  }
+
+  return laidOutBlocks;
+}
+
 function normalizeDayDate(date: Date): Date {
   const normalizedDate = new Date(date);
   normalizedDate.setHours(0, 0, 0, 0);
@@ -170,6 +359,16 @@ export default function DayAgendaScreen() {
       day: 'numeric',
       year: 'numeric',
     });
+  }, [selectedDate]);
+
+  const selectedDayWindow = useMemo(() => {
+    const start = new Date(selectedDate);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    return { start, end };
   }, [selectedDate]);
 
   useEffect(() => {
@@ -753,6 +952,274 @@ export default function DayAgendaScreen() {
     return getDailySummary(dateStr, totalGoldenMinutes);
   }, [getDailySummary, dateStr, totalGoldenMinutes]);
 
+  const dayScheduleData = useMemo(() => {
+    const scheduleBlocks: DayScheduleBlockInput[] = [];
+    const allDayItems: AllDayScheduleItem[] = [];
+    const allDayItemIds = new Set<string>();
+    const selectedDayStartMs = selectedDayWindow.start.getTime();
+    const selectedDayEndMs = selectedDayWindow.end.getTime();
+
+    const addAllDayItem = (item: AllDayScheduleItem) => {
+      if (allDayItemIds.has(item.id)) {
+        return;
+      }
+
+      allDayItemIds.add(item.id);
+      allDayItems.push(item);
+    };
+
+    const addScheduleBlock = (block: DayScheduleBlockInput) => {
+      const clampedRange = clampScheduleRange(block.startMinutes, block.endMinutes);
+      if (!clampedRange) {
+        return;
+      }
+
+      scheduleBlocks.push({
+        ...block,
+        ...clampedRange,
+      });
+    };
+
+    mergedCruiseBookings.forEach((cruise) => {
+      const dayNum = getDayOfCruise(cruise);
+      const totalDays = cruise.nights + 1;
+      const itineraryDay = getItineraryForDay(cruise, dayNum);
+      const casinoContext = getCasinoContext(cruise, dayNum);
+      const casinoInfo = determineCasinoHoursWithContext(casinoContext);
+      const arrivalMinutes = parseScheduleTimeToMinutes(itineraryDay?.arrival);
+      const departureMinutes = parseScheduleTimeToMinutes(itineraryDay?.departure);
+
+      if (itineraryDay?.isSeaDay) {
+        addAllDayItem({
+          id: `sea-day-${cruise.id}-${dayNum}`,
+          title: 'Sea Day',
+          subtitle: cruise.shipName,
+          detail: `Day ${dayNum} of ${totalDays}`,
+          color: EVENT_COLORS.seaDay,
+          icon: 'sea',
+        });
+      } else if (itineraryDay?.port) {
+        addAllDayItem({
+          id: `port-call-${cruise.id}-${dayNum}`,
+          title: itineraryDay.port,
+          subtitle: cruise.shipName,
+          detail: `Day ${dayNum} of ${totalDays}`,
+          color: EVENT_COLORS.port,
+          icon: 'port',
+        });
+      } else if (dayNum === 1) {
+        addAllDayItem({
+          id: `embarkation-chip-${cruise.id}`,
+          title: 'Embarkation Day',
+          subtitle: cruise.shipName,
+          detail: cruise.departurePort,
+          color: EVENT_COLORS.cruise,
+          icon: 'ship',
+        });
+      } else if (dayNum === totalDays) {
+        addAllDayItem({
+          id: `disembarkation-chip-${cruise.id}`,
+          title: 'Disembarkation Day',
+          subtitle: cruise.shipName,
+          detail: cruise.departurePort,
+          color: EVENT_COLORS.cruise,
+          icon: 'ship',
+        });
+      }
+
+      if (itineraryDay && !itineraryDay.isSeaDay) {
+        if (arrivalMinutes !== null && departureMinutes !== null) {
+          addScheduleBlock({
+            id: `port-window-${cruise.id}-${dayNum}`,
+            title: `In Port • ${itineraryDay.port}`,
+            subtitle: cruise.shipName,
+            location: itineraryDay.port,
+            notes: itineraryDay.notes,
+            startMinutes: arrivalMinutes,
+            endMinutes: departureMinutes > arrivalMinutes ? departureMinutes : MINUTES_PER_DAY,
+            color: EVENT_COLORS.port,
+            icon: 'port',
+            type: 'port',
+          });
+        } else if (departureMinutes !== null) {
+          addScheduleBlock({
+            id: `port-window-${cruise.id}-${dayNum}`,
+            title: `In Port • ${itineraryDay.port}`,
+            subtitle: `${cruise.shipName} embarkation window`,
+            location: itineraryDay.port,
+            notes: itineraryDay.notes,
+            startMinutes: 0,
+            endMinutes: departureMinutes,
+            color: EVENT_COLORS.port,
+            icon: 'port',
+            type: 'port',
+          });
+        } else if (arrivalMinutes !== null) {
+          addScheduleBlock({
+            id: `port-window-${cruise.id}-${dayNum}`,
+            title: `In Port • ${itineraryDay.port}`,
+            subtitle: `${cruise.shipName} disembarkation window`,
+            location: itineraryDay.port,
+            notes: itineraryDay.notes,
+            startMinutes: arrivalMinutes,
+            endMinutes: MINUTES_PER_DAY,
+            color: EVENT_COLORS.port,
+            icon: 'port',
+            type: 'port',
+          });
+        }
+      }
+
+      if (casinoInfo.open) {
+        if (casinoContext.isDepartureDay) {
+          const openMinutes = parseScheduleTimeToMinutes(casinoInfo.openTime);
+          if (openMinutes !== null) {
+            addScheduleBlock({
+              id: `casino-departure-${cruise.id}-${dayNum}`,
+              title: 'Casino Opens After Sail Away',
+              subtitle: cruise.shipName,
+              notes: casinoInfo.reason,
+              startMinutes: openMinutes,
+              endMinutes: MINUTES_PER_DAY,
+              color: EVENT_COLORS.casino,
+              icon: 'casino',
+              type: 'casino',
+            });
+          }
+        } else if (casinoContext.isSeaDay) {
+          const openMinutes = parseScheduleTimeToMinutes(casinoInfo.openTime) ?? 0;
+          addScheduleBlock({
+            id: `casino-sea-day-${cruise.id}-${dayNum}`,
+            title: 'Casino Open',
+            subtitle: cruise.shipName,
+            notes: casinoInfo.reason,
+            startMinutes: openMinutes,
+            endMinutes: MINUTES_PER_DAY,
+            color: EVENT_COLORS.casino,
+            icon: 'casino',
+            type: 'casino',
+          });
+        } else if (!casinoContext.isDisembarkDay) {
+          addScheduleBlock({
+            id: `casino-carryover-${cruise.id}-${dayNum}`,
+            title: 'Casino Open',
+            subtitle: `${cruise.shipName} overnight carryover`,
+            notes: 'Open from midnight until the ship is back in port waters.',
+            startMinutes: 0,
+            endMinutes: 5 * 60,
+            color: EVENT_COLORS.casino,
+            icon: 'casino',
+            type: 'casino',
+          });
+
+          const reopenMinutes = parseScheduleTimeToMinutes(casinoInfo.openTime);
+          if (reopenMinutes !== null) {
+            addScheduleBlock({
+              id: `casino-reopen-${cruise.id}-${dayNum}`,
+              title: 'Casino Reopens',
+              subtitle: itineraryDay?.port ? `${itineraryDay.port} sail away` : cruise.shipName,
+              notes: casinoInfo.reason,
+              startMinutes: reopenMinutes,
+              endMinutes: MINUTES_PER_DAY,
+              color: EVENT_COLORS.casino,
+              icon: 'casino',
+              type: 'casino',
+            });
+          }
+        }
+      } else {
+        addAllDayItem({
+          id: `casino-closed-${cruise.id}-${dayNum}`,
+          title: 'Casino Closed',
+          subtitle: casinoInfo.reason,
+          detail: cruise.shipName,
+          color: '#6B7280',
+          icon: 'casino',
+        });
+      }
+    });
+
+    calendarEvents.forEach((event) => {
+      const eventStartValue = event.startDate || event.start || '';
+      const eventEndValue = event.endDate || event.end || eventStartValue;
+      if (!eventStartValue) {
+        return;
+      }
+
+      const isTravelEvent = event.type === 'travel' || event.type === 'flight' || event.type === 'hotel';
+      const eventColor = event.type === 'cruise'
+        ? EVENT_COLORS.cruise
+        : isTravelEvent
+          ? EVENT_COLORS.travel
+          : EVENT_COLORS.personal;
+      const secondaryText = event.location ?? event.description;
+
+      if (event.allDay || !eventStartValue.includes('T')) {
+        if (isDateInRange(selectedDate, eventStartValue, eventEndValue)) {
+          addAllDayItem({
+            id: `all-day-event-${event.id}`,
+            title: event.title,
+            subtitle: secondaryText,
+            detail: event.type,
+            color: eventColor,
+            icon: 'calendar',
+          });
+        }
+        return;
+      }
+
+      const eventStartDate = new Date(eventStartValue);
+      if (Number.isNaN(eventStartDate.getTime())) {
+        return;
+      }
+
+      const parsedEndDate = eventEndValue ? new Date(eventEndValue) : new Date(eventStartDate.getTime() + 30 * 60 * 1000);
+      const eventEndDate = Number.isNaN(parsedEndDate.getTime()) || parsedEndDate.getTime() <= eventStartDate.getTime()
+        ? new Date(eventStartDate.getTime() + 30 * 60 * 1000)
+        : parsedEndDate;
+
+      const overlapStartMs = Math.max(selectedDayStartMs, eventStartDate.getTime());
+      const overlapEndMs = Math.min(selectedDayEndMs, eventEndDate.getTime());
+      if (overlapEndMs <= overlapStartMs) {
+        return;
+      }
+
+      const overlapStartMinutes = Math.max(0, Math.round((overlapStartMs - selectedDayStartMs) / 60000));
+      const overlapEndMinutes = Math.min(MINUTES_PER_DAY, Math.round((overlapEndMs - selectedDayStartMs) / 60000));
+      const safeEndMinutes = overlapEndMinutes <= overlapStartMinutes
+        ? Math.min(MINUTES_PER_DAY, overlapStartMinutes + 30)
+        : overlapEndMinutes;
+
+      addScheduleBlock({
+        id: `timed-event-${event.id}`,
+        title: event.title,
+        subtitle: secondaryText,
+        location: event.location,
+        notes: event.description,
+        startMinutes: overlapStartMinutes,
+        endMinutes: safeEndMinutes,
+        color: eventColor,
+        icon: 'calendar',
+        type: isTravelEvent ? 'travel' : event.type === 'cruise' ? 'cruise' : 'personal',
+      });
+    });
+
+    const timedBlocks = layoutDayScheduleBlocks(scheduleBlocks);
+    const portMinutes = timedBlocks
+      .filter((block) => block.type === 'port')
+      .reduce((total, block) => total + (block.endMinutes - block.startMinutes), 0);
+    const casinoMinutes = timedBlocks
+      .filter((block) => block.type === 'casino')
+      .reduce((total, block) => total + (block.endMinutes - block.startMinutes), 0);
+
+    return {
+      timedBlocks,
+      allDayItems,
+      portMinutes,
+      casinoMinutes,
+    };
+  }, [calendarEvents, getCasinoContext, getDayOfCruise, getItineraryForDay, isDateInRange, mergedCruiseBookings, selectedDate, selectedDayWindow.end, selectedDayWindow.start]);
+
   const handleAddSession = useCallback(() => {
     setShowAddSessionModal(true);
   }, []);
@@ -864,6 +1331,82 @@ export default function DayAgendaScreen() {
             )}
           </View>
         </View>
+      </View>
+    );
+  }, [getTimelineIcon]);
+
+  const renderAllDayScheduleItem = useCallback((item: AllDayScheduleItem) => {
+    const IconComponent = getTimelineIcon(item.icon);
+
+    return (
+      <View
+        key={item.id}
+        style={[
+          styles.allDayItem,
+          {
+            borderColor: `${item.color}55`,
+            backgroundColor: `${item.color}18`,
+          },
+        ]}
+        testID={`day-agenda-all-day-${item.id}`}
+      >
+        <View style={[styles.allDayIconBadge, { backgroundColor: `${item.color}24` }]}>
+          <IconComponent size={14} color={item.color} />
+        </View>
+        <View style={styles.allDayTextContainer}>
+          <Text style={styles.allDayItemTitle} numberOfLines={1}>{item.title}</Text>
+          {item.subtitle ? (
+            <Text style={styles.allDayItemSubtitle} numberOfLines={1}>{item.subtitle}</Text>
+          ) : null}
+        </View>
+        {item.detail ? (
+          <Text style={styles.allDayItemDetail} numberOfLines={1}>{item.detail}</Text>
+        ) : null}
+      </View>
+    );
+  }, [getTimelineIcon]);
+
+  const renderDayScheduleBlock = useCallback((block: DayScheduleBlock) => {
+    const IconComponent = getTimelineIcon(block.icon);
+    const top = (block.startMinutes / 60) * HOUR_ROW_HEIGHT;
+    const rawHeight = ((block.endMinutes - block.startMinutes) / 60) * HOUR_ROW_HEIGHT;
+    const blockHeight = Math.max(rawHeight, MIN_SCHEDULE_BLOCK_HEIGHT);
+    const widthPercent = 100 / block.overlapColumns;
+    const adjustedWidthPercent = Math.max(widthPercent - (block.overlapColumns > 1 ? 1.8 : 0), 24);
+    const leftPercent = block.overlapColumn * widthPercent;
+    const isCompact = blockHeight < 82;
+
+    return (
+      <View
+        key={block.id}
+        style={[
+          styles.dayScheduleBlock,
+          {
+            top,
+            height: blockHeight,
+            left: `${leftPercent}%`,
+            width: `${adjustedWidthPercent}%`,
+            borderColor: `${block.color}66`,
+            backgroundColor: `${block.color}20`,
+          },
+        ]}
+        testID={`day-agenda-schedule-block-${block.id}`}
+      >
+        <View style={styles.dayScheduleBlockHeader}>
+          <View style={[styles.dayScheduleBlockIconBadge, { backgroundColor: `${block.color}28` }]}>
+            <IconComponent size={13} color={block.color} />
+          </View>
+          <Text style={styles.dayScheduleBlockTime} numberOfLines={1}>
+            {formatScheduleTimeRange(block.startMinutes, block.endMinutes)}
+          </Text>
+        </View>
+        <Text style={styles.dayScheduleBlockTitle} numberOfLines={isCompact ? 1 : 2}>{block.title}</Text>
+        {!isCompact && block.subtitle ? (
+          <Text style={styles.dayScheduleBlockSubtitle} numberOfLines={2}>{block.subtitle}</Text>
+        ) : null}
+        {!isCompact && block.location ? (
+          <Text style={styles.dayScheduleBlockLocation} numberOfLines={1}>{block.location}</Text>
+        ) : null}
       </View>
     );
   }, [getTimelineIcon]);
@@ -1043,7 +1586,8 @@ export default function DayAgendaScreen() {
             ) : null}
           </View>
           <Text style={styles.eventCount}>
-            {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
+            {dayScheduleData.timedBlocks.length} timed block{dayScheduleData.timedBlocks.length === 1 ? '' : 's'}
+            {dayScheduleData.allDayItems.length > 0 ? ` • ${dayScheduleData.allDayItems.length} all-day` : ''}
             {dailyLuckDigit !== null ? ` • ${getLuckDigitLabel(dailyLuckDigit)} luck day` : ''}
           </Text>
         </View>
@@ -1053,6 +1597,69 @@ export default function DayAgendaScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.sectionContainer} testID="day-agenda-24-hour-section">
+            <Text style={styles.sectionTitle}>24-Hour Agenda</Text>
+            <View style={styles.dayScheduleCard}>
+              <View style={styles.dayScheduleSummaryHeader}>
+                <View style={styles.dayScheduleSummaryCopy}>
+                  <Text style={styles.dayScheduleSummaryTitle}>Full day schedule</Text>
+                  <Text style={styles.dayScheduleSummarySubtitle}>
+                    Port windows, casino availability, and timed events for this day.
+                  </Text>
+                </View>
+                <View style={styles.dayScheduleMetricsRow}>
+                  <View style={styles.dayScheduleMetricChip}>
+                    <Text style={styles.dayScheduleMetricValue}>{formatDurationLabel(dayScheduleData.portMinutes)}</Text>
+                    <Text style={styles.dayScheduleMetricLabel}>In port</Text>
+                  </View>
+                  <View style={styles.dayScheduleMetricChip}>
+                    <Text style={styles.dayScheduleMetricValue}>{formatDurationLabel(dayScheduleData.casinoMinutes)}</Text>
+                    <Text style={styles.dayScheduleMetricLabel}>Casino open</Text>
+                  </View>
+                </View>
+              </View>
+
+              {dayScheduleData.allDayItems.length > 0 ? (
+                <View style={styles.allDaySection}>
+                  <Text style={styles.allDaySectionLabel}>All-day</Text>
+                  <View style={styles.allDayItemsList}>
+                    {dayScheduleData.allDayItems.map(renderAllDayScheduleItem)}
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={styles.dayScheduleBody}>
+                <View style={styles.dayScheduleHoursColumn}>
+                  {DAY_HOURS.map((hour) => (
+                    <View key={`schedule-hour-${hour}`} style={styles.dayScheduleHourLabelRow}>
+                      <Text style={styles.dayScheduleHourLabel}>{formatHourLabel(hour)}</Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={styles.dayScheduleGrid} testID="day-agenda-24-hour-grid">
+                  {DAY_HOURS.map((hour) => (
+                    <View
+                      key={`schedule-divider-${hour}`}
+                      style={[styles.dayScheduleHourDivider, { top: hour * HOUR_ROW_HEIGHT }]}
+                    />
+                  ))}
+                  <View style={[styles.dayScheduleHourDivider, styles.dayScheduleBottomDivider]} />
+                  <View style={styles.dayScheduleBlocksLayer}>
+                    {dayScheduleData.timedBlocks.map(renderDayScheduleBlock)}
+                  </View>
+                  {dayScheduleData.timedBlocks.length === 0 ? (
+                    <View style={styles.dayScheduleEmptyState} testID="day-agenda-24-hour-empty">
+                      <Text style={styles.dayScheduleEmptyTitle}>No timed items</Text>
+                      <Text style={styles.dayScheduleEmptySubtitle}>
+                        Port windows, casino hours, and timed events will appear here for this day.
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          </View>
+
           <View style={styles.sectionContainer} testID="day-agenda-daily-luck-section">
             <DailyLuckReport
               birthdate={normalizedBirthdate}
@@ -1061,7 +1668,7 @@ export default function DayAgendaScreen() {
             />
           </View>
 
-          {agendaItems.length === 0 && timelineEvents.length === 0 ? (
+          {agendaItems.length === 0 && timelineEvents.length === 0 && dayScheduleData.timedBlocks.length === 0 && dayScheduleData.allDayItems.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconContainer}>
                 <Calendar size={48} color="#FFFFFF" />
@@ -1574,5 +2181,218 @@ const styles = StyleSheet.create({
   },
   timelineSubtitleOpportune: {
     color: '#FFFFFF',
+  },
+  dayScheduleCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: BORDER_RADIUS.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    overflow: 'hidden',
+  },
+  dayScheduleSummaryHeader: {
+    padding: SPACING.lg,
+    gap: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  dayScheduleSummaryCopy: {
+    gap: 4,
+  },
+  dayScheduleSummaryTitle: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+  },
+  dayScheduleSummarySubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255, 255, 255, 0.78)',
+    lineHeight: 20,
+  },
+  dayScheduleMetricsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  dayScheduleMetricChip: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  dayScheduleMetricValue: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+  },
+  dayScheduleMetricLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255, 255, 255, 0.68)',
+    marginTop: 2,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  allDaySection: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    gap: SPACING.sm,
+  },
+  allDaySectionLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: 'rgba(255, 255, 255, 0.72)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 1,
+  },
+  allDayItemsList: {
+    gap: SPACING.sm,
+  },
+  allDayItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    borderWidth: 1,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  allDayIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  allDayTextContainer: {
+    flex: 1,
+    gap: 2,
+  },
+  allDayItemTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#FFFFFF',
+  },
+  allDayItemSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255, 255, 255, 0.76)',
+  },
+  allDayItemDetail: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.4,
+  },
+  dayScheduleBody: {
+    flexDirection: 'row',
+    minHeight: HOUR_ROW_HEIGHT * 24,
+    padding: SPACING.lg,
+    gap: SPACING.sm,
+  },
+  dayScheduleHoursColumn: {
+    width: 54,
+  },
+  dayScheduleHourLabelRow: {
+    height: HOUR_ROW_HEIGHT,
+    alignItems: 'flex-end',
+    paddingTop: 2,
+  },
+  dayScheduleHourLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: 'rgba(255, 255, 255, 0.62)',
+    textTransform: 'uppercase' as const,
+  },
+  dayScheduleGrid: {
+    flex: 1,
+    minHeight: HOUR_ROW_HEIGHT * 24,
+    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: 'rgba(8, 15, 28, 0.28)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  dayScheduleHourDivider: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  dayScheduleBottomDivider: {
+    top: HOUR_ROW_HEIGHT * 24,
+  },
+  dayScheduleBlocksLayer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: SPACING.sm,
+    right: SPACING.sm,
+  },
+  dayScheduleBlock: {
+    position: 'absolute',
+    borderWidth: 1,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    overflow: 'hidden',
+  },
+  dayScheduleBlockHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  dayScheduleBlockIconBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayScheduleBlockTime: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+  },
+  dayScheduleBlockTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+  },
+  dayScheduleBlockSubtitle: {
+    marginTop: 4,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255, 255, 255, 0.84)',
+    lineHeight: 16,
+  },
+  dayScheduleBlockLocation: {
+    marginTop: 4,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255, 255, 255, 0.68)',
+  },
+  dayScheduleEmptyState: {
+    position: 'absolute',
+    left: SPACING.lg,
+    right: SPACING.lg,
+    top: SPACING.xl,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: SPACING.lg,
+    gap: 4,
+  },
+  dayScheduleEmptyTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#FFFFFF',
+  },
+  dayScheduleEmptySubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255, 255, 255, 0.72)',
+    lineHeight: 20,
   },
 });
