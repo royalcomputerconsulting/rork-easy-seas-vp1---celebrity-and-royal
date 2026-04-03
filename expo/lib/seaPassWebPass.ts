@@ -24,6 +24,13 @@ export interface SeaPassOverlayMask {
   radius: number;
 }
 
+export interface SeaPassOverlayCloneSource {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface SeaPassDynamicOverlay {
   key: SeaPassOverlayKey;
   value: string;
@@ -34,6 +41,7 @@ export interface SeaPassDynamicOverlay {
   fontWeight: string;
   textAnchor?: 'middle' | 'end';
   mask: SeaPassOverlayMask;
+  cloneSource?: SeaPassOverlayCloneSource;
 }
 
 interface SeaPassDynamicOverlayDefinition {
@@ -44,6 +52,7 @@ interface SeaPassDynamicOverlayDefinition {
   fontWeight: string;
   textAnchor?: 'middle' | 'end';
   mask: SeaPassOverlayMask;
+  cloneSource?: SeaPassOverlayCloneSource;
 }
 
 export const SEA_PASS_VIEWBOX = {
@@ -124,128 +133,170 @@ export const BOARDING_KEY_RING_PATH = 'M42 76C22 76 6 60 6 40C6 20 22 4 42 4C61 
 
 const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDynamicOverlayDefinition> = {
   time: {
-    x: 916,
+    x: 956,
     y: 106,
     fill: '#FFFFFF',
-    fontSize: 52,
+    fontSize: 46,
     fontWeight: '400',
     textAnchor: 'end',
     mask: {
-      x: 738,
-      y: 36,
-      width: 220,
-      height: 52,
-      fill: '#6B49AE',
-      radius: 10,
+      x: 774,
+      y: 52,
+      width: 186,
+      height: 58,
+      fill: '#583B8A',
+      radius: 6,
+    },
+    cloneSource: {
+      x: 534,
+      y: 52,
+      width: 186,
+      height: 58,
     },
   },
   date: {
-    x: 916,
-    y: 176,
+    x: 958,
+    y: 178,
     fill: '#FFFFFF',
-    fontSize: 72,
+    fontSize: 62,
     fontWeight: '300',
     textAnchor: 'end',
     mask: {
-      x: 730,
-      y: 98,
-      width: 228,
-      height: 82,
-      fill: '#6B49AE',
-      radius: 10,
+      x: 764,
+      y: 118,
+      width: 196,
+      height: 74,
+      fill: '#5A3C8E',
+      radius: 6,
+    },
+    cloneSource: {
+      x: 520,
+      y: 118,
+      width: 196,
+      height: 74,
     },
   },
   deck: {
-    x: 60,
-    y: 716,
+    x: 94,
+    y: 608,
     fill: '#30333A',
-    fontSize: 56,
+    fontSize: 54,
     fontWeight: '400',
     mask: {
-      x: 56,
-      y: 662,
-      width: 96,
-      height: 70,
-      fill: '#F5F5F6',
-      radius: 8,
+      x: 90,
+      y: 570,
+      width: 72,
+      height: 48,
+      fill: '#F2F2F3',
+      radius: 4,
+    },
+    cloneSource: {
+      x: 470,
+      y: 570,
+      width: 72,
+      height: 48,
     },
   },
   stateroom: {
     x: 250,
-    y: 716,
+    y: 608,
     fill: '#30333A',
-    fontSize: 56,
+    fontSize: 54,
     fontWeight: '400',
     mask: {
-      x: 244,
-      y: 662,
-      width: 248,
-      height: 70,
-      fill: '#F5F5F6',
-      radius: 8,
+      x: 246,
+      y: 570,
+      width: 176,
+      height: 48,
+      fill: '#F2F2F3',
+      radius: 4,
+    },
+    cloneSource: {
+      x: 506,
+      y: 570,
+      width: 176,
+      height: 48,
     },
   },
   muster: {
-    x: 912,
-    y: 716,
+    x: 930,
+    y: 608,
     fill: '#30333A',
-    fontSize: 56,
+    fontSize: 54,
     fontWeight: '400',
     textAnchor: 'end',
     mask: {
-      x: 816,
-      y: 662,
-      width: 130,
-      height: 70,
-      fill: '#F5F5F6',
-      radius: 8,
+      x: 848,
+      y: 570,
+      width: 86,
+      height: 48,
+      fill: '#F2F2F3',
+      radius: 4,
+    },
+    cloneSource: {
+      x: 658,
+      y: 570,
+      width: 86,
+      height: 48,
     },
   },
   reservation: {
-    x: 64,
-    y: 904,
+    x: 94,
+    y: 755,
     fill: '#30333A',
-    fontSize: 56,
+    fontSize: 54,
     fontWeight: '400',
     mask: {
-      x: 58,
-      y: 850,
-      width: 290,
-      height: 70,
-      fill: '#F7F7F8',
-      radius: 8,
+      x: 90,
+      y: 718,
+      width: 174,
+      height: 48,
+      fill: '#F4F4F5',
+      radius: 4,
+    },
+    cloneSource: {
+      x: 408,
+      y: 718,
+      width: 174,
+      height: 48,
     },
   },
   ship: {
-    x: 912,
-    y: 904,
+    x: 930,
+    y: 755,
     fill: '#30333A',
-    fontSize: 56,
+    fontSize: 54,
     fontWeight: '400',
     textAnchor: 'end',
     mask: {
-      x: 818,
-      y: 850,
-      width: 128,
-      height: 70,
-      fill: '#F7F7F8',
-      radius: 8,
+      x: 848,
+      y: 718,
+      width: 86,
+      height: 48,
+      fill: '#F4F4F5',
+      radius: 4,
+    },
+    cloneSource: {
+      x: 684,
+      y: 718,
+      width: 86,
+      height: 48,
     },
   },
   barcodeCaption: {
     x: 512,
-    y: 1350,
+    y: 1308,
     fill: '#30333A',
-    fontSize: 42,
+    fontSize: 48,
     fontWeight: '400',
     textAnchor: 'middle',
     mask: {
-      x: 322,
-      y: 1302,
-      width: 380,
-      height: 62,
-      fill: '#FAFAFA',
-      radius: 8,
+      x: 356,
+      y: 1272,
+      width: 312,
+      height: 48,
+      fill: '#F8F8F9',
+      radius: 4,
     },
   },
 };
@@ -319,22 +370,41 @@ async function getSeaPassApprovedScreenshotDataUrl(): Promise<string> {
   return approvedSeaPassImageDataUrlPromise;
 }
 
-function buildSeaPassOverlaySvgMarkup(input: Partial<SeaPassWebPassData>): string {
+function buildSeaPassOverlaySvgMarkup(
+  input: Partial<SeaPassWebPassData>,
+  approvedImageHref: string,
+): { defsMarkup: string; overlayMarkup: string } {
   const data = getSeaPassData(input);
   const barcodeCaption = getSeaPassBarcodeCaption(data);
   const overlays = getSeaPassDynamicOverlays(data);
+  const safeImageHref = escapeXml(approvedImageHref);
+  const defs: string[] = [];
 
-  return overlays
+  const overlayMarkup = overlays
     .map((overlay) => {
       const mask = overlay.mask;
       const textAnchor = overlay.textAnchor ? ` text-anchor="${overlay.textAnchor}"` : '';
       const value = escapeXml(getDynamicOverlayValue(overlay.key, data, barcodeCaption));
+      const clipId = `overlay-clip-${overlay.key}`;
 
-      return `
-  <rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" />
-  <text x="${overlay.x}" y="${overlay.y}"${textAnchor} font-family="${SEA_PASS_FONT_STACK}" font-size="${overlay.fontSize}" font-weight="${overlay.fontWeight}" fill="${overlay.fill}">${value}</text>`;
+      const eraseMarkup = overlay.cloneSource
+        ? (() => {
+            defs.push(
+              `<clipPath id="${clipId}"><rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" /></clipPath>`,
+            );
+
+            return `<image href="${safeImageHref}" x="${mask.x - overlay.cloneSource.x}" y="${mask.y - overlay.cloneSource.y}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" clip-path="url(#${clipId})" />`;
+          })()
+        : `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" />`;
+
+      return `${eraseMarkup}<text x="${overlay.x}" y="${overlay.y}"${textAnchor} font-family="${SEA_PASS_FONT_STACK}" font-size="${overlay.fontSize}" font-weight="${overlay.fontWeight}" fill="${overlay.fill}">${value}</text>`;
     })
     .join('');
+
+  return {
+    defsMarkup: defs.join(''),
+    overlayMarkup,
+  };
 }
 
 export function getSeaPassData(input: Partial<SeaPassWebPassData>): SeaPassWebPassData {
@@ -377,6 +447,7 @@ export function getSeaPassDynamicOverlays(input: Partial<SeaPassWebPassData>): S
       fontWeight: definition.fontWeight,
       textAnchor: definition.textAnchor,
       mask: definition.mask,
+      cloneSource: definition.cloneSource,
     });
     return accumulator;
   }, []);
@@ -439,10 +510,11 @@ export function buildSeaPassSvgMarkup(
 ): string {
   const background = escapeXml(backgroundColor);
   const safeImageHref = escapeXml(approvedImageHref);
-  const overlayMarkup = buildSeaPassOverlaySvgMarkup(input);
+  const { defsMarkup, overlayMarkup } = buildSeaPassOverlaySvgMarkup(input, approvedImageHref);
+  const defsSection = defsMarkup.length > 0 ? `<defs>${defsMarkup}</defs>` : '';
 
   return `
-<svg xmlns="http://www.w3.org/2000/svg" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" viewBox="0 0 ${SEA_PASS_VIEWBOX.width} ${SEA_PASS_VIEWBOX.height}" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" viewBox="0 0 ${SEA_PASS_VIEWBOX.width} ${SEA_PASS_VIEWBOX.height}" fill="none">${defsSection}
   <rect x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" fill="${background}" />
   <image href="${safeImageHref}" x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" />${overlayMarkup}
 </svg>`.trim();
