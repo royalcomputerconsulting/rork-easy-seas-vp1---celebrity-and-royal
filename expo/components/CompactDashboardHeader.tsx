@@ -195,24 +195,24 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         return {
           marbleConfig: MARBLE_TEXTURES.white,
           borderColor: 'rgba(17, 24, 39, 0.16)',
-          backgroundOverlayColors: ['rgba(255,255,255,0.62)', 'rgba(244,244,245,0.42)', 'rgba(255,255,255,0.16)'] as [string, string, string],
-          atmosphereOverlayColors: ['rgba(17,24,39,0.12)', 'rgba(161,161,170,0.08)', 'rgba(255,255,255,0.06)'] as [string, string, string],
+          backgroundOverlayColors: ['rgba(17,24,39,0.14)', 'rgba(17,24,39,0.06)', 'rgba(17,24,39,0.00)'] as [string, string, string],
+          atmosphereOverlayColors: ['rgba(17,24,39,0.08)', 'rgba(161,161,170,0.04)', 'rgba(255,255,255,0.00)'] as [string, string, string],
           contentBackground: 'rgba(255, 255, 255, 0.18)',
         };
       case 'silversea':
         return {
           marbleConfig: MARBLE_TEXTURES.gold,
           borderColor: 'rgba(124, 90, 55, 0.16)',
-          backgroundOverlayColors: ['rgba(255,252,246,0.58)', 'rgba(255,244,214,0.38)', 'rgba(255,255,255,0.14)'] as [string, string, string],
-          atmosphereOverlayColors: ['rgba(124,90,55,0.10)', 'rgba(255,255,255,0.08)', 'rgba(255,236,179,0.06)'] as [string, string, string],
+          backgroundOverlayColors: ['rgba(86,56,26,0.14)', 'rgba(86,56,26,0.06)', 'rgba(86,56,26,0.00)'] as [string, string, string],
+          atmosphereOverlayColors: ['rgba(124,90,55,0.08)', 'rgba(255,236,179,0.04)', 'rgba(255,255,255,0.00)'] as [string, string, string],
           contentBackground: 'rgba(255, 248, 236, 0.14)',
         };
       default:
         return {
           marbleConfig: MARBLE_TEXTURES.lightBlue,
           borderColor: 'rgba(255, 255, 255, 0.26)',
-          backgroundOverlayColors: ['rgba(255,255,255,0.56)', 'rgba(255,248,236,0.34)', 'rgba(255,255,255,0.12)'] as [string, string, string],
-          atmosphereOverlayColors: ['rgba(255,255,255,0.18)', 'rgba(246,214,142,0.16)', 'rgba(103, 232, 249, 0.10)'] as [string, string, string],
+          backgroundOverlayColors: ['rgba(10,22,38,0.14)', 'rgba(10,22,38,0.06)', 'rgba(10,22,38,0.00)'] as [string, string, string],
+          atmosphereOverlayColors: ['rgba(255,255,255,0.06)', 'rgba(246,214,142,0.06)', 'rgba(103, 232, 249, 0.04)'] as [string, string, string],
           contentBackground: 'rgba(255, 248, 236, 0.12)',
         };
     }
@@ -1187,7 +1187,7 @@ const styles = StyleSheet.create({
   },
   backgroundImage: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(244, 248, 255, 0.78)',
+    backgroundColor: '#F4F8FF',
   },
   backgroundOverlay: {
     ...StyleSheet.absoluteFillObject,
