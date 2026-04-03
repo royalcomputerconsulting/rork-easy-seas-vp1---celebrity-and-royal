@@ -206,6 +206,28 @@ export default function SettingsScreen() {
     }
     return 'Purchase a monthly or annual subscription to continue.';
   }, [entitlement.source, entitlement.subscriptionDisplayStatus, entitlement.trialDaysRemaining, isAdmin]);
+  const shouldShowIosMonthlySubscription = Platform.OS !== 'android';
+  const isIosMonthlyPurchaseDisabled = entitlement.isLoading || entitlement.isPro;
+  const iosMonthlyPurchaseButtonLabel = entitlement.isPro
+    ? 'Monthly Plan Active'
+    : entitlement.isLoading
+      ? 'Processing...'
+      : 'Subscribe for $9.99/month';
+
+  const handleStartIosMonthlySubscription = useCallback(() => {
+    console.log('[Settings] Starting iOS monthly subscription purchase flow');
+    void entitlement.subscribeProMonthly();
+  }, [entitlement]);
+
+  const handleOpenSubscriptionPrivacyPolicy = useCallback(() => {
+    console.log('[Settings] Opening subscription privacy policy');
+    void entitlement.openPrivacyPolicy();
+  }, [entitlement]);
+
+  const handleOpenSubscriptionTerms = useCallback(() => {
+    console.log('[Settings] Opening subscription terms of use');
+    void entitlement.openTerms();
+  }, [entitlement]);
 
   const loadWhitelist = useCallback(async () => {
     try {
@@ -2204,6 +2226,62 @@ STEP 4: Optional Calendar Import
                 <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
                 () => { void entitlement.openManageSubscription(); }
               )}
+              {shouldShowIosMonthlySubscription && (
+                <View style={styles.subscriptionPurchaseCard} testID="settings.subscription.monthly-card">
+                  <View style={styles.subscriptionPurchaseHeader}>
+                    <View style={styles.subscriptionPurchaseBadge}>
+                      <Crown size={14} color={COLORS.white} />
+                      <Text style={styles.subscriptionPurchaseBadgeText}>App Store Monthly Plan</Text>
+                    </View>
+                    <Text style={styles.subscriptionPurchasePrice}>
+                      $9.99<Text style={styles.subscriptionPurchasePriceSuffix}>/month</Text>
+                    </Text>
+                  </View>
+                  <Text style={styles.subscriptionPurchaseTitle}>Easy Seas Monthly Subscription</Text>
+                  <Text style={styles.subscriptionPurchaseSubtitle}>
+                    Unlock full access with the iOS in-app subscription directly from Settings.
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.subscriptionPurchaseButton,
+                      isIosMonthlyPurchaseDisabled && styles.subscriptionPurchaseButtonDisabled,
+                    ]}
+                    onPress={handleStartIosMonthlySubscription}
+                    activeOpacity={0.85}
+                    disabled={isIosMonthlyPurchaseDisabled}
+                    testID="settings.subscription.monthly-button"
+                  >
+                    {entitlement.isLoading ? (
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                    ) : (
+                      <Text style={styles.subscriptionPurchaseButtonText}>{iosMonthlyPurchaseButtonLabel}</Text>
+                    )}
+                  </TouchableOpacity>
+                  <Text style={styles.subscriptionPurchaseDisclaimer}>
+                    Payment will be charged to your Apple ID account at confirmation of purchase. The subscription renews automatically at $9.99 per month unless auto-renew is turned off at least 24 hours before the end of the current period. You can manage and cancel your subscription anytime in App Store account settings.
+                  </Text>
+                  <View style={styles.subscriptionLegalRow}>
+                    <TouchableOpacity
+                      style={styles.subscriptionLegalButton}
+                      onPress={handleOpenSubscriptionPrivacyPolicy}
+                      activeOpacity={0.85}
+                      testID="settings.subscription.privacy"
+                    >
+                      <Shield size={14} color={COLORS.navyDeep} />
+                      <Text style={styles.subscriptionLegalButtonText}>Privacy Policy</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.subscriptionLegalButton}
+                      onPress={handleOpenSubscriptionTerms}
+                      activeOpacity={0.85}
+                      testID="settings.subscription.terms"
+                    >
+                      <Shield size={14} color={COLORS.navyDeep} />
+                      <Text style={styles.subscriptionLegalButtonText}>Terms of Use</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
               <View style={styles.dataDivider} />
               {renderSettingRow(
                 <Shield size={18} color={COLORS.navyDeep} />,
@@ -3062,6 +3140,101 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     marginHorizontal: SPACING.xs,
     lineHeight: 16,
+  },
+  subscriptionPurchaseCard: {
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.14)',
+    gap: SPACING.sm,
+  },
+  subscriptionPurchaseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  subscriptionPurchaseBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexShrink: 1,
+  },
+  subscriptionPurchaseBadgeText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+    letterSpacing: 0.6,
+  },
+  subscriptionPurchasePrice: {
+    fontSize: 24,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  subscriptionPurchasePriceSuffix: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: CLEAN_THEME.text.secondary,
+  },
+  subscriptionPurchaseTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  subscriptionPurchaseSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: CLEAN_THEME.text.secondary,
+    lineHeight: 20,
+  },
+  subscriptionPurchaseButton: {
+    minHeight: 48,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#0369A1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.md,
+  },
+  subscriptionPurchaseButtonDisabled: {
+    opacity: 0.6,
+  },
+  subscriptionPurchaseButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  subscriptionPurchaseDisclaimer: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 18,
+    color: CLEAN_THEME.text.secondary,
+  },
+  subscriptionLegalRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  subscriptionLegalButton: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.16)',
+    backgroundColor: 'rgba(3, 105, 161, 0.06)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.sm,
+  },
+  subscriptionLegalButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
   },
   subscriptionErrorText: {
     fontSize: TYPOGRAPHY.fontSizeXS,

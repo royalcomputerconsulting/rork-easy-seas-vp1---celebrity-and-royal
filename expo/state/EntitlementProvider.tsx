@@ -1036,13 +1036,6 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     actionInFlightRef.current = true;
     setError(null);
 
-    if (!auth.isAdmin) {
-      console.warn('[Entitlement] Purchase attempt blocked for non-admin user');
-      actionInFlightRef.current = false;
-      Alert.alert('Admin Only', 'Purchasing subscriptions is temporarily restricted to admin users.');
-      return;
-    }
-
     if (Platform.OS === 'web') {
       try {
         await AsyncStorage.setItem(storageKeys.WEB_IS_PRO, 'true');
@@ -1105,7 +1098,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setIsLoading(false);
       }
     }
-  }, [auth.isAdmin, ensurePurchasesLoaded, findPackageByProductIds, hasPrivilegedAccess, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO]);
+  }, [ensurePurchasesLoaded, findPackageByProductIds, hasPrivilegedAccess, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO]);
 
   const subscribeBasicMonthly = useCallback(async () => {
     await subscribeToProduct(BASIC_PRODUCT_IDS, 'Basic monthly subscription');
