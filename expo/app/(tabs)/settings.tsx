@@ -115,6 +115,7 @@ export default function SettingsScreen() {
     clubRoyaleTier: loyaltyClubRoyaleTier,
     setManualClubRoyalePoints,
     setManualCrownAnchorPoints,
+    setExtendedLoyaltyData,
     syncFromStorage: syncLoyaltyFromStorage,
     extendedLoyalty,
     venetianSociety,
@@ -1276,13 +1277,36 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         crownAnchor: profileData.loyaltyPoints
       });
       
-      // Ensure Celebrity loyalty data is persisted
+      const shouldSyncExtendedLoyalty = Boolean(
+        extendedLoyalty ||
+        profileData.celebrityCaptainsClubNumber ||
+        profileData.celebrityCaptainsClubPoints > 0 ||
+        profileData.celebrityBlueChipPoints > 0 ||
+        profileData.silverseaVenetianNumber ||
+        profileData.silverseaVenetianTier ||
+        profileData.silverseaCasinoPoints ||
+        profileData.silverseaCasinoTier
+      );
+
+      if (shouldSyncExtendedLoyalty) {
+        await setExtendedLoyaltyData({
+          ...(extendedLoyalty ?? {}),
+          captainsClubId: profileData.celebrityCaptainsClubNumber || extendedLoyalty?.captainsClubId,
+          captainsClubTier: profileData.celebrityCaptainsClubLevel || extendedLoyalty?.captainsClubTier,
+          captainsClubPoints: profileData.celebrityCaptainsClubPoints,
+          celebrityBlueChipTier: profileData.celebrityBlueChipTier || extendedLoyalty?.celebrityBlueChipTier,
+          celebrityBlueChipPoints: profileData.celebrityBlueChipPoints,
+          venetianSocietyTier: profileData.silverseaVenetianTier || extendedLoyalty?.venetianSocietyTier,
+          venetianSocietyMemberNumber: profileData.silverseaVenetianNumber || extendedLoyalty?.venetianSocietyMemberNumber,
+          venetianSocietyEnrolled: profileData.silverseaVenetianNumber ? true : (extendedLoyalty?.venetianSocietyEnrolled ?? false),
+        });
+      }
+
       console.log('[Settings] ✓ Updated Celebrity loyalty:', {
         captainsClub: profileData.celebrityCaptainsClubPoints,
         blueChip: profileData.celebrityBlueChipPoints
       });
       
-      // Ensure Silversea loyalty data is persisted
       console.log('[Settings] ✓ Updated Silversea loyalty:', {
         venetianTier: profileData.silverseaVenetianTier,
         venetianPoints: profileData.silverseaVenetianPoints,

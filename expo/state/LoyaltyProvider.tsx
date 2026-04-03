@@ -4,6 +4,7 @@ import createContextHook from "@nkzw/create-context-hook";
 import type { BookedCruise, ClubRoyaleTier, CrownAnchorLevel } from "@/types/models";
 import { useCoreData } from "./CoreDataProvider";
 import { useAuth } from "./AuthProvider";
+import { useUser, type UserProfile } from "./UserProvider";
 import { 
   CLUB_ROYALE_TIERS, 
   getTierByPoints, 
@@ -101,6 +102,7 @@ const DEFAULT_LOYALTY = {
 export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState => {
   const { bookedCruises: storedBookedCruises, isLoading: cruisesLoading } = useCoreData();
   const { authenticatedEmail } = useAuth();
+  const { currentUser, updateUser } = useUser();
   const lastEmailRef = useRef<string | null>(null);
 
   const skRef = useRef({
@@ -125,11 +127,6 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
   const bookedCruises = useMemo((): BookedCruise[] => {
     return storedBookedCruises || [];
   }, [storedBookedCruises]);
-
-  const userStorageKeys = useMemo(() => ({
-    USERS: getUserScopedKey(ALL_STORAGE_KEYS.USERS, authenticatedEmail),
-    CURRENT_USER: getUserScopedKey(ALL_STORAGE_KEYS.CURRENT_USER, authenticatedEmail),
-  }), [authenticatedEmail]);
 
   const loadManualPoints = useCallback(async () => {
     try {
@@ -194,7 +191,10 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
           console.log('[LoyaltyProvider] ✓ Loaded extended loyalty data from storage');
         } catch (parseError) {
           console.warn('[LoyaltyProvider] Failed to parse extended loyalty data:', parseError);
+          setExtendedLoyaltyState(null);
         }
+      } else {
+        setExtendedLoyaltyState(null);
       }
       
       console.log('[LoyaltyProvider] ✓ Manual points loaded successfully:', {
@@ -344,44 +344,35 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
         console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor points:', data.crownAndAnchorPointsFromApi);
       }
       
-      // Update Celebrity loyalty data
-      const celebrityUpdates: any = {};
+      const profileUpdates: Partial<UserProfile> = {};
       if (data.celebrityBlueChipPoints !== undefined) {
-        celebrityUpdates.celebrityBlueChipPoints = data.celebrityBlueChipPoints;
+        profileUpdates.celebrityBlueChipPoints = data.celebrityBlueChipPoints;
         console.log('[LoyaltyProvider] ✓ Updated Celebrity Blue Chip points:', data.celebrityBlueChipPoints);
       }
       if (data.captainsClubPoints !== undefined) {
-        celebrityUpdates.celebrityCaptainsClubPoints = data.captainsClubPoints;
+        profileUpdates.celebrityCaptainsClubPoints = data.captainsClubPoints;
         console.log('[LoyaltyProvider] ✓ Updated Celebrity Captains Club points:', data.captainsClubPoints);
       }
-      
-      // Update Silversea loyalty data
-      const silverseaUpdates: any = {};
+      if (data.captainsClubId !== undefined && data.captainsClubId !== null) {
+        profileUpdates.celebrityCaptainsClubNumber = data.captainsClubId;
+        console.log('[LoyaltyProvider] ✓ Updated Celebrity Captains Club number from sync payload');
+      }
       if (data.venetianSocietyTier !== undefined && data.venetianSocietyTier !== null) {
-        silverseaUpdates.silverseaVenetianTier = data.venetianSocietyTier;
+        profileUpdates.silverseaVenetianTier = data.venetianSocietyTier;
         console.log('[LoyaltyProvider] ✓ Updated Silversea Venetian tier:', data.venetianSocietyTier);
       }
+      if (data.venetianSocietyMemberNumber !== undefined && data.venetianSocietyMemberNumber !== null) {
+        profileUpdates.silverseaVenetianNumber = data.venetianSocietyMemberNumber;
+        console.log('[LoyaltyProvider] ✓ Updated Silversea Venetian member number from sync payload');
+      }
       
-      // Apply all updates to user profile if any exist
-      if (Object.keys(celebrityUpdates).length > 0 || Object.keys(silverseaUpdates).length > 0) {
-        const allUpdates = { ...celebrityUpdates, ...silverseaUpdates };
-        console.log('[LoyaltyProvider] ✓ Updating user profile with all cruise line data:', allUpdates);
-        
-        // Store to AsyncStorage to persist across all three cruise lines
-        const usersData = await AsyncStorage.getItem(userStorageKeys.USERS);
-        if (usersData) {
-          const users = JSON.parse(usersData);
-          const currentUserId = await AsyncStorage.getItem(userStorageKeys.CURRENT_USER);
-          if (currentUserId) {
-            const updatedUsers = users.map((u: any) => 
-              u.id === currentUserId 
-                ? { ...u, ...allUpdates, updatedAt: new Date().toISOString() }
-                : u
-            );
-            await AsyncStorage.setItem(userStorageKeys.USERS, JSON.stringify(updatedUsers));
-            console.log('[LoyaltyProvider] ✓ User profile updated in scoped storage with all cruise line loyalty data');
-          }
-        }
+      if (currentUser && Object.keys(profileUpdates).length > 0) {
+        console.log('[LoyaltyProvider] ✓ Updating in-memory user profile with all cruise line data:', {
+          userId: currentUser.id,
+          updatedFields: Object.keys(profileUpdates),
+        });
+        await updateUser(currentUser.id, profileUpdates);
+        console.log('[LoyaltyProvider] ✓ User profile updated live for loyalty progress refresh');
       }
       
       console.log('[LoyaltyProvider] ==================== SAVE COMPLETE ====================');
@@ -389,7 +380,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       console.error('[LoyaltyProvider] ✗ Failed to save extended loyalty data:', error);
       throw error;
     }
-  }, [setManualClubRoyalePoints, setManualCrownAnchorPoints, userStorageKeys]);
+  }, [currentUser, setManualClubRoyalePoints, setManualCrownAnchorPoints, updateUser]);
 
   const calculatedData = useMemo(() => {
     let calculatedClubRoyalePoints = 0;
