@@ -431,17 +431,23 @@ export default function CruiseDetailsScreen() {
   const retailSummary = useMemo(() => {
     if (!valueBreakdown) return null;
 
-    const retail = valueBreakdown.totalRetailValue;
-    const paid = valueBreakdown.amountPaid;
-    const net = retail - paid;
-    const coverage = retail > 0 ? Math.min(1, Math.max(0, net / retail)) : 0;
+    const retail = Number.isFinite(valueBreakdown.totalRetailValue) ? valueBreakdown.totalRetailValue : 0;
+    const paid = Number.isFinite(valueBreakdown.trueOutOfPocket)
+      ? valueBreakdown.trueOutOfPocket
+      : (Number.isFinite(valueBreakdown.amountPaid) ? valueBreakdown.amountPaid : 0);
+    const net = Number.isFinite(valueBreakdown.netValue)
+      ? valueBreakdown.netValue
+      : retail - paid;
+    const coverage = Number.isFinite(valueBreakdown.coverageFraction)
+      ? valueBreakdown.coverageFraction
+      : (retail > 0 ? Math.min(1, Math.max(0, (retail - paid) / retail)) : 0);
 
     return {
       retail,
       paid,
       net,
       coverage,
-      isFullyComped: paid <= Math.max(valueBreakdown.taxesFees, retail * 0.1),
+      isFullyComped: valueBreakdown.isFullyComped,
     };
   }, [valueBreakdown]);
 
@@ -548,7 +554,7 @@ export default function CruiseDetailsScreen() {
       singleOccupancy: (cruise as BookedCruise).singleOccupancy !== false,
       winnings: String((cruise as any).winnings || ''),
       earnedPoints: String((cruise as any).earnedPoints || (cruise as any).casinoPoints || ''),
-      amountPaid: String(cruise.totalPrice || cruise.price || ''),
+      amountPaid: String((cruise as BookedCruise).pricePaid || cruise.totalPrice || cruise.price || ''),
       tradeInValue: String(cruise.tradeInValue || linkedOffer?.tradeInValue || ''),
       nextCruiseCertificate: String((cruise as any).nextCruiseCertificate || ''),
     });
@@ -606,6 +612,7 @@ export default function CruiseDetailsScreen() {
       winnings: parseFloat(editForm.winnings) || 0,
       earnedPoints: parseFloat(editForm.earnedPoints) || 0,
       casinoPoints: parseFloat(editForm.earnedPoints) || 0,
+      pricePaid: parseFloat(editForm.amountPaid) || 0,
       totalPrice: parseFloat(editForm.amountPaid) || 0,
       price: parseFloat(editForm.amountPaid) || 0,
       tradeInValue: parseFloat(editForm.tradeInValue) || 0,
