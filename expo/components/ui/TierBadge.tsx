@@ -13,6 +13,8 @@ interface TierBadgeProps {
   size?: 'small' | 'medium' | 'large';
   onPress?: () => void;
   showLabel?: boolean;
+  colorOverride?: string;
+  backgroundColorOverride?: string;
 }
 
 export const TierBadge = React.memo(function TierBadge({
@@ -21,6 +23,8 @@ export const TierBadge = React.memo(function TierBadge({
   size = 'medium',
   onPress,
   showLabel = false,
+  colorOverride,
+  backgroundColorOverride,
 }: TierBadgeProps) {
   const getTierColor = () => {
     if (type === 'clubRoyale') {
@@ -36,8 +40,8 @@ export const TierBadge = React.memo(function TierBadge({
     return CROWN_ANCHOR_LEVELS[tier]?.bgColor || 'rgba(212, 165, 116, 0.15)';
   };
 
-  const tierColor = getTierColor();
-  const bgColor = getBgColor();
+  const tierColor = colorOverride ?? getTierColor();
+  const bgColor = backgroundColorOverride ?? getBgColor();
 
   const sizeStyles = {
     small: {
@@ -122,6 +126,10 @@ interface TierBadgeGroupProps {
   size?: 'small' | 'medium' | 'large';
   onClubRoyalePress?: () => void;
   onCrownAnchorPress?: () => void;
+  clubRoyaleColorOverride?: string;
+  clubRoyaleBackgroundColorOverride?: string;
+  crownAnchorColorOverride?: string;
+  crownAnchorBackgroundColorOverride?: string;
 }
 
 export const TierBadgeGroup = React.memo(function TierBadgeGroup({
@@ -130,6 +138,10 @@ export const TierBadgeGroup = React.memo(function TierBadgeGroup({
   size = 'medium',
   onClubRoyalePress,
   onCrownAnchorPress,
+  clubRoyaleColorOverride,
+  clubRoyaleBackgroundColorOverride,
+  crownAnchorColorOverride,
+  crownAnchorBackgroundColorOverride,
 }: TierBadgeGroupProps) {
   return (
     <View style={styles.group}>
@@ -138,12 +150,16 @@ export const TierBadgeGroup = React.memo(function TierBadgeGroup({
         type="clubRoyale"
         size={size}
         onPress={onClubRoyalePress}
+        colorOverride={clubRoyaleColorOverride}
+        backgroundColorOverride={clubRoyaleBackgroundColorOverride}
       />
       <TierBadge
         tier={crownAnchorLevel}
         type="crownAnchor"
         size={size}
         onPress={onCrownAnchorPress}
+        colorOverride={crownAnchorColorOverride}
+        backgroundColorOverride={crownAnchorBackgroundColorOverride}
       />
     </View>
   );

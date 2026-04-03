@@ -173,6 +173,18 @@ export default function EventsScreen() {
     return count;
   }, [calendarEvents, currentDate, mergedBookedCruises]);
 
+  const heroTierAccentOverrides = useMemo(() => {
+    const accentColor = '#FB923C';
+    const accentBackground = 'rgba(251, 146, 60, 0.18)';
+
+    return {
+      clubRoyaleColorOverride: clubRoyaleTier === 'Signature' ? accentColor : undefined,
+      clubRoyaleBackgroundColorOverride: clubRoyaleTier === 'Signature' ? accentBackground : undefined,
+      crownAnchorColorOverride: crownAnchorLevel === 'Diamond Plus' ? accentColor : undefined,
+      crownAnchorBackgroundColorOverride: crownAnchorLevel === 'Diamond Plus' ? accentBackground : undefined,
+    };
+  }, [clubRoyaleTier, crownAnchorLevel]);
+
   const isDateInRange = useCallback((date: Date, startStr: string, endStr?: string, fallbackNights?: number): boolean => {
     const dateRange = getDateRange(startStr, endStr, fallbackNights);
     if (!dateRange) {
@@ -574,6 +586,10 @@ export default function EventsScreen() {
                     clubRoyaleTier={clubRoyaleTier}
                     crownAnchorLevel={crownAnchorLevel}
                     size="small"
+                    clubRoyaleColorOverride={heroTierAccentOverrides.clubRoyaleColorOverride}
+                    clubRoyaleBackgroundColorOverride={heroTierAccentOverrides.clubRoyaleBackgroundColorOverride}
+                    crownAnchorColorOverride={heroTierAccentOverrides.crownAnchorColorOverride}
+                    crownAnchorBackgroundColorOverride={heroTierAccentOverrides.crownAnchorBackgroundColorOverride}
                   />
                 </View>
               </View>
@@ -725,6 +741,16 @@ export default function EventsScreen() {
               <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.personal }]} />
               <Text style={styles.legendText}>Personal</Text>
             </View>
+          </View>
+
+          <View style={styles.luckScaleContainer} testID="calendar-luck-scale-label">
+            <Text style={styles.luckScaleText}>
+              Luck scale: <Text style={[styles.luckScaleValue, { color: getLuckDigitColor(1) }]}>Red 1</Text>
+              <Text style={styles.luckScaleText}> = Worst</Text>
+              <Text style={styles.luckScaleDivider}> • </Text>
+              <Text style={[styles.luckScaleValue, { color: getLuckDigitColor(9) }]}>Purple 9</Text>
+              <Text style={styles.luckScaleText}> = Great Luck</Text>
+            </Text>
           </View>
 
           {viewMode === 'events' && (
@@ -1066,6 +1092,31 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.navyDeep,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  luckScaleContainer: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.76)',
+    borderRadius: BORDER_RADIUS.md,
+    marginHorizontal: SPACING.md,
+    marginTop: -SPACING.xs,
+    marginBottom: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  luckScaleText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    textAlign: 'center',
+    opacity: 0.78,
+  },
+  luckScaleValue: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  luckScaleDivider: {
+    color: 'rgba(0, 31, 63, 0.45)',
   },
   ninetyDaysContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
