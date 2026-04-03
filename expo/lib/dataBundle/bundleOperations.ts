@@ -13,6 +13,7 @@ import type { CasinoSession } from '@/state/CasinoSessionProvider';
 import type { RecognitionEntryWithCrew, Sailing } from '@/types/crew-recognition';
 import { ALL_STORAGE_KEYS, GLOBAL_KEYS, getUserScopedKey, type AppSettings } from '../storage/storageKeys';
 import { applyKnownRetailValuesToBooked } from '../dataEnrichment/retailValueEnrichment';
+import { countEffectiveCalendarEvents, mergeCalendarEventsWithDerivedCruiseEvents } from '@/lib/calendar/derivedCruiseEvents';
 
 export interface FullAppDataBundle {
   version: string;
@@ -317,7 +318,7 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
         totalCruises: cruises.length,
         totalBooked: bookedCruises.length,
         totalOffers: casinoOffers.length,
-        totalEvents: calendarEvents.length,
+        totalEvents: countEffectiveCalendarEvents(calendarEvents, bookedCruises),
         totalCertificates: certificates.length,
         totalSessions: casinoSessions.length,
         totalMachines: myAtlasIds.length,
@@ -372,7 +373,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       console.log('[DataBundle] Imported cruises:', imported.cruises);
     }
   } catch (error) {
-    errors.push(`Failed to import cruises: ${error}`);
+    errors.push(`Failed to import cruises: ${String(error)}`);
   }
 
   try {
@@ -384,7 +385,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       console.log('[DataBundle] Imported booked cruises:', imported.bookedCruises);
     }
   } catch (error) {
-    errors.push(`Failed to import booked cruises: ${error}`);
+    errors.push(`Failed to import booked cruises: ${String(error)}`);
   }
 
   try {
@@ -395,17 +396,24 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       console.log('[DataBundle] Imported casino offers:', imported.casinoOffers);
     }
   } catch (error) {
-    errors.push(`Failed to import casino offers: ${error}`);
+    errors.push(`Failed to import casino offers: ${String(error)}`);
   }
 
   try {
     if (bundle.calendarEvents && Array.isArray(bundle.calendarEvents)) {
-      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), JSON.stringify(bundle.calendarEvents));
-      imported.calendarEvents = bundle.calendarEvents.length;
-      console.log('[DataBundle] Imported calendar events:', imported.calendarEvents);
+      const mergedCalendarEvents = mergeCalendarEventsWithDerivedCruiseEvents(
+        bundle.calendarEvents,
+        bundle.bookedCruises ?? [],
+      );
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), JSON.stringify(mergedCalendarEvents));
+      imported.calendarEvents = mergedCalendarEvents.length;
+      console.log('[DataBundle] Imported calendar events:', {
+        storedEvents: bundle.calendarEvents.length,
+        effectiveEvents: imported.calendarEvents,
+      });
     }
   } catch (error) {
-    errors.push(`Failed to import calendar events: ${error}`);
+    errors.push(`Failed to import calendar events: ${String(error)}`);
   }
 
   try {
@@ -415,7 +423,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       console.log('[DataBundle] Imported casino sessions:', imported.casinoSessions);
     }
   } catch (error) {
-    errors.push(`Failed to import casino sessions: ${error}`);
+    errors.push(`Failed to import casino sessions: ${String(error)}`);
   }
 
   try {
@@ -425,7 +433,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       console.log('[DataBundle] Imported certificates:', imported.certificates);
     }
   } catch (error) {
-    errors.push(`Failed to import certificates: ${error}`);
+    errors.push(`Failed to import certificates: ${String(error)}`);
   }
 
   try {
@@ -434,7 +442,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       console.log('[DataBundle] Imported club profile');
     }
   } catch (error) {
-    errors.push(`Failed to import club profile: ${error}`);
+    errors.push(`Failed to import club profile: ${String(error)}`);
   }
 
   try {
@@ -443,7 +451,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       console.log('[DataBundle] Imported settings');
     }
   } catch (error) {
-    errors.push(`Failed to import settings: ${error}`);
+    errors.push(`Failed to import settings: ${String(error)}`);
   }
 
   try {
@@ -469,7 +477,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       console.log('[DataBundle] Imported loyalty data');
     }
   } catch (error) {
-    errors.push(`Failed to import loyalty data: ${error}`);
+    errors.push(`Failed to import loyalty data: ${String(error)}`);
   }
 
   try {
@@ -516,7 +524,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     }
   } catch (error) {
     console.error('[DataBundle] Error importing users:', error);
-    errors.push(`Failed to import users: ${error}`);
+    errors.push(`Failed to import users: ${String(error)}`);
   }
 
   try {
@@ -533,7 +541,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     }
   } catch (error) {
     console.error('[DataBundle] Error importing machines:', error);
-    errors.push(`Failed to import machines: ${error}`);
+    errors.push(`Failed to import machines: ${String(error)}`);
   }
 
   try {
@@ -549,7 +557,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     }
   } catch (error) {
     console.error('[DataBundle] Error importing crew recognition:', error);
-    errors.push(`Failed to import crew recognition: ${error}`);
+    errors.push(`Failed to import crew recognition: ${String(error)}`);
   }
 
   const success = errors.length === 0;

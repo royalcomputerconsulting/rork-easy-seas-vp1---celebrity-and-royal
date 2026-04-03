@@ -8,6 +8,7 @@ import {
   applyFreeplayOBCData,
 } from "./dataEnrichment";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, CURRENT_CRUISE_DATA_VERSION, getScopedStorageKeys, type AppSettings } from "./storageConfig";
+import { mergeCalendarEventsWithDerivedCruiseEvents } from "@/lib/calendar/derivedCruiseEvents";
 
 export interface StorageSnapshot {
   cruisesData: string | null;
@@ -220,39 +221,29 @@ export function processCalendarEvents(
   const { eventsData, bookedData } = snapshot;
   const { parsedBookedData } = status;
 
-  let parsedEvents: CalendarEvent[] = eventsData ? JSON.parse(eventsData) : [];
+  const parsedEvents: CalendarEvent[] = eventsData ? JSON.parse(eventsData) : [];
+  const currentBookedState = (() => {
+    if (bookedData && parsedBookedData.length > 0) {
+      return filterDemoCruises(parsedBookedData);
+    }
+    return [];
+  })();
 
   if (parsedEvents.length === 0 && finalBookedCount > 0) {
-    console.log('[CoreData] No calendar events found but', finalBookedCount, 'booked cruises exist - auto-generating events');
-
-    const currentBookedState = (() => {
-      if (bookedData && parsedBookedData.length > 0) {
-        return filterDemoCruises(parsedBookedData);
-      }
-      return [];
-    })();
-
-    parsedEvents = currentBookedState
-      .filter((cruise: BookedCruise) => cruise.sailDate && cruise.returnDate)
-      .map((cruise: BookedCruise): CalendarEvent => ({
-        id: `cruise-${cruise.id}`,
-        title: cruise.shipName,
-        description: cruise.itineraryName || `${cruise.nights} Night Cruise`,
-        startDate: cruise.sailDate,
-        endDate: cruise.returnDate,
-        type: 'cruise',
-        allDay: true,
-        location: cruise.departurePort,
-        cruiseId: cruise.id,
-      }));
-
-    console.log('[CoreData] Auto-generated', parsedEvents.length, 'calendar events from booked cruises');
-
-    return { events: parsedEvents, shouldPersist: parsedEvents.length > 0 };
+    console.log('[CoreData] No stored calendar events found but', finalBookedCount, 'booked cruises exist - deriving port-day events');
   }
 
-  console.log('[CoreData] Parsed events:', parsedEvents.length);
-  return { events: parsedEvents, shouldPersist: false };
+  const mergedEvents = mergeCalendarEventsWithDerivedCruiseEvents(parsedEvents, currentBookedState);
+  const shouldPersist = JSON.stringify(mergedEvents) !== JSON.stringify(parsedEvents);
+
+  console.log('[CoreData] Processed calendar events:', {
+    storedEvents: parsedEvents.length,
+    derivedCruises: currentBookedState.length,
+    finalEvents: mergedEvents.length,
+    shouldPersist,
+  });
+
+  return { events: mergedEvents, shouldPersist };
 }
 
 export function processMetadata(
