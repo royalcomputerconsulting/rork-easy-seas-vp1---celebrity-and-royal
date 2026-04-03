@@ -44,6 +44,7 @@ function getDatabaseErrorMessage(error: unknown): string {
 
 function normalizeDatabaseConnectionError(error: unknown): Error {
   const errorMessage = getDatabaseErrorMessage(error);
+  const normalizedMessage = errorMessage.toLowerCase();
   const isNotFoundResponse =
     errorMessage.includes('"code":"not_found"') ||
     errorMessage.includes('The requested resource was not found');
@@ -53,8 +54,19 @@ function normalizeDatabaseConnectionError(error: unknown): Error {
   const isVersionRetrievalFailure =
     errorMessage.includes('VersionRetrievalFailure') ||
     errorMessage.includes('Failed to retrieve remote version');
+  const isNetworkFailure =
+    error instanceof TypeError ||
+    normalizedMessage.includes('failed to fetch') ||
+    normalizedMessage.includes('fetch failed') ||
+    normalizedMessage.includes('network request failed') ||
+    normalizedMessage.includes('networkerror') ||
+    normalizedMessage.includes('load failed') ||
+    normalizedMessage.includes('aborterror') ||
+    normalizedMessage.includes('connection') ||
+    normalizedMessage.includes('timeout') ||
+    normalizedMessage.includes('err_network');
 
-  if (isUnsupportedVersionResponse || isNotFoundResponse || isVersionRetrievalFailure) {
+  if (isUnsupportedVersionResponse || isNotFoundResponse || isVersionRetrievalFailure || isNetworkFailure) {
     return new Error(DATABASE_UNAVAILABLE);
   }
 
@@ -136,7 +148,7 @@ export async function getDb(): Promise<Surreal> {
     db = null;
 
     if (normalizedError.message === DATABASE_UNAVAILABLE) {
-      console.log('[DB] Database unavailable - endpoint did not return a supported SurrealDB RPC response');
+      console.log('[DB] Database unavailable - endpoint unreachable or did not return a supported SurrealDB RPC response');
       throw normalizedError;
     }
 

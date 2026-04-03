@@ -107,6 +107,7 @@ function getCloudStoreErrorMessage(error: unknown): string {
 
 function normalizeCloudStoreConnectionError(error: unknown): Error {
   const errorMessage = getCloudStoreErrorMessage(error);
+  const normalizedMessage = errorMessage.toLowerCase();
   const isNotFoundResponse =
     errorMessage.includes('"code":"not_found"') ||
     errorMessage.includes('The requested resource was not found');
@@ -116,8 +117,19 @@ function normalizeCloudStoreConnectionError(error: unknown): Error {
   const isVersionRetrievalFailure =
     errorMessage.includes('VersionRetrievalFailure') ||
     errorMessage.includes(VERSION_RETRIEVAL_FAILURE_MESSAGE);
+  const isNetworkFailure =
+    error instanceof TypeError ||
+    normalizedMessage.includes('failed to fetch') ||
+    normalizedMessage.includes('fetch failed') ||
+    normalizedMessage.includes('network request failed') ||
+    normalizedMessage.includes('networkerror') ||
+    normalizedMessage.includes('load failed') ||
+    normalizedMessage.includes('aborterror') ||
+    normalizedMessage.includes('connection') ||
+    normalizedMessage.includes('timeout') ||
+    normalizedMessage.includes('err_network');
 
-  if (isUnsupportedVersionResponse || isVersionRetrievalFailure || isNotFoundResponse) {
+  if (isUnsupportedVersionResponse || isVersionRetrievalFailure || isNotFoundResponse || isNetworkFailure) {
     return new Error(DIRECT_CLOUD_STORE_UNAVAILABLE);
   }
 
@@ -231,7 +243,7 @@ async function getCloudDb(): Promise<Surreal> {
     lastCloudHealthCheck = Date.now();
 
     if (normalizedError.message === DIRECT_CLOUD_STORE_UNAVAILABLE) {
-      console.log("[CloudStore] Direct cloud store unavailable - endpoint did not return a supported SurrealDB RPC response");
+      console.log("[CloudStore] Direct cloud store unavailable - endpoint unreachable or did not return a supported SurrealDB RPC response");
     } else {
       console.error("[CloudStore] Direct cloud store connection failed:", normalizedError.message);
     }
