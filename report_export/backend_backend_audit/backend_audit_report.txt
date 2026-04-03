@@ -1,0 +1,45 @@
+BACKEND AUDIT REPORT
+
+Hosted backend reviewed:
+https://rork-easy-seas-vp1-2nep.onrender.com/
+
+Summary:
+The backend deployment appears stale relative to what the app is currently calling. The main failures were consistent with route mismatch and database endpoint mismatch rather than a frontend-only issue.
+
+What was confirmed:
+1. The app expects tRPC procedures that may be served from either /trpc or /api/trpc.
+2. The deployable backend snapshot in this project was missing compatibility in several places.
+3. SurrealDB connectivity was vulnerable to endpoint shape mismatch because some deployments expose the DB at the raw URL while others require /rpc.
+4. Calendar feed support had been missing from the deployable backend snapshot.
+5. The deployable backend snapshot still shows a stale router file that does not register all currently expected feature routers.
+
+Files updated locally in this project:
+1. expo/lib/trpc.ts
+   - Render backend calls now fall back between /trpc and /api/trpc.
+
+2. expo/assets/github-deploy/backend/db.js
+   - DB connection now tries both the raw endpoint and the same endpoint with /rpc appended.
+   - not_found and fetch-style failures are normalized into a clean database unavailable state.
+
+3. expo/assets/github-deploy/backend/trpc/routes/data.js
+   - Added support for cruises.
+   - Added support for crewRecognitionEntries.
+   - Added support for crewRecognitionSailings.
+
+4. expo/assets/github-deploy/backend/hono.js
+   - Restored /calendar-feed/:token.
+
+Remaining issue still visible in deploy snapshot:
+1. expo/assets/github-deploy/backend/trpc/app-router.js
+   - Still only registers:
+     example
+     data
+     calendar
+     royalCaribbeanSync
+     cruiseDeals
+   - It does not register crewRecognition.
+   - It does not register dailyLuck.
+   - If the live GitHub backend repo matches this stale file, those features will still return 404 or procedure-not-found errors until the backend repo is updated and redeployed.
+
+Conclusion:
+The hosted backend likely needs a repo update and redeploy. The frontend was not the only issue. The backend deployment contract needs to be brought back in sync with the app’s current expected routes and DB connection behavior.
