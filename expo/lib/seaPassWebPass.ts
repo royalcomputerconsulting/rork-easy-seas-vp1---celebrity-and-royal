@@ -355,29 +355,27 @@ function buildSeaPassOverlaySvgMarkup(
   const barcodeCaption = getSeaPassBarcodeCaption(data);
   const overlays = getSeaPassDynamicOverlays(data);
   const safeImageHref = escapeXml(approvedImageHref);
-  const defs: string[] = [
-    `<pattern id="approved-shell-pattern" patternUnits="userSpaceOnUse" x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}"><image href="${safeImageHref}" x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" /></pattern>`,
-  ];
+  const defs: string[] = [];
 
   const overlayMarkup = overlays
     .map((overlay) => {
       const mask = overlay.mask;
-      const patternId = `overlay-sample-${overlay.key}`;
+      const clipPathId = `overlay-clip-${overlay.key}`;
       const textAnchor = overlay.textAnchor ? ` text-anchor="${overlay.textAnchor}"` : '';
       const letterSpacing = typeof overlay.letterSpacing === 'number' ? ` letter-spacing="${overlay.letterSpacing}"` : '';
       const value = escapeXml(getDynamicOverlayValue(overlay.key, data, barcodeCaption));
-      const sampleX = mask.sampleX ?? 0;
-      const sampleY = mask.sampleY ?? 0;
       const hasSampleBackground = typeof mask.sampleX === 'number' && typeof mask.sampleY === 'number';
 
-      if (hasSampleBackground) {
-        defs.push(
-          `<pattern id="${patternId}" patternUnits="userSpaceOnUse" x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}"><image href="${safeImageHref}" x="${mask.x - sampleX}" y="${mask.y - sampleY}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" /></pattern>`,
-        );
-      }
+      let eraseMarkup = `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" />`;
 
-      const eraseFill = hasSampleBackground ? `url(#${patternId})` : mask.fill;
-      const eraseMarkup = `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${eraseFill}" />`;
+      if (hasSampleBackground) {
+        const sampleX = mask.sampleX ?? 0;
+        const sampleY = mask.sampleY ?? 0;
+        defs.push(
+          `<clipPath id="${clipPathId}"><rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" ry="${mask.radius}" /></clipPath>`,
+        );
+        eraseMarkup = `<g clip-path="url(#${clipPathId})"><image href="${safeImageHref}" x="${mask.x - sampleX}" y="${mask.y - sampleY}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" /></g>`;
+      }
 
       return `${eraseMarkup}<text x="${overlay.x}" y="${overlay.y}"${textAnchor}${letterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${overlay.fontSize}" font-weight="${overlay.fontWeight}" fill="${overlay.fill}">${value}</text>`;
     })
