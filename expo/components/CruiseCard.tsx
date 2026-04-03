@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
-import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
+import { CasinoCardBackground } from '@/components/ui/CasinoCardBackground';
 
 import { createDateFromString } from '@/lib/date';
 import { DEFAULT_CRUISE_IMAGE, getImageForShip, getUniqueImageForCruise } from '@/constants/cruiseImages';
@@ -36,8 +36,6 @@ const MINI_CARD_BACKDROP_PALETTES = [
   ['rgba(196, 244, 235, 0.9)', 'rgba(225, 249, 244, 0.76)', 'rgba(244, 252, 250, 0.96)'],
   ['rgba(255, 229, 214, 0.88)', 'rgba(255, 241, 230, 0.76)', 'rgba(255, 248, 243, 0.96)'],
 ] as const;
-
-const BOOKED_CARD_MARBLE = MARBLE_TEXTURES.white;
 
 function getDeterministicHash(seed: string): number {
   let hash = 0;
@@ -268,33 +266,17 @@ export const CruiseCard = React.memo(function CruiseCard({
         >
           <View style={styles.miniContainer}>
             <View style={styles.miniSurfaceContent}>
+              <CasinoCardBackground />
               <LinearGradient
-                colors={[miniBackdropColors[0], miniBackdropColors[1], miniBackdropColors[2]]}
+                colors={[miniBackdropColors[0], 'rgba(255,255,255,0.04)', miniBackdropColors[1]]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.miniBackgroundImage}
-              />
-              <LinearGradient
-                colors={['rgba(255,255,255,0.24)', 'rgba(248,251,255,0.84)', 'rgba(248,251,255,0.96)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.miniBackgroundOverlay}
+                style={styles.miniThemeTint}
               />
               <View style={styles.miniContentRow}>
-                <View style={styles.miniImageShell}>
-                  <StableRemoteImage
-                    uri={cardImageUri}
-                    fallbackUri={cardImageFallbackUri}
-                    style={styles.miniImage}
-                    recyclingKey={`${cruise.id}-mini-image`}
-                    testID="cruise-card-mini-image"
-                  />
-                  <LinearGradient
-                    colors={['rgba(3,17,31,0.04)', 'rgba(3,17,31,0.26)']}
-                    start={{ x: 0.1, y: 0 }}
-                    end={{ x: 0.9, y: 1 }}
-                    style={styles.miniImageOverlay}
-                  />
+                <View style={styles.miniIconShell}>
+                  <Ship size={24} color="#FEF3C7" />
+                  <Text style={styles.miniIconText}>{cruise.nights}N</Text>
                 </View>
                 <View style={styles.miniContent}>
                   <View style={styles.miniTopRow}>
@@ -542,34 +524,12 @@ export const CruiseCard = React.memo(function CruiseCard({
           testID="cruise-card-booked"
         >
           <View style={styles.bookedContainer}>
+            <CasinoCardBackground />
             <LinearGradient
-              colors={BOOKED_CARD_MARBLE.gradientColors as unknown as [string, string, ...string[]]}
-              locations={BOOKED_CARD_MARBLE.gradientLocations}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.bookedMarbleBase}
-            />
-            <LinearGradient
-              colors={['rgba(255,255,255,0.92)', 'rgba(244,244,246,0.55)', 'rgba(229,229,234,0.85)']}
+              colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.08)']}
               start={{ x: 0.08, y: 0 }}
               end={{ x: 0.92, y: 1 }}
-              style={styles.bookedMarbleGlow}
-            />
-            <View style={styles.bookedMarbleVeinPrimary} />
-            <View style={styles.bookedMarbleVeinSecondary} />
-            <View style={styles.bookedMarbleVeinTertiary} />
-            <View style={styles.bookedMarbleVeinFine} />
-            <LinearGradient
-              colors={['rgba(255,255,255,0.56)', 'rgba(246,247,249,0.76)', 'rgba(239,241,244,0.9)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.bookedBackgroundOverlay}
-            />
-            <LinearGradient
-              colors={['rgba(24,24,27,0.02)', 'rgba(24,24,27,0.08)']}
-              start={{ x: 0.1, y: 0 }}
-              end={{ x: 0.9, y: 1 }}
-              style={styles.bookedBackgroundShade}
+              style={styles.bookedThemeScrim}
             />
             <View style={styles.bookedContentSection}>
               <View style={styles.bookedHeaderRow}>
@@ -676,27 +636,21 @@ export const CruiseCard = React.memo(function CruiseCard({
         testID="cruise-card"
       >
         <View style={styles.container}>
-          <View style={styles.imageSection}>
-            <StableRemoteImage
-              uri={cardImageUri}
-              fallbackUri={cardImageFallbackUri}
-              style={styles.heroImage}
-              recyclingKey={`${cruise.id}-hero-image`}
-              testID="cruise-card-hero-image"
-            />
-            
-            {cruiseStatus === 'upcoming' && !isBooked && (
-              <View style={styles.saleBadge}>
-                <Text style={styles.saleBadgeText}>Casino Offer</Text>
+          <CasinoCardBackground />
+          <View style={styles.cruiseHeroPanel}>
+            <View style={styles.cruiseHeroTopRow}>
+              {cruiseStatus === 'upcoming' && !isBooked ? (
+                <View style={styles.saleBadge}>
+                  <Text style={styles.saleBadgeText}>Casino Offer</Text>
+                </View>
+              ) : <View />}
+              <View style={styles.nightsBadge}>
+                <Text style={styles.nightsBadgeText}>{cruise.nights} Nights</Text>
               </View>
-            )}
-
-            <View style={styles.nightsBadge}>
-              <Text style={styles.nightsBadgeText}>{cruise.nights} Nights</Text>
             </View>
-
             <View style={styles.cruiseNameOverlay}>
               <Text style={styles.cruiseNameText}>{getItineraryName()}</Text>
+              <Text style={styles.cruiseHeroRoute}>{cruise.departurePort || cruise.destination || 'Cruise itinerary'}</Text>
             </View>
           </View>
           
@@ -876,6 +830,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(244,248,255,0.78)',
   },
+  miniThemeTint: {
+    ...StyleSheet.absoluteFillObject,
+  },
   miniBackgroundOverlay: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -894,6 +851,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.48)',
     backgroundColor: 'rgba(255,255,255,0.28)',
+  },
+  miniIconShell: {
+    width: 96,
+    height: 114,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  miniIconText: {
+    fontSize: 12,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FEF3C7',
   },
   miniImage: {
     width: '100%',
@@ -1266,6 +1239,9 @@ const styles = StyleSheet.create({
   bookedBackgroundShade: {
     ...StyleSheet.absoluteFillObject,
   },
+  bookedThemeScrim: {
+    ...StyleSheet.absoluteFillObject,
+  },
   bookedContentSection: {
     padding: SPACING.lg,
     gap: SPACING.md,
@@ -1469,6 +1445,24 @@ const styles = StyleSheet.create({
   compactChevron: {
     marginRight: SPACING.sm,
   },
+  cruiseHeroPanel: {
+    minHeight: 128,
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+  },
+  cruiseHeroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  cruiseHeroRoute: {
+    marginTop: 4,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255,255,255,0.88)',
+  },
   imageSection: {
     height: 200,
     position: 'relative',
@@ -1507,11 +1501,8 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   cruiseNameOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 31, 63, 0.75)',
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: 'rgba(0, 24, 48, 0.26)',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
   },
@@ -1522,6 +1513,7 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     padding: SPACING.lg,
+    backgroundColor: 'rgba(255,255,255,0.88)',
   },
   headerRow: {
     flexDirection: 'row',

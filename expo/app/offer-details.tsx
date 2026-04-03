@@ -29,6 +29,7 @@ import {
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { CasinoCardBackground } from '@/components/ui/CasinoCardBackground';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -444,14 +445,7 @@ export default function OfferDetailsScreen() {
         onPress={() => handleCruisePress(item.id)}
         activeOpacity={0.85}
       >
-        <LinearGradient
-          colors={isBooked 
-            ? ['#34D399', '#10B981', '#059669'] 
-            : ['#0EA5E9', '#6366F1', '#8B5CF6']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+        <CasinoCardBackground />
 
         {/* Compact Summary Row - Top - White with Navy Text */}
         <View style={styles.summaryRow}>
@@ -593,7 +587,7 @@ export default function OfferDetailsScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Merged Header - Offer Name, Code, Expiry, Value, Cruises */}
         <LinearGradient
-          colors={['#E0F2FE', '#DBEAFE', '#E0F7FA']}
+          colors={['rgba(120, 43, 143, 0.96)', 'rgba(164, 77, 122, 0.92)', 'rgba(210, 156, 39, 0.92)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.mergedHeader}
@@ -939,7 +933,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 31, 63, 0.1)',
+    borderBottomColor: 'rgba(255,255,255,0.16)',
   },
   closeButton: {
     position: 'absolute' as const,
@@ -948,7 +942,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
@@ -984,7 +978,7 @@ const styles = StyleSheet.create({
   featuredOfferName: {
     fontSize: 28,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     textAlign: 'left' as const,
     lineHeight: 34,
   },
@@ -1010,27 +1004,31 @@ const styles = StyleSheet.create({
     color: '#166534',
   },
   offerCodeBadge: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   offerCodeText: {
     fontSize: 16,
     fontWeight: '700' as const,
-    color: COLORS.white,
+    color: '#FEF3C7',
     letterSpacing: 1,
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'stretch',
-    backgroundColor: 'rgba(255, 255, 255, 0.78)',
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     marginTop: SPACING.xs,
     gap: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   statItem: {
     flex: 1,
@@ -1054,13 +1052,13 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 10,
     fontWeight: '500' as const,
-    color: COLORS.navyDeep,
-    opacity: 0.7,
+    color: '#FDECC2',
+    opacity: 0.9,
   },
   statValue: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   statValueWarning: {
     color: COLORS.warning,
@@ -1276,17 +1274,18 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   cruiseCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: 'rgba(94, 37, 112, 0.24)',
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     overflow: 'hidden',
-    borderWidth: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
     ...SHADOW.lg,
   },
   bookedCard: {
-    borderColor: COLORS.success,
-    borderWidth: 3,
+    borderColor: 'rgba(254, 243, 199, 0.7)',
+    borderWidth: 2,
   },
   cruiseHeader: {
     flexDirection: 'row',
@@ -1354,7 +1353,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     marginHorizontal: -SPACING.md,
     marginTop: -SPACING.md,
     marginBottom: 0,

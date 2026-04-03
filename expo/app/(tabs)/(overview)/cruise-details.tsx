@@ -1,5 +1,5 @@
-import React, { memo, useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
+import React, { memo, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ItineraryDay, BookedCruise, CasinoOffer } from '@/types/models';
 import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, Dice5, AlertCircle, Trash2, Sparkles } from 'lucide-react-native';
@@ -13,8 +13,8 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 
 import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
-import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import { GlassSurface } from '@/components/premium/GlassSurface';
+import { CasinoCardBackground } from '@/components/ui/CasinoCardBackground';
 
 type CompactFactProps = {
   icon: React.ComponentType<{ size?: number; color?: string }>;
@@ -101,7 +101,6 @@ export default function CruiseDetailsScreen() {
   const { bookedCruises: storeBookedCruises, cruises: storeCruises, casinoOffers: storeOffers, updateBookedCruise: updateCruiseInStore, updateCruise: updateCruiseInCruisesStore, removeBookedCruise, addBookedCruise } = useCoreData();
   const { currentUser } = useUser();
   
-  const [heroImageUri, setHeroImageUri] = useState<string>(DEFAULT_CRUISE_IMAGE);
   const [unbookModalVisible, setUnbookModalVisible] = useState<boolean>(false);
   
   const playingHoursConfig: PlayingHoursConfig = useMemo(() => {
@@ -176,18 +175,6 @@ export default function CruiseDetailsScreen() {
     });
     return found;
   }, [storeCruises, storeBookedCruises, storeOffers, localData.cruises, localData.booked, localData.offers, id]);
-
-  useEffect(() => {
-    if (cruise) {
-      const imageUrl = getUniqueImageForCruise(
-        cruise.id,
-        cruise.destination || cruise.itineraryName || '',
-        cruise.sailDate,
-        cruise.shipName
-      );
-      setHeroImageUri(imageUrl || DEFAULT_CRUISE_IMAGE);
-    }
-  }, [cruise]);
 
   const linkedOffer = useMemo((): CasinoOffer | undefined => {
     if (!cruise?.offerCode) return undefined;
@@ -673,14 +660,9 @@ export default function CruiseDetailsScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.heroPlaceholder}>
-          <Image
-            source={{ uri: heroImageUri }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-            onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)}
-          />
+          <CasinoCardBackground />
           <LinearGradient
-            colors={['rgba(0,31,63,0.3)', 'rgba(0,31,63,0.7)']}
+            colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.02)']}
             style={StyleSheet.absoluteFill}
           />
           {isBooked && (
@@ -1872,20 +1854,23 @@ const styles = StyleSheet.create({
     height: 200,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   bookedBadge: {
     position: 'absolute',
     top: SPACING.lg,
     left: SPACING.lg,
-    backgroundColor: COLORS.success,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   bookedBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: '#FEF3C7',
     letterSpacing: 1,
   },
   heroButtonsContainer: {
@@ -1898,23 +1883,23 @@ const styles = StyleSheet.create({
   editAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(212, 165, 116, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     gap: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(212, 165, 116, 0.4)',
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   bookHeaderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.beigeWarm,
+    backgroundColor: 'rgba(255,255,255,0.9)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: COLORS.goldDark,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   bookHeaderButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -1924,12 +1909,12 @@ const styles = StyleSheet.create({
   unbookHeaderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: COLORS.error,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   editAllButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,

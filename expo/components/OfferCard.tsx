@@ -3,6 +3,7 @@ import { Platform, StyleSheet, Text, TouchableOpacity, View, type ViewStyle } fr
 import { LinearGradient } from 'expo-linear-gradient';
 import { CheckCircle, ChevronRight, Clock, Ship, Sparkles } from 'lucide-react-native';
 import { GlassSurface } from '@/components/premium/GlassSurface';
+import { CasinoCardBackground } from '@/components/ui/CasinoCardBackground';
 import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
 import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { getUniqueImageForCruise } from '@/constants/cruiseImages';
@@ -389,7 +390,8 @@ export const OfferCard = React.memo(function OfferCard({
   return (
     <TouchableOpacity style={styles.shadowShell} onPress={onPress} activeOpacity={0.94} testID="offer-card">
       <View style={styles.container}>
-        <LinearGradient colors={['#FFFDF9', '#F8F0DB', '#E8F8FC']} style={styles.shellGradient}>
+        <CasinoCardBackground />
+        <LinearGradient colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)']} style={styles.shellGradient}>
           <View style={styles.headerStrip}>
             <View style={styles.headerCopy}>
               <Text style={styles.headerTitle}>{inferredOfferName}</Text>
@@ -403,26 +405,23 @@ export const OfferCard = React.memo(function OfferCard({
 
           {showImage ? (
             <View style={styles.heroSection}>
-              <StableRemoteImage
-                uri={heroImageUri}
-                style={styles.heroImage}
-                testID="offer-card-hero-image"
-              />
               <LinearGradient
-                colors={['rgba(7, 20, 36, 0.08)', 'rgba(8, 24, 41, 0.42)', 'rgba(7, 18, 34, 0.92)']}
-                start={{ x: 0.1, y: 0 }}
-                end={{ x: 0.9, y: 1 }}
+                colors={['rgba(255,255,255,0.18)', 'rgba(255,255,255,0.04)']}
+                start={{ x: 0.08, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={styles.heroOverlay}
               />
-              <LinearGradient colors={statusBadge.colors} style={styles.statusPill}>
-                <Text style={styles.statusPillText}>{statusBadge.text}</Text>
-              </LinearGradient>
-              {isExpiringSoon ? (
-                <View style={styles.urgentPill}>
-                  <Clock size={12} color="#FFFFFF" />
-                  <Text style={styles.urgentPillText}>Expires in {getDaysUntil(offer.offerExpiry || '')} days</Text>
-                </View>
-              ) : null}
+              <View style={styles.heroTopRow}>
+                <LinearGradient colors={statusBadge.colors} style={styles.statusPill}>
+                  <Text style={styles.statusPillText}>{statusBadge.text}</Text>
+                </LinearGradient>
+                {isExpiringSoon ? (
+                  <View style={styles.urgentPill}>
+                    <Clock size={12} color="#FFFFFF" />
+                    <Text style={styles.urgentPillText}>Expires in {getDaysUntil(offer.offerExpiry || '')} days</Text>
+                  </View>
+                ) : null}
+              </View>
               <GlassSurface style={styles.heroInfoPill} contentStyle={styles.heroInfoPillContent}>
                 <Sparkles size={13} color="#FFFFFF" />
                 <Text style={styles.heroInfoText}>View all {availableCruiseCount} cruises</Text>
@@ -465,7 +464,7 @@ export const OfferCard = React.memo(function OfferCard({
               </View>
             </GlassSurface>
 
-            <LinearGradient colors={['#0E3554', '#0A4C62', '#12706D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaButton}>
+            <LinearGradient colors={['#D4A00A', '#A55853', '#7B2D8E']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaButton}>
               <TouchableOpacity style={styles.ctaButtonInner} onPress={onPress} activeOpacity={0.85} testID="offer-card-view-all-button">
                 <Text style={styles.ctaText}>View all {availableCruiseCount} cruises</Text>
                 <ChevronRight size={18} color="#FFFFFF" />
@@ -489,12 +488,12 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.34)',
-    backgroundColor: '#FFF9EF',
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: '#6D2B81',
   },
   shellGradient: {
     borderRadius: 24,
-    backgroundColor: '#FFF9EF',
+    backgroundColor: 'rgba(255,255,255,0.02)',
   },
   headerStrip: {
     flexDirection: 'row',
@@ -504,7 +503,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.md,
     paddingBottom: SPACING.sm,
-    backgroundColor: 'rgba(255, 249, 241, 0.84)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   headerCopy: {
     flex: 1,
@@ -512,29 +511,29 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '800' as const,
-    color: '#171630',
+    color: '#FFFFFF',
     letterSpacing: -0.4,
   },
   headerCode: {
     marginTop: 2,
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#2F2416',
+    color: '#FDECC2',
   },
   headerValueBlock: {
     alignItems: 'flex-end',
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 252, 247, 0.74)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.30)',
+    borderColor: 'rgba(255,255,255,0.24)',
     minWidth: 104,
   },
   headerValueLabel: {
     fontSize: 9,
     fontWeight: '700' as const,
-    color: '#2F2416',
+    color: '#FDECC2',
     letterSpacing: 0.7,
     textTransform: 'uppercase' as const,
   },
@@ -542,11 +541,20 @@ const styles = StyleSheet.create({
     marginTop: 1,
     fontSize: 16,
     fontWeight: '800' as const,
-    color: COLORS.moneyDark,
+    color: '#FFFFFF',
   },
   heroSection: {
-    height: 104,
+    minHeight: 74,
     position: 'relative',
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.sm,
+    justifyContent: 'space-between',
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
   },
   heroImage: {
     width: '100%',
@@ -554,6 +562,7 @@ const styles = StyleSheet.create({
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
+    borderRadius: 18,
   },
   statusPill: {
     position: 'absolute',
@@ -607,7 +616,7 @@ const styles = StyleSheet.create({
   contentSection: {
     padding: SPACING.md,
     gap: SPACING.sm,
-    backgroundColor: 'rgba(255, 252, 247, 0.82)',
+    backgroundColor: 'rgba(255, 252, 247, 0.9)',
   },
   primaryRow: {
     flexDirection: 'row',
