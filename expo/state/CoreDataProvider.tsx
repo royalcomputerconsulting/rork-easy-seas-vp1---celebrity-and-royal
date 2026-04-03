@@ -105,6 +105,35 @@ function getNormalizedErrorString(error: unknown): string {
   return String(error);
 }
 
+function shouldAttemptDirectCloudFallback(errorMessage: string): boolean {
+  const lower = errorMessage.toLowerCase();
+
+  return (
+    [
+      'BACKEND_NOT_CONFIGURED',
+      'BACKEND_TEMPORARILY_DISABLED',
+      'BACKEND_OFFLINE',
+      'DATABASE_UNAVAILABLE',
+      'DIRECT_CLOUD_STORE_UNAVAILABLE',
+      'DIRECT_CLOUD_STORE_NOT_CONFIGURED',
+      'DIRECT_CLOUD_STORE_TIMEOUT',
+    ].includes(errorMessage) ||
+    lower.includes('failed to fetch') ||
+    lower.includes('fetch failed') ||
+    lower.includes('network request failed') ||
+    lower.includes('networkerror') ||
+    lower.includes('load failed') ||
+    lower.includes('aborterror') ||
+    lower.includes('timeout') ||
+    lower.includes('connection') ||
+    lower.includes('offline') ||
+    lower.includes('database connection failed') ||
+    lower.includes('database configuration missing') ||
+    lower.includes('"code":"not_found"') ||
+    lower.includes('the requested resource was not found')
+  );
+}
+
 function isIgnorableBackendError(errorMessage: string, errorString: string): boolean {
   return (
     ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'BACKEND_OFFLINE', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage) ||
@@ -476,7 +505,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           return;
         } catch (error) {
           const errorMessage = getNormalizedErrorString(error);
-          console.log('[CoreData] Primary backend sync failed, trying direct cloud store:', errorMessage);
+          if (!shouldAttemptDirectCloudFallback(errorMessage)) {
+            console.log('[CoreData] Primary backend sync failed without fallback:', errorMessage);
+            throw error;
+          }
+          console.log('[CoreData] Primary backend sync unavailable, trying direct cloud store:', errorMessage);
         }
       }
 
@@ -524,7 +557,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           cloudResult = await trpcClient.data.getAllUserData.query({ email: authenticatedEmail });
         } catch (error) {
           const errorMessage = getNormalizedErrorString(error);
-          console.log('[CoreData] Primary backend load failed, trying direct cloud store:', errorMessage);
+          if (!shouldAttemptDirectCloudFallback(errorMessage)) {
+            console.log('[CoreData] Primary backend load failed without fallback:', errorMessage);
+            throw error;
+          }
+          console.log('[CoreData] Primary backend load unavailable, trying direct cloud store:', errorMessage);
         }
       }
 

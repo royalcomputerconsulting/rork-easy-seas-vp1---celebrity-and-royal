@@ -110,6 +110,35 @@ function getNormalizedErrorString(error: unknown): string {
   return String(error);
 }
 
+function shouldAttemptDirectCloudFallback(errorMessage: string): boolean {
+  const lower = errorMessage.toLowerCase();
+
+  return (
+    [
+      'BACKEND_NOT_CONFIGURED',
+      'BACKEND_TEMPORARILY_DISABLED',
+      'BACKEND_OFFLINE',
+      'DATABASE_UNAVAILABLE',
+      'DIRECT_CLOUD_STORE_UNAVAILABLE',
+      'DIRECT_CLOUD_STORE_NOT_CONFIGURED',
+      'DIRECT_CLOUD_STORE_TIMEOUT',
+    ].includes(errorMessage) ||
+    lower.includes('failed to fetch') ||
+    lower.includes('fetch failed') ||
+    lower.includes('network request failed') ||
+    lower.includes('networkerror') ||
+    lower.includes('load failed') ||
+    lower.includes('aborterror') ||
+    lower.includes('timeout') ||
+    lower.includes('connection') ||
+    lower.includes('offline') ||
+    lower.includes('database connection failed') ||
+    lower.includes('database configuration missing') ||
+    lower.includes('"code":"not_found"') ||
+    lower.includes('the requested resource was not found')
+  );
+}
+
 function isNonBlockingCloudError(errorMessage: string): boolean {
   const BLOCKING_NEVER = true;
   if (BLOCKING_NEVER) return true;
@@ -200,7 +229,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return await saveAllMutation.mutateAsync(payload);
     } catch (error) {
       const errorMessage = getNormalizedErrorString(error);
-      console.log("[UserDataSync] Primary cloud save failed, trying direct cloud store:", errorMessage);
+      if (!shouldAttemptDirectCloudFallback(errorMessage)) {
+        console.log("[UserDataSync] Primary cloud save failed without fallback:", errorMessage);
+        throw error;
+      }
+
+      console.log("[UserDataSync] Primary cloud save unavailable, trying direct cloud store:", errorMessage);
 
       if (!isDirectCloudStoreConfigured()) {
         throw error;
@@ -224,7 +258,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return await trpcClient.data.getAllUserData.query({ email: normalizedEmail });
     } catch (error) {
       const errorMessage = getNormalizedErrorString(error);
-      console.log("[UserDataSync] Primary cloud fetch failed, trying direct cloud store:", errorMessage);
+      if (!shouldAttemptDirectCloudFallback(errorMessage)) {
+        console.log("[UserDataSync] Primary cloud fetch failed without fallback:", errorMessage);
+        throw error;
+      }
+
+      console.log("[UserDataSync] Primary cloud fetch unavailable, trying direct cloud store:", errorMessage);
 
       if (!isDirectCloudStoreConfigured()) {
         throw error;
