@@ -19,7 +19,7 @@ import { Download, FileDown, RefreshCcw, Shield, Ship } from 'lucide-react-nativ
 import { SeaPassWebPass } from '@/components/seapass/SeaPassWebPass';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { SEA_PASS_APPROVED_SCREENSHOT_URL, SEA_PASS_DEFAULTS, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
+import { SEA_PASS_APPROVED_SCREENSHOT_URL, SEA_PASS_DEFAULTS, SEA_PASS_VIEWBOX, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
 import { exportSeaPassPdf, exportSeaPassPng } from '@/lib/seapassExport';
 import { useAuth } from '@/state/AuthProvider';
 
@@ -94,6 +94,7 @@ function normalizeSeaPassFieldValue(key: keyof SeaPassWebPassData, value: string
 function SeaPassGeneratorScreen() {
   const { width } = useWindowDimensions();
   const previewCaptureRef = useRef<View | null>(null);
+  const exportCaptureRef = useRef<View | null>(null);
   const [formData, setFormData] = useState<SeaPassWebPassData>({ ...SEA_PASS_DEFAULTS });
   const [isExportingPng, setIsExportingPng] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
@@ -140,7 +141,10 @@ function SeaPassGeneratorScreen() {
     try {
       console.log('[SeaPassGenerator] Starting PNG export');
       setIsExportingPng(true);
-      const resultMessage = await exportSeaPassPng(formData, previewCaptureRef.current);
+      const captureTarget = Platform.OS === 'web'
+        ? previewCaptureRef.current
+        : exportCaptureRef.current ?? previewCaptureRef.current;
+      const resultMessage = await exportSeaPassPng(formData, captureTarget);
       Alert.alert('PNG Export Ready', resultMessage);
     } catch (error) {
       console.error('[SeaPassGenerator] PNG export failed', error);
@@ -177,6 +181,22 @@ function SeaPassGeneratorScreen() {
         }}
       />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.hiddenExportStage} pointerEvents="none">
+          <View ref={exportCaptureRef} collapsable={false} style={styles.hiddenExportCaptureFrame} testID="seapass-generator.export-capture-target">
+            <SeaPassWebPass
+              time={formData.time}
+              date={formData.date}
+              deck={formData.deck}
+              stateroom={formData.stateroom}
+              muster={formData.muster}
+              reservation={formData.reservation}
+              ship={formData.ship}
+              width={SEA_PASS_VIEWBOX.width}
+              style={styles.hiddenExportPass}
+              testID="seapass-generator.export-pass"
+            />
+          </View>
+        </View>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -424,6 +444,19 @@ const styles = StyleSheet.create({
   },
   previewPass: {
     maxWidth: 520,
+  },
+  hiddenExportStage: {
+    position: 'absolute',
+    left: -20000,
+    top: 0,
+  },
+  hiddenExportCaptureFrame: {
+    width: SEA_PASS_VIEWBOX.width,
+    backgroundColor: '#FFFFFF',
+  },
+  hiddenExportPass: {
+    width: SEA_PASS_VIEWBOX.width,
+    maxWidth: SEA_PASS_VIEWBOX.width,
   },
   formCard: {
     borderRadius: 28,

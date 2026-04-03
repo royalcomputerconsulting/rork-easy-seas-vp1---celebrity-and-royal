@@ -22,13 +22,8 @@ export interface SeaPassOverlayMask {
   height: number;
   fill: string;
   radius: number;
-}
-
-export interface SeaPassOverlayCloneSource {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  blur: number;
+  coverOpacity?: number;
 }
 
 export interface SeaPassDynamicOverlay {
@@ -39,9 +34,9 @@ export interface SeaPassDynamicOverlay {
   fill: string;
   fontSize: number;
   fontWeight: string;
+  letterSpacing?: number;
   textAnchor?: 'middle' | 'end';
   mask: SeaPassOverlayMask;
-  cloneSource?: SeaPassOverlayCloneSource;
 }
 
 interface SeaPassDynamicOverlayDefinition {
@@ -50,9 +45,9 @@ interface SeaPassDynamicOverlayDefinition {
   fill: string;
   fontSize: number;
   fontWeight: string;
+  letterSpacing?: number;
   textAnchor?: 'middle' | 'end';
   mask: SeaPassOverlayMask;
-  cloneSource?: SeaPassOverlayCloneSource;
 }
 
 export const SEA_PASS_VIEWBOX = {
@@ -138,20 +133,17 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     fill: '#FFFFFF',
     fontSize: 46,
     fontWeight: '400',
+    letterSpacing: -1.1,
     textAnchor: 'end',
     mask: {
-      x: 774,
-      y: 52,
-      width: 186,
-      height: 58,
+      x: 728,
+      y: 48,
+      width: 236,
+      height: 68,
       fill: '#583B8A',
-      radius: 6,
-    },
-    cloneSource: {
-      x: 534,
-      y: 52,
-      width: 186,
-      height: 58,
+      radius: 8,
+      blur: 10,
+      coverOpacity: 0.14,
     },
   },
   date: {
@@ -160,20 +152,17 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     fill: '#FFFFFF',
     fontSize: 62,
     fontWeight: '300',
+    letterSpacing: -1.6,
     textAnchor: 'end',
     mask: {
-      x: 764,
-      y: 118,
-      width: 196,
-      height: 74,
+      x: 744,
+      y: 114,
+      width: 220,
+      height: 84,
       fill: '#5A3C8E',
-      radius: 6,
-    },
-    cloneSource: {
-      x: 520,
-      y: 118,
-      width: 196,
-      height: 74,
+      radius: 8,
+      blur: 12,
+      coverOpacity: 0.14,
     },
   },
   deck: {
@@ -182,19 +171,16 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     fill: '#30333A',
     fontSize: 54,
     fontWeight: '400',
+    letterSpacing: -0.8,
     mask: {
-      x: 90,
-      y: 570,
-      width: 72,
-      height: 48,
+      x: 84,
+      y: 564,
+      width: 84,
+      height: 58,
       fill: '#F2F2F3',
-      radius: 4,
-    },
-    cloneSource: {
-      x: 470,
-      y: 570,
-      width: 72,
-      height: 48,
+      radius: 6,
+      blur: 8,
+      coverOpacity: 0.18,
     },
   },
   stateroom: {
@@ -203,19 +189,16 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     fill: '#30333A',
     fontSize: 54,
     fontWeight: '400',
+    letterSpacing: -0.8,
     mask: {
-      x: 246,
-      y: 570,
-      width: 176,
-      height: 48,
+      x: 238,
+      y: 564,
+      width: 192,
+      height: 58,
       fill: '#F2F2F3',
-      radius: 4,
-    },
-    cloneSource: {
-      x: 506,
-      y: 570,
-      width: 176,
-      height: 48,
+      radius: 6,
+      blur: 8,
+      coverOpacity: 0.18,
     },
   },
   muster: {
@@ -224,20 +207,17 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     fill: '#30333A',
     fontSize: 54,
     fontWeight: '400',
+    letterSpacing: -0.8,
     textAnchor: 'end',
     mask: {
-      x: 848,
-      y: 570,
-      width: 86,
-      height: 48,
+      x: 838,
+      y: 564,
+      width: 106,
+      height: 58,
       fill: '#F2F2F3',
-      radius: 4,
-    },
-    cloneSource: {
-      x: 658,
-      y: 570,
-      width: 86,
-      height: 48,
+      radius: 6,
+      blur: 8,
+      coverOpacity: 0.18,
     },
   },
   reservation: {
@@ -246,19 +226,16 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     fill: '#30333A',
     fontSize: 54,
     fontWeight: '400',
+    letterSpacing: -0.8,
     mask: {
-      x: 90,
-      y: 718,
-      width: 174,
-      height: 48,
+      x: 84,
+      y: 710,
+      width: 190,
+      height: 60,
       fill: '#F4F4F5',
-      radius: 4,
-    },
-    cloneSource: {
-      x: 408,
-      y: 718,
-      width: 174,
-      height: 48,
+      radius: 6,
+      blur: 8,
+      coverOpacity: 0.18,
     },
   },
   ship: {
@@ -267,20 +244,17 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     fill: '#30333A',
     fontSize: 54,
     fontWeight: '400',
+    letterSpacing: -0.8,
     textAnchor: 'end',
     mask: {
-      x: 848,
-      y: 718,
-      width: 86,
-      height: 48,
+      x: 838,
+      y: 710,
+      width: 106,
+      height: 60,
       fill: '#F4F4F5',
-      radius: 4,
-    },
-    cloneSource: {
-      x: 684,
-      y: 718,
-      width: 86,
-      height: 48,
+      radius: 6,
+      blur: 8,
+      coverOpacity: 0.18,
     },
   },
   barcodeCaption: {
@@ -289,14 +263,17 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     fill: '#30333A',
     fontSize: 48,
     fontWeight: '400',
+    letterSpacing: -0.6,
     textAnchor: 'middle',
     mask: {
-      x: 356,
-      y: 1272,
-      width: 312,
-      height: 48,
+      x: 338,
+      y: 1266,
+      width: 348,
+      height: 58,
       fill: '#F8F8F9',
-      radius: 4,
+      radius: 6,
+      blur: 8,
+      coverOpacity: 0.14,
     },
   },
 };
@@ -378,26 +355,29 @@ function buildSeaPassOverlaySvgMarkup(
   const barcodeCaption = getSeaPassBarcodeCaption(data);
   const overlays = getSeaPassDynamicOverlays(data);
   const safeImageHref = escapeXml(approvedImageHref);
-  const defs: string[] = [];
+  const defs: string[] = [
+    `<pattern id="approved-shell-pattern" patternUnits="userSpaceOnUse" x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}"><image href="${safeImageHref}" x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" /></pattern>`,
+  ];
 
   const overlayMarkup = overlays
     .map((overlay) => {
       const mask = overlay.mask;
+      const blurId = `overlay-blur-${overlay.key}`;
       const textAnchor = overlay.textAnchor ? ` text-anchor="${overlay.textAnchor}"` : '';
+      const letterSpacing = typeof overlay.letterSpacing === 'number' ? ` letter-spacing="${overlay.letterSpacing}"` : '';
       const value = escapeXml(getDynamicOverlayValue(overlay.key, data, barcodeCaption));
-      const clipId = `overlay-clip-${overlay.key}`;
+      const blurPadding = Math.max(mask.blur * 6, 24);
 
-      const eraseMarkup = overlay.cloneSource
-        ? (() => {
-            defs.push(
-              `<clipPath id="${clipId}"><rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" /></clipPath>`,
-            );
+      defs.push(
+        `<filter id="${blurId}" x="${mask.x - blurPadding}" y="${mask.y - blurPadding}" width="${mask.width + blurPadding * 2}" height="${mask.height + blurPadding * 2}" filterUnits="userSpaceOnUse"><feGaussianBlur stdDeviation="${mask.blur}" /></filter>`,
+      );
 
-            return `<image href="${safeImageHref}" x="${mask.x - overlay.cloneSource.x}" y="${mask.y - overlay.cloneSource.y}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" clip-path="url(#${clipId})" />`;
-          })()
-        : `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" />`;
+      const eraseMarkup = `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="url(#approved-shell-pattern)" filter="url(#${blurId})" />`;
+      const softenMarkup = mask.coverOpacity && mask.coverOpacity > 0
+        ? `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" opacity="${mask.coverOpacity}" />`
+        : '';
 
-      return `${eraseMarkup}<text x="${overlay.x}" y="${overlay.y}"${textAnchor} font-family="${SEA_PASS_FONT_STACK}" font-size="${overlay.fontSize}" font-weight="${overlay.fontWeight}" fill="${overlay.fill}">${value}</text>`;
+      return `${eraseMarkup}${softenMarkup}<text x="${overlay.x}" y="${overlay.y}"${textAnchor}${letterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${overlay.fontSize}" font-weight="${overlay.fontWeight}" fill="${overlay.fill}">${value}</text>`;
     })
     .join('');
 
@@ -445,9 +425,9 @@ export function getSeaPassDynamicOverlays(input: Partial<SeaPassWebPassData>): S
       fill: definition.fill,
       fontSize: definition.fontSize,
       fontWeight: definition.fontWeight,
+      letterSpacing: definition.letterSpacing,
       textAnchor: definition.textAnchor,
       mask: definition.mask,
-      cloneSource: definition.cloneSource,
     });
     return accumulator;
   }, []);
