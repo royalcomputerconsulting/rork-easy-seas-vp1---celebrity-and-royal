@@ -139,6 +139,30 @@ export const CruiseCard = React.memo(function CruiseCard({
     return cabinValueForTwo;
   }, [cruise, showRetailValue]);
 
+  const itineraryPorts = useMemo((): string[] => {
+    const itineraryStops = bookedCruise.itinerary?.map((day: ItineraryDay) => day.port).filter((port): port is string => Boolean(port && port.trim())) ?? [];
+
+    if (itineraryStops.length > 0) {
+      return itineraryStops;
+    }
+
+    return bookedCruise.ports?.filter((port): port is string => Boolean(port && port.trim())) ?? [];
+  }, [bookedCruise.itinerary, bookedCruise.ports]);
+
+  const guestCount = bookedCruise.guestNames?.length || bookedCruise.guests || 2;
+  const visiblePorts = itineraryPorts.slice(0, 4);
+  const offerCodeValue = bookedCruise.offerCode || cruise.offerCode;
+  const freePlayAmount = bookedCruise.freePlay ?? cruise.freePlay ?? 0;
+  const obcAmount = bookedCruise.freeOBC ?? cruise.freeOBC ?? 0;
+  const shouldUseBookedBackgroundLayout = isBooked && !mini && !compact;
+  const shouldShowBookedFooter =
+    (showRetailValue && retailValue !== null && retailValue > 0) ||
+    Boolean(bookedCruise.cabinType) ||
+    Boolean(offerCodeValue) ||
+    freePlayAmount > 0 ||
+    obcAmount > 0 ||
+    Boolean(bookedCruise.usedNextCruiseCertificate);
+
   const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {
     const start = createDateFromString(sailDate);
     const startMonth = start.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
@@ -497,6 +521,131 @@ export const CruiseCard = React.memo(function CruiseCard({
               </View>
             </View>
             <ChevronRight size={20} color={COLORS.textBlack} style={styles.compactChevron} />
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+
+  if (shouldUseBookedBackgroundLayout) {
+    return (
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <TouchableOpacity
+          style={styles.shadowShell}
+          onPress={onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          activeOpacity={1}
+          testID="cruise-card-booked"
+        >
+          <View style={styles.bookedContainer}>
+            <StableRemoteImage
+              uri={cardImageUri}
+              fallbackUri={cardImageFallbackUri}
+              style={styles.bookedBackgroundImage}
+              recyclingKey={`${cruise.id}-booked-background-image`}
+              testID="cruise-card-booked-background-image"
+            />
+            <LinearGradient
+              colors={['rgba(255,255,255,0.7)', 'rgba(246,250,255,0.84)', 'rgba(246,250,255,0.95)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.bookedBackgroundOverlay}
+            />
+            <LinearGradient
+              colors={['rgba(4,25,45,0.03)', 'rgba(4,25,45,0.12)']}
+              start={{ x: 0.1, y: 0 }}
+              end={{ x: 0.9, y: 1 }}
+              style={styles.bookedBackgroundShade}
+            />
+            <View style={styles.bookedContentSection}>
+              <View style={styles.bookedHeaderRow}>
+                <View style={styles.bookedTitleGroup}>
+                  <View style={styles.bookedShipRow}>
+                    <Ship size={15} color={COLORS.navyDeep} />
+                    <Text style={styles.bookedShipName} numberOfLines={1}>{cruise.shipName}</Text>
+                  </View>
+                  <Text style={styles.bookedItinerary} numberOfLines={2}>{getItineraryName()}</Text>
+                </View>
+                <View style={[styles.bookedStatusBadge, { backgroundColor: statusBadge.bg }]}>
+                  <Text style={styles.bookedStatusBadgeText}>{statusBadge.text}</Text>
+                </View>
+              </View>
+
+              <View style={styles.bookedMetaGrid}>
+                <View style={styles.bookedMetaChip}>
+                  <Calendar size={14} color={COLORS.navyDeep} />
+                  <Text style={styles.bookedMetaText}>{formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}</Text>
+                </View>
+                <View style={styles.bookedMetaChip}>
+                  <Users size={14} color={COLORS.navyDeep} />
+                  <Text style={styles.bookedMetaText}>{guestCount} Guests</Text>
+                </View>
+                <View style={styles.bookedMetaChip}>
+                  <Anchor size={14} color={COLORS.navyDeep} />
+                  <Text style={styles.bookedMetaText}>{cruise.nights} Nights</Text>
+                </View>
+              </View>
+
+              <View style={styles.bookedRouteCard}>
+                <Text style={styles.bookedRouteLabel}>Roundtrip from</Text>
+                <Text style={styles.bookedRouteValue}>{cruise.departurePort || cruise.destination || 'Cruise itinerary'}</Text>
+                {visiblePorts.length > 0 && (
+                  <View style={styles.bookedPortsRow}>
+                    {visiblePorts.map((port: string) => (
+                      <View key={`${cruise.id}-${port}`} style={styles.bookedPortChip}>
+                        <Text style={styles.bookedPortChipText}>{port}</Text>
+                      </View>
+                    ))}
+                    {itineraryPorts.length > visiblePorts.length && (
+                      <View style={styles.bookedPortChip}>
+                        <Text style={styles.bookedPortChipText}>+{itineraryPorts.length - visiblePorts.length} more</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              {shouldShowBookedFooter && (
+                <View style={styles.bookedFooterRow}>
+                  <View style={styles.bookedValueBlock}>
+                    {showRetailValue && retailValue !== null && retailValue > 0 ? (
+                      <>
+                        <Text style={styles.bookedValueLabel}>Retail value</Text>
+                        <Text style={styles.bookedValueText}>${Math.round(retailValue).toLocaleString()}</Text>
+                      </>
+                    ) : null}
+                    {!!bookedCruise.cabinType && (
+                      <Text style={styles.bookedSubValueText}>{bookedCruise.cabinType}</Text>
+                    )}
+                  </View>
+                  <View style={styles.bookedBenefitsRow}>
+                    {!!offerCodeValue && (
+                      <View style={styles.bookedBenefitBadge}>
+                        <Sparkles size={12} color={COLORS.goldDark} />
+                        <Text style={styles.bookedBenefitText}>{offerCodeValue}</Text>
+                      </View>
+                    )}
+                    {freePlayAmount > 0 && (
+                      <View style={styles.bookedBenefitBadge}>
+                        <Text style={styles.bookedBenefitText}>FP ${freePlayAmount.toLocaleString()}</Text>
+                      </View>
+                    )}
+                    {obcAmount > 0 && (
+                      <View style={styles.bookedBenefitBadge}>
+                        <Text style={styles.bookedBenefitText}>OBC ${obcAmount.toLocaleString()}</Text>
+                      </View>
+                    )}
+                    {bookedCruise.usedNextCruiseCertificate && (
+                      <View style={styles.bookedBenefitBadge}>
+                        <Ticket size={12} color="#7C3AED" />
+                        <Text style={styles.bookedBenefitText}>NCC</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
+            </View>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -1034,6 +1183,179 @@ const styles = StyleSheet.create({
   miniEnrichmentBadgeText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  bookedContainer: {
+    minHeight: 248,
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+    backgroundColor: '#F7FBFF',
+    borderWidth: 1,
+    borderColor: 'rgba(203,220,235,0.9)',
+  },
+  bookedBackgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.2,
+    backgroundColor: 'rgba(244,248,255,0.78)',
+  },
+  bookedBackgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  bookedBackgroundShade: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  bookedContentSection: {
+    padding: SPACING.lg,
+    gap: SPACING.md,
+  },
+  bookedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  bookedTitleGroup: {
+    flex: 1,
+    gap: 6,
+  },
+  bookedShipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bookedShipName: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  bookedItinerary: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  bookedStatusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.65)',
+  },
+  bookedStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.5,
+    color: COLORS.white,
+  },
+  bookedMetaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  bookedMetaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.75)',
+  },
+  bookedMetaText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  bookedRouteCard: {
+    gap: 8,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.78)',
+  },
+  bookedRouteLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#38506B',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+  },
+  bookedRouteValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.textBlack,
+  },
+  bookedPortsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  bookedPortChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(226,236,247,0.92)',
+  },
+  bookedPortChipText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  bookedFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+  },
+  bookedValueBlock: {
+    flex: 1,
+  },
+  bookedValueLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#38506B',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  bookedValueText: {
+    fontSize: 30,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.textBlack,
+  },
+  bookedSubValueText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: '#38506B',
+    marginTop: 4,
+  },
+  bookedBenefitsRow: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  bookedBenefitBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
+  },
+  bookedBenefitText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
   },
   compactShadowShell: {
     borderRadius: BORDER_RADIUS.md,

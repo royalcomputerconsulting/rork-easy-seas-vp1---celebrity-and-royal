@@ -275,7 +275,6 @@ export default function BookedScreen() {
         cruise={item}
         onPress={() => handleCruisePress(item)}
         variant={isPast ? 'completed' : 'booked'}
-        mini={true}
       />
     );
   }, [handleCruisePress]);
@@ -321,7 +320,6 @@ export default function BookedScreen() {
                         cruise={cruise}
                         onPress={() => handleCruisePress(cruise)}
                         variant="booked"
-                        mini={true}
                       />
                     </View>
                   </View>
@@ -362,7 +360,6 @@ export default function BookedScreen() {
                         cruise={cruise}
                         onPress={() => handleCruisePress(cruise)}
                         variant="completed"
-                        mini={true}
                       />
                     </View>
                   </View>
