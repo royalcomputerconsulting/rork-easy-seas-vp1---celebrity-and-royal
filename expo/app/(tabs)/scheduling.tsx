@@ -558,7 +558,7 @@ export default function SchedulingScreen() {
     );
   }, [renderSlotOffers]);
 
-  const renderHeader = () => (
+  const renderHeader = useCallback(() => (
     <View style={styles.headerContent}>
       <CompactDashboardHeader
         memberName={currentUser?.name || clubRoyaleProfile.memberName}
@@ -743,7 +743,31 @@ export default function SchedulingScreen() {
         </View>
       )}
     </View>
-  );
+  ), [
+    activeTab,
+    alertCount,
+    availableShips,
+    b2bSets.length,
+    clearFilters,
+    clubRoyaleProfile.memberName,
+    currentUser?.name,
+    filteredCruises.length,
+    filters.cabinType,
+    filters.noConflicts,
+    filters.selectedShips,
+    filters.sortBy,
+    handleAlertsPress,
+    handleSettingsPress,
+    handleSortChange,
+    router,
+    showAdvancedFilters,
+    showShipFilter,
+    stats.available,
+    stats.booked,
+    stats.showing,
+    stats.total,
+    toggleShipFilter,
+  ]);
 
   const renderListFooter = useCallback(() => {
     if (activeTab !== 'available') {

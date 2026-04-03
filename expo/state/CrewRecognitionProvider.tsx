@@ -246,7 +246,9 @@ function parseCSVToEntries(csvText: string): ParsedCrewImport {
 
 export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook(() => {
   const auth = useAuth();
-  const userId = auth.authenticatedEmail || 'guest';
+  const signedInUserId = auth.isAuthenticated ? auth.authenticatedEmail : null;
+  const userId = signedInUserId ?? '';
+  const canManageCrewData = signedInUserId !== null;
 
   const skEntriesRef = useRef(getUserScopedKey(BASE_STORAGE_KEY_ENTRIES, auth.authenticatedEmail));
   const skSailingsRef = useRef(getUserScopedKey(BASE_STORAGE_KEY_SAILINGS, auth.authenticatedEmail));
@@ -255,6 +257,16 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     skSailingsRef.current = getUserScopedKey(BASE_STORAGE_KEY_SAILINGS, auth.authenticatedEmail);
     console.log('[CrewRecognition] Scoped storage keys updated for:', auth.authenticatedEmail);
   }, [auth.authenticatedEmail]);
+
+  const requireSignedInUserId = useCallback((): string => {
+    if (!signedInUserId) {
+      const errorMessage = 'Please sign in to sync and manage your personal crew recognition data.';
+      console.log('[CrewRecognition] Blocked crew action because there is no signed-in user');
+      throw new Error(errorMessage);
+    }
+
+    return signedInUserId;
+  }, [signedInUserId]);
 
   const [filters, setFilters] = useState<CrewRecognitionFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
@@ -265,6 +277,16 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   useEffect(() => {
+    setLocalLoaded(false);
+
+    if (!signedInUserId) {
+      console.log('[CrewRecognition] No signed-in user, clearing in-memory crew data');
+      setLocalEntries([]);
+      setLocalSailings([]);
+      setLocalLoaded(true);
+      return;
+    }
+
     void (async () => {
       try {
         const [storedEntries, storedSailings] = await Promise.all([
@@ -290,7 +312,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
         setLocalLoaded(true);
       }
     })();
-  }, [userId]);
+  }, [signedInUserId, userId]);
 
   useEffect(() => {
     const handleDataCleared = () => {
@@ -338,7 +360,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     {
       refetchOnMount: true,
       refetchOnWindowFocus: false,
-      enabled: !!userId,
+      enabled: canManageCrewData,
       retry: 1,
       retryDelay: 2000,
     }
@@ -361,7 +383,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     {
       refetchOnMount: true,
       refetchOnWindowFocus: false,
-      enabled: !!userId,
+      enabled: canManageCrewData,
       retry: 1,
       retryDelay: 2000,
     }
@@ -372,7 +394,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     {
       refetchOnMount: true,
       refetchOnWindowFocus: false,
-      enabled: !!userId,
+      enabled: canManageCrewData,
       retry: 1,
       retryDelay: 2000,
     }
@@ -448,19 +470,25 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     sailingId?: string;
     userId: string;
   }) => {
+    const authenticatedUserId = requireSignedInUserId();
+    const normalizedData = {
+      ...data,
+      userId: authenticatedUserId,
+    };
+
     if (!isOfflineMode) {
       try {
-        const result = await createCrewMemberMutation.mutateAsync(data as any);
+        const result = await createCrewMemberMutation.mutateAsync(normalizedData as any);
         return result;
       } catch (err) {
         console.log('[CrewRecognition] Backend create failed, falling back to local:', err instanceof Error ? err.message : String(err));
       }
     }
-    console.log('[CrewRecognition] Creating crew member locally:', data.fullName);
+    console.log('[CrewRecognition] Creating crew member locally:', normalizedData.fullName);
 
     const now = new Date().toISOString();
     const crewId = `local_crew_manual_${Date.now()}`;
-    const sailing = data.sailingId ? localSailings.find(s => s.id === data.sailingId) : undefined;
+    const sailing = normalizedData.sailingId ? localSailings.find(s => s.id === normalizedData.sailingId) : undefined;
 
     const newEntry: RecognitionEntryWithCrew = {
       id: `local_entry_manual_${Date.now()}`,
@@ -471,23 +499,23 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
       sailEndDate: sailing?.sailEndDate || '',
       sailingMonth: sailing?.sailStartDate?.substring(0, 7) || '',
       sailingYear: sailing?.sailStartDate ? parseInt(sailing.sailStartDate.substring(0, 4), 10) : 0,
-      department: data.department,
-      roleTitle: data.roleTitle,
+      department: normalizedData.department,
+      roleTitle: normalizedData.roleTitle,
       sourceText: 'Manually added',
-      userId: data.userId,
+      userId: normalizedData.userId,
       createdAt: now,
       updatedAt: now,
-      fullName: data.fullName,
-      crewNotes: data.notes,
+      fullName: normalizedData.fullName,
+      crewNotes: normalizedData.notes,
     };
 
     const updatedEntries = [newEntry, ...localEntries];
     setLocalEntries(updatedEntries);
     setIsOfflineMode(true);
     await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
-    console.log('[CrewRecognition] Added crew member locally with notes:', data.fullName, data.notes ? '(has notes)' : '(no notes)');
+    console.log('[CrewRecognition] Added crew member locally with notes:', normalizedData.fullName, normalizedData.notes ? '(has notes)' : '(no notes)');
     return newEntry;
-  }, [isOfflineMode, createCrewMemberMutation, localEntries, localSailings]);
+  }, [createCrewMemberMutation, isOfflineMode, localEntries, localSailings, requireSignedInUserId]);
 
   const updateCrewMemberMutation = trpc.crewRecognition.updateCrewMember.useMutation({
     onSuccess: () => {
@@ -604,9 +632,14 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     nights?: number;
     userId: string;
   }): Promise<Sailing> => {
-    const normalizedShipName = data.shipName.trim();
+    const authenticatedUserId = requireSignedInUserId();
+    const normalizedData = {
+      ...data,
+      userId: authenticatedUserId,
+    };
+    const normalizedShipName = normalizedData.shipName.trim();
     const existingLocalSailing = localSailings.find(
-      (sailing) => sailing.shipName === normalizedShipName && sailing.sailStartDate === data.sailStartDate,
+      (sailing) => sailing.shipName === normalizedShipName && sailing.sailStartDate === normalizedData.sailStartDate,
     );
 
     if (existingLocalSailing) {
@@ -615,7 +648,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
     if (!isOfflineMode) {
       try {
-        const result = await createSailingMutation.mutateAsync(data as never);
+        const result = await createSailingMutation.mutateAsync(normalizedData as never);
         const createdSailing = Array.isArray(result) ? result[0] : result;
         if (createdSailing && typeof createdSailing === 'object') {
           return createdSailing as unknown as Sailing;
@@ -629,10 +662,10 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     const newSailing: Sailing = {
       id: `local_sailing_manual_${Date.now()}`,
       shipName: normalizedShipName,
-      sailStartDate: data.sailStartDate,
-      sailEndDate: data.sailEndDate,
-      nights: data.nights,
-      userId: data.userId,
+      sailStartDate: normalizedData.sailStartDate,
+      sailEndDate: normalizedData.sailEndDate,
+      nights: normalizedData.nights,
+      userId: normalizedData.userId,
       createdAt: now,
       updatedAt: now,
     };
@@ -643,11 +676,11 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     await AsyncStorage.setItem(skSailingsRef.current, JSON.stringify(updatedSailings));
     console.log('[CrewRecognition] Created sailing locally:', {
       shipName: normalizedShipName,
-      sailStartDate: data.sailStartDate,
-      sailEndDate: data.sailEndDate,
+      sailStartDate: normalizedData.sailStartDate,
+      sailEndDate: normalizedData.sailEndDate,
     });
     return newSailing;
-  }, [createSailingMutation, isOfflineMode, localSailings]);
+  }, [createSailingMutation, isOfflineMode, localSailings, requireSignedInUserId]);
 
   const clearCrewData = useCallback(async () => {
     console.log('[CrewRecognition] Clearing all crew data...');
@@ -668,11 +701,22 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   }, []);
 
   const syncFromCSVLocally = useCallback(async () => {
-    console.log('[CrewRecognition] Parsing CSV locally...');
+    const authenticatedUserId = requireSignedInUserId();
+    console.log('[CrewRecognition] Parsing CSV locally for signed-in user:', authenticatedUserId);
     const parsedImport = parseCSVToEntries(CREW_RECOGNITION_CSV);
+    const parsedEntries = parsedImport.entries.map((entry) => ({
+      ...entry,
+      userId: authenticatedUserId,
+    }));
+    const parsedSailings = parsedImport.sailings.map((sailing) => ({
+      ...sailing,
+      userId: authenticatedUserId,
+    }));
+
     console.log('[CrewRecognition] Parsed import summary:', {
-      parsedEntries: parsedImport.entries.length,
-      parsedSailings: parsedImport.sailings.length,
+      userId: authenticatedUserId,
+      parsedEntries: parsedEntries.length,
+      parsedSailings: parsedSailings.length,
       totalRows: parsedImport.totalRows,
       duplicateRowsSkipped: parsedImport.duplicateCount,
     });
@@ -689,7 +733,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
       }))
     );
 
-    const newEntries = parsedImport.entries.filter((entry) => {
+    const newEntries = parsedEntries.filter((entry) => {
       const entryIdentity = buildRecognitionEntryIdentity({
         fullName: entry.fullName,
         crewMemberId: entry.crewMemberId,
@@ -713,9 +757,9 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
       return true;
     });
 
-    const duplicateCount = parsedImport.duplicateCount + (parsedImport.entries.length - newEntries.length);
+    const duplicateCount = parsedImport.duplicateCount + (parsedEntries.length - newEntries.length);
     const mergedEntries = [...newEntries, ...localEntries];
-    const mergedSailings = dedupeSailings([...parsedImport.sailings, ...localSailings]);
+    const mergedSailings = dedupeSailings([...parsedSailings, ...localSailings]);
 
     setLocalEntries(mergedEntries);
     setLocalSailings(mergedSailings);
@@ -726,6 +770,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
       AsyncStorage.setItem(skSailingsRef.current, JSON.stringify(mergedSailings)),
     ]);
     console.log('[CrewRecognition] Saved deduped import to local storage:', {
+      userId: authenticatedUserId,
       importedCount: newEntries.length,
       totalEntries: mergedEntries.length,
       totalSailings: mergedSailings.length,
@@ -737,7 +782,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
       totalRows: parsedImport.totalRows,
       duplicateCount,
     };
-  }, [localEntries, localSailings]);
+  }, [localEntries, localSailings, requireSignedInUserId]);
 
   const updateFilters = useCallback((newFilters: Partial<CrewRecognitionFilters>) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
@@ -761,7 +806,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     setPage(newPage);
   }, []);
 
-  const useLocal = isOfflineMode || (statsQuery.isError && localLoaded);
+  const useLocal = canManageCrewData && (isOfflineMode || (statsQuery.isError && localLoaded));
   const backendEntries = useMemo(() => {
     const raw = entriesQuery.data?.entries || [];
     return [...raw].sort((a, b) => (b.sailStartDate || '').localeCompare(a.sailStartDate || ''));
@@ -810,6 +855,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     sailings: useLocal ? localSailings : mergedSailings,
     sailingsLoading: !useLocal && sailingsQuery.isLoading,
     isOfflineMode: useLocal,
+    canManageCrewData,
     syncFromCSVLocally,
     createCrewMember: addCrewMemberWithFallback,
     updateCrewMember: updateCrewMemberMutation.mutateAsync,
@@ -822,7 +868,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     refetch,
   }), [
     userId, filters, updateFilters, resetFilters, page, pageSize, nextPage, previousPage, goToPage,
-    useLocal, localStats, mergedStats, statsQuery.isLoading, filteredLocalEntries, mergedEntries, backendTotal,
+    useLocal, canManageCrewData, localStats, mergedStats, statsQuery.isLoading, filteredLocalEntries, mergedEntries, backendTotal,
     entriesQuery.isLoading, localSailings, mergedSailings, sailingsQuery.isLoading,
     syncFromCSVLocally, addCrewMemberWithFallback, updateCrewMemberMutation.mutateAsync,
     deleteCrewMemberWithFallback, createRecognitionEntryMutation.mutateAsync,

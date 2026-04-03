@@ -317,7 +317,6 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       <StableRemoteImage
         uri={scenicHeroUri}
         style={styles.backgroundImage}
-        recyclingKey={`player-card-${activeBrand}-background`}
         testID="player-card-background-image"
       />
       <LinearGradient
@@ -340,7 +339,6 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               uri={IMAGES.logo}
               style={styles.headerLogo}
               contentFit="contain"
-              recyclingKey="player-card-logo"
               testID="player-card-logo-image"
             />
           )}
@@ -1189,6 +1187,7 @@ const styles = StyleSheet.create({
   },
   backgroundImage: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(244, 248, 255, 0.78)',
   },
   backgroundOverlay: {
     ...StyleSheet.absoluteFillObject,

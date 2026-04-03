@@ -199,6 +199,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             <StableRemoteImage
               uri={cardImageUri}
               style={styles.miniBackgroundImage}
+              recyclingKey={`${cruise.id}-mini-background-image`}
               testID="cruise-card-mini-background-image"
             />
             <LinearGradient
@@ -212,6 +213,7 @@ export const CruiseCard = React.memo(function CruiseCard({
                 <StableRemoteImage
                   uri={cardImageUri}
                   style={styles.miniImage}
+                  recyclingKey={`${cruise.id}-mini-image`}
                   testID="cruise-card-mini-image"
                 />
                 <LinearGradient
@@ -433,6 +435,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             <StableRemoteImage
               uri={cardImageUri}
               style={styles.compactImage}
+              recyclingKey={`${cruise.id}-compact-image`}
               testID="cruise-card-compact-image"
             />
             <View style={styles.compactContent}>
@@ -467,6 +470,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             <StableRemoteImage
               uri={cardImageUri}
               style={styles.heroImage}
+              recyclingKey={`${cruise.id}-hero-image`}
               testID="cruise-card-hero-image"
             />
             
@@ -649,6 +653,7 @@ const styles = StyleSheet.create({
   },
   miniBackgroundImage: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(244,248,255,0.78)',
   },
   miniBackgroundOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -672,6 +677,7 @@ const styles = StyleSheet.create({
   miniImage: {
     width: '100%',
     height: '100%',
+    backgroundColor: 'rgba(244,248,255,0.78)',
   },
   miniImageOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -984,6 +990,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   compactImage: {
+    backgroundColor: 'rgba(244,248,255,0.78)',
     width: 80,
     height: 80,
     borderRadius: BORDER_RADIUS.md,
@@ -1023,6 +1030,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   heroImage: {
+    backgroundColor: 'rgba(244,248,255,0.78)',
     width: '100%',
     height: '100%',
   },

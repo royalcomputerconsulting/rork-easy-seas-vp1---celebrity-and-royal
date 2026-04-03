@@ -897,33 +897,18 @@ export default function SettingsScreen() {
               await clearLocalData();
               setLastImportResult(null);
 
+              await clearSession();
+              console.log('[Settings] App data cleared and session removed immediately');
+
               if (result.success) {
                 Alert.alert(
                   'Data Reset Complete',
-                  `Successfully cleared ${result.clearedKeys.length} data stores. Press Continue to finish signing out.`,
-                  [
-                    {
-                      text: 'Continue',
-                      style: 'default',
-                      onPress: () => {
-                        void clearSession();
-                      },
-                    },
-                  ]
+                  `Successfully cleared ${result.clearedKeys.length} data stores and signed you out.`
                 );
               } else {
                 Alert.alert(
                   'Partial Clear',
-                  `Cleared ${result.clearedKeys.length} items with ${result.errors.length} errors. Press Continue to finish signing out.`,
-                  [
-                    {
-                      text: 'Continue',
-                      style: 'default',
-                      onPress: () => {
-                        void clearSession();
-                      },
-                    },
-                  ]
+                  `Cleared ${result.clearedKeys.length} items with ${result.errors.length} errors and signed you out.`
                 );
               }
             } catch (error) {

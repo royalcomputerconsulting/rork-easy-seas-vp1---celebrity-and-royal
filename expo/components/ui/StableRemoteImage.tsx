@@ -52,7 +52,7 @@ export const StableRemoteImage = React.memo(function StableRemoteImage({
 
   const resolvedRecyclingKey = Platform.OS === 'web' || source
     ? undefined
-    : (recyclingKey ?? normalizedUri ?? normalizedFallbackUri ?? 'stable-remote-image');
+    : recyclingKey;
 
   const handleError = useCallback(() => {
     if (normalizedUri) {

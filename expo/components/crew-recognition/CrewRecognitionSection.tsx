@@ -75,6 +75,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     createSailing,
     updateRecognitionEntry,
     deleteRecognitionEntry,
+    canManageCrewData,
     syncFromCSVLocally,
   } = useCrewRecognition();
 
@@ -88,6 +89,11 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
 
   const handleSync = useCallback(async () => {
+    if (!canManageCrewData) {
+      Alert.alert('Sign In Required', 'Please sign in to sync your personal crew recognition data.');
+      return;
+    }
+
     setIsSyncing(true);
     setSyncProgress(null);
     try {
@@ -112,7 +118,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
       setIsSyncing(false);
       setSyncProgress(null);
     }
-  }, [syncFromCSVLocally]);
+  }, [canManageCrewData, syncFromCSVLocally]);
 
   const handleExportResults = useCallback(() => {
     if (entries.length === 0) return;
@@ -167,12 +173,15 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
   const activeFilterCount = filters.shipNames.length + filters.departments.length;
 
   const syncButtonLabel = useMemo(() => {
+    if (!canManageCrewData) {
+      return 'Sign In to Sync';
+    }
     if (syncProgress) {
       return `Syncing ${syncProgress.current}/${syncProgress.total}`;
     }
     if (isSyncing) return 'Syncing...';
     return 'Sync';
-  }, [isSyncing, syncProgress]);
+  }, [canManageCrewData, isSyncing, syncProgress]);
 
   return (
     <View style={styles.container}>
@@ -197,16 +206,17 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
           <Text style={styles.addButtonText}>Add Crew</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
+          style={[styles.syncButton, (!canManageCrewData || isSyncing) && styles.syncButtonDisabled]}
           onPress={handleSync}
-          disabled={isSyncing}
+          disabled={!canManageCrewData || isSyncing}
+          testID="crew-sync-button"
         >
           {isSyncing ? (
             <ActivityIndicator size="small" color="#0369A1" />
           ) : (
-            <RefreshCcw size={18} color="#0369A1" />
+            <RefreshCcw size={18} color={canManageCrewData ? '#0369A1' : COLORS.textTertiary} />
           )}
-          <Text style={styles.syncButtonText}>{syncButtonLabel}</Text>
+          <Text style={[styles.syncButtonText, !canManageCrewData && styles.syncButtonTextDisabled]}>{syncButtonLabel}</Text>
         </TouchableOpacity>
       </View>
 
@@ -595,6 +605,9 @@ const styles = StyleSheet.create({
     color: '#0369A1',
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
+  },
+  syncButtonTextDisabled: {
+    color: COLORS.textTertiary,
   },
   syncProgressContainer: {
     paddingHorizontal: SPACING.md,
