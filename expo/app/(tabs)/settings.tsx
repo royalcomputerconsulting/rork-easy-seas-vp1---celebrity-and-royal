@@ -9,10 +9,13 @@ import {
   Linking, 
   ActivityIndicator,
   TextInput,
-  Image
+  Image,
+  Platform,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { 
   Settings as SettingsIcon, 
   Download, 
@@ -71,6 +74,7 @@ import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
 import { countCalendarFeedEntries, generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
 import { getRenderCalendarFeedUrl, trpc } from '@/lib/trpc';
+import { importCompletedCruisesFromWorkbook, type WorkbookBinaryInput } from '@/lib/importers/completedCruiseWorkbook';
 
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -83,6 +87,11 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+
+interface PickedCompletedCruisesWorkbook {
+  fileName: string;
+  workbookInput: WorkbookBinaryInput;
+}
 
 function normalizeAccountEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -375,6 +384,53 @@ export default function SettingsScreen() {
     };
   }, [bookedCruises, casinoOffers, crewStats, cruises, localData.booked, localData.calendar, localData.cruises, localData.offers, myAtlasMachines.length]);
 
+  const pickCompletedCruisesWorkbook = useCallback(async (): Promise<PickedCompletedCruisesWorkbook | null> => {
+    console.log('[Settings] Opening completed cruises workbook picker');
+    const result = await DocumentPicker.getDocumentAsync({
+      type: [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'application/octet-stream',
+      ],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) {
+      console.log('[Settings] Completed cruises workbook picker cancelled');
+      return null;
+    }
+
+    const asset = result.assets[0];
+    console.log('[Settings] Completed cruises workbook selected:', asset.name, asset.size, asset.uri);
+
+    if (Platform.OS === 'web') {
+      const response = await fetch(asset.uri);
+      const arrayBuffer = await response.arrayBuffer();
+      console.log('[Settings] Completed cruises workbook loaded on web, bytes:', arrayBuffer.byteLength);
+      return {
+        fileName: asset.name,
+        workbookInput: {
+          kind: 'array',
+          data: new Uint8Array(arrayBuffer),
+        },
+      };
+    }
+
+    const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    console.log('[Settings] Completed cruises workbook loaded on native, base64 length:', base64.length);
+    return {
+      fileName: asset.name,
+      workbookInput: {
+        kind: 'base64',
+        data: base64,
+      },
+    };
+  }, []);
+
   const handleImportOffersCSV = useCallback(async () => {
     try {
       setIsImporting(true);
@@ -445,6 +501,84 @@ export default function SettingsScreen() {
       setIsImporting(false);
     }
   }, [setCruises, setCasinoOffers, setLocalData]);
+
+  const handleImportCompletedCruisesWorkbook = useCallback(async () => {
+    try {
+      setIsImporting(true);
+      setLastImportResult(null);
+      console.log('[Settings] Starting completed cruises workbook import');
+
+      const pickedWorkbook = await pickCompletedCruisesWorkbook();
+      if (!pickedWorkbook) {
+        console.log('[Settings] Completed cruises workbook import cancelled');
+        setIsImporting(false);
+        return;
+      }
+
+      const existingBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
+      console.log('[Settings] Existing booked cruises before workbook import:', existingBooked.length);
+
+      const result = importCompletedCruisesFromWorkbook(pickedWorkbook.workbookInput, existingBooked);
+      console.log('[Settings] Completed cruises workbook summary:', result.summary);
+
+      if (result.summary.importedPastCruises === 0) {
+        Alert.alert('No Past Cruises Found', 'This workbook did not contain any rows marked as Past.');
+        setIsImporting(false);
+        return;
+      }
+
+      await setBookedCruises(result.cruises);
+      await setLocalData({
+        booked: result.cruises,
+      });
+
+      await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
+      console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
+
+      setLastImportResult({
+        type: 'completed-workbook',
+        count: result.summary.addedNew + result.summary.matchedExisting,
+      });
+
+      Alert.alert(
+        'Completed Cruises Imported',
+        `Imported ${result.summary.importedPastCruises} past cruises from ${pickedWorkbook.fileName}.\n\nMatched existing: ${result.summary.matchedExisting}\nAdded new: ${result.summary.addedNew}\nSkipped non-past rows: ${result.summary.skippedNonPastRows}`
+      );
+      console.log('[Settings] Completed cruises workbook import complete:', result.summary);
+    } catch (error) {
+      console.error('[Settings] Completed cruises workbook import error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to import the workbook. Please check the file format and try again.';
+      Alert.alert('Import Error', errorMessage);
+    } finally {
+      setIsImporting(false);
+    }
+  }, [bookedCruises, localData.booked, pickCompletedCruisesWorkbook, setBookedCruises, setLocalData]);
+
+  const handleChooseOffersImportSource = useCallback(() => {
+    Alert.alert(
+      'Import Cruise Data',
+      'Choose which file you want to import from this section.',
+      [
+        {
+          text: 'offers.csv',
+          onPress: () => {
+            void handleImportOffersCSV();
+          },
+        },
+        {
+          text: 'Completed cruises.xlsx',
+          onPress: () => {
+            void handleImportCompletedCruisesWorkbook();
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
+  }, [handleImportCompletedCruisesWorkbook, handleImportOffersCSV]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
@@ -1485,9 +1619,11 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     label: string,
     value?: string | React.ReactNode,
     onPress?: () => void,
-    isDanger?: boolean
+    isDanger?: boolean,
+    testID?: string
   ) => (
     <TouchableOpacity 
+      testID={testID}
       style={styles.settingRow} 
       onPress={onPress}
       disabled={!onPress}
@@ -1649,8 +1785,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
             <TouchableOpacity 
+              testID="settings.quickAction.importOffersOrCompletedCruises"
               style={styles.quickActionFullWidth} 
-              onPress={handleImportOffersCSV}
+              onPress={handleChooseOffersImportSource}
               activeOpacity={0.7}
               disabled={isImporting}
             >
@@ -1661,7 +1798,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                   <FileDown size={16} color={COLORS.info} />
                 )}
               </View>
-              <Text style={styles.quickActionLabelInline}>Load Import Offers.CSV</Text>
+              <Text style={styles.quickActionLabelInline}>Load Offers / Completed Cruises</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
             <View style={styles.quickActionsRow}>
@@ -1728,16 +1865,18 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               </View>
               {renderSettingRow(
                 <FileSpreadsheet size={18} color={COLORS.navyDeep} />,
-                'Offers CSV',
+                'Offers CSV / Completed Cruises.xlsx',
                 isImporting ? (
                   <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                ) : lastImportResult?.type === 'offers' ? (
+                ) : lastImportResult?.type === 'offers' || lastImportResult?.type === 'completed-workbook' ? (
                   <View style={styles.successBadge}>
                     <CheckCircle size={12} color={COLORS.success} />
                     <Text style={styles.successText}>{lastImportResult.count}</Text>
                   </View>
                 ) : undefined,
-                handleImportOffersCSV
+                handleChooseOffersImportSource,
+                false,
+                'settings.data.importOffersOrCompletedCruises'
               )}
               {renderSettingRow(
                 <Ship size={18} color={COLORS.navyDeep} />,
@@ -2164,16 +2303,18 @@ STEP 4: Optional Calendar Import
                 </View>
                 {renderSettingRow(
                   <FileSpreadsheet size={18} color={COLORS.navyDeep} />,
-                  'Import Offers CSV',
+                  'Import Offers CSV / Completed Cruises.xlsx',
                   isImporting ? (
                     <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                  ) : lastImportResult?.type === 'offers' ? (
+                  ) : lastImportResult?.type === 'offers' || lastImportResult?.type === 'completed-workbook' ? (
                     <View style={styles.successBadge}>
                       <CheckCircle size={12} color={COLORS.success} />
                       <Text style={styles.successText}>{lastImportResult.count}</Text>
                     </View>
                   ) : undefined,
-                  handleImportOffersCSV
+                  handleChooseOffersImportSource,
+                  false,
+                  'settings.admin.importOffersOrCompletedCruises'
                 )}
                 {renderSettingRow(
                   <RefreshCcw size={18} color={COLORS.error} />,
