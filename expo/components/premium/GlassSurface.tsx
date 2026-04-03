@@ -1,5 +1,5 @@
-import React from 'react';
-import { Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import React, { useMemo } from 'react';
+import { Platform, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 
@@ -35,6 +35,31 @@ function getBackdropMode(): GlassBackdropMode {
 }
 
 const backdropMode = getBackdropMode();
+
+function normalizeGlassChildren(children: React.ReactNode): React.ReactNode[] {
+  return React.Children.toArray(children).flatMap((child, index) => {
+    if (typeof child === 'string') {
+      const trimmedChild = child.trim();
+      if (!trimmedChild) {
+        return [];
+      }
+
+      console.log('[GlassSurface] Wrapping raw text child to avoid invalid View text nodes:', trimmedChild);
+      return <Text key={`glass-surface-text-${index}`}>{trimmedChild}</Text>;
+    }
+
+    if (typeof child === 'number') {
+      console.log('[GlassSurface] Wrapping numeric child to avoid invalid View text nodes:', child);
+      return <Text key={`glass-surface-number-${index}`}>{child}</Text>;
+    }
+
+    if (React.isValidElement<{ children?: React.ReactNode }>(child) && child.type === React.Fragment) {
+      return normalizeGlassChildren(child.props.children);
+    }
+
+    return [child];
+  });
+}
 
 const GlassBackdrop = React.memo(function GlassBackdrop({ mode }: { mode: GlassBackdropMode }) {
   if (Platform.OS === 'web') {
@@ -80,10 +105,12 @@ const GlassBackdrop = React.memo(function GlassBackdrop({ mode }: { mode: GlassB
 });
 
 export const GlassSurface = React.memo(function GlassSurface({ children, style, contentStyle, testID }: GlassSurfaceProps) {
+  const normalizedChildren = useMemo(() => normalizeGlassChildren(children), [children]);
+
   if (Platform.OS === 'web') {
     return (
       <View style={[styles.glassShell, styles.webGlassShell, style]} testID={testID ?? 'glass-surface'}>
-        <View style={[styles.glassClip, styles.webGlassClip, styles.contentLayer, contentStyle]}>{children}</View>
+        <View style={[styles.glassClip, styles.webGlassClip, styles.contentLayer, contentStyle]}>{normalizedChildren}</View>
       </View>
     );
   }
@@ -92,7 +119,7 @@ export const GlassSurface = React.memo(function GlassSurface({ children, style, 
     <View style={[styles.glassShell, style]} testID={testID ?? 'glass-surface'}>
       <View style={styles.glassClip}>
         <GlassBackdrop mode={backdropMode} />
-        <View style={[styles.contentLayer, contentStyle]}>{children}</View>
+        <View style={[styles.contentLayer, contentStyle]}>{normalizedChildren}</View>
       </View>
     </View>
   );
