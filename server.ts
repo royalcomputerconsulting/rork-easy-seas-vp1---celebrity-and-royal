@@ -1,4 +1,5 @@
 const BACKEND_TARGET = 'https://rork-easy-seas-vp1-2nep.onrender.com';
+const API_PREFIX = '/api';
 
 declare const Deno: {
   serve: (options: { port: number }, handler: (request: Request) => Response | Promise<Response>) => unknown;
@@ -21,14 +22,28 @@ function buildCorsHeaders(request: Request): Headers {
   return headers;
 }
 
+function normalizeProxyPath(pathname: string): string {
+  if (pathname === API_PREFIX) {
+    return '/';
+  }
+
+  if (pathname.startsWith(`${API_PREFIX}/`)) {
+    return pathname.slice(API_PREFIX.length) || '/';
+  }
+
+  return pathname;
+}
+
 async function proxyRequest(request: Request): Promise<Response> {
   const incomingUrl = new URL(request.url);
-  const targetUrl = `${BACKEND_TARGET}${incomingUrl.pathname}${incomingUrl.search}`;
+  const normalizedPathname = normalizeProxyPath(incomingUrl.pathname);
+  const targetUrl = `${BACKEND_TARGET}${normalizedPathname}${incomingUrl.search}`;
   const method = request.method.toUpperCase();
 
   console.log('[BackendProxy] Forwarding request:', {
     method,
     pathname: incomingUrl.pathname,
+    normalizedPathname,
     search: incomingUrl.search,
     targetUrl,
   });
@@ -55,6 +70,7 @@ async function proxyRequest(request: Request): Promise<Response> {
   console.log('[BackendProxy] Upstream response:', {
     method,
     pathname: incomingUrl.pathname,
+    normalizedPathname,
     status: upstreamResponse.status,
   });
 
@@ -87,6 +103,7 @@ Deno.serve({ port }, async (request: Request) => {
     console.error('[BackendProxy] Request failed:', {
       method: request.method,
       pathname: incomingUrl.pathname,
+      normalizedPathname: normalizeProxyPath(incomingUrl.pathname),
       message,
     });
 

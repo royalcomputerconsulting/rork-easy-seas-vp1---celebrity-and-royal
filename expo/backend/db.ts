@@ -3,23 +3,29 @@ import Surreal from 'surrealdb.js';
 let db: Surreal | null = null;
 let isConnecting = false;
 let lastConnectionTime = 0;
+let selectedDatabaseEndpoint: string | null = null;
 const CONNECTION_TIMEOUT = 5000;
 const CONNECTION_RETRY_DELAY = 1000;
 const RPC_SUFFIX = '/rpc';
 const DATABASE_UNAVAILABLE = 'DATABASE_UNAVAILABLE';
 
-function normalizeEndpoint(endpoint: string): string {
+function getEndpointCandidates(endpoint: string): string[] {
   const trimmedEndpoint = endpoint.trim().replace(/\/+$/, '');
 
   if (!trimmedEndpoint) {
-    return trimmedEndpoint;
+    return [];
   }
 
-  if (trimmedEndpoint.endsWith(RPC_SUFFIX)) {
-    return trimmedEndpoint;
-  }
+  const rawEndpoint = trimmedEndpoint.endsWith(RPC_SUFFIX)
+    ? trimmedEndpoint.slice(0, -RPC_SUFFIX.length)
+    : trimmedEndpoint;
+  const rpcEndpoint = trimmedEndpoint.endsWith(RPC_SUFFIX)
+    ? trimmedEndpoint
+    : `${trimmedEndpoint}${RPC_SUFFIX}`;
 
-  return `${trimmedEndpoint}${RPC_SUFFIX}`;
+  return [rawEndpoint, rpcEndpoint].filter((candidate, index, list) => {
+    return Boolean(candidate) && list.indexOf(candidate) === index;
+  });
 }
 
 function getDatabaseErrorMessage(error: unknown): string {
@@ -82,22 +88,53 @@ async function createConnection(): Promise<Surreal> {
     throw new Error('Database configuration missing');
   }
 
-  const newDb = new Surreal();
-  
-  const connectPromise = newDb.connect(normalizeEndpoint(endpoint), {
-    namespace,
-    database: 'easyseas',
-    auth: token,
+  const candidateEndpoints = getEndpointCandidates(endpoint);
+  if (selectedDatabaseEndpoint) {
+    candidateEndpoints.unshift(selectedDatabaseEndpoint);
+  }
+
+  const uniqueCandidateEndpoints = candidateEndpoints.filter((candidate, index, list) => {
+    return list.indexOf(candidate) === index;
   });
 
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Database connection timeout')), CONNECTION_TIMEOUT);
-  });
+  let lastConnectionError: Error | null = null;
 
-  await Promise.race([connectPromise, timeoutPromise]);
-  
-  console.log('[DB] Connected to SurrealDB');
-  return newDb;
+  for (const candidateEndpoint of uniqueCandidateEndpoints) {
+    const newDb = new Surreal();
+
+    try {
+      const connectPromise = newDb.connect(candidateEndpoint, {
+        namespace,
+        database: 'easyseas',
+        auth: token,
+        versionCheck: false,
+      });
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Database connection timeout')), CONNECTION_TIMEOUT);
+      });
+
+      await Promise.race([connectPromise, timeoutPromise]);
+      selectedDatabaseEndpoint = candidateEndpoint;
+      console.log('[DB] Connected to SurrealDB via candidate:', candidateEndpoint);
+      return newDb;
+    } catch (error) {
+      lastConnectionError = normalizeDatabaseConnectionError(error);
+      console.log('[DB] Database candidate failed:', candidateEndpoint, lastConnectionError.message);
+
+      try {
+        await newDb.close();
+      } catch {
+      }
+
+      if (lastConnectionError.message !== DATABASE_UNAVAILABLE) {
+        throw lastConnectionError;
+      }
+    }
+  }
+
+  selectedDatabaseEndpoint = null;
+  throw lastConnectionError ?? new Error(DATABASE_UNAVAILABLE);
 }
 
 async function testConnection(dbInstance: Surreal): Promise<boolean> {

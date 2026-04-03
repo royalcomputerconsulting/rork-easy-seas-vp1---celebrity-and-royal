@@ -62,6 +62,7 @@ let cloudDb: Surreal | null = null;
 let isConnectingCloudDb = false;
 let lastCloudHealthCheck = 0;
 let lastCloudReachable: boolean | null = null;
+let selectedCloudEndpoint: string | null = null;
 
 function isCloudHealthCacheFresh(): boolean {
   return Date.now() - lastCloudHealthCheck < CLOUD_HEALTH_CACHE_MS;
@@ -71,18 +72,23 @@ function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
 }
 
-function normalizeCloudEndpoint(endpoint: string): string {
+function getCloudEndpointCandidates(endpoint: string): string[] {
   const trimmedEndpoint = endpoint.trim().replace(/\/+$/, "");
 
   if (!trimmedEndpoint) {
-    return trimmedEndpoint;
+    return [];
   }
 
-  if (trimmedEndpoint.endsWith(CLOUD_RPC_SUFFIX)) {
-    return trimmedEndpoint;
-  }
+  const rawEndpoint = trimmedEndpoint.endsWith(CLOUD_RPC_SUFFIX)
+    ? trimmedEndpoint.slice(0, -CLOUD_RPC_SUFFIX.length)
+    : trimmedEndpoint;
+  const rpcEndpoint = trimmedEndpoint.endsWith(CLOUD_RPC_SUFFIX)
+    ? trimmedEndpoint
+    : `${trimmedEndpoint}${CLOUD_RPC_SUFFIX}`;
 
-  return `${trimmedEndpoint}${CLOUD_RPC_SUFFIX}`;
+  return [rawEndpoint, rpcEndpoint].filter((candidate, index, list) => {
+    return Boolean(candidate) && list.indexOf(candidate) === index;
+  });
 }
 
 function getCloudStoreErrorMessage(error: unknown): string {
@@ -142,7 +148,7 @@ function getCloudConfig() {
   const token = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
 
   return {
-    endpoint: endpoint ? normalizeCloudEndpoint(endpoint) : endpoint,
+    endpoint,
     namespace,
     token,
   };
@@ -166,25 +172,55 @@ async function createCloudConnection(): Promise<Surreal> {
     throw new Error("DIRECT_CLOUD_STORE_NOT_CONFIGURED");
   }
 
-  const db = new Surreal();
+  const candidateEndpoints = getCloudEndpointCandidates(endpoint);
+  if (selectedCloudEndpoint) {
+    candidateEndpoints.unshift(selectedCloudEndpoint);
+  }
 
-  const connectionPromise = db.connect(endpoint, {
-    namespace,
-    database: CLOUD_DB_NAME,
-    auth: token,
-    versionCheck: false,
+  const uniqueCandidateEndpoints = candidateEndpoints.filter((candidate, index, list) => {
+    return list.indexOf(candidate) === index;
   });
 
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      reject(new Error("DIRECT_CLOUD_STORE_TIMEOUT"));
-    }, CLOUD_CONNECTION_TIMEOUT_MS);
-  });
+  let lastConnectionError: Error | null = null;
 
-  await Promise.race([connectionPromise, timeoutPromise]);
-  console.log("[CloudStore] Direct cloud store connected");
+  for (const candidateEndpoint of uniqueCandidateEndpoints) {
+    const db = new Surreal();
 
-  return db;
+    try {
+      const connectionPromise = db.connect(candidateEndpoint, {
+        namespace,
+        database: CLOUD_DB_NAME,
+        auth: token,
+        versionCheck: false,
+      });
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("DIRECT_CLOUD_STORE_TIMEOUT"));
+        }, CLOUD_CONNECTION_TIMEOUT_MS);
+      });
+
+      await Promise.race([connectionPromise, timeoutPromise]);
+      selectedCloudEndpoint = candidateEndpoint;
+      console.log("[CloudStore] Direct cloud store connected via candidate:", candidateEndpoint);
+      return db;
+    } catch (error) {
+      lastConnectionError = normalizeCloudStoreConnectionError(error);
+      console.log("[CloudStore] Direct cloud store candidate failed:", candidateEndpoint, lastConnectionError.message);
+
+      try {
+        await db.close();
+      } catch {
+      }
+
+      if (lastConnectionError.message !== DIRECT_CLOUD_STORE_UNAVAILABLE) {
+        throw lastConnectionError;
+      }
+    }
+  }
+
+  selectedCloudEndpoint = null;
+  throw lastConnectionError ?? new Error(DIRECT_CLOUD_STORE_UNAVAILABLE);
 }
 
 async function testCloudConnection(db: Surreal): Promise<boolean> {

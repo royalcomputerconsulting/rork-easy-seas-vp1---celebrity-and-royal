@@ -33,6 +33,27 @@ const trimTrailingSlash = (value: string): string => {
   return value.replace(/\/+$/, '');
 };
 
+const getHealthUrlCandidates = (baseUrl: string): string[] => {
+  const normalizedBaseUrl = trimTrailingSlash(baseUrl);
+
+  if (!normalizedBaseUrl || normalizedBaseUrl === 'https://fallback.local') {
+    return [];
+  }
+
+  const candidates = [`${normalizedBaseUrl}/`];
+
+  if (normalizedBaseUrl.endsWith(API_SUFFIX)) {
+    candidates.push(`${normalizedBaseUrl.slice(0, -API_SUFFIX.length)}/`);
+  } else {
+    candidates.push(`${normalizedBaseUrl}${API_SUFFIX}`);
+    candidates.push(`${normalizedBaseUrl}${API_SUFFIX}/`);
+  }
+
+  return candidates.filter((candidate, index, list) => {
+    return list.indexOf(candidate) === index;
+  });
+};
+
 const getSystemTrpcBaseCandidates = (baseUrl: string): string[] => {
   const normalizedBaseUrl = trimTrailingSlash(baseUrl);
 
@@ -94,29 +115,33 @@ const getHealthTargets = (): HealthTarget[] => {
 };
 
 const checkHealthTarget = async (target: HealthTarget): Promise<boolean> => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
+  const candidateUrls = getHealthUrlCandidates(target.baseUrl);
 
-  try {
-    const res = await fetch(`${target.baseUrl}/`, {
-      method: 'GET',
-      signal: controller.signal,
-      headers: { 'Accept': 'application/json' },
-    });
+  for (const candidateUrl of candidateUrls) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
 
-    if (res.ok) {
-      console.log(`[tRPC] ${target.label} backend health check passed`);
-      return true;
+    try {
+      const res = await fetch(candidateUrl, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (res.ok) {
+        console.log(`[tRPC] ${target.label} backend health check passed via`, candidateUrl);
+        return true;
+      }
+
+      console.log(`[tRPC] ${target.label} backend returned non-ok status from ${candidateUrl}:`, res.status);
+    } catch (error) {
+      console.log(`[tRPC] ${target.label} backend unreachable at ${candidateUrl}:`, error instanceof Error ? error.message : String(error));
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    console.log(`[tRPC] ${target.label} backend returned non-ok status:`, res.status);
-    return false;
-  } catch (error) {
-    console.log(`[tRPC] ${target.label} backend unreachable:`, error instanceof Error ? error.message : String(error));
-    return false;
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  return false;
 };
 
 const checkBackendHealth = async (): Promise<boolean> => {
@@ -185,6 +210,10 @@ const isTrpcProcedureNotFound = (value: string): boolean => {
   return value.includes('No procedure found on path') || TRPC_PROCEDURE_NOT_FOUND_PATTERN.test(value);
 };
 
+const isMisroutedProcedureNotFound = (value: string): boolean => {
+  return value.includes('No procedure found on path "trpc/') || value.includes('No procedure found on path "trpc.');
+};
+
 const isBackendNotFoundPayload = (value: string): boolean => {
   if (isTrpcProcedureNotFound(value)) {
     return false;
@@ -200,6 +229,13 @@ const normalizeBackendResponseError = async (response: Response): Promise<Error 
   try {
     const responseBody = await response.clone().text();
     const trimmedResponseBody = responseBody.trim();
+
+    if (isMisroutedProcedureNotFound(responseBody)) {
+      _backendReachable = false;
+      _lastHealthCheck = Date.now();
+      console.log('[tRPC] Backend endpoint is misrouted - operating in offline mode');
+      return new Error('BACKEND_OFFLINE');
+    }
 
     if (isTrpcProcedureNotFound(responseBody)) {
       console.log('[tRPC] Procedure not found on backend (stale deploy) - passing through as normal tRPC error');
