@@ -90,6 +90,26 @@ function normalizeSyncedLoyaltyPayload(loyaltyData: unknown): SyncedLoyaltyPaylo
   };
 }
 
+function getNormalizedErrorString(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error && typeof error === 'object') {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return '[unserializable error object]';
+    }
+  }
+
+  return String(error);
+}
+
 function isNonBlockingCloudError(errorMessage: string): boolean {
   const BLOCKING_NEVER = true;
   if (BLOCKING_NEVER) return true;
@@ -179,7 +199,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     try {
       return await saveAllMutation.mutateAsync(payload);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getNormalizedErrorString(error);
       console.log("[UserDataSync] Primary cloud save failed, trying direct cloud store:", errorMessage);
 
       if (!isDirectCloudStoreConfigured()) {
@@ -197,7 +217,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     try {
       return await trpcClient.data.getAllUserData.query({ email: normalizedEmail });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getNormalizedErrorString(error);
       console.log("[UserDataSync] Primary cloud fetch failed, trying direct cloud store:", errorMessage);
 
       if (!isDirectCloudStoreConfigured()) {
@@ -610,7 +630,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       setInitialCheckComplete(true);
       return false;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const errorMessage = getNormalizedErrorString(error);
       console.log("[UserDataSync] Cloud load error (backend may be unavailable):", errorMessage);
       retryCountRef.current += 1;
       
@@ -698,7 +718,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       
       console.log("[UserDataSync] Successfully synced to cloud");
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const errorMessage = getNormalizedErrorString(error);
       console.log("[UserDataSync] Cloud sync error (backend may be unavailable):", errorMessage);
       retryCountRef.current += 1;
       

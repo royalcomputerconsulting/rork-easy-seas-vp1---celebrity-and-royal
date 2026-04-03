@@ -82,7 +82,23 @@ function normalizeCloudEndpoint(endpoint: string): string {
 }
 
 function getCloudStoreErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error && typeof error === 'object') {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return '[unserializable error object]';
+    }
+  }
+
+  return String(error);
 }
 
 function normalizeCloudStoreConnectionError(error: unknown): Error {

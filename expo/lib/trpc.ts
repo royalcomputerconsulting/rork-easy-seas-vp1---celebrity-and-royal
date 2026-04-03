@@ -177,18 +177,19 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 let _lastErrorLogTime = 0;
 const ERROR_LOG_THROTTLE = 30_000;
-const BACKEND_NOT_FOUND_CODE = '"code":"not_found"';
+const BACKEND_NOT_FOUND_CODE_PATTERN = /"code"\s*:\s*"not_found"/i;
+const TRPC_PROCEDURE_NOT_FOUND_PATTERN = /"code"\s*:\s*"NOT_FOUND"/;
 const BACKEND_NOT_FOUND_MESSAGE = 'The requested resource was not found';
 
 const isTrpcProcedureNotFound = (value: string): boolean => {
-  return value.includes('No procedure found on path') || value.includes('"code":"NOT_FOUND"');
+  return value.includes('No procedure found on path') || TRPC_PROCEDURE_NOT_FOUND_PATTERN.test(value);
 };
 
 const isBackendNotFoundPayload = (value: string): boolean => {
   if (isTrpcProcedureNotFound(value)) {
     return false;
   }
-  return value.includes(BACKEND_NOT_FOUND_CODE) || value.includes(BACKEND_NOT_FOUND_MESSAGE);
+  return BACKEND_NOT_FOUND_CODE_PATTERN.test(value) || value.includes(BACKEND_NOT_FOUND_MESSAGE);
 };
 
 const normalizeBackendResponseError = async (response: Response): Promise<Error | null> => {

@@ -84,10 +84,32 @@ function normalizeLoyaltySyncPayload(loyaltyData: unknown): {
   };
 }
 
+function getNormalizedErrorString(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error && typeof error === 'object') {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return '[unserializable error object]';
+    }
+  }
+
+  return String(error);
+}
+
 function isIgnorableBackendError(errorMessage: string, errorString: string): boolean {
   return (
     ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'BACKEND_OFFLINE', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage) ||
     errorString.includes('Failed to retrieve remote version') ||
+    errorString.includes('Database configuration missing') ||
+    errorString.includes('Database connection failed') ||
     errorString.includes('"code":"not_found"') ||
     errorString.includes('The requested resource was not found')
   );
@@ -438,7 +460,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           console.log('[CoreData] ✅ Backend sync successful via primary API');
           return;
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          const errorMessage = getNormalizedErrorString(error);
           console.log('[CoreData] Primary backend sync failed, trying direct cloud store:', errorMessage);
         }
       }
@@ -451,8 +473,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       await saveCloudUserDataFallback(payload);
       console.log('[CoreData] ✅ Backend sync successful via direct cloud store fallback');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorString = String(error);
+      const errorMessage = getNormalizedErrorString(error);
+      const errorString = getNormalizedErrorString(error);
       
       if (isIgnorableBackendError(errorMessage, errorString)) {
         console.log('[CoreData] Backend sync skipped:', errorMessage);
@@ -484,7 +506,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         try {
           cloudResult = await trpcClient.data.getAllUserData.query({ email: authenticatedEmail });
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          const errorMessage = getNormalizedErrorString(error);
           console.log('[CoreData] Primary backend load failed, trying direct cloud store:', errorMessage);
         }
       }
@@ -568,8 +590,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.log('[CoreData] No backend data found for:', authenticatedEmail);
       return false;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorString = String(error);
+      const errorMessage = getNormalizedErrorString(error);
+      const errorString = getNormalizedErrorString(error);
 
       if (isIgnorableBackendError(errorMessage, errorString)) {
         console.log('[CoreData] Backend load skipped:', errorMessage);

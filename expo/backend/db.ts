@@ -23,7 +23,23 @@ function normalizeEndpoint(endpoint: string): string {
 }
 
 function getDatabaseErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error && typeof error === 'object') {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return '[unserializable error object]';
+    }
+  }
+
+  return String(error);
 }
 
 function normalizeDatabaseConnectionError(error: unknown): Error {
@@ -34,8 +50,11 @@ function normalizeDatabaseConnectionError(error: unknown): Error {
   const isUnsupportedVersionResponse =
     errorMessage.includes('reported by the engine is not supported by this library') &&
     isNotFoundResponse;
+  const isVersionRetrievalFailure =
+    errorMessage.includes('VersionRetrievalFailure') ||
+    errorMessage.includes('Failed to retrieve remote version');
 
-  if (isUnsupportedVersionResponse || isNotFoundResponse) {
+  if (isUnsupportedVersionResponse || isNotFoundResponse || isVersionRetrievalFailure) {
     return new Error(DATABASE_UNAVAILABLE);
   }
 
