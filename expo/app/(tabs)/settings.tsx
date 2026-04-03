@@ -57,7 +57,6 @@ import {
   parseICSFile, 
   parseBookedCSV,
   generateOffersCSV, 
-  generateCalendarICS,
   generateBookedCSV,
   exportFile,
   downloadFromURL,
@@ -70,7 +69,7 @@ import {
 } from '@/lib/dataManager';
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
-import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
+import { countCalendarFeedEntries, generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
 import { getRenderCalendarFeedUrl, trpc } from '@/lib/trpc';
 
 
@@ -348,16 +347,20 @@ export default function SettingsScreen() {
     const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
     const uniqueOfferCodes = new Set(allOffers.map((offer) => offer.offerCode).filter(Boolean));
     const uniqueOfferCount = uniqueOfferCodes.size || allOffers.length;
+    const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
+    const allCalendarEvents = localData.calendar || [];
+    const upcoming = allBooked.filter((cruise) => !isDateInPast(cruise.returnDate)).length;
+    const completed = allBooked.filter((cruise) => isDateInPast(cruise.returnDate)).length;
+    const totalCalendarEntries = countCalendarFeedEntries(allBooked, allCalendarEvents);
     
     console.log('[Settings] Data stats calculation:', {
       totalOffers: allOffers.length,
       uniqueOfferCodes: Array.from(uniqueOfferCodes),
       uniqueCount: uniqueOfferCount,
+      bookedCruises: allBooked.length,
+      rawCalendarEvents: allCalendarEvents.length,
+      totalCalendarEntries,
     });
-    
-    const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
-    const upcoming = allBooked.filter((cruise) => !isDateInPast(cruise.returnDate)).length;
-    const completed = allBooked.filter((cruise) => isDateInPast(cruise.returnDate)).length;
 
     return {
       cruises: cruises.length || localData.cruises?.length || 0,
@@ -366,11 +369,11 @@ export default function SettingsScreen() {
       completed,
       sailings: allOffers.length,
       uniqueOffers: uniqueOfferCount,
-      events: localData.calendar?.length || 0,
+      events: totalCalendarEntries,
       machines: myAtlasMachines.length || 0,
       crewMembers: crewStats?.crewMemberCount || 0,
     };
-  }, [cruises, bookedCruises, casinoOffers, localData, myAtlasMachines, crewStats]);
+  }, [bookedCruises, casinoOffers, crewStats, cruises, localData.booked, localData.calendar, localData.cruises, localData.offers, myAtlasMachines.length]);
 
   const handleImportOffersCSV = useCallback(async () => {
     try {
@@ -485,7 +488,8 @@ export default function SettingsScreen() {
 
       const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
       const allEvents = localData.calendar || [];
-      console.log('[Settings] Generating ICS from', allBooked.length, 'cruises and', allEvents.length, 'events');
+      const totalCalendarEntries = countCalendarFeedEntries(allBooked, allEvents);
+      console.log('[Settings] Generating ICS from', allBooked.length, 'cruises and', allEvents.length, 'events with', totalCalendarEntries, 'calendar entries');
 
       const icsContent = generateCalendarFeed(allBooked, allEvents);
 
@@ -504,7 +508,7 @@ export default function SettingsScreen() {
       console.log('[Settings] Calendar feed published successfully:', feedUrl);
       Alert.alert(
         'Calendar Feed Published',
-        `Your calendar feed is live with ${allBooked.length} cruises.\n\nYou can now subscribe to this feed from any calendar app (Apple Calendar, Google Calendar, Outlook, etc.).\n\nTap "Copy URL" to copy the feed link.`
+        `Your calendar feed is live with ${totalCalendarEntries} calendar entries from ${allBooked.length} cruises.\n\nYou can now subscribe to this feed from any calendar app (Apple Calendar, Google Calendar, Outlook, etc.).\n\nTap "Copy URL" to copy the feed link.`
       );
     } catch (error) {
       console.error('[Settings] Publish feed error:', error);
@@ -855,20 +859,22 @@ export default function SettingsScreen() {
       setIsExporting(true);
       console.log('[Settings] Starting calendar ICS export');
       
+      const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
       const allEvents = localData.calendar || [];
+      const totalCalendarEntries = countCalendarFeedEntries(allBooked, allEvents);
       
-      if (allEvents.length === 0) {
-        Alert.alert('No Data', 'No calendar events to export. Import events first.');
+      if (totalCalendarEntries === 0) {
+        Alert.alert('No Data', 'No calendar data to export yet. Sync cruises or import calendar events first.');
         setIsExporting(false);
         return;
       }
 
-      const icsContent = generateCalendarICS(allEvents);
+      const icsContent = generateCalendarFeed(allBooked, allEvents);
       const fileName = `easyseas_calendar_${new Date().toISOString().split('T')[0]}.ics`;
       
       const success = await exportFile(icsContent, fileName);
       if (success) {
-        Alert.alert('Export Successful', `Exported ${allEvents.length} events to ${fileName}`);
+        Alert.alert('Export Successful', `Exported ${totalCalendarEntries} calendar entries to ${fileName}`);
       } else {
         Alert.alert('Export Info', 'File saved but sharing may not be available on this device.');
       }
@@ -879,7 +885,7 @@ export default function SettingsScreen() {
     } finally {
       setIsExporting(false);
     }
-  }, [localData.calendar]);
+  }, [bookedCruises, localData.booked, localData.calendar]);
 
   const handleClearData = useCallback(() => {
     Alert.alert(

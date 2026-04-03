@@ -158,6 +158,51 @@ function buildPortDayEvents(cruise: BookedCruise): string[] {
   return events;
 }
 
+export function countCalendarFeedEntries(
+  bookedCruises: BookedCruise[],
+  calendarEvents: CalendarEvent[]
+): number {
+  const validCruises = bookedCruises.filter((cruise) => {
+    if (!cruise.sailDate || !cruise.returnDate) {
+      return false;
+    }
+
+    const dtStart = formatICSDate(cruise.sailDate);
+    const dtEnd = formatICSDate(cruise.returnDate);
+    return dtStart.length === 8 && dtEnd.length === 8;
+  });
+
+  const cruiseEventIds = new Set(bookedCruises.map((cruise) => `cruise-${cruise.id}`));
+  const linkedCruiseIds = new Set(bookedCruises.map((cruise) => cruise.id));
+
+  const standaloneCalendarEvents = calendarEvents.filter((event) => {
+    if (cruiseEventIds.has(event.id)) {
+      return false;
+    }
+    if (event.cruiseId && linkedCruiseIds.has(event.cruiseId)) {
+      return false;
+    }
+
+    const startDate = formatICSDate(event.startDate || event.start || '');
+    return startDate.length === 8;
+  });
+
+  const portEventCount = validCruises.reduce((total, cruise) => {
+    return total + buildPortDayEvents(cruise).length;
+  }, 0);
+
+  const totalEntries = validCruises.length + portEventCount + standaloneCalendarEvents.length;
+
+  console.log('[FeedGenerator] Counted calendar feed entries:', {
+    validCruises: validCruises.length,
+    portEvents: portEventCount,
+    standaloneCalendarEvents: standaloneCalendarEvents.length,
+    totalEntries,
+  });
+
+  return totalEntries;
+}
+
 export function generateCalendarFeed(
   bookedCruises: BookedCruise[],
   calendarEvents: CalendarEvent[]
@@ -165,6 +210,7 @@ export function generateCalendarFeed(
   console.log('[FeedGenerator] Generating calendar feed:', {
     cruises: bookedCruises.length,
     events: calendarEvents.length,
+    totalEntries: countCalendarFeedEntries(bookedCruises, calendarEvents),
   });
 
   const now = new Date();
