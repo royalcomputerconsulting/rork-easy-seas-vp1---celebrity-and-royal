@@ -13,6 +13,7 @@ import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGene
 import { exportFile } from '@/lib/fileIO/fileOperations';
 import { importCompletedCruisesFromWorkbook, type WorkbookBinaryInput, type CompletedCruiseWorkbookSummary } from '@/lib/importers/completedCruiseWorkbook';
 import { getRenderCalendarFeedUrl, trpc } from '@/lib/trpc';
+import { aggregateCruisePricing } from '@/lib/cruisePricingAggregation';
 
 type ScreenMode = 'auto' | 'manual' | 'calendar';
 
@@ -402,47 +403,51 @@ export default function ImportCruisesScreen() {
 
         const newSyncedResults: SyncedCruiseResult[] = [];
         let updateCount = 0;
+        const updatedCruiseIds = new Set<string>();
+        const pricingByBookingId = new Map<string, CruisePricing[]>();
 
-        for (const pricing of result.pricing) {
-          const cruise = bookedCruises.find(c => c.id === pricing.bookingId);
-          if (!cruise) {
-            console.log('[ImportCruises] Cruise not found for pricing:', pricing.bookingId);
+        result.pricing.forEach((pricing) => {
+          const existingPricing = pricingByBookingId.get(pricing.bookingId) ?? [];
+          existingPricing.push(pricing);
+          pricingByBookingId.set(pricing.bookingId, existingPricing);
+        });
+
+        for (const cruise of upcomingCruises) {
+          const cruisePricing = pricingByBookingId.get(cruise.id) ?? [];
+
+          if (cruisePricing.length === 0) {
             continue;
           }
 
-          const updatePayload: Partial<BookedCruise> = {
-            updatedAt: new Date().toISOString(),
-          };
+          const aggregatedPricing = aggregateCruisePricing(cruisePricing);
 
-          if (pricing.interiorPrice) updatePayload.interiorPrice = pricing.interiorPrice;
-          if (pricing.oceanviewPrice) updatePayload.oceanviewPrice = pricing.oceanviewPrice;
-          if (pricing.balconyPrice) updatePayload.balconyPrice = pricing.balconyPrice;
-          if (pricing.suitePrice) updatePayload.suitePrice = pricing.suitePrice;
-          if (pricing.portTaxesFees) updatePayload.taxes = pricing.portTaxesFees;
+          if (!aggregatedPricing.hasPricingData) {
+            console.log('[ImportCruises] Pricing records found but no valid prices were extracted for cruise:', cruise.id, cruise.shipName);
+            continue;
+          }
 
-          console.log('[ImportCruises] Saving prices to cruise:', cruise.id, cruise.shipName, updatePayload);
-          updateBookedCruise(cruise.id, updatePayload);
+          console.log('[ImportCruises] Saving aggregated prices to cruise:', cruise.id, cruise.shipName, aggregatedPricing.update);
+          updateBookedCruise(cruise.id, aggregatedPricing.update);
+          updatedCruiseIds.add(cruise.id);
           updateCount++;
 
           newSyncedResults.push({
             cruiseId: cruise.id,
             shipName: cruise.shipName,
             sailDate: cruise.sailDate,
-            interiorPrice: pricing.interiorPrice,
-            oceanviewPrice: pricing.oceanviewPrice,
-            balconyPrice: pricing.balconyPrice,
-            suitePrice: pricing.suitePrice,
-            portTaxesFees: pricing.portTaxesFees,
-            confidence: pricing.confidence,
+            interiorPrice: aggregatedPricing.interiorPrice,
+            oceanviewPrice: aggregatedPricing.oceanviewPrice,
+            balconyPrice: aggregatedPricing.balconyPrice,
+            suitePrice: aggregatedPricing.suitePrice,
+            portTaxesFees: aggregatedPricing.portTaxesFees,
+            confidence: aggregatedPricing.confidence,
             saved: true,
           });
 
-          addToLog(`  Saved: ${cruise.shipName}: INT ${pricing.interiorPrice || '-'} | OV ${pricing.oceanviewPrice || '-'} | BAL ${pricing.balconyPrice || '-'} | STE ${pricing.suitePrice || '-'} | TAX ${pricing.portTaxesFees || '-'}`);
+          addToLog(`  Saved: ${cruise.shipName}: INT ${aggregatedPricing.interiorPrice || '-'} | OV ${aggregatedPricing.oceanviewPrice || '-'} | BAL ${aggregatedPricing.balconyPrice || '-'} | STE ${aggregatedPricing.suitePrice || '-'} | TAX ${aggregatedPricing.portTaxesFees || '-'}`);
         }
 
-        const missingCruises = upcomingCruises.filter(
-          c => !result.pricing.some((p: CruisePricing) => p.bookingId === c.id)
-        );
+        const missingCruises = upcomingCruises.filter((cruise) => !updatedCruiseIds.has(cruise.id));
         missingCruises.forEach(c => {
           newSyncedResults.push({
             cruiseId: c.id,

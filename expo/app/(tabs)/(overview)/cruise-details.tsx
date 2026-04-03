@@ -192,7 +192,6 @@ export default function CruiseDetailsScreen() {
   const linkedOffer = useMemo((): CasinoOffer | undefined => {
     if (!cruise?.offerCode) return undefined;
     
-    // Check CruiseStore offers first (primary), then localData offers (fallback)
     const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
     
     return allOffers.find(o => 
@@ -201,6 +200,32 @@ export default function CruiseDetailsScreen() {
       o.cruiseId === cruise.id
     );
   }, [cruise, storeOffers, localData.offers]);
+
+  const pricingRows = useMemo(() => {
+    if (!cruise) {
+      return [] as Array<{ key: string; label: string; value: number }>;
+    }
+
+    const rows = [
+      { key: 'interior', label: 'Interior', value: cruise.interiorPrice },
+      { key: 'oceanview', label: 'Oceanview', value: cruise.oceanviewPrice },
+      { key: 'balcony', label: 'Balcony', value: cruise.balconyPrice },
+      { key: 'suite', label: 'Suite', value: cruise.suitePrice },
+      { key: 'taxes', label: 'Port Taxes & Fees', value: cruise.taxes },
+    ];
+
+    return rows.filter((row): row is { key: string; label: string; value: number } => {
+      return typeof row.value === 'number' && Number.isFinite(row.value) && row.value > 0;
+    });
+  }, [cruise]);
+
+  const pricingSectionSubtitle = useMemo(() => {
+    if (!cruise?.updatedAt) {
+      return 'Current synced room pricing for this sailing.';
+    }
+
+    return `Current synced room pricing for this sailing. Updated ${formatDate(cruise.updatedAt, 'medium')}.`;
+  }, [cruise?.updatedAt]);
 
   // Calculate accurate nights from sailDate and returnDate
   const accurateNights = useMemo(() => {
@@ -847,39 +872,22 @@ export default function CruiseDetailsScreen() {
             </View>
           )}
 
-          {(cruise.interiorPrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Interior</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.interiorPrice ?? 0)}</Text>
-            </View>
-          )}
-
-          {(cruise.oceanviewPrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Oceanview</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.oceanviewPrice ?? 0)}</Text>
-            </View>
-          )}
-
-          {(cruise.balconyPrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Balcony</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.balconyPrice ?? 0)}</Text>
-            </View>
-          )}
-
-          {(cruise.suitePrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Suite</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.suitePrice ?? 0)}</Text>
-            </View>
-          )}
-
-          {(cruise.taxes ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Port Taxes & Fees</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.taxes ?? 0)}</Text>
-            </View>
+          {pricingRows.length > 0 && (
+            <GlassSurface style={styles.cruiseDetailsSection} contentStyle={styles.glassSectionContent} testID="cruise-current-pricing-section">
+              <View style={styles.sectionHeader}>
+                <DollarSign size={20} color={COLORS.beigeWarm} />
+                <Text style={styles.sectionTitle}>Current Pricing</Text>
+              </View>
+              <Text style={styles.sectionSubtitle}>{pricingSectionSubtitle}</Text>
+              <View style={styles.pricingGrid}>
+                {pricingRows.map((pricingRow) => (
+                  <View key={pricingRow.key} style={styles.pricingCategoryCard} testID={`cruise-pricing-${pricingRow.key}`}>
+                    <Text style={styles.pricingCategoryLabel}>{pricingRow.label}</Text>
+                    <Text style={styles.pricingCategoryValue}>{formatCurrency(pricingRow.value)}</Text>
+                  </View>
+                ))}
+              </View>
+            </GlassSurface>
           )}
 
           {isBooked && (
@@ -3556,6 +3564,9 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.money,
+  },
+  pricingGrid: {
+    gap: SPACING.sm,
   },
   offersSectionCompact: {
     marginBottom: SPACING.md,

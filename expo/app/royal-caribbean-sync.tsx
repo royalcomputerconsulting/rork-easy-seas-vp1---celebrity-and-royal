@@ -13,6 +13,7 @@ import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
 import { trpc, isWebSyncAvailable, RENDER_BACKEND_URL } from '@/lib/trpc';
 import { syncCruisePricing } from '@/lib/cruisePricingSync';
+import { aggregateCruisePricing } from '@/lib/cruisePricingAggregation';
 import { useAuth } from '@/state/AuthProvider';
 import { maskSensitiveMemberNumber } from '@/lib/privacy';
 function RoyalCaribbeanSyncScreen() {
@@ -637,41 +638,26 @@ function RoyalCaribbeanSyncScreen() {
                     addLog(`Pricing sync complete! Retrieved ${result.pricing.length} pricing records`, 'success');
 
                     const pricingByBookingId = new Map<string, typeof result.pricing>();
-                    result.pricing.forEach(p => {
-                      if (!pricingByBookingId.has(p.bookingId)) {
-                        pricingByBookingId.set(p.bookingId, []);
-                      }
-                      pricingByBookingId.get(p.bookingId)!.push(p);
+                    result.pricing.forEach((pricingRecord) => {
+                      const existingPricing = pricingByBookingId.get(pricingRecord.bookingId) ?? [];
+                      existingPricing.push(pricingRecord);
+                      pricingByBookingId.set(pricingRecord.bookingId, existingPricing);
                     });
 
                     let updatedCount = 0;
                     for (const cruise of upcomingCruises) {
-                      const cruisePricing = pricingByBookingId.get(cruise.id);
-                      if (!cruisePricing || cruisePricing.length === 0) continue;
+                      const cruisePricing = pricingByBookingId.get(cruise.id) ?? [];
+                      if (cruisePricing.length === 0) continue;
 
-                      const avgPricing = {
-                        interiorPrice: 0,
-                        oceanviewPrice: 0,
-                        balconyPrice: 0,
-                        suitePrice: 0,
-                      };
+                      const aggregatedPricing = aggregateCruisePricing(cruisePricing);
+                      if (!aggregatedPricing.hasPricingData) {
+                        addLog(`Pricing found for ${cruise.shipName}, but no valid room rates were extracted`, 'warning');
+                        continue;
+                      }
 
-                      cruisePricing.forEach(p => {
-                        if (p.interiorPrice) avgPricing.interiorPrice += p.interiorPrice;
-                        if (p.oceanviewPrice) avgPricing.oceanviewPrice += p.oceanviewPrice;
-                        if (p.balconyPrice) avgPricing.balconyPrice += p.balconyPrice;
-                        if (p.suitePrice) avgPricing.suitePrice += p.suitePrice;
-                      });
-
-                      const count = cruisePricing.length;
-                      avgPricing.interiorPrice = Math.round(avgPricing.interiorPrice / count);
-                      avgPricing.oceanviewPrice = Math.round(avgPricing.oceanviewPrice / count);
-                      avgPricing.balconyPrice = Math.round(avgPricing.balconyPrice / count);
-                      avgPricing.suitePrice = Math.round(avgPricing.suitePrice / count);
-
-                      coreData.updateBookedCruise(cruise.id, avgPricing);
+                      coreData.updateBookedCruise(cruise.id, aggregatedPricing.update);
                       updatedCount++;
-                      addLog(`Updated pricing for ${cruise.shipName}`, 'info');
+                      addLog(`Updated pricing for ${cruise.shipName}: INT ${aggregatedPricing.interiorPrice || '-'} | OV ${aggregatedPricing.oceanviewPrice || '-'} | BAL ${aggregatedPricing.balconyPrice || '-'} | STE ${aggregatedPricing.suitePrice || '-'} | TAX ${aggregatedPricing.portTaxesFees || '-'}`, 'info');
                     }
 
                     setPricingSyncResults({ updated: updatedCount, total: upcomingCruises.length });
