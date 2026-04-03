@@ -2,27 +2,52 @@ import type { ImageSourcePropType } from 'react-native';
 
 export const DEFAULT_CRUISE_IMAGE = 'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&h=400&fit=crop';
 
+export const REAL_SHIP_PHOTOS = [
+  'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/04ea2e2m90xup15dgbjxz.png',
+  'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/6v21igf8f64m8f1kjnerd.png',
+  'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/jc05av5jm5bt54m8ft3oj.png',
+  'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/4tuc3p2w39rnkufczn56t.png',
+  'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/8we0p61tz47nodvvq1evw.png',
+  'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/0zheg7tjsbsjsrdwn9zqm.png',
+] as const;
+
+const [
+  SHIP_PHOTO_1,
+  SHIP_PHOTO_2,
+  SHIP_PHOTO_3,
+  SHIP_PHOTO_4,
+  SHIP_PHOTO_5,
+  SHIP_PHOTO_6,
+] = REAL_SHIP_PHOTOS;
+
+
 export const DESTINATION_IMAGES: Record<string, string[]> = {
   caribbean: [
+    SHIP_PHOTO_1,
     'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1580541631971-a4621a2ce6f3?w=800&h=400&fit=crop',
+    SHIP_PHOTO_2,
     'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&h=400&fit=crop',
+    SHIP_PHOTO_3,
     'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1584490150601-ae57d204b55b?w=800&h=400&fit=crop',
   ],
   mexico: [
+    SHIP_PHOTO_4,
     'https://images.unsplash.com/photo-1518105779142-d975f22f1b0a?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1570737543098-0c78f59d3a4b?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1512813195386-6cf811ad3542?w=800&h=400&fit=crop',
+    SHIP_PHOTO_5,
     'https://images.unsplash.com/photo-1547995886-6dc09384c6e6?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1578165219176-ece04edbd053?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1568402102990-bc541580b59f?w=800&h=400&fit=crop',
   ],
   bahamas: [
     'https://images.unsplash.com/photo-1580541631971-a4621a2ce6f3?w=800&h=400&fit=crop',
+    SHIP_PHOTO_6,
     'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1506953823976-52e1fdc0149a?w=800&h=400&fit=crop',
@@ -78,7 +103,9 @@ export const DESTINATION_IMAGES: Record<string, string[]> = {
   ],
   california: [
     'https://images.unsplash.com/photo-1534190760961-74e8c1c5c3da?w=800&h=400&fit=crop',
+    SHIP_PHOTO_1,
     'https://images.unsplash.com/photo-1449034446853-66c86144b0ad?w=800&h=400&fit=crop',
+    SHIP_PHOTO_4,
     'https://images.unsplash.com/photo-1515896769750-31548aa180ed?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=800&h=400&fit=crop',
@@ -104,22 +131,26 @@ export const DESTINATION_IMAGES: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=800&h=400&fit=crop',
   ],
   default: [
+    SHIP_PHOTO_2,
     'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&h=400&fit=crop',
     'https://images.unsplash.com/photo-1599640842225-85d111c60e6b?w=800&h=400&fit=crop',
+    SHIP_PHOTO_3,
     'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&h=400&fit=crop',
+    SHIP_PHOTO_5,
     'https://images.unsplash.com/photo-1500754088824-ce0582cfe45f?w=800&h=400&fit=crop',
+    SHIP_PHOTO_6,
     'https://images.unsplash.com/photo-1504681869696-d977211a5f4c?w=800&h=400&fit=crop',
   ],
 };
 
 export const SHIP_IMAGES: Record<string, string> = {
-  'quantum of the seas': 'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&h=400&fit=crop',
-  'odyssey of the seas': 'https://images.unsplash.com/photo-1599640842225-85d111c60e6b?w=800&h=400&fit=crop',
-  'symphony of the seas': 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&h=400&fit=crop',
-  'harmony of the seas': 'https://images.unsplash.com/photo-1580541631971-a4621a2ce6f3?w=800&h=400&fit=crop',
-  'navigator of the seas': 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&h=400&fit=crop',
+  'quantum of the seas': SHIP_PHOTO_1,
+  'odyssey of the seas': SHIP_PHOTO_2,
+  'symphony of the seas': SHIP_PHOTO_3,
+  'harmony of the seas': SHIP_PHOTO_4,
+  'navigator of the seas': SHIP_PHOTO_5,
   'liberty of the seas': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&h=400&fit=crop',
-  'radiance of the seas': 'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&h=400&fit=crop',
+  'radiance of the seas': SHIP_PHOTO_6,
   'star of the seas': 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=800&h=400&fit=crop',
 };
 
@@ -158,6 +189,12 @@ export const BEACH_IMAGES = [
 ];
 
 export const CRUISE_SHIP_IMAGES = [
+  SHIP_PHOTO_1,
+  SHIP_PHOTO_2,
+  SHIP_PHOTO_3,
+  SHIP_PHOTO_4,
+  SHIP_PHOTO_5,
+  SHIP_PHOTO_6,
   'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&h=400&fit=crop',
   'https://images.unsplash.com/photo-1599640842225-85d111c60e6b?w=800&h=400&fit=crop',
   'https://images.unsplash.com/photo-1580541631971-a4621a2ce6f3?w=800&h=400&fit=crop',
