@@ -390,7 +390,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   setIsClearing: (clearing: boolean) => void;
 }) {
   const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail, isWhitelisted } = useAuth();
-  const { initialCheckComplete, isSyncing, syncError, lastRestoreTime } = useUserDataSync();
+  const { initialCheckComplete, isSyncing, lastRestoreTime } = useUserDataSync();
   const { setIsUserWhitelisted } = useSlotMachineLibrary();
   const { refreshData } = useCoreData();
   const { updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
@@ -500,11 +500,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
           <Text style={rootStyles.cloudRestoreHint} testID="cloudRestoreHint">
             {isSyncing ? 'Checking cloud backup…' : 'Preparing your workspace…'}
           </Text>
-          {!!syncError && (
-            <Text style={rootStyles.cloudRestoreError} testID="cloudRestoreError">
-              {syncError}
-            </Text>
-          )}
+
         </View>
       </View>
     );

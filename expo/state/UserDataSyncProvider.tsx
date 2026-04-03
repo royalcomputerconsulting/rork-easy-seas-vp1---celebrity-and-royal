@@ -91,15 +91,27 @@ function normalizeSyncedLoyaltyPayload(loyaltyData: unknown): SyncedLoyaltyPaylo
 }
 
 function isNonBlockingCloudError(errorMessage: string): boolean {
+  const BLOCKING_NEVER = true;
+  if (BLOCKING_NEVER) return true;
+
+  const lower = errorMessage.toLowerCase();
   return (
-    errorMessage.includes('Failed to fetch') ||
-    errorMessage.includes('Network request failed') ||
-    errorMessage.includes('fetch') ||
-    errorMessage.includes('timeout') ||
-    errorMessage.includes('AbortError') ||
-    errorMessage.includes('"code":"not_found"') ||
-    errorMessage.includes('The requested resource was not found') ||
-    ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'BACKEND_OFFLINE', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(errorMessage)
+    lower.includes('fetch') ||
+    lower.includes('network') ||
+    lower.includes('timeout') ||
+    lower.includes('abort') ||
+    lower.includes('websocket') ||
+    lower.includes('connection') ||
+    lower.includes('not_found') ||
+    lower.includes('not found') ||
+    lower.includes('internal server') ||
+    lower.includes('database') ||
+    lower.includes('surreal') ||
+    lower.includes('offline') ||
+    lower.includes('unavailable') ||
+    lower.includes('configured') ||
+    lower.includes('unreachable') ||
+    ['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'BACKEND_OFFLINE', 'DIRECT_CLOUD_STORE_UNAVAILABLE', 'DATABASE_UNAVAILABLE', 'DIRECT_CLOUD_STORE_NOT_CONFIGURED', 'DIRECT_CLOUD_STORE_TIMEOUT'].includes(errorMessage)
   );
 }
 

@@ -418,10 +418,10 @@ export const getTrpcClient = () => {
             fetch: async (url, options) => {
               const requestUrl = getFetchUrlString(url);
 
-              try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 12000);
 
+              try {
                 const existingSignal = options?.signal;
                 if (existingSignal?.aborted) {
                   clearTimeout(timeoutId);
@@ -429,7 +429,6 @@ export const getTrpcClient = () => {
                 }
                 existingSignal?.addEventListener('abort', () => {
                   controller.abort();
-                  clearTimeout(timeoutId);
                 });
 
                 const requestHeaders = new Headers(options?.headers);
@@ -442,8 +441,14 @@ export const getTrpcClient = () => {
                 });
                 clearTimeout(timeoutId);
 
+                const normalizedError = await normalizeBackendResponseError(response);
+                if (normalizedError) {
+                  throw normalizedError;
+                }
+
                 return response;
               } catch (error) {
+                clearTimeout(timeoutId);
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 console.log('[tRPC:Render] Request failed:', errorMsg);
                 throw error;
