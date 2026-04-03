@@ -303,7 +303,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     ? 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?auto=format&fit=crop&w=1600&q=80'
     : activeBrand === 'silversea'
       ? 'https://images.unsplash.com/photo-1512100356356-de1b84283e18?auto=format&fit=crop&w=1600&q=80'
-      : 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80';
+      : 'https://images.unsplash.com/photo-1718152220142-1878c0fce8e4?auto=format&fit=crop&w=1600&q=80';
 
   return (
     <View style={styles.shadowShell}>

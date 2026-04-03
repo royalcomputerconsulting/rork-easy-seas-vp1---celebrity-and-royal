@@ -12,6 +12,7 @@ import {
 import { useAuth } from "@/state/AuthProvider";
 import { getUserScopedKey, ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
+import { mergeCalendarEventsWithDerivedCruiseEvents } from "@/lib/calendar/derivedCruiseEvents";
 
 const _BASE_LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 1;
@@ -355,11 +356,15 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           }
         : normalizedLegacyLoyaltyData;
 
+      const rawBookedCruises = bookedCruisesRaw ? JSON.parse(bookedCruisesRaw) : [];
+      const rawCalendarEvents = calendarEventsRaw ? JSON.parse(calendarEventsRaw) : [];
+      const mergedCalendarEvents = mergeCalendarEventsWithDerivedCruiseEvents(rawCalendarEvents, rawBookedCruises);
+
       const data = {
         cruises: cruisesRaw ? JSON.parse(cruisesRaw) : [],
-        bookedCruises: bookedCruisesRaw ? JSON.parse(bookedCruisesRaw) : [],
+        bookedCruises: rawBookedCruises,
         casinoOffers: casinoOffersRaw ? JSON.parse(casinoOffersRaw) : [],
-        calendarEvents: calendarEventsRaw ? JSON.parse(calendarEventsRaw) : [],
+        calendarEvents: mergedCalendarEvents,
         casinoSessions: casinoSessionsRaw ? JSON.parse(casinoSessionsRaw) : [],
         clubRoyaleProfile: clubProfileRaw ? JSON.parse(clubProfileRaw) : null,
         settings: settingsRaw ? JSON.parse(settingsRaw) : null,
@@ -399,6 +404,11 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
     try {
       const savePromises: Promise<void>[] = [];
+      const restoredBookedCruises = Array.isArray(cloudData.bookedCruises) ? cloudData.bookedCruises : [];
+      const restoredCalendarEvents = mergeCalendarEventsWithDerivedCruiseEvents(
+        Array.isArray(cloudData.calendarEvents) ? cloudData.calendarEvents : [],
+        restoredBookedCruises,
+      );
 
       if (cloudData.cruises !== undefined) {
         savePromises.push(
@@ -407,7 +417,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       }
       if (cloudData.bookedCruises !== undefined) {
         savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), JSON.stringify(cloudData.bookedCruises ?? []))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), JSON.stringify(restoredBookedCruises))
         );
       }
       if (cloudData.casinoOffers !== undefined) {
@@ -415,9 +425,9 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS), JSON.stringify(cloudData.casinoOffers ?? []))
         );
       }
-      if (cloudData.calendarEvents !== undefined) {
+      if (cloudData.calendarEvents !== undefined || restoredBookedCruises.length > 0) {
         savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), JSON.stringify(cloudData.calendarEvents ?? []))
+          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), JSON.stringify(restoredCalendarEvents))
         );
       }
       if (cloudData.casinoSessions !== undefined) {
@@ -541,9 +551,9 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
       console.log("[UserDataSync] Cloud data restored to local storage:", {
         availableCruises: cloudData.cruises?.length ?? 0,
-        cruises: cloudData.bookedCruises?.length ?? 0,
+        cruises: restoredBookedCruises.length,
         offers: cloudData.casinoOffers?.length ?? 0,
-        events: cloudData.calendarEvents?.length ?? 0,
+        events: restoredCalendarEvents.length,
         sessions: cloudData.casinoSessions?.length ?? 0,
         crewEntries: cloudData.crewRecognitionEntries?.length ?? 0,
         crewSailings: cloudData.crewRecognitionSailings?.length ?? 0,
