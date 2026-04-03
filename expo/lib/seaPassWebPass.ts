@@ -73,7 +73,31 @@ export const SEA_PASS_LEGAL_LINES = [
 export const SEA_PASS_PREVIEW_BACKGROUND = '#EFF3F8';
 export const SEA_PASS_EXPORT_BACKGROUND = '#FFFFFF';
 export const SEA_PASS_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-export const SEA_PASS_APPROVED_SCREENSHOT_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/2odahwrylhqkr8gb1jwp4.png';
+export const SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/2odahwrylhqkr8gb1jwp4.png';
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+function getSeaPassApprovedScreenshotUrl(): string {
+  const apiBaseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL?.trim();
+
+  if (!apiBaseUrl) {
+    return SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL;
+  }
+
+  const normalizedBaseUrl = trimTrailingSlash(apiBaseUrl);
+
+  if (normalizedBaseUrl.endsWith('/api')) {
+    return `${normalizedBaseUrl}/seapass-approved-shell`;
+  }
+
+  return `${normalizedBaseUrl}/api/seapass-approved-shell`;
+}
+
+export const SEA_PASS_APPROVED_SCREENSHOT_URL = getSeaPassApprovedScreenshotUrl();
+
+let approvedSeaPassImageDataUrlPromise: Promise<string> | null = null;
 
 export const SEA_PASS_LAYOUT = {
   cardX: 24,
@@ -284,6 +308,17 @@ async function fetchImageAsDataUrl(url: string): Promise<string> {
   });
 }
 
+async function getSeaPassApprovedScreenshotDataUrl(): Promise<string> {
+  if (!approvedSeaPassImageDataUrlPromise) {
+    approvedSeaPassImageDataUrlPromise = fetchImageAsDataUrl(SEA_PASS_APPROVED_SCREENSHOT_URL).catch((error) => {
+      approvedSeaPassImageDataUrlPromise = null;
+      throw error;
+    });
+  }
+
+  return approvedSeaPassImageDataUrlPromise;
+}
+
 function buildSeaPassOverlaySvgMarkup(input: Partial<SeaPassWebPassData>): string {
   const data = getSeaPassData(input);
   const barcodeCaption = getSeaPassBarcodeCaption(data);
@@ -455,12 +490,14 @@ export function buildSeaPassPrintHtml(input: Partial<SeaPassWebPassData>): strin
 }
 
 export async function exportSeaPassPngOnWeb(input: Partial<SeaPassWebPassData>, fileName: string): Promise<void> {
-  let approvedImageHref = SEA_PASS_APPROVED_SCREENSHOT_URL;
+  let approvedImageHref: string;
 
   try {
-    approvedImageHref = await fetchImageAsDataUrl(SEA_PASS_APPROVED_SCREENSHOT_URL);
+    approvedImageHref = await getSeaPassApprovedScreenshotDataUrl();
+    console.log('[SeaPassWebPass] Approved SeaPass shell embedded for exact PNG export');
   } catch (error) {
-    console.warn('[SeaPassWebPass] Falling back to remote approved image URL for web PNG export', error);
+    console.error('[SeaPassWebPass] Unable to prepare approved SeaPass shell for PNG export', error);
+    throw new Error('The approved SeaPass artwork is not ready for export yet. Please try again in a moment.');
   }
 
   const svgMarkup = buildSeaPassSvgMarkup(input, SEA_PASS_EXPORT_BACKGROUND, approvedImageHref);
@@ -470,7 +507,6 @@ export async function exportSeaPassPngOnWeb(input: Partial<SeaPassWebPassData>, 
   try {
     await new Promise<void>((resolve, reject) => {
       const image = new Image();
-      image.crossOrigin = 'anonymous';
       image.onload = () => {
         try {
           const canvas = document.createElement('canvas');
