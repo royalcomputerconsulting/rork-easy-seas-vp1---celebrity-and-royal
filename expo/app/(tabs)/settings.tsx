@@ -1018,9 +1018,9 @@ export default function SettingsScreen() {
           calendar: syncedEvents,
         });
         
-        console.log('[Settings] Triggering final refresh to propagate to UI...');
+        console.log('[Settings] Triggering final local-only refresh to propagate imported storage without stale cloud overwrite...');
         await new Promise(resolve => setTimeout(resolve, 300));
-        await coreData.refreshData();
+        await coreData.refreshData({ skipRemote: true });
         
         Alert.alert(
           'Import Successful',

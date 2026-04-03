@@ -281,6 +281,14 @@ const getFirstTimeUserSampleData = (): { sampleCruises: BookedCruise[]; sampleOf
 
 
 
+interface RefreshDataOptions {
+  skipRemote?: boolean;
+}
+
+interface LoadFromStorageOptions extends RefreshDataOptions {
+  force?: boolean;
+}
+
 interface CoreDataState {
   cruises: Cruise[];
   bookedCruises: BookedCruise[];
@@ -330,7 +338,7 @@ interface CoreDataState {
   syncToBackend: () => Promise<void>;
   
   clearAllData: () => Promise<void>;
-  refreshData: () => Promise<void>;
+  refreshData: (options?: RefreshDataOptions) => Promise<void>;
   restoreMockData: () => Promise<void>;
 }
 
@@ -661,8 +669,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
   }, [authenticatedEmail, canUseDirectCloudFallback]);
 
-  const loadFromStorage = useCallback(async (force = false) => {
-    console.log('[CoreData] === START LOADING FROM STORAGE ===', { force, alreadyAttempted: loadAttemptedRef.current });
+  const loadFromStorage = useCallback(async (options: LoadFromStorageOptions = {}) => {
+    const { force = false, skipRemote = false } = options;
+    console.log('[CoreData] === START LOADING FROM STORAGE ===', { force, skipRemote, alreadyAttempted: loadAttemptedRef.current });
     if (loadAttemptedRef.current && !force) {
       console.log('[CoreData] Load already attempted, skipping');
       return;
@@ -676,11 +685,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
     
     try {
-      if (authenticatedEmail) {
+      if (authenticatedEmail && !skipRemote) {
         const hasBackendData = await loadFromBackend();
         if (hasBackendData) {
           console.log('[CoreData] Loaded user data from backend, will refresh from storage');
         }
+      } else if (skipRemote) {
+        console.log('[CoreData] Skipping remote backend load and refreshing from local storage only');
       }
 
       const snapshot = await readAllStorageKeys(authenticatedEmail);
@@ -907,7 +918,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const handleCloudDataRestored = () => {
       console.log('[CoreDataProvider] Cloud data restored event received, reloading data...');
       loadAttemptedRef.current = false;
-      void loadFromStorage(true);
+      void loadFromStorage({ force: true });
     };
 
     try {
@@ -915,7 +926,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         const handleEntitlementProUnlocked = () => {
           console.log('[CoreDataProvider] entitlementProUnlocked event received, reloading data...');
           loadAttemptedRef.current = false;
-          void loadFromStorage(true);
+          void loadFromStorage({ force: true });
         };
 
         window.addEventListener('casinoSessionPointsUpdated', handleSessionPointsUpdate as EventListener);
@@ -1269,9 +1280,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
   }, []);
 
-  const refreshData = useCallback(async () => {
-    console.log('[CoreData] === REFRESH DATA CALLED (FORCE RELOAD) ===');
-    await loadFromStorage(true);
+  const refreshData = useCallback(async (options: RefreshDataOptions = {}) => {
+    console.log('[CoreData] === REFRESH DATA CALLED (FORCE RELOAD) ===', options);
+    await loadFromStorage({ force: true, skipRemote: options.skipRemote ?? false });
   }, [loadFromStorage]);
 
   const restoreMockData = useCallback(async () => {
