@@ -3,8 +3,81 @@ import Surreal from 'surrealdb.js';
 let db = null;
 let isConnecting = false;
 let lastConnectionTime = 0;
+let selectedDatabaseEndpoint = null;
 const CONNECTION_TIMEOUT = 5000;
 const CONNECTION_RETRY_DELAY = 1000;
+const RPC_SUFFIX = '/rpc';
+const DATABASE_UNAVAILABLE = 'DATABASE_UNAVAILABLE';
+
+function getEndpointCandidates(endpoint) {
+  const trimmedEndpoint = endpoint.trim().replace(/\/+$/, '');
+
+  if (!trimmedEndpoint) {
+    return [];
+  }
+
+  const rawEndpoint = trimmedEndpoint.endsWith(RPC_SUFFIX)
+    ? trimmedEndpoint.slice(0, -RPC_SUFFIX.length)
+    : trimmedEndpoint;
+  const rpcEndpoint = trimmedEndpoint.endsWith(RPC_SUFFIX)
+    ? trimmedEndpoint
+    : `${trimmedEndpoint}${RPC_SUFFIX}`;
+
+  return [rawEndpoint, rpcEndpoint].filter((candidate, index, list) => {
+    return Boolean(candidate) && list.indexOf(candidate) === index;
+  });
+}
+
+function getDatabaseErrorMessage(error) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error && typeof error === 'object') {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return '[unserializable error object]';
+    }
+  }
+
+  return String(error);
+}
+
+function normalizeDatabaseConnectionError(error) {
+  const errorMessage = getDatabaseErrorMessage(error);
+  const normalizedMessage = errorMessage.toLowerCase();
+  const isNotFoundResponse =
+    errorMessage.includes('"code":"not_found"') ||
+    errorMessage.includes('The requested resource was not found');
+  const isUnsupportedVersionResponse =
+    errorMessage.includes('reported by the engine is not supported by this library') &&
+    isNotFoundResponse;
+  const isVersionRetrievalFailure =
+    errorMessage.includes('VersionRetrievalFailure') ||
+    errorMessage.includes('Failed to retrieve remote version');
+  const isNetworkFailure =
+    error instanceof TypeError ||
+    normalizedMessage.includes('failed to fetch') ||
+    normalizedMessage.includes('fetch failed') ||
+    normalizedMessage.includes('network request failed') ||
+    normalizedMessage.includes('networkerror') ||
+    normalizedMessage.includes('load failed') ||
+    normalizedMessage.includes('aborterror') ||
+    normalizedMessage.includes('connection') ||
+    normalizedMessage.includes('timeout') ||
+    normalizedMessage.includes('err_network');
+
+  if (isUnsupportedVersionResponse || isNotFoundResponse || isVersionRetrievalFailure || isNetworkFailure) {
+    return new Error(DATABASE_UNAVAILABLE);
+  }
+
+  return error instanceof Error ? error : new Error(errorMessage);
+}
 
 async function createConnection() {
   const endpoint = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
@@ -15,22 +88,53 @@ async function createConnection() {
     throw new Error('Database configuration missing');
   }
 
-  const newDb = new Surreal();
-  
-  const connectPromise = newDb.connect(endpoint, {
-    namespace,
-    database: 'easyseas',
-    auth: token,
+  const candidateEndpoints = getEndpointCandidates(endpoint);
+  if (selectedDatabaseEndpoint) {
+    candidateEndpoints.unshift(selectedDatabaseEndpoint);
+  }
+
+  const uniqueCandidateEndpoints = candidateEndpoints.filter((candidate, index, list) => {
+    return list.indexOf(candidate) === index;
   });
 
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Database connection timeout')), CONNECTION_TIMEOUT);
-  });
+  let lastConnectionError = null;
 
-  await Promise.race([connectPromise, timeoutPromise]);
-  
-  console.log('[DB] Connected to SurrealDB');
-  return newDb;
+  for (const candidateEndpoint of uniqueCandidateEndpoints) {
+    const newDb = new Surreal();
+
+    try {
+      const connectPromise = newDb.connect(candidateEndpoint, {
+        namespace,
+        database: 'easyseas',
+        auth: token,
+        versionCheck: false,
+      });
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Database connection timeout')), CONNECTION_TIMEOUT);
+      });
+
+      await Promise.race([connectPromise, timeoutPromise]);
+      selectedDatabaseEndpoint = candidateEndpoint;
+      console.log('[DB] Connected to SurrealDB via candidate:', candidateEndpoint);
+      return newDb;
+    } catch (error) {
+      lastConnectionError = normalizeDatabaseConnectionError(error);
+      console.log('[DB] Database candidate failed:', candidateEndpoint, lastConnectionError.message);
+
+      try {
+        await newDb.close();
+      } catch {
+      }
+
+      if (lastConnectionError.message !== DATABASE_UNAVAILABLE) {
+        throw lastConnectionError;
+      }
+    }
+  }
+
+  selectedDatabaseEndpoint = null;
+  throw lastConnectionError ?? new Error(DATABASE_UNAVAILABLE);
 }
 
 async function testConnection(dbInstance) {
@@ -55,13 +159,13 @@ export async function getDb() {
     if (timeSinceLastConnection < 60000) {
       return db;
     }
-    
+
     const isHealthy = await testConnection(db);
     if (isHealthy) {
       lastConnectionTime = Date.now();
       return db;
     }
-    
+
     console.log('[DB] Connection unhealthy, reconnecting...');
     try {
       await db.close();
@@ -77,9 +181,16 @@ export async function getDb() {
     lastConnectionTime = Date.now();
     return db;
   } catch (error) {
+    const normalizedError = normalizeDatabaseConnectionError(error);
     db = null;
-    console.error('[DB] Failed to connect:', error instanceof Error ? error.message : String(error));
-    throw new Error('Database connection failed: ' + (error instanceof Error ? error.message : String(error)));
+
+    if (normalizedError.message === DATABASE_UNAVAILABLE) {
+      console.log('[DB] Database unavailable - endpoint unreachable or did not return a supported SurrealDB RPC response');
+      throw normalizedError;
+    }
+
+    console.error('[DB] Failed to connect:', normalizedError.message);
+    throw new Error('Database connection failed: ' + normalizedError.message);
   } finally {
     isConnecting = false;
   }

@@ -4,6 +4,7 @@ import { createTRPCRouter, publicProcedure } from "../create-context.js";
 
 const UserDataSchema = z.object({
   email: z.string().email(),
+  cruises: z.array(z.any()).optional(),
   bookedCruises: z.array(z.any()).optional(),
   casinoOffers: z.array(z.any()).optional(),
   calendarEvents: z.array(z.any()).optional(),
@@ -18,6 +19,8 @@ const UserDataSchema = z.object({
   loyaltyData: z.any().optional(),
   bankrollData: z.any().optional(),
   celebrityData: z.any().optional(),
+  crewRecognitionEntries: z.array(z.any()).optional(),
+  crewRecognitionSailings: z.array(z.any()).optional(),
 });
 
 export const dataRouter = createTRPCRouter({
@@ -31,7 +34,7 @@ export const dataRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
-      
+
       const result = await db.create("user_data", {
         userId: input.userId,
         bookedCruises: input.bookedCruises,
@@ -52,7 +55,7 @@ export const dataRouter = createTRPCRouter({
     .input(z.object({ userId: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      
+
       const results = await db.query(
         `SELECT * FROM user_data WHERE userId = $userId ORDER BY updatedAt DESC LIMIT 1`,
         { userId: input.userId }
@@ -85,7 +88,7 @@ export const dataRouter = createTRPCRouter({
       const db = await getDb();
       const normalizedEmail = input.email.toLowerCase().trim();
       const now = new Date().toISOString();
-      
+
       console.log('[API] Saving all user data for:', normalizedEmail);
 
       const existingResults = await db.query(
@@ -94,9 +97,10 @@ export const dataRouter = createTRPCRouter({
       );
 
       const existingData = existingResults?.[0]?.[0];
-      
+
       const dataToSave = {
         email: normalizedEmail,
+        cruises: input.cruises ?? existingData?.cruises ?? [],
         bookedCruises: input.bookedCruises ?? existingData?.bookedCruises ?? [],
         casinoOffers: input.casinoOffers ?? existingData?.casinoOffers ?? [],
         calendarEvents: input.calendarEvents ?? existingData?.calendarEvents ?? [],
@@ -111,6 +115,8 @@ export const dataRouter = createTRPCRouter({
         loyaltyData: input.loyaltyData ?? existingData?.loyaltyData,
         bankrollData: input.bankrollData ?? existingData?.bankrollData,
         celebrityData: input.celebrityData ?? existingData?.celebrityData,
+        crewRecognitionEntries: input.crewRecognitionEntries ?? existingData?.crewRecognitionEntries ?? [],
+        crewRecognitionSailings: input.crewRecognitionSailings ?? existingData?.crewRecognitionSailings ?? [],
         updatedAt: now,
         createdAt: existingData?.createdAt ?? now,
       };
@@ -118,6 +124,7 @@ export const dataRouter = createTRPCRouter({
       if (existingData) {
         await db.query(
           `UPDATE user_profiles SET 
+            cruises = $cruises,
             bookedCruises = $bookedCruises,
             casinoOffers = $casinoOffers,
             calendarEvents = $calendarEvents,
@@ -132,6 +139,8 @@ export const dataRouter = createTRPCRouter({
             loyaltyData = $loyaltyData,
             bankrollData = $bankrollData,
             celebrityData = $celebrityData,
+            crewRecognitionEntries = $crewRecognitionEntries,
+            crewRecognitionSailings = $crewRecognitionSailings,
             updatedAt = $updatedAt
           WHERE email = $email`,
           dataToSave
@@ -147,10 +156,13 @@ export const dataRouter = createTRPCRouter({
 
       console.log('[API] Saved all user data:', {
         email: normalizedEmail,
+        availableCruises: dataToSave.cruises?.length ?? 0,
         cruises: dataToSave.bookedCruises?.length ?? 0,
         offers: dataToSave.casinoOffers?.length ?? 0,
         events: dataToSave.calendarEvents?.length ?? 0,
         sessions: dataToSave.casinoSessions?.length ?? 0,
+        crewEntries: dataToSave.crewRecognitionEntries?.length ?? 0,
+        crewSailings: dataToSave.crewRecognitionSailings?.length ?? 0,
       });
 
       return { success: true, updatedAt: now };
@@ -161,7 +173,7 @@ export const dataRouter = createTRPCRouter({
     .query(async ({ input }) => {
       const db = await getDb();
       const normalizedEmail = input.email.toLowerCase().trim();
-      
+
       console.log('[API] Loading all user data for:', normalizedEmail);
 
       const results = await db.query(
@@ -173,15 +185,19 @@ export const dataRouter = createTRPCRouter({
         const data = results[0][0];
         console.log('[API] Found user data:', {
           email: normalizedEmail,
+          availableCruises: data.cruises?.length ?? 0,
           cruises: data.bookedCruises?.length ?? 0,
           offers: data.casinoOffers?.length ?? 0,
           events: data.calendarEvents?.length ?? 0,
           sessions: data.casinoSessions?.length ?? 0,
+          crewEntries: data.crewRecognitionEntries?.length ?? 0,
+          crewSailings: data.crewRecognitionSailings?.length ?? 0,
           updatedAt: data.updatedAt,
         });
         return {
           found: true,
           data: {
+            cruises: data.cruises ?? [],
             bookedCruises: data.bookedCruises ?? [],
             casinoOffers: data.casinoOffers ?? [],
             calendarEvents: data.calendarEvents ?? [],
@@ -196,6 +212,8 @@ export const dataRouter = createTRPCRouter({
             loyaltyData: data.loyaltyData,
             bankrollData: data.bankrollData,
             celebrityData: data.celebrityData,
+            crewRecognitionEntries: data.crewRecognitionEntries ?? [],
+            crewRecognitionSailings: data.crewRecognitionSailings ?? [],
             updatedAt: data.updatedAt,
             createdAt: data.createdAt,
           },
@@ -214,7 +232,7 @@ export const dataRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const db = await getDb();
       const normalizedEmail = input.email.toLowerCase().trim();
-      
+
       console.log('[API] Deleting all user data for:', normalizedEmail);
 
       await db.query(
@@ -231,7 +249,7 @@ export const dataRouter = createTRPCRouter({
     .query(async ({ input }) => {
       const db = await getDb();
       const normalizedEmail = input.email.toLowerCase().trim();
-      
+
       console.log('[API] Checking if email exists:', normalizedEmail);
 
       const results = await db.query(
@@ -241,7 +259,7 @@ export const dataRouter = createTRPCRouter({
 
       const exists = results && results[0] && results[0].length > 0;
       console.log('[API] Email exists check:', { email: normalizedEmail, exists });
-      
+
       return { exists };
     }),
 });

@@ -79,7 +79,7 @@ const getSystemTrpcBaseCandidates = (baseUrl: string): string[] => {
 };
 
 const getRenderTrpcBaseCandidates = (): string[] => {
-  return [`${RENDER_BACKEND_URL}${TRPC_SUFFIX}`];
+  return getSystemTrpcBaseCandidates(RENDER_BACKEND_URL);
 };
 
 const getBaseUrl = () => {
@@ -466,38 +466,14 @@ export const getTrpcClient = () => {
             transformer: superjson,
             fetch: async (url, options) => {
               const requestUrl = getFetchUrlString(url);
-
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 12000);
+              const renderCandidateUrls = getTrpcRequestUrlCandidates(
+                requestUrl,
+                getRenderTrpcBaseCandidates()
+              );
 
               try {
-                const existingSignal = options?.signal;
-                if (existingSignal?.aborted) {
-                  clearTimeout(timeoutId);
-                  throw new DOMException('Request was cancelled', 'AbortError');
-                }
-                existingSignal?.addEventListener('abort', () => {
-                  controller.abort();
-                });
-
-                const requestHeaders = new Headers(options?.headers);
-                requestHeaders.set('Accept', 'application/json');
-
-                const response = await fetch(requestUrl, {
-                  ...options,
-                  signal: controller.signal,
-                  headers: requestHeaders,
-                });
-                clearTimeout(timeoutId);
-
-                const normalizedError = await normalizeBackendResponseError(response);
-                if (normalizedError) {
-                  throw normalizedError;
-                }
-
-                return response;
+                return await fetchWithTrpcUrlFallback(renderCandidateUrls, options, 'Render');
               } catch (error) {
-                clearTimeout(timeoutId);
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 console.log('[tRPC:Render] Request failed:', errorMsg);
                 throw error;
