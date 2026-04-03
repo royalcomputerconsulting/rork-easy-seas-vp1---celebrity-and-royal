@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { Save, CheckCircle, AlertCircle, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
-import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
+import { getTierByPoints, CLUB_ROYALE_TIERS, TIER_ORDER } from '@/constants/clubRoyaleTiers';
 import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS, resolveCelebrityCaptainsClubLevelKey } from '@/constants/celebrityCaptainsClub';
 import { getCelebrityBlueChipTierByPoints, CELEBRITY_BLUE_CHIP_TIERS, resolveCelebrityBlueChipTierKey } from '@/constants/celebrityBlueChipClub';
 import { SILVERSEA_VENETIAN_TIERS, getSilverseaTierByDays, getNextSilverseaTier, resolveSilverseaTierKey } from '@/constants/silverseaVenetianSociety';
@@ -147,6 +147,18 @@ export function UserProfileCard({
   
   const calculatedTier = getTierByPoints(formData.clubRoyalePoints);
   const calculatedTierInfo = CLUB_ROYALE_TIERS[calculatedTier];
+  const displayedClubRoyaleTier = useMemo((): string => {
+    const tierCandidates = [formData.clubRoyaleTier, enrichmentData?.clubRoyaleTierFromApi, calculatedTier].filter(
+      (tier): tier is string => typeof tier === 'string' && tier.length > 0
+    );
+
+    return tierCandidates.reduce((bestTier, candidateTier) => {
+      const bestTierIndex = TIER_ORDER.indexOf(bestTier);
+      const candidateTierIndex = TIER_ORDER.indexOf(candidateTier);
+      return candidateTierIndex > bestTierIndex ? candidateTier : bestTier;
+    }, calculatedTier);
+  }, [calculatedTier, enrichmentData?.clubRoyaleTierFromApi, formData.clubRoyaleTier]);
+  const displayedClubRoyaleTierInfo = CLUB_ROYALE_TIERS[displayedClubRoyaleTier] || calculatedTierInfo;
 
   const calculatedCelebrityLevel = getCelebrityCaptainsClubLevelByPoints(formData.celebrityCaptainsClubPoints || 0);
   const calculatedCelebrityLevelInfo = CELEBRITY_CAPTAINS_CLUB_LEVELS[calculatedCelebrityLevel];
@@ -332,7 +344,7 @@ export function UserProfileCard({
         {renderValueCard('Crown & Anchor #', getMaskedRoyalNumber(currentValues.crownAnchorNumber || enrichmentData?.crownAndAnchorId), undefined, true)}
         {renderValueCard('C&A Level', enrichmentData?.crownAndAnchorTier || calculatedLevel, calculatedLevelInfo?.color)}
         {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
-        {renderValueCard('Club Royale Tier', enrichmentData?.clubRoyaleTierFromApi || calculatedTier, calculatedTierInfo?.color)}
+        {renderValueCard('Club Royale Tier', displayedClubRoyaleTier, displayedClubRoyaleTierInfo?.color)}
         {renderValueCard('Casino Points', enrichmentData?.clubRoyalePointsFromApi ?? currentValues.clubRoyalePoints, COLORS.points)}
         {enrichmentData?.crownAndAnchorNextTier && renderValueCard('Next C&A Level', enrichmentData.crownAndAnchorNextTier)}
         {enrichmentData?.crownAndAnchorRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.crownAndAnchorRemainingPoints)}

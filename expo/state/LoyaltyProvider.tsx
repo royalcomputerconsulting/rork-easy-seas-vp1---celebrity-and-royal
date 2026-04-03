@@ -19,7 +19,7 @@ import {
 import { createDateFromString } from "@/lib/date";
 import { isRoyalCaribbeanShip } from "@/constants/shipInfo";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
-import { resolveRetainedTierState } from "@/lib/casinoProgram";
+import { resolveHistoricalRetainedTierState, resolveRetainedTierState } from "@/lib/casinoProgram";
 import type { ExtendedLoyaltyData } from "@/lib/royalCaribbean/types";
 
 interface LoyaltyState {
@@ -408,6 +408,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     }[] = [];
     
     const completedCruisesData: { nights: number; earnedPoints: number }[] = [];
+    const clubRoyaleEarningEvents: { occurredAt: Date; pointsEarned: number }[] = [];
 
     bookedCruises.forEach((cruise: BookedCruise) => {
       const nights = cruise.nights || 0;
@@ -436,6 +437,12 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
         completedNights += nights;
         if (earnedPoints > 0 && nights > 0) {
           completedCruisesData.push({ nights, earnedPoints });
+        }
+        if (earnedPoints > 0) {
+          clubRoyaleEarningEvents.push({
+            occurredAt: returnDate,
+            pointsEarned: earnedPoints,
+          });
         }
       } else {
         const normalizedStatus = `${cruise.status ?? ''}`.trim().toLowerCase();
@@ -496,14 +503,32 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     const fallbackClubRoyaleTier = (manualClubRoyalePoints !== null
       ? getTierByPoints(manualClubRoyalePoints)
       : getTierByPoints(effectiveClubRoyalePoints)) as ClubRoyaleTier;
+    const historicalRetainedClubRoyaleStatus = resolveHistoricalRetainedTierState({
+      entries: clubRoyaleEarningEvents,
+      tierOrder: TIER_ORDER,
+      thresholds: CLUB_ROYALE_TIERS,
+      today,
+    });
+    const apiReportedClubRoyaleTier = extendedLoyalty?.clubRoyaleTierFromApi ?? null;
+    const apiReportedClubRoyaleTierIndex = apiReportedClubRoyaleTier ? TIER_ORDER.indexOf(apiReportedClubRoyaleTier) : -1;
+    const historicalRetainedClubRoyaleTierIndex = historicalRetainedClubRoyaleStatus.retainedTier
+      ? TIER_ORDER.indexOf(historicalRetainedClubRoyaleStatus.retainedTier)
+      : -1;
+    const preferredActiveClubRoyaleTier = historicalRetainedClubRoyaleTierIndex >= apiReportedClubRoyaleTierIndex
+      ? historicalRetainedClubRoyaleStatus.retainedTier ?? apiReportedClubRoyaleTier ?? fallbackClubRoyaleTier
+      : apiReportedClubRoyaleTier ?? historicalRetainedClubRoyaleStatus.retainedTier ?? fallbackClubRoyaleTier;
+    const preferredClubRoyaleRetainedUntil = preferredActiveClubRoyaleTier === historicalRetainedClubRoyaleStatus.retainedTier
+      ? historicalRetainedClubRoyaleStatus.retainedTierUntil
+      : null;
     const resolvedClubRoyaleStatus = resolveRetainedTierState({
       currentPoints: effectiveClubRoyalePoints,
-      activeTier: extendedLoyalty?.clubRoyaleTierFromApi ?? fallbackClubRoyaleTier,
+      activeTier: preferredActiveClubRoyaleTier,
       tierOrder: TIER_ORDER,
       thresholds: CLUB_ROYALE_TIERS,
       getTierByPoints,
       defaultTier: 'Choice',
       today,
+      retainedTierUntil: preferredClubRoyaleRetainedUntil,
     });
     const clubRoyaleTier = resolvedClubRoyaleStatus.displayTier as ClubRoyaleTier;
     const clubRoyaleEarningTier = resolvedClubRoyaleStatus.earnedTier as ClubRoyaleTier;
@@ -679,6 +704,10 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       mastersProgress,
       currentYearClubRoyalePoints,
       calculatedClubRoyalePoints,
+      retainedClubRoyaleTierFromHistory: historicalRetainedClubRoyaleStatus.retainedTier,
+      retainedClubRoyaleThresholdCrossedAt: historicalRetainedClubRoyaleStatus.thresholdCrossedAt?.toISOString() ?? null,
+      retainedClubRoyaleUntil: historicalRetainedClubRoyaleStatus.retainedTierUntil?.toISOString() ?? null,
+      preferredActiveClubRoyaleTier,
       totalCruisesProcessed: bookedCruises.length,
       averageCasinoPointsPerNight,
       upcomingCruisesCount: upcomingBookedCruises.length,

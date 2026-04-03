@@ -12,6 +12,11 @@ export interface AnnualResetWindow {
   nextResetDate: Date;
 }
 
+export interface TierEarningEvent {
+  occurredAt: Date;
+  pointsEarned: number;
+}
+
 interface ResolveRetainedTierStateParams {
   currentPoints: number;
   activeTier?: string | null;
@@ -44,6 +49,19 @@ interface ResolveDisplayTierAtDateParams {
   getTierByPoints: (points: number) => string;
 }
 
+interface ResolveHistoricalRetainedTierStateParams {
+  entries: TierEarningEvent[];
+  tierOrder: string[];
+  thresholds: TierThresholdMap;
+  today?: Date;
+}
+
+export interface HistoricalRetainedTierState {
+  retainedTier: string | null;
+  retainedTierUntil: Date | null;
+  thresholdCrossedAt: Date | null;
+}
+
 const DEFAULT_RESET_MONTH_INDEX = 3;
 const DEFAULT_RESET_DAY = 1;
 
@@ -73,6 +91,67 @@ export function getAnnualResetWindow(
   return {
     cycleStart,
     nextResetDate,
+  };
+}
+
+export function resolveHistoricalRetainedTierState({
+  entries,
+  tierOrder,
+  thresholds,
+  today = new Date(),
+}: ResolveHistoricalRetainedTierStateParams): HistoricalRetainedTierState {
+  const normalizedEntries = entries
+    .filter((entry) => entry.pointsEarned > 0 && !Number.isNaN(entry.occurredAt.getTime()))
+    .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+
+  let activeCycleKey: string | null = null;
+  let cyclePoints = 0;
+  let retainedTier: string | null = null;
+  let retainedTierUntil: Date | null = null;
+  let thresholdCrossedAt: Date | null = null;
+
+  for (const entry of normalizedEntries) {
+    const annualWindow = getAnnualResetWindow(entry.occurredAt);
+    const cycleKey = annualWindow.cycleStart.toISOString();
+
+    if (cycleKey !== activeCycleKey) {
+      activeCycleKey = cycleKey;
+      cyclePoints = 0;
+    }
+
+    const previousPoints = cyclePoints;
+    cyclePoints += entry.pointsEarned;
+
+    for (const tier of tierOrder) {
+      const threshold = getTierThreshold(thresholds[tier]);
+      if (threshold <= 0) {
+        continue;
+      }
+
+      const crossedTierThreshold = previousPoints < threshold && cyclePoints >= threshold;
+      if (!crossedTierThreshold) {
+        continue;
+      }
+
+      const candidateRetainedUntil = new Date(annualWindow.nextResetDate);
+      candidateRetainedUntil.setFullYear(candidateRetainedUntil.getFullYear() + 1);
+
+      if (today >= candidateRetainedUntil) {
+        continue;
+      }
+
+      if (!retainedTier || getTierIndex(tierOrder, tier) >= getTierIndex(tierOrder, retainedTier)) {
+        retainedTier = tier;
+        retainedTierUntil = candidateRetainedUntil;
+        thresholdCrossedAt = entry.occurredAt;
+      }
+    }
+  }
+
+  return {
+    retainedTier,
+    retainedTierUntil,
+    thresholdCrossedAt,
   };
 }
 
