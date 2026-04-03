@@ -85,6 +85,97 @@ export function enrichCruisePipeline(cruises: BookedCruise[]): BookedCruise[] {
   return enrichCruisesWithReceiptData(withFreeplayOBC);
 }
 
+const LEGACY_SEEDED_BOOKING_RESERVATION_NUMBERS = new Set([
+  '4623588',
+  '103650',
+  '102141',
+  '1627512',
+  '1332345',
+  '9351090',
+  '1527742',
+  '4622209',
+  '4097701',
+  '3839803',
+]);
+
+function sortCruisesBySailDate(cruises: BookedCruise[]): BookedCruise[] {
+  return [...cruises].sort((a, b) => {
+    const aTime = new Date(a.sailDate).getTime();
+    const bTime = new Date(b.sailDate).getTime();
+    return aTime - bTime;
+  });
+}
+
+function normalizeSeededBookedCruises(
+  existingCruises: BookedCruise[],
+  canonicalCruises: BookedCruise[],
+): { cruises: BookedCruise[]; changed: boolean } {
+  const canonicalByReservation = new Map<string, BookedCruise>();
+  canonicalCruises.forEach((cruise) => {
+    if (cruise.reservationNumber) {
+      canonicalByReservation.set(cruise.reservationNumber, cruise);
+    }
+  });
+
+  let changed = false;
+  const normalizedCruises: BookedCruise[] = [];
+
+  existingCruises.forEach((cruise) => {
+    const reservationNumber = cruise.reservationNumber ?? '';
+    const canonicalCruise = reservationNumber ? canonicalByReservation.get(reservationNumber) : undefined;
+
+    if (reservationNumber && LEGACY_SEEDED_BOOKING_RESERVATION_NUMBERS.has(reservationNumber) && !canonicalCruise) {
+      changed = true;
+      console.log('[CoreData] Removing outdated seeded cruise from stored data:', {
+        reservationNumber,
+        shipName: cruise.shipName,
+        sailDate: cruise.sailDate,
+      });
+      return;
+    }
+
+    if (canonicalCruise) {
+      const mergedCruise = {
+        ...cruise,
+        ...canonicalCruise,
+      };
+
+      if (JSON.stringify(mergedCruise) !== JSON.stringify(cruise)) {
+        changed = true;
+        console.log('[CoreData] Refreshing stored cruise from canonical booking data:', {
+          reservationNumber,
+          previousShipName: cruise.shipName,
+          previousSailDate: cruise.sailDate,
+          nextShipName: canonicalCruise.shipName,
+          nextSailDate: canonicalCruise.sailDate,
+        });
+      }
+
+      normalizedCruises.push(mergedCruise);
+      canonicalByReservation.delete(reservationNumber);
+      return;
+    }
+
+    normalizedCruises.push(cruise);
+  });
+
+  if (canonicalByReservation.size > 0) {
+    changed = true;
+    const cruisesToAdd = Array.from(canonicalByReservation.values());
+    console.log('[CoreData] Adding missing canonical cruises into stored data:', cruisesToAdd.map((cruise) => ({
+      reservationNumber: cruise.reservationNumber,
+      shipName: cruise.shipName,
+      sailDate: cruise.sailDate,
+    })));
+    normalizedCruises.push(...cruisesToAdd);
+  }
+
+  return {
+    cruises: sortCruisesBySailDate(normalizedCruises),
+    changed,
+  };
+}
+
 export async function readAllStorageKeys(email?: string | null): Promise<StorageSnapshot> {
   const keys = email ? getScopedStorageKeys(email) : STORAGE_KEYS;
   console.log('[CoreData] Loading from storage for user:', email || 'unknown', 'using scoped keys:', !!email);
@@ -153,20 +244,18 @@ export async function processBookedCruises(
     const versionKey = email ? getScopedStorageKeys(email).CRUISE_DATA_VERSION : STORAGE_KEYS.CRUISE_DATA_VERSION;
     const storedVersion = await AsyncStorage.getItem(versionKey).catch(() => null);
     let mergedCruises = nonMockCruises;
+    let didNormalizeStoredCruises = false;
 
     if (storedVersion !== CURRENT_CRUISE_DATA_VERSION) {
-      console.log('[CoreData] Cruise data version changed:', storedVersion, '->', CURRENT_CRUISE_DATA_VERSION, '- merging missing cruises');
+      console.log('[CoreData] Cruise data version changed:', storedVersion, '->', CURRENT_CRUISE_DATA_VERSION, '- normalizing stored cruises');
       const { BOOKED_CRUISES_DATA } = getMockCruises();
       const realMockCruises = filterDemoCruises(BOOKED_CRUISES_DATA);
+      const normalizedResult = normalizeSeededBookedCruises(mergedCruises, realMockCruises);
+      mergedCruises = normalizedResult.cruises;
+      didNormalizeStoredCruises = normalizedResult.changed;
 
-      const existingResNums = new Set(mergedCruises.map((c: BookedCruise) => c.reservationNumber));
-      const missingCruises = realMockCruises.filter((mc: BookedCruise) => !existingResNums.has(mc.reservationNumber));
-
-      if (missingCruises.length > 0) {
-        console.log('[CoreData] Adding', missingCruises.length, 'missing cruises:', missingCruises.map((c: BookedCruise) => c.reservationNumber));
-        mergedCruises = [...mergedCruises, ...missingCruises];
-      } else {
-        console.log('[CoreData] No missing cruises to add');
+      if (!didNormalizeStoredCruises) {
+        console.log('[CoreData] Stored cruises already matched canonical booking data');
       }
 
       await AsyncStorage.setItem(versionKey, CURRENT_CRUISE_DATA_VERSION).catch(console.error);
@@ -184,7 +273,7 @@ export async function processBookedCruises(
     return {
       bookedCruises: enrichedBooked,
       finalBookedCount: enrichedBooked.length,
-      shouldPersistMergedCruises: mergedCruises.length > nonMockCruises.length,
+      shouldPersistMergedCruises: didNormalizeStoredCruises,
       shouldPersistFirstTimeData: false,
     };
   }

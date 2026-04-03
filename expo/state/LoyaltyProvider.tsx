@@ -438,24 +438,34 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
           completedCruisesData.push({ nights, earnedPoints });
         }
       } else {
+        const normalizedStatus = `${cruise.status ?? ''}`.trim().toLowerCase();
+        const isCourtesyHold = cruise.isCourtesyHold === true || normalizedStatus === 'courtesy hold' || normalizedStatus === 'hold' || normalizedStatus === 'offer';
+        const isCancelled = normalizedStatus === 'cancelled';
+
+        if (isCourtesyHold || isCancelled) {
+          console.log('[LoyaltyProvider] Skipping non-booked future cruise from loyalty projections:', {
+            reservationNumber: cruise.reservationNumber,
+            shipName: cruise.shipName,
+            sailDate: cruise.sailDate,
+            status: cruise.status ?? 'unknown',
+            isCourtesyHold,
+            isCancelled,
+          });
+          return;
+        }
+
         bookedNights += nights;
-        
-        // Calculate Crown & Anchor points for booked cruises
-        // Base: 1 point per night
-        // Single occupancy bonus: +1 point per night (solo sailing)
-        // Suite bonus: +1 point per night if in suite category
-        // singleOccupancy defaults to true unless explicitly set to false
         const isSolo = cruise.singleOccupancy !== false;
         const cabinType = cruise.cabinType || cruise.cabinCategory || '';
         const isSuite = cabinType.toLowerCase().includes('suite');
         
-        let crownAnchorPointsForThisCruise = isSolo ? nights * 2 : nights * 1; // solo = 2x, shared = 1x
+        let crownAnchorPointsForThisCruise = isSolo ? nights * 2 : nights * 1;
         
         if (isSuite && isSolo) {
-          crownAnchorPointsForThisCruise = nights * 3; // Base + single + suite
+          crownAnchorPointsForThisCruise = nights * 3;
           console.log('[LoyaltyProvider] Suite bonus applied for', cruise.shipName, 'cabin:', cabinType);
         } else if (isSuite && !isSolo) {
-          crownAnchorPointsForThisCruise = nights * 2; // Suite but not solo — no single bonus
+          crownAnchorPointsForThisCruise = nights * 2;
           console.log('[LoyaltyProvider] Suite (shared occupancy) for', cruise.shipName, 'cabin:', cabinType);
         }
         

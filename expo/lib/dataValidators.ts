@@ -34,8 +34,9 @@ const VALID_CABIN_TYPES = ['Interior', 'Oceanview', 'Balcony', 'Suite', 'Junior 
 
 const KNOWN_SHIPS = [
   'Allure of the Seas', 'Anthem of the Seas', 'Brilliance of the Seas',
-  'Enchantment of the Seas', 'Explorer of the Seas', 'Freedom of the Seas',
-  'Grandeur of the Seas', 'Harmony of the Seas', 'Icon of the Seas',
+  'Celebrity Beyond', 'Celebrity Equinox', 'Enchantment of the Seas',
+  'Explorer of the Seas', 'Freedom of the Seas', 'Grandeur of the Seas',
+  'Harmony of the Seas', 'Hero of the Seas', 'Icon of the Seas',
   'Independence of the Seas', 'Jewel of the Seas', 'Liberty of the Seas',
   'Mariner of the Seas', 'Navigator of the Seas', 'Oasis of the Seas',
   'Odyssey of the Seas', 'Ovation of the Seas', 'Quantum of the Seas',

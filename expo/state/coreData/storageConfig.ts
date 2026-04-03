@@ -26,7 +26,7 @@ export function getScopedStorageKeys(email: string | null): Record<StorageKeyNam
 
 export const STORAGE_KEYS = BASE_STORAGE_KEYS;
 
-export const CURRENT_CRUISE_DATA_VERSION = '2';
+export const CURRENT_CRUISE_DATA_VERSION = '3';
 
 export interface AppSettings {
   showTaxesInList: boolean;

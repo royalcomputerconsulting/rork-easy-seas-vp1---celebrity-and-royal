@@ -271,6 +271,15 @@ export const ROYAL_CARIBBEAN_SHIPS: Record<string, ShipInfo> = {
     homePort: 'Fort Lauderdale',
     typicalItineraries: ['Bahamas', 'Perfect Day at CocoCay'],
   },
+  'Hero of the Seas': {
+    name: 'Hero of the Seas',
+    class: 'Icon Class',
+    passengerCapacity: 5610,
+    grossTonnage: 250800,
+    yearBuilt: 2027,
+    homePort: 'Port Canaveral',
+    typicalItineraries: ['Perfect Day at CocoCay', 'Western Caribbean'],
+  },
 };
 
 export const SHIP_CLASSES = [
