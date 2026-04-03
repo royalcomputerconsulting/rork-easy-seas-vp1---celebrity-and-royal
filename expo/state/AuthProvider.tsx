@@ -126,17 +126,37 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
   const checkAuthentication = useCallback(async () => {
     try {
       const auth = await AsyncStorage.getItem(AUTH_KEY);
-      const email = await AsyncStorage.getItem(AUTH_EMAIL_KEY);
+      const storedEmail = normalizeAuthEmail(await AsyncStorage.getItem(AUTH_EMAIL_KEY));
       const freshStart = await AsyncStorage.getItem(FRESH_START_KEY);
-      setIsAuthenticated(auth === "true");
-      setAuthenticatedEmail(email);
-      setIsFreshStart(freshStart === "true");
-      const adminStatus = isAdminEmail(email);
+      const authenticated = auth === "true";
+      const effectiveEmail = authenticated ? storedEmail : null;
+      const effectiveFreshStart = authenticated && freshStart === "true";
+
+      if (!authenticated && storedEmail) {
+        console.warn('[AuthProvider] Found stale auth email without an active session. Clearing persisted auth email key:', storedEmail);
+        await Promise.all([
+          AsyncStorage.removeItem(AUTH_EMAIL_KEY),
+          AsyncStorage.removeItem(FRESH_START_KEY),
+          AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY),
+        ]);
+      }
+
+      setIsAuthenticated(authenticated);
+      setAuthenticatedEmail(effectiveEmail);
+      setIsFreshStart(effectiveFreshStart);
+      const adminStatus = isAdminEmail(effectiveEmail);
       setIsAdmin(adminStatus);
-      
-      const whitelisted = await checkWhitelistStatus(email);
+
+      const whitelisted = await checkWhitelistStatus(effectiveEmail);
       setIsWhitelisted(whitelisted);
-      console.log('[AuthProvider] Loaded auth state:', { authenticated: auth === "true", email, isAdmin: adminStatus, isWhitelisted: whitelisted });
+      console.log('[AuthProvider] Loaded auth state:', {
+        authenticated,
+        storedEmail,
+        effectiveEmail,
+        hadStaleEmail: !authenticated && !!storedEmail,
+        isAdmin: adminStatus,
+        isWhitelisted: whitelisted,
+      });
     } catch (error) {
       console.error("[AuthProvider] Error checking authentication:", error);
       setIsAuthenticated(false);

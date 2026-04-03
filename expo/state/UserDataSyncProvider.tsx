@@ -589,8 +589,11 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   }, [canUseCloudDataStore, fetchAllUserDataByEmail]);
 
   const loadFromCloud = useCallback(async (): Promise<boolean> => {
-    if (!authenticatedEmail) {
-      console.log("[UserDataSync] No authenticated email, skipping cloud load");
+    if (!isAuthenticated || !authenticatedEmail) {
+      console.log("[UserDataSync] No active authenticated session, skipping cloud load", {
+        isAuthenticated,
+        authenticatedEmail,
+      });
       setInitialCheckComplete(true);
       return false;
     }
@@ -708,12 +711,15 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         setIsSyncing(false);
       }
     }
-  }, [authenticatedEmail, canUseCloudDataStore, fetchAllUserDataByEmail, restoreDataToLocal]);
+  }, [authenticatedEmail, canUseCloudDataStore, fetchAllUserDataByEmail, isAuthenticated, restoreDataToLocal]);
   loadFromCloudRef.current = loadFromCloud;
 
   const syncToCloud = useCallback(async () => {
-    if (!authenticatedEmail) {
-      console.log("[UserDataSync] No authenticated email, skipping cloud sync");
+    if (!isAuthenticated || !authenticatedEmail) {
+      console.log("[UserDataSync] No active authenticated session, skipping cloud sync", {
+        isAuthenticated,
+        authenticatedEmail,
+      });
       return;
     }
 
@@ -795,7 +801,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         setIsSyncing(false);
       }
     }
-  }, [authenticatedEmail, canUseCloudDataStore, gatherAllLocalData, saveAllUserDataToCloud]);
+  }, [authenticatedEmail, canUseCloudDataStore, gatherAllLocalData, isAuthenticated, saveAllUserDataToCloud]);
   canUseCloudDataStoreRef.current = canUseCloudDataStore;
   syncToCloudRef.current = syncToCloud;
 
