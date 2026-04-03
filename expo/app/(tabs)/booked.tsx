@@ -703,7 +703,7 @@ export default function BookedScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={Platform.OS !== 'web'}
+          removeClippedSubviews={false}
           disableVirtualization={false}
           initialNumToRender={Platform.OS === 'web' ? 8 : 6}
           maxToRenderPerBatch={Platform.OS === 'web' ? 8 : 5}

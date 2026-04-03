@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, StyleProp, ImageStyle } from 'react-native';
 import { Image } from 'expo-image';
 
@@ -44,11 +44,21 @@ export const StableRemoteImage = React.memo(function StableRemoteImage({
   const normalizedFallbackUri = useMemo(() => normalizeUri(fallbackUri), [fallbackUri]);
   const [failedPrimaryUri, setFailedPrimaryUri] = useState<string | null>(null);
 
+  useEffect(() => {
+    setFailedPrimaryUri(null);
+  }, [normalizedUri]);
+
   const resolvedUri = failedPrimaryUri === normalizedUri
     ? (normalizedFallbackUri && normalizedFallbackUri !== normalizedUri ? normalizedFallbackUri : undefined)
     : (normalizedUri ?? normalizedFallbackUri);
 
-  const resolvedSource = source ?? (resolvedUri ? { uri: resolvedUri } : undefined);
+  const resolvedSource = useMemo(() => {
+    if (source) {
+      return source;
+    }
+
+    return resolvedUri ? { uri: resolvedUri } : undefined;
+  }, [resolvedUri, source]);
 
   const resolvedRecyclingKey = Platform.OS === 'web' || source
     ? undefined
@@ -56,7 +66,7 @@ export const StableRemoteImage = React.memo(function StableRemoteImage({
 
   const handleError = useCallback(() => {
     if (normalizedUri) {
-      setFailedPrimaryUri((currentValue) => currentValue ?? normalizedUri);
+      setFailedPrimaryUri(normalizedUri);
     }
 
     onError?.();
