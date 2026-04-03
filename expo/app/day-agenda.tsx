@@ -32,6 +32,7 @@ import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { DailyLuckReport } from '@/components/DailyLuckReport';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { mergeBookedCruiseSources } from '@/lib/calendar/bookedCruises';
+import { getRuntimeBuildInfo } from '@/lib/runtimeBuildInfo';
 
 const EVENT_COLORS = {
   cruise: '#3B82F6',
@@ -330,6 +331,7 @@ export default function DayAgendaScreen() {
   const { getSessionsForDate, getDailySummary, addSession, removeSession } = useCasinoSessions();
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const runtimeBuildInfo = useMemo(() => getRuntimeBuildInfo(DAY_AGENDA_LAYOUT_VERSION), []);
 
   const normalizedBirthdate = useMemo(() => {
     const storedBirthdate = currentUser?.birthdate;
@@ -377,8 +379,9 @@ export default function DayAgendaScreen() {
       layoutVersion: DAY_AGENDA_LAYOUT_VERSION,
       date,
       formattedDate,
+      runtimeBuildInfo,
     });
-  }, [date, formattedDate]);
+  }, [date, formattedDate, runtimeBuildInfo]);
 
   useEffect(() => {
     void ensureDailyLuckYear(selectedDate.getFullYear());
@@ -1599,6 +1602,13 @@ export default function DayAgendaScreen() {
             {dayScheduleData.allDayItems.length > 0 ? ` • ${dayScheduleData.allDayItems.length} all-day` : ''}
             {dailyLuckDigit !== null ? ` • ${getLuckDigitLabel(dailyLuckDigit)} luck day` : ''}
           </Text>
+          <View style={styles.runtimeInfoCard} testID="day-agenda-runtime-info">
+            <Text style={styles.runtimeInfoLabel}>Runtime fingerprint</Text>
+            <Text style={styles.runtimeInfoValue}>{runtimeBuildInfo.fingerprint}</Text>
+            <Text style={styles.runtimeInfoMeta}>
+              Project {runtimeBuildInfo.projectId} • Created {runtimeBuildInfo.updateCreatedAt}
+            </Text>
+          </View>
         </View>
 
         <ScrollView 
@@ -1836,6 +1846,32 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: SPACING.md,
     paddingBottom: 120,
+  },
+  runtimeInfoCard: {
+    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    gap: 4,
+  },
+  runtimeInfoLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: 'rgba(255,255,255,0.72)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  runtimeInfoValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#FFFFFF',
+  },
+  runtimeInfoMeta: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.68)',
   },
   sectionContainer: {
     marginBottom: SPACING.lg,

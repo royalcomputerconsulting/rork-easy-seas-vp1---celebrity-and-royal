@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { StableRemoteImage } from '@/components/ui/StableRemoteImage';
+import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 
 import { createDateFromString } from '@/lib/date';
 import { DEFAULT_CRUISE_IMAGE, getImageForShip, getUniqueImageForCruise } from '@/constants/cruiseImages';
@@ -35,6 +36,8 @@ const MINI_CARD_BACKDROP_PALETTES = [
   ['rgba(196, 244, 235, 0.9)', 'rgba(225, 249, 244, 0.76)', 'rgba(244, 252, 250, 0.96)'],
   ['rgba(255, 229, 214, 0.88)', 'rgba(255, 241, 230, 0.76)', 'rgba(255, 248, 243, 0.96)'],
 ] as const;
+
+const BOOKED_CARD_MARBLE = MARBLE_TEXTURES.white;
 
 function getDeterministicHash(seed: string): number {
   let hash = 0;
@@ -539,21 +542,31 @@ export const CruiseCard = React.memo(function CruiseCard({
           testID="cruise-card-booked"
         >
           <View style={styles.bookedContainer}>
-            <StableRemoteImage
-              uri={cardImageUri}
-              fallbackUri={cardImageFallbackUri}
-              style={styles.bookedBackgroundImage}
-              recyclingKey={`${cruise.id}-booked-background-image`}
-              testID="cruise-card-booked-background-image"
+            <LinearGradient
+              colors={BOOKED_CARD_MARBLE.gradientColors as unknown as [string, string, ...string[]]}
+              locations={BOOKED_CARD_MARBLE.gradientLocations}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.bookedMarbleBase}
             />
             <LinearGradient
-              colors={['rgba(255,255,255,0.7)', 'rgba(246,250,255,0.84)', 'rgba(246,250,255,0.95)']}
+              colors={['rgba(255,255,255,0.92)', 'rgba(244,244,246,0.55)', 'rgba(229,229,234,0.85)']}
+              start={{ x: 0.08, y: 0 }}
+              end={{ x: 0.92, y: 1 }}
+              style={styles.bookedMarbleGlow}
+            />
+            <View style={styles.bookedMarbleVeinPrimary} />
+            <View style={styles.bookedMarbleVeinSecondary} />
+            <View style={styles.bookedMarbleVeinTertiary} />
+            <View style={styles.bookedMarbleVeinFine} />
+            <LinearGradient
+              colors={['rgba(255,255,255,0.56)', 'rgba(246,247,249,0.76)', 'rgba(239,241,244,0.9)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.bookedBackgroundOverlay}
             />
             <LinearGradient
-              colors={['rgba(4,25,45,0.03)', 'rgba(4,25,45,0.12)']}
+              colors={['rgba(24,24,27,0.02)', 'rgba(24,24,27,0.08)']}
               start={{ x: 0.1, y: 0 }}
               end={{ x: 0.9, y: 1 }}
               style={styles.bookedBackgroundShade}
@@ -1192,10 +1205,60 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(203,220,235,0.9)',
   },
-  bookedBackgroundImage: {
+  bookedMarbleBase: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.2,
-    backgroundColor: 'rgba(244,248,255,0.78)',
+    backgroundColor: '#F3F4F6',
+  },
+  bookedMarbleGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  bookedMarbleVeinPrimary: {
+    position: 'absolute',
+    top: -36,
+    right: -24,
+    width: 244,
+    height: 170,
+    borderRadius: 120,
+    backgroundColor: 'rgba(255,255,255,0.58)',
+    borderWidth: 1,
+    borderColor: 'rgba(213,213,218,0.7)',
+    transform: [{ rotate: '16deg' }],
+  },
+  bookedMarbleVeinSecondary: {
+    position: 'absolute',
+    top: 92,
+    left: -42,
+    width: 214,
+    height: 110,
+    borderRadius: 80,
+    backgroundColor: 'rgba(236,236,239,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(205,205,211,0.66)',
+    transform: [{ rotate: '-18deg' }],
+  },
+  bookedMarbleVeinTertiary: {
+    position: 'absolute',
+    bottom: -42,
+    right: 32,
+    width: 188,
+    height: 132,
+    borderRadius: 94,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(222,222,227,0.74)',
+    transform: [{ rotate: '-10deg' }],
+  },
+  bookedMarbleVeinFine: {
+    position: 'absolute',
+    top: 134,
+    right: -22,
+    width: 176,
+    height: 32,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.46)',
+    borderWidth: 1,
+    borderColor: 'rgba(214,214,219,0.68)',
+    transform: [{ rotate: '14deg' }],
   },
   bookedBackgroundOverlay: {
     ...StyleSheet.absoluteFillObject,
