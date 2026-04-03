@@ -7,7 +7,6 @@ import { BORDER_RADIUS, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/
 import { buildLocalDailyLuckEntry, fetchLiveDailyLuckAnalysis, getDailyLuckDateKey } from '@/lib/dailyLuck';
 import { deriveChineseSignFromBirthDate, deriveWesternSignFromBirthDate } from '@/lib/dailyLuck/signs';
 import type { DailyLuckEntry } from '@/types/daily-luck';
-import { DailyLuckCompactCard } from '@/components/daily-luck/DailyLuckCompactCard';
 import { DailyLuckExpandedCard } from '@/components/daily-luck/DailyLuckExpandedCard';
 
 interface DailyLuckReportProps {
@@ -62,8 +61,7 @@ export function DailyLuckReport({ birthdate, selectedDate, entry }: DailyLuckRep
 
   if (liveQuery.data) {
     return (
-      <View style={styles.container}>
-        <DailyLuckCompactCard analysis={liveQuery.data} />
+      <View style={styles.container} testID="daily-luck-live-card">
         <DailyLuckExpandedCard analysis={liveQuery.data} />
       </View>
     );
