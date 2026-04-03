@@ -5,6 +5,7 @@ import { trpc, trpcClient, isBackendAvailable } from "@/lib/trpc";
 import {
   getCloudUserDataFallback,
   isDirectCloudStoreConfigured,
+  isDirectCloudStoreReachable,
   saveCloudUserDataFallback,
   type CloudUserDataPayload,
 } from "@/lib/cloudUserDataStore";
@@ -380,6 +381,19 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
   }, []);
 
+  const canUseDirectCloudFallback = useCallback(async (): Promise<boolean> => {
+    if (!isDirectCloudStoreConfigured()) {
+      return false;
+    }
+
+    const reachable = await isDirectCloudStoreReachable();
+    if (!reachable) {
+      console.log('[CoreData] Direct cloud store unreachable - skipping fallback');
+    }
+
+    return reachable;
+  }, []);
+
   const syncToBackend = useCallback(async () => {
     if (!authenticatedEmail) {
       console.log('[CoreData] Backend sync skipped - not authenticated');
@@ -465,8 +479,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         }
       }
 
-      if (!isDirectCloudStoreConfigured()) {
-        console.log('[CoreData] Direct cloud store is not configured, skipping fallback sync');
+      const directCloudReachable = await canUseDirectCloudFallback();
+      if (!directCloudReachable) {
+        console.log('[CoreData] Direct cloud store fallback sync skipped - upstream unavailable');
         return;
       }
 
@@ -484,7 +499,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         console.log('[CoreData] Backend sync failed (non-critical):', errorMessage);
       }
     }
-  }, [saveAllUserDataMutateAsync, authenticatedEmail]);
+  }, [canUseDirectCloudFallback, saveAllUserDataMutateAsync, authenticatedEmail]);
 
   const loadFromBackend = useCallback(async () => {
     if (!authenticatedEmail) {
@@ -511,8 +526,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         }
       }
 
-      if ((!cloudResult || !cloudResult.found) && isDirectCloudStoreConfigured()) {
-        cloudResult = await getCloudUserDataFallback(authenticatedEmail);
+      if (!cloudResult || !cloudResult.found) {
+        const directCloudReachable = await canUseDirectCloudFallback();
+        if (directCloudReachable) {
+          cloudResult = await getCloudUserDataFallback(authenticatedEmail);
+        }
       }
       
       if (cloudResult?.found && cloudResult.data) {
@@ -602,7 +620,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       }
       return false;
     }
-  }, [authenticatedEmail]);
+  }, [authenticatedEmail, canUseDirectCloudFallback]);
 
   const loadFromStorage = useCallback(async (force = false) => {
     console.log('[CoreData] === START LOADING FROM STORAGE ===', { force, alreadyAttempted: loadAttemptedRef.current });

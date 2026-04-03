@@ -206,6 +206,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         throw error;
       }
 
+      const directCloudReachable = await isDirectCloudStoreReachable();
+      if (!directCloudReachable) {
+        console.log("[UserDataSync] Direct cloud store unreachable - skipping fallback save");
+        throw new Error("DIRECT_CLOUD_STORE_UNAVAILABLE");
+      }
+
       return saveCloudUserDataFallback(payload);
     }
   }, [saveAllMutation]);
@@ -222,6 +228,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
       if (!isDirectCloudStoreConfigured()) {
         throw error;
+      }
+
+      const directCloudReachable = await isDirectCloudStoreReachable();
+      if (!directCloudReachable) {
+        console.log("[UserDataSync] Direct cloud store unreachable - skipping fallback fetch");
+        throw new Error("DIRECT_CLOUD_STORE_UNAVAILABLE");
       }
 
       return getCloudUserDataFallback(normalizedEmail);

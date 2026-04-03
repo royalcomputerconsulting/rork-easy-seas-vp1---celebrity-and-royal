@@ -63,6 +63,10 @@ let isConnectingCloudDb = false;
 let lastCloudHealthCheck = 0;
 let lastCloudReachable: boolean | null = null;
 
+function isCloudHealthCacheFresh(): boolean {
+  return Date.now() - lastCloudHealthCheck < CLOUD_HEALTH_CACHE_MS;
+}
+
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
 }
@@ -182,6 +186,10 @@ async function testCloudConnection(db: Surreal): Promise<boolean> {
 }
 
 async function getCloudDb(): Promise<Surreal> {
+  if (!cloudDb && lastCloudReachable === false && isCloudHealthCacheFresh()) {
+    throw new Error(DIRECT_CLOUD_STORE_UNAVAILABLE);
+  }
+
   if (isConnectingCloudDb) {
     await waitForCloudConnectionTurn();
     return getCloudDb();
@@ -236,6 +244,10 @@ async function getCloudDb(): Promise<Surreal> {
 
 export async function isDirectCloudStoreReachable(): Promise<boolean> {
   if (!isDirectCloudStoreConfigured()) {
+    return false;
+  }
+
+  if (!cloudDb && lastCloudReachable === false && isCloudHealthCacheFresh()) {
     return false;
   }
 
