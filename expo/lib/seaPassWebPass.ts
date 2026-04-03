@@ -136,14 +136,14 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     letterSpacing: -1.1,
     textAnchor: 'end',
     mask: {
-      x: 716,
-      y: 40,
-      width: 252,
-      height: 76,
+      x: 632,
+      y: 36,
+      width: 336,
+      height: 84,
       fill: '#5A3C8E',
       radius: 8,
-      sampleX: 486,
-      sampleY: 40,
+      sampleX: 632,
+      sampleY: 228,
     },
   },
   date: {
@@ -155,14 +155,14 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     letterSpacing: -1.6,
     textAnchor: 'end',
     mask: {
-      x: 724,
-      y: 108,
-      width: 244,
-      height: 96,
+      x: 632,
+      y: 104,
+      width: 336,
+      height: 108,
       fill: '#5A3C8E',
       radius: 8,
-      sampleX: 488,
-      sampleY: 108,
+      sampleX: 632,
+      sampleY: 228,
     },
   },
   deck: {
@@ -408,11 +408,15 @@ export function getSeaPassDynamicOverlays(input: Partial<SeaPassWebPassData>): S
   const data = getSeaPassData(input);
   const barcodeCaption = getSeaPassBarcodeCaption(data);
   const orderedKeys: SeaPassOverlayKey[] = ['time', 'date', 'deck', 'stateroom', 'muster', 'reservation', 'ship', 'barcodeCaption'];
+  const topRightChanged = data.time !== SEA_PASS_DEFAULTS.time || data.date !== SEA_PASS_DEFAULTS.date;
 
   return orderedKeys.reduce<SeaPassDynamicOverlay[]>((accumulator, key) => {
     const overlayValue = getDynamicOverlayValue(key, data, barcodeCaption);
+    const shouldRender = key === 'time' || key === 'date'
+      ? topRightChanged
+      : shouldRenderDynamicOverlay(key, overlayValue);
 
-    if (!shouldRenderDynamicOverlay(key, overlayValue)) {
+    if (!shouldRender) {
       return accumulator;
     }
 
