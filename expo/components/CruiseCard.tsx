@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 
 import { createDateFromString } from '@/lib/date';
@@ -181,6 +182,12 @@ export const CruiseCard = React.memo(function CruiseCard({
     }).start();
   }, [scaleAnim]);
 
+  const miniGradientColors = useMemo((): [string, string, string] => {
+    if (cruiseStatus === 'completed') return ['#DCFCE7', '#D1FAE5', '#ECFDF5'];
+    if (cruiseStatus === 'active') return ['#FEF9C3', '#FEF3C7', '#FFFBEB'];
+    return ['#E0F7FA', '#E0F2FE', '#EEF2FF'];
+  }, [cruiseStatus]);
+
   if (mini) {
     const miniPorts = bookedCruise.itinerary?.map((day: ItineraryDay) => day.port).filter(Boolean) || bookedCruise.ports || [];
     const guestCount = bookedCruise.guestNames?.length || bookedCruise.guests || 2;
@@ -195,6 +202,12 @@ export const CruiseCard = React.memo(function CruiseCard({
         activeOpacity={1}
         testID="cruise-card-mini"
       >
+        <LinearGradient
+          colors={miniGradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         <Image 
           source={{ uri: compactImageUri }} 
           style={styles.miniBackgroundImage}
@@ -615,7 +628,6 @@ const styles = StyleSheet.create({
     ...SHADOW.md,
   },
   miniContainer: {
-    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     marginBottom: SPACING.sm,
@@ -623,15 +635,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.07)',
     ...SHADOW.sm,
   },
   miniBackgroundImage: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.07,
+    opacity: 0.05,
   },
   miniImageOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.90)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   miniContent: {
     flex: 1,
