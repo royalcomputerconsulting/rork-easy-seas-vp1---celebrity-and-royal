@@ -185,7 +185,7 @@ export const CruiseCard = React.memo(function CruiseCard({
   const miniGradientColors = useMemo((): [string, string, string] => {
     if (cruiseStatus === 'completed') return ['#DCFCE7', '#D1FAE5', '#ECFDF5'];
     if (cruiseStatus === 'active') return ['#FEF9C3', '#FEF3C7', '#FFFBEB'];
-    return ['#E0F7FA', '#E0F2FE', '#EEF2FF'];
+    return ['#FFF3E0', '#FFE0B2', '#FFF8E1'];
   }, [cruiseStatus]);
 
   if (mini) {
