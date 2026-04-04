@@ -2115,23 +2115,20 @@ STEP 4: Optional Calendar Import
               {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan')}
               <View style={styles.subscriptionStatusBanner}>
                 <Crown size={18} color={
-                  entitlement.subscriptionDisplayStatus === 'annual' ? '#10B981' :
                   entitlement.subscriptionDisplayStatus === 'monthly' ? '#3B82F6' :
                   entitlement.subscriptionDisplayStatus === 'grace_period' ? '#F59E0B' :
                   '#EF4444'
                 } />
                 <View style={styles.subscriptionStatusText}>
                   <Text style={styles.subscriptionStatusTitle}>
-                    {entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual Subscription' :
-                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly Subscription' :
+                    {entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly Subscription' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? '5-Day Grace Period' :
                      'Subscription Expired'}
                   </Text>
                   <Text style={styles.subscriptionStatusSubtitle}>
-                    {entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual plan active — all features unlocked' :
-                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly plan active — all features unlocked' :
+                    {entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly plan active — all features unlocked' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining — full access` :
-                     'Purchase a monthly or annual subscription to continue'}
+                     'Purchase a monthly subscription to continue'}
                   </Text>
                 </View>
               </View>
@@ -2150,15 +2147,9 @@ STEP 4: Optional Calendar Import
               )}
               {renderSettingRow(
                 <Calendar size={18} color={COLORS.navyDeep} />,
-                'Purchase a Monthly Subscription',
+                'Purchase Monthly Subscription ($9.99/mo)',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
                 () => router.push('/paywall-monthly' as any)
-              )}
-              {renderSettingRow(
-                <Crown size={18} color={COLORS.navyDeep} />,
-                'Purchase an Annual Subscription',
-                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
-                () => router.push('/paywall' as any)
               )}
               <View style={styles.dataDivider} />
               {renderSettingRow(
@@ -2175,7 +2166,7 @@ STEP 4: Optional Calendar Import
               )}
             </View>
             <Text style={styles.subscriptionHint}>
-              Manage your subscription status, restore previous purchases, and review legal terms. The annual subscription renews automatically unless canceled at least 24 hours before the end of the current period.
+              Manage your subscription status, restore previous purchases, and review legal terms. The monthly subscription renews automatically unless canceled at least 24 hours before the end of the current period.
             </Text>
           </View>
 

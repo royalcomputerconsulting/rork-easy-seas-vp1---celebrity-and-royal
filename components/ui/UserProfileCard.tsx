@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
 import { Save, CheckCircle, AlertCircle, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '@/state/AuthProvider';
 import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
 import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
 import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS } from '@/constants/celebrityCaptainsClub';
@@ -87,6 +88,7 @@ export function UserProfileCard({
   isSaving = false,
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
+  const { isAdmin } = useAuth();
   const [formData, setFormData] = useState<UserProfileData>(currentValues);
   const [activeBrand, setActiveBrand] = useState<BrandType>(
     (currentValues.preferredBrand as BrandType) || 'royal'
@@ -154,6 +156,17 @@ export function UserProfileCard({
       </Text>
     </View>
   );
+
+  const PRIVATE_CA_NUMBER = '305812247';
+
+  const maskCrownAnchorNumber = (value: string | number | undefined): string | number | undefined => {
+    if (!value) return value;
+    const strVal = String(value);
+    if (strVal === PRIVATE_CA_NUMBER && !isAdmin) {
+      return '•••••' + strVal.slice(-4);
+    }
+    return value;
+  };
 
   const renderValueCard = (label: string, value: string | number | undefined, color?: string, wide?: boolean) => (
     <View style={[styles.valueCard, wide && styles.valueCardWide]}>
@@ -231,7 +244,7 @@ export function UserProfileCard({
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.email, undefined, true)}
-        {renderValueCard('Crown & Anchor #', enrichmentData?.crownAndAnchorId || currentValues.crownAnchorNumber, undefined, true)}
+        {renderValueCard('Crown & Anchor #', maskCrownAnchorNumber(enrichmentData?.crownAndAnchorId || currentValues.crownAnchorNumber), undefined, true)}
         {renderValueCard('C&A Level', enrichmentData?.crownAndAnchorTier || calculatedLevel, calculatedLevelInfo?.color)}
         {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
         {renderValueCard('Club Royale Tier', enrichmentData?.clubRoyaleTierFromApi || calculatedTier, calculatedTierInfo?.color)}

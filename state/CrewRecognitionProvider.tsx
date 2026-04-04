@@ -45,6 +45,94 @@ interface CSVRow {
   endDate: string;
 }
 
+function parseTextListToEntries(text: string): { entries: RecognitionEntryWithCrew[]; sailing: Sailing | null; importedCount: number; skippedDuplicates: number } {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length < 2) return { entries: [], sailing: null, importedCount: 0, skippedDuplicates: 0 };
+
+  const headerLine = lines[0];
+  let shipName = '';
+  let sailStartDate = '';
+  let sailEndDate = '';
+
+  const headerParts = headerLine.split(/[,|\t]/).map(p => p.trim()).filter(p => p.length > 0);
+  if (headerParts.length >= 2) {
+    shipName = headerParts[0];
+    sailStartDate = headerParts[1];
+    sailEndDate = headerParts.length >= 3 ? headerParts[2] : sailStartDate;
+  } else {
+    const dateMatch = headerLine.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
+    if (dateMatch) {
+      sailStartDate = dateMatch[1];
+      sailEndDate = sailStartDate;
+      shipName = headerLine.replace(dateMatch[0], '').replace(/[,|\t]/g, '').trim();
+    } else {
+      shipName = headerLine;
+    }
+  }
+
+  if (!shipName) {
+    console.warn('[CrewRecognition] Import: Could not parse ship name from header:', headerLine);
+    return { entries: [], sailing: null, importedCount: 0, skippedDuplicates: 0 };
+  }
+
+  const sailingId = `local_sailing_import_${shipName.replace(/\s+/g, '_')}_${sailStartDate}`;
+  const sailing: Sailing = {
+    id: sailingId,
+    shipName,
+    sailStartDate,
+    sailEndDate,
+    userId: 'local',
+  };
+
+  const sailingMonth = sailStartDate.length >= 7 ? sailStartDate.substring(0, 7) : '';
+  const sailingYear = sailStartDate ? parseInt(sailStartDate.substring(0, 4), 10) || new Date().getFullYear() : new Date().getFullYear();
+
+  const now = new Date().toISOString();
+  const entries: RecognitionEntryWithCrew[] = [];
+  const seenNames = new Set<string>();
+  let skippedDuplicates = 0;
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
+
+    const parts = line.split(/[,|\t]/).map(p => p.trim()).filter(p => p.length > 0);
+    const fullName = parts[0] || line;
+    const department = parts.length >= 2 ? parts[1] : 'Other';
+    const roleTitle = parts.length >= 3 ? parts[2] : undefined;
+    const notes = parts.length >= 4 ? parts.slice(3).join(', ') : undefined;
+
+    const dedupeKey = `${fullName.toLowerCase()}_${shipName.toLowerCase()}_${sailStartDate}`;
+    if (seenNames.has(dedupeKey)) {
+      skippedDuplicates++;
+      continue;
+    }
+    seenNames.add(dedupeKey);
+
+    const crewId = `local_crew_import_${Date.now()}_${i}`;
+    entries.push({
+      id: `local_entry_import_${Date.now()}_${i}`,
+      crewMemberId: crewId,
+      sailingId,
+      shipName,
+      sailStartDate,
+      sailEndDate,
+      sailingMonth,
+      sailingYear,
+      department,
+      roleTitle,
+      sourceText: 'Imported from text list',
+      userId: 'local',
+      createdAt: now,
+      updatedAt: now,
+      fullName,
+      crewNotes: notes,
+    });
+  }
+
+  return { entries, sailing, importedCount: entries.length, skippedDuplicates };
+}
+
 function parseCSVToEntries(csvText: string): { entries: RecognitionEntryWithCrew[]; sailings: Sailing[] } {
   const lines = csvText.split('\n').filter(line => line.trim());
   if (lines.length < 2) return { entries: [], sailings: [] };
@@ -508,6 +596,58 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     return { importedCount: parsedEntries.length, totalRows: parsedEntries.length };
   }, []);
 
+  const importFromTextList = useCallback(async (text: string) => {
+    console.log('[CrewRecognition] Importing from text list...');
+    const { entries: newEntries, sailing, importedCount, skippedDuplicates } = parseTextListToEntries(text);
+
+    if (importedCount === 0) {
+      console.log('[CrewRecognition] No entries parsed from text list');
+      return { importedCount: 0, skippedDuplicates: 0, duplicatesInExisting: 0 };
+    }
+
+    const existingNameKeys = new Set(
+      localEntries.map(e => `${e.fullName.toLowerCase()}_${e.shipName.toLowerCase()}_${e.sailStartDate}`)
+    );
+    const nonDuplicateEntries = newEntries.filter(e => {
+      const key = `${e.fullName.toLowerCase()}_${e.shipName.toLowerCase()}_${e.sailStartDate}`;
+      return !existingNameKeys.has(key);
+    });
+    const duplicatesInExisting = newEntries.length - nonDuplicateEntries.length;
+
+    if (duplicatesInExisting > 0) {
+      console.log(`[CrewRecognition] Skipped ${duplicatesInExisting} duplicates that already exist in local data`);
+    }
+
+    const mergedEntries = [...localEntries, ...nonDuplicateEntries];
+    let mergedSailings = [...localSailings];
+    if (sailing) {
+      const sailingExists = mergedSailings.some(
+        s => s.shipName === sailing.shipName && s.sailStartDate === sailing.sailStartDate
+      );
+      if (!sailingExists) {
+        mergedSailings = [...mergedSailings, sailing];
+      }
+    }
+
+    setLocalEntries(mergedEntries);
+    setLocalSailings(mergedSailings);
+    setIsOfflineMode(true);
+
+    await Promise.all([
+      AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(mergedEntries)),
+      AsyncStorage.setItem(skSailingsRef.current, JSON.stringify(mergedSailings)),
+    ]);
+
+    console.log('[CrewRecognition] Text list import complete:', {
+      imported: nonDuplicateEntries.length,
+      skippedInList: skippedDuplicates,
+      skippedExisting: duplicatesInExisting,
+      totalEntries: mergedEntries.length,
+    });
+
+    return { importedCount: nonDuplicateEntries.length, skippedDuplicates, duplicatesInExisting };
+  }, [localEntries, localSailings]);
+
   const updateFilters = useCallback((newFilters: Partial<CrewRecognitionFilters>) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
     setPage(1);
@@ -562,6 +702,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     sailingsLoading: !useLocal && sailingsQuery.isLoading,
     isOfflineMode: useLocal,
     syncFromCSVLocally,
+    importFromTextList,
     createCrewMember: addCrewMemberWithFallback,
     updateCrewMember: updateCrewMemberMutation.mutateAsync,
     deleteCrewMember: deleteCrewMemberWithFallback,
@@ -575,7 +716,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     userId, filters, updateFilters, resetFilters, page, pageSize, nextPage, previousPage, goToPage,
     useLocal, localStats, statsQuery.data, statsQuery.isLoading, filteredLocalEntries, backendEntries, backendTotal,
     entriesQuery.isLoading, localSailings, sailingsQuery.data, sailingsQuery.isLoading,
-    syncFromCSVLocally, addCrewMemberWithFallback, updateCrewMemberMutation.mutateAsync,
+    syncFromCSVLocally, importFromTextList, addCrewMemberWithFallback, updateCrewMemberMutation.mutateAsync,
     deleteCrewMemberWithFallback, createRecognitionEntryMutation.mutateAsync,
     updateRecognitionEntryWithFallback, deleteRecognitionEntryWithFallback,
     createSailingMutation.mutateAsync, clearCrewData, refetch,

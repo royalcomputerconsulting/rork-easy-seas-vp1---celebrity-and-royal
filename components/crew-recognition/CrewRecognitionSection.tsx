@@ -8,8 +8,12 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
+  Platform,
 } from 'react-native';
-import { Users, Plus, Download, Search, Filter, X, RefreshCcw, UserCheck, Check, Ship, Calendar, ChevronRight } from 'lucide-react-native';
+import { Users, Plus, Download, Search, Filter, X, RefreshCcw, UserCheck, Check, Ship, Calendar, ChevronRight, FileText, Upload } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
@@ -75,6 +79,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     updateRecognitionEntry,
     deleteRecognitionEntry,
     syncFromCSVLocally,
+    importFromTextList,
   } = useCrewRecognition();
 
   const { bookedCruises } = useCoreData();
@@ -85,6 +90,9 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
   const [showFilters, setShowFilters] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
 
   const handleSync = useCallback(async () => {
     setIsSyncing(true);
@@ -108,6 +116,57 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
       setSyncProgress(null);
     }
   }, [syncFromCSVLocally]);
+
+  const handleImportTextList = useCallback(async () => {
+    if (!importText.trim()) {
+      Alert.alert('Empty Input', 'Please paste a crew list or import a text file.');
+      return;
+    }
+    setIsImporting(true);
+    try {
+      console.log('[CrewRecognition] Importing text list, length:', importText.length);
+      const result = await importFromTextList(importText.trim());
+      const messages: string[] = [];
+      messages.push(`Imported ${result.importedCount} crew member(s).`);
+      if (result.skippedDuplicates > 0) {
+        messages.push(`Skipped ${result.skippedDuplicates} duplicate(s) within the list.`);
+      }
+      if (result.duplicatesInExisting > 0) {
+        messages.push(`Skipped ${result.duplicatesInExisting} already existing member(s).`);
+      }
+      Alert.alert('Import Complete', messages.join('\n'));
+      setImportText('');
+      setShowImportModal(false);
+    } catch (error) {
+      console.error('[CrewRecognition] Text import error:', error);
+      Alert.alert('Import Error', error instanceof Error ? error.message : 'Failed to import crew list.');
+    } finally {
+      setIsImporting(false);
+    }
+  }, [importText, importFromTextList]);
+
+  const handlePickTextFile = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: ['text/plain', 'text/*', '*/*'], copyToCacheDirectory: true });
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        console.log('[CrewRecognition] File pick cancelled');
+        return;
+      }
+      const file = result.assets[0];
+      console.log('[CrewRecognition] File picked:', file.name, file.uri);
+      if (Platform.OS === 'web') {
+        const response = await fetch(file.uri);
+        const text = await response.text();
+        setImportText(text);
+      } else {
+        const text = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.UTF8 });
+        setImportText(text);
+      }
+    } catch (error) {
+      console.error('[CrewRecognition] File pick error:', error);
+      Alert.alert('Error', 'Failed to read the file. Please try pasting the content instead.');
+    }
+  }, []);
 
   const handleExportResults = useCallback(() => {
     if (entries.length === 0) return;
@@ -190,6 +249,13 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
           <Plus size={18} color="#0369A1" />
           <Text style={styles.addButtonText}>Add Crew</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => setShowImportModal(true)}
+        >
+          <Upload size={18} color="#0369A1" />
+          <Text style={styles.addButtonText}>Import List</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
@@ -480,6 +546,64 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         onClose={() => setShowSurveyModal(false)}
         sailings={sailings}
       />
+
+      <Modal visible={showImportModal} animationType="slide" transparent>
+        <View style={styles.importModalOverlay}>
+          <View style={styles.importModalContent}>
+            <View style={styles.importModalHeader}>
+              <FileText size={24} color="#0369A1" />
+              <Text style={styles.importModalTitle}>Import Crew List</Text>
+              <TouchableOpacity onPress={() => { setShowImportModal(false); setImportText(''); }} style={styles.importModalClose}>
+                <X size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.importModalBody}>
+              <Text style={styles.importModalHint}>
+                Paste a list starting with the ship name and sailing date on the first line, followed by one crew member per line.
+              </Text>
+              <View style={styles.importModalExample}>
+                <Text style={styles.importModalExampleTitle}>Example format:</Text>
+                <Text style={styles.importModalExampleText}>{"Liberty of the Seas, 2026-03-15, 2026-03-22\nJohn Smith, Casino, Dealer\nJane Doe, Beverage, Bartender\nBob Johnson, Housekeeping"}</Text>
+              </View>
+
+              <TouchableOpacity style={styles.importFileButton} onPress={handlePickTextFile}>
+                <Upload size={16} color="#0369A1" />
+                <Text style={styles.importFileButtonText}>Import from Text File</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.importModalLabel}>Or paste crew list below:</Text>
+              <TextInput
+                style={styles.importTextArea}
+                value={importText}
+                onChangeText={setImportText}
+                placeholder={"Liberty of the Seas, 2026-03-15, 2026-03-22\nJohn Smith, Casino, Dealer\nJane Doe, Beverage"}
+                placeholderTextColor={COLORS.textTertiary}
+                multiline
+                numberOfLines={10}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.importModalFooter}>
+              <TouchableOpacity style={styles.importCancelButton} onPress={() => { setShowImportModal(false); setImportText(''); }}>
+                <Text style={styles.importCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.importSubmitButton, (isImporting || !importText.trim()) && styles.importSubmitButtonDisabled]}
+                onPress={handleImportTextList}
+                disabled={isImporting || !importText.trim()}
+              >
+                {isImporting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.importSubmitButtonText}>Import Crew</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 });
@@ -926,5 +1050,135 @@ const styles = StyleSheet.create({
   mockCrewValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.text,
+  },
+  importModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.lg,
+  },
+  importModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: BORDER_RADIUS.lg,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '90%',
+  },
+  importModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    gap: SPACING.sm,
+  },
+  importModalTitle: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: '600' as const,
+    color: COLORS.text,
+  },
+  importModalClose: {
+    padding: SPACING.xs,
+  },
+  importModalBody: {
+    padding: SPACING.lg,
+  },
+  importModalHint: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+    marginBottom: SPACING.md,
+  },
+  importModalExample: {
+    backgroundColor: 'rgba(3, 105, 161, 0.06)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.15)',
+  },
+  importModalExampleTitle: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: '#0369A1',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  importModalExampleText: {
+    fontSize: 11,
+    color: '#475569',
+    lineHeight: 16,
+    fontFamily: undefined,
+  },
+  importFileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.3)',
+    marginBottom: SPACING.md,
+  },
+  importFileButtonText: {
+    color: '#0369A1',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '600' as const,
+  },
+  importModalLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '600' as const,
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  importTextArea: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.text,
+    minHeight: 160,
+    textAlignVertical: 'top' as const,
+  },
+  importModalFooter: {
+    flexDirection: 'row',
+    padding: SPACING.lg,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: SPACING.sm,
+  },
+  importCancelButton: {
+    flex: 1,
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  importCancelButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '600' as const,
+    color: COLORS.textSecondary,
+  },
+  importSubmitButton: {
+    flex: 1,
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#0369A1',
+    alignItems: 'center',
+  },
+  importSubmitButtonDisabled: {
+    opacity: 0.5,
+  },
+  importSubmitButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '600' as const,
+    color: '#fff',
   },
 });
