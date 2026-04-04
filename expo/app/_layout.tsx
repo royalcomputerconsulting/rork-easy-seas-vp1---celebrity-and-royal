@@ -352,6 +352,12 @@ function RootLayoutNav() {
           headerShown: true,
         }} 
       />
+      <Stack.Screen 
+        name="seapass-generator" 
+        options={{ 
+          headerShown: true,
+        }} 
+      />
     </Stack>
   );
 }

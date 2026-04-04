@@ -10,7 +10,8 @@ import {
   Linking, 
   ActivityIndicator,
   TextInput,
-  Image
+  Image,
+  Platform,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -82,6 +83,10 @@ import {
   mergeImportedOffers,
 } from '@/lib/importMerge';
 import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import * as XLSX from 'xlsx';
+import type { BookedCruise } from '@/types/models';
 
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -806,6 +811,177 @@ export default function SettingsScreen() {
       }
       
       Alert.alert('Import Error', errorMessage);
+    } finally {
+      setIsImporting(false);
+    }
+  }, [bookedCruises, localData.booked, setBookedCruises, setLocalData]);
+
+  const handleImportCompletedCruisesXLSX = useCallback(async () => {
+    try {
+      setIsImporting(true);
+      setLastImportResult(null);
+      console.log('[Settings] Starting completed cruises XLSX import');
+
+      const pickerResult = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-excel',
+          'text/csv',
+          '*/*',
+        ],
+        copyToCacheDirectory: true,
+      });
+
+      if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
+        console.log('[Settings] XLSX import cancelled');
+        setIsImporting(false);
+        return;
+      }
+
+      const asset = pickerResult.assets[0];
+      console.log('[Settings] XLSX file selected:', asset.name, 'size:', asset.size);
+
+      let workbook: XLSX.WorkBook;
+      try {
+        if (Platform.OS === 'web') {
+          const response = await fetch(asset.uri);
+          const arrayBuffer = await response.arrayBuffer();
+          workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        } else {
+          const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' as any });
+          workbook = XLSX.read(base64, { type: 'base64' });
+        }
+      } catch (parseError) {
+        console.error('[Settings] XLSX parse error:', parseError);
+        Alert.alert('Parse Error', 'Could not parse the XLSX file. Make sure it is a valid Excel or CSV file.');
+        setIsImporting(false);
+        return;
+      }
+
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        Alert.alert('Empty File', 'The file has no sheets.');
+        setIsImporting(false);
+        return;
+      }
+
+      const sheet = workbook.Sheets[sheetName];
+      const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      console.log('[Settings] Parsed XLSX rows:', rows.length);
+
+      if (rows.length === 0) {
+        Alert.alert('No Data', 'No data rows found in the file.');
+        setIsImporting(false);
+        return;
+      }
+
+      const importedCruises: BookedCruise[] = [];
+      const existingBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] as Record<string, any>;
+        const getVal = (searchTerms: string[]): string => {
+          const key = Object.keys(row).find(k => searchTerms.some(t => k.toLowerCase().includes(t))) || '';
+          return key ? String(row[key] || '').trim() : '';
+        };
+
+        const shipName = getVal(['ship', 'vessel']);
+        const sailDateRaw = getVal(['sail date', 'saildate', 'departure', 'embark']);
+        const returnDateRaw = getVal(['return date', 'returndate', 'disembark', 'end']);
+        const nightsRaw = getVal(['nights', 'duration', 'days']);
+        const destination = getVal(['destination', 'itinerary', 'route']);
+        const departurePort = getVal(['departure port', 'port', 'homeport']);
+        const reservationNumber = getVal(['reservation', 'booking', 'res']);
+        const cabinType = getVal(['cabin', 'stateroom', 'room type']);
+        const guests = getVal(['guests', 'pax', 'passengers']);
+        const price = getVal(['price', 'cost', 'paid', 'amount']);
+        const winnings = getVal(['winnings', 'casino', 'win']);
+
+        if (!shipName && !sailDateRaw) continue;
+
+        const parseDate = (raw: string): string => {
+          if (!raw) return new Date().toISOString().split('T')[0];
+          const excelSerial = parseInt(raw);
+          if (!isNaN(excelSerial) && excelSerial > 10000) {
+            const d = new Date((excelSerial - 25569) * 86400 * 1000);
+            return d.toISOString().split('T')[0];
+          }
+          const dateMatch = raw.match(/(\d{1,4})[/-](\d{1,2})[/-](\d{2,4})/);
+          if (dateMatch) {
+            let [, a, b, c] = dateMatch;
+            if (a.length === 4) return `${a}-${b.padStart(2,'0')}-${c.padStart(2,'0')}`;
+            return `${c.length === 2 ? '20'+c : c}-${a.padStart(2,'0')}-${b.padStart(2,'0')}`;
+          }
+          try { return new Date(raw).toISOString().split('T')[0]; } catch { return new Date().toISOString().split('T')[0]; }
+        };
+
+        const sailDate = parseDate(sailDateRaw);
+        const nights = parseInt(nightsRaw) || 7;
+        let returnDate = returnDateRaw ? parseDate(returnDateRaw) : '';
+        if (!returnDate) {
+          const sailObj = new Date(sailDate);
+          sailObj.setDate(sailObj.getDate() + nights);
+          returnDate = sailObj.toISOString().split('T')[0];
+        }
+
+        const isDuplicate = existingBooked.some(
+          c => c.shipName === (shipName || 'Unknown Ship') && c.sailDate === sailDate
+        ) || importedCruises.some(
+          c => c.shipName === (shipName || 'Unknown Ship') && c.sailDate === sailDate
+        );
+
+        if (isDuplicate) {
+          console.log('[Settings] Skipping duplicate completed cruise:', shipName, sailDate);
+          continue;
+        }
+
+        const cruise: BookedCruise = {
+          id: `completed-xlsx-${Date.now()}-${i}`,
+          shipName: shipName || 'Unknown Ship',
+          sailDate,
+          returnDate,
+          nights,
+          destination: destination || 'Caribbean',
+          itineraryName: destination || `${nights} Night Cruise`,
+          departurePort: departurePort || '',
+          reservationNumber: reservationNumber || undefined,
+          cabinType: cabinType || 'Balcony',
+          guests: parseInt(guests) || 2,
+          guestNames: [],
+          price: price ? parseFloat(price.replace(/[^0-9.]/g, '')) || undefined : undefined,
+          winnings: winnings ? parseFloat(winnings.replace(/[^0-9.]/g, '')) || undefined : undefined,
+          status: 'completed',
+          completionState: 'completed',
+          cruiseSource: 'royal',
+          createdAt: new Date().toISOString(),
+        };
+
+        importedCruises.push(cruise);
+      }
+
+      if (importedCruises.length === 0) {
+        Alert.alert(
+          'No New Cruises',
+          'No new completed cruises were found. All entries may already exist or the file columns could not be recognized.\n\nExpected columns: Ship, Sail Date, Return Date, Nights, Destination, Departure Port, Reservation, Cabin Type, Guests.'
+        );
+        setIsImporting(false);
+        return;
+      }
+
+      const merged = [...existingBooked, ...importedCruises];
+      await setBookedCruises(merged);
+      await setLocalData({ booked: merged });
+      await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
+
+      setLastImportResult({ type: 'completed', count: importedCruises.length });
+      Alert.alert(
+        'Import Successful',
+        `Imported ${importedCruises.length} completed cruise${importedCruises.length !== 1 ? 's' : ''} from ${asset.name}.`
+      );
+      console.log('[Settings] XLSX import complete:', importedCruises.length, 'new completed cruises');
+    } catch (error) {
+      console.error('[Settings] XLSX import error:', error);
+      Alert.alert('Import Error', 'Failed to import the XLSX file. Please check the file format and try again.');
     } finally {
       setIsImporting(false);
     }
@@ -2266,9 +2442,22 @@ STEP 4: Optional Calendar Import
 
                 <View style={styles.dataDivider} />
                 
+                <View style={[styles.dataSubsection, { backgroundColor: 'rgba(75, 0, 130, 0.08)' }]}>
+                  <Text style={styles.subsectionLabel}>SEAPASS GENERATOR</Text>
+                  <Text style={styles.subsectionHelper}>Generate Royal Caribbean web SeaPass cards.</Text>
+                </View>
+                {renderSettingRow(
+                  <Ship size={18} color="#4F2A95" />,
+                  'SeaPass Web Generator',
+                  undefined,
+                  () => router.push('/seapass-generator' as any)
+                )}
+
+                <View style={styles.dataDivider} />
+
                 <View style={[styles.dataSubsection, { backgroundColor: 'rgba(0, 31, 63, 0.08)' }]}>
                   <Text style={styles.subsectionLabel}>DATA TOOLS</Text>
-                  <Text style={styles.subsectionHelper}>Import CSV files and reset app data.</Text>
+                  <Text style={styles.subsectionHelper}>Import CSV/XLSX files and reset app data.</Text>
                 </View>
                 {renderSettingRow(
                   <FileSpreadsheet size={18} color={COLORS.navyDeep} />,
@@ -2282,6 +2471,19 @@ STEP 4: Optional Calendar Import
                     </View>
                   ) : undefined,
                   handleImportOffersCSV
+                )}
+                {renderSettingRow(
+                  <FolderInput size={18} color={COLORS.success} />,
+                  'Import Completed Cruises (.xlsx)',
+                  isImporting ? (
+                    <ActivityIndicator size="small" color={COLORS.success} />
+                  ) : lastImportResult?.type === 'completed' ? (
+                    <View style={styles.successBadge}>
+                      <CheckCircle size={12} color={COLORS.success} />
+                      <Text style={styles.successText}>{lastImportResult.count}</Text>
+                    </View>
+                  ) : undefined,
+                  handleImportCompletedCruisesXLSX
                 )}
                 {renderSettingRow(
                   <RefreshCcw size={18} color={COLORS.error} />,

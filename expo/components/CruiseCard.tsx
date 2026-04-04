@@ -5,7 +5,7 @@ import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 
 import { createDateFromString } from '@/lib/date';
-import { calculateCruiseValue } from '@/lib/valueCalculator';
+
 import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 
@@ -38,7 +38,7 @@ function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'acti
 export const CruiseCard = React.memo(function CruiseCard({ 
   cruise, 
   onPress, 
-  showPricePerNight = true, 
+  showPricePerNight: _showPricePerNight = true, 
   compact = false,
   mini = false,
   variant = 'default',
@@ -81,7 +81,6 @@ export const CruiseCard = React.memo(function CruiseCard({
   const retailValue = useMemo(() => {
     if (!showRetailValue) return null;
     
-    const cabinType = cruise.cabinType || 'Balcony';
     const guestCount = cruise.guests || 2;
     let cabinValueForTwo = 0;
     
@@ -198,13 +197,14 @@ export const CruiseCard = React.memo(function CruiseCard({
       >
         <Image 
           source={{ uri: compactImageUri }} 
-          style={styles.miniImage}
+          style={styles.miniBackgroundImage}
           resizeMode="cover"
           onError={() => {
             console.log('Mini image load error, using default');
             setCompactImageUri(DEFAULT_CRUISE_IMAGE);
           }}
         />
+        <View style={styles.miniImageOverlay} />
         <View style={styles.miniContent}>
           <View style={styles.miniTopRow}>
             <View style={styles.miniShipRow}>
@@ -621,19 +621,21 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
     ...SHADOW.sm,
   },
-  miniImage: {
-    width: 91,
-    height: 110,
-    borderRadius: BORDER_RADIUS.sm,
-    margin: SPACING.sm,
+  miniBackgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.07,
+  },
+  miniImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.90)',
   },
   miniContent: {
     flex: 1,
-    paddingVertical: SPACING.sm,
-    paddingRight: SPACING.sm,
+    paddingVertical: SPACING.xs,
   },
   miniTopRow: {
     flexDirection: 'row',

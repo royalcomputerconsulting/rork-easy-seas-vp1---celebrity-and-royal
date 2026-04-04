@@ -6,7 +6,7 @@ import type { AppRouter } from "@/backend/trpc/app-router";
 
 export const trpc = createTRPCReact<AppRouter>();
 
-const DEFAULT_RENDER_URL = "https://rork-easy-seas-vp1-2nep.onrender.com";
+const DEFAULT_RENDER_URL = "https://easy-seas-backend-v2.onrender.com";
 
 export const RENDER_BACKEND_URL =
   process.env.EXPO_PUBLIC_RENDER_BACKEND_URL?.trim() || DEFAULT_RENDER_URL;
