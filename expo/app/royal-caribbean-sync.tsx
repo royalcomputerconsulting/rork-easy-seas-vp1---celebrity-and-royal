@@ -16,6 +16,93 @@ import { syncCruisePricing } from '@/lib/cruisePricingSync';
 import { aggregateCruisePricing } from '@/lib/cruisePricingAggregation';
 import { useAuth } from '@/state/AuthProvider';
 import { maskSensitiveMemberNumber } from '@/lib/privacy';
+
+const IN_APP_SIGN_IN_BRIDGE = `
+  (function() {
+    if (window.__easySeasSignInBridgeInstalled) {
+      return true;
+    }
+
+    window.__easySeasSignInBridgeInstalled = true;
+
+    function postLog(message, logType) {
+      try {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: message,
+          logType: logType || 'info'
+        }));
+      } catch (error) {}
+    }
+
+    function normalizeTargets() {
+      try {
+        var elements = document.querySelectorAll('a[target="_blank"], form[target="_blank"]');
+        for (var i = 0; i < elements.length; i += 1) {
+          elements[i].setAttribute('target', '_self');
+        }
+      } catch (error) {}
+    }
+
+    var originalOpen = window.open;
+    window.open = function(url, target, features) {
+      if (typeof url === 'string' && url.length > 0 && url !== 'about:blank') {
+        try {
+          window.location.href = url;
+          postLog('Opening sign-in flow in the current sync browser tab', 'info');
+        } catch (error) {
+          postLog('Unable to redirect popup login into the sync browser', 'warning');
+        }
+        return window;
+      }
+
+      try {
+        return originalOpen ? originalOpen.call(window, url, '_self', features) : window;
+      } catch (error) {
+        return window;
+      }
+    };
+
+    document.addEventListener('click', function(event) {
+      try {
+        var node = event.target;
+        while (node && node.tagName !== 'A') {
+          node = node.parentElement;
+        }
+
+        if (!node) {
+          return;
+        }
+
+        if (node.getAttribute('target') === '_blank') {
+          event.preventDefault();
+          var href = node.href || node.getAttribute('href') || '';
+          if (href) {
+            window.location.href = href;
+            postLog('Redirected a popup link into the in-app browser', 'info');
+          }
+        }
+      } catch (error) {}
+    }, true);
+
+    normalizeTargets();
+
+    try {
+      var observer = new MutationObserver(function() {
+        normalizeTargets();
+      });
+      observer.observe(document.documentElement || document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['target', 'href']
+      });
+    } catch (error) {}
+
+    return true;
+  })();
+`;
+
 function RoyalCaribbeanSyncScreen() {
   const router = useRouter();
   const coreData = useCoreData();
@@ -58,23 +145,56 @@ function RoyalCaribbeanSyncScreen() {
   const isCelebrity = cruiseLine === 'celebrity';
   const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
 
-  const handleToggleBrowser = () => {
+  const queueBrowserRefresh = useCallback(() => {
+    setTimeout(() => {
+      try {
+        webViewRef.current?.reload();
+      } catch (error) {
+        console.error('[RoyalCaribbeanSyncScreen] Failed to refresh sign-in browser:', error);
+      }
+    }, 180);
+  }, [webViewRef]);
+
+  const handleToggleBrowser = useCallback(() => {
     if (!webViewVisible) {
       setWebViewVisible(true);
       openLogin();
+      queueBrowserRefresh();
       return;
     }
 
     setWebViewVisible(false);
-  };
+  }, [openLogin, queueBrowserRefresh, webViewVisible]);
 
-  const handleOpenLogin = () => {
+  const handleOpenLogin = useCallback(() => {
     if (!webViewVisible) {
       setWebViewVisible(true);
     }
 
     openLogin();
-  };
+    queueBrowserRefresh();
+  }, [openLogin, queueBrowserRefresh, webViewVisible]);
+
+  const handleShouldStartLoadWithRequest = useCallback((request: { url: string }) => {
+    const nextUrl = request.url;
+
+    if (!nextUrl) {
+      return true;
+    }
+
+    if (nextUrl.startsWith('http://') || nextUrl.startsWith('https://') || nextUrl === 'about:blank') {
+      return true;
+    }
+
+    if (nextUrl.startsWith('mailto:') || nextUrl.startsWith('tel:')) {
+      void Linking.openURL(nextUrl).catch((error: unknown) => {
+        console.error('[RoyalCaribbeanSyncScreen] Failed to open external link from sync browser:', error);
+      });
+      return false;
+    }
+
+    return true;
+  }, []);
 
   const handleRunIngestion = useCallback(() => {
     if (!webViewVisible) {
@@ -476,11 +596,14 @@ function RoyalCaribbeanSyncScreen() {
                 testID="royal-caribbean-sync-webview"
                 onMessage={onMessage}
                 onLoadEnd={onPageLoaded}
+                onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
                 sharedCookiesEnabled={true}
                 thirdPartyCookiesEnabled={true}
-                injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
+                setSupportMultipleWindows={false}
+                originWhitelist={['http://*', 'https://*', 'about:blank']}
+                injectedJavaScriptBeforeContentLoaded={`${AUTH_DETECTION_SCRIPT}\n${IN_APP_SIGN_IN_BRIDGE}`}
                 keyboardDisplayRequiresUserAction={false}
                 allowsInlineMediaPlayback={true}
                 mediaPlaybackRequiresUserAction={false}
@@ -491,6 +614,8 @@ function RoyalCaribbeanSyncScreen() {
                 onError={(syntheticEvent) => {
                   const { nativeEvent } = syntheticEvent;
                   console.warn('[RoyalCaribbeanSyncScreen] WebView error:', nativeEvent);
+                  addLog('The sign-in browser hit an error. Reloading the Club Royale login page...', 'warning');
+                  handleOpenLogin();
                 }}
                 onHttpError={(syntheticEvent) => {
                   const { nativeEvent } = syntheticEvent;
@@ -498,9 +623,8 @@ function RoyalCaribbeanSyncScreen() {
                 }}
                 onContentProcessDidTerminate={() => {
                   console.error('[RoyalCaribbeanSyncScreen] WebView content process terminated, reloading...');
-                  if (webViewRef.current) {
-                    webViewRef.current.reload();
-                  }
+                  addLog('The sign-in browser was interrupted. Reopening the Club Royale login page...', 'warning');
+                  handleOpenLogin();
                 }}
               />
             )}
