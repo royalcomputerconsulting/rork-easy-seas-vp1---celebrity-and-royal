@@ -33,6 +33,7 @@ interface UserProfileData {
   carnivalVifpTier?: string;
   carnivalPlayersClubTier?: string;
   carnivalPlayersClubPoints?: number;
+  birthdate?: string;
 }
 
 interface EnrichmentData {
@@ -231,6 +232,7 @@ export function UserProfileCard({
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.email, undefined, true)}
+        {currentValues.birthdate && renderValueCard('Date of Birth', currentValues.birthdate, undefined, true)}
         {renderValueCard('Crown & Anchor #', enrichmentData?.crownAndAnchorId || currentValues.crownAnchorNumber, undefined, true)}
         {renderValueCard('C&A Level', enrichmentData?.crownAndAnchorTier || calculatedLevel, calculatedLevelInfo?.color)}
         {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
@@ -302,6 +304,17 @@ export function UserProfileCard({
               onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
               placeholder="Enter your name"
               placeholderTextColor="#9CA3AF"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Date of Birth</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.birthdate || ''}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, birthdate: text }))}
+              placeholder="MM/DD/YYYY"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numbers-and-punctuation"
             />
           </View>
           <View style={styles.inputGroup}>
