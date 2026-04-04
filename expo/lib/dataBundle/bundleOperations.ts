@@ -30,6 +30,7 @@ export interface FullAppDataBundle {
     manualCrownAnchorPoints: number | null;
     userPoints: number | null;
   };
+  extendedLoyaltyData?: Record<string, unknown> | null;
   userProfile: {
     name: string;
     email?: string;
@@ -73,6 +74,11 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
   };
 
   try {
+    const scopedUsersKey = email
+      ? getUserScopedKey(ALL_STORAGE_KEYS.USERS, email.toLowerCase().trim())
+      : ALL_STORAGE_KEYS.USERS;
+    const extendedLoyaltyKey = sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA);
+
     const [
       cruisesData,
       bookedData,
@@ -85,11 +91,13 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
       manualClubRoyale,
       manualCrownAnchor,
       userPoints,
-      usersData,
+      scopedUsersData,
+      globalUsersData,
       machineEncyclopediaData,
       myAtlasData,
       crewEntriesData,
       crewSailingsData,
+      extendedLoyaltyRaw,
     ] = await Promise.all([
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CRUISES)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
@@ -102,12 +110,17 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.USER_POINTS)),
-      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.USERS)),
+      AsyncStorage.getItem(scopedUsersKey),
+      AsyncStorage.getItem(ALL_STORAGE_KEYS.USERS),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS)),
+      AsyncStorage.getItem(extendedLoyaltyKey),
     ]);
+
+    const usersData = scopedUsersData || globalUsersData;
+    console.log('[DataBundle] Users lookup: scopedKey=', scopedUsersKey, 'found=', !!scopedUsersData, ', globalFallback=', !!globalUsersData);
 
     let cruises: Cruise[] = [];
     let bookedCruises: BookedCruise[] = [];
@@ -286,6 +299,16 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
     
     const playingHours = ownerUser?.playingHours;
 
+    let extendedLoyaltyData: Record<string, unknown> | null = null;
+    try {
+      if (extendedLoyaltyRaw) {
+        extendedLoyaltyData = JSON.parse(extendedLoyaltyRaw) as Record<string, unknown>;
+        console.log('[DataBundle] Found extended loyalty data with keys:', Object.keys(extendedLoyaltyData));
+      }
+    } catch (e) {
+      console.error('[DataBundle] Error parsing extended loyalty data:', e);
+    }
+
     const bundle: FullAppDataBundle = {
       version: '2.1.0',
       exportDate: new Date().toISOString(),
@@ -302,6 +325,7 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
         manualCrownAnchorPoints: manualCrownAnchor ? parseInt(manualCrownAnchor, 10) : null,
         userPoints: userPoints ? parseInt(userPoints, 10) : null,
       },
+      extendedLoyaltyData,
       userProfile,
       users,
       playingHours,
@@ -470,6 +494,18 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     }
   } catch (error) {
     errors.push(`Failed to import loyalty data: ${error}`);
+  }
+
+  try {
+    if (bundle.extendedLoyaltyData && typeof bundle.extendedLoyaltyData === 'object') {
+      await AsyncStorage.setItem(
+        sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA),
+        JSON.stringify(bundle.extendedLoyaltyData)
+      );
+      console.log('[DataBundle] Imported extended loyalty data:', Object.keys(bundle.extendedLoyaltyData));
+    }
+  } catch (error) {
+    errors.push(`Failed to import extended loyalty data: ${error}`);
   }
 
   try {
