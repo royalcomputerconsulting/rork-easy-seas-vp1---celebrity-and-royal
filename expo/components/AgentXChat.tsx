@@ -102,7 +102,7 @@ export const AgentXChat = React.memo(function AgentXChat({
     onSendMessage(prompt);
   }, [onSendMessage]);
 
-  const renderMessage = useCallback((message: ChatMessage, index: number) => {
+  const renderMessage = useCallback((message: ChatMessage, _index: number) => {
     const isUser = message.role === 'user';
     
 
