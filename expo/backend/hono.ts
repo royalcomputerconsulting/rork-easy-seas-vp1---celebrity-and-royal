@@ -57,6 +57,36 @@ app.get("/calendar-feed/:token", async (c) => {
   }
 });
 
+// SeaPass approved shell image proxy - avoids CORS issues on web
+app.get("/seapass-approved-shell", async (c) => {
+  const SOURCE_URL = 'https://r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png';
+  console.log('[Hono] Proxying SeaPass approved shell image');
+
+  try {
+    const response = await fetch(SOURCE_URL);
+
+    if (!response.ok) {
+      console.error('[Hono] Failed to fetch SeaPass shell from source:', response.status);
+      return c.text('Failed to load SeaPass shell image', 502);
+    }
+
+    const buffer = await response.arrayBuffer();
+    const contentType = response.headers.get('content-type') ?? 'image/png';
+
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=86400',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
+  } catch (error) {
+    console.error('[Hono] SeaPass shell proxy error:', error);
+    return c.text('Internal server error', 500);
+  }
+});
+
 // Simple health check endpoint
 app.get("/", (c) => {
   return c.json({ status: "ok", message: "API is running", timestamp: Date.now() });
