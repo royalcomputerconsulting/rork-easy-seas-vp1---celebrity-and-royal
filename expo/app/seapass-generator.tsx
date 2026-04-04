@@ -110,13 +110,15 @@ function SeaPassGeneratorScreen() {
 
   useEffect(() => {
     console.log('[SeaPassGenerator] Screen mounted');
-    Image.prefetch(SEA_PASS_APPROVED_SCREENSHOT_URL)
-      .then((didLoad) => {
-        console.log('[SeaPassGenerator] Approved SeaPass shell prefetched', { didLoad });
-      })
-      .catch((error: unknown) => {
-        console.error('[SeaPassGenerator] Failed to prefetch approved SeaPass shell', error);
-      });
+    if (Platform.OS !== 'web') {
+      Image.prefetch(SEA_PASS_APPROVED_SCREENSHOT_URL)
+        .then((didLoad) => {
+          console.log('[SeaPassGenerator] Approved SeaPass shell prefetched', { didLoad });
+        })
+        .catch((error: unknown) => {
+          console.log('[SeaPassGenerator] Could not prefetch SeaPass shell (non-critical)', error instanceof Error ? error.message : String(error));
+        });
+    }
   }, []);
 
   useEffect(() => {

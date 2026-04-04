@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useState } from 'react';
-import { DimensionValue, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { DimensionValue, Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import {
   SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL,
@@ -27,6 +27,11 @@ export const SeaPassWebPass = memo(function SeaPassWebPass({
   const [imageHref, setImageHref] = useState<string>(SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL);
 
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      console.log('[SeaPassWebPass] Web platform - using direct URL for shell image');
+      return;
+    }
+
     let cancelled = false;
     console.log('[SeaPassWebPass] Loading approved shell image as data URL');
 
@@ -38,7 +43,7 @@ export const SeaPassWebPass = memo(function SeaPassWebPass({
         }
       })
       .catch((error) => {
-        console.error('[SeaPassWebPass] Could not load shell as data URL, using direct URL', error);
+        console.log('[SeaPassWebPass] Could not load shell as data URL, using direct URL:', error instanceof Error ? error.message : String(error));
       });
 
     return () => {

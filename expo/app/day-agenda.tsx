@@ -30,6 +30,7 @@ import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { SeaPassCard } from '@/components/SeaPassCard';
+import { DailyLuckSection } from '@/components/DailyLuckSection';
 
 const EVENT_COLORS = {
   cruise: '#3B82F6',
@@ -241,41 +242,6 @@ export default function DayAgendaScreen() {
     const [year, month, day] = date.split('-').map(Number);
     return new Date(year, month - 1, day);
   }, [date]);
-
-  const dailyLuck = useMemo(() => {
-    const seed = selectedDate.getFullYear() * 10000 + (selectedDate.getMonth() + 1) * 100 + selectedDate.getDate();
-    const rng = (n: number) => {
-      let x = Math.sin(seed + n) * 10000;
-      return Math.floor((x - Math.floor(x)) * 1000);
-    };
-    const luckyNumbers = Array.from({ length: 5 }, (_, i) => (rng(i * 7) % 36) + 1);
-    const machines = ['Video Poker', 'Blackjack', 'Slots', 'Roulette', 'Baccarat', 'Three Card Poker', 'Let It Ride'];
-    const colors = [
-      { name: 'Royal Gold', hex: '#D4A00A' },
-      { name: 'Ocean Blue', hex: '#0EA5E9' },
-      { name: 'Emerald', hex: '#10B981' },
-      { name: 'Ruby Red', hex: '#EF4444' },
-      { name: 'Violet', hex: '#8B5CF6' },
-      { name: 'Coral', hex: '#F97316' },
-      { name: 'Pearl White', hex: '#E5E7EB' },
-    ];
-    const fortunes = [
-      'Lady Luck smiles on those who play with patience.',
-      'A steady hand wins more than a bold bet.',
-      'Your best session starts with your best mindset.',
-      'The casino rewards discipline over impulse.',
-      'Set your limits early \u2014 your future self will thank you.',
-      'Sometimes the table is cold. Walk away and come back.',
-      'A small win is still a win. Celebrate it.',
-    ];
-    return {
-      luckyNumbers,
-      luckyMachine: machines[rng(13) % machines.length],
-      luckyColor: colors[rng(17) % colors.length],
-      fortune: fortunes[rng(23) % fortunes.length],
-      luckyHour: `${(rng(31) % 12) + 1}:${rng(37) % 2 === 0 ? '00' : '30'} ${rng(41) % 2 === 0 ? 'PM' : 'AM'}`,
-    };
-  }, [selectedDate]);
 
   const formattedDate = useMemo(() => {
     return selectedDate.toLocaleDateString('en-US', {
@@ -1505,39 +1471,7 @@ export default function DayAgendaScreen() {
 
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>Daily Luck</Text>
-            <View style={styles.luckCard}>
-              <View style={styles.luckFortuneRow}>
-                <Text style={styles.luckFortuneIcon}>🎰</Text>
-                <Text style={styles.luckFortune}>{dailyLuck.fortune}</Text>
-              </View>
-              <View style={styles.luckDivider} />
-              <View style={styles.luckGrid}>
-                <View style={styles.luckItem}>
-                  <Text style={styles.luckLabel}>LUCKY GAME</Text>
-                  <Text style={styles.luckValue}>{dailyLuck.luckyMachine}</Text>
-                </View>
-                <View style={styles.luckItem}>
-                  <Text style={styles.luckLabel}>LUCKY HOUR</Text>
-                  <Text style={styles.luckValue}>{dailyLuck.luckyHour}</Text>
-                </View>
-                <View style={styles.luckItem}>
-                  <Text style={styles.luckLabel}>LUCKY COLOR</Text>
-                  <View style={styles.luckColorRow}>
-                    <View style={[styles.luckColorSwatch, { backgroundColor: dailyLuck.luckyColor.hex }]} />
-                    <Text style={styles.luckValue}>{dailyLuck.luckyColor.name}</Text>
-                  </View>
-                </View>
-              </View>
-              <View style={styles.luckDivider} />
-              <Text style={styles.luckLabel}>LUCKY NUMBERS</Text>
-              <View style={styles.luckNumbersRow}>
-                {dailyLuck.luckyNumbers.map((num, i) => (
-                  <View key={`lucky-${i}`} style={styles.luckNumberBubble}>
-                    <Text style={styles.luckNumberText}>{num}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
+            <DailyLuckSection selectedDate={selectedDate} />
           </View>
 
           {agendaItems.length > 0 && (
@@ -2249,89 +2183,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: 'rgba(255, 255, 255, 0.72)',
     lineHeight: 20,
-  },
-  luckCard: {
-    backgroundColor: 'rgba(212, 160, 10, 0.08)',
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 160, 10, 0.25)',
-  },
-  luckFortuneRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'flex-start',
-    gap: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  luckFortuneIcon: {
-    fontSize: 22,
-    lineHeight: 26,
-  },
-  luckFortune: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.9)',
-    fontStyle: 'italic' as const,
-    lineHeight: 20,
-  },
-  luckDivider: {
-    height: 1,
-    backgroundColor: 'rgba(212,160,10,0.2)',
-    marginVertical: SPACING.sm,
-  },
-  luckGrid: {
-    flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
-    gap: SPACING.md,
-  },
-  luckItem: {
-    flex: 1,
-    minWidth: 100,
-  },
-  luckLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: '700' as const,
-    color: 'rgba(212,160,10,0.8)',
-    letterSpacing: 1,
-    marginBottom: 4,
-    textTransform: 'uppercase' as const,
-  },
-  luckValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: '600' as const,
-    color: '#FFFFFF',
-  },
-  luckColorRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center',
-    gap: 6,
-  },
-  luckColorSwatch: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  luckNumbersRow: {
-    flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
-    gap: SPACING.sm,
-    marginTop: 6,
-  },
-  luckNumberBubble: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(212,160,10,0.15)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(212,160,10,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  luckNumberText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: '800' as const,
-    color: '#D4A00A',
   },
 });
