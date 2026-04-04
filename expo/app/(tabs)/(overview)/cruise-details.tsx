@@ -792,7 +792,7 @@ export default function CruiseDetailsScreen() {
                   </View>
                 )}
                 
-                {cruise.guests && (
+                {(cruise.guests ?? 0) > 0 && (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailRowLabel}>Number of Guests</Text>
                     <Text style={styles.detailRowValue}>{cruise.guests}</Text>

@@ -277,25 +277,25 @@ export default function MachineDetailScreen() {
 
               {displayMachine.apMetadata.mhbThresholds && (
                 <View style={styles.mhbGrid}>
-                  {displayMachine.apMetadata.mhbThresholds.minor && (
+                  {!!displayMachine.apMetadata.mhbThresholds.minor && (
                     <View style={styles.mhbItem}>
                       <Text style={styles.mhbLabel}>Minor</Text>
                       <Text style={styles.mhbValue}>${displayMachine.apMetadata.mhbThresholds.minor}</Text>
                     </View>
                   )}
-                  {displayMachine.apMetadata.mhbThresholds.major && (
+                  {!!displayMachine.apMetadata.mhbThresholds.major && (
                     <View style={styles.mhbItem}>
                       <Text style={styles.mhbLabel}>Major</Text>
                       <Text style={styles.mhbValue}>${displayMachine.apMetadata.mhbThresholds.major}</Text>
                     </View>
                   )}
-                  {displayMachine.apMetadata.mhbThresholds.grand && (
+                  {!!displayMachine.apMetadata.mhbThresholds.grand && (
                     <View style={styles.mhbItem}>
                       <Text style={styles.mhbLabel}>Grand</Text>
                       <Text style={styles.mhbValue}>${displayMachine.apMetadata.mhbThresholds.grand}</Text>
                     </View>
                   )}
-                  {displayMachine.apMetadata.mhbThresholds.mega && (
+                  {!!displayMachine.apMetadata.mhbThresholds.mega && (
                     <View style={styles.mhbItem}>
                       <Text style={styles.mhbLabel}>Mega</Text>
                       <Text style={styles.mhbValue}>${displayMachine.apMetadata.mhbThresholds.mega}</Text>

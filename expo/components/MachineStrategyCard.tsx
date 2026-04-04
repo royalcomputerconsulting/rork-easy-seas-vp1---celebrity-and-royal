@@ -128,7 +128,7 @@ function RecommendationItem({ recommendation, rank, isHighlight }: Recommendatio
 
   return (
     <View style={[styles.recItem, isHighlight && styles.recItemHighlight]}>
-      {rank && (
+      {rank != null && (
         <View style={[styles.rankBadge, rank === 1 && styles.rankBadgeGold]}>
           <Text style={styles.rankText}>{rank}</Text>
         </View>

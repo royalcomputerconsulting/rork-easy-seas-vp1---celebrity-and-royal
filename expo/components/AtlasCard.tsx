@@ -115,7 +115,7 @@ export function AtlasCard({
 
           <View style={styles.manufacturerRow}>
             <Text style={styles.manufacturer}>{machine.manufacturer}</Text>
-            {machine.releaseYear && (
+            {!!machine.releaseYear && (
               <View style={styles.yearBadge}>
                 <Text style={styles.yearText}>{machine.releaseYear}</Text>
               </View>

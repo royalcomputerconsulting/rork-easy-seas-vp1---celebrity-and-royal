@@ -120,11 +120,11 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
             </Text>
           </View>
 
-          {item.denomination && (
+          {(item.denomination ?? 0) > 0 && (
             <View style={styles.sessionDetailItem}>
               <Text style={styles.sessionDetailLabel}>Denom</Text>
               <Text style={styles.sessionDetailValue}>
-                ${item.denomination.toFixed(2)}
+                ${(item.denomination ?? 0).toFixed(2)}
               </Text>
             </View>
           )}
