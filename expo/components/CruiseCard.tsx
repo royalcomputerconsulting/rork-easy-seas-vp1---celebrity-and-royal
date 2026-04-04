@@ -565,8 +565,8 @@ export const CruiseCard = React.memo(function CruiseCard({
                 <Text style={styles.bookedRouteValue}>{cruise.departurePort || cruise.destination || 'Cruise itinerary'}</Text>
                 {visiblePorts.length > 0 && (
                   <View style={styles.bookedPortsRow}>
-                    {visiblePorts.map((port: string) => (
-                      <View key={`${cruise.id}-${port}`} style={styles.bookedPortChip}>
+                    {visiblePorts.map((port: string, index: number) => (
+                      <View key={`${cruise.id}-${port}-${index}`} style={styles.bookedPortChip}>
                         <Text style={styles.bookedPortChipText}>{port}</Text>
                       </View>
                     ))}
