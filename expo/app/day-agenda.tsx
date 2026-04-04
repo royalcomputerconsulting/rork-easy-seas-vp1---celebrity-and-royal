@@ -24,7 +24,7 @@ import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
-import { createDateFromString, getDailyLuckDigitForDate, getLuckDigitColor, getLuckDigitLabel, normalizeBirthdateInput } from '@/lib/date';
+import { createDateFromString, getDailyLuckDigitForDate, getLuckDigitColor, normalizeBirthdateInput } from '@/lib/date';
 import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -1597,18 +1597,6 @@ export default function DayAgendaScreen() {
               </View>
             ) : null}
           </View>
-          <Text style={styles.eventCount}>
-            {dayScheduleData.timedBlocks.length} timed block{dayScheduleData.timedBlocks.length === 1 ? '' : 's'}
-            {dayScheduleData.allDayItems.length > 0 ? ` • ${dayScheduleData.allDayItems.length} all-day` : ''}
-            {dailyLuckDigit !== null ? ` • ${getLuckDigitLabel(dailyLuckDigit)} luck day` : ''}
-          </Text>
-          <View style={styles.runtimeInfoCard} testID="day-agenda-runtime-info">
-            <Text style={styles.runtimeInfoLabel}>Runtime fingerprint</Text>
-            <Text style={styles.runtimeInfoValue}>{runtimeBuildInfo.fingerprint}</Text>
-            <Text style={styles.runtimeInfoMeta}>
-              Project {runtimeBuildInfo.projectId} • Created {runtimeBuildInfo.updateCreatedAt}
-            </Text>
-          </View>
         </View>
 
         <ScrollView 
@@ -1816,11 +1804,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  eventCount: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#FFFFFF',
   },
   dailyLuckChip: {
     paddingHorizontal: SPACING.sm,
@@ -1847,32 +1830,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     paddingBottom: 120,
   },
-  runtimeInfoCard: {
-    marginTop: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    gap: 4,
-  },
-  runtimeInfoLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(255,255,255,0.72)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  runtimeInfoValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FFFFFF',
-  },
-  runtimeInfoMeta: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.68)',
-  },
+
   sectionContainer: {
     marginBottom: SPACING.lg,
   },
