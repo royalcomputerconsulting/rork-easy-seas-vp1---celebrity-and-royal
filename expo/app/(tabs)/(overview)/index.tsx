@@ -16,7 +16,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { 
   Tag,
-  AlertTriangle,
   Sparkles,
   Bot,
   Target,
@@ -546,6 +545,7 @@ function OverviewScreenContent() {
           totalValue={offerSummary.totalValue}
           totalCruises={offerSummary.totalCruises}
           totalOffers={offerSummary.totalOffers}
+          expiringSoonCount={expiringSoonCount}
           onSoonestPress={() => setSortMode('soonest')}
           onHighestValuePress={() => setSortMode('highestValue')}
           activeSortMode={sortMode}
@@ -557,14 +557,6 @@ function OverviewScreenContent() {
           <Tag size={18} color={COLORS.navyDeep} />
           <Text style={styles.sectionTitle}>CASINO OFFERS</Text>
         </View>
-        {expiringSoonCount > 0 && (
-          <View style={styles.expiringAlert}>
-            <AlertTriangle size={14} color={COLORS.warning} />
-            <Text style={styles.expiringAlertText}>
-              {expiringSoonCount} expiring soon
-            </Text>
-          </View>
-        )}
       </View>
     </View>
   );

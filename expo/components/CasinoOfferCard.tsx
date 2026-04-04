@@ -32,6 +32,7 @@ interface OfferSummaryCardProps {
   totalValue: number;
   totalCruises: number;
   totalOffers: number;
+  expiringSoonCount?: number;
   onSoonestPress?: () => void;
   onHighestValuePress?: () => void;
   activeSortMode?: 'soonest' | 'highestValue';
@@ -43,35 +44,45 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
   totalValue,
   totalCruises,
   totalOffers,
+  expiringSoonCount = 0,
   onSoonestPress,
   onHighestValuePress,
   activeSortMode = 'soonest',
 }: OfferSummaryCardProps) {
+  const expiringSoonLabel = expiringSoonCount === 1
+    ? '1 expiring soon offer'
+    : `${expiringSoonCount} expiring soon offers`;
+
   return (
-    <View style={summaryStyles.container}>
+    <View style={summaryStyles.container} testID="offer-summary-card">
       <StableRemoteImage
         uri={JACKPOT_BG_URI}
         style={summaryStyles.backgroundImage}
         testID="offer-summary-background-image"
       />
-      <LinearGradient colors={['rgba(14, 52, 86, 0.18)', 'rgba(27, 41, 76, 0.48)', 'rgba(18, 28, 58, 0.62)']} style={summaryStyles.overlay}>
+      <LinearGradient colors={['rgba(8, 28, 47, 0.34)', 'rgba(12, 36, 59, 0.72)', 'rgba(10, 24, 45, 0.84)']} style={summaryStyles.overlay}>
         <GlassSurface style={summaryStyles.summaryGlass} contentStyle={summaryStyles.summaryGlassContent}>
           <View style={summaryStyles.summaryHeader}>
-            <View>
+            <View style={summaryStyles.summaryHeaderCopy}>
               <Text style={summaryStyles.summaryEyebrow}>Offer command center</Text>
-              <Text style={summaryStyles.summaryTitle}>Your live casino inventory</Text>
+              <Text style={summaryStyles.summaryLeadValue}>${totalValue > 0 ? Math.round(totalValue).toLocaleString() : '---'}</Text>
+              <Text style={summaryStyles.summaryLeadLabel}>Total value across your live casino inventory</Text>
             </View>
-            <View style={summaryStyles.summaryChip}>
-              <Sparkles size={14} color="#F8D56B" />
-              <Text style={summaryStyles.summaryChipText}>{totalOffers} offers</Text>
+            <View
+              style={[
+                summaryStyles.summaryChip,
+                expiringSoonCount > 0 ? summaryStyles.summaryChipUrgent : summaryStyles.summaryChipCalm,
+              ]}
+              testID="offer-summary-expiring-chip"
+            >
+              <Clock size={14} color={expiringSoonCount > 0 ? '#FFFFFF' : '#E2E8F0'} />
+              <Text style={summaryStyles.summaryChipText}>
+                {expiringSoonCount > 0 ? expiringSoonLabel : 'No urgent expirations'}
+              </Text>
             </View>
           </View>
 
           <View style={summaryStyles.statRow}>
-            <View style={summaryStyles.statBlock}>
-              <Text style={summaryStyles.statLabel}>Total Value</Text>
-              <Text style={summaryStyles.statValueMoney}>${totalValue > 0 ? totalValue.toLocaleString() : '---'}</Text>
-            </View>
             <View style={summaryStyles.statBlock}>
               <Text style={summaryStyles.statLabel}>Cruises</Text>
               <Text style={summaryStyles.statValue}>{totalCruises}</Text>
@@ -80,6 +91,10 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
               <Text style={summaryStyles.statLabel}>Offers</Text>
               <Text style={summaryStyles.statValue}>{totalOffers}</Text>
             </View>
+            <View style={summaryStyles.statBlock}>
+              <Text style={summaryStyles.statLabel}>Expiring Soon</Text>
+              <Text style={summaryStyles.statValue}>{expiringSoonCount}</Text>
+            </View>
           </View>
 
           <View style={summaryStyles.summaryActionRow}>
@@ -87,6 +102,7 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
               style={[summaryStyles.summaryAction, activeSortMode === 'soonest' && summaryStyles.summaryActionActive]}
               onPress={onSoonestPress}
               activeOpacity={0.85}
+              testID="offer-summary-sort-soonest"
             >
               <Text style={[summaryStyles.summaryActionText, activeSortMode === 'soonest' && summaryStyles.summaryActionTextActive]}>Soonest expiring</Text>
             </TouchableOpacity>
@@ -94,6 +110,7 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
               style={[summaryStyles.summaryAction, activeSortMode === 'highestValue' && summaryStyles.summaryActionActive]}
               onPress={onHighestValuePress}
               activeOpacity={0.85}
+              testID="offer-summary-sort-highest-value"
             >
               <Text style={[summaryStyles.summaryActionText, activeSortMode === 'highestValue' && summaryStyles.summaryActionTextActive]}>Highest value</Text>
             </TouchableOpacity>
@@ -540,7 +557,7 @@ const summaryStyles = StyleSheet.create({
     borderRadius: 30,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
-    backgroundColor: '#F9F4EC',
+    backgroundColor: '#071521',
     ...SHADOW.lg,
   },
   backgroundImage: {
@@ -551,8 +568,8 @@ const summaryStyles = StyleSheet.create({
   },
   summaryGlass: {
     borderRadius: 28,
-    backgroundColor: 'rgba(255, 248, 239, 0.94)',
-    borderColor: 'rgba(255,255,255,0.30)',
+    backgroundColor: 'rgba(5, 18, 31, 0.82)',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   summaryGlassContent: {
     padding: SPACING.lg,
@@ -561,21 +578,30 @@ const summaryStyles = StyleSheet.create({
   summaryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: SPACING.md,
+  },
+  summaryHeaderCopy: {
+    flex: 1,
   },
   summaryEyebrow: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    letterSpacing: 1.1,
+    letterSpacing: 1.2,
     textTransform: 'uppercase' as const,
-    color: 'rgba(17,17,17,0.74)',
+    color: 'rgba(226, 232, 240, 0.84)',
   },
-  summaryTitle: {
-    marginTop: 6,
-    fontSize: TYPOGRAPHY.fontSizeXXL,
+  summaryLeadValue: {
+    marginTop: 8,
+    fontSize: 34,
     fontWeight: '800' as const,
-    color: '#111111',
+    color: '#FFFFFF',
+    letterSpacing: -1.2,
+  },
+  summaryLeadLabel: {
+    marginTop: 6,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(226, 232, 240, 0.78)',
   },
   summaryChip: {
     flexDirection: 'row',
@@ -584,14 +610,22 @@ const summaryStyles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.round,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.64)',
     borderWidth: 1,
-    borderColor: 'rgba(17,17,17,0.06)',
+    maxWidth: 170,
+  },
+  summaryChipUrgent: {
+    backgroundColor: 'rgba(220, 38, 38, 0.92)',
+    borderColor: 'rgba(254, 202, 202, 0.38)',
+  },
+  summaryChipCalm: {
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    borderColor: 'rgba(226, 232, 240, 0.18)',
   },
   summaryChipText: {
+    flex: 1,
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#111111',
+    color: '#FFFFFF',
   },
   statRow: {
     flexDirection: 'row',
@@ -600,29 +634,24 @@ const summaryStyles = StyleSheet.create({
   statBlock: {
     flex: 1,
     borderRadius: 22,
-    padding: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.56)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderWidth: 1,
-    borderColor: 'rgba(17,17,17,0.06)',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   statLabel: {
     fontSize: 10,
     fontWeight: '700' as const,
     textTransform: 'uppercase' as const,
     letterSpacing: 1,
-    color: 'rgba(17,17,17,0.74)',
+    color: 'rgba(226, 232, 240, 0.72)',
   },
   statValue: {
     marginTop: 8,
     fontSize: 24,
     fontWeight: '800' as const,
-    color: '#111111',
-  },
-  statValueMoney: {
-    marginTop: 8,
-    fontSize: 22,
-    fontWeight: '800' as const,
-    color: '#0F766E',
+    color: '#FFFFFF',
   },
   summaryActionRow: {
     flexDirection: 'row',
@@ -634,20 +663,21 @@ const summaryStyles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: BORDER_RADIUS.round,
     paddingVertical: 14,
-    backgroundColor: 'rgba(255,255,255,0.58)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderWidth: 1,
-    borderColor: 'rgba(17,17,17,0.06)',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   summaryActionActive: {
-    backgroundColor: '#111111',
+    backgroundColor: '#F8D56B',
+    borderColor: 'rgba(248, 213, 107, 0.9)',
   },
   summaryActionText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#111111',
+    color: '#FFFFFF',
   },
   summaryActionTextActive: {
-    color: '#FFFFFF',
+    color: '#0B1A2A',
   },
 });
 
