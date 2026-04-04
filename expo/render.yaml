@@ -2,11 +2,15 @@ services:
   - type: web
     name: easy-seas-backend
     env: node
-    buildCommand: npm install --legacy-peer-deps
-    startCommand: HOME=/tmp npx tsx server.js
+    buildCommand: bun install
+    startCommand: bun run start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATA_DIR
+        value: ./data
+      - key: PORT
+        value: 10000
       - key: EXPO_PUBLIC_TOOLKIT_URL
         sync: false
       - key: EXPO_PUBLIC_RORK_DB_ENDPOINT
