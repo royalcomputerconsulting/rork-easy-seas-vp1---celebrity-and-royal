@@ -393,19 +393,17 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     if (Platform.OS === 'web') return null;
 
     const isExpoGo = Constants.appOwnership === 'expo';
-    
+
+    if (isExpoGo) {
+      purchasesInitError = 'IAP not available in Expo Go. Use a development build or web preview for testing.';
+      console.warn('[Entitlement] Skipping react-native-purchases in Expo Go — native module not available.');
+      return null;
+    }
+
     let apiKey = '';
     let keySource = '';
 
-    if (isExpoGo) {
-      apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? '').trim();
-      keySource = 'test-store (Expo Go)';
-      if (!apiKey) {
-        purchasesInitError = 'IAP not available in Expo Go. Use a development build or web preview for testing.';
-        console.warn('[Entitlement] RevenueCat IAP requires a development build or Test Store API Key for Expo Go.');
-        return null;
-      }
-    } else if (Platform.OS === 'android') {
+    if (Platform.OS === 'android') {
       apiKey = (process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '').trim();
       keySource = 'android-production (Google Play)';
       console.log('[Entitlement] ANDROID PATH: Using Google Play Store RevenueCat API key');
