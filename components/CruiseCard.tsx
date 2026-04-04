@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ImageBackground, Animated, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -196,19 +196,21 @@ export const CruiseCard = React.memo(function CruiseCard({
         activeOpacity={1}
         testID="cruise-card-mini"
       >
-        <Image 
-          source={{ uri: compactImageUri }} 
-          style={styles.miniImage}
+        <ImageBackground
+          source={{ uri: compactImageUri }}
+          style={StyleSheet.absoluteFillObject}
           resizeMode="cover"
           onError={() => {
             console.log('Mini image load error, using default');
             setCompactImageUri(DEFAULT_CRUISE_IMAGE);
           }}
-        />
+        >
+          <View style={styles.miniImageOverlay} />
+        </ImageBackground>
         <View style={styles.miniContent}>
           <View style={styles.miniTopRow}>
             <View style={styles.miniShipRow}>
-              <Ship size={13} color={COLORS.navyDeep} />
+              <Ship size={13} color={COLORS.white} />
               <Text style={styles.miniShipName} numberOfLines={1}>{cruise.shipName}</Text>
             </View>
             <View style={[styles.miniStatusBadge, { backgroundColor: statusBadge.bg }]}>
@@ -387,7 +389,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             </View>
           )}
         </View>
-        <ChevronRight size={20} color={COLORS.navyDeep} style={styles.miniChevron} />
+        <ChevronRight size={20} color={COLORS.white} style={styles.miniChevron} />
       </TouchableOpacity>
       </Animated.View>
     );
@@ -615,24 +617,24 @@ const styles = StyleSheet.create({
     ...SHADOW.md,
   },
   miniContainer: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.navyDeep,
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     marginBottom: SPACING.sm,
     flexDirection: 'row',
     alignItems: 'center',
     paddingRight: SPACING.sm,
+    position: 'relative',
     ...SHADOW.sm,
   },
-  miniImage: {
-    width: 91,
-    height: 110,
-    borderRadius: BORDER_RADIUS.sm,
-    margin: SPACING.sm,
+  miniImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 20, 50, 0.62)',
   },
   miniContent: {
     flex: 1,
     paddingVertical: SPACING.sm,
+    paddingLeft: SPACING.sm,
     paddingRight: SPACING.sm,
   },
   miniTopRow: {
@@ -650,14 +652,14 @@ const styles = StyleSheet.create({
   miniShipName: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.9)',
     flex: 1,
     marginRight: 4,
   },
   miniItinerary: {
     fontSize: 15,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: COLORS.white,
     marginBottom: 2,
   },
   miniStatusBadge: {
@@ -672,12 +674,12 @@ const styles = StyleSheet.create({
   },
   miniDestination: {
     fontSize: 13,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.85)',
     marginBottom: 2,
   },
   miniPorts: {
     fontSize: 11,
-    color: '#4B5563',
+    color: 'rgba(255,255,255,0.7)',
     marginBottom: 3,
   },
   miniBottomRow: {
@@ -698,13 +700,13 @@ const styles = StyleSheet.create({
   },
   miniDate: {
     fontSize: 12,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.85)',
   },
   miniNights: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    backgroundColor: '#E0F2F1',
+    color: COLORS.white,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -718,25 +720,25 @@ const styles = StyleSheet.create({
   miniRetailValue: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: COLORS.white,
   },
   miniCabinRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#E0F2F1',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 3,
   },
   miniCabin: {
     fontSize: 10,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.9)',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   miniExpectedPoints: {
     fontSize: 10,
-    color: '#059669',
+    color: '#6EE7B7',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniOfferBadge: {
@@ -764,27 +766,27 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingTop: 4,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: 'rgba(255,255,255,0.15)',
   },
   miniPricingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   miniPricingLabel: {
     fontSize: 10,
-    color: '#0369A1',
+    color: '#93C5FD',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniPricingValue: {
     fontSize: 10,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniTaxesRow: {
@@ -795,12 +797,12 @@ const styles = StyleSheet.create({
   },
   miniTaxesLabel: {
     fontSize: 10,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.65)',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   miniTaxesValue: {
     fontSize: 10,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.9)',
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   miniFpObcRow: {
@@ -871,7 +873,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: 'rgba(255,255,255,0.15)',
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
@@ -883,12 +885,12 @@ const styles = StyleSheet.create({
   },
   miniEnrichmentLabel: {
     fontSize: 9,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.6)',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   miniEnrichmentValue: {
     fontSize: 9,
-    color: COLORS.navyDeep,
+    color: 'rgba(255,255,255,0.9)',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   miniEnrichmentBadge: {
