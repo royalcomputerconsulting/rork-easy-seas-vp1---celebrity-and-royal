@@ -38,8 +38,6 @@ interface OfferSummaryCardProps {
   activeSortMode?: 'soonest' | 'highestValue';
 }
 
-const JACKPOT_BG_URI = getUniqueImageForCruise('offer-summary-background', 'caribbean');
-
 export const OfferSummaryCard = React.memo(function OfferSummaryCard({
   totalValue,
   totalCruises,
@@ -55,67 +53,60 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
 
   return (
     <View style={summaryStyles.container} testID="offer-summary-card">
-      <StableRemoteImage
-        uri={JACKPOT_BG_URI}
-        style={summaryStyles.backgroundImage}
-        testID="offer-summary-background-image"
-      />
-      <LinearGradient colors={['rgba(8, 28, 47, 0.34)', 'rgba(12, 36, 59, 0.72)', 'rgba(10, 24, 45, 0.84)']} style={summaryStyles.overlay}>
-        <GlassSurface style={summaryStyles.summaryGlass} contentStyle={summaryStyles.summaryGlassContent}>
-          <View style={summaryStyles.summaryHeader}>
-            <View style={summaryStyles.summaryHeaderCopy}>
-              <Text style={summaryStyles.summaryEyebrow}>Offer command center</Text>
-              <Text style={summaryStyles.summaryLeadValue}>${totalValue > 0 ? Math.round(totalValue).toLocaleString() : '---'}</Text>
-              <Text style={summaryStyles.summaryLeadLabel}>Total value across your live casino inventory</Text>
+      <LinearGradient colors={['#FFF8F3', '#FFEFE4', '#FAEEF7']} style={summaryStyles.overlay}>
+        <View style={summaryStyles.summaryGlass}>
+          <View style={summaryStyles.summaryGlassContent}>
+            <View style={summaryStyles.summaryHeader}>
+              <View style={summaryStyles.summaryHeaderCopy}>
+                <Text style={summaryStyles.summaryEyebrow}>Offer command center</Text>
+                <Text style={summaryStyles.summaryLeadValue}>${totalValue > 0 ? Math.round(totalValue).toLocaleString() : '---'}</Text>
+                <Text style={summaryStyles.summaryLeadLabel}>Total value across your live casino inventory</Text>
+              </View>
+              <View
+                style={[
+                  summaryStyles.summaryChip,
+                  expiringSoonCount > 0 ? summaryStyles.summaryChipUrgent : summaryStyles.summaryChipCalm,
+                ]}
+                testID="offer-summary-expiring-chip"
+              >
+                <Clock size={12} color={expiringSoonCount > 0 ? '#FFFFFF' : '#8A4D34'} />
+                <Text style={summaryStyles.summaryChipText}>
+                  {expiringSoonCount > 0 ? expiringSoonLabel : 'No urgent expirations'}
+                </Text>
+              </View>
             </View>
-            <View
-              style={[
-                summaryStyles.summaryChip,
-                expiringSoonCount > 0 ? summaryStyles.summaryChipUrgent : summaryStyles.summaryChipCalm,
-              ]}
-              testID="offer-summary-expiring-chip"
-            >
-              <Clock size={14} color={expiringSoonCount > 0 ? '#FFFFFF' : '#E2E8F0'} />
-              <Text style={summaryStyles.summaryChipText}>
-                {expiringSoonCount > 0 ? expiringSoonLabel : 'No urgent expirations'}
-              </Text>
-            </View>
-          </View>
 
-          <View style={summaryStyles.statRow}>
-            <View style={summaryStyles.statBlock}>
-              <Text style={summaryStyles.statLabel}>Cruises</Text>
-              <Text style={summaryStyles.statValue}>{totalCruises}</Text>
+            <View style={summaryStyles.statRow}>
+              <View style={summaryStyles.statBlock}>
+                <Text style={summaryStyles.statLabel}>Cruises</Text>
+                <Text style={summaryStyles.statValue}>{totalCruises}</Text>
+              </View>
+              <View style={summaryStyles.statBlock}>
+                <Text style={summaryStyles.statLabel}>Offers</Text>
+                <Text style={summaryStyles.statValue}>{totalOffers}</Text>
+              </View>
             </View>
-            <View style={summaryStyles.statBlock}>
-              <Text style={summaryStyles.statLabel}>Offers</Text>
-              <Text style={summaryStyles.statValue}>{totalOffers}</Text>
-            </View>
-            <View style={summaryStyles.statBlock}>
-              <Text style={summaryStyles.statLabel}>Expiring Soon</Text>
-              <Text style={summaryStyles.statValue}>{expiringSoonCount}</Text>
-            </View>
-          </View>
 
-          <View style={summaryStyles.summaryActionRow}>
-            <TouchableOpacity
-              style={[summaryStyles.summaryAction, activeSortMode === 'soonest' && summaryStyles.summaryActionActive]}
-              onPress={onSoonestPress}
-              activeOpacity={0.85}
-              testID="offer-summary-sort-soonest"
-            >
-              <Text style={[summaryStyles.summaryActionText, activeSortMode === 'soonest' && summaryStyles.summaryActionTextActive]}>Soonest expiring</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[summaryStyles.summaryAction, activeSortMode === 'highestValue' && summaryStyles.summaryActionActive]}
-              onPress={onHighestValuePress}
-              activeOpacity={0.85}
-              testID="offer-summary-sort-highest-value"
-            >
-              <Text style={[summaryStyles.summaryActionText, activeSortMode === 'highestValue' && summaryStyles.summaryActionTextActive]}>Highest value</Text>
-            </TouchableOpacity>
+            <View style={summaryStyles.summaryActionRow}>
+              <TouchableOpacity
+                style={[summaryStyles.summaryAction, activeSortMode === 'soonest' && summaryStyles.summaryActionActive]}
+                onPress={onSoonestPress}
+                activeOpacity={0.85}
+                testID="offer-summary-sort-soonest"
+              >
+                <Text style={[summaryStyles.summaryActionText, activeSortMode === 'soonest' && summaryStyles.summaryActionTextActive]}>Soonest expiring</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[summaryStyles.summaryAction, activeSortMode === 'highestValue' && summaryStyles.summaryActionActive]}
+                onPress={onHighestValuePress}
+                activeOpacity={0.85}
+                testID="offer-summary-sort-highest-value"
+              >
+                <Text style={[summaryStyles.summaryActionText, activeSortMode === 'highestValue' && summaryStyles.summaryActionTextActive]}>Highest value</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </GlassSurface>
+        </View>
       </LinearGradient>
     </View>
   );
@@ -380,7 +371,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
         activeOpacity={0.94}
         testID="casino-offer-card-compact"
       >
-        <LinearGradient colors={['#FFFDF9', '#F8F0DB', '#E8F8FC']} style={styles.compactShellGradient}>
+        <LinearGradient colors={['#FFF8F3', '#FFEFE4', '#FBEAF2']} style={styles.compactShellGradient}>
           <View style={styles.compactBody}>
             <View style={styles.compactThumbShell}>
               <StableRemoteImage
@@ -461,7 +452,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.94} testID="casino-offer-card">
-      <LinearGradient colors={['#FFFDF9', '#F8F0DB', '#E8F8FC']} style={styles.shellGradient}>
+      <LinearGradient colors={['#FFF8F3', '#FFEFE4', '#FBEAF2']} style={styles.shellGradient}>
         <View style={styles.headerStrip}>
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>{offerName}</Text>
@@ -532,7 +523,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
             </View>
           </GlassSurface>
 
-          <LinearGradient colors={offerSource === 'carnival' ? ['#B91C1C', '#DC2626'] : ['#0E3554', '#0A4C62', '#12706D']} style={styles.ctaButton}>
+          <LinearGradient colors={offerSource === 'carnival' ? ['#B91C1C', '#DC2626'] : ['#BB6A7A', '#E79876', '#F0C86A']} style={styles.ctaButton}>
             <TouchableOpacity
               style={styles.ctaButtonInner}
               onPress={offerSource === 'carnival' ? handleOpenCarnival : onPress}
@@ -554,78 +545,79 @@ const summaryStyles = StyleSheet.create({
   container: {
     width: '100%',
     alignSelf: 'stretch',
-    borderRadius: 30,
+    borderRadius: 22,
     overflow: 'hidden',
-    marginBottom: SPACING.lg,
-    backgroundColor: '#071521',
-    ...SHADOW.lg,
-  },
-  backgroundImage: {
-    ...StyleSheet.absoluteFillObject,
+    marginBottom: SPACING.md,
+    backgroundColor: '#FFF8F3',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 149, 117, 0.18)',
+    ...SHADOW.md,
   },
   overlay: {
-    padding: SPACING.lg,
+    padding: 10,
   },
   summaryGlass: {
-    borderRadius: 28,
-    backgroundColor: 'rgba(5, 18, 31, 0.82)',
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 252, 248, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
   },
   summaryGlassContent: {
-    padding: SPACING.lg,
-    gap: SPACING.md,
+    padding: SPACING.md,
+    gap: SPACING.sm,
   },
   summaryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: SPACING.md,
+    gap: SPACING.sm,
   },
   summaryHeaderCopy: {
     flex: 1,
   },
   summaryEyebrow: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    letterSpacing: 1.2,
+    letterSpacing: 1,
     textTransform: 'uppercase' as const,
-    color: 'rgba(226, 232, 240, 0.84)',
+    color: '#8A5A45',
   },
   summaryLeadValue: {
-    marginTop: 8,
-    fontSize: 34,
+    marginTop: 4,
+    fontSize: 24,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
-    letterSpacing: -1.2,
+    color: '#172033',
+    letterSpacing: -0.8,
   },
   summaryLeadLabel: {
-    marginTop: 6,
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(226, 232, 240, 0.78)',
+    marginTop: 3,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: '#6B7280',
+    lineHeight: 16,
   },
   summaryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     borderRadius: BORDER_RADIUS.round,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderWidth: 1,
-    maxWidth: 170,
+    maxWidth: 158,
   },
   summaryChipUrgent: {
-    backgroundColor: 'rgba(220, 38, 38, 0.92)',
-    borderColor: 'rgba(254, 202, 202, 0.38)',
+    backgroundColor: '#EF4444',
+    borderColor: 'rgba(248, 113, 113, 0.32)',
   },
   summaryChipCalm: {
-    backgroundColor: 'rgba(15, 23, 42, 0.7)',
-    borderColor: 'rgba(226, 232, 240, 0.18)',
+    backgroundColor: '#FFF1E8',
+    borderColor: 'rgba(201, 149, 117, 0.18)',
   },
   summaryChipText: {
     flex: 1,
-    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#8A4D34',
   },
   statRow: {
     flexDirection: 'row',
@@ -633,25 +625,25 @@ const summaryStyles = StyleSheet.create({
   },
   statBlock: {
     flex: 1,
-    borderRadius: 22,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(201, 149, 117, 0.14)',
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700' as const,
     textTransform: 'uppercase' as const,
-    letterSpacing: 1,
-    color: 'rgba(226, 232, 240, 0.72)',
+    letterSpacing: 0.9,
+    color: '#8A5A45',
   },
   statValue: {
-    marginTop: 8,
-    fontSize: 24,
+    marginTop: 5,
+    fontSize: 18,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#172033',
   },
   summaryActionRow: {
     flexDirection: 'row',
@@ -662,22 +654,22 @@ const summaryStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: BORDER_RADIUS.round,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    paddingVertical: 11,
+    backgroundColor: '#FFF4ED',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(201, 149, 117, 0.14)',
   },
   summaryActionActive: {
-    backgroundColor: '#F8D56B',
-    borderColor: 'rgba(248, 213, 107, 0.9)',
+    backgroundColor: '#172033',
+    borderColor: '#172033',
   },
   summaryActionText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FFFFFF',
+    color: '#8A4D34',
   },
   summaryActionTextActive: {
-    color: '#0B1A2A',
+    color: '#FFFFFF',
   },
 });
 
@@ -906,27 +898,30 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   compactContainer: {
-    borderRadius: 22,
+    borderRadius: 20,
     overflow: 'hidden',
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(214, 184, 111, 0.18)',
-    ...SHADOW.md,
+    borderColor: 'rgba(201, 149, 117, 0.16)',
+    backgroundColor: '#FFF8F3',
+    ...SHADOW.sm,
   },
   compactShellGradient: {
-    borderRadius: 22,
+    borderRadius: 20,
   },
   compactBody: {
     flexDirection: 'row',
-    gap: SPACING.md,
-    padding: SPACING.md,
+    gap: 12,
+    padding: 12,
   },
   compactThumbShell: {
-    width: 108,
-    height: 108,
-    borderRadius: 18,
+    width: 94,
+    height: 94,
+    borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(255,255,255,0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.68)',
     position: 'relative',
   },
   compactThumbImage: {
@@ -979,22 +974,25 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   compactCardTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontSize: 15,
     fontWeight: '800' as const,
     color: '#171630',
     letterSpacing: -0.3,
+    lineHeight: 19,
   },
   compactCardSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#425466',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: '#5D6674',
   },
   compactValueBlock: {
-    minWidth: 92,
+    minWidth: 88,
     alignItems: 'flex-end',
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 149, 117, 0.12)',
   },
   compactValueLabel: {
     fontSize: 9,
@@ -1016,11 +1014,13 @@ const styles = StyleSheet.create({
   },
   compactMetaPill: {
     flexGrow: 1,
-    minWidth: 92,
+    minWidth: 90,
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.68)',
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 149, 117, 0.1)',
   },
   compactMetaLabel: {
     fontSize: 9,
@@ -1052,7 +1052,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(255,255,255,0.62)',
+    backgroundColor: 'rgba(255,255,255,0.68)',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 149, 117, 0.1)',
   },
   compactShipTagText: {
     flex: 1,

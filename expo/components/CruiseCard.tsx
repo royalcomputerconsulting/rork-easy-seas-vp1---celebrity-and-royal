@@ -31,10 +31,10 @@ const WEB_SHADOW_FIX = Platform.select<ViewStyle>({
 });
 
 const MINI_CARD_BACKDROP_PALETTES = [
-  ['rgba(191, 240, 255, 0.88)', 'rgba(219, 246, 255, 0.74)', 'rgba(240, 249, 255, 0.96)'],
-  ['rgba(216, 236, 255, 0.92)', 'rgba(232, 242, 255, 0.78)', 'rgba(247, 250, 255, 0.96)'],
-  ['rgba(196, 244, 235, 0.9)', 'rgba(225, 249, 244, 0.76)', 'rgba(244, 252, 250, 0.96)'],
-  ['rgba(255, 229, 214, 0.88)', 'rgba(255, 241, 230, 0.76)', 'rgba(255, 248, 243, 0.96)'],
+  ['rgba(255, 221, 226, 0.94)', 'rgba(255, 238, 232, 0.82)', 'rgba(255, 248, 244, 0.98)'],
+  ['rgba(247, 220, 255, 0.92)', 'rgba(252, 236, 255, 0.8)', 'rgba(255, 248, 255, 0.98)'],
+  ['rgba(255, 229, 214, 0.92)', 'rgba(255, 242, 232, 0.8)', 'rgba(255, 249, 244, 0.98)'],
+  ['rgba(255, 214, 229, 0.92)', 'rgba(255, 236, 244, 0.8)', 'rgba(255, 247, 251, 0.98)'],
 ] as const;
 
 function getDeterministicHash(seed: string): number {
@@ -526,9 +526,9 @@ export const CruiseCard = React.memo(function CruiseCard({
           <View style={styles.bookedContainer}>
             <CasinoCardBackground />
             <LinearGradient
-              colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.08)']}
-              start={{ x: 0.08, y: 0 }}
-              end={{ x: 0.92, y: 1 }}
+              colors={['rgba(255, 243, 240, 0.82)', 'rgba(246, 221, 230, 0.48)', 'rgba(247, 233, 255, 0.22)']}
+              start={{ x: 0.06, y: 0 }}
+              end={{ x: 0.96, y: 1 }}
               style={styles.bookedThemeScrim}
             />
             <View style={styles.bookedContentSection}>
@@ -811,15 +811,15 @@ const styles = StyleSheet.create({
   },
   miniContainer: {
     borderRadius: 22,
-    minHeight: 134,
+    minHeight: 128,
     overflow: 'hidden',
-    backgroundColor: 'rgba(248,251,255,0.96)',
+    backgroundColor: 'rgba(255,249,246,0.98)',
     borderWidth: 1,
-    borderColor: 'rgba(208,221,236,0.88)',
-    shadowColor: '#03111F',
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
+    borderColor: 'rgba(209, 165, 153, 0.32)',
+    shadowColor: '#241321',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
     elevation: 3,
     ...(WEB_SHADOW_FIX ?? {}),
   },
@@ -853,12 +853,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.28)',
   },
   miniIconShell: {
-    width: 96,
-    height: 114,
+    width: 92,
+    height: 110,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.32)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
@@ -866,7 +866,7 @@ const styles = StyleSheet.create({
   miniIconText: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#FEF3C7',
+    color: '#FFF7E6',
   },
   miniImage: {
     width: '100%',
@@ -894,17 +894,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   miniShipName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.textBlack,
+    color: '#1F2937',
     flex: 1,
     marginRight: 4,
   },
   miniItinerary: {
     fontSize: 15,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.textBlack,
+    color: '#111827',
     marginBottom: 2,
+    lineHeight: 18,
   },
   miniStatusBadge: {
     paddingHorizontal: 6,
@@ -919,8 +920,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   miniDestination: {
-    fontSize: 13,
-    color: COLORS.textBlack,
+    fontSize: 12,
+    color: '#4B5563',
     marginBottom: 2,
   },
   miniPorts: {
@@ -951,15 +952,15 @@ const styles = StyleSheet.create({
     color: COLORS.textBlack,
   },
   miniNights: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.textBlack,
-    backgroundColor: 'rgba(255,255,255,0.68)',
+    color: '#7C3F2E',
+    backgroundColor: 'rgba(255,255,255,0.72)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.62)',
+    borderColor: 'rgba(209, 165, 153, 0.28)',
   },
   miniValueRow: {
     flexDirection: 'row',
@@ -976,12 +977,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.62)',
+    backgroundColor: 'rgba(255,255,255,0.72)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.58)',
+    borderColor: 'rgba(209, 165, 153, 0.24)',
   },
   miniCabin: {
     fontSize: 10,
@@ -1171,12 +1172,12 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   bookedContainer: {
-    minHeight: 248,
+    minHeight: 226,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
-    backgroundColor: '#F7FBFF',
+    backgroundColor: '#FFF8F4',
     borderWidth: 1,
-    borderColor: 'rgba(203,220,235,0.9)',
+    borderColor: 'rgba(209, 165, 153, 0.26)',
   },
   bookedMarbleBase: {
     ...StyleSheet.absoluteFillObject,
@@ -1243,8 +1244,8 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   bookedContentSection: {
-    padding: SPACING.lg,
-    gap: SPACING.md,
+    padding: SPACING.md,
+    gap: SPACING.sm,
   },
   bookedHeaderRow: {
     flexDirection: 'row',
@@ -1268,8 +1269,8 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
   },
   bookedItinerary: {
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: 20,
+    lineHeight: 24,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.navyDeep,
   },
@@ -1299,9 +1300,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.75)',
+    borderColor: 'rgba(209, 165, 153, 0.24)',
   },
   bookedMetaText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -1310,11 +1311,11 @@ const styles = StyleSheet.create({
   },
   bookedRouteCard: {
     gap: 8,
-    padding: SPACING.md,
+    padding: 12,
     borderRadius: BORDER_RADIUS.md,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.86)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.78)',
+    borderColor: 'rgba(209, 165, 153, 0.18)',
   },
   bookedRouteLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -1362,7 +1363,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   bookedValueText: {
-    fontSize: 30,
+    fontSize: 24,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.textBlack,
   },
@@ -1388,8 +1389,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderColor: 'rgba(209, 165, 153, 0.18)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
   },
   bookedBenefitText: {
     fontSize: 10,
@@ -1403,16 +1404,18 @@ const styles = StyleSheet.create({
     ...(WEB_SHADOW_FIX ?? {}),
   },
   compactContainer: {
-    backgroundColor: COLORS.white,
+    backgroundColor: '#FFF8F3',
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(209, 165, 153, 0.18)',
   },
   compactImage: {
-    backgroundColor: 'rgba(244,248,255,0.78)',
-    width: 80,
-    height: 80,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    width: 74,
+    height: 74,
     borderRadius: BORDER_RADIUS.md,
     margin: SPACING.sm,
   },

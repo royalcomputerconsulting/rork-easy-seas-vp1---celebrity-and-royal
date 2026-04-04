@@ -464,7 +464,7 @@ export const OfferCard = React.memo(function OfferCard({
               </View>
             </GlassSurface>
 
-            <LinearGradient colors={['#D4A00A', '#A55853', '#7B2D8E']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaButton}>
+            <LinearGradient colors={['#BB6A7A', '#E79876', '#F0C86A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaButton}>
               <TouchableOpacity style={styles.ctaButtonInner} onPress={onPress} activeOpacity={0.85} testID="offer-card-view-all-button">
                 <Text style={styles.ctaText}>View all {availableCruiseCount} cruises</Text>
                 <ChevronRight size={18} color="#FFFFFF" />
@@ -488,12 +488,12 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: '#6D2B81',
+    borderColor: 'rgba(209, 165, 153, 0.22)',
+    backgroundColor: '#FFF8F3',
   },
   shellGradient: {
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    backgroundColor: '#FFF8F3',
   },
   headerStrip: {
     flexDirection: 'row',
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.md,
     paddingBottom: SPACING.sm,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.72)',
   },
   headerCopy: {
     flex: 1,
@@ -511,29 +511,29 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#171630',
     letterSpacing: -0.4,
   },
   headerCode: {
     marginTop: 2,
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FDECC2',
+    color: '#8A4D34',
   },
   headerValueBlock: {
     alignItems: 'flex-end',
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.24)',
+    borderColor: 'rgba(209, 165, 153, 0.18)',
     minWidth: 104,
   },
   headerValueLabel: {
     fontSize: 9,
     fontWeight: '700' as const,
-    color: '#FDECC2',
+    color: '#8A4D34',
     letterSpacing: 0.7,
     textTransform: 'uppercase' as const,
   },
@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
     fontSize: 16,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: COLORS.moneyDark,
   },
   heroSection: {
     minHeight: 74,
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
   contentSection: {
     padding: SPACING.md,
     gap: SPACING.sm,
-    backgroundColor: 'rgba(255, 252, 247, 0.9)',
+    backgroundColor: 'rgba(255, 251, 247, 0.94)',
   },
   primaryRow: {
     flexDirection: 'row',
@@ -672,6 +672,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.76)',
   },
   infoItem: {
     flex: 1,
@@ -726,8 +727,8 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.24)',
-    backgroundColor: '#0D1723',
+    borderColor: 'rgba(209, 165, 153, 0.2)',
+    backgroundColor: '#FFF8F3',
   },
   compactImage: {
     width: '100%',
