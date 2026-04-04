@@ -250,7 +250,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             {showRetailValue && retailValue !== null && retailValue > 0 && (
               <Text style={styles.miniRetailValue}>${Math.round(retailValue).toLocaleString()}</Text>
             )}
-            {bookedCruise.cabinType && (
+            {!!bookedCruise.cabinType && (
               <View style={styles.miniCabinRow}>
                 <Text style={styles.miniCabin}>{bookedCruise.cabinType}</Text>
                 {cruise.nights != null && cruise.nights > 0 && (
@@ -282,7 +282,7 @@ export const CruiseCard = React.memo(function CruiseCard({
                     <Text style={styles.miniObcValue}>${(bookedCruise.freeOBC ?? cruise.freeOBC ?? 0).toLocaleString()}</Text>
                   </View>
                 )}
-                {bookedCruise.usedNextCruiseCertificate && (
+                {!!bookedCruise.usedNextCruiseCertificate && (
                   <View style={styles.miniNccBadge}>
                     <Ticket size={11} color="#7C3AED" />
                     <Text style={styles.miniNccLabel}>NCC</Text>
@@ -326,9 +326,9 @@ export const CruiseCard = React.memo(function CruiseCard({
             </View>
           )}
           {/* Booking Enrichment Data from Sync */}
-          {isBooked && (bookedCruise.musterStation || bookedCruise.bookingStatus || bookedCruise.packageCode || bookedCruise.stateroomNumber || bookedCruise.stateroomCategoryCode) && (
+          {isBooked && !!(bookedCruise.musterStation || bookedCruise.bookingStatus || bookedCruise.packageCode || bookedCruise.stateroomNumber || bookedCruise.stateroomCategoryCode) && (
             <View style={styles.miniEnrichmentSection}>
-              {bookedCruise.bookingStatus && (
+              {!!bookedCruise.bookingStatus && (
                 <View style={styles.miniEnrichmentRow}>
                   <Text style={styles.miniEnrichmentLabel}>Status:</Text>
                   <View style={[
@@ -344,19 +344,19 @@ export const CruiseCard = React.memo(function CruiseCard({
                   </View>
                 </View>
               )}
-              {bookedCruise.stateroomNumber && bookedCruise.stateroomNumber !== 'GTY' && (
+              {!!bookedCruise.stateroomNumber && bookedCruise.stateroomNumber !== 'GTY' && (
                 <View style={styles.miniEnrichmentRow}>
                   <Text style={styles.miniEnrichmentLabel}>Cabin #:</Text>
                   <Text style={styles.miniEnrichmentValue}>{bookedCruise.stateroomNumber}</Text>
                 </View>
               )}
-              {bookedCruise.stateroomCategoryCode && (
+              {!!bookedCruise.stateroomCategoryCode && (
                 <View style={styles.miniEnrichmentRow}>
                   <Text style={styles.miniEnrichmentLabel}>Category:</Text>
                   <Text style={styles.miniEnrichmentValue}>{bookedCruise.stateroomCategoryCode}</Text>
                 </View>
               )}
-              {bookedCruise.stateroomType && (
+              {!!bookedCruise.stateroomType && (
                 <View style={styles.miniEnrichmentRow}>
                   <Text style={styles.miniEnrichmentLabel}>Type:</Text>
                   <Text style={styles.miniEnrichmentValue}>
@@ -364,19 +364,19 @@ export const CruiseCard = React.memo(function CruiseCard({
                   </Text>
                 </View>
               )}
-              {bookedCruise.musterStation && (
+              {!!bookedCruise.musterStation && (
                 <View style={styles.miniEnrichmentRow}>
                   <Text style={styles.miniEnrichmentLabel}>Muster:</Text>
                   <Text style={styles.miniEnrichmentValue}>{bookedCruise.musterStation}</Text>
                 </View>
               )}
-              {bookedCruise.packageCode && (
+              {!!bookedCruise.packageCode && (
                 <View style={styles.miniEnrichmentRow}>
                   <Text style={styles.miniEnrichmentLabel}>Offer Code:</Text>
                   <Text style={styles.miniEnrichmentValue}>{bookedCruise.packageCode}</Text>
                 </View>
               )}
-              {bookedCruise.passengerStatus && (
+              {!!bookedCruise.passengerStatus && (
                 <View style={styles.miniEnrichmentRow}>
                   <Text style={styles.miniEnrichmentLabel}>Pax Status:</Text>
                   <Text style={styles.miniEnrichmentValue}>
@@ -493,7 +493,7 @@ export const CruiseCard = React.memo(function CruiseCard({
           <Text style={styles.routeValue}>{cruise.departurePort || cruise.destination}</Text>
         </View>
 
-        {bookedCruise.itinerary && bookedCruise.itinerary.length > 0 && (
+        {!!bookedCruise.itinerary && bookedCruise.itinerary.length > 0 && (
           <View style={styles.visitingSection}>
             <Text style={styles.visitingLabel}>VISITING:</Text>
             <Text style={styles.visitingPorts}>
@@ -505,7 +505,7 @@ export const CruiseCard = React.memo(function CruiseCard({
           </View>
         )}
 
-        {bookedCruise.ports && bookedCruise.ports.length > 0 && !bookedCruise.itinerary && (
+        {!!bookedCruise.ports && bookedCruise.ports.length > 0 && !bookedCruise.itinerary && (
           <View style={styles.visitingSection}>
             <Text style={styles.visitingLabel}>VISITING:</Text>
             <Text style={styles.visitingPorts}>
@@ -542,7 +542,7 @@ export const CruiseCard = React.memo(function CruiseCard({
                 </View>
               </>
             )}
-            {(bookedCruise.cabinType) && (
+            {!!bookedCruise.cabinType && (
               <Text style={styles.cabinType}>{bookedCruise.cabinType}</Text>
             )}
           </View>
