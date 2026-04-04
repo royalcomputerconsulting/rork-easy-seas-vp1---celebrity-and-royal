@@ -68,6 +68,40 @@ app.get('/api/health', async (context) => {
   });
 });
 
+const SEA_PASS_APPROVED_SHELL_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/vvcelze4prvyhmkje7pah.png';
+
+async function proxySeaPassApprovedShell(context: Parameters<Parameters<typeof app.get>[1]>[0]) {
+  console.log('[Server] SeaPass approved shell proxy request');
+
+  try {
+    const upstream = await fetch(SEA_PASS_APPROVED_SHELL_URL);
+
+    if (!upstream.ok) {
+      console.error('[Server] SeaPass upstream fetch failed:', upstream.status);
+      return context.json({ code: 'upstream_error', message: 'Unable to fetch approved SeaPass shell' }, 502);
+    }
+
+    const buffer = await upstream.arrayBuffer();
+    const contentType = upstream.headers.get('content-type') ?? 'image/png';
+
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=86400',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Server] SeaPass proxy error:', message);
+    return context.json({ code: 'proxy_error', message }, 500);
+  }
+}
+
+app.get('/seapass-approved-shell', proxySeaPassApprovedShell);
+app.get('/api/seapass-approved-shell', proxySeaPassApprovedShell);
+
 app.get('/calendar-feed/:token', async (context) => {
   const token = context.req.param('token').replace(/\.ics$/i, '');
   const database = await readDatabase();

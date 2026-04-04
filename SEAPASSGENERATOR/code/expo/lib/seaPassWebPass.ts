@@ -102,6 +102,7 @@ function getSeaPassApprovedScreenshotUrl(): string {
 export const SEA_PASS_APPROVED_SCREENSHOT_URL = getSeaPassApprovedScreenshotUrl();
 
 let approvedSeaPassImageDataUrlPromise: Promise<string> | null = null;
+let approvedSeaPassSourceImageDataUrlPromise: Promise<string> | null = null;
 
 export const SEA_PASS_LAYOUT = {
   cardX: 24,
@@ -345,6 +346,18 @@ async function getSeaPassApprovedScreenshotDataUrl(): Promise<string> {
   }
 
   return approvedSeaPassImageDataUrlPromise;
+}
+
+export async function loadSeaPassApprovedImageAsDataUrl(): Promise<string> {
+  if (!approvedSeaPassSourceImageDataUrlPromise) {
+    approvedSeaPassSourceImageDataUrlPromise = fetchImageAsDataUrl(SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL).catch((error) => {
+      approvedSeaPassSourceImageDataUrlPromise = null;
+      console.error('[SeaPassWebPass] Failed to load approved shell as data URL, falling back to URL', error);
+      return SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL;
+    });
+  }
+
+  return approvedSeaPassSourceImageDataUrlPromise;
 }
 
 function buildSeaPassOverlaySvgMarkup(

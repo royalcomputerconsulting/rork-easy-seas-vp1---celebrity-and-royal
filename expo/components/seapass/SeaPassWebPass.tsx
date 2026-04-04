@@ -1,7 +1,15 @@
-import React, { memo } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import { DimensionValue, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { SvgXml } from 'react-native-svg';
-import { SEA_PASS_PREVIEW_BACKGROUND, SEA_PASS_VIEWBOX, buildSeaPassSvgMarkup, getSeaPassData, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
+import {
+  SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL,
+  SEA_PASS_PREVIEW_BACKGROUND,
+  SEA_PASS_VIEWBOX,
+  buildSeaPassSvgMarkup,
+  getSeaPassData,
+  loadSeaPassApprovedImageAsDataUrl,
+  type SeaPassWebPassData,
+} from '@/lib/seaPassWebPass';
 
 export interface SeaPassWebPassProps extends Partial<SeaPassWebPassData> {
   width?: DimensionValue;
@@ -16,7 +24,29 @@ export const SeaPassWebPass = memo(function SeaPassWebPass({
   ...input
 }: SeaPassWebPassProps) {
   const data = getSeaPassData(input);
-  const svgMarkup = buildSeaPassSvgMarkup(data);
+  const [imageHref, setImageHref] = useState<string>(SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL);
+
+  useEffect(() => {
+    let cancelled = false;
+    console.log('[SeaPassWebPass] Loading approved shell image as data URL');
+
+    loadSeaPassApprovedImageAsDataUrl()
+      .then((dataUrl) => {
+        if (!cancelled) {
+          console.log('[SeaPassWebPass] Approved shell image loaded, length:', dataUrl.length);
+          setImageHref(dataUrl);
+        }
+      })
+      .catch((error) => {
+        console.error('[SeaPassWebPass] Could not load shell as data URL, using direct URL', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const svgMarkup = buildSeaPassSvgMarkup(data, SEA_PASS_PREVIEW_BACKGROUND, imageHref);
 
   return (
     <View style={[styles.container, style, { width }]} testID={testID ?? 'seapass.preview'}>
