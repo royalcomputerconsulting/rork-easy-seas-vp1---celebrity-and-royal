@@ -477,7 +477,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     
     if (bundle.users && Array.isArray(bundle.users) && bundle.users.length > 0) {
       console.log('[DataBundle] Found users array with', bundle.users.length, 'users');
-      console.log('[DataBundle] Users data:', JSON.stringify(bundle.users.map(u => ({ id: u.id, name: u.name, crownAnchorNumber: u.crownAnchorNumber, playingHours: u.playingHours }))));
+      console.log('[DataBundle] Users data:', JSON.stringify(bundle.users.map(u => ({ id: u.id, name: u.name, crownAnchorNumber: u.crownAnchorNumber, birthdate: u.birthdate, playingHours: !!u.playingHours }))));
       usersToImport = bundle.users;
     } else if (bundle.userProfile && (bundle.userProfile.name || bundle.userProfile.crownAnchorNumber)) {
       console.log('[DataBundle] No users array, creating from userProfile:', JSON.stringify(bundle.userProfile));
@@ -504,13 +504,34 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     }
     
     if (usersToImport && usersToImport.length > 0) {
-      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.USERS), JSON.stringify(usersToImport));
-      console.log('[DataBundle] Successfully imported', usersToImport.length, 'users to storage');
-      console.log('[DataBundle] Imported users:', JSON.stringify(usersToImport.map(u => ({ id: u.id, name: u.name, crownAnchorNumber: u.crownAnchorNumber, hasPlayingHours: !!u.playingHours }))));
+      const normalizedEmail = email ? email.toLowerCase().trim() : null;
+      
+      // Always normalise the user email to the currently authenticated account so
+      // UserProvider (which reads from a scoped key) can match the profile.
+      if (normalizedEmail) {
+        usersToImport = usersToImport.map(u => ({
+          ...u,
+          email: normalizedEmail,
+        }));
+      }
+
+      // UserProvider stores/reads users under an email-scoped key even though
+      // ALL_STORAGE_KEYS.USERS appears in GLOBAL_KEYS.  Write directly to the
+      // scoped key so syncFromStorage() picks up the data immediately.
+      const scopedUsersKey = normalizedEmail
+        ? getUserScopedKey(ALL_STORAGE_KEYS.USERS, normalizedEmail)
+        : ALL_STORAGE_KEYS.USERS;
+      const scopedCurrentUserKey = normalizedEmail
+        ? getUserScopedKey(ALL_STORAGE_KEYS.CURRENT_USER, normalizedEmail)
+        : ALL_STORAGE_KEYS.CURRENT_USER;
+
+      await AsyncStorage.setItem(scopedUsersKey, JSON.stringify(usersToImport));
+      console.log('[DataBundle] Successfully imported', usersToImport.length, 'users to scoped storage key:', scopedUsersKey);
+      console.log('[DataBundle] Imported users:', JSON.stringify(usersToImport.map(u => ({ id: u.id, name: u.name, email: u.email, crownAnchorNumber: u.crownAnchorNumber, birthdate: u.birthdate, hasPlayingHours: !!u.playingHours }))));
       
       const ownerUser = usersToImport.find(u => u.isOwner) || usersToImport[0];
       if (ownerUser) {
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CURRENT_USER), ownerUser.id);
+        await AsyncStorage.setItem(scopedCurrentUserKey, ownerUser.id);
         console.log('[DataBundle] Set current user to:', ownerUser.id, ownerUser.name);
       }
     }
