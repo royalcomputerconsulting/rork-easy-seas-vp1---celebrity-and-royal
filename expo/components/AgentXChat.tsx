@@ -266,7 +266,7 @@ export const AgentXChat = React.memo(function AgentXChat({
         {messages.length === 0 ? renderWelcome() : messages.map(renderMessage)}
       </ScrollView>
       
-      <View style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : SPACING.md }]}>
+      <View style={styles.inputContainer}>
         <View style={styles.inputWrapper}>
           <TextInput
             ref={inputRef}
@@ -516,7 +516,9 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   inputContainer: {
-    padding: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.xs,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 31, 63, 0.1)',
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
