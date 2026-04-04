@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: easy-seas-backend-v2
+    runtime: node
+    buildCommand: bun install
+    startCommand: bun run start
+    disk:
+      name: easy-seas-data
+      mountPath: /mnt/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: EASY_SEAS_DATA_DIR
+        value: /mnt/data
