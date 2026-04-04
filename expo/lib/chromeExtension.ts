@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import JSZip from 'jszip';
 
 const EASY_SEAS_EXTENSION_VERSION = '3.2.0';
 
@@ -1326,8 +1327,8 @@ export async function downloadScraperExtension(): Promise<{ success: boolean; er
 
   try {
     console.log(`[ChromeExtension] Creating Easy Seas Sync extension ZIP v${EASY_SEAS_EXTENSION_VERSION}...`);
-    const JSZip = (await import('jszip')).default;
-    const zip = new JSZip();
+    const ZipConstructor = (JSZip as any).default ?? JSZip;
+    const zip = new ZipConstructor();
     const extensionFiles = getEasySeasExtensionFiles();
 
     for (const [filename, content] of Object.entries(extensionFiles)) {
@@ -1335,9 +1336,16 @@ export async function downloadScraperExtension(): Promise<{ success: boolean; er
       console.log(`[ChromeExtension] Added ${filename}`);
     }
 
-    zip.file('icons/icon16.png', createPlaceholderIcon('ES', '#1d4ed8', 16));
-    zip.file('icons/icon48.png', createPlaceholderIcon('ES', '#1d4ed8', 48));
-    zip.file('icons/icon128.png', createPlaceholderIcon('ES', '#1d4ed8', 128));
+    try {
+      zip.file('icons/icon16.png', createPlaceholderIcon('ES', '#1d4ed8', 16));
+      zip.file('icons/icon48.png', createPlaceholderIcon('ES', '#1d4ed8', 48));
+      zip.file('icons/icon128.png', createPlaceholderIcon('ES', '#1d4ed8', 128));
+    } catch (iconError) {
+      console.warn('[ChromeExtension] Icon generation failed, using empty icons:', iconError);
+      zip.file('icons/icon16.png', new Uint8Array(0));
+      zip.file('icons/icon48.png', new Uint8Array(0));
+      zip.file('icons/icon128.png', new Uint8Array(0));
+    }
 
     const fileCount = Object.keys(zip.files).length;
     const blob = await zip.generateAsync({ type: 'blob' });
