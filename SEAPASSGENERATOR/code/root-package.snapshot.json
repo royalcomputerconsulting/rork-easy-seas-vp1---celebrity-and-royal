@@ -1,0 +1,10 @@
+{
+  "name": "easy-seas-workspace",
+  "private": true,
+  "scripts": {
+    "start": "cd expo && bun run start",
+    "start-web": "cd expo && bun run start-web",
+    "start-web-dev": "cd expo && bun run start-web-dev",
+    "lint": "cd expo && bun run lint"
+  }
+}
