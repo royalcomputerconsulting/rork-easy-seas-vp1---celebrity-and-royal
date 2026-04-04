@@ -509,10 +509,10 @@ export function TimeZoneConverter() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: '#0A1A3A',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: 'rgba(0, 172, 193, 0.25)',
+    borderColor: 'rgba(0, 172, 193, 0.4)',
     overflow: 'hidden',
   },
   headerRow: {
@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
   },
   previewLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.8)',
     marginBottom: 2,
   },
   previewTime: {
@@ -589,11 +589,11 @@ const styles = StyleSheet.create({
   },
   clockCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   clockLabelRow: {
     flexDirection: 'row',
@@ -633,7 +633,7 @@ const styles = StyleSheet.create({
   },
   clockDate: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.85)',
     marginBottom: 4,
   },
   changeBtnRow: {
@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
@@ -671,7 +671,7 @@ const styles = StyleSheet.create({
   },
   offsetBannerText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#FFFFFF',
   },
   offsetBannerHighlight: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
@@ -679,11 +679,11 @@ const styles = StyleSheet.create({
   },
   meetingSection: {
     marginTop: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   meetingSectionHeader: {
     flexDirection: 'row',
@@ -704,14 +704,14 @@ const styles = StyleSheet.create({
   },
   meetingInput: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: Platform.OS === 'ios' ? SPACING.md : SPACING.sm,
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   convertBtn: {
     backgroundColor: '#00ACC1',
@@ -732,15 +732,15 @@ const styles = StyleSheet.create({
   },
   meetingFromLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#FFFFFF',
   },
   meetingFromChip: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   meetingFromChipActive: {
     backgroundColor: 'rgba(0, 172, 193, 0.2)',
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
   },
   meetingFromChipText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   meetingFromChipTextActive: {
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
   },
   meetingResultLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.85)',
     marginBottom: 2,
   },
   meetingResultTime: {
