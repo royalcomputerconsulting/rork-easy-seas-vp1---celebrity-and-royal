@@ -11,7 +11,7 @@ export default function PaywallScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
   const { isAdmin } = useAuth();
-  const isPurchaseDisabled = entitlement.isLoading || entitlement.isPro || !isAdmin;
+  const isPurchaseDisabled = entitlement.isLoading || entitlement.isPro;
 
   const handleClose = useCallback(() => {
     console.log('[Paywall] Close requested - navigating to home');
@@ -32,37 +32,31 @@ export default function PaywallScreen() {
           </View>
 
           <View style={styles.centerBlock}>
-            <Text style={styles.title}>Annual Subscription</Text>
-            <Text style={styles.priceHero}>$79.99<Text style={styles.priceUnit}> / year</Text></Text>
+            <Text style={styles.title}>Monthly Subscription</Text>
+            <Text style={styles.priceHero}>$9.99<Text style={styles.priceUnit}> / month</Text></Text>
 
             <TouchableOpacity
               style={[styles.purchaseButton, isPurchaseDisabled && styles.purchaseButtonDisabled]}
-              onPress={() => entitlement.subscribeProAnnual()}
+              onPress={() => entitlement.subscribeProMonthly()}
               activeOpacity={0.85}
               disabled={isPurchaseDisabled}
-              testID="paywall.subscribe-pro-annual"
+              testID="paywall.subscribe-pro-monthly"
             >
               {entitlement.isLoading ? (
                 <ActivityIndicator color={COLORS.white} />
               ) : (
                 <Text style={styles.purchaseButtonText}>
                   {entitlement.isPro
-                    ? 'Subscribed'
-                    : !isAdmin
-                      ? 'Admin Only'
-                      : Platform.OS === 'android'
-                        ? 'Subscribe via Google Play'
-                        : 'Subscribe Now'}
+                    ? isAdmin
+                      ? 'Admin Access Active'
+                      : 'Subscribed'
+                    : Platform.OS === 'android'
+                      ? 'Subscribe via Google Play'
+                      : 'Subscribe Now'}
                 </Text>
               )}
             </TouchableOpacity>
 
-            {!isAdmin && (
-              <View style={styles.errorBox} testID="paywall.admin-only">
-                <Text style={styles.errorTitle}>Admin only</Text>
-                <Text style={styles.errorBody}>Annual in-app purchases are temporarily restricted to admin users.</Text>
-              </View>
-            )}
 
             {!!entitlement.error && (
               <View style={styles.errorBox} testID="paywall.error">
@@ -98,7 +92,7 @@ export default function PaywallScreen() {
           <View style={styles.bottomBlock}>
             <View style={styles.disclosureBox}>
               <Text style={styles.disclosureBody}>
-                Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews at $79.99/year unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
+                Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews at $9.99/month unless cancelled at least 24 hours before the end of the current period. Non-admin accounts receive a 3-day grace period before billing is required. Manage or cancel anytime in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
               </Text>
             </View>
 

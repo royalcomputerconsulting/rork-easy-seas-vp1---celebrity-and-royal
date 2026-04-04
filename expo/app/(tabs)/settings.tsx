@@ -182,32 +182,27 @@ export default function SettingsScreen() {
   }, [isProfileIdentityReady, isLoyaltyLoading]);
   const subscriptionAccentColor = useMemo(() => {
     if (isAdmin || entitlement.source === 'dev') return '#10B981';
-    if (entitlement.subscriptionDisplayStatus === 'annual') return '#10B981';
     if (entitlement.subscriptionDisplayStatus === 'monthly') return '#2563EB';
     if (entitlement.subscriptionDisplayStatus === 'grace_period') return '#F59E0B';
     return '#EF4444';
   }, [entitlement.source, entitlement.subscriptionDisplayStatus, isAdmin]);
   const subscriptionStatusTitle = useMemo(() => {
     if (isAdmin || entitlement.source === 'dev') return 'Admin Access';
-    if (entitlement.subscriptionDisplayStatus === 'annual') return 'Annual Subscription';
     if (entitlement.subscriptionDisplayStatus === 'monthly') return 'Monthly Subscription';
-    if (entitlement.subscriptionDisplayStatus === 'grace_period') return '5-Day Grace Period';
+    if (entitlement.subscriptionDisplayStatus === 'grace_period') return '3-Day Grace Period';
     return 'Subscription Expired';
   }, [entitlement.source, entitlement.subscriptionDisplayStatus, isAdmin]);
   const subscriptionStatusSubtitle = useMemo(() => {
     if (isAdmin || entitlement.source === 'dev') {
       return 'Admin access active — full app access stays unlocked and restore/licensing tools remain available.';
     }
-    if (entitlement.subscriptionDisplayStatus === 'annual') {
-      return 'Annual plan active — all features unlocked.';
-    }
     if (entitlement.subscriptionDisplayStatus === 'monthly') {
       return 'Monthly plan active — all features unlocked.';
     }
     if (entitlement.subscriptionDisplayStatus === 'grace_period') {
-      return `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining — full access.`;
+      return `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining in your 3-day grace period — full access.`;
     }
-    return 'Purchase a monthly or annual subscription to continue.';
+    return 'Purchase the $9.99/month subscription to continue.';
   }, [entitlement.source, entitlement.subscriptionDisplayStatus, entitlement.trialDaysRemaining, isAdmin]);
   const shouldShowIosMonthlySubscription = Platform.OS !== 'android';
   const isIosMonthlyPurchaseDisabled = entitlement.isLoading || entitlement.isPro;

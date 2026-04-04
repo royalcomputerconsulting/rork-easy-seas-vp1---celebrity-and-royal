@@ -225,7 +225,7 @@ function describePurchasesModuleShape(moduleValue: unknown): Record<string, unkn
 
 export type EntitlementSource = 'iap' | 'dev' | 'grandfathered' | 'unknown';
 export type SubscriptionTier = 'trial' | 'view' | 'basic' | 'pro';
-export type SubscriptionDisplayStatus = 'grace_period' | 'monthly' | 'annual' | 'expired';
+export type SubscriptionDisplayStatus = 'grace_period' | 'monthly' | 'expired';
 export type RevenueCatEnvironment = 'test_store' | 'app_store' | 'play_store' | 'unknown';
 
 export interface EntitlementState {
@@ -267,7 +267,7 @@ const BASE_KEYS = {
   FIRST_ACCOUNT_CREATED: 'easyseas_first_account_created',
 } as const;
 
-const TRIAL_DURATION_DAYS = 5;
+const TRIAL_DURATION_DAYS = 3;
 const CURRENT_USER_ACCESS_LOCKIN_DATE = new Date('2026-03-31T23:59:59.999Z');
 const CURRENT_USER_ACCESS_END_DATE = new Date('2027-03-31T23:59:59.999Z');
 
@@ -375,18 +375,18 @@ function computeIsProFromCustomerInfo(info: CustomerInfo | null): boolean {
   }
 }
 
-function detectActiveSubscriptionType(info: CustomerInfo | null): 'monthly' | 'annual' | null {
+function detectActiveSubscriptionType(info: CustomerInfo | null): 'monthly' | null {
   if (!info) return null;
   try {
     const active = (info.activeSubscriptions ?? []) as string[];
     console.log('[Entitlement] Detecting subscription type from active subs:', active);
-    if (active.some((subscriptionId) => isProAnnualProductId(subscriptionId))) return 'annual';
-    if (active.some((subscriptionId) => isProMonthlyProductId(subscriptionId) || isBasicProductId(subscriptionId))) return 'monthly';
+    if (active.some((subscriptionId) => isProMonthlyProductId(subscriptionId) || isBasicProductId(subscriptionId) || isProAnnualProductId(subscriptionId))) {
+      return 'monthly';
+    }
 
     const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
     const entitlementIds = Object.keys(entitlements).map(k => k.toLowerCase().trim());
     if (entitlementIds.includes('pro') || entitlementIds.includes('pro access') || entitlementIds.includes('basic')) {
-      if (active.some((subscriptionId) => isProAnnualProductId(subscriptionId) || subscriptionId.toLowerCase().includes('annual') || subscriptionId.toLowerCase().includes('yearly'))) return 'annual';
       return 'monthly';
     }
     return null;
@@ -477,7 +477,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   const [isGrandfathered, setIsGrandfathered] = useState<boolean>(false);
   const [accountCreatedAt, setAccountCreatedAt] = useState<Date | null>(null);
   const [subscriptionDisplayStatus, setSubscriptionDisplayStatus] = useState<SubscriptionDisplayStatus>('grace_period');
-  const hasPrivilegedAccess = useMemo(() => auth.isAdmin || auth.isWhitelisted, [auth.isAdmin, auth.isWhitelisted]);
+  const hasPrivilegedAccess = useMemo(() => auth.isAdmin, [auth.isAdmin]);
   const availableProductIds = useMemo(
     () => offerings.flatMap((offering) => (offering.availablePackages ?? []).map((pkg) => pkg.product.identifier)),
     [offerings]
@@ -601,11 +601,18 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     }
   }, [storageKeys.TRIAL_END, storageKeys.TRIAL_START]);
 
-  const computeTier = useCallback((isPro: boolean, isBasic: boolean, _trialEnd: Date | null, isGrandfathered: boolean): SubscriptionTier => {
-    if (isGrandfathered) return 'pro';
+  const computeTier = useCallback((isPro: boolean, isBasic: boolean, currentTrialEnd: Date | null, _isGrandfathered: boolean): SubscriptionTier => {
     if (isPro) return 'pro';
     if (isBasic) return 'basic';
-    return 'basic';
+
+    if (currentTrialEnd) {
+      const now = new Date();
+      if (now < currentTrialEnd) {
+        return 'trial';
+      }
+    }
+
+    return 'view';
   }, []);
 
   const computeDisplayStatus = useCallback((
@@ -626,10 +633,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       trialEnd: currentTrialEnd?.toISOString(),
     });
 
-    if (subType === 'annual') return 'annual';
     if (subType === 'monthly') return 'monthly';
 
-    if (currentIsGrandfathered || currentHasPrivilegedAccess) return 'annual';
+    if (currentHasPrivilegedAccess) return 'monthly';
 
     if (computedIsPro || computedIsBasic) return 'monthly';
 
@@ -664,18 +670,16 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     });
 
     const wasPro = lastIsProRef.current;
-    const finalIsPro = currentIsGrandfathered || effectiveIsPro;
+    const finalIsPro = effectiveIsPro;
 
     setCustomerInfo(info);
     setIsPro(finalIsPro);
     setIsBasic(computedIsBasic);
     setTier(computedTier);
     setSource(
-      currentIsGrandfathered
-        ? 'grandfathered'
-        : currentHasPrivilegedAccess
-          ? 'dev'
-          : (effectiveIsPro || computedIsBasic ? 'iap' : 'unknown')
+      currentHasPrivilegedAccess
+        ? 'dev'
+        : (effectiveIsPro || computedIsBasic ? 'iap' : 'unknown')
     );
     setLastCheckedAt(new Date().toISOString());
     
@@ -720,11 +724,11 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       return;
     }
 
-    const finalIsPro = currentIsGrandfathered || storedIsPro || hasPrivilegedAccess;
+    const finalIsPro = storedIsPro || hasPrivilegedAccess;
     setIsPro(finalIsPro);
     setIsBasic(false);
     setTier(computeTier(finalIsPro, false, currentTrialEnd, currentIsGrandfathered));
-    setSource(currentIsGrandfathered ? 'grandfathered' : (finalIsPro ? 'dev' : 'unknown'));
+    setSource(hasPrivilegedAccess ? 'dev' : (storedIsPro ? 'iap' : 'unknown'));
     setLastCheckedAt(new Date().toISOString());
     setCustomerInfo(null);
     setOfferings([]);
@@ -950,7 +954,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
           setIsPro(true);
           setIsBasic(false);
           setTier(computeTier(true, false, currentTrialEnd, currentIsGrandfathered));
-          setSource(currentIsGrandfathered ? 'grandfathered' : 'dev');
+          setSource('dev');
           setLastCheckedAt(new Date().toISOString());
           setCustomerInfo(null);
           setOfferings([]);
@@ -1041,9 +1045,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         await AsyncStorage.setItem(storageKeys.WEB_IS_PRO, 'true');
         if (!mountedRef.current) return;
         setIsPro(true);
-        setSource('dev');
+        setSource('iap');
         setLastCheckedAt(new Date().toISOString());
-        Alert.alert('Unlocked (Web)', 'Pro has been enabled for web preview.');
+        Alert.alert('Unlocked (Web)', 'Monthly access has been enabled for web preview.');
         return;
       } catch (e) {
         console.error(`[Entitlement] web subscribeToProduct failed`, e);
@@ -1109,7 +1113,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   }, [subscribeToProduct]);
 
   const subscribeProAnnual = useCallback(async () => {
-    await subscribeToProduct(ANNUAL_PRODUCT_IDS, 'Pro annual subscription');
+    await subscribeToProduct(MONTHLY_PRODUCT_IDS, 'Pro monthly subscription');
   }, [subscribeToProduct]);
 
   const restore = useCallback(async () => {
@@ -1140,42 +1144,13 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
     try {
       setIsLoading(true);
-      
-      let hasWhitelistAccess = false;
-      if (auth.isWhitelisted && auth.authenticatedEmail) {
-        console.log('[Entitlement] Whitelisted email detected during restore:', auth.authenticatedEmail);
-        hasWhitelistAccess = true;
-        
-        setIsPro(true);
-        setSource('dev');
-        setLastCheckedAt(new Date().toISOString());
-        
-        const wasPro = lastIsProRef.current;
-        lastIsProRef.current = true;
-        
-        if (!wasPro) {
-          try {
-            if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
-              console.log('[Entitlement] Dispatching entitlementProUnlocked event for whitelisted user');
-              window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
-            }
-          } catch (e) {
-            console.error('[Entitlement] Failed to dispatch entitlementProUnlocked event', e);
-          }
-        }
-      }
-      
+
       const purchases = await ensurePurchasesLoaded();
       if (!purchases) {
         const message = purchasesInitError ?? 'In-app purchases are not configured.';
         console.warn('[Entitlement] restore: Purchases unavailable', { message });
-        
-        if (hasWhitelistAccess) {
-          Alert.alert('Success', 'Full access unlocked via whitelisted email.');
-        } else {
-          Alert.alert('Not Available', message);
-          setError(message);
-        }
+        Alert.alert('Not Available', message);
+        setError(message);
         return;
       }
 
@@ -1187,26 +1162,18 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         entitlements: Object.keys(info?.entitlements?.active ?? {}),
       });
       if (!mountedRef.current) return;
-      
+
       const hasProPurchase = computeIsProFromCustomerInfo(info);
       const hasBasicPurchase = computeIsBasicFromCustomerInfo(info);
-      const hasAnyActivePurchase = hasProPurchase || hasBasicPurchase;
-      
+
       const storedTrialEnd = await AsyncStorage.getItem(storageKeys.TRIAL_END);
       const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
       setStateFromCustomerInfo(info, currentTrialEnd, isGrandfathered, hasPrivilegedAccess);
-      
+
       if (!mountedRef.current) return;
-      
-      if (hasWhitelistAccess && hasAnyActivePurchase) {
-        const tierName = hasProPurchase ? 'Pro' : 'Basic';
-        Alert.alert('Success', `Full access unlocked via whitelisted email and active ${tierName} subscription restored.`);
-      } else if (hasWhitelistAccess) {
-        Alert.alert('Success', 'Full access unlocked via whitelisted email.');
-      } else if (hasProPurchase) {
-        Alert.alert('Restored', 'Pro subscription restored successfully.');
-      } else if (hasBasicPurchase) {
-        Alert.alert('Restored', 'Basic subscription restored successfully.');
+
+      if (hasProPurchase || hasBasicPurchase) {
+        Alert.alert('Restored', 'Monthly subscription restored successfully.');
       } else {
         Alert.alert('Restored', 'No active subscription found.');
       }
@@ -1222,7 +1189,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setIsLoading(false);
       }
     }
-  }, [auth.authenticatedEmail, auth.isWhitelisted, ensurePurchasesLoaded, hasPrivilegedAccess, isGrandfathered, refresh, setStateFromCustomerInfo, storageKeys.TRIAL_END, syncPurchasesIdentity]);
+  }, [ensurePurchasesLoaded, hasPrivilegedAccess, isGrandfathered, refresh, setStateFromCustomerInfo, storageKeys.TRIAL_END, syncPurchasesIdentity]);
 
   const openManageSubscription = useCallback(async () => {
     if (Platform.OS === 'web') {

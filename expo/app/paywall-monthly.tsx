@@ -11,7 +11,7 @@ export default function PaywallMonthlyScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
   const { isAdmin } = useAuth();
-  const isPurchaseDisabled = entitlement.isLoading || entitlement.isPro || !isAdmin;
+  const isPurchaseDisabled = entitlement.isLoading || entitlement.isPro;
 
   const handleClose = useCallback(() => {
     console.log('[PaywallMonthly] Close requested');
@@ -46,22 +46,16 @@ export default function PaywallMonthlyScreen() {
               ) : (
                 <Text style={styles.purchaseButtonText}>
                   {entitlement.isPro
-                    ? 'Subscribed'
-                    : !isAdmin
-                      ? 'Admin Only'
-                      : Platform.OS === 'android'
-                        ? 'Subscribe via Google Play'
-                        : 'Subscribe Now'}
+                    ? isAdmin
+                      ? 'Admin Access Active'
+                      : 'Subscribed'
+                    : Platform.OS === 'android'
+                      ? 'Subscribe via Google Play'
+                      : 'Subscribe Now'}
                 </Text>
               )}
             </TouchableOpacity>
 
-            {!isAdmin && (
-              <View style={styles.errorBox} testID="paywall-monthly.admin-only">
-                <Text style={styles.errorTitle}>Admin only</Text>
-                <Text style={styles.errorBody}>Monthly in-app purchases are temporarily restricted to admin users.</Text>
-              </View>
-            )}
 
             {!!entitlement.error && (
               <View style={styles.errorBox} testID="paywall-monthly.error">
@@ -97,7 +91,7 @@ export default function PaywallMonthlyScreen() {
           <View style={styles.bottomBlock}>
             <View style={styles.disclosureBox}>
               <Text style={styles.disclosureBody}>
-                Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews at $9.99/month unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
+                Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews at $9.99/month unless cancelled at least 24 hours before the end of the current period. Non-admin accounts receive a 3-day grace period before billing is required. Manage or cancel anytime in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
               </Text>
             </View>
 

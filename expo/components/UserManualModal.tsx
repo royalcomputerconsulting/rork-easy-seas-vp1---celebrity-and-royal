@@ -119,7 +119,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
                 When you first open EasySeas, you will see a welcome splash screen. The app requires authentication to ensure your data is secure.
               </Paragraph>
               <BulletList title="Initial Setup Steps:" items={[
-                'Sign in with your email (sync requires an active subscription or a whitelisted email)',
+                'Sign in with your email (sync requires an active subscription unless you are an admin)',
                 'Complete your user profile in Settings with your name and loyalty points',
                 'Import your cruise data using Chrome extensions or CSV files (see Chrome Extensions Setup)',
               ]} />
@@ -799,7 +799,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
               <Text style={styles.subHeader}>Profile Card</Text>
               <FieldList items={[
                 { field: 'Name Input', description: 'Enter your full name. Used for display throughout the app.' },
-                { field: 'Email Input', description: 'Your email address. Sync features may require an active subscription or a whitelisted email.' },
+                { field: 'Email Input', description: 'Your email address. Sync features require an active subscription unless you are an admin.' },
                 { field: 'Crown & Anchor Number', description: 'Your Royal Caribbean loyalty number (found on your SeaPass card or account)' },
               ]} />
               <ButtonList items={[

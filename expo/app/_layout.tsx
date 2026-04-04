@@ -395,7 +395,7 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   isClearing: boolean;
   setIsClearing: (clearing: boolean) => void;
 }) {
-  const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail, isWhitelisted } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail } = useAuth();
   const { initialCheckComplete, isSyncing, lastRestoreTime } = useUserDataSync();
   const { setIsUserWhitelisted } = useSlotMachineLibrary();
   const { refreshData } = useCoreData();
@@ -463,8 +463,8 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   }, [isAuthenticated, lastRestoreTime]);
 
   useEffect(() => {
-    setIsUserWhitelisted(isWhitelisted);
-  }, [isWhitelisted, setIsUserWhitelisted]);
+    setIsUserWhitelisted(false);
+  }, [setIsUserWhitelisted]);
 
   const handleSplashComplete = useCallback(() => {
     setShowSplash(false);
