@@ -52,6 +52,83 @@ function getMiniCardBackdropColors(seed: string): readonly [string, string, stri
   return MINI_CARD_BACKDROP_PALETTES[getDeterministicHash(seed) % MINI_CARD_BACKDROP_PALETTES.length] ?? MINI_CARD_BACKDROP_PALETTES[0];
 }
 
+function cleanText(value?: string | null): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function isGenericCruiseLabel(value?: string | null): boolean {
+  const normalized = cleanText(value).toLowerCase();
+
+  if (!normalized) {
+    return true;
+  }
+
+  if (/^\d+$/.test(normalized)) {
+    return true;
+  }
+
+  return /^(\d+\s*-?\s*night(s)?\s*cruise|cruise|cruise itinerary)$/i.test(normalized);
+}
+
+function normalizePortLabel(value?: string | null): string {
+  const cleaned = cleanText(value)
+    .replace(/^roundtrip from\s+/i, '')
+    .replace(/^day\s*\d+[:-]?\s*/i, '')
+    .replace(/\b(arrive|arrival|depart|departure)\b.*$/i, '')
+    .replace(/\b\d{1,2}:\d{2}\s*(am|pm)\b/gi, '')
+    .replace(/[•|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned) {
+    return '';
+  }
+
+  if (/sea day/i.test(cleaned)) {
+    return 'Sea Day';
+  }
+
+  if (isGenericCruiseLabel(cleaned)) {
+    return '';
+  }
+
+  return cleaned;
+}
+
+function getUniqueDisplayValues(values: string[]): string[] {
+  const seen = new Set<string>();
+  const uniqueValues: string[] = [];
+
+  values.forEach((value) => {
+    const normalized = cleanText(value);
+    const key = normalized.toLowerCase();
+
+    if (!normalized || seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    uniqueValues.push(normalized);
+  });
+
+  return uniqueValues;
+}
+
+function parsePortsAndTimes(portsAndTimes?: string): string[] {
+  if (!portsAndTimes) {
+    return [];
+  }
+
+  return portsAndTimes
+    .split(/\r?\n|[→›|]/)
+    .map((segment) => normalizePortLabel(segment))
+    .filter((segment): segment is string => Boolean(segment));
+}
+
 function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'active' {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -141,17 +218,20 @@ export const CruiseCard = React.memo(function CruiseCard({
   }, [cruise, showRetailValue]);
 
   const itineraryPorts = useMemo((): string[] => {
-    const itineraryStops = bookedCruise.itinerary?.map((day: ItineraryDay) => day.port).filter((port): port is string => Boolean(port && port.trim())) ?? [];
+    const itineraryStops = bookedCruise.itinerary?.map((day: ItineraryDay) => day.isSeaDay ? 'Sea Day' : day.port).filter((port): port is string => Boolean(port && cleanText(port))) ?? [];
+    const structuredPorts = bookedCruise.ports?.filter((port): port is string => Boolean(port && cleanText(port))) ?? [];
+    const rawItineraryPorts = bookedCruise.itineraryRaw?.map((port) => normalizePortLabel(port)).filter((port): port is string => Boolean(port)) ?? [];
+    const parsedPorts = parsePortsAndTimes(bookedCruise.portsAndTimes);
 
-    if (itineraryStops.length > 0) {
-      return itineraryStops;
-    }
-
-    return bookedCruise.ports?.filter((port): port is string => Boolean(port && port.trim())) ?? [];
-  }, [bookedCruise.itinerary, bookedCruise.ports]);
+    return getUniqueDisplayValues([
+      ...itineraryStops.map((port) => normalizePortLabel(port)).filter(Boolean),
+      ...structuredPorts.map((port) => normalizePortLabel(port)).filter(Boolean),
+      ...rawItineraryPorts,
+      ...parsedPorts,
+    ]);
+  }, [bookedCruise.itinerary, bookedCruise.itineraryRaw, bookedCruise.ports, bookedCruise.portsAndTimes]);
 
   const guestCount = bookedCruise.guestNames?.length || bookedCruise.guests || 2;
-  const visiblePorts = itineraryPorts.slice(0, 4);
   const offerCodeValue = bookedCruise.offerCode || cruise.offerCode;
   const freePlayAmount = bookedCruise.freePlay ?? cruise.freePlay ?? 0;
   const obcAmount = bookedCruise.freeOBC ?? cruise.freeOBC ?? 0;
@@ -209,22 +289,57 @@ export const CruiseCard = React.memo(function CruiseCard({
     }
   };
 
-  const getItineraryName = () => {
-    if (cruise.itineraryName) {
-      const parts = cruise.itineraryName.split(':');
-      if (parts.length > 1) {
-        return parts[1].trim();
-      }
-      
-      const isJustNumber = /^\d+$/.test(cruise.itineraryName.trim());
-      if (isJustNumber || cruise.itineraryName.length < 5) {
-        return `${cruise.nights || 0}-Night ${cruise.destination || 'Cruise'}`;
-      }
-      
-      return cruise.itineraryName;
+  const displayRouteOrigin = useMemo(() => {
+    return normalizePortLabel(cruise.departurePort);
+  }, [cruise.departurePort]);
+
+  const displayRouteStops = useMemo(() => {
+    const normalizedStops = getUniqueDisplayValues(
+      itineraryPorts
+        .map((port) => normalizePortLabel(port))
+        .filter((port) => port.length > 0 && port.toLowerCase() !== displayRouteOrigin.toLowerCase())
+    );
+
+    return displayRouteOrigin ? [displayRouteOrigin, ...normalizedStops] : normalizedStops;
+  }, [displayRouteOrigin, itineraryPorts]);
+
+  const displayItineraryName = useMemo(() => {
+    const itineraryName = cleanText(cruise.itineraryName);
+    if (!isGenericCruiseLabel(itineraryName)) {
+      const titleParts = itineraryName.split(':').map((part) => cleanText(part)).filter(Boolean);
+      return titleParts.length > 1 ? titleParts.slice(1).join(': ') : itineraryName;
     }
-    return `${cruise.nights || 0}-Night ${cruise.destination || 'Cruise'}`;
-  };
+
+    const destination = normalizePortLabel(cruise.destination);
+    if (!isGenericCruiseLabel(destination) && destination.toLowerCase() !== displayRouteOrigin.toLowerCase()) {
+      return destination;
+    }
+
+    const itineraryStops = displayRouteStops
+      .slice(displayRouteOrigin ? 1 : 0)
+      .filter((port) => port.toLowerCase() !== 'sea day');
+
+    if (itineraryStops.length > 0) {
+      return itineraryStops.join(' • ');
+    }
+
+    return cruise.nights > 0 ? `${cruise.nights}-Night Cruise` : 'Cruise';
+  }, [cruise.destination, cruise.itineraryName, cruise.nights, displayRouteOrigin, displayRouteStops]);
+
+  const displayRouteLabel = displayRouteOrigin ? 'Roundtrip from' : 'Itinerary';
+  const displayRouteValue = displayRouteOrigin || displayItineraryName;
+  const displayRouteSummary = useMemo(() => {
+    if (displayRouteStops.length <= 1) {
+      return '';
+    }
+
+    return displayRouteStops.join(' • ');
+  }, [displayRouteStops]);
+  const visiblePorts = useMemo(() => {
+    return displayRouteStops
+      .filter((port, index) => !(index === 0 && port === displayRouteOrigin))
+      .slice(0, 4);
+  }, [displayRouteOrigin, displayRouteStops]);
 
   const statusBadge = getStatusBadge();
 
@@ -297,9 +412,9 @@ export const CruiseCard = React.memo(function CruiseCard({
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.miniItinerary} numberOfLines={1}>{getItineraryName()}</Text>
+                  <Text style={styles.miniItinerary} numberOfLines={1}>{displayItineraryName}</Text>
                   <Text style={styles.miniDestination} numberOfLines={1}>
-                    {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
+                    {displayRouteOrigin ? `From ${displayRouteOrigin}` : (displayRouteSummary || displayItineraryName)}
                   </Text>
                   {miniPorts.length > 0 && (
                     <Text style={styles.miniPorts} numberOfLines={2}>
@@ -524,9 +639,22 @@ export const CruiseCard = React.memo(function CruiseCard({
           testID="cruise-card-booked"
         >
           <View style={styles.bookedContainer}>
+            <StableRemoteImage
+              uri={cardImageUri}
+              fallbackUri={cardImageFallbackUri}
+              style={styles.bookedBackdropImage}
+              recyclingKey={`${cruise.id}-booked-backdrop-image`}
+              testID="cruise-card-booked-backdrop-image"
+            />
+            <LinearGradient
+              colors={['rgba(255, 249, 245, 0.7)', 'rgba(255, 246, 241, 0.88)', 'rgba(255, 255, 255, 0.96)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.bookedBackdropTint}
+            />
             <CasinoCardBackground />
             <LinearGradient
-              colors={['rgba(255, 243, 240, 0.82)', 'rgba(246, 221, 230, 0.48)', 'rgba(247, 233, 255, 0.22)']}
+              colors={['rgba(255, 243, 240, 0.68)', 'rgba(246, 221, 230, 0.34)', 'rgba(247, 233, 255, 0.14)']}
               start={{ x: 0.06, y: 0 }}
               end={{ x: 0.96, y: 1 }}
               style={styles.bookedThemeScrim}
@@ -536,12 +664,30 @@ export const CruiseCard = React.memo(function CruiseCard({
                 <View style={styles.bookedTitleGroup}>
                   <View style={styles.bookedShipRow}>
                     <Ship size={15} color={COLORS.navyDeep} />
-                    <Text style={styles.bookedShipName} numberOfLines={1}>{cruise.shipName}</Text>
+                    <Text style={styles.bookedShipName} numberOfLines={2}>{cruise.shipName}</Text>
                   </View>
-                  <Text style={styles.bookedItinerary} numberOfLines={2}>{getItineraryName()}</Text>
+                  <Text style={styles.bookedItinerary} numberOfLines={3}>{displayItineraryName}</Text>
+                  {!!displayRouteSummary && (
+                    <Text style={styles.bookedHeroRouteText} numberOfLines={2}>{displayRouteSummary}</Text>
+                  )}
                 </View>
-                <View style={[styles.bookedStatusBadge, { backgroundColor: statusBadge.bg }]}>
-                  <Text style={styles.bookedStatusBadgeText}>{statusBadge.text}</Text>
+                <View style={styles.bookedHeroAside}>
+                  <View style={[styles.bookedStatusBadge, { backgroundColor: statusBadge.bg }]}>
+                    <Text style={styles.bookedStatusBadgeText}>{statusBadge.text}</Text>
+                  </View>
+                  <View style={styles.bookedImageFrame}>
+                    <StableRemoteImage
+                      uri={cardImageUri}
+                      fallbackUri={cardImageFallbackUri}
+                      style={styles.bookedImage}
+                      recyclingKey={`${cruise.id}-booked-image`}
+                      testID="cruise-card-booked-image"
+                    />
+                    <LinearGradient
+                      colors={['rgba(3, 24, 44, 0.02)', 'rgba(3, 24, 44, 0.28)']}
+                      style={styles.bookedImageOverlay}
+                    />
+                  </View>
                 </View>
               </View>
 
@@ -561,8 +707,11 @@ export const CruiseCard = React.memo(function CruiseCard({
               </View>
 
               <View style={styles.bookedRouteCard}>
-                <Text style={styles.bookedRouteLabel}>Roundtrip from</Text>
-                <Text style={styles.bookedRouteValue}>{cruise.departurePort || cruise.destination || 'Cruise itinerary'}</Text>
+                <Text style={styles.bookedRouteLabel}>{displayRouteLabel}</Text>
+                <Text style={styles.bookedRouteValue}>{displayRouteValue || 'Cruise itinerary'}</Text>
+                {!!displayRouteSummary && displayRouteSummary !== displayRouteValue && (
+                  <Text style={styles.bookedRouteSummary}>{displayRouteSummary}</Text>
+                )}
                 {visiblePorts.length > 0 && (
                   <View style={styles.bookedPortsRow}>
                     {visiblePorts.map((port: string, index: number) => (
@@ -570,9 +719,9 @@ export const CruiseCard = React.memo(function CruiseCard({
                         <Text style={styles.bookedPortChipText}>{port}</Text>
                       </View>
                     ))}
-                    {itineraryPorts.length > visiblePorts.length && (
+                    {displayRouteStops.length - (displayRouteOrigin ? 1 : 0) > visiblePorts.length && (
                       <View style={styles.bookedPortChip}>
-                        <Text style={styles.bookedPortChipText}>+{itineraryPorts.length - visiblePorts.length} more</Text>
+                        <Text style={styles.bookedPortChipText}>+{displayRouteStops.length - (displayRouteOrigin ? 1 : 0) - visiblePorts.length} more</Text>
                       </View>
                     )}
                   </View>
@@ -644,13 +793,23 @@ export const CruiseCard = React.memo(function CruiseCard({
                   <Text style={styles.saleBadgeText}>Casino Offer</Text>
                 </View>
               ) : <View />}
-              <View style={styles.nightsBadge}>
-                <Text style={styles.nightsBadgeText}>{cruise.nights} Nights</Text>
+              <View style={styles.heroThumbnailFrame}>
+                <StableRemoteImage
+                  uri={cardImageUri}
+                  fallbackUri={cardImageFallbackUri}
+                  style={styles.heroThumbnailImage}
+                  recyclingKey={`${cruise.id}-hero-thumbnail-image`}
+                  testID="cruise-card-hero-thumbnail-image"
+                />
+                <LinearGradient
+                  colors={['rgba(3, 24, 44, 0.04)', 'rgba(3, 24, 44, 0.32)']}
+                  style={styles.heroThumbnailOverlay}
+                />
               </View>
             </View>
             <View style={styles.cruiseNameOverlay}>
-              <Text style={styles.cruiseNameText}>{getItineraryName()}</Text>
-              <Text style={styles.cruiseHeroRoute}>{cruise.departurePort || cruise.destination || 'Cruise itinerary'}</Text>
+              <Text style={styles.cruiseNameText}>{displayItineraryName}</Text>
+              <Text style={styles.cruiseHeroRoute}>{displayRouteSummary || displayRouteValue || 'Cruise itinerary'}</Text>
             </View>
           </View>
           
@@ -678,28 +837,22 @@ export const CruiseCard = React.memo(function CruiseCard({
             </View>
 
             <View style={styles.routeInfo}>
-              <Text style={styles.routeLabel}>ROUNDTRIP FROM:</Text>
-              <Text style={styles.routeValue}>{cruise.departurePort || cruise.destination}</Text>
+              <Text style={styles.routeLabel}>{`${displayRouteLabel.toUpperCase()}:`}</Text>
+              <Text style={styles.routeValue}>{displayRouteValue || 'Cruise itinerary'}</Text>
+              {!!displayRouteSummary && displayRouteSummary !== displayRouteValue && (
+                <Text style={styles.routeSummary}>{displayRouteSummary}</Text>
+              )}
             </View>
 
-            {bookedCruise.itinerary && bookedCruise.itinerary.length > 0 && (
+            {visiblePorts.length > 0 && (
               <View style={styles.visitingSection}>
                 <Text style={styles.visitingLabel}>VISITING:</Text>
                 <Text style={styles.visitingPorts}>
-                  {bookedCruise.itinerary.map((day: ItineraryDay) => day.port).join(' • ')}
+                  {visiblePorts.join(' • ')}
                 </Text>
-                <TouchableOpacity>
-                  <Text style={styles.viewPortsLink}>+ View Ports & Map</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {bookedCruise.ports && bookedCruise.ports.length > 0 && !bookedCruise.itinerary && (
-              <View style={styles.visitingSection}>
-                <Text style={styles.visitingLabel}>VISITING:</Text>
-                <Text style={styles.visitingPorts}>
-                  {bookedCruise.ports.join(' • ')}
-                </Text>
+                {displayRouteStops.length - (displayRouteOrigin ? 1 : 0) > visiblePorts.length && (
+                  <Text style={styles.viewPortsLink}>+{displayRouteStops.length - (displayRouteOrigin ? 1 : 0) - visiblePorts.length} more ports</Text>
+                )}
               </View>
             )}
 
@@ -1172,12 +1325,20 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   bookedContainer: {
-    minHeight: 226,
+    minHeight: 248,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     backgroundColor: '#FFF8F4',
     borderWidth: 1,
     borderColor: 'rgba(209, 165, 153, 0.26)',
+  },
+  bookedBackdropImage: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.28,
+    backgroundColor: 'rgba(244,248,255,0.78)',
+  },
+  bookedBackdropTint: {
+    ...StyleSheet.absoluteFillObject,
   },
   bookedMarbleBase: {
     ...StyleSheet.absoluteFillObject,
@@ -1247,6 +1408,11 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     gap: SPACING.sm,
   },
+  bookedHeroAside: {
+    width: 94,
+    alignItems: 'flex-end',
+    gap: 8,
+  },
   bookedHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1274,6 +1440,12 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.navyDeep,
   },
+  bookedHeroRouteText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#38506B',
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
   bookedStatusBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
@@ -1287,6 +1459,23 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
     letterSpacing: 0.5,
     color: COLORS.white,
+  },
+  bookedImageFrame: {
+    width: 86,
+    height: 94,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  bookedImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(244,248,255,0.78)',
+  },
+  bookedImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   bookedMetaGrid: {
     flexDirection: 'row',
@@ -1328,6 +1517,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.textBlack,
+  },
+  bookedRouteSummary: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 19,
+    color: '#506A84',
   },
   bookedPortsRow: {
     flexDirection: 'row',
@@ -1461,6 +1655,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: SPACING.sm,
   },
+  heroThumbnailFrame: {
+    width: 74,
+    height: 74,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  heroThumbnailImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(244,248,255,0.78)',
+  },
+  heroThumbnailOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
   cruiseHeroRoute: {
     marginTop: 4,
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -1566,6 +1777,12 @@ const styles = StyleSheet.create({
   routeValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.textBlack,
+  },
+  routeSummary: {
+    marginTop: 4,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 18,
+    color: '#506A84',
   },
   visitingSection: {
     marginBottom: SPACING.sm,
