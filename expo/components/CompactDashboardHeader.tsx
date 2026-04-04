@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users } from 'lucide-react-native';
@@ -59,6 +59,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   } = useLoyalty();
   const { currentUser } = useUser();
   const [activeBrand, setActiveBrand] = useState<BrandType>(currentUser?.preferredBrand || 'royal');
+  const [showNumber, setShowNumber] = useState(false);
+
+  const toggleShowNumber = useCallback(() => setShowNumber(v => !v), []);
 
   useEffect(() => {
     setActiveBrand(currentUser?.preferredBrand || 'royal');
@@ -97,13 +100,16 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   const marbleConfig = MARBLE_TEXTURES.lightBlue;
 
   const displayName = currentUser?.name || memberName;
-  const displayNumber = activeBrand === 'royal' 
+  const rawNumber = activeBrand === 'royal' 
     ? (crownAnchorNumber || currentUser?.crownAnchorNumber || '')
     : activeBrand === 'celebrity'
-    ? (currentUser?.celebrityCaptainsClubNumber || 'Not set')
+    ? (currentUser?.celebrityCaptainsClubNumber || '')
     : activeBrand === 'silversea'
-    ? (currentUser?.silverseaVenetianNumber || 'Not set')
-    : (currentUser?.carnivalVifpNumber || 'Not set');
+    ? (currentUser?.silverseaVenetianNumber || '')
+    : (currentUser?.carnivalVifpNumber || '');
+  const displayNumber = rawNumber
+    ? (showNumber ? rawNumber : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022')
+    : 'Not set';
   const displayNumberLabel = activeBrand === 'royal' ? 'C&A #'
     : activeBrand === 'celebrity' ? 'Captain\'s Club #'
     : activeBrand === 'silversea' ? 'Venetian Society #'
@@ -135,7 +141,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           )}
           <View style={styles.memberTextInfo}>
             <Text style={styles.memberGreeting}>{displayName}</Text>
-            <Text style={styles.memberSubtitle}>{displayNumberLabel} {displayNumber}</Text>
+            <TouchableOpacity onPress={rawNumber ? toggleShowNumber : undefined} activeOpacity={rawNumber ? 0.7 : 1}>
+              <Text style={styles.memberSubtitle}>{displayNumberLabel} {displayNumber}</Text>
+            </TouchableOpacity>
           </View>
         </View>
         

@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { AddCrewMemberModal } from './AddCrewMemberModal';
+import { ImportCrewTextModal } from './ImportCrewTextModal';
 import { RecognitionEntryDetailModal } from './RecognitionEntryDetailModal';
 import { SurveyListModal } from './SurveyListModal';
 import { exportToCSV } from '@/lib/csv-export';
@@ -75,11 +76,13 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     updateRecognitionEntry,
     deleteRecognitionEntry,
     syncFromCSVLocally,
+    importFromTextLocally,
   } = useCrewRecognition();
 
   const { bookedCruises } = useCoreData();
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportTextModal, setShowImportTextModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<RecognitionEntryWithCrew | null>(null);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -144,16 +147,16 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     }
   }, [filters.departments, updateFilters]);
 
-  const allRoyalShips = useMemo(() => getAllShipNames().sort(), []);
+  const allRoyalShips = useMemo(() => getAllShipNames().sort((a, b) => a.localeCompare(b)), []);
   const sailingShips = useMemo(() => sailings.map(s => s.shipName), [sailings]);
   const uniqueShips = useMemo(
-    () => Array.from(new Set([...allRoyalShips, ...sailingShips])).sort(),
+    () => Array.from(new Set([...allRoyalShips, ...sailingShips])).sort((a, b) => a.localeCompare(b)),
     [allRoyalShips, sailingShips]
   );
 
   const uniqueDepts = useMemo(() => {
     const entryDepts = entries.map(e => e.department);
-    return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort();
+    return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort((a, b) => a.localeCompare(b));
   }, [entries]);
 
   const showMockData = stats.crewMemberCount === 0 && !statsLoading;
@@ -190,6 +193,10 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
           <Plus size={18} color="#0369A1" />
           <Text style={styles.addButtonText}>Add Crew</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.importTextButton} onPress={() => setShowImportTextModal(true)}>
+          <Plus size={18} color="#059669" />
+          <Text style={styles.importTextButtonText}>Import List</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
@@ -462,6 +469,12 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         bookedCruises={bookedCruises}
       />
 
+      <ImportCrewTextModal
+        visible={showImportTextModal}
+        onClose={() => setShowImportTextModal(false)}
+        onImport={importFromTextLocally}
+      />
+
       <RecognitionEntryDetailModal
         visible={!!selectedEntry}
         entry={selectedEntry}
@@ -547,6 +560,24 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: '#0369A1',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '600' as const,
+  },
+  importTextButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    backgroundColor: 'rgba(5, 150, 105, 0.08)',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(5, 150, 105, 0.3)',
+  },
+  importTextButtonText: {
+    color: '#059669',
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
   },

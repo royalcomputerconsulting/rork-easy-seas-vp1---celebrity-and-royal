@@ -2,20 +2,17 @@ import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
 import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat, type SyncDataSource } from './dataTransformers';
 
-function getEffectiveSource(source: SyncDataSource | undefined): SyncDataSource {
-  return source ?? 'royal';
-}
-
 function areSourcesCompatible(sourceA: SyncDataSource | undefined, sourceB: SyncDataSource | undefined): boolean {
-  return getEffectiveSource(sourceA) === getEffectiveSource(sourceB);
+  if (sourceA === undefined || sourceB === undefined) return true;
+  return sourceA === sourceB;
 }
 
 function isManagedOfferSource(offer: CasinoOffer, syncSource: SyncDataSource): boolean {
-  return getEffectiveSource(offer.offerSource) === syncSource;
+  return offer.offerSource === syncSource;
 }
 
 function isManagedCruiseSource(cruise: Cruise | BookedCruise, syncSource: SyncDataSource): boolean {
-  return getEffectiveSource(cruise.cruiseSource) === syncSource;
+  return cruise.cruiseSource === syncSource;
 }
 
 export interface SyncPreview {

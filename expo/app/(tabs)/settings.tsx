@@ -1672,6 +1672,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
+            {isAdmin && (
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/carnival-sync' as any)}
@@ -1683,6 +1684,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Sync Carnival Cruises</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
+            )}
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/pricing-summary' as any)}
@@ -2144,23 +2146,20 @@ STEP 4: Optional Calendar Import
               {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan')}
               <View style={styles.subscriptionStatusBanner}>
                 <Crown size={18} color={
-                  entitlement.subscriptionDisplayStatus === 'annual' ? '#10B981' :
-                  entitlement.subscriptionDisplayStatus === 'monthly' ? '#3B82F6' :
+                  entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? '#3B82F6' :
                   entitlement.subscriptionDisplayStatus === 'grace_period' ? '#F59E0B' :
                   '#EF4444'
                 } />
                 <View style={styles.subscriptionStatusText}>
                   <Text style={styles.subscriptionStatusTitle}>
-                    {entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual Subscription' :
-                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly Subscription' :
+                    {entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? 'Monthly Subscription' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? '5-Day Grace Period' :
                      'Subscription Expired'}
                   </Text>
                   <Text style={styles.subscriptionStatusSubtitle}>
-                    {entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual plan active — all features unlocked' :
-                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly plan active — all features unlocked' :
+                    {entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? 'Monthly plan active — all features unlocked' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining — full access` :
-                     'Purchase a monthly or annual subscription to continue'}
+                     'Purchase a monthly subscription ($9.99/month) to continue'}
                   </Text>
                 </View>
               </View>
@@ -2183,12 +2182,6 @@ STEP 4: Optional Calendar Import
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
                 () => router.push('/paywall-monthly' as any)
               )}
-              {renderSettingRow(
-                <Crown size={18} color={COLORS.navyDeep} />,
-                'Purchase an Annual Subscription',
-                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
-                () => router.push('/paywall' as any)
-              )}
               <View style={styles.dataDivider} />
               {renderSettingRow(
                 <Shield size={18} color={COLORS.navyDeep} />,
@@ -2204,7 +2197,7 @@ STEP 4: Optional Calendar Import
               )}
             </View>
             <Text style={styles.subscriptionHint}>
-              Manage your subscription status, restore previous purchases, and review legal terms. The annual subscription renews automatically unless canceled at least 24 hours before the end of the current period.
+              Manage your subscription status, restore previous purchases, and review legal terms. The subscription automatically renews at $9.99/month unless canceled at least 24 hours before the end of the current period.
             </Text>
           </View>
 
