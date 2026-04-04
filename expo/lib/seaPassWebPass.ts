@@ -339,10 +339,15 @@ async function fetchImageAsDataUrl(url: string): Promise<string> {
 
 async function getSeaPassApprovedScreenshotDataUrl(): Promise<string> {
   if (!approvedSeaPassImageDataUrlPromise) {
-    approvedSeaPassImageDataUrlPromise = fetchImageAsDataUrl(SEA_PASS_APPROVED_SCREENSHOT_URL).catch((error) => {
-      approvedSeaPassImageDataUrlPromise = null;
-      throw error;
-    });
+    approvedSeaPassImageDataUrlPromise = fetchImageAsDataUrl(SEA_PASS_APPROVED_SCREENSHOT_URL)
+      .catch((error) => {
+        console.log('[SeaPassWebPass] API proxy fetch failed, falling back to source URL:', error instanceof Error ? error.message : String(error));
+        return fetchImageAsDataUrl(SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL);
+      })
+      .catch((error) => {
+        approvedSeaPassImageDataUrlPromise = null;
+        throw error;
+      });
   }
 
   return approvedSeaPassImageDataUrlPromise;
