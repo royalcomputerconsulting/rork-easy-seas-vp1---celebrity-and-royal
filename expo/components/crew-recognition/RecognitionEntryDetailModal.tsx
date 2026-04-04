@@ -228,12 +228,12 @@ export function RecognitionEntryDetailModal({
               )}
             </View>
 
-            {entry.crewNotes ? (
+            {entry.crewNotes && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Crew Notes</Text>
                 <Text style={styles.valueText}>{entry.crewNotes}</Text>
               </View>
-            ) : null}
+            )}
           </ScrollView>
 
           {isEditing && (

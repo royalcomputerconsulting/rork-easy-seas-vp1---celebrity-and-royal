@@ -6,16 +6,16 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
+  Platform,
   ActivityIndicator,
   Animated,
   Image,
-  Linking,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { 
   Tag,
+  AlertTriangle,
   Sparkles,
   Bot,
   Target,
@@ -132,8 +132,6 @@ interface CasinoOfferCardData {
   obc?: number;
   perks?: string[];
   cruises: Cruise[];
-  offerSource?: 'royal' | 'celebrity' | 'carnival';
-  bookingLink?: string;
 }
 
 function OverviewScreenContent() {
@@ -229,8 +227,6 @@ function OverviewScreenContent() {
           obc,
           perks: offer.perks ?? [],
           cruises: [],
-          offerSource: offer.offerSource,
-          bookingLink: offer.bookingLink,
         });
         return;
       }
@@ -276,7 +272,7 @@ function OverviewScreenContent() {
       }
     });
 
-    return Array.from(offersMap.values()).filter(offer => offer.cruises.length > 0 || offer.offerSource === 'carnival');
+    return Array.from(offersMap.values()).filter(offer => offer.cruises.length > 0);
   }, [offersData, cruisesData]);
 
   const nonExpiredOffers = useMemo(() => {
@@ -439,15 +435,6 @@ function OverviewScreenContent() {
   const handleOfferPress = useCallback((offer: CasinoOfferCardData | Cruise) => {
     console.log('[Overview] Offer pressed:', offer.id);
     if ('cruises' in offer) {
-      if (offer.offerSource === 'carnival') {
-        const carnivalUrl = offer.bookingLink
-          || `https://www.carnival.com/cruise-search?rateCodes=${encodeURIComponent(offer.offerCode)}&pageNumber=1&numadults=2&pageSize=50&sort=fromprice&showBest=true`;
-        console.log('[Overview] Opening Carnival offer externally:', carnivalUrl);
-        Linking.openURL(carnivalUrl).catch(err => {
-          console.error('[Overview] Failed to open Carnival URL:', err);
-        });
-        return;
-      }
       router.push(`/offer-details?offerCode=${encodeURIComponent(offer.offerCode)}` as any);
     } else {
       router.push(`/cruise-details?id=${offer.id}` as any);
@@ -545,7 +532,6 @@ function OverviewScreenContent() {
           totalValue={offerSummary.totalValue}
           totalCruises={offerSummary.totalCruises}
           totalOffers={offerSummary.totalOffers}
-          expiringSoonCount={expiringSoonCount}
           onSoonestPress={() => setSortMode('soonest')}
           onHighestValuePress={() => setSortMode('highestValue')}
           activeSortMode={sortMode}
@@ -557,6 +543,14 @@ function OverviewScreenContent() {
           <Tag size={18} color={COLORS.navyDeep} />
           <Text style={styles.sectionTitle}>CASINO OFFERS</Text>
         </View>
+        {expiringSoonCount > 0 && (
+          <View style={styles.expiringAlert}>
+            <AlertTriangle size={14} color={COLORS.warning} />
+            <Text style={styles.expiringAlertText}>
+              {expiringSoonCount} expiring soon
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -668,8 +662,6 @@ function OverviewScreenContent() {
           onCruisePress={handleCruiseItemPress}
           bookedCruiseIds={bookedCruiseIds}
           isBestValue={index === 0}
-          offerSource={item.offerSource}
-          compact
         />
       );
     }
@@ -692,7 +684,6 @@ function OverviewScreenContent() {
         onPress={() => handleOfferPress(item)} 
         isBooked={bookedCruiseIds.has(item.id)}
         recommended={index === 0}
-        showImage={false}
       />
     );
   }, [handleOfferPress, handleCruiseItemPress, bookedCruiseIds, cruisesData, offerNameByCode]);
@@ -762,11 +753,10 @@ function OverviewScreenContent() {
             />
           }
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={Platform.OS !== 'web'}
-          disableVirtualization={false}
-          initialNumToRender={Platform.OS === 'web' ? 8 : 5}
-          maxToRenderPerBatch={Platform.OS === 'web' ? 8 : 5}
-          windowSize={Platform.OS === 'web' ? 9 : 7}
+          removeClippedSubviews={Platform.OS === 'android'}
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={7}
         />
       </SafeAreaView>
     </View>

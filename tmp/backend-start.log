@@ -1,7 +1,0 @@
-[Server] Starting backend on port 3000...
-[Server] Environment check:
-  - EXPO_PUBLIC_TOOLKIT_URL: Missing
-  - EXPO_PUBLIC_RORK_DB_ENDPOINT: Missing
-[Server] Backend running at http://localhost:3000
-[Server] tRPC endpoint: http://localhost:3000/trpc
-[Server] Health check: http://localhost:3000/

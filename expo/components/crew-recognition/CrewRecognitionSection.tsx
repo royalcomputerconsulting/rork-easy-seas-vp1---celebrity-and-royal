@@ -72,10 +72,8 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     updateFilters,
     resetFilters,
     createCrewMember,
-    createSailing,
     updateRecognitionEntry,
     deleteRecognitionEntry,
-    canManageCrewData,
     syncFromCSVLocally,
   } = useCrewRecognition();
 
@@ -89,11 +87,6 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
 
   const handleSync = useCallback(async () => {
-    if (!canManageCrewData) {
-      Alert.alert('Sign In Required', 'Please sign in to sync your personal crew recognition data.');
-      return;
-    }
-
     setIsSyncing(true);
     setSyncProgress(null);
     try {
@@ -105,11 +98,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
       setSyncProgress({ current: result.totalRows, total: result.totalRows });
       console.log('[CrewRecognition] Local sync complete:', result.importedCount, 'entries');
 
-      const duplicateMessage = result.duplicateCount > 0
-        ? `\nSkipped ${result.duplicateCount} duplicate entr${result.duplicateCount === 1 ? 'y' : 'ies'}.`
-        : '';
-
-      Alert.alert('Success', `Loaded ${result.importedCount} crew recognition entries from CSV.${duplicateMessage}`);
+      Alert.alert('Success', `Loaded ${result.importedCount} crew recognition entries from CSV`);
     } catch (error) {
       console.error('[CrewRecognition] Sync error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -118,7 +107,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
       setIsSyncing(false);
       setSyncProgress(null);
     }
-  }, [canManageCrewData, syncFromCSVLocally]);
+  }, [syncFromCSVLocally]);
 
   const handleExportResults = useCallback(() => {
     if (entries.length === 0) return;
@@ -155,16 +144,16 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     }
   }, [filters.departments, updateFilters]);
 
-  const allRoyalShips = useMemo(() => getAllShipNames().sort((a, b) => a.localeCompare(b)), []);
+  const allRoyalShips = useMemo(() => getAllShipNames().sort(), []);
   const sailingShips = useMemo(() => sailings.map(s => s.shipName), [sailings]);
   const uniqueShips = useMemo(
-    () => Array.from(new Set([...allRoyalShips, ...sailingShips])).sort((a, b) => a.localeCompare(b)),
+    () => Array.from(new Set([...allRoyalShips, ...sailingShips])).sort(),
     [allRoyalShips, sailingShips]
   );
 
   const uniqueDepts = useMemo(() => {
     const entryDepts = entries.map(e => e.department);
-    return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort((a, b) => a.localeCompare(b));
+    return Array.from(new Set([...ALL_FILTER_DEPARTMENTS, ...entryDepts])).sort();
   }, [entries]);
 
   const showMockData = stats.crewMemberCount === 0 && !statsLoading;
@@ -173,15 +162,12 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
   const activeFilterCount = filters.shipNames.length + filters.departments.length;
 
   const syncButtonLabel = useMemo(() => {
-    if (!canManageCrewData) {
-      return 'Sign In to Sync';
-    }
     if (syncProgress) {
       return `Syncing ${syncProgress.current}/${syncProgress.total}`;
     }
     if (isSyncing) return 'Syncing...';
     return 'Sync';
-  }, [canManageCrewData, isSyncing, syncProgress]);
+  }, [isSyncing, syncProgress]);
 
   return (
     <View style={styles.container}>
@@ -206,21 +192,20 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
           <Text style={styles.addButtonText}>Add Crew</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.syncButton, (!canManageCrewData || isSyncing) && styles.syncButtonDisabled]}
+          style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
           onPress={handleSync}
-          disabled={!canManageCrewData || isSyncing}
-          testID="crew-sync-button"
+          disabled={isSyncing}
         >
           {isSyncing ? (
             <ActivityIndicator size="small" color="#0369A1" />
           ) : (
-            <RefreshCcw size={18} color={canManageCrewData ? '#0369A1' : COLORS.textTertiary} />
+            <RefreshCcw size={18} color="#0369A1" />
           )}
-          <Text style={[styles.syncButtonText, !canManageCrewData && styles.syncButtonTextDisabled]}>{syncButtonLabel}</Text>
+          <Text style={styles.syncButtonText}>{syncButtonLabel}</Text>
         </TouchableOpacity>
       </View>
 
-      {syncProgress ? (
+      {syncProgress && (
         <View style={styles.syncProgressContainer}>
           <View style={styles.syncProgressBar}>
             <View
@@ -234,7 +219,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
             {`Processing ${syncProgress.current} of ${syncProgress.total} rows...`}
           </Text>
         </View>
-      ) : null}
+      )}
 
       <View style={styles.statsRow}>
         {statsLoading ? (
@@ -270,11 +255,11 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
             placeholder="Search crew name..."
             placeholderTextColor={COLORS.textTertiary}
           />
-          {filters.search !== '' ? (
+          {filters.search !== '' && (
             <TouchableOpacity onPress={() => updateFilters({ search: '' })}>
               <X size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
-          ) : null}
+          )}
         </View>
         <TouchableOpacity
           style={[styles.filterButton, showFilters && styles.filterButtonActive]}
@@ -373,12 +358,12 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
             </View>
           </View>
 
-          {activeFilterCount > 0 ? (
+          {activeFilterCount > 0 && (
             <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
               <X size={14} color="#0369A1" />
               <Text style={styles.resetButtonText}>Clear all filters</Text>
             </TouchableOpacity>
-          ) : null}
+          )}
         </View>
       )}
 
@@ -457,7 +442,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                         {entry.sailEndDate && entry.sailEndDate !== entry.sailStartDate ? ` – ${entry.sailEndDate}` : ''}
                       </Text>
                     </View>
-                    {entry.crewNotes && String(entry.crewNotes).trim() ? (
+                    {entry.crewNotes ? (
                       <Text style={styles.crewCardNotes} numberOfLines={1}>{String(entry.crewNotes)}</Text>
                     ) : null}
                   </View>
@@ -472,26 +457,6 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         onClose={() => setShowAddModal(false)}
         onSubmit={async (data) => {
           await createCrewMember({ ...data, department: data.department as Department, userId });
-        }}
-        onEnsureSailing={async (data) => {
-          const existingSailing = sailings.find((sailing) => (
-            sailing.shipName.trim().toLowerCase() === data.shipName.trim().toLowerCase()
-            && sailing.sailStartDate === data.sailStartDate
-          ));
-
-          if (existingSailing) {
-            return existingSailing.id;
-          }
-
-          const sailing = await createSailing({
-            shipName: data.shipName,
-            sailStartDate: data.sailStartDate,
-            sailEndDate: data.sailEndDate,
-            nights: data.nights,
-            userId,
-          });
-
-          return sailing.id;
         }}
         sailings={sailings}
         bookedCruises={bookedCruises}
@@ -605,9 +570,6 @@ const styles = StyleSheet.create({
     color: '#0369A1',
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
-  },
-  syncButtonTextDisabled: {
-    color: COLORS.textTertiary,
   },
   syncProgressContainer: {
     paddingHorizontal: SPACING.md,

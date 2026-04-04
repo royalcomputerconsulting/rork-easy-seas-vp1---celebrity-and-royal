@@ -5,19 +5,20 @@ import {
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
+  Switch, 
   Alert, 
   Linking, 
   ActivityIndicator,
   TextInput,
-  Image,
-  Platform,
+  Image
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
 import { 
   Settings as SettingsIcon, 
+  Bell, 
+  Moon, 
+  DollarSign, 
   Download, 
   Upload,
   Trash2, 
@@ -45,21 +46,21 @@ import {
   Link2,
   Copy,
   Rss,
-  Ticket,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
-import { renderViewContent } from '@/lib/renderViewContent';
 import { LinearGradient } from 'expo-linear-gradient';
-import { formatBirthdateForDisplay, isDateInPast, normalizeBirthdateInput } from '@/lib/date';
+import { isDateInPast } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
-import { useUser } from '@/state/UserProvider';
+import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
+import type { PlayingHours } from '@/state/UserProvider';
 import { 
   pickAndReadFile, 
   parseOffersCSV, 
   parseICSFile, 
   parseBookedCSV,
   generateOffersCSV, 
+  generateCalendarICS,
   generateBookedCSV,
   exportFile,
   downloadFromURL,
@@ -72,28 +73,29 @@ import {
 } from '@/lib/dataManager';
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
-import { countCalendarFeedEntries, generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
-import { getRenderCalendarFeedUrl, trpc } from '@/lib/trpc';
-import { importCompletedCruisesFromWorkbook, type WorkbookBinaryInput } from '@/lib/importers/completedCruiseWorkbook';
+import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
+import {
+  getImportedSource,
+  getImportedSourceLabel,
+  mergeImportedBookedCruises,
+  mergeImportedCruises,
+  mergeImportedOffers,
+} from '@/lib/importMerge';
+import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
 
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { UserProfileCard } from '@/components/ui/UserProfileCard';
+import { PlayingHoursCard } from '@/components/ui/PlayingHoursCard';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { saveMockData } from '@/lib/saveMockData';
+import { generateSampleData, SAMPLE_LOYALTY_POINTS } from '@/lib/sampleData';
 import { useAuth } from '@/state/AuthProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
-
-interface PickedCompletedCruisesWorkbook {
-  fileName: string;
-  workbookInput: WorkbookBinaryInput;
-}
-
-const SETTINGS_LAYOUT_VERSION = 'settings_subscriptions_v2026_04_04';
 
 function normalizeAccountEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -107,7 +109,7 @@ function normalizeAccountEmail(email: string | null | undefined): string | null 
 export default function SettingsScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
-  const { clearLocalData, setLocalData, localData } = useAppState();
+  const { settings, updateSettings, clearLocalData, setLocalData, localData } = useAppState();
   const coreData = useCoreData();
   const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers } = coreData;
   const cruises = coreData.cruises;
@@ -125,7 +127,6 @@ export default function SettingsScreen() {
     clubRoyaleTier: loyaltyClubRoyaleTier,
     setManualClubRoyalePoints,
     setManualCrownAnchorPoints,
-    setExtendedLoyaltyData,
     syncFromStorage: syncLoyaltyFromStorage,
     extendedLoyalty,
     venetianSociety,
@@ -141,6 +142,7 @@ export default function SettingsScreen() {
   const [isImportingAll, setIsImportingAll] = useState(false);
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+  const [isSavingPlayingHours, setIsSavingPlayingHours] = useState(false);
   const [isImportingMachines, setIsImportingMachines] = useState(false);
   const [isExportingMachines, setIsExportingMachines] = useState(false);
   const [isSavingMockData, setIsSavingMockData] = useState(false);
@@ -156,7 +158,7 @@ export default function SettingsScreen() {
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
-  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail, authenticatedEmail, isAdminEmailAddress, verifyAdminPassword, clearSession } = useAuth();
+  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail, authenticatedEmail } = useAuth();
   const { stats: crewStats } = useCrewRecognition();
 
   const normalizedAuthenticatedEmail = useMemo(() => normalizeAccountEmail(authenticatedEmail), [authenticatedEmail]);
@@ -179,59 +181,8 @@ export default function SettingsScreen() {
   const isProfileDisplayReady = useMemo(() => {
     return isProfileIdentityReady && !isLoyaltyLoading;
   }, [isProfileIdentityReady, isLoyaltyLoading]);
-  const subscriptionAccentColor = useMemo(() => {
-    if (isAdmin || entitlement.source === 'dev') return '#10B981';
-    if (entitlement.subscriptionDisplayStatus === 'monthly') return '#2563EB';
-    if (entitlement.subscriptionDisplayStatus === 'grace_period') return '#F59E0B';
-    return '#EF4444';
-  }, [entitlement.source, entitlement.subscriptionDisplayStatus, isAdmin]);
-  const subscriptionStatusTitle = useMemo(() => {
-    if (isAdmin || entitlement.source === 'dev') return 'Admin Access';
-    if (entitlement.subscriptionDisplayStatus === 'monthly') return 'Monthly Subscription';
-    if (entitlement.subscriptionDisplayStatus === 'grace_period') return '3-Day Grace Period';
-    return 'Subscription Expired';
-  }, [entitlement.source, entitlement.subscriptionDisplayStatus, isAdmin]);
-  const subscriptionStatusSubtitle = useMemo(() => {
-    if (isAdmin || entitlement.source === 'dev') {
-      return 'Admin access active — full app access stays unlocked and restore/licensing tools remain available.';
-    }
-    if (entitlement.subscriptionDisplayStatus === 'monthly') {
-      return 'Monthly plan active — all features unlocked.';
-    }
-    if (entitlement.subscriptionDisplayStatus === 'grace_period') {
-      return `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining in your 3-day grace period — full access.`;
-    }
-    return 'Purchase the $9.99/month subscription to continue.';
-  }, [entitlement.source, entitlement.subscriptionDisplayStatus, entitlement.trialDaysRemaining, isAdmin]);
-  const shouldShowIosMonthlySubscription = Platform.OS !== 'android';
-  const isIosMonthlyPurchaseDisabled = entitlement.isLoading || entitlement.isPro;
-  const iosMonthlyPurchaseButtonLabel = entitlement.isPro
-    ? 'Monthly Plan Active'
-    : entitlement.isLoading
-      ? 'Processing...'
-      : 'Subscribe for $9.99/month';
-  const handleStartIosMonthlySubscription = useCallback(() => {
-    console.log('[Settings] Starting iOS monthly subscription purchase flow');
-    void entitlement.subscribeProMonthly();
-  }, [entitlement]);
 
-  const handleOpenSubscriptionPrivacyPolicy = useCallback(() => {
-    console.log('[Settings] Opening subscription privacy policy');
-    void entitlement.openPrivacyPolicy();
-  }, [entitlement]);
 
-  const handleOpenSubscriptionTerms = useCallback(() => {
-    console.log('[Settings] Opening subscription terms of use');
-    void entitlement.openTerms();
-  }, [entitlement]);
-
-  useEffect(() => {
-    console.log('[Settings] Rendering layout version:', {
-      layoutVersion: SETTINGS_LAYOUT_VERSION,
-      subscriptionStatus: entitlement.subscriptionDisplayStatus,
-      entitlementSource: entitlement.source,
-    });
-  }, [entitlement.source, entitlement.subscriptionDisplayStatus]);
 
   const loadWhitelist = useCallback(async () => {
     try {
@@ -297,7 +248,6 @@ export default function SettingsScreen() {
     name: isProfileDisplayReady ? currentUser?.name || '' : '',
     email: isProfileDisplayReady ? currentUser?.email || authenticatedEmail || '' : authenticatedEmail || '',
     crownAnchorNumber: isProfileDisplayReady ? currentUser?.crownAnchorNumber || '' : '',
-    birthdate: isProfileDisplayReady ? formatBirthdateForDisplay(currentUser?.birthdate) || '' : '',
     clubRoyalePoints: isProfileDisplayReady ? loyaltyClubRoyalePoints : 0,
     clubRoyaleTier: isProfileDisplayReady ? loyaltyClubRoyaleTier : 'Choice',
     loyaltyPoints: isProfileDisplayReady ? loyaltyCrownAnchorPoints : 0,
@@ -313,8 +263,6 @@ export default function SettingsScreen() {
     silverseaVenetianNumber: isProfileDisplayReady ? currentUser?.silverseaVenetianNumber || '' : '',
     silverseaVenetianTier: isProfileDisplayReady ? currentUser?.silverseaVenetianTier || '' : '',
     silverseaVenetianPoints: isProfileDisplayReady ? currentUser?.silverseaVenetianPoints || 0 : 0,
-    silverseaCasinoTier: isProfileDisplayReady ? currentUser?.silverseaCasinoTier || 'Rock Star' : 'Rock Star',
-    silverseaCasinoPoints: isProfileDisplayReady ? currentUser?.silverseaCasinoPoints || 0 : 0,
     carnivalVifpNumber: isProfileDisplayReady ? currentUser?.carnivalVifpNumber || '' : '',
     carnivalVifpTier: isProfileDisplayReady ? currentUser?.carnivalVifpTier || '' : '',
     carnivalPlayersClubTier: isProfileDisplayReady ? currentUser?.carnivalPlayersClubTier || '' : '',
@@ -328,6 +276,22 @@ export default function SettingsScreen() {
     loyaltyCrownAnchorLevel,
     loyaltyCrownAnchorPoints,
   ]);
+
+  const currentPlayingHours = useMemo(() => {
+    if (!isProfileDisplayReady) {
+      return DEFAULT_PLAYING_HOURS;
+    }
+
+    return currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
+  }, [currentUser?.playingHours, isProfileDisplayReady]);
+
+  const profileTransitionSubtitle = useMemo(() => {
+    if (authenticatedEmail) {
+      return `Loading private settings for ${authenticatedEmail}`;
+    }
+
+    return 'Securing your private settings';
+  }, [authenticatedEmail]);
 
   const enrichmentData = useMemo(() => {
     if (!isProfileDisplayReady) return null;
@@ -380,22 +344,20 @@ export default function SettingsScreen() {
 
   const dataStats = useMemo(() => {
     const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
-    const uniqueOfferCodes = new Set(allOffers.map((offer) => offer.offerCode).filter(Boolean));
+    // Count unique offers by offerCode - this is the true unique identifier for an offer
+    // Multiple sailings can share the same offerCode (e.g., 2601C05 applies to multiple cruises)
+    const uniqueOfferCodes = new Set(allOffers.map(o => o.offerCode).filter(Boolean));
     const uniqueOfferCount = uniqueOfferCodes.size || allOffers.length;
-    const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
-    const allCalendarEvents = localData.calendar || [];
-    const upcoming = allBooked.filter((cruise) => !isDateInPast(cruise.returnDate)).length;
-    const completed = allBooked.filter((cruise) => isDateInPast(cruise.returnDate)).length;
-    const totalCalendarEntries = countCalendarFeedEntries(allBooked, allCalendarEvents);
     
     console.log('[Settings] Data stats calculation:', {
       totalOffers: allOffers.length,
       uniqueOfferCodes: Array.from(uniqueOfferCodes),
       uniqueCount: uniqueOfferCount,
-      bookedCruises: allBooked.length,
-      rawCalendarEvents: allCalendarEvents.length,
-      totalCalendarEntries,
     });
+    
+    const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
+    const upcoming = allBooked.filter(c => !isDateInPast(c.returnDate)).length;
+    const completed = allBooked.filter(c => isDateInPast(c.returnDate)).length;
 
     return {
       cruises: cruises.length || localData.cruises?.length || 0,
@@ -404,58 +366,11 @@ export default function SettingsScreen() {
       completed,
       sailings: allOffers.length,
       uniqueOffers: uniqueOfferCount,
-      events: totalCalendarEntries,
+      events: localData.calendar?.length || 0,
       machines: myAtlasMachines.length || 0,
       crewMembers: crewStats?.crewMemberCount || 0,
     };
-  }, [bookedCruises, casinoOffers, crewStats, cruises, localData.booked, localData.calendar, localData.cruises, localData.offers, myAtlasMachines.length]);
-
-  const pickCompletedCruisesWorkbook = useCallback(async (): Promise<PickedCompletedCruisesWorkbook | null> => {
-    console.log('[Settings] Opening completed cruises workbook picker');
-    const result = await DocumentPicker.getDocumentAsync({
-      type: [
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-excel',
-        'application/octet-stream',
-      ],
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
-
-    if (result.canceled || !result.assets || result.assets.length === 0) {
-      console.log('[Settings] Completed cruises workbook picker cancelled');
-      return null;
-    }
-
-    const asset = result.assets[0];
-    console.log('[Settings] Completed cruises workbook selected:', asset.name, asset.size, asset.uri);
-
-    if (Platform.OS === 'web') {
-      const response = await fetch(asset.uri);
-      const arrayBuffer = await response.arrayBuffer();
-      console.log('[Settings] Completed cruises workbook loaded on web, bytes:', arrayBuffer.byteLength);
-      return {
-        fileName: asset.name,
-        workbookInput: {
-          kind: 'array',
-          data: new Uint8Array(arrayBuffer),
-        },
-      };
-    }
-
-    const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    console.log('[Settings] Completed cruises workbook loaded on native, base64 length:', base64.length);
-    return {
-      fileName: asset.name,
-      workbookInput: {
-        kind: 'base64',
-        data: base64,
-      },
-    };
-  }, []);
+  }, [cruises, bookedCruises, casinoOffers, localData, myAtlasMachines, crewStats]);
 
   const handleImportOffersCSV = useCallback(async () => {
     try {
@@ -487,21 +402,38 @@ export default function SettingsScreen() {
         fieldsFixed: healingReport.fieldsFixed.length,
       });
 
-      await setCruises(parsedCruises);
-      await setCasinoOffers(parsedOffers);
+      const existingCruises = cruises.length > 0 ? cruises : (localData.cruises || []);
+      const existingOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
+      const importedSource = getImportedSource({ cruises: parsedCruises, offers: parsedOffers });
+      const mergedCruises = mergeImportedCruises(existingCruises, parsedCruises);
+      const mergedOffers = mergeImportedOffers(existingOffers, parsedOffers);
+
+      console.log('[Settings] Merged imported offers CSV:', {
+        importedSource,
+        existingCruises: existingCruises.length,
+        existingOffers: existingOffers.length,
+        parsedCruises: parsedCruises.length,
+        parsedOffers: parsedOffers.length,
+        mergedCruises: mergedCruises.length,
+        mergedOffers: mergedOffers.length,
+      });
+
+      await setCruises(mergedCruises);
+      await setCasinoOffers(mergedOffers);
       await setLocalData({
-        cruises: parsedCruises,
-        offers: parsedOffers,
+        cruises: mergedCruises,
+        offers: mergedOffers,
       });
 
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
       console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
+      const sourceLabel = getImportedSourceLabel(importedSource);
       const healNote = healingReport.fieldsFixed.length > 0 ? `\n\nData healing fixed ${healingReport.fieldsFixed.length} field(s).` : '';
       setLastImportResult({ type: 'offers', count: parsedCruises.length });
       Alert.alert(
         'Import Successful', 
-        `Imported ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}${healNote}`
+        `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}`
       );
       console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {
@@ -526,85 +458,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [setCruises, setCasinoOffers, setLocalData]);
-
-  const handleImportCompletedCruisesWorkbook = useCallback(async () => {
-    try {
-      setIsImporting(true);
-      setLastImportResult(null);
-      console.log('[Settings] Starting completed cruises workbook import');
-
-      const pickedWorkbook = await pickCompletedCruisesWorkbook();
-      if (!pickedWorkbook) {
-        console.log('[Settings] Completed cruises workbook import cancelled');
-        setIsImporting(false);
-        return;
-      }
-
-      const existingBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
-      console.log('[Settings] Existing booked cruises before workbook import:', existingBooked.length);
-
-      const result = importCompletedCruisesFromWorkbook(pickedWorkbook.workbookInput, existingBooked);
-      console.log('[Settings] Completed cruises workbook summary:', result.summary);
-
-      if (result.summary.importedPastCruises === 0) {
-        Alert.alert('No Past Cruises Found', 'This workbook did not contain any rows marked as Past.');
-        setIsImporting(false);
-        return;
-      }
-
-      await setBookedCruises(result.cruises);
-      await setLocalData({
-        booked: result.cruises,
-      });
-
-      await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
-      console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
-
-      setLastImportResult({
-        type: 'completed-workbook',
-        count: result.summary.addedNew + result.summary.matchedExisting,
-      });
-
-      Alert.alert(
-        'Completed Cruises Imported',
-        `Imported ${result.summary.importedPastCruises} past cruises from ${pickedWorkbook.fileName}.\n\nMatched existing: ${result.summary.matchedExisting}\nAdded new: ${result.summary.addedNew}\nSkipped non-past rows: ${result.summary.skippedNonPastRows}`
-      );
-      console.log('[Settings] Completed cruises workbook import complete:', result.summary);
-    } catch (error) {
-      console.error('[Settings] Completed cruises workbook import error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to import the workbook. Please check the file format and try again.';
-      Alert.alert('Import Error', errorMessage);
-    } finally {
-      setIsImporting(false);
-    }
-  }, [bookedCruises, localData.booked, pickCompletedCruisesWorkbook, setBookedCruises, setLocalData]);
-
-  const handleChooseOffersImportSource = useCallback(() => {
-    Alert.alert(
-      'Import Cruise Data',
-      'Choose which file you want to import from this section.',
-      [
-        {
-          text: 'offers.csv',
-          onPress: () => {
-            void handleImportOffersCSV();
-          },
-        },
-        {
-          text: 'Completed cruises.xlsx',
-          onPress: () => {
-            void handleImportCompletedCruisesWorkbook();
-          },
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ],
-      { cancelable: true }
-    );
-  }, [handleImportCompletedCruisesWorkbook, handleImportOffersCSV]);
+  }, [casinoOffers, cruises, localData.cruises, localData.offers, setCruises, setCasinoOffers, setLocalData]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
@@ -615,7 +469,7 @@ export default function SettingsScreen() {
         const stored = await AsyncStorage.getItem('easyseas_calendar_feed_token');
         if (stored) {
           setCalendarFeedToken(stored);
-          setCalendarFeedUrl(getRenderCalendarFeedUrl(stored));
+          setCalendarFeedUrl(`${RENDER_BACKEND_URL}/api/calendar-feed/${stored}`);
           const lastUpdate = await AsyncStorage.getItem('easyseas_calendar_feed_updated');
           if (lastUpdate) setFeedLastUpdated(lastUpdate);
           console.log('[Settings] Loaded calendar feed token:', stored.slice(0, 8) + '...');
@@ -638,7 +492,7 @@ export default function SettingsScreen() {
       setIsPublishingFeed(true);
       console.log('[Settings] Publishing calendar feed...');
 
-      let token: string = calendarFeedToken ?? '';
+      let token = calendarFeedToken;
       if (!token) {
         token = generateFeedToken();
         setCalendarFeedToken(token);
@@ -648,8 +502,7 @@ export default function SettingsScreen() {
 
       const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
       const allEvents = localData.calendar || [];
-      const totalCalendarEntries = countCalendarFeedEntries(allBooked, allEvents);
-      console.log('[Settings] Generating ICS from', allBooked.length, 'cruises and', allEvents.length, 'events with', totalCalendarEntries, 'calendar entries');
+      console.log('[Settings] Generating ICS from', allBooked.length, 'cruises and', allEvents.length, 'events');
 
       const icsContent = generateCalendarFeed(allBooked, allEvents);
 
@@ -659,7 +512,7 @@ export default function SettingsScreen() {
         icsContent,
       });
 
-      const feedUrl = getRenderCalendarFeedUrl(token);
+      const feedUrl = `${RENDER_BACKEND_URL}/api/calendar-feed/${token}`;
       setCalendarFeedUrl(feedUrl);
       const now = new Date().toISOString();
       setFeedLastUpdated(now);
@@ -668,7 +521,7 @@ export default function SettingsScreen() {
       console.log('[Settings] Calendar feed published successfully:', feedUrl);
       Alert.alert(
         'Calendar Feed Published',
-        `Your calendar feed is live with ${totalCalendarEntries} calendar entries from ${allBooked.length} cruises.\n\nYou can now subscribe to this feed from any calendar app (Apple Calendar, Google Calendar, Outlook, etc.).\n\nTap "Copy URL" to copy the feed link.`
+        `Your calendar feed is live with ${allBooked.length} cruises.\n\nYou can now subscribe to this feed from any calendar app (Apple Calendar, Google Calendar, Outlook, etc.).\n\nTap "Copy URL" to copy the feed link.`
       );
     } catch (error) {
       console.error('[Settings] Publish feed error:', error);
@@ -901,16 +754,22 @@ export default function SettingsScreen() {
       const existingBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
       console.log('[Settings] Existing booked cruises:', existingBooked.length);
       
-      const parsedBooked = parseBookedCSV(result.content, existingBooked);
+      const parsedBooked = parseBookedCSV(result.content, []);
       
       if (parsedBooked.length === 0) {
-        Alert.alert('No New Cruises', 'All cruises in the file already exist in your database, or the file contains no valid data.');
+        Alert.alert('Import Failed', 'No valid booked cruise data was found in the CSV file.');
         setIsImporting(false);
         return;
       }
 
-      const mergedBooked = [...existingBooked, ...parsedBooked];
-      console.log('[Settings] Merged booked cruises:', mergedBooked.length, '(added:', parsedBooked.length, ')');
+      const importedSource = getImportedSource({ bookedCruises: parsedBooked });
+      const mergedBooked = mergeImportedBookedCruises(existingBooked, parsedBooked);
+      console.log('[Settings] Merged booked cruises:', {
+        importedSource,
+        existingBooked: existingBooked.length,
+        parsedBooked: parsedBooked.length,
+        mergedBooked: mergedBooked.length,
+      });
 
       await setBookedCruises(mergedBooked);
       await setLocalData({
@@ -920,13 +779,14 @@ export default function SettingsScreen() {
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
       console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
+      const sourceLabel = getImportedSourceLabel(importedSource);
       setLastImportResult({ type: 'booked', count: parsedBooked.length });
       
       Alert.alert(
         'Import Successful', 
-        `Added ${parsedBooked.length} new cruises from ${result.fileName}`
+        `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).`
       );
-      console.log('[Settings] Booked import complete:', parsedBooked.length, 'new cruises added');
+      console.log('[Settings] Booked import complete:', parsedBooked.length, 'cruise rows imported');
     } catch (error) {
       console.error('[Settings] Booked import error:', error);
       
@@ -1019,22 +879,20 @@ export default function SettingsScreen() {
       setIsExporting(true);
       console.log('[Settings] Starting calendar ICS export');
       
-      const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
       const allEvents = localData.calendar || [];
-      const totalCalendarEntries = countCalendarFeedEntries(allBooked, allEvents);
       
-      if (totalCalendarEntries === 0) {
-        Alert.alert('No Data', 'No calendar data to export yet. Sync cruises or import calendar events first.');
+      if (allEvents.length === 0) {
+        Alert.alert('No Data', 'No calendar events to export. Import events first.');
         setIsExporting(false);
         return;
       }
 
-      const icsContent = generateCalendarFeed(allBooked, allEvents);
+      const icsContent = generateCalendarICS(allEvents);
       const fileName = `easyseas_calendar_${new Date().toISOString().split('T')[0]}.ics`;
       
       const success = await exportFile(icsContent, fileName);
       if (success) {
-        Alert.alert('Export Successful', `Exported ${totalCalendarEntries} calendar entries to ${fileName}`);
+        Alert.alert('Export Successful', `Exported ${allEvents.length} events to ${fileName}`);
       } else {
         Alert.alert('Export Info', 'File saved but sharing may not be available on this device.');
       }
@@ -1045,12 +903,12 @@ export default function SettingsScreen() {
     } finally {
       setIsExporting(false);
     }
-  }, [bookedCruises, localData.booked, localData.calendar]);
+  }, [localData.calendar]);
 
   const handleClearData = useCallback(() => {
     Alert.alert(
       'Clear All Data',
-      'Are you sure you want to delete ALL app data including:\n\n• Cruises & Offers\n• Booked Cruises\n• Calendar Events\n• Certificates\n• User Profile\n• Loyalty Data\n• Settings & Preferences\n• Your saved sign-in session\n\nThis action cannot be undone and will sign you out.',
+      'Are you sure you want to delete ALL app data including:\n\n• Cruises & Offers\n• Booked Cruises\n• Calendar Events\n• Certificates\n• User Profile (Name, C&A #)\n• Club Royale Points\n• Loyalty Points\n• Settings & Preferences\n\nSample demo data will be added so you can explore the app.\n\nThis action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -1061,22 +919,57 @@ export default function SettingsScreen() {
               console.log('[Settings] Clearing all app data...');
               const result = await clearAllAppData();
               
-              await clearAllData();
-              await clearLocalData();
-              setLastImportResult(null);
-
-              await clearSession();
-              console.log('[Settings] App data cleared and session removed immediately');
-
               if (result.success) {
+                await clearAllData();
+                await clearLocalData();
+                setLastImportResult(null);
+                
+                console.log('[Settings] Resetting user profile to blank for all cruise lines...');
+                await syncUserFromStorage();
+                const owner = await ensureOwner();
+                await updateUser(owner.id, { 
+                  name: '',
+                  crownAnchorNumber: '',
+                  celebrityEmail: '',
+                  celebrityCaptainsClubNumber: '',
+                  celebrityCaptainsClubPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
+                  celebrityBlueChipPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
+                  silverseaEmail: '',
+                  silverseaVenetianNumber: '',
+                  silverseaVenetianTier: '',
+                  silverseaVenetianPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
+                });
+                
+                console.log('[Settings] Setting loyalty points to 1 for all three cruise lines (sample data)...');
+                await setManualClubRoyalePoints(SAMPLE_LOYALTY_POINTS.clubRoyale);
+                await setManualCrownAnchorPoints(SAMPLE_LOYALTY_POINTS.crownAnchor);
+                console.log('[Settings] ✓ Royal Caribbean: Club Royale & Crown & Anchor reset to 1');
+                console.log('[Settings] ✓ Celebrity: Captain\'s Club & Blue Chip reset to 1');
+                console.log('[Settings] ✓ Silversea: Venetian Society reset to 1');
+                
+                console.log('[Settings] Generating sample demo data...');
+                const sampleData = generateSampleData();
+                
+                console.log('[Settings] Populating sample cruises, offers, and events...');
+                await setBookedCruises(sampleData.bookedCruises);
+                await setCasinoOffers(sampleData.casinoOffers);
+                await setLocalData({
+                  booked: sampleData.bookedCruises,
+                  offers: sampleData.casinoOffers,
+                  calendar: sampleData.calendarEvents,
+                });
+                
+                console.log('[Settings] Re-syncing loyalty provider from storage...');
+                await syncLoyaltyFromStorage();
+                
                 Alert.alert(
-                  'Data Reset Complete',
-                  `Successfully cleared ${result.clearedKeys.length} data stores and signed you out.`
+                  'Data Reset Complete', 
+                  `Successfully cleared ${result.clearedKeys.length} data stores.\n\nSample demo data has been added:\n• 3 sample cruises (1 completed, 2 booked)\n• 2 sample casino offers\n• 1 sample calendar event\n• Crown & Anchor: 1 point\n• Club Royale: 1 point\n\nDelete the sample data and import your real data to get started!`
                 );
               } else {
                 Alert.alert(
-                  'Partial Clear',
-                  `Cleared ${result.clearedKeys.length} items with ${result.errors.length} errors and signed you out.`
+                  'Partial Clear', 
+                  `Cleared ${result.clearedKeys.length} items with ${result.errors.length} errors.`
                 );
               }
             } catch (error) {
@@ -1087,7 +980,7 @@ export default function SettingsScreen() {
         },
       ]
     );
-  }, [clearAllData, clearLocalData, clearSession]);
+  }, [clearAllData, clearLocalData, syncUserFromStorage, ensureOwner, updateUser, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncLoyaltyFromStorage, setBookedCruises, setCasinoOffers, setLocalData]);
 
 
 
@@ -1128,6 +1021,7 @@ export default function SettingsScreen() {
         setIsImportingAll(false);
         return;
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       
       if (result.success && result.imported) {
         const { cruises: importedCruises, bookedCruises: importedBooked, casinoOffers: importedOffers, calendarEvents, casinoSessions: importedSessions, certificates, machines: importedMachines } = result.imported;
@@ -1171,9 +1065,9 @@ export default function SettingsScreen() {
           calendar: syncedEvents,
         });
         
-        console.log('[Settings] Triggering final local-only refresh to propagate imported storage without stale cloud overwrite...');
+        console.log('[Settings] Triggering final refresh to propagate to UI...');
         await new Promise(resolve => setTimeout(resolve, 300));
-        await coreData.refreshData({ skipRemote: true });
+        await coreData.refreshData();
         
         Alert.alert(
           'Import Successful',
@@ -1250,7 +1144,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     name: string;
     email: string;
     crownAnchorNumber: string;
-    birthdate?: string;
     clubRoyalePoints: number;
     clubRoyaleTier: string;
     loyaltyPoints: number;
@@ -1266,8 +1159,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     silverseaVenetianNumber?: string;
     silverseaVenetianTier?: string;
     silverseaVenetianPoints?: number;
-    silverseaCasinoTier?: string;
-    silverseaCasinoPoints?: number;
     carnivalVifpNumber?: string;
     carnivalVifpTier?: string;
     carnivalPlayersClubTier?: string;
@@ -1289,55 +1180,55 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       
       console.log('[Settings] Email change check:', { oldEmail, newEmail, emailChanged });
       
-      if (emailChanged && isAdminEmailAddress(newEmail)) {
-        return new Promise<void>((resolve) => {
-          Alert.prompt(
-            'Admin Email Verification',
-            'To switch this account to an admin email, enter the admin password.',
-            [
-              {
-                text: 'Cancel',
-                style: 'cancel',
-                onPress: () => {
-                  setIsSaving(false);
-                  resolve();
-                },
-              },
-              {
-                text: 'Verify',
-                onPress: async (password?: string) => {
-                  if (!verifyAdminPassword(password)) {
-                    Alert.alert('Invalid Password', 'The admin password you entered is incorrect.');
+      if (emailChanged) {
+        if (isAdmin) {
+          return new Promise<void>((resolve) => {
+            Alert.prompt(
+              'Admin Email Verification',
+              'You are an admin. Please enter the password to change your email:',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                  onPress: () => {
                     setIsSaving(false);
                     resolve();
-                    return;
-                  }
-                  await continueProfileSave(profileData, oldEmail, newEmail, !!emailChanged);
-                  resolve();
+                  },
                 },
-              },
-            ],
-            'secure-text'
-          );
-        });
-      }
-
-      if (emailChanged) {
-        try {
-          const emailCheck = { exists: false };
-          if (emailCheck.exists) {
-            Alert.alert(
-              'Email Already Exists',
-              'This email is already associated with another account. Please use a different email address.'
+                {
+                  text: 'Verify',
+                  onPress: async (password?: string) => {
+                    if (password !== 'a1') {
+                      Alert.alert('Invalid Password', 'The password you entered is incorrect.');
+                      setIsSaving(false);
+                      resolve();
+                      return;
+                    }
+                    await continueProfileSave(profileData, oldEmail, newEmail, !!emailChanged);
+                    resolve();
+                  },
+                },
+              ],
+              'secure-text'
             );
+          });
+        } else {
+          try {
+            const emailCheck = { exists: false };
+            if (emailCheck.exists) {
+              Alert.alert(
+                'Email Already Exists',
+                'This email is already associated with another account. Please use a different email address.'
+              );
+              setIsSaving(false);
+              return;
+            }
+          } catch (error) {
+            console.error('[Settings] Error checking email uniqueness:', error);
+            Alert.alert('Error', 'Failed to verify email. Please try again.');
             setIsSaving(false);
             return;
           }
-        } catch (error) {
-          console.error('[Settings] Error checking email uniqueness:', error);
-          Alert.alert('Error', 'Failed to verify email. Please try again.');
-          setIsSaving(false);
-          return;
         }
       }
       
@@ -1354,7 +1245,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       name: string;
       email: string;
       crownAnchorNumber: string;
-      birthdate?: string;
       clubRoyalePoints: number;
       clubRoyaleTier: string;
       loyaltyPoints: number;
@@ -1370,8 +1260,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       silverseaVenetianNumber?: string;
       silverseaVenetianTier?: string;
       silverseaVenetianPoints?: number;
-      silverseaCasinoTier?: string;
-      silverseaCasinoPoints?: number;
       carnivalVifpNumber?: string;
       carnivalVifpTier?: string;
       carnivalPlayersClubTier?: string;
@@ -1382,18 +1270,11 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     emailChanged: boolean
   ) {
     try {
-      const normalizedBirthdate = normalizeBirthdateInput(profileData.birthdate);
-      console.log('[Settings] Normalized birthdate for profile save:', {
-        inputBirthdate: profileData.birthdate,
-        normalizedBirthdate,
-      });
-
       if (currentUser) {
         await updateUser(currentUser.id, { 
           name: profileData.name,
           email: profileData.email,
           crownAnchorNumber: profileData.crownAnchorNumber,
-          birthdate: normalizedBirthdate,
           celebrityEmail: profileData.celebrityEmail,
           celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
@@ -1403,8 +1284,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           silverseaVenetianNumber: profileData.silverseaVenetianNumber,
           silverseaVenetianTier: profileData.silverseaVenetianTier,
           silverseaVenetianPoints: profileData.silverseaVenetianPoints,
-          silverseaCasinoTier: profileData.silverseaCasinoTier,
-          silverseaCasinoPoints: profileData.silverseaCasinoPoints,
           carnivalVifpNumber: profileData.carnivalVifpNumber,
           carnivalVifpTier: profileData.carnivalVifpTier,
           carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
@@ -1416,7 +1295,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           name: profileData.name,
           email: profileData.email,
           crownAnchorNumber: profileData.crownAnchorNumber,
-          birthdate: normalizedBirthdate,
           celebrityEmail: profileData.celebrityEmail,
           celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
@@ -1426,8 +1304,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           silverseaVenetianNumber: profileData.silverseaVenetianNumber,
           silverseaVenetianTier: profileData.silverseaVenetianTier,
           silverseaVenetianPoints: profileData.silverseaVenetianPoints,
-          silverseaCasinoTier: profileData.silverseaCasinoTier,
-          silverseaCasinoPoints: profileData.silverseaCasinoPoints,
           carnivalVifpNumber: profileData.carnivalVifpNumber,
           carnivalVifpTier: profileData.carnivalVifpTier,
           carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
@@ -1443,41 +1319,16 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         crownAnchor: profileData.loyaltyPoints
       });
       
-      const shouldSyncExtendedLoyalty = Boolean(
-        extendedLoyalty ||
-        profileData.celebrityCaptainsClubNumber ||
-        profileData.celebrityCaptainsClubPoints > 0 ||
-        profileData.celebrityBlueChipPoints > 0 ||
-        profileData.silverseaVenetianNumber ||
-        profileData.silverseaVenetianTier ||
-        profileData.silverseaCasinoPoints ||
-        profileData.silverseaCasinoTier
-      );
-
-      if (shouldSyncExtendedLoyalty) {
-        await setExtendedLoyaltyData({
-          ...(extendedLoyalty ?? {}),
-          captainsClubId: profileData.celebrityCaptainsClubNumber || extendedLoyalty?.captainsClubId,
-          captainsClubTier: profileData.celebrityCaptainsClubLevel || extendedLoyalty?.captainsClubTier,
-          captainsClubPoints: profileData.celebrityCaptainsClubPoints,
-          celebrityBlueChipTier: profileData.celebrityBlueChipTier || extendedLoyalty?.celebrityBlueChipTier,
-          celebrityBlueChipPoints: profileData.celebrityBlueChipPoints,
-          venetianSocietyTier: profileData.silverseaVenetianTier || extendedLoyalty?.venetianSocietyTier,
-          venetianSocietyMemberNumber: profileData.silverseaVenetianNumber || extendedLoyalty?.venetianSocietyMemberNumber,
-          venetianSocietyEnrolled: profileData.silverseaVenetianNumber ? true : (extendedLoyalty?.venetianSocietyEnrolled ?? false),
-        });
-      }
-
+      // Ensure Celebrity loyalty data is persisted
       console.log('[Settings] ✓ Updated Celebrity loyalty:', {
         captainsClub: profileData.celebrityCaptainsClubPoints,
         blueChip: profileData.celebrityBlueChipPoints
       });
       
+      // Ensure Silversea loyalty data is persisted
       console.log('[Settings] ✓ Updated Silversea loyalty:', {
         venetianTier: profileData.silverseaVenetianTier,
-        venetianPoints: profileData.silverseaVenetianPoints,
-        casinoTier: profileData.silverseaCasinoTier,
-        casinoPoints: profileData.silverseaCasinoPoints,
+        venetianPoints: profileData.silverseaVenetianPoints
       });
       
       console.log('[Settings] ✓ Updated Carnival loyalty:', {
@@ -1522,6 +1373,33 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       Alert.alert('Error', 'Unable to open link');
     });
   }, []);
+
+  const handleSavePlayingHours = useCallback(async (playingHours: PlayingHours) => {
+    if (!isProfileDisplayReady) {
+      console.log('[Settings] Blocked playing-hours save while account data is still loading');
+      Alert.alert('Profile Loading', 'Please wait for your account data to finish loading.');
+      return;
+    }
+
+    try {
+      setIsSavingPlayingHours(true);
+      console.log('[Settings] Saving playing hours:', playingHours);
+      
+      if (currentUser) {
+        await updateUser(currentUser.id, { playingHours });
+      } else {
+        const owner = await ensureOwner();
+        await updateUser(owner.id, { playingHours });
+      }
+      
+      Alert.alert('Playing Hours Saved', 'Your preferred playing times have been updated.');
+    } catch (error) {
+      console.error('[Settings] Save playing hours error:', error);
+      Alert.alert('Save Error', 'Failed to save playing hours. Please try again.');
+    } finally {
+      setIsSavingPlayingHours(false);
+    }
+  }, [currentUser, ensureOwner, isProfileDisplayReady, updateUser]);
 
   const handleImportMachinesJSON = useCallback(async () => {
     try {
@@ -1645,11 +1523,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     label: string,
     value?: string | React.ReactNode,
     onPress?: () => void,
-    isDanger?: boolean,
-    testID?: string
+    isDanger?: boolean
   ) => (
     <TouchableOpacity 
-      testID={testID}
       style={styles.settingRow} 
       onPress={onPress}
       disabled={!onPress}
@@ -1660,14 +1536,24 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         <Text style={[styles.settingLabel, isDanger && styles.dangerLabel]}>{label}</Text>
       </View>
       <View style={styles.settingRight}>
-        {typeof value === 'string' || typeof value === 'number' ? (
+        {typeof value === 'string' ? (
           <Text style={styles.settingValue}>{value}</Text>
         ) : (
-          renderViewContent(value)
+          value
         )}
         {onPress && <ChevronRight size={18} color={isDanger ? COLORS.error : CLEAN_THEME.text.secondary} />}
       </View>
     </TouchableOpacity>
+  );
+
+  const renderToggle = (value: boolean, onToggle: (val: boolean) => void) => (
+    <Switch
+      value={value}
+      onValueChange={onToggle}
+      trackColor={{ false: '#E5E7EB', true: 'rgba(0, 31, 63, 0.3)' }}
+      thumbColor={value ? COLORS.navyDeep : '#9CA3AF'}
+      ios_backgroundColor="#E5E7EB"
+    />
   );
 
   const renderSectionHeader = (
@@ -1693,7 +1579,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
   );
 
   return (
-    <View style={styles.container} testID={`settings-screen-${SETTINGS_LAYOUT_VERSION}`}>
+    <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
       
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -1786,7 +1672,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
-            {isAdmin && (
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/carnival-sync' as any)}
@@ -1798,7 +1683,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Sync Carnival Cruises</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
-            )}
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/pricing-summary' as any)}
@@ -1811,9 +1695,8 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
             <TouchableOpacity 
-              testID="settings.quickAction.importOffersOrCompletedCruises"
               style={styles.quickActionFullWidth} 
-              onPress={handleChooseOffersImportSource}
+              onPress={handleImportOffersCSV}
               activeOpacity={0.7}
               disabled={isImporting}
             >
@@ -1824,7 +1707,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                   <FileDown size={16} color={COLORS.info} />
                 )}
               </View>
-              <Text style={styles.quickActionLabelInline}>Load Offers / Completed Cruises</Text>
+              <Text style={styles.quickActionLabelInline}>Load Import Offers.CSV</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
             <View style={styles.quickActionsRow}>
@@ -1863,24 +1746,82 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           </View>
 
           {isProfileDisplayReady ? (
-            <UserProfileCard
-              key={`profile-${normalizedAuthenticatedEmail ?? 'guest'}`}
-              currentValues={currentProfileValues}
-              enrichmentData={enrichmentData}
-              onSave={handleSaveProfile}
-              isSaving={isSaving}
-            />
+            <>
+              <UserProfileCard
+                key={`profile-${normalizedAuthenticatedEmail ?? 'guest'}`}
+                currentValues={currentProfileValues}
+                enrichmentData={enrichmentData}
+                onSave={handleSaveProfile}
+                isSaving={isSaving}
+              />
+
+              <PlayingHoursCard
+                key={`playing-hours-${normalizedAuthenticatedEmail ?? 'guest'}`}
+                currentValues={currentPlayingHours}
+                onSave={handleSavePlayingHours}
+                isSaving={isSavingPlayingHours}
+              />
+            </>
           ) : (
-            <View style={styles.profileLoadingCard} testID="settings-profile-loading-card">
-              <View style={styles.profileLoadingIconWrap}>
-                <ActivityIndicator size="small" color={COLORS.navyDeep} />
+            <>
+              <View style={styles.profileLoadingCard} testID="settings-profile-loading-card">
+                <View style={styles.profileLoadingIconWrap}>
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                </View>
+                <View style={styles.profileLoadingCopy}>
+                  <Text style={styles.profileLoadingTitle}>Securing your profile</Text>
+                  <Text style={styles.profileLoadingSubtitle}>{profileTransitionSubtitle}</Text>
+                </View>
               </View>
-              <View style={styles.profileLoadingCopy}>
-                <Text style={styles.profileLoadingTitle}>Securing your profile</Text>
-                <Text style={styles.profileLoadingSubtitle}>Your private profile is loading.</Text>
+
+              <View style={styles.profileLoadingCard} testID="settings-playing-hours-loading-card">
+                <View style={styles.profileLoadingIconWrap}>
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                </View>
+                <View style={styles.profileLoadingCopy}>
+                  <Text style={styles.profileLoadingTitle}>Refreshing playing hours</Text>
+                  <Text style={styles.profileLoadingSubtitle}>Your account preferences will appear as soon as the correct profile is loaded.</Text>
+                </View>
               </View>
-            </View>
+            </>
           )}
+
+          <View style={styles.section}>
+            <View style={styles.sectionCard}>
+              {renderSectionHeader(<Moon size={18} color={COLORS.white} />, 'Display Preferences', 'Customize how data appears')}
+              {renderSettingRow(
+                <DollarSign size={18} color={COLORS.navyDeep} />,
+                'Show Taxes in List',
+                renderToggle(settings.showTaxesInList, (val) => updateSettings({ showTaxesInList: val }))
+              )}
+              {renderSettingRow(
+                <DollarSign size={18} color={COLORS.navyDeep} />,
+                'Price Per Night',
+                renderToggle(settings.showPricePerNight, (val) => updateSettings({ showPricePerNight: val }))
+              )}
+              {renderSettingRow(
+                <Moon size={18} color={COLORS.navyDeep} />,
+                'Theme',
+                settings.theme === 'dark' ? 'Dark' : settings.theme === 'light' ? 'Light' : 'System'
+              )}
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionCard}>
+              {renderSectionHeader(<Bell size={18} color={COLORS.white} />, 'Notifications', 'Alert preferences')}
+              {renderSettingRow(
+                <Bell size={18} color={COLORS.navyDeep} />,
+                'Price Drop Alerts',
+                renderToggle(settings.priceDropAlerts, (val) => updateSettings({ priceDropAlerts: val }))
+              )}
+              {renderSettingRow(
+                <Bell size={18} color={COLORS.navyDeep} />,
+                'Daily Summary',
+                renderToggle(settings.dailySummaryNotifications || false, (val) => updateSettings({ dailySummaryNotifications: val }))
+              )}
+            </View>
+          </View>
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
@@ -1891,18 +1832,16 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               </View>
               {renderSettingRow(
                 <FileSpreadsheet size={18} color={COLORS.navyDeep} />,
-                'Offers CSV / Completed Cruises.xlsx',
+                'Offers CSV',
                 isImporting ? (
                   <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                ) : lastImportResult?.type === 'offers' || lastImportResult?.type === 'completed-workbook' ? (
+                ) : lastImportResult?.type === 'offers' ? (
                   <View style={styles.successBadge}>
                     <CheckCircle size={12} color={COLORS.success} />
                     <Text style={styles.successText}>{lastImportResult.count}</Text>
                   </View>
                 ) : undefined,
-                handleChooseOffersImportSource,
-                false,
-                'settings.data.importOffersOrCompletedCruises'
+                handleImportOffersCSV
               )}
               {renderSettingRow(
                 <Ship size={18} color={COLORS.navyDeep} />,
@@ -2203,21 +2142,29 @@ STEP 4: Optional Calendar Import
           <View style={styles.section}>
             <View style={styles.sectionCard}>
               {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan')}
-              <View style={styles.subscriptionStatusBanner} testID="settings.subscription.status-banner">
-                <Crown size={18} color={subscriptionAccentColor} />
+              <View style={styles.subscriptionStatusBanner}>
+                <Crown size={18} color={
+                  entitlement.subscriptionDisplayStatus === 'annual' ? '#10B981' :
+                  entitlement.subscriptionDisplayStatus === 'monthly' ? '#3B82F6' :
+                  entitlement.subscriptionDisplayStatus === 'grace_period' ? '#F59E0B' :
+                  '#EF4444'
+                } />
                 <View style={styles.subscriptionStatusText}>
-                  <Text style={styles.subscriptionStatusTitle}>{subscriptionStatusTitle}</Text>
-                  <Text style={styles.subscriptionStatusSubtitle}>{subscriptionStatusSubtitle}</Text>
+                  <Text style={styles.subscriptionStatusTitle}>
+                    {entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual Subscription' :
+                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly Subscription' :
+                     entitlement.subscriptionDisplayStatus === 'grace_period' ? '5-Day Grace Period' :
+                     'Subscription Expired'}
+                  </Text>
+                  <Text style={styles.subscriptionStatusSubtitle}>
+                    {entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual plan active — all features unlocked' :
+                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly plan active — all features unlocked' :
+                     entitlement.subscriptionDisplayStatus === 'grace_period' ? `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining — full access` :
+                     'Purchase a monthly or annual subscription to continue'}
+                  </Text>
                 </View>
               </View>
-              {!!entitlement.error && <Text style={styles.subscriptionErrorText}>{entitlement.error}</Text>}
               <View style={styles.dataDivider} />
-              {renderSettingRow(
-                <RefreshCcw size={18} color={COLORS.navyDeep} />,
-                'Refresh Subscription Status',
-                entitlement.isLoading ? <ActivityIndicator size="small" color={COLORS.navyDeep} /> : <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
-                () => { void entitlement.refresh(); }
-              )}
               {renderSettingRow(
                 <RefreshCcw size={18} color={COLORS.navyDeep} />,
                 'Restore Purchases',
@@ -2230,61 +2177,17 @@ STEP 4: Optional Calendar Import
                 <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
                 () => { void entitlement.openManageSubscription(); }
               )}
-              {shouldShowIosMonthlySubscription && (
-                <View style={styles.subscriptionPurchaseCard} testID="settings.subscription.monthly-card">
-                  <View style={styles.subscriptionPurchaseHeader}>
-                    <View style={styles.subscriptionPurchaseBadge}>
-                      <Crown size={14} color={COLORS.white} />
-                      <Text style={styles.subscriptionPurchaseBadgeText}>App Store Monthly Plan</Text>
-                    </View>
-                    <Text style={styles.subscriptionPurchasePrice}>
-                      $9.99<Text style={styles.subscriptionPurchasePriceSuffix}>/month</Text>
-                    </Text>
-                  </View>
-                  <Text style={styles.subscriptionPurchaseTitle}>Easy Seas Monthly Subscription</Text>
-                  <Text style={styles.subscriptionPurchaseSubtitle}>
-                    Unlock full access with the iOS in-app subscription directly from Settings.
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.subscriptionPurchaseButton,
-                      isIosMonthlyPurchaseDisabled && styles.subscriptionPurchaseButtonDisabled,
-                    ]}
-                    onPress={handleStartIosMonthlySubscription}
-                    activeOpacity={0.85}
-                    disabled={isIosMonthlyPurchaseDisabled}
-                    testID="settings.subscription.monthly-button"
-                  >
-                    {entitlement.isLoading ? (
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                    ) : (
-                      <Text style={styles.subscriptionPurchaseButtonText}>{iosMonthlyPurchaseButtonLabel}</Text>
-                    )}
-                  </TouchableOpacity>
-                  <Text style={styles.subscriptionPurchaseDisclaimer}>
-                    Payment will be charged to your Apple ID account at confirmation of purchase. The subscription renews automatically at $9.99 per month unless auto-renew is turned off at least 24 hours before the end of the current period. You can manage and cancel your subscription anytime in App Store account settings.
-                  </Text>
-                  <View style={styles.subscriptionLegalRow}>
-                    <TouchableOpacity
-                      style={styles.subscriptionLegalButton}
-                      onPress={handleOpenSubscriptionPrivacyPolicy}
-                      activeOpacity={0.85}
-                      testID="settings.subscription.privacy"
-                    >
-                      <Shield size={14} color={COLORS.navyDeep} />
-                      <Text style={styles.subscriptionLegalButtonText}>Privacy Policy</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.subscriptionLegalButton}
-                      onPress={handleOpenSubscriptionTerms}
-                      activeOpacity={0.85}
-                      testID="settings.subscription.terms"
-                    >
-                      <Shield size={14} color={COLORS.navyDeep} />
-                      <Text style={styles.subscriptionLegalButtonText}>Terms of Use</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+              {renderSettingRow(
+                <Calendar size={18} color={COLORS.navyDeep} />,
+                'Purchase a Monthly Subscription',
+                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                () => router.push('/paywall-monthly' as any)
+              )}
+              {renderSettingRow(
+                <Crown size={18} color={COLORS.navyDeep} />,
+                'Purchase an Annual Subscription',
+                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                () => router.push('/paywall' as any)
               )}
               <View style={styles.dataDivider} />
               {renderSettingRow(
@@ -2301,9 +2204,7 @@ STEP 4: Optional Calendar Import
               )}
             </View>
             <Text style={styles.subscriptionHint}>
-              {(isAdmin || entitlement.source === 'dev')
-                ? 'Your account has privileged access. Restore and subscription management tools remain available here.'
-                : 'Manage your subscription status, restore previous purchases, and review legal terms.'}
+              Manage your subscription status, restore previous purchases, and review legal terms. The annual subscription renews automatically unless canceled at least 24 hours before the end of the current period.
             </Text>
           </View>
 
@@ -2311,13 +2212,6 @@ STEP 4: Optional Calendar Import
             <View style={styles.section}>
               <View style={styles.sectionCard}>
                 {renderSectionHeader(<Shield size={18} color={COLORS.white} />, 'Admin', 'Email whitelist & data tools')}
-                {renderSettingRow(
-                  <Ticket size={18} color="#5A319F" />,
-                  'SeaPass Web Generator',
-                  'Locked Version 2 web pass',
-                  () => router.push('/seapass-generator' as any)
-                )}
-                <View style={styles.dataDivider} />
                 <View style={styles.adminHeader}>
                   <Text style={styles.adminHeaderText}>Manage user access</Text>
                   <Text style={styles.adminHeaderSubtext}>
@@ -2385,18 +2279,16 @@ STEP 4: Optional Calendar Import
                 </View>
                 {renderSettingRow(
                   <FileSpreadsheet size={18} color={COLORS.navyDeep} />,
-                  'Import Offers CSV / Completed Cruises.xlsx',
+                  'Import Offers CSV',
                   isImporting ? (
                     <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                  ) : lastImportResult?.type === 'offers' || lastImportResult?.type === 'completed-workbook' ? (
+                  ) : lastImportResult?.type === 'offers' ? (
                     <View style={styles.successBadge}>
                       <CheckCircle size={12} color={COLORS.success} />
                       <Text style={styles.successText}>{lastImportResult.count}</Text>
                     </View>
                   ) : undefined,
-                  handleChooseOffersImportSource,
-                  false,
-                  'settings.admin.importOffersOrCompletedCruises'
+                  handleImportOffersCSV
                 )}
                 {renderSettingRow(
                   <RefreshCcw size={18} color={COLORS.error} />,
@@ -3143,107 +3035,6 @@ const styles = StyleSheet.create({
     color: CLEAN_THEME.text.secondary,
     marginTop: SPACING.xs,
     marginHorizontal: SPACING.xs,
-    lineHeight: 16,
-  },
-  subscriptionPurchaseCard: {
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.md,
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.14)',
-    gap: SPACING.sm,
-  },
-  subscriptionPurchaseHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: SPACING.sm,
-  },
-  subscriptionPurchaseBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.navyDeep,
-    borderRadius: BORDER_RADIUS.round,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    flexShrink: 1,
-  },
-  subscriptionPurchaseBadgeText: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
-    letterSpacing: 0.6,
-  },
-  subscriptionPurchasePrice: {
-    fontSize: 24,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  subscriptionPurchasePriceSuffix: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: CLEAN_THEME.text.secondary,
-  },
-  subscriptionPurchaseTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  subscriptionPurchaseSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: CLEAN_THEME.text.secondary,
-    lineHeight: 20,
-  },
-  subscriptionPurchaseButton: {
-    minHeight: 48,
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: '#0369A1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING.md,
-  },
-  subscriptionPurchaseButtonDisabled: {
-    opacity: 0.6,
-  },
-  subscriptionPurchaseButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
-  },
-  subscriptionPurchaseDisclaimer: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    lineHeight: 18,
-    color: CLEAN_THEME.text.secondary,
-  },
-  subscriptionLegalRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  subscriptionLegalButton: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.16)',
-    backgroundColor: 'rgba(3, 105, 161, 0.06)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: SPACING.sm,
-  },
-  subscriptionLegalButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-  },
-  subscriptionErrorText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.error,
     lineHeight: 16,
   },
   calendarFeedBanner: {
