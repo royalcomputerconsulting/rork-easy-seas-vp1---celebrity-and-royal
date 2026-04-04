@@ -12,9 +12,11 @@ This folder is a rebuild pack for the current SeaPass Generator feature.
 
 ## Folder contents
 - `code/` — source snapshots of the core feature files and direct supporting files.
-- `snippets/` — integration snippets for routing, settings entry, and backend proxy wiring.
+- `snippets/` — integration snippets for routing, settings entry, backend proxy wiring, and extra feature notes.
 - `CURRENT_SYSTEM_SNAPSHOT.md` — current dependencies, env usage, routes, and asset references.
 - `REBUILD_GUIDE.md` — step-by-step rebuild notes.
+- `DAY_AGENDA_DAILY_LUCK_SYSTEM.md` — how Day Agenda pages are generated and how the Daily Luck system works.
+- `CHANGELOG_LAST_14_DAYS.md` — recent implementation/change log compiled from available project history.
 
 ## Core source of truth in the current app
 - `expo/app/seapass-generator.tsx`
@@ -48,3 +50,6 @@ The feature directly uses:
 
 ## Rebuild goal
 If the SeaPass Generator ever needs to be recreated, everything in this folder gives the exact current implementation pattern, integration points, render/export logic, and operating notes needed to rebuild it quickly.
+
+## Additional system coverage
+This folder now also includes Day Agenda and Daily Luck implementation notes plus source snapshots for the luck pipeline, user persistence, and Day Agenda rendering flow so those systems can be reconstructed alongside SeaPass-related work.
