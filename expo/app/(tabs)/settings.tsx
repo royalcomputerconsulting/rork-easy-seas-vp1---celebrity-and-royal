@@ -87,7 +87,6 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
-import { getRuntimeBuildInfo } from '@/lib/runtimeBuildInfo';
 
 interface PickedCompletedCruisesWorkbook {
   fileName: string;
@@ -211,8 +210,6 @@ export default function SettingsScreen() {
     : entitlement.isLoading
       ? 'Processing...'
       : 'Subscribe for $9.99/month';
-  const runtimeBuildInfo = useMemo(() => getRuntimeBuildInfo(SETTINGS_LAYOUT_VERSION), []);
-
   const handleStartIosMonthlySubscription = useCallback(() => {
     console.log('[Settings] Starting iOS monthly subscription purchase flow');
     void entitlement.subscribeProMonthly();
@@ -231,11 +228,10 @@ export default function SettingsScreen() {
   useEffect(() => {
     console.log('[Settings] Rendering layout version:', {
       layoutVersion: SETTINGS_LAYOUT_VERSION,
-      runtimeBuildInfo,
       subscriptionStatus: entitlement.subscriptionDisplayStatus,
       entitlementSource: entitlement.source,
     });
-  }, [entitlement.source, entitlement.subscriptionDisplayStatus, runtimeBuildInfo]);
+  }, [entitlement.source, entitlement.subscriptionDisplayStatus]);
 
   const loadWhitelist = useCallback(async () => {
     try {
@@ -2290,13 +2286,6 @@ STEP 4: Optional Calendar Import
                   </View>
                 </View>
               )}
-              <View style={styles.subscriptionBuildCard} testID="settings.subscription.build-card">
-                <Text style={styles.subscriptionBuildLabel}>Runtime fingerprint</Text>
-                <Text style={styles.subscriptionBuildValue}>{runtimeBuildInfo.fingerprint}</Text>
-                <Text style={styles.subscriptionBuildMeta}>
-                  Project {runtimeBuildInfo.projectId} • Created {runtimeBuildInfo.updateCreatedAt}
-                </Text>
-              </View>
               <View style={styles.dataDivider} />
               {renderSettingRow(
                 <Shield size={18} color={COLORS.navyDeep} />,
@@ -2314,7 +2303,7 @@ STEP 4: Optional Calendar Import
             <Text style={styles.subscriptionHint}>
               {(isAdmin || entitlement.source === 'dev')
                 ? 'Your account has privileged access. Restore and subscription management tools remain available here.'
-                : 'Manage your subscription status, restore previous purchases, and review legal terms. If TestFlight ever shows an older purchase layout, compare the runtime fingerprint above to confirm which bundle is running.'}
+                : 'Manage your subscription status, restore previous purchases, and review legal terms.'}
             </Text>
           </View>
 
@@ -3165,34 +3154,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(3, 105, 161, 0.14)',
     gap: SPACING.sm,
-  },
-  subscriptionBuildCard: {
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.md,
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.12)',
-    gap: 6,
-  },
-  subscriptionBuildLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  subscriptionBuildValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-    lineHeight: 18,
-  },
-  subscriptionBuildMeta: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: CLEAN_THEME.text.secondary,
-    lineHeight: 16,
   },
   subscriptionPurchaseHeader: {
     flexDirection: 'row',
