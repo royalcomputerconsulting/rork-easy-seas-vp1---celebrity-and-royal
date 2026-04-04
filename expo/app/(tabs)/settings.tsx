@@ -879,32 +879,77 @@ export default function SettingsScreen() {
       const importedCruises: BookedCruise[] = [];
       const existingBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
 
+      const headerKeys = rows.length > 0 ? Object.keys(rows[0] as Record<string, any>) : [];
+      console.log('[Settings] XLSX column headers:', headerKeys);
+
+      const findCol = (searchTerms: string[], excludeTerms?: string[]): string | null => {
+        return headerKeys.find(k => {
+          const lk = k.toLowerCase();
+          const matches = searchTerms.some(t => lk.includes(t));
+          if (!matches) return false;
+          if (excludeTerms && excludeTerms.some(ex => lk.includes(ex))) return false;
+          return true;
+        }) || null;
+      };
+
+      const colShip = findCol(['ship', 'vessel']);
+      const colSailDate = findCol(['start date', 'sail date', 'saildate', 'departure date', 'embark'], ['port']);
+      const colReturnDate = findCol(['end date', 'return date', 'returndate', 'disembark'], ['port']);
+      const colNights = findCol(['nights', 'duration']);
+      const colItinerary = findCol(['cruise', 'itinerary', 'destination', 'route'], ['full itinerary', 'source']);
+      const colFullItinerary = findCol(['full itinerary']);
+      const colStartPort = findCol(['start port', 'departure port', 'homeport', 'embarkation port']);
+      const colEndPort = findCol(['end port', 'disembarkation port']);
+      const colPortsVisited = findCol(['ports visited', 'ports of call']);
+      const colBrand = findCol(['brand', 'cruise line']);
+      const colStatus = findCol(['status']);
+      const colNotes = findCol(['notes', 'comments']);
+      const colReservation = findCol(['reservation', 'booking', 'res']);
+      const colCabin = findCol(['cabin', 'stateroom', 'room type']);
+      const colGuests = findCol(['guests', 'pax', 'passengers']);
+      const colPrice = findCol(['price', 'cost', 'paid', 'amount']);
+      const colWinnings = findCol(['winnings', 'casino win']);
+      const colProgram = findCol(['program', 'charter']);
+
+      console.log('[Settings] XLSX mapped columns:', {
+        ship: colShip, sailDate: colSailDate, returnDate: colReturnDate,
+        nights: colNights, itinerary: colItinerary, startPort: colStartPort,
+        brand: colBrand, portsVisited: colPortsVisited,
+      });
+
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i] as Record<string, any>;
-        const getVal = (searchTerms: string[]): string => {
-          const key = Object.keys(row).find(k => searchTerms.some(t => k.toLowerCase().includes(t))) || '';
-          return key ? String(row[key] || '').trim() : '';
+        const getCol = (col: string | null): string => {
+          if (!col) return '';
+          return String(row[col] ?? '').trim();
         };
 
-        const shipName = getVal(['ship', 'vessel']);
-        const sailDateRaw = getVal(['sail date', 'saildate', 'departure', 'embark']);
-        const returnDateRaw = getVal(['return date', 'returndate', 'disembark', 'end']);
-        const nightsRaw = getVal(['nights', 'duration', 'days']);
-        const destination = getVal(['destination', 'itinerary', 'route']);
-        const departurePort = getVal(['departure port', 'port', 'homeport']);
-        const reservationNumber = getVal(['reservation', 'booking', 'res']);
-        const cabinType = getVal(['cabin', 'stateroom', 'room type']);
-        const guests = getVal(['guests', 'pax', 'passengers']);
-        const price = getVal(['price', 'cost', 'paid', 'amount']);
-        const winnings = getVal(['winnings', 'casino', 'win']);
+        const shipName = getCol(colShip);
+        const sailDateRaw = getCol(colSailDate);
+        const returnDateRaw = getCol(colReturnDate);
+        const nightsRaw = getCol(colNights);
+        const destination = getCol(colItinerary);
+        const fullItinerary = getCol(colFullItinerary);
+        const departurePort = getCol(colStartPort);
+        const _endPort = getCol(colEndPort);
+        const portsVisited = getCol(colPortsVisited);
+        const brand = getCol(colBrand);
+        const _statusVal = getCol(colStatus);
+        const notesVal = getCol(colNotes);
+        const reservationNumber = getCol(colReservation);
+        const cabinType = getCol(colCabin);
+        const guests = getCol(colGuests);
+        const price = getCol(colPrice);
+        const winnings = getCol(colWinnings);
+        const program = getCol(colProgram);
 
         if (!shipName && !sailDateRaw) continue;
 
         const parseDate = (raw: string): string => {
           if (!raw) return new Date().toISOString().split('T')[0];
-          const excelSerial = parseInt(raw);
-          if (!isNaN(excelSerial) && excelSerial > 10000) {
-            const d = new Date((excelSerial - 25569) * 86400 * 1000);
+          const num = Number(raw);
+          if (!isNaN(num) && num > 10000 && num < 100000) {
+            const d = new Date((num - 25569) * 86400 * 1000);
             return d.toISOString().split('T')[0];
           }
           const dateMatch = raw.match(/(\d{1,4})[/-](\d{1,2})[/-](\d{2,4})/);
@@ -936,34 +981,49 @@ export default function SettingsScreen() {
           continue;
         }
 
+        const brandLower = brand.toLowerCase();
+        const cruiseSource: 'royal' | 'celebrity' | 'carnival' = 
+          brandLower.includes('celebrity') ? 'celebrity' :
+          brandLower.includes('carnival') ? 'carnival' : 'royal';
+
+        const portsList = portsVisited ? portsVisited.split(',').map(p => p.trim()).filter(Boolean) : [];
+        const itineraryLabel = destination || fullItinerary || `${nights} Night Cruise`;
+
         const cruise: BookedCruise = {
           id: `completed-xlsx-${Date.now()}-${i}`,
           shipName: shipName || 'Unknown Ship',
           sailDate,
           returnDate,
           nights,
-          destination: destination || 'Caribbean',
-          itineraryName: destination || `${nights} Night Cruise`,
+          destination: destination || fullItinerary || 'Caribbean',
+          itineraryName: itineraryLabel,
           departurePort: departurePort || '',
+          ports: portsList.length > 0 ? portsList : undefined,
+          itineraryRaw: fullItinerary ? [fullItinerary] : undefined,
           reservationNumber: reservationNumber || undefined,
           cabinType: cabinType || 'Balcony',
           guests: parseInt(guests) || 2,
           guestNames: [],
           price: price ? parseFloat(price.replace(/[^0-9.]/g, '')) || undefined : undefined,
           winnings: winnings ? parseFloat(winnings.replace(/[^0-9.]/g, '')) || undefined : undefined,
+          notes: notesVal || (program ? `Program: ${program}` : undefined),
           status: 'completed',
           completionState: 'completed',
-          cruiseSource: 'royal',
+          cruiseSource,
           createdAt: new Date().toISOString(),
         };
 
         importedCruises.push(cruise);
+        console.log(`[Settings] Parsed XLSX row ${i}: ${cruise.shipName} | ${cruise.sailDate} → ${cruise.returnDate} | ${cruise.nights}N | ${cruiseSource}`);
       }
+
+      const skippedCount = rows.length - importedCruises.length;
+      console.log('[Settings] XLSX import summary:', { total: rows.length, imported: importedCruises.length, skippedOrDuplicate: skippedCount });
 
       if (importedCruises.length === 0) {
         Alert.alert(
           'No New Cruises',
-          'No new completed cruises were found. All entries may already exist or the file columns could not be recognized.\n\nExpected columns: Ship, Sail Date, Return Date, Nights, Destination, Departure Port, Reservation, Cabin Type, Guests.'
+          `No new completed cruises were found. ${skippedCount > 0 ? `${skippedCount} row(s) were duplicates or unrecognized.` : 'The file columns could not be recognized.'}\n\nExpected columns: Ship, Start Date, End Date, Nights, Cruise/Itinerary, Start Port.`
         );
         setIsImporting(false);
         return;

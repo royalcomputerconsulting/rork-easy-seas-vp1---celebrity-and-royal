@@ -1,6 +1,11 @@
+const _noEmailWarnedKeys = new Set<string>();
+
 export function getUserScopedKey(baseKey: string, email: string | null): string {
   if (!email) {
-    console.warn('[StorageKeys] No email provided for scoped key, using isolated fallback for:', baseKey);
+    if (!_noEmailWarnedKeys.has(baseKey)) {
+      _noEmailWarnedKeys.add(baseKey);
+      console.log('[StorageKeys] No email yet for scoped key (initial load):', baseKey);
+    }
     return `${baseKey}::__no_user__`;
   }
   const normalizedEmail = email.toLowerCase().trim();
