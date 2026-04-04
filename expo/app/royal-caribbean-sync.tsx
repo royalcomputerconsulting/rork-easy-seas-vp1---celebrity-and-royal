@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, ActivityIndicator, Animated } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -41,13 +41,14 @@ function RoyalCaribbeanSyncScreen() {
     onPageLoaded
   } = useRoyalCaribbeanSync();
   
-  const [webViewVisible, setWebViewVisible] = useState<boolean>(Platform.OS === 'web');
+  const [webViewVisible, setWebViewVisible] = useState<boolean>(true);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [showCookieModal, setShowCookieModal] = useState(false);
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
   const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [syncingPricing, setSyncingPricing] = useState(false);
   const [syncStarted, setSyncStarted] = useState(false);
+  const [isConfirmingSync, setIsConfirmingSync] = useState<boolean>(false);
   const syncPulse = useState(() => new Animated.Value(1))[0];
   const [_pricingSyncResults, setPricingSyncResults] = useState<{ updated: number; total: number } | null>(null);
   
@@ -74,6 +75,35 @@ function RoyalCaribbeanSyncScreen() {
 
     openLogin();
   };
+
+  const handleRunIngestion = useCallback(() => {
+    if (!webViewVisible) {
+      setWebViewVisible(true);
+    }
+
+    void runIngestion().catch((error: unknown) => {
+      const errorMessage = error instanceof Error ? error.message : 'Unable to start Club Royale sync';
+      console.error('[RoyalCaribbeanSyncScreen] Failed to start ingestion:', error);
+      addLog(`Unable to start sync: ${errorMessage}`, 'error');
+    });
+  }, [addLog, runIngestion, webViewVisible]);
+
+  const handleConfirmSync = useCallback(() => {
+    if (isConfirmingSync) {
+      return;
+    }
+
+    setIsConfirmingSync(true);
+    void syncToApp(coreData, loyalty)
+      .catch((error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : 'Club Royale sync failed';
+        console.error('[RoyalCaribbeanSyncScreen] Sync-to-app error:', error);
+        addLog(`Unable to finish sync: ${errorMessage}`, 'error');
+      })
+      .finally(() => {
+        setIsConfirmingSync(false);
+      });
+  }, [addLog, coreData, isConfirmingSync, loyalty, syncToApp]);
 
   useEffect(() => {
     if (isRunningOrSyncing) {
@@ -585,8 +615,9 @@ function RoyalCaribbeanSyncScreen() {
 
               <Pressable 
                 style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled, isRunning && styles.syncActiveButton]}
-                onPress={runIngestion}
+                onPress={handleRunIngestion}
                 disabled={!canRunIngestion || isRunning}
+                testID="run-club-royale-sync-button"
               >
                 {isRunning ? (
                   <Animated.View style={{ opacity: syncPulse }}>
@@ -926,12 +957,12 @@ function RoyalCaribbeanSyncScreen() {
                 </Pressable>
 
                 <Pressable 
-                  style={[styles.button, styles.confirmButton]}
-                  onPress={() => {
-                    void syncToApp(coreData, loyalty);
-                  }}
+                  style={[styles.button, styles.confirmButton, isConfirmingSync && styles.buttonDisabled]}
+                  onPress={handleConfirmSync}
+                  disabled={isConfirmingSync}
+                  testID="club-royale-confirm-sync-button"
                 >
-                  <Text style={styles.buttonText}>Yes, Sync Now</Text>
+                  <Text style={styles.buttonText}>{isConfirmingSync ? 'Syncing…' : 'Yes, Sync Now'}</Text>
                 </Pressable>
               </View>
             </View>
