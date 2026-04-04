@@ -3,7 +3,7 @@ services:
     name: easy-seas-backend
     env: node
     buildCommand: npm install --legacy-peer-deps
-    startCommand: npm run backend
+    startCommand: HOME=/tmp npx tsx server.js
     envVars:
       - key: NODE_ENV
         value: production
