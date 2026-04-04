@@ -1,4 +1,4 @@
-import { httpLink, splitLink } from "@trpc/client";
+import { httpLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 
@@ -6,41 +6,25 @@ import type { AppRouter } from "@/backend/trpc/app-router";
 
 export const trpc = createTRPCReact<AppRouter>();
 
-export const RENDER_BACKEND_URL = "https://rork-easy-seas-vp1-2nep.onrender.com";
+const DEFAULT_RENDER_URL = "https://rork-easy-seas-vp1-2nep.onrender.com";
 
-export const isRenderBackendAvailable = () => {
-  return true;
-};
+export const RENDER_BACKEND_URL =
+  process.env.EXPO_PUBLIC_RENDER_BACKEND_URL?.trim() || DEFAULT_RENDER_URL;
 
-const RENDER_ROUTED_PREFIXES = [
-  'calendar.',
-  'royalCaribbeanSync.',
-  'example.',
-];
+export const isRenderBackendAvailable = () => true;
 
-const isRenderRoutedProcedure = (path: string): boolean => {
-  return RENDER_ROUTED_PREFIXES.some(prefix => path.startsWith(prefix));
-};
-
-const getBaseUrl = () => {
-  const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-
-  if (!url) {
-    return "https://fallback.local";
-  }
-
-  return url;
+const getBackendUrl = (): string => {
+  return RENDER_BACKEND_URL;
 };
 
 let _backendReachable: boolean | null = null;
 let _lastHealthCheck = 0;
 const HEALTH_CHECK_INTERVAL = 120_000;
-const HEALTH_CHECK_TIMEOUT = 5_000;
+const HEALTH_CHECK_TIMEOUT = 8_000;
 let _healthCheckPromise: Promise<boolean> | null = null;
 
 const checkBackendHealth = async (): Promise<boolean> => {
-  const baseUrl = getBaseUrl();
-  if (baseUrl === "https://fallback.local") return false;
+  const baseUrl = getBackendUrl();
 
   const now = Date.now();
   if (_backendReachable !== null && now - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
@@ -54,23 +38,23 @@ const checkBackendHealth = async (): Promise<boolean> => {
       const controller = new AbortController();
       const tid = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
       const res = await fetch(`${baseUrl}/`, {
-        method: 'GET',
+        method: "GET",
         signal: controller.signal,
-        headers: { 'Accept': 'application/json' },
+        headers: { Accept: "application/json" },
       });
       clearTimeout(tid);
       _backendReachable = res.ok;
       _lastHealthCheck = Date.now();
       if (_backendReachable) {
-        console.log('[tRPC] Backend health check passed');
+        console.log("[tRPC] Backend health check passed:", baseUrl);
       } else {
-        console.log('[tRPC] Backend returned non-ok status:', res.status);
+        console.log("[tRPC] Backend returned non-ok status:", res.status, baseUrl);
       }
       return _backendReachable;
     } catch {
       _backendReachable = false;
       _lastHealthCheck = Date.now();
-      console.log('[tRPC] Backend unreachable - operating in offline mode');
+      console.log("[tRPC] Backend unreachable - operating in offline mode:", baseUrl);
       return false;
     } finally {
       _healthCheckPromise = null;
@@ -81,15 +65,13 @@ const checkBackendHealth = async (): Promise<boolean> => {
 };
 
 export const isBackendAvailable = (): boolean => {
-  const baseUrl = getBaseUrl();
-  if (baseUrl === "https://fallback.local") return false;
-  if (_backendReachable === false && Date.now() - _lastHealthCheck < HEALTH_CHECK_INTERVAL) return false;
+  if (_backendReachable === false && Date.now() - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
+    return false;
+  }
   return true;
 };
 
-export const isWebSyncAvailable = (): boolean => {
-  return true;
-};
+export const isWebSyncAvailable = (): boolean => true;
 
 export const isBackendReachable = async (): Promise<boolean> => {
   return checkBackendHealth();
@@ -103,7 +85,7 @@ export const resetBackendHealthCache = () => {
 
 let _trpcClient: ReturnType<typeof trpc.createClient> | null = null;
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let _lastErrorLogTime = 0;
 const ERROR_LOG_THROTTLE = 30_000;
@@ -114,119 +96,104 @@ const fetchWithRetry = async (
   maxRetries = 1
 ): Promise<Response> => {
   let lastError: Error | null = null;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
       const existingSignal = options?.signal;
       if (existingSignal?.aborted) {
         clearTimeout(timeoutId);
-        throw new DOMException('Request was cancelled', 'AbortError');
+        throw new DOMException("Request was cancelled", "AbortError");
       }
-      
-      existingSignal?.addEventListener('abort', () => {
+
+      existingSignal?.addEventListener("abort", () => {
         controller.abort();
         clearTimeout(timeoutId);
       });
-      
+
+      const mergedHeaders = new Headers(options?.headers as HeadersInit | undefined);
+      mergedHeaders.set("Accept", "application/json");
+
       const response = await fetch(url, {
-        ...options,
+        method: options?.method,
+        body: options?.body,
         signal: controller.signal,
-        headers: {
-          ...options?.headers,
-          'Accept': 'application/json',
-        },
+        headers: mergedHeaders,
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (response.status === 429) {
-        const retryAfter = response.headers.get('retry-after');
-        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.min(1000 * Math.pow(2, attempt), 30000);
-        
+        const retryAfter = response.headers.get("retry-after");
+        const waitTime = retryAfter
+          ? parseInt(retryAfter) * 1000
+          : Math.min(1000 * Math.pow(2, attempt), 30000);
+
         if (attempt < maxRetries) {
           await sleep(waitTime);
           continue;
         }
       }
-      
+
       if (response.ok) {
         _backendReachable = true;
         _lastHealthCheck = Date.now();
       }
-      
+
       return response;
     } catch (error) {
       lastError = error as Error;
-      
+
       if (attempt < maxRetries) {
         const waitTime = Math.min(1000 * Math.pow(2, attempt), 5000);
         await sleep(waitTime);
       }
     }
   }
-  
+
   if (lastError) {
-    const msg = lastError.message || '';
-    if (msg.includes('Failed to fetch') || msg.includes('Network request failed') || lastError.name === 'AbortError') {
+    const msg = lastError.message || "";
+    if (
+      msg.includes("Failed to fetch") ||
+      msg.includes("Network request failed") ||
+      lastError.name === "AbortError"
+    ) {
       _backendReachable = false;
       _lastHealthCheck = Date.now();
     }
   }
-  
-  throw lastError || new Error('Fetch failed after retries');
+
+  throw lastError || new Error("Fetch failed after retries");
 };
 
 export const getTrpcClient = () => {
   if (!_trpcClient) {
-    const baseUrl = getBaseUrl();
-    console.log('[tRPC] Initializing client - System backend:', baseUrl, '| Render backend:', RENDER_BACKEND_URL);
+    const backendUrl = getBackendUrl();
+    console.log("[tRPC] Initializing client - Render backend:", backendUrl);
+
     _trpcClient = trpc.createClient({
       links: [
-        splitLink({
-          condition: (op) => isRenderRoutedProcedure(op.path),
-          true: httpLink({
-            url: `${RENDER_BACKEND_URL}/trpc`,
-            transformer: superjson,
-            fetch: async (url, options) => {
-              try {
-                const response = await fetchWithRetry(url.toString(), options);
-                return response;
-              } catch (error) {
+        httpLink({
+          url: `${backendUrl}/trpc`,
+          transformer: superjson,
+          fetch: async (url, options) => {
+            try {
+              const rawUrl = url as string | URL | Request;
+              const urlString = typeof rawUrl === "string" ? rawUrl : rawUrl instanceof URL ? rawUrl.href : (rawUrl as Request).url;
+              const response = await fetchWithRetry(urlString, options);
+              return response;
+            } catch (error) {
+              const now = Date.now();
+              if (now - _lastErrorLogTime > ERROR_LOG_THROTTLE) {
+                _lastErrorLogTime = now;
                 const errorMsg = error instanceof Error ? error.message : String(error);
-                console.log('[tRPC:Render] Request failed:', errorMsg);
-                throw error;
+                console.log("[tRPC] Request failed:", errorMsg, "- operating in offline mode");
               }
-            },
-          }),
-          false: httpLink({
-            url: `${baseUrl}/trpc`,
-            transformer: superjson,
-            fetch: async (url, options) => {
-              if (baseUrl === "https://fallback.local") {
-                throw new Error("BACKEND_NOT_CONFIGURED");
-              }
-
-              if (_backendReachable === false && Date.now() - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
-                throw new Error("BACKEND_OFFLINE");
-              }
-              
-              try {
-                const response = await fetchWithRetry(url.toString(), options);
-                return response;
-              } catch (error) {
-                const now = Date.now();
-                if (now - _lastErrorLogTime > ERROR_LOG_THROTTLE) {
-                  _lastErrorLogTime = now;
-                  const errorMsg = error instanceof Error ? error.message : String(error);
-                  console.log('[tRPC:System] Request failed:', errorMsg, '- operating in offline mode');
-                }
-                throw error;
-              }
-            },
-          }),
+              throw error;
+            }
+          },
         }),
       ],
     });

@@ -5,6 +5,7 @@ import { calendarRouter } from "./routes/calendar";
 import { royalCaribbeanSyncRouter } from "./routes/royal-caribbean-sync";
 import { cruiseDealsRouter } from "./routes/cruise-deals";
 import { crewRecognitionRouter } from "./routes/crew-recognition";
+import { dailyLuckRouter } from "./routes/daily-luck";
 
 export const appRouter = createTRPCRouter({
   example: exampleRouter,
@@ -13,6 +14,7 @@ export const appRouter = createTRPCRouter({
   royalCaribbeanSync: royalCaribbeanSyncRouter,
   cruiseDeals: cruiseDealsRouter,
   crewRecognition: crewRecognitionRouter,
+  dailyLuck: dailyLuckRouter,
 });
 
 export type AppRouter = typeof appRouter;
