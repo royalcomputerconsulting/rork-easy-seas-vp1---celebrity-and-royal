@@ -186,3 +186,299 @@ export function getRelativeTimeString(date: Date | string): string {
   
   return formatDate(d, 'medium');
 }
+
+const TAROT_LUCK_VALUES: number[] = [
+  85, 92, 78, 88, 82, 74, 90, 87, 80, 68, 93,
+  75, 65, 72, 79, 62, 58, 91, 66, 98, 84, 96,
+];
+
+function buildBirthdate(year: number, month: number, day: number): Date | null {
+  const date = new Date(year, month - 1, day, 8, 0, 0, 0);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+export function formatBirthdateForStorage(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const year = String(date.getFullYear());
+  return `${month}/${day}/${year}`;
+}
+
+export function parseBirthdate(input: string | Date | null | undefined): Date | null {
+  if (!input) return null;
+  if (input instanceof Date) {
+    return Number.isNaN(input.getTime()) ? null : input;
+  }
+
+  const trimmedInput = input.trim();
+  if (!trimmedInput) return null;
+
+  const slashMatch = trimmedInput.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slashMatch) {
+    const month = Number(slashMatch[1]);
+    const day = Number(slashMatch[2]);
+    const yearStr = slashMatch[3];
+    const year = yearStr.length <= 2 ? (Number(yearStr) > (new Date().getFullYear() % 100) ? 1900 + Number(yearStr) : 2000 + Number(yearStr)) : Number(yearStr);
+    return buildBirthdate(year, month, day);
+  }
+
+  const dashMatch = trimmedInput.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dashMatch) {
+    return buildBirthdate(Number(dashMatch[3]), Number(dashMatch[1]), Number(dashMatch[2]));
+  }
+
+  const isoMatch = trimmedInput.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    return buildBirthdate(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
+  }
+
+  const compactDigits = trimmedInput.replace(/\D/g, '');
+  if (/^\d{8}$/.test(compactDigits)) {
+    return buildBirthdate(
+      Number(compactDigits.slice(4, 8)),
+      Number(compactDigits.slice(0, 2)),
+      Number(compactDigits.slice(2, 4)),
+    );
+  }
+
+  if (/^\d{6}$/.test(compactDigits)) {
+    const month = Number(compactDigits.slice(0, 2));
+    const day = Number(compactDigits.slice(2, 4));
+    const yearSuffix = Number(compactDigits.slice(4, 6));
+    const currentYearSuffix = new Date().getFullYear() % 100;
+    const year = yearSuffix > currentYearSuffix ? 1900 + yearSuffix : 2000 + yearSuffix;
+    return buildBirthdate(year, month, day);
+  }
+
+  const parsedDate = new Date(trimmedInput);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return null;
+  }
+  return buildBirthdate(parsedDate.getFullYear(), parsedDate.getMonth() + 1, parsedDate.getDate());
+}
+
+export function normalizeBirthdateInput(input: string | null | undefined): string | undefined {
+  if (!input) return undefined;
+  const trimmedInput = input.trim();
+  if (!trimmedInput) return undefined;
+
+  const placeholderLikeInput =
+    /^m{1,2}[/.-]d{1,2}[/.-]y{2,4}$/i.test(trimmedInput) ||
+    /^y{4}[/.-]m{1,2}[/.-]d{1,2}$/i.test(trimmedInput);
+  if (placeholderLikeInput) {
+    console.warn('[date] Birthdate placeholder provided instead of a real date:', trimmedInput);
+    return undefined;
+  }
+
+  const parsedDate = parseBirthdate(trimmedInput);
+  if (!parsedDate) {
+    console.warn('[date] Could not normalize birthdate input:', trimmedInput);
+    return trimmedInput;
+  }
+  return formatBirthdateForStorage(parsedDate);
+}
+
+const MS_IN_DAY = 86400000;
+const LUCK_SCORE_FLOOR = 8;
+const LUCK_SCORE_CEILING = 96;
+const YEARLY_LUCK_SCORE_CACHE = new Map<string, Map<string, number>>();
+
+function normalizeLuckDate(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0);
+}
+
+function getLuckDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getDaysInYear(year: number): number {
+  const start = new Date(year, 0, 1, 12, 0, 0, 0);
+  const end = new Date(year + 1, 0, 1, 12, 0, 0, 0);
+  return Math.round((end.getTime() - start.getTime()) / MS_IN_DAY);
+}
+
+function getDayOfYear(date: Date): number {
+  const normalizedDate = normalizeLuckDate(date);
+  const start = new Date(normalizedDate.getFullYear(), 0, 0, 12, 0, 0, 0);
+  return Math.round((normalizedDate.getTime() - start.getTime()) / MS_IN_DAY);
+}
+
+function reduceToSingleDigit(value: number): number {
+  let result = Math.abs(Math.trunc(value));
+  while (result > 9) {
+    result = String(result).split('').reduce((sum, digit) => sum + Number(digit), 0);
+  }
+  return Math.max(1, result);
+}
+
+function getApproxLunarPhase(date: Date): number {
+  const normalizedDate = normalizeLuckDate(date);
+  const referenceMoon = Date.UTC(2000, 0, 6, 18, 14, 0, 0);
+  const daysSinceReference = (normalizedDate.getTime() - referenceMoon) / MS_IN_DAY;
+  const synodicMonth = 29.530588853;
+  const phase = daysSinceReference / synodicMonth;
+  return ((phase % 1) + 1) % 1;
+}
+
+function getBirthdayAnchorForYear(year: number, birthdate: Date): Date {
+  const daysInBirthMonth = new Date(year, birthdate.getMonth() + 1, 0).getDate();
+  const safeDay = Math.min(birthdate.getDate(), daysInBirthMonth);
+  return new Date(year, birthdate.getMonth(), safeDay, 12, 0, 0, 0);
+}
+
+function getWrappedDayDistance(dayA: number, dayB: number, totalDays: number): number {
+  const directDistance = Math.abs(dayA - dayB);
+  return Math.min(directDistance, totalDays - directDistance);
+}
+
+function getTarotLuck(birthdate: Date, selectedDate: Date): number {
+  const seed =
+    birthdate.getFullYear() +
+    birthdate.getMonth() * 13 +
+    birthdate.getDate() * 7 +
+    (selectedDate.getFullYear() * 3 +
+      selectedDate.getMonth() * 17 +
+      selectedDate.getDate() * 11);
+  const index = ((seed % TAROT_LUCK_VALUES.length) + TAROT_LUCK_VALUES.length) % TAROT_LUCK_VALUES.length;
+  return TAROT_LUCK_VALUES[index] ?? TAROT_LUCK_VALUES[0];
+}
+
+function calculateCalendarLuckSignal(birthdate: Date, selectedDate: Date): number {
+  const normalizedDate = normalizeLuckDate(selectedDate);
+  const year = normalizedDate.getFullYear();
+  const monthIndex = normalizedDate.getMonth();
+  const month = monthIndex + 1;
+  const day = normalizedDate.getDate();
+  const weekday = normalizedDate.getDay();
+  const dayOfYear = getDayOfYear(normalizedDate);
+  const daysInYear = getDaysInYear(year);
+  const weekOfMonth = Math.ceil(day / 7);
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const tarotLuck = getTarotLuck(birthdate, normalizedDate);
+
+  const weekdayWeights = [-7, 1, 6, -4, 5, 2, -5];
+  const monthWeights = [2, -4, 5, 1, -2, 4, -5, 3, -1, 0, 6, -3];
+  const quarterWeights = [3, -2, 2, -1];
+  const quarterIndex = Math.floor(monthIndex / 3);
+
+  const calendarDigit = reduceToSingleDigit(
+    year + month * 17 + day * 31 + birthdate.getFullYear() + (birthdate.getMonth() + 1) * 13 + birthdate.getDate() * 7,
+  );
+
+  const numerologySignal = (calendarDigit - 5) * 3.2;
+  const yearlyWave = Math.sin(((dayOfYear + birthdate.getDate() * 5) / daysInYear) * Math.PI * 2) * 13;
+  const halfYearWave = Math.cos(((dayOfYear * 2 + (birthdate.getMonth() + 1) * 11) / daysInYear) * Math.PI * 2) * 8;
+  const intraMonthWave = Math.sin(((day + weekday + birthdate.getDay()) / daysInMonth) * Math.PI * 2) * 5;
+  const lunarPhase = getApproxLunarPhase(normalizedDate);
+  const lunarSignal = Math.cos(lunarPhase * Math.PI * 2) * 4 + Math.sin(lunarPhase * Math.PI * 4) * 3;
+  const birthdayAnchor = getBirthdayAnchorForYear(year, birthdate);
+  const birthdayDistance = getWrappedDayDistance(dayOfYear, getDayOfYear(birthdayAnchor), daysInYear);
+  const birthdaySignal = Math.cos((birthdayDistance / daysInYear) * Math.PI * 2) * 6;
+  const tarotSignal = (tarotLuck - 78) * 0.55;
+  const calendarEdgeSignal = day === 1 || day === daysInMonth ? -2.5 : 0;
+  const weekPatternSignal = weekOfMonth === 5 ? 2.25 : weekOfMonth === 1 ? -1.5 : 0;
+  const weekendSignal = weekday === 0 || weekday === 6 ? 1.75 : 0;
+
+  return (
+    (weekdayWeights[weekday] ?? 0) +
+    (monthWeights[monthIndex] ?? 0) +
+    (quarterWeights[quarterIndex] ?? 0) +
+    numerologySignal + yearlyWave + halfYearWave + intraMonthWave +
+    lunarSignal + birthdaySignal + tarotSignal +
+    calendarEdgeSignal + weekPatternSignal + weekendSignal
+  );
+}
+
+function buildYearlyLuckScoreMap(birthdate: Date, year: number): Map<string, number> {
+  const totalDays = getDaysInYear(year);
+  const rawCalendarReadings: { date: Date; rawScore: number }[] = [];
+  for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
+    const date = new Date(year, 0, dayIndex + 1, 12, 0, 0, 0);
+    rawCalendarReadings.push({ date, rawScore: calculateCalendarLuckSignal(birthdate, date) });
+  }
+
+  const sortedReadings = [...rawCalendarReadings].sort((a, b) => a.rawScore === b.rawScore ? a.date.getTime() - b.date.getTime() : a.rawScore - b.rawScore);
+  const scoreMap = new Map<string, number>();
+  const rankDenominator = Math.max(1, sortedReadings.length - 1);
+  const minRawScore = sortedReadings[0]?.rawScore ?? 0;
+  const maxRawScore = sortedReadings[sortedReadings.length - 1]?.rawScore ?? minRawScore;
+
+  sortedReadings.forEach((reading, index) => {
+    const percentile = rankDenominator === 0 ? 0.5 : index / rankDenominator;
+    const normalizedRaw = maxRawScore === minRawScore ? 0.5 : (reading.rawScore - minRawScore) / (maxRawScore - minRawScore);
+    const blendedPosition = percentile * 0.82 + normalizedRaw * 0.18;
+    const score = Math.round(LUCK_SCORE_FLOOR + blendedPosition * (LUCK_SCORE_CEILING - LUCK_SCORE_FLOOR));
+    scoreMap.set(getLuckDateKey(reading.date), score);
+  });
+  return scoreMap;
+}
+
+function getYearlyLuckScoreMap(birthdate: Date, year: number): Map<string, number> {
+  const cacheKey = `${formatBirthdateForStorage(birthdate)}:${year}`;
+  const cachedScores = YEARLY_LUCK_SCORE_CACHE.get(cacheKey);
+  if (cachedScores) return cachedScores;
+  const yearlyScores = buildYearlyLuckScoreMap(birthdate, year);
+  YEARLY_LUCK_SCORE_CACHE.set(cacheKey, yearlyScores);
+  return yearlyScores;
+}
+
+export function getDailyLuckScoreForDate(
+  birthdateInput: string | Date | null | undefined,
+  selectedDate: Date,
+): number | null {
+  const birthdate = parseBirthdate(birthdateInput);
+  if (!birthdate || Number.isNaN(selectedDate.getTime())) return null;
+  const normalizedDate = normalizeLuckDate(selectedDate);
+
+  try {
+    const { getEarthRoosterLuck2026Digit } = require('@/constants/earthRoosterLuck2026');
+    const earthRoosterDigit = getEarthRoosterLuck2026Digit(normalizedDate);
+    if (earthRoosterDigit !== null) {
+      return Math.round((earthRoosterDigit / 9) * 100);
+    }
+  } catch {}
+
+  const yearlyScores = getYearlyLuckScoreMap(birthdate, normalizedDate.getFullYear());
+  return yearlyScores.get(getLuckDateKey(normalizedDate)) ?? null;
+}
+
+export function getDailyLuckDigitForDate(
+  birthdateInput: string | Date | null | undefined,
+  selectedDate: Date,
+): number | null {
+  if (Number.isNaN(selectedDate.getTime())) return null;
+  const normalizedDate = normalizeLuckDate(selectedDate);
+
+  try {
+    const { getEarthRoosterLuck2026Digit } = require('@/constants/earthRoosterLuck2026');
+    const earthRoosterDigit = getEarthRoosterLuck2026Digit(normalizedDate);
+    if (earthRoosterDigit !== null) return earthRoosterDigit;
+  } catch {}
+
+  const overallScore = getDailyLuckScoreForDate(birthdateInput, normalizedDate);
+  if (overallScore === null) return null;
+  return Math.min(9, Math.max(1, Math.ceil(overallScore / (100 / 9))));
+}
+
+export function getLuckDigitColor(digit: number): string {
+  if (digit <= 1) return '#DC2626';
+  if (digit === 2) return '#F97316';
+  if (digit === 3) return '#F59E0B';
+  if (digit === 4) return '#EAB308';
+  if (digit === 5) return '#22C55E';
+  if (digit === 6) return '#14B8A6';
+  if (digit === 7) return '#3B82F6';
+  if (digit === 8) return '#4F46E5';
+  return '#7C3AED';
+}

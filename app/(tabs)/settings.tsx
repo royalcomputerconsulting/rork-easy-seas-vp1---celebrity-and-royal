@@ -2270,6 +2270,19 @@ STEP 4: Optional Calendar Import
                 )}
 
                 <View style={styles.dataDivider} />
+                
+                <View style={[styles.dataSubsection, { backgroundColor: 'rgba(90, 49, 159, 0.08)' }]}>
+                  <Text style={styles.subsectionLabel}>ADMIN TOOLS</Text>
+                  <Text style={styles.subsectionHelper}>SeaPass generator and admin utilities.</Text>
+                </View>
+                {renderSettingRow(
+                  <Ship size={18} color="#5A319F" />,
+                  'SeaPass Web Generator',
+                  <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                  () => router.push('/seapass-generator' as any)
+                )}
+
+                <View style={styles.dataDivider} />
 
                 {isLoadingWhitelist ? (
                   <View style={styles.loadingContainer}>
