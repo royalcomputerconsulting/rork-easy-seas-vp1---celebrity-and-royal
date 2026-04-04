@@ -232,13 +232,13 @@ export function UserProfileCard({
         {renderValueCard('Subscription', subTier.text, subTier.color, true)}
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.email, undefined, true)}
-        {currentValues.birthdate && renderValueCard('Date of Birth', currentValues.birthdate, undefined, true)}
+        {!!currentValues.birthdate && renderValueCard('Date of Birth', currentValues.birthdate, undefined, true)}
         {renderValueCard('Crown & Anchor #', enrichmentData?.crownAndAnchorId || currentValues.crownAnchorNumber, undefined, true)}
         {renderValueCard('C&A Level', enrichmentData?.crownAndAnchorTier || calculatedLevel, calculatedLevelInfo?.color)}
         {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
         {renderValueCard('Club Royale Tier', enrichmentData?.clubRoyaleTierFromApi || calculatedTier, calculatedTierInfo?.color)}
         {renderValueCard('Casino Points', enrichmentData?.clubRoyalePointsFromApi ?? currentValues.clubRoyalePoints, COLORS.points)}
-        {enrichmentData?.crownAndAnchorNextTier && renderValueCard('Next C&A Level', enrichmentData.crownAndAnchorNextTier)}
+        {!!enrichmentData?.crownAndAnchorNextTier && renderValueCard('Next C&A Level', enrichmentData.crownAndAnchorNextTier)}
         {enrichmentData?.crownAndAnchorRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.crownAndAnchorRemainingPoints)}
       </View>
     );
@@ -256,7 +256,7 @@ export function UserProfileCard({
         {renderValueCard('Club Points', enrichmentData?.captainsClubPoints ?? currentValues.celebrityCaptainsClubPoints, COLORS.loyalty)}
         {renderValueCard('Blue Chip Tier', enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier, calculatedCelebrityTierInfo?.color)}
         {renderValueCard('Casino Points', enrichmentData?.celebrityBlueChipPoints ?? currentValues.celebrityBlueChipPoints, COLORS.points)}
-        {enrichmentData?.captainsClubNextTier && renderValueCard('Next Level', enrichmentData.captainsClubNextTier)}
+        {!!enrichmentData?.captainsClubNextTier && renderValueCard('Next Level', enrichmentData.captainsClubNextTier)}
         {enrichmentData?.captainsClubRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.captainsClubRemainingPoints)}
       </View>
     );
@@ -273,7 +273,7 @@ export function UserProfileCard({
         {renderValueCard('Enrolled', enrichmentData?.venetianSocietyEnrolled ? 'Yes' : 'No', enrichmentData?.venetianSocietyEnrolled ? COLORS.success : undefined)}
         {renderValueCard('Tier', enrichmentData?.venetianSocietyTier || currentValues.silverseaVenetianTier)}
         {renderValueCard('Points', currentValues.silverseaVenetianPoints, COLORS.loyalty)}
-        {enrichmentData?.venetianSocietyNextTier && renderValueCard('Next Tier', enrichmentData.venetianSocietyNextTier)}
+        {!!enrichmentData?.venetianSocietyNextTier && renderValueCard('Next Tier', enrichmentData.venetianSocietyNextTier)}
       </View>
     );
   };
