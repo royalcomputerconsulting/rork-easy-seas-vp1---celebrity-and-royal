@@ -15,7 +15,8 @@ import {
   BookedCruiseRow,
   WebViewMessage,
   ExtendedLoyaltyData,
-  LoyaltyApiInformation
+  LoyaltyApiInformation,
+  LoyaltyData
 } from '@/lib/royalCaribbean/types';
 import { convertLoyaltyInfoToExtended } from '@/lib/royalCaribbean/loyaltyConverter';
 import { rcLogger } from '@/lib/royalCaribbean/logger';
@@ -2327,6 +2328,93 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
   }, []);
 
+  const applyExternalSyncResults = useCallback((payload: {
+    offers: unknown;
+    bookedCruises: unknown;
+    loyaltyData?: LoyaltyData | null;
+    extendedLoyaltyData?: ExtendedLoyaltyData | null;
+    source?: CruiseLine;
+  }) => {
+    clearPendingSyncWork();
+    processedPayloads.current.clear();
+    carnivalUserDataRef.current = null;
+
+    const normalizedOffers = normalizeOfferRows(payload.offers);
+    const normalizedBookedCruises = normalizeBookedCruiseRows(payload.bookedCruises);
+    const externalExtendedLoyalty = payload.extendedLoyaltyData ?? null;
+    const mergedLoyaltyData: LoyaltyData | null = externalExtendedLoyalty
+      ? {
+          ...(payload.loyaltyData ?? {}),
+          clubRoyaleTier:
+            externalExtendedLoyalty.clubRoyaleTierFromApi
+            ?? payload.loyaltyData?.clubRoyaleTier
+            ?? externalExtendedLoyalty.celebrityBlueChipTier,
+          clubRoyalePoints:
+            externalExtendedLoyalty.clubRoyalePointsFromApi?.toString()
+            ?? payload.loyaltyData?.clubRoyalePoints
+            ?? externalExtendedLoyalty.celebrityBlueChipPoints?.toString(),
+          crownAndAnchorLevel:
+            externalExtendedLoyalty.crownAndAnchorTier
+            ?? payload.loyaltyData?.crownAndAnchorLevel
+            ?? externalExtendedLoyalty.captainsClubTier,
+          crownAndAnchorPoints:
+            externalExtendedLoyalty.crownAndAnchorPointsFromApi?.toString()
+            ?? payload.loyaltyData?.crownAndAnchorPoints
+            ?? externalExtendedLoyalty.captainsClubPoints?.toString(),
+        }
+      : (payload.loyaltyData ?? null);
+
+    extractedOffersRef.current = normalizedOffers;
+    setExtendedLoyaltyData(externalExtendedLoyalty);
+    hasReceivedApiLoyaltyDataRef.current = Boolean(externalExtendedLoyalty);
+    capturedSections.current = {
+      offers: normalizedOffers.length > 0,
+      bookings: normalizedBookedCruises.length > 0,
+      loyalty: Boolean(mergedLoyaltyData || externalExtendedLoyalty),
+    };
+
+    const uniqueOffers = new Map<string, number>();
+    normalizedOffers.forEach((offer) => {
+      const key = offer.offerName || offer.offerCode || 'Unknown';
+      uniqueOffers.set(key, (uniqueOffers.get(key) ?? 0) + 1);
+    });
+
+    const upcomingCruises = normalizedBookedCruises.filter((cruise) => cruise.status === 'Upcoming').length;
+    const courtesyHolds = normalizedBookedCruises.filter((cruise) => cruise.status === 'Courtesy Hold').length;
+    const completedCruises = normalizedBookedCruises.filter((cruise) => cruise.status === 'Completed').length;
+
+    const statusParts: string[] = [];
+    if (upcomingCruises > 0) statusParts.push(`${upcomingCruises} upcoming`);
+    if (completedCruises > 0) statusParts.push(`${completedCruises} completed`);
+    if (courtesyHolds > 0) statusParts.push(`${courtesyHolds} courtesy holds`);
+
+    addLog('Imported sync results from the web sync service', 'success');
+    addLog(`📊 SUMMARY: ${uniqueOffers.size} casino offer(s) with ${normalizedOffers.length} total sailing(s)`, 'success');
+    addLog(`📊 SUMMARY: ${normalizedBookedCruises.length} cruise(s)${statusParts.length > 0 ? ' - ' + statusParts.join(', ') : ''}`, 'success');
+    if (mergedLoyaltyData || externalExtendedLoyalty) {
+      addLog('📊 SUMMARY: Loyalty status captured successfully', 'success');
+    }
+    addLog('⏳ Please review and confirm to sync this data to your app', 'info');
+
+    setState((prev) => ({
+      ...prev,
+      status: 'awaiting_confirmation',
+      currentStep: '',
+      progress: null,
+      error: null,
+      extractedOffers: normalizedOffers,
+      extractedBookedCruises: normalizedBookedCruises,
+      loyaltyData: mergedLoyaltyData,
+      syncCounts: {
+        offerCount: uniqueOffers.size,
+        offerRows: normalizedOffers.length,
+        upcomingCruises,
+        courtesyHolds,
+      },
+      syncPreview: null,
+    }));
+  }, [addLog, clearPendingSyncWork, normalizeBookedCruiseRows, normalizeOfferRows]);
+
   const syncToApp = useCallback(async (coreDataContext: SyncCoreDataContext, loyaltyContext: SyncLoyaltyContext, providedExtendedLoyalty?: ExtendedLoyaltyData | null) => {
     const loyaltyToSync = providedExtendedLoyalty ?? extendedLoyaltyData;
     const fallbackExtendedLoyaltyFromState = state.loyaltyData
@@ -2724,6 +2812,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     exportBookedCruisesCSV,
     exportLog,
     resetState,
+    applyExternalSyncResults,
     syncToApp,
     cancelSync,
     handleWebViewMessage,
@@ -2736,7 +2825,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     onPageLoaded
   }), [
     state, webViewRef, cruiseLine, setCruiseLine, config, openLogin, runIngestion,
-    exportOffersCSV, exportBookedCruisesCSV, exportLog, resetState, syncToApp,
+    exportOffersCSV, exportBookedCruisesCSV, exportLog, resetState, applyExternalSyncResults, syncToApp,
     cancelSync, handleWebViewMessage, addLog, extendedLoyaltyData, setExtendedLoyalty,
     staySignedIn, toggleStaySignedIn, webViewUrl, onPageLoaded
   ]);
