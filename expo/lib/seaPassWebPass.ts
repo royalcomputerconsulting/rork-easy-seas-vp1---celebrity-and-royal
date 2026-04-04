@@ -77,7 +77,7 @@ export const SEA_PASS_LEGAL_LINES = [
 export const SEA_PASS_PREVIEW_BACKGROUND = '#EFF3F8';
 export const SEA_PASS_EXPORT_BACKGROUND = '#FFFFFF';
 export const SEA_PASS_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-export const SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/2odahwrylhqkr8gb1jwp4.png';
+export const SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/vvcelze4prvyhmkje7pah.png';
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
