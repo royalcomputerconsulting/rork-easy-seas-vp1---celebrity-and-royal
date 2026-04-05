@@ -686,12 +686,12 @@ export default function CruiseDetailsScreen() {
               </View>
             )}
             
-            {cruise.offerCode && (
+            {cruise.offerCode ? (
               <View style={styles.offerCodeBadge}>
                 <Tag size={14} color={COLORS.beigeWarm} />
                 <Text style={styles.offerCodeText}>{cruise.offerCode}</Text>
               </View>
-            )}
+            ) : null}
             
             {daysUntil > 0 && (
               <View style={styles.countdownContainer}>

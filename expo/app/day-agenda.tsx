@@ -1189,12 +1189,12 @@ export default function DayAgendaScreen() {
           ) : event.isAllDay ? (
             <Text style={styles.timelineAllDay}>All Day</Text>
           ) : null}
-          {event.endTime && (
+          {event.endTime ? (
             <Text style={[
               styles.timelineEndTime,
               isOpportune && styles.timelineEndTimeOpportune,
             ]}>{event.endTime}</Text>
-          )}
+          ) : null}
         </View>
         <View style={styles.timelineDot}>
           <View style={[
@@ -1216,15 +1216,15 @@ export default function DayAgendaScreen() {
               styles.timelineTitle,
               isOpportune && styles.timelineTitleOpportune,
             ]}>{event.title}</Text>
-            {event.subtitle && (
+            {event.subtitle ? (
               <Text style={[
                 styles.timelineSubtitle,
                 isOpportune && styles.timelineSubtitleOpportune,
               ]} numberOfLines={1}>{event.subtitle}</Text>
-            )}
-            {event.notes && (
+            ) : null}
+            {event.notes ? (
               <Text style={styles.timelineNotes}>{event.notes}</Text>
-            )}
+            ) : null}
           </View>
         </View>
       </View>
@@ -1272,16 +1272,16 @@ export default function DayAgendaScreen() {
             )}
           </View>
 
-          {item.subtitle && (
+          {item.subtitle ? (
             <Text style={styles.itemSubtitle} numberOfLines={2}>{item.subtitle}</Text>
-          )}
+          ) : null}
 
-          {item.location && (
+          {item.location ? (
             <View style={styles.locationContainer}>
               <MapPin size={12} color="#FFFFFF" />
               <Text style={styles.locationText} numberOfLines={1}>{item.location}</Text>
             </View>
-          )}
+          ) : null}
 
           {isCruise && cruiseData && (
             <>
@@ -1330,18 +1330,18 @@ export default function DayAgendaScreen() {
                 <View style={styles.bookingsContainer}>
                   {cruiseData.bookings.map((booking, index) => (
                     <View key={`booking-${index}`} style={styles.bookingRow}>
-                      {booking.reservationNumber && (
+                      {booking.reservationNumber ? (
                         <View style={styles.bookingBadge}>
                           <Text style={styles.bookingLabel}>Res#</Text>
                           <Text style={styles.bookingValue}>{booking.reservationNumber}</Text>
                         </View>
-                      )}
-                      {booking.cabinNumber && (
+                      ) : null}
+                      {booking.cabinNumber ? (
                         <View style={styles.bookingBadge}>
                           <Text style={styles.bookingLabel}>Cabin</Text>
                           <Text style={styles.bookingValue}>{booking.cabinNumber}</Text>
                         </View>
-                      )}
+                      ) : null}
                       {booking.guestNames && booking.guestNames.length > 0 && (
                         <Text style={styles.guestNames} numberOfLines={1}>
                           {booking.guestNames.join(', ')}

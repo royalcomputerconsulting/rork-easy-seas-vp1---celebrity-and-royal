@@ -820,17 +820,17 @@ export default function AnalyticsScreen() {
             </View>
           </View>
           
-          {cruise.cabinType && (
+          {cruise.cabinType ? (
             <View style={styles.portfolioCardFooter}>
               <Text style={styles.portfolioCardCabin}>{cruise.cabinType}</Text>
-              {cruise.offerCode && (
+              {cruise.offerCode ? (
                 <View style={styles.portfolioOfferBadge}>
                   <Zap size={10} color={COLORS.goldDark} />
                   <Text style={styles.portfolioOfferCode}>{cruise.offerCode}</Text>
                 </View>
-              )}
+              ) : null}
             </View>
-          )}
+          ) : null}
         </View>
       </TouchableOpacity>
     );

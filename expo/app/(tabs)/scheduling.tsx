@@ -418,9 +418,9 @@ export default function SchedulingScreen() {
                   <Text style={styles.offerCabinType}>{offer.cabinType || 'Any Room'}</Text>
                   <Text style={styles.offerGuests}>{offer.guestsInfo}</Text>
                 </View>
-                {offer.offerName && (
+                {offer.offerName ? (
                   <Text style={styles.offerNameSmall} numberOfLines={1}>{offer.offerName}</Text>
-                )}
+                ) : null}
               </TouchableOpacity>
             ))}
           </View>

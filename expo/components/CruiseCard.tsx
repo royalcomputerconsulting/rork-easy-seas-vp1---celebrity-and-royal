@@ -239,11 +239,11 @@ export const CruiseCard = React.memo(function CruiseCard({
           <Text style={styles.miniDestination} numberOfLines={1}>
             {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
           </Text>
-          {miniPorts.length > 0 && (
+          {miniPorts.length > 0 ? (
             <Text style={styles.miniPorts}>
               {miniPorts.join(' • ')}
             </Text>
-          )}
+          ) : null}
           <View style={styles.miniBottomRow}>
             <View style={styles.miniMetaRow}>
               <View style={styles.miniMeta}>
@@ -263,20 +263,20 @@ export const CruiseCard = React.memo(function CruiseCard({
             {showRetailValue && retailValue !== null && retailValue > 0 && (
               <Text style={styles.miniRetailValue}>${Math.round(retailValue).toLocaleString()}</Text>
             )}
-            {!!bookedCruise.cabinType && (
+            {bookedCruise.cabinType ? (
               <View style={styles.miniCabinRow}>
                 <Text style={styles.miniCabin}>{bookedCruise.cabinType}</Text>
-                {cruise.nights != null && cruise.nights > 0 && (
-                  <Text style={styles.miniExpectedPoints}>• {cruise.nights * 2} pts</Text>
-                )}
+                {cruise.nights != null && cruise.nights > 0 ? (
+                  <Text style={styles.miniExpectedPoints}>{'• '}{cruise.nights * 2}{' pts'}</Text>
+                ) : null}
               </View>
-            )}
-            {!!(bookedCruise.offerCode || cruise.offerCode) && (
+            ) : null}
+            {(bookedCruise.offerCode || cruise.offerCode) ? (
               <View style={styles.miniOfferBadge}>
                 <Sparkles size={10} color={COLORS.goldDark} />
                 <Text style={styles.miniOfferCode}>{bookedCruise.offerCode || cruise.offerCode}</Text>
               </View>
-            )}
+            ) : null}
           </View>
           {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
             (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
@@ -295,12 +295,12 @@ export const CruiseCard = React.memo(function CruiseCard({
                     <Text style={styles.miniObcValue}>${(bookedCruise.freeOBC ?? cruise.freeOBC ?? 0).toLocaleString()}</Text>
                   </View>
                 )}
-                {!!bookedCruise.usedNextCruiseCertificate && (
+                {bookedCruise.usedNextCruiseCertificate ? (
                   <View style={styles.miniNccBadge}>
                     <Ticket size={11} color="#7C3AED" />
                     <Text style={styles.miniNccLabel}>NCC</Text>
                   </View>
-                )}
+                ) : null}
               </View>
             )
           )}
@@ -506,7 +506,7 @@ export const CruiseCard = React.memo(function CruiseCard({
           <Text style={styles.routeValue}>{cruise.departurePort || cruise.destination}</Text>
         </View>
 
-        {!!bookedCruise.itinerary && bookedCruise.itinerary.length > 0 && (
+        {bookedCruise.itinerary && bookedCruise.itinerary.length > 0 ? (
           <View style={styles.visitingSection}>
             <Text style={styles.visitingLabel}>VISITING:</Text>
             <Text style={styles.visitingPorts}>
@@ -516,16 +516,16 @@ export const CruiseCard = React.memo(function CruiseCard({
               <Text style={styles.viewPortsLink}>+ View Ports & Map</Text>
             </TouchableOpacity>
           </View>
-        )}
+        ) : null}
 
-        {!!bookedCruise.ports && bookedCruise.ports.length > 0 && !bookedCruise.itinerary && (
+        {bookedCruise.ports && bookedCruise.ports.length > 0 && !bookedCruise.itinerary ? (
           <View style={styles.visitingSection}>
             <Text style={styles.visitingLabel}>VISITING:</Text>
             <Text style={styles.visitingPorts}>
               {bookedCruise.ports.join(' • ')}
             </Text>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.dateGuestRow}>
           <View style={styles.dateInfo}>
@@ -555,9 +555,9 @@ export const CruiseCard = React.memo(function CruiseCard({
                 </View>
               </>
             )}
-            {!!bookedCruise.cabinType && (
+            {bookedCruise.cabinType ? (
               <Text style={styles.cabinType}>{bookedCruise.cabinType}</Text>
-            )}
+            ) : null}
           </View>
         </View>
 
@@ -570,25 +570,25 @@ export const CruiseCard = React.memo(function CruiseCard({
           </TouchableOpacity>
         </View>
 
-        {!!(bookedCruise.offerName || cruise.offerName || cruise.offerCode) && (
+        {(bookedCruise.offerName || cruise.offerName || cruise.offerCode) ? (
           <View style={styles.offerSection}>
             <Sparkles size={14} color={COLORS.goldDark} />
             <Text style={styles.offerText}>
               {bookedCruise.offerName || cruise.offerName || `Offer ${cruise.offerCode}`}
             </Text>
-            {!!(bookedCruise.offerCode || cruise.offerCode) && (
+            {(bookedCruise.offerCode || cruise.offerCode) ? (
               <View style={styles.offerCodeBadge}>
                 <Anchor size={10} color={COLORS.loyalty} />
                 <Text style={styles.offerCodeText}>{bookedCruise.offerCode || cruise.offerCode}</Text>
               </View>
-            )}
-            {!!(cruise.offerValue && cruise.offerValue > 0) && (
+            ) : null}
+            {cruise.offerValue && cruise.offerValue > 0 ? (
               <View style={styles.offerValueBadge}>
                 <Text style={styles.offerValueText}>${cruise.offerValue.toLocaleString()}</Text>
               </View>
-            )}
+            ) : null}
           </View>
-        )}
+        ) : null}
 
         {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
           (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
