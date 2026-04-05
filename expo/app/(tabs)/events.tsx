@@ -4,6 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle, Ban } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { IMAGES } from '@/constants/images';
 import { useAppState } from '@/state/AppStateProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -481,7 +482,7 @@ export default function EventsScreen() {
             <View style={styles.heroContent}>
               <View style={styles.logoSection}>
                 <Image 
-                  source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/m9jyogxgz1j0xb91psbkq' }}
+                  source={{ uri: IMAGES.logo }}
                   style={styles.logoImage}
                   resizeMode="cover"
                 />
