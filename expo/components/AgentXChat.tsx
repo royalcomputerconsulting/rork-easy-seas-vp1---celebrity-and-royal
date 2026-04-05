@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Animated,
   Alert,
+  TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -159,10 +160,12 @@ export const AgentXChat = React.memo(function AgentXChat({
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [ttsEnabled, setTtsEnabled] = useState(true);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
+  const [ttsEnabled, setTtsEnabled] = useState<boolean>(true);
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [inputMode, setInputMode] = useState<'voice' | 'manual'>('manual');
+  const [manualInput, setManualInput] = useState<string>('');
   const recordingRef = useRef<Audio.Recording | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -443,6 +446,30 @@ export const AgentXChat = React.memo(function AgentXChat({
     onSendMessage(prompt);
   }, [onSendMessage, isSpeaking, stopSpeaking]);
 
+  const handleModeChange = useCallback((mode: 'voice' | 'manual') => {
+    if (isRecording || isTranscribing || inputMode === mode) {
+      return;
+    }
+
+    console.log('[AgentXChat] Switching input mode to:', mode);
+    setInputMode(mode);
+  }, [inputMode, isRecording, isTranscribing]);
+
+  const handleManualSend = useCallback(() => {
+    const trimmedInput = manualInput.trim();
+    if (!trimmedInput || isLoading || isTranscribing || isRecording) {
+      return;
+    }
+
+    console.log('[AgentXChat] Sending manual message:', trimmedInput);
+    if (isSpeaking) {
+      stopSpeaking();
+    }
+
+    onSendMessage(trimmedInput);
+    setManualInput('');
+  }, [manualInput, isLoading, isTranscribing, isRecording, isSpeaking, stopSpeaking, onSendMessage]);
+
   const renderMessage = useCallback((message: ChatMessage, _index: number) => {
     const isUser = message.role === 'user';
 
@@ -532,7 +559,7 @@ export const AgentXChat = React.memo(function AgentXChat({
 
       <View style={styles.voiceHintContainer}>
         <Mic size={16} color={COLORS.navyDeep} />
-        <Text style={styles.voiceHintText}>Tap the mic to talk — I'll listen and respond with voice</Text>
+        <Text style={styles.voiceHintText}>Choose Voice or Manual below — speak naturally or type your request</Text>
       </View>
 
       <View style={styles.devAssistantSection}>
@@ -712,44 +739,115 @@ export const AgentXChat = React.memo(function AgentXChat({
       )}
       
       <View style={styles.inputContainer}>
-        <View style={styles.inputWrapper} testID="voice-only-composer">
-          <View style={styles.voiceOnlyCard}>
-            <Text style={styles.voiceOnlyTitle}>
-              {isRecording ? 'Listening now' : isTranscribing ? 'Processing your voice' : 'Voice-only agent'}
+        <View style={styles.modeSelector} testID="agentx-input-mode-toggle">
+          <TouchableOpacity
+            style={[
+              styles.modeButton,
+              inputMode === 'voice' && styles.modeButtonActive,
+              (isRecording || isTranscribing) && styles.modeButtonDisabled,
+            ]}
+            onPress={() => handleModeChange('voice')}
+            disabled={isRecording || isTranscribing}
+            activeOpacity={0.7}
+            testID="agentx-mode-voice"
+          >
+            <Text style={[
+              styles.modeButtonText,
+              inputMode === 'voice' && styles.modeButtonTextActive,
+            ]}>
+              Voice
             </Text>
-            <Text style={styles.voiceOnlySubtitle}>
-              {isRecording
-                ? 'Speak naturally, then tap the mic again to send.'
-                : isTranscribing
-                  ? 'Please wait while your message is converted to text.'
-                  : `Manual typing is off. Say something like: ${placeholder}`}
-            </Text>
-          </View>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={[
-              styles.micButton,
-              styles.micButtonLarge,
-              isRecording && styles.micButtonRecording,
-              (isLoading || isTranscribing) && styles.micButtonDisabled,
+              styles.modeButton,
+              inputMode === 'manual' && styles.modeButtonActive,
+              (isRecording || isTranscribing) && styles.modeButtonDisabled,
             ]}
-            onPress={handleMicPress}
-            disabled={isLoading || isTranscribing}
+            onPress={() => handleModeChange('manual')}
+            disabled={isRecording || isTranscribing}
             activeOpacity={0.7}
-            testID="mic-button"
+            testID="agentx-mode-manual"
           >
-            {isTranscribing ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
-            ) : isRecording ? (
-              <MicOff size={24} color={COLORS.white} />
-            ) : (
-              <Mic size={24} color={COLORS.white} />
-            )}
+            <Text style={[
+              styles.modeButtonText,
+              inputMode === 'manual' && styles.modeButtonTextActive,
+            ]}>
+              Manual
+            </Text>
           </TouchableOpacity>
         </View>
 
+        {inputMode === 'voice' ? (
+          <View style={styles.inputWrapper} testID="agentx-composer">
+            <View style={styles.voiceOnlyCard}>
+              <Text style={styles.voiceOnlyTitle}>
+                {isRecording ? 'Listening now' : isTranscribing ? 'Processing your voice' : 'Voice mode ready'}
+              </Text>
+              <Text style={styles.voiceOnlySubtitle}>
+                {isRecording
+                  ? 'Speak naturally, then tap the mic again to send.'
+                  : isTranscribing
+                    ? 'Please wait while your message is converted to text.'
+                    : `Tap the mic and say something like: ${placeholder}`}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.micButton,
+                styles.micButtonLarge,
+                isRecording && styles.micButtonRecording,
+                (isLoading || isTranscribing) && styles.micButtonDisabled,
+              ]}
+              onPress={handleMicPress}
+              disabled={isLoading || isTranscribing}
+              activeOpacity={0.7}
+              testID="mic-button"
+            >
+              {isTranscribing ? (
+                <ActivityIndicator size="small" color={COLORS.white} />
+              ) : isRecording ? (
+                <MicOff size={24} color={COLORS.white} />
+              ) : (
+                <Mic size={24} color={COLORS.white} />
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={[styles.inputWrapper, styles.manualComposer]} testID="agentx-composer">
+            <TextInput
+              style={styles.manualInput}
+              value={manualInput}
+              onChangeText={setManualInput}
+              placeholder={placeholder}
+              placeholderTextColor="rgba(30, 58, 95, 0.45)"
+              editable={!isLoading && !isTranscribing && !isRecording}
+              multiline={true}
+              textAlignVertical="top"
+              autoCorrect={true}
+              autoCapitalize="sentences"
+              testID="agentx-manual-input"
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                (!manualInput.trim() || isLoading || isTranscribing || isRecording) && styles.sendButtonDisabled,
+              ]}
+              onPress={handleManualSend}
+              disabled={!manualInput.trim() || isLoading || isTranscribing || isRecording}
+              activeOpacity={0.7}
+              testID="agentx-send-button"
+            >
+              <Text style={styles.sendButtonText}>Send</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <Text style={styles.disclaimer}>
-          AI Analysis is now voice-first. Use the mic or tap a suggested action.
+          AI Analysis supports both voice and manual chat.
         </Text>
       </View>
     </KeyboardAvoidingView>
@@ -1144,6 +1242,34 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(0, 31, 63, 0.1)',
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
   },
+  modeSelector: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 31, 63, 0.06)',
+    borderRadius: BORDER_RADIUS.round,
+    padding: 4,
+    marginBottom: SPACING.sm,
+  },
+  modeButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BORDER_RADIUS.round,
+    paddingVertical: SPACING.sm,
+  },
+  modeButtonActive: {
+    backgroundColor: COLORS.navyDeep,
+  },
+  modeButtonDisabled: {
+    opacity: 0.5,
+  },
+  modeButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  modeButtonTextActive: {
+    color: COLORS.white,
+  },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1154,6 +1280,9 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.15)',
+  },
+  manualComposer: {
+    alignItems: 'flex-end',
   },
   voiceOnlyCard: {
     flex: 1,
@@ -1170,6 +1299,32 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
     opacity: 0.7,
     lineHeight: 18,
+  },
+  manualInput: {
+    flex: 1,
+    minHeight: 48,
+    maxHeight: 108,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: COLORS.navyDeep,
+    paddingTop: Platform.OS === 'ios' ? 12 : 8,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 8,
+  },
+  sendButton: {
+    minWidth: 74,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.navyDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.md,
+  },
+  sendButtonDisabled: {
+    backgroundColor: 'rgba(30, 58, 95, 0.28)',
+  },
+  sendButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
   },
   micButton: {
     width: 40,
