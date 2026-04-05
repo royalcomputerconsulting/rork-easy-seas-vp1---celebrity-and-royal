@@ -1,3 +1,5 @@
+import { CROWN_ANCHOR_TIER_COLORS, withAlpha } from '@/constants/loyaltyColors';
+
 export interface CrownAnchorLevelInfo {
   name: string;
   cruiseNights: number;
@@ -10,8 +12,8 @@ export const CROWN_ANCHOR_LEVELS: Record<string, CrownAnchorLevelInfo> = {
   Gold: {
     name: 'Gold',
     cruiseNights: 1,
-    color: '#D4AF37',
-    bgColor: 'rgba(212, 175, 55, 0.15)',
+    color: CROWN_ANCHOR_TIER_COLORS.Gold,
+    bgColor: withAlpha(CROWN_ANCHOR_TIER_COLORS.Gold, 0.15),
     benefits: [
       'Crown & Anchor Society welcome',
       'Member savings on future cruises',
@@ -21,8 +23,8 @@ export const CROWN_ANCHOR_LEVELS: Record<string, CrownAnchorLevelInfo> = {
   Platinum: {
     name: 'Platinum',
     cruiseNights: 30,
-    color: '#E5E4E2',
-    bgColor: 'rgba(229, 228, 226, 0.15)',
+    color: CROWN_ANCHOR_TIER_COLORS.Platinum,
+    bgColor: withAlpha(CROWN_ANCHOR_TIER_COLORS.Platinum, 0.18),
     benefits: [
       'All Gold benefits',
       'Priority check-in',
@@ -33,8 +35,8 @@ export const CROWN_ANCHOR_LEVELS: Record<string, CrownAnchorLevelInfo> = {
   Emerald: {
     name: 'Emerald',
     cruiseNights: 55,
-    color: '#10B981',
-    bgColor: 'rgba(16, 185, 129, 0.12)',
+    color: CROWN_ANCHOR_TIER_COLORS.Emerald,
+    bgColor: withAlpha(CROWN_ANCHOR_TIER_COLORS.Emerald, 0.12),
     benefits: [
       'All Platinum benefits',
       'Complimentary laundry service',
@@ -45,8 +47,8 @@ export const CROWN_ANCHOR_LEVELS: Record<string, CrownAnchorLevelInfo> = {
   Diamond: {
     name: 'Diamond',
     cruiseNights: 80,
-    color: '#B9F2FF',
-    bgColor: 'rgba(185, 242, 255, 0.15)',
+    color: CROWN_ANCHOR_TIER_COLORS.Diamond,
+    bgColor: withAlpha(CROWN_ANCHOR_TIER_COLORS.Diamond, 0.15),
     benefits: [
       'All Emerald benefits',
       'Behind-the-scenes tour',
@@ -58,8 +60,8 @@ export const CROWN_ANCHOR_LEVELS: Record<string, CrownAnchorLevelInfo> = {
   'Diamond Plus': {
     name: 'Diamond Plus',
     cruiseNights: 175,
-    color: '#0097A7',
-    bgColor: 'rgba(0, 151, 167, 0.12)',
+    color: CROWN_ANCHOR_TIER_COLORS['Diamond Plus'],
+    bgColor: withAlpha(CROWN_ANCHOR_TIER_COLORS['Diamond Plus'], 0.12),
     benefits: [
       'All Diamond benefits',
       'Four complimentary beverages per day',
@@ -70,8 +72,8 @@ export const CROWN_ANCHOR_LEVELS: Record<string, CrownAnchorLevelInfo> = {
   Pinnacle: {
     name: 'Pinnacle',
     cruiseNights: 700,
-    color: '#1C1C1C',
-    bgColor: 'rgba(28, 28, 28, 0.25)',
+    color: CROWN_ANCHOR_TIER_COLORS['Pinnacle Club'],
+    bgColor: withAlpha(CROWN_ANCHOR_TIER_COLORS['Pinnacle Club'], 0.16),
     benefits: [
       'All Diamond Plus benefits',
       'Annual Pinnacle cruise experience',
@@ -133,7 +135,7 @@ export function calculateETAToPinnacle(
 ): Date | null {
   const nightsNeeded = calculateNightsToPinnacle(currentNights);
   if (nightsNeeded === 0) return null;
-  
+
   const monthsNeeded = nightsNeeded / averageNightsPerMonth;
   const eta = new Date();
   eta.setMonth(eta.getMonth() + Math.ceil(monthsNeeded));

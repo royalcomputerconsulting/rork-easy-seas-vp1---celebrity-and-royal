@@ -1,3 +1,5 @@
+import { CLUB_ROYALE_TIER_COLORS, withAlpha } from '@/constants/loyaltyColors';
+
 export interface ClubRoyaleTierInfo {
   name: string;
   threshold: number;
@@ -11,8 +13,8 @@ export const CLUB_ROYALE_TIERS: Record<string, ClubRoyaleTierInfo> = {
   Choice: {
     name: 'Choice',
     threshold: 0,
-    color: '#6B7280',
-    bgColor: 'rgba(107, 114, 128, 0.15)',
+    color: CLUB_ROYALE_TIER_COLORS.Choice,
+    bgColor: withAlpha(CLUB_ROYALE_TIER_COLORS.Choice, 0.15),
     benefits: [
       'Basic casino privileges',
       'Access to Club Royale lounge',
@@ -22,8 +24,8 @@ export const CLUB_ROYALE_TIERS: Record<string, ClubRoyaleTierInfo> = {
   Prime: {
     name: 'Prime',
     threshold: 2501,
-    color: '#3B82F6',
-    bgColor: 'rgba(59, 130, 246, 0.15)',
+    color: CLUB_ROYALE_TIER_COLORS.Prime,
+    bgColor: withAlpha(CLUB_ROYALE_TIER_COLORS.Prime, 0.15),
     benefits: [
       'Priority boarding',
       'Complimentary specialty dining',
@@ -35,8 +37,8 @@ export const CLUB_ROYALE_TIERS: Record<string, ClubRoyaleTierInfo> = {
   Signature: {
     name: 'Signature',
     threshold: 25001,
-    color: '#7B2D8E',
-    bgColor: 'rgba(123, 45, 142, 0.12)',
+    color: CLUB_ROYALE_TIER_COLORS.Signature,
+    bgColor: withAlpha(CLUB_ROYALE_TIER_COLORS.Signature, 0.12),
     benefits: [
       'All Prime benefits',
       'Suite-level amenities',
@@ -49,8 +51,8 @@ export const CLUB_ROYALE_TIERS: Record<string, ClubRoyaleTierInfo> = {
   Masters: {
     name: 'Masters',
     threshold: 100001,
-    color: '#F59E0B',
-    bgColor: 'rgba(245, 158, 11, 0.15)',
+    color: CLUB_ROYALE_TIER_COLORS.Masters,
+    bgColor: withAlpha(CLUB_ROYALE_TIER_COLORS.Masters, 0.15),
     benefits: [
       'All Signature benefits',
       'Complimentary suite upgrades',
@@ -120,7 +122,7 @@ export function calculateETAToTier(
 ): Date | null {
   const nightsNeeded = calculateNightsToTier(currentPoints, targetTier, averagePointsPerNight);
   if (nightsNeeded === 0) return null;
-  
+
   const monthsNeeded = nightsNeeded / averageNightsPerMonth;
   const eta = new Date();
   eta.setMonth(eta.getMonth() + Math.ceil(monthsNeeded));

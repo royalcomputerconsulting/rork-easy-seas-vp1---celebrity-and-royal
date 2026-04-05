@@ -1,3 +1,5 @@
+import { BLUE_CHIP_CLUB_TIER_COLORS, withAlpha } from '@/constants/loyaltyColors';
+
 export interface CelebrityBlueChipTierInfo {
   name: string;
   level: number;
@@ -11,8 +13,8 @@ export const CELEBRITY_BLUE_CHIP_TIERS: Record<string, CelebrityBlueChipTierInfo
   Pearl: {
     name: 'Pearl',
     level: 1,
-    color: '#1C1C1C',
-    bgColor: 'rgba(240, 234, 214, 0.15)',
+    color: BLUE_CHIP_CLUB_TIER_COLORS.Pearl,
+    bgColor: withAlpha(BLUE_CHIP_CLUB_TIER_COLORS.Pearl, 0.18),
     benefits: [
       'Basic casino privileges',
       'Access to Blue Chip Club lounge',
@@ -23,8 +25,8 @@ export const CELEBRITY_BLUE_CHIP_TIERS: Record<string, CelebrityBlueChipTierInfo
   Onyx: {
     name: 'Onyx',
     level: 2,
-    color: '#353839',
-    bgColor: 'rgba(53, 56, 57, 0.15)',
+    color: BLUE_CHIP_CLUB_TIER_COLORS.Onyx,
+    bgColor: withAlpha(BLUE_CHIP_CLUB_TIER_COLORS.Onyx, 0.15),
     benefits: [
       'All Pearl benefits',
       'Priority boarding',
@@ -36,8 +38,8 @@ export const CELEBRITY_BLUE_CHIP_TIERS: Record<string, CelebrityBlueChipTierInfo
   Amethyst: {
     name: 'Amethyst',
     level: 3,
-    color: '#9966CC',
-    bgColor: 'rgba(153, 102, 204, 0.15)',
+    color: BLUE_CHIP_CLUB_TIER_COLORS.Amethyst,
+    bgColor: withAlpha(BLUE_CHIP_CLUB_TIER_COLORS.Amethyst, 0.15),
     benefits: [
       'All Onyx benefits',
       'Complimentary specialty dining',
@@ -49,8 +51,8 @@ export const CELEBRITY_BLUE_CHIP_TIERS: Record<string, CelebrityBlueChipTierInfo
   Sapphire: {
     name: 'Sapphire',
     level: 4,
-    color: '#0F52BA',
-    bgColor: 'rgba(15, 82, 186, 0.15)',
+    color: BLUE_CHIP_CLUB_TIER_COLORS.Sapphire,
+    bgColor: withAlpha(BLUE_CHIP_CLUB_TIER_COLORS.Sapphire, 0.15),
     benefits: [
       'All Amethyst benefits',
       'Suite-level amenities',
@@ -62,8 +64,8 @@ export const CELEBRITY_BLUE_CHIP_TIERS: Record<string, CelebrityBlueChipTierInfo
   'Sapphire Plus': {
     name: 'Sapphire Plus',
     level: 5,
-    color: '#0067A5',
-    bgColor: 'rgba(0, 103, 165, 0.15)',
+    color: BLUE_CHIP_CLUB_TIER_COLORS['Sapphire Plus'],
+    bgColor: withAlpha(BLUE_CHIP_CLUB_TIER_COLORS['Sapphire Plus'], 0.15),
     benefits: [
       'All Sapphire benefits',
       'Complimentary cabin upgrades',
@@ -75,8 +77,8 @@ export const CELEBRITY_BLUE_CHIP_TIERS: Record<string, CelebrityBlueChipTierInfo
   Ruby: {
     name: 'Ruby',
     level: 6,
-    color: '#E0115F',
-    bgColor: 'rgba(224, 17, 95, 0.15)',
+    color: BLUE_CHIP_CLUB_TIER_COLORS.Ruby,
+    bgColor: withAlpha(BLUE_CHIP_CLUB_TIER_COLORS.Ruby, 0.15),
     benefits: [
       'All Sapphire Plus benefits',
       'Complimentary suite upgrades',
@@ -100,7 +102,7 @@ export function getNextCelebrityTier(currentTier: string): string | null {
 
 export function getCelebrityBlueChipTierByLevel(level: number): string {
   const tier = CELEBRITY_TIER_ORDER.find(
-    tierName => CELEBRITY_BLUE_CHIP_TIERS[tierName].level === level
+    (tierName) => CELEBRITY_BLUE_CHIP_TIERS[tierName].level === level
   );
   return tier || 'Pearl';
 }

@@ -1,3 +1,5 @@
+import { CLUB_POINTS_TIER_COLORS, withAlpha } from '@/constants/loyaltyColors';
+
 export interface CelebrityCaptainsClubLevelInfo {
   name: string;
   cruisePoints: number;
@@ -10,8 +12,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   Preview: {
     name: 'Preview',
     cruisePoints: 0,
-    color: '#708090',
-    bgColor: 'rgba(112, 128, 144, 0.15)',
+    color: CLUB_POINTS_TIER_COLORS.Preview,
+    bgColor: withAlpha(CLUB_POINTS_TIER_COLORS.Preview, 0.15),
     benefits: [
       'Enrollment before first cruise',
       'Access to Captain\'s Club member portal',
@@ -20,8 +22,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   Classic: {
     name: 'Classic',
     cruisePoints: 2,
-    color: '#CD7F32',
-    bgColor: 'rgba(205, 127, 50, 0.15)',
+    color: CLUB_POINTS_TIER_COLORS.Classic,
+    bgColor: withAlpha(CLUB_POINTS_TIER_COLORS.Classic, 0.15),
     benefits: [
       'Captain\'s Club welcome',
       'Member savings on future cruises',
@@ -31,8 +33,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   Select: {
     name: 'Select',
     cruisePoints: 150,
-    color: '#C0C0C0',
-    bgColor: 'rgba(192, 192, 192, 0.15)',
+    color: CLUB_POINTS_TIER_COLORS.Select,
+    bgColor: withAlpha(CLUB_POINTS_TIER_COLORS.Select, 0.15),
     benefits: [
       'All Classic benefits',
       'Priority check-in',
@@ -43,8 +45,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   Elite: {
     name: 'Elite',
     cruisePoints: 300,
-    color: '#FFD700',
-    bgColor: 'rgba(255, 215, 0, 0.15)',
+    color: CLUB_POINTS_TIER_COLORS.Elite,
+    bgColor: withAlpha(CLUB_POINTS_TIER_COLORS.Elite, 0.15),
     benefits: [
       'All Select benefits',
       'Priority embarkation',
@@ -55,8 +57,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   'Elite Plus': {
     name: 'Elite Plus',
     cruisePoints: 750,
-    color: '#1C1C1C',
-    bgColor: 'rgba(229, 228, 226, 0.15)',
+    color: CLUB_POINTS_TIER_COLORS['Elite Plus'],
+    bgColor: withAlpha(CLUB_POINTS_TIER_COLORS['Elite Plus'], 0.15),
     benefits: [
       'All Elite benefits',
       'Complimentary laundry service',
@@ -68,8 +70,8 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
   Zenith: {
     name: 'Zenith',
     cruisePoints: 3000,
-    color: '#4169E1',
-    bgColor: 'rgba(65, 105, 225, 0.15)',
+    color: CLUB_POINTS_TIER_COLORS.Zenith,
+    bgColor: withAlpha(CLUB_POINTS_TIER_COLORS.Zenith, 0.15),
     benefits: [
       'All Elite Plus benefits',
       'Annual Zenith event',
@@ -131,7 +133,7 @@ export function calculateETAToZenith(
 ): Date | null {
   const pointsNeeded = calculatePointsToZenith(currentPoints);
   if (pointsNeeded === 0) return null;
-  
+
   const monthsNeeded = pointsNeeded / averagePointsPerMonth;
   const eta = new Date();
   eta.setMonth(eta.getMonth() + Math.ceil(monthsNeeded));
