@@ -1,9 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
-import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
+import {
+  getCarnivalPlayersClubTierColor,
+  getCarnivalVifpTierColor,
+  getCelebrityBlueChipTierColor,
+  getCelebrityCaptainsClubLevelColor,
+  getClubRoyaleTierColor,
+  getCrownAnchorTierColor,
+  getPlayerCardTheme,
+  getSilverseaTierColor,
+} from '@/constants/loyaltyTheme';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS, LEVEL_ORDER } from '@/constants/crownAnchor';
 import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER, getCelebrityCaptainsClubLevelByPoints } from '@/constants/celebrityCaptainsClub';
@@ -14,6 +23,7 @@ import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
 import { BrandToggle, BrandType } from '@/components/ui/BrandToggle';
 import { IMAGES } from '@/constants/images';
+import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 
 interface CompactDashboardHeaderProps {
   memberName?: string;
@@ -71,6 +81,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   const celebrityBlueChipPoints = currentUser?.celebrityBlueChipPoints || 0;
   const celebrityLevel = getCelebrityCaptainsClubLevelByPoints(celebrityCaptainsClubPoints);
   const celebrityTier = getCelebrityBlueChipTierByLevel(1);
+  const silverseaTier = currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints || 0);
+  const silverseaPoints = currentUser?.silverseaVenetianPoints || 0;
+  const carnivalVifpTier = currentUser?.carnivalVifpTier || 'Blue';
+  const carnivalPlayersClubTier = currentUser?.carnivalPlayersClubTier || 'Blue';
+  const carnivalPlayersClubPoints = currentUser?.carnivalPlayersClubPoints || 0;
 
   const formatETAFromDate = (date: Date | null): string => {
     if (!date) return 'TBD';
@@ -97,7 +112,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     return `${mm}-${dd}-${yy}`;
   };
 
-  const marbleConfig = MARBLE_TEXTURES.lightBlue;
+  const playerCardTheme = useMemo(() => getPlayerCardTheme({
+    brand: activeBrand,
+    crownAnchorLevel,
+    celebrityLevel,
+    silverseaTier,
+    carnivalVifpTier,
+  }), [activeBrand, carnivalVifpTier, celebrityLevel, crownAnchorLevel, silverseaTier]);
 
   const displayName = currentUser?.name || memberName;
   const rawNumber = activeBrand === 'royal' 
@@ -115,20 +136,12 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     : activeBrand === 'silversea' ? 'Venetian Society #'
     : 'VIFP Club #';
 
-  const silverseaTier = currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints || 0);
-  const silverseaPoints = currentUser?.silverseaVenetianPoints || 0;
-
-  const carnivalVifpTier = currentUser?.carnivalVifpTier || 'Blue';
-  const carnivalPlayersClubTier = currentUser?.carnivalPlayersClubTier || 'Blue';
-  const carnivalPlayersClubPoints = currentUser?.carnivalPlayersClubPoints || 0;
-
   return (
     <LinearGradient
-      colors={marbleConfig.gradientColors as unknown as [string, string, ...string[]]}
-      locations={marbleConfig.gradientLocations}
+      colors={playerCardTheme.gradientColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.container}
+      style={[styles.container, { borderColor: playerCardTheme.borderColor }]}
     >
       <View style={styles.topRow}>
         <View style={styles.memberInfoInline}>
@@ -140,9 +153,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
             />
           )}
           <View style={styles.memberTextInfo}>
-            <Text style={styles.memberGreeting}>{displayName}</Text>
+            <Text style={[styles.memberGreeting, { color: playerCardTheme.topTextColor }]}>{displayName}</Text>
             <TouchableOpacity onPress={rawNumber ? toggleShowNumber : undefined} activeOpacity={rawNumber ? 0.7 : 1}>
-              <Text style={styles.memberSubtitle}>{displayNumberLabel} {displayNumber}</Text>
+              <Text style={[styles.memberSubtitle, { color: playerCardTheme.secondaryTextColor }]}>{displayNumberLabel} {displayNumber}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -150,11 +163,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <View style={styles.actionsSection}>
           {onAlertsPress && (
             <TouchableOpacity 
-              style={styles.iconBtn} 
+              style={[styles.iconBtn, { backgroundColor: playerCardTheme.surfaceColor }]} 
               onPress={onAlertsPress}
               activeOpacity={0.7}
             >
-              <Bell size={18} color={CLEAN_THEME.text.primary} />
+              <Bell size={18} color={playerCardTheme.topTextColor} />
               {alertCount > 0 && (
                 <View style={styles.alertBadge}>
                   <Text style={styles.alertBadgeText}>
@@ -166,20 +179,20 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           )}
           {onLogoutPress && (
             <TouchableOpacity 
-              style={styles.iconBtn} 
+              style={[styles.iconBtn, { backgroundColor: playerCardTheme.surfaceColor }]} 
               onPress={onLogoutPress}
               activeOpacity={0.7}
             >
-              <LogOut size={18} color={CLEAN_THEME.text.primary} />
+              <LogOut size={18} color={playerCardTheme.topTextColor} />
             </TouchableOpacity>
           )}
           {onSettingsPress && (
             <TouchableOpacity 
-              style={styles.iconBtn} 
+              style={[styles.iconBtn, { backgroundColor: playerCardTheme.surfaceColor }]} 
               onPress={onSettingsPress}
               activeOpacity={0.7}
             >
-              <Settings size={18} color={CLEAN_THEME.text.primary} />
+              <Settings size={18} color={playerCardTheme.topTextColor} />
             </TouchableOpacity>
           )}
         </View>
@@ -191,17 +204,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <>
       {/* === ROYAL CARIBBEAN === */}
       <View style={styles.tierRow}>
-        <View style={[styles.tierBadge, { backgroundColor: '#FFFFFF', borderColor: 'rgba(0, 31, 63, 0.2)' }]}>
-          <Text style={[styles.tierText, { color: COLORS.navyDeep }]}>{clubRoyaleTier.toUpperCase()}</Text>
-        </View>
-        <View style={[styles.tierBadge, { backgroundColor: '#FFFFFF', borderColor: 'rgba(0, 31, 63, 0.2)' }]}>
-          <Text style={[styles.tierText, { color: COLORS.navyDeep }]}>{crownAnchorLevel.toUpperCase()}</Text>
-        </View>
+        <LoyaltyPill label={clubRoyaleTier} color={getClubRoyaleTierColor(clubRoyaleTier)} size="small" />
+        <LoyaltyPill label={crownAnchorLevel} color={getCrownAnchorTierColor(crownAnchorLevel)} size="small" />
       </View>
       {crewMemberCount > 0 && (
         <View style={styles.crewCountRow}>
-          <Users size={13} color={CLEAN_THEME.text.secondary} />
-          <Text style={styles.crewCountText}>{crewMemberCount} crew members</Text>
+          <Users size={13} color={playerCardTheme.secondaryTextColor} />
+          <Text style={[styles.crewCountText, { color: playerCardTheme.secondaryTextColor }]}>{crewMemberCount} crew members</Text>
         </View>
       )}
 
@@ -440,12 +449,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <>
       {/* === CELEBRITY CRUISES === */}
       <View style={styles.tierRow}>
-        <View style={[styles.tierBadge, { backgroundColor: (CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color ?? '#F0EAD6') + '30', borderColor: CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color ?? '#F0EAD6' }]}>
-          <Text style={[styles.tierText, { color: CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#F0EAD6' }]}>{celebrityTier.toUpperCase()}</Text>
-        </View>
-        <View style={[styles.tierBadge, { backgroundColor: (CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color ?? '#708090') + '30', borderColor: CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color ?? '#708090' }]}>
-          <Text style={[styles.tierText, { color: CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color || '#708090' }]}>{celebrityLevel.toUpperCase()}</Text>
-        </View>
+        <LoyaltyPill label={celebrityTier} color={getCelebrityBlueChipTierColor(celebrityTier)} size="small" />
+        <LoyaltyPill label={celebrityLevel} color={getCelebrityCaptainsClubLevelColor(celebrityLevel)} size="small" />
       </View>
 
       <View style={styles.progressGrid}>
@@ -596,9 +601,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <>
       {/* === SILVERSEA === */}
       <View style={styles.tierRow}>
-        <View style={[styles.tierBadge, { backgroundColor: (SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color ?? '#708090') + '30', borderColor: SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color ?? '#708090' }]}>
-          <Text style={[styles.tierText, { color: SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color || '#708090' }]}>{silverseaTier.toUpperCase()}</Text>
-        </View>
+        <LoyaltyPill label={silverseaTier} color={getSilverseaTierColor(silverseaTier)} size="small" />
       </View>
 
       <View style={styles.progressGrid}>
@@ -710,12 +713,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <>
       {/* === CARNIVAL === */}
       <View style={styles.tierRow}>
-        <View style={[styles.tierBadge, { backgroundColor: (CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.color ?? '#1E90FF') + '30', borderColor: CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.color ?? '#1E90FF' }]}>
-          <Text style={[styles.tierText, { color: CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.color || '#1E90FF' }]}>VIFP {carnivalVifpTier.toUpperCase()}</Text>
-        </View>
-        <View style={[styles.tierBadge, { backgroundColor: (CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color ?? '#1E90FF') + '30', borderColor: CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color ?? '#1E90FF' }]}>
-          <Text style={[styles.tierText, { color: CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color || '#1E90FF' }]}>PLAYERS {carnivalPlayersClubTier.toUpperCase()}</Text>
-        </View>
+        <LoyaltyPill label={`VIFP ${carnivalVifpTier}`} color={getCarnivalVifpTierColor(carnivalVifpTier)} size="small" />
+        <LoyaltyPill label={`Players ${carnivalPlayersClubTier}`} color={getCarnivalPlayersClubTierColor(carnivalPlayersClubTier)} size="small" />
       </View>
 
       <View style={styles.progressGrid}>

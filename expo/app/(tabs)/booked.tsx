@@ -33,6 +33,9 @@ import {
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
+import { withAlpha } from '@/constants/loyaltyColors';
+import { createLoyaltyCardTheme, getClubRoyaleTierColor } from '@/constants/loyaltyTheme';
+import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
@@ -179,6 +182,8 @@ export default function BookedScreen() {
 
   const currentPoints = loyaltyClubRoyalePoints || clubRoyaleProfile?.tierPoints || 0;
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
+  const clubRoyaleTierColor = getClubRoyaleTierColor(clubRoyaleTier);
+  const casinoCardTheme = useMemo(() => createLoyaltyCardTheme(clubRoyaleTierColor), [clubRoyaleTierColor]);
 
   const stats = useMemo(() => {
     const upcoming = bookedCruises.filter(c => !isCruiseCompleted(c)).length;
@@ -455,75 +460,77 @@ export default function BookedScreen() {
       {/* Combined Casino Section */}
       <View style={styles.casinoSection}>
         <LinearGradient
-          colors={['#E0F2FE', '#DBEAFE', '#E0F7FA']}
+          colors={casinoCardTheme.gradientColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.casinoGradient}
+          style={[styles.casinoGradient, { borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}
         >
           <View style={styles.casinoHeader}>
-            <View style={styles.casinoIconBadge}>
+            <View style={[styles.casinoIconBadge, {
+              backgroundColor: withAlpha(casinoCardTheme.accentColor, 0.28),
+              borderWidth: 1,
+              borderColor: withAlpha('#FFFFFF', 0.18),
+            }]}> 
               <Dice5 size={20} color={COLORS.white} />
             </View>
-            <Text style={styles.casinoTitle}>Casino</Text>
-            <View style={styles.casinoTierBadge}>
-              <Text style={styles.casinoTierText}>{clubRoyaleTier}</Text>
-            </View>
+            <Text style={[styles.casinoTitle, { color: casinoCardTheme.topTextColor }]}>Casino</Text>
+            <LoyaltyPill label={clubRoyaleTier} color={clubRoyaleTierColor} size="small" testID="booked-casino-tier-pill" />
           </View>
           
           <View style={styles.casinoMetricsGrid}>
-            <View style={styles.casinoMetricCard}>
-              <View style={[styles.casinoMetricIcon, { backgroundColor: 'rgba(255, 152, 0, 0.15)' }]}>
-                <Coins size={16} color={COLORS.goldDark} />
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
+              <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
+                <Coins size={16} color={COLORS.goldLight} />
               </View>
-              <Text style={styles.casinoMetricValue}>{formatCurrency(casinoStats.totalCoinIn)}</Text>
-              <Text style={styles.casinoMetricLabel}>Total Coin-In</Text>
+              <Text style={[styles.casinoMetricValue, { color: casinoCardTheme.topTextColor }]}>{formatCurrency(casinoStats.totalCoinIn)}</Text>
+              <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Total Coin-In</Text>
             </View>
             
-            <View style={styles.casinoMetricCard}>
-              <View style={[styles.casinoMetricIcon, { backgroundColor: casinoStats.netResult >= 0 ? 'rgba(76, 175, 80, 0.15)' : 'rgba(244, 67, 54, 0.15)' }]}>
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
+              <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
                 <Target size={16} color={casinoStats.netResult >= 0 ? COLORS.success : COLORS.error} />
               </View>
               <Text style={[styles.casinoMetricValue, { color: casinoStats.netResult >= 0 ? COLORS.success : COLORS.error }]}>
                 {casinoStats.netResult >= 0 ? '+' : ''}{formatCurrency(casinoStats.netResult)}
               </Text>
-              <Text style={styles.casinoMetricLabel}>Net Win/Loss</Text>
+              <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Net Win/Loss</Text>
             </View>
             
-            <View style={styles.casinoMetricCard}>
-              <View style={[styles.casinoMetricIcon, { backgroundColor: 'rgba(103, 58, 183, 0.15)' }]}>
-                <Award size={16} color={COLORS.royalPurple} />
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
+              <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
+                <Award size={16} color={clubRoyaleTierColor} />
               </View>
-              <Text style={styles.casinoMetricValue}>{formatNumber(currentPoints)}</Text>
-              <Text style={styles.casinoMetricLabel}>Current Points</Text>
+              <Text style={[styles.casinoMetricValue, { color: casinoCardTheme.topTextColor }]}>{formatNumber(currentPoints)}</Text>
+              <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Current Points</Text>
             </View>
           </View>
           
-          <View style={styles.casinoFinancialsRow}>
+          <View style={[styles.casinoFinancialsRow, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
             <View style={styles.casinoFinancialItem}>
-              <Ship size={14} color={COLORS.navyDeep} />
+              <Ship size={14} color={casinoCardTheme.topTextColor} />
               <View style={styles.casinoFinancialText}>
-                <Text style={styles.casinoFinancialLabel}>Retail Value</Text>
+                <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Retail Value</Text>
                 <Text style={[styles.casinoFinancialValue, { color: COLORS.success }]}>
                   {formatCurrency(casinoStats.totalRetailValue)}
                 </Text>
               </View>
             </View>
-            <View style={styles.casinoFinancialDivider} />
+            <View style={[styles.casinoFinancialDivider, { backgroundColor: withAlpha('#FFFFFF', 0.14) }]} />
             <View style={styles.casinoFinancialItem}>
-              <DollarSign size={14} color={COLORS.navyDeep} />
+              <DollarSign size={14} color={casinoCardTheme.topTextColor} />
               <View style={styles.casinoFinancialText}>
-                <Text style={styles.casinoFinancialLabel}>Taxes Paid</Text>
-                <Text style={styles.casinoFinancialValue}>
+                <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Taxes Paid</Text>
+                <Text style={[styles.casinoFinancialValue, { color: casinoCardTheme.topTextColor }]}>
                   {formatCurrency(casinoStats.totalTaxesFees)}
                 </Text>
               </View>
             </View>
-            <View style={styles.casinoFinancialDivider} />
+            <View style={[styles.casinoFinancialDivider, { backgroundColor: withAlpha('#FFFFFF', 0.14) }]} />
             <View style={styles.casinoFinancialItem}>
               <TrendingUp size={14} color={casinoStats.totalProfit >= 0 ? COLORS.success : COLORS.error} />
               <View style={styles.casinoFinancialText}>
-                <Text style={styles.casinoFinancialLabel}>Net Profit</Text>
-                <Text style={[styles.casinoFinancialValue, { color: casinoStats.totalProfit >= 0 ? COLORS.success : COLORS.error }]}>
+                <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Net Profit</Text>
+                <Text style={[styles.casinoFinancialValue, { color: casinoStats.totalProfit >= 0 ? COLORS.success : COLORS.error }]}> 
                   {casinoStats.totalProfit >= 0 ? '+' : ''}{formatCurrency(casinoStats.totalProfit)}
                 </Text>
               </View>
@@ -531,15 +538,15 @@ export default function BookedScreen() {
           </View>
           
           {casinoStats.completedCount > 0 && (
-            <View style={styles.casinoAvgRow}>
+            <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.2) }]}>
               <View style={styles.casinoAvgItem}>
-                <Text style={styles.casinoAvgLabel}>Avg Coin-In/Cruise</Text>
-                <Text style={styles.casinoAvgValue}>{formatCurrency(casinoStats.avgCoinInPerCruise)}</Text>
+                <Text style={[styles.casinoAvgLabel, { color: casinoCardTheme.secondaryTextColor }]}>Avg Coin-In/Cruise</Text>
+                <Text style={[styles.casinoAvgValue, { color: casinoCardTheme.topTextColor }]}>{formatCurrency(casinoStats.avgCoinInPerCruise)}</Text>
               </View>
-              <View style={styles.casinoAvgDivider} />
+              <View style={[styles.casinoAvgDivider, { backgroundColor: withAlpha('#FFFFFF', 0.14) }]} />
               <View style={styles.casinoAvgItem}>
-                <Text style={styles.casinoAvgLabel}>Avg Win/Loss</Text>
-                <Text style={[styles.casinoAvgValue, { color: casinoStats.avgWinLossPerCruise >= 0 ? COLORS.success : COLORS.error }]}>
+                <Text style={[styles.casinoAvgLabel, { color: casinoCardTheme.secondaryTextColor }]}>Avg Win/Loss</Text>
+                <Text style={[styles.casinoAvgValue, { color: casinoStats.avgWinLossPerCruise >= 0 ? COLORS.success : COLORS.error }]}> 
                   {casinoStats.avgWinLossPerCruise >= 0 ? '+' : ''}{formatCurrency(casinoStats.avgWinLossPerCruise)}
                 </Text>
               </View>

@@ -12,6 +12,8 @@ import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
+import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
+import { getCarnivalPlayersClubTierColor, getCarnivalVifpTierColor } from '@/constants/loyaltyTheme';
 import { trpc, isWebSyncAvailable } from '@/lib/trpc';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
 const CARNIVAL_RED = '#CC2232';
@@ -797,9 +799,11 @@ function CarnivalSyncScreen() {
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
-                            <Text style={styles.loyaltyValue}>
-                              {state.loyaltyData?.crownAndAnchorLevel}
-                            </Text>
+                            <LoyaltyPill
+                              label={state.loyaltyData?.crownAndAnchorLevel || 'N/A'}
+                              color={getCarnivalVifpTierColor(state.loyaltyData?.crownAndAnchorLevel)}
+                              size="small"
+                            />
                           </View>
                           {state.loyaltyData?.crownAndAnchorPoints ? (
                             <View style={styles.loyaltyRow}>
@@ -820,9 +824,11 @@ function CarnivalSyncScreen() {
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
-                            <Text style={styles.loyaltyValue}>
-                              {state.loyaltyData.clubRoyaleTier}
-                            </Text>
+                            <LoyaltyPill
+                              label={state.loyaltyData.clubRoyaleTier}
+                              color={getCarnivalPlayersClubTierColor(state.loyaltyData.clubRoyaleTier)}
+                              size="small"
+                            />
                           </View>
                         </View>
                       )}

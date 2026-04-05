@@ -10,6 +10,14 @@ import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
+import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
+import {
+  getCelebrityBlueChipTierColor,
+  getCelebrityCaptainsClubLevelColor,
+  getClubRoyaleTierColor,
+  getCrownAnchorTierColor,
+  getSilverseaTierColor,
+} from '@/constants/loyaltyTheme';
 import { trpc, isWebSyncAvailable, RENDER_BACKEND_URL } from '@/lib/trpc';
 import { syncCruisePricing } from '@/lib/cruisePricingSync';
 function RoyalCaribbeanSyncScreen() {
@@ -779,9 +787,12 @@ function RoyalCaribbeanSyncScreen() {
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Level:</Text>
-                            <Text style={styles.loyaltyValue}>
-                              {extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel}
-                            </Text>
+                            <LoyaltyPill
+                              label={extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel || 'N/A'}
+                              color={getCrownAnchorTierColor(extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel)}
+                              size="small"
+                              testID="royal-sync-crown-anchor-pill"
+                            />
                           </View>
                           {(extendedLoyaltyData?.crownAndAnchorPointsFromApi !== undefined || state.loyaltyData?.crownAndAnchorPoints) && (
                             <View style={styles.loyaltyRow}>
@@ -811,9 +822,12 @@ function RoyalCaribbeanSyncScreen() {
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
-                            <Text style={styles.loyaltyValue}>
-                              {extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier}
-                            </Text>
+                            <LoyaltyPill
+                              label={extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier || 'N/A'}
+                              color={getClubRoyaleTierColor(extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier)}
+                              size="small"
+                              testID="royal-sync-club-royale-pill"
+                            />
                           </View>
                           {(extendedLoyaltyData?.clubRoyalePointsFromApi !== undefined || state.loyaltyData?.clubRoyalePoints) && (
                             <View style={styles.loyaltyRow}>
@@ -835,7 +849,12 @@ function RoyalCaribbeanSyncScreen() {
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
-                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.captainsClubTier ?? 'N/A'}</Text>
+                            <LoyaltyPill
+                              label={extendedLoyaltyData.captainsClubTier ?? 'N/A'}
+                              color={getCelebrityCaptainsClubLevelColor(extendedLoyaltyData.captainsClubTier)}
+                              size="small"
+                              testID="royal-sync-captains-club-pill"
+                            />
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Points:</Text>
@@ -861,7 +880,12 @@ function RoyalCaribbeanSyncScreen() {
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
-                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.celebrityBlueChipTier ?? 'N/A'}</Text>
+                            <LoyaltyPill
+                              label={extendedLoyaltyData.celebrityBlueChipTier ?? 'N/A'}
+                              color={getCelebrityBlueChipTierColor(extendedLoyaltyData.celebrityBlueChipTier)}
+                              size="small"
+                              testID="royal-sync-blue-chip-pill"
+                            />
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Points:</Text>
@@ -879,7 +903,12 @@ function RoyalCaribbeanSyncScreen() {
                           </View>
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
-                            <Text style={styles.loyaltyValue}>{extendedLoyaltyData.venetianSocietyTier}</Text>
+                            <LoyaltyPill
+                              label={extendedLoyaltyData.venetianSocietyTier}
+                              color={getSilverseaTierColor(extendedLoyaltyData.venetianSocietyTier)}
+                              size="small"
+                              testID="royal-sync-venetian-pill"
+                            />
                           </View>
                           {extendedLoyaltyData.venetianSocietyNextTier && (
                             <View style={styles.loyaltyRow}>
@@ -952,38 +981,57 @@ function RoyalCaribbeanSyncScreen() {
                   {(extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel) && (
                     <View style={styles.successLoyaltyRow}>
                       <Anchor size={12} color="#60a5fa" />
-                      <Text style={styles.successLoyaltyText}>
-                        Crown & Anchor: {extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel}
-                        {(extendedLoyaltyData?.crownAndAnchorPointsFromApi ?? 0) > 0 && ` — ${(extendedLoyaltyData?.crownAndAnchorPointsFromApi ?? 0).toLocaleString()} pts`}
-                      </Text>
+                      <Text style={styles.successLoyaltyText}>Crown & Anchor:</Text>
+                      <LoyaltyPill
+                        label={extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel || 'N/A'}
+                        color={getCrownAnchorTierColor(extendedLoyaltyData?.crownAndAnchorTier || state.loyaltyData?.crownAndAnchorLevel)}
+                        size="small"
+                      />
+                      {(extendedLoyaltyData?.crownAndAnchorPointsFromApi ?? 0) > 0 ? (
+                        <Text style={styles.successLoyaltyText}>— {(extendedLoyaltyData?.crownAndAnchorPointsFromApi ?? 0).toLocaleString()} pts</Text>
+                      ) : null}
                     </View>
                   )}
                   {(extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier) && (
                     <View style={styles.successLoyaltyRow}>
                       <Crown size={12} color="#f59e0b" />
-                      <Text style={styles.successLoyaltyText}>
-                        Club Royale: {extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier}
-                        {(extendedLoyaltyData?.clubRoyalePointsFromApi ?? 0) > 0 && ` — ${(extendedLoyaltyData?.clubRoyalePointsFromApi ?? 0).toLocaleString()} pts`}
-                      </Text>
+                      <Text style={styles.successLoyaltyText}>Club Royale:</Text>
+                      <LoyaltyPill
+                        label={extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier || 'N/A'}
+                        color={getClubRoyaleTierColor(extendedLoyaltyData?.clubRoyaleTierFromApi || state.loyaltyData?.clubRoyaleTier)}
+                        size="small"
+                      />
+                      {(extendedLoyaltyData?.clubRoyalePointsFromApi ?? 0) > 0 ? (
+                        <Text style={styles.successLoyaltyText}>— {(extendedLoyaltyData?.clubRoyalePointsFromApi ?? 0).toLocaleString()} pts</Text>
+                      ) : null}
                     </View>
                   )}
                   {extendedLoyaltyData?.captainsClubTier ? (
                     <View style={styles.successLoyaltyRow}>
                       <Star size={12} color="#10b981" />
-                      <Text style={styles.successLoyaltyText}>
-                        {"Captain's Club: "}
-                        {extendedLoyaltyData.captainsClubTier}
-                        {(extendedLoyaltyData.captainsClubPoints ?? 0) > 0 && ` — ${(extendedLoyaltyData.captainsClubPoints ?? 0).toLocaleString()} pts`}
-                      </Text>
+                      <Text style={styles.successLoyaltyText}>Captain's Club:</Text>
+                      <LoyaltyPill
+                        label={extendedLoyaltyData.captainsClubTier}
+                        color={getCelebrityCaptainsClubLevelColor(extendedLoyaltyData.captainsClubTier)}
+                        size="small"
+                      />
+                      {(extendedLoyaltyData.captainsClubPoints ?? 0) > 0 ? (
+                        <Text style={styles.successLoyaltyText}>— {(extendedLoyaltyData.captainsClubPoints ?? 0).toLocaleString()} pts</Text>
+                      ) : null}
                     </View>
                   ) : null}
                   {extendedLoyaltyData?.celebrityBlueChipTier ? (
                     <View style={styles.successLoyaltyRow}>
                       <Award size={12} color="#8b5cf6" />
-                      <Text style={styles.successLoyaltyText}>
-                        Blue Chip: {extendedLoyaltyData.celebrityBlueChipTier}
-                        {(extendedLoyaltyData.celebrityBlueChipPoints ?? 0) > 0 && ` — ${(extendedLoyaltyData.celebrityBlueChipPoints ?? 0).toLocaleString()} pts`}
-                      </Text>
+                      <Text style={styles.successLoyaltyText}>Blue Chip:</Text>
+                      <LoyaltyPill
+                        label={extendedLoyaltyData.celebrityBlueChipTier}
+                        color={getCelebrityBlueChipTierColor(extendedLoyaltyData.celebrityBlueChipTier)}
+                        size="small"
+                      />
+                      {(extendedLoyaltyData.celebrityBlueChipPoints ?? 0) > 0 ? (
+                        <Text style={styles.successLoyaltyText}>— {(extendedLoyaltyData.celebrityBlueChipPoints ?? 0).toLocaleString()} pts</Text>
+                      ) : null}
                     </View>
                   ) : null}
                 </View>
@@ -1507,7 +1555,8 @@ const styles = StyleSheet.create({
   successLoyaltyRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 6
+    gap: 6,
+    flexWrap: 'wrap' as const,
   },
   successLoyaltyText: {
     color: '#a7f3d0',

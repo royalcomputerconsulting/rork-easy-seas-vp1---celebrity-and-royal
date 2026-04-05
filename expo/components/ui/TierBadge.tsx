@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
+import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 
 type BadgeType = 'clubRoyale' | 'crownAnchor';
 
@@ -29,64 +30,15 @@ export const TierBadge = React.memo(function TierBadge({
     return CROWN_ANCHOR_LEVELS[tier]?.color || COLORS.beigeWarm;
   };
 
-  const getBgColor = () => {
-    if (type === 'clubRoyale') {
-      return CLUB_ROYALE_TIERS[tier]?.bgColor || 'rgba(212, 165, 116, 0.15)';
-    }
-    return CROWN_ANCHOR_LEVELS[tier]?.bgColor || 'rgba(212, 165, 116, 0.15)';
-  };
-
   const tierColor = getTierColor();
-  const bgColor = getBgColor();
-
-  const sizeStyles = {
-    small: {
-      paddingHorizontal: SPACING.sm,
-      paddingVertical: 2,
-      fontSize: TYPOGRAPHY.fontSizeXS,
-      borderRadius: BORDER_RADIUS.sm,
-    },
-    medium: {
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.xs,
-      fontSize: TYPOGRAPHY.fontSizeSM,
-      borderRadius: BORDER_RADIUS.md,
-    },
-    large: {
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.sm,
-      fontSize: TYPOGRAPHY.fontSizeMD,
-      borderRadius: BORDER_RADIUS.lg,
-    },
-  };
-
-  const currentSize = sizeStyles[size];
 
   const content = (
-    <View
-      style={[
-        styles.badge,
-        {
-          backgroundColor: bgColor,
-          paddingHorizontal: currentSize.paddingHorizontal,
-          paddingVertical: currentSize.paddingVertical,
-          borderRadius: currentSize.borderRadius,
-          borderColor: tierColor,
-        },
-      ]}
-    >
-      <Text
-        style={[
-          styles.text,
-          {
-            fontSize: currentSize.fontSize,
-            color: tierColor,
-          },
-        ]}
-      >
-        {tier.toUpperCase()}
-      </Text>
-    </View>
+    <LoyaltyPill
+      label={tier}
+      color={tierColor}
+      size={size}
+      style={styles.badge}
+    />
   );
 
   if (onPress) {
@@ -154,13 +106,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   badge: {
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  text: {
-    fontWeight: '700' as const,
-    letterSpacing: 0.5,
   },
   label: {
     fontSize: TYPOGRAPHY.fontSizeXS,
