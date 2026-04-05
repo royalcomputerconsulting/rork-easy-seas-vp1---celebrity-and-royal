@@ -73,6 +73,7 @@ import {
 } from '@/lib/dataManager';
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
+import { downloadSeaPassGenerator } from '@/lib/seapassGeneratorDownload';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
 import {
   getImportedSource,
@@ -146,6 +147,7 @@ export default function SettingsScreen() {
   const [isImportingAll, setIsImportingAll] = useState(false);
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+  const [isDownloadingSeaPass, setIsDownloadingSeaPass] = useState(false);
 
   const [isImportingMachines, setIsImportingMachines] = useState(false);
   const [isExportingMachines, setIsExportingMachines] = useState(false);
@@ -1351,6 +1353,34 @@ export default function SettingsScreen() {
     }
   }, []);
 
+  const handleDownloadSeaPassGenerator = useCallback(async () => {
+    try {
+      setIsDownloadingSeaPass(true);
+      console.log('[Settings] Starting SeaPass Generator download...');
+      const result = await downloadSeaPassGenerator();
+      if (result.success) {
+        Alert.alert(
+          'Download Started',
+          `Standalone SeaPass Generator v1.0.0 is downloading.\n\nThis ZIP contains the complete SeaPass Generator feature pack including:\n- Core source files\n- Rebuild guide & architecture docs\n- Integration snippets\n- Backend proxy code\n\n${result.filesAdded} files included.`
+        );
+      } else {
+        console.error('[Settings] SeaPass Generator download failed:', result.error);
+        Alert.alert(
+          'Download Failed',
+          result.error || 'Unable to download the SeaPass Generator. Please make sure you are using a desktop web browser.'
+        );
+      }
+    } catch (error) {
+      console.error('[Settings] SeaPass Generator download error:', error);
+      Alert.alert(
+        'Download Error',
+        `Failed to download SeaPass Generator: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    } finally {
+      setIsDownloadingSeaPass(false);
+    }
+  }, []);
+
   const handleDownloadCSVTemplate = useCallback(async () => {
     try {
       setIsDownloadingTemplate(true);
@@ -2249,6 +2279,16 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                   <Text style={styles.countBadge}>v1.0.0</Text>
                 ),
                 handleDownloadExtension
+              )}
+              {isAdmin && renderSettingRow(
+                <Ship size={18} color="#0070C9" />,
+                'Download SeaPass Generator',
+                isDownloadingSeaPass ? (
+                  <ActivityIndicator size="small" color="#0070C9" />
+                ) : (
+                  <Text style={styles.countBadge}>v1.0.0</Text>
+                ),
+                handleDownloadSeaPassGenerator
               )}
               {renderSettingRow(
                 <FileSpreadsheet size={18} color={COLORS.success} />,
