@@ -1527,24 +1527,35 @@ export default function AnalyticsScreen() {
     const isHistorical = calcsMode === 'historical';
     const DOLLARS_PER_POINT = 5;
 
+    const sessionCoinIn = sessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
+    const hasSessionData = sessions.length > 0 && sessionCoinIn > 0;
+
     const totalCoinIn = isHistorical
       ? casinoAnalytics.totalCoinIn
-      : (sessions.length > 0
-        ? sessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0)
-        : casinoAnalytics.totalCoinIn);
-    const totalSessions = isHistorical ? historicalCruiseData.totalSessions : sessions.length;
-    const totalProfit = isHistorical ? realAnalytics.completedProfit : realAnalytics.completedProfit;
+      : (hasSessionData ? sessionCoinIn : casinoAnalytics.totalCoinIn);
+
+    const totalSessions = isHistorical
+      ? historicalCruiseData.totalSessions
+      : (hasSessionData ? sessions.length : historicalCruiseData.totalSessions || Math.max(1, casinoAnalytics.completedCruisesCount * 2));
+
+    const totalProfit = realAnalytics.completedProfit;
     const totalHours = sessionAnalytics.totalPlayTimeMinutes / 60;
-    const totalRetailValue = isHistorical ? realAnalytics.completedRetailValue : realAnalytics.completedRetailValue;
-    const totalTaxesFees = isHistorical ? realAnalytics.completedTaxesFees : realAnalytics.completedTaxesFees;
-    const totalWinLoss = isHistorical ? casinoAnalytics.netResult : sessionAnalytics.netWinLoss;
-    const avgSessionLength = sessionAnalytics.avgSessionLength;
-    const modeLabel = isHistorical ? 'historical' : 'per session';
+    const totalRetailValue = realAnalytics.completedRetailValue;
+    const totalTaxesFees = realAnalytics.completedTaxesFees;
+
+    const sessionNetWinLoss = hasSessionData ? sessionAnalytics.netWinLoss : casinoAnalytics.netResult;
+    const totalWinLoss = isHistorical ? casinoAnalytics.netResult : sessionNetWinLoss;
+
+    const defaultAvgSessionMinutes = 90;
+    const avgSessionLength = sessionAnalytics.avgSessionLength > 0 ? sessionAnalytics.avgSessionLength : defaultAvgSessionMinutes;
+    const modeLabel = isHistorical ? 'historical' : (hasSessionData ? 'per session' : 'per session (est.)');
     const historicalTotalPoints = casinoAnalytics.totalPointsEarned;
     const completedCruiseCount = casinoAnalytics.completedCruisesCount;
     const divisorLabel = isHistorical
       ? `${historicalCruiseData.totalSessions} sessions across ${completedCruiseCount} cruises`
-      : `${sessions.length} tracked sessions`;
+      : (hasSessionData ? `${sessions.length} tracked sessions` : `${totalSessions} est. sessions from ${completedCruiseCount} cruises`);
+
+    console.log('[Calcs] Mode:', calcsMode, 'hasSessionData:', hasSessionData, 'totalCoinIn:', totalCoinIn, 'totalSessions:', totalSessions, 'casinoAnalytics.totalCoinIn:', casinoAnalytics.totalCoinIn);
 
     const coinInPerUnit = totalSessions > 0 ? totalCoinIn / totalSessions : 0;
     
@@ -1565,9 +1576,9 @@ export default function AnalyticsScreen() {
 
     let morningTheo: number;
     let eveningTheo: number;
-    if (isHistorical && totalSessions > 0) {
-      const morningRatio = morningSessionsData.length / Math.max(sessions.length, 1);
-      const eveningRatio = eveningSessionsData.length / Math.max(sessions.length, 1);
+    if (isHistorical || !hasSessionData) {
+      const morningRatio = sessions.length > 0 ? morningSessionsData.length / Math.max(sessions.length, 1) : 0.4;
+      const eveningRatio = sessions.length > 0 ? eveningSessionsData.length / Math.max(sessions.length, 1) : 0.6;
       morningTheo = (totalCoinIn * morningRatio) * assumedHold;
       eveningTheo = (totalCoinIn * eveningRatio) * assumedHold;
     } else {
@@ -1592,7 +1603,7 @@ export default function AnalyticsScreen() {
     
     const roiPercentage = totalTaxesFees > 0 ? ((totalRetailValue - totalTaxesFees + totalWinLoss) / totalTaxesFees) * 100 : 0;
     void roiPercentage;
-    const profitPerUnit = totalSessions > 0 ? totalProfit / totalSessions : 0;
+    const profitPerUnit = totalSessions > 0 ? totalProfit / totalSessions : (totalProfit !== 0 ? totalProfit : 0);
     
     const stopGap = 200;
     const riskPerHour = avgSessionLength > 0 ? (stopGap / (avgSessionLength / 60)) : 0;
@@ -1614,7 +1625,7 @@ export default function AnalyticsScreen() {
     
     const totalHistoricalHours = isHistorical
       ? (historicalCruiseData.totalSessions * avgSessionLength) / 60
-      : totalHours;
+      : (totalHours > 0 ? totalHours : (totalSessions * avgSessionLength) / 60);
     const valuePerHourPlayed = totalHistoricalHours > 0 ? totalRetailValue / totalHistoricalHours : 0;
     
     const recentProfit = sessions.slice(-10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
@@ -1623,11 +1634,12 @@ export default function AnalyticsScreen() {
     const variabilityScore = 1 - Math.min(adtSmoothingFactor, 1);
     const sustainabilityScore = (trendScore * 0.6 + variabilityScore * 0.4) * 100;
 
+    const sessionPointsTotal = sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0);
     const pointsPerSession = isHistorical && historicalCruiseData.totalSessions > 0
       ? historicalTotalPoints / historicalCruiseData.totalSessions
-      : sessions.length > 0
-        ? sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0) / sessions.length
-        : 0;
+      : (hasSessionData && sessionPointsTotal > 0)
+        ? sessionPointsTotal / sessions.length
+        : (historicalTotalPoints > 0 && totalSessions > 0 ? historicalTotalPoints / totalSessions : 0);
 
     return [
       {
