@@ -26,6 +26,7 @@ import { useSlotMachineLibrary } from './SlotMachineLibraryProvider';
 import { useDeckPlan } from './DeckPlanProvider';
 import { useCasinoSessions } from './CasinoSessionProvider';
 import { useEntitlement } from './EntitlementProvider';
+import { useAuth } from './AuthProvider';
 
 interface AgentXState {
   messages: ChatMessage[];
@@ -93,6 +94,30 @@ Slot Machine Advantage Play:
 - Check entry/exit conditions for optimal AP opportunities
 - Use session data to identify hot/cold machines
 - Analyze player ROI and win rates per machine`;
+}
+
+function buildDevAssistantSystemPrompt(): string {
+  return `You are AI Dev Assistant inside Easy Seas. Help the user design and implement voice-enabled assistant features with practical, production-minded guidance.
+
+Focus on:
+- Prompt-based app development and app scaffolding
+- Conversational AI architecture
+- GPT-4o, Anthropic Claude, and similar LLM integrations
+- Speech-to-text, text-to-speech, microphone UX, and voice pipelines
+- WebSocket-based real-time audio streaming
+- Backend integration points, security, and API key handling
+- Persona, memory, conversation tone, and refinement workflows
+
+When responding:
+- Be specific and implementation-oriented
+- Break architecture into frontend, backend, data flow, and UX
+- Call out tradeoffs and recommended defaults
+- Favor Expo-friendly and React Native-compatible approaches
+- Keep the answer actionable and easy to build from`;
+}
+
+function isDevAssistantRequest(message: string): boolean {
+  return /prompt-based development|voice-enabled assistant|conversational ai|conversational capabilities|app structure|ai dev assistant|api integration|gpt-4o|anthropic|claude|voice api|speech-to-text|text-to-speech|websocket|real-time audio|audio streaming|persona|conversational tone|system prompt|conversation memory|backend integration/i.test(message);
 }
 
 function parseToolCall(message: string): { tool: string; params: unknown } | null {
@@ -232,6 +257,7 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
 
 export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => {
   const { tier } = useEntitlement();
+  const { isAdmin } = useAuth();
   const { cruises, bookedCruises, casinoOffers } = useCoreData();
   const { clubRoyalePoints, clubRoyaleTier } = useLoyalty();
   const { allMachines } = useSlotMachines();
@@ -301,9 +327,12 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
 
   const sendMessage = useCallback(async (content: string) => {
     console.log('[AgentX] User message:', content);
+
+    const devAssistantRequest = isDevAssistantRequest(content);
+    const hasAgentAccess = tier === 'pro' || isAdmin || devAssistantRequest;
     
-    if (tier !== 'pro') {
-      console.log('[AgentX] Access denied. Tier:', tier);
+    if (!hasAgentAccess) {
+      console.log('[AgentX] Access denied. Tier:', tier, 'isAdmin:', isAdmin, 'devAssistantRequest:', devAssistantRequest);
       const deniedMessage: ChatMessage = {
         id: `denied-${Date.now()}`,
         role: 'assistant',
@@ -337,7 +366,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
     setMessages(prev => [...prev, loadingMessage]);
     
     try {
-      const toolCall = parseToolCall(content);
+      const toolCall = devAssistantRequest ? null : parseToolCall(content);
       
       let toolResult = '';
       if (toolCall) {
@@ -401,26 +430,40 @@ Completed Cruises with Points Earned:
 CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club Royale points and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information.
 `;
 
-      const systemPrompt = buildSystemPrompt({
-        globalLibrary,
-        myAtlasMachines,
-        sessions,
-        deckMappings,
-      });
+      const systemPrompt = devAssistantRequest
+        ? buildDevAssistantSystemPrompt()
+        : buildSystemPrompt({
+            globalLibrary,
+            myAtlasMachines,
+            sessions,
+            deckMappings,
+          });
       
-      const messagesForAI = [
-        { role: 'user' as const, content: `${systemPrompt}\n\n${contextInfo}` },
-        ...messages.slice(-6).map(m => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        })),
-        { 
-          role: 'user' as const, 
-          content: toolResult 
-            ? `User asked: "${content}"\n\nTool result:\n${toolResult}\n\nPlease summarize this information in a helpful, conversational way. Highlight the most important points.`
-            : `User asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise data and context.`
-        },
-      ];
+      const messagesForAI = devAssistantRequest
+        ? [
+            { role: 'user' as const, content: systemPrompt },
+            ...messages.slice(-6).map(m => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+            })),
+            {
+              role: 'user' as const,
+              content: `Help me with this development request:\n\n${content}`,
+            },
+          ]
+        : [
+            { role: 'user' as const, content: `${systemPrompt}\n\n${contextInfo}` },
+            ...messages.slice(-6).map(m => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+            })),
+            { 
+              role: 'user' as const, 
+              content: toolResult 
+                ? `User asked: "${content}"\n\nTool result:\n${toolResult}\n\nPlease summarize this information in a helpful, conversational way. Highlight the most important points.`
+                : `User asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise data and context.`
+            },
+          ];
       
       const aiResponse = await generateText({ messages: messagesForAI });
       
@@ -450,7 +493,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
     } finally {
       setIsLoading(false);
     }
-  }, [messages, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings]);
+  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings]);
 
   const clearMessages = useCallback(() => {
     console.log('[AgentX] Clearing messages');
@@ -475,7 +518,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
     await sendMessage('Provide a comprehensive analysis of my cruise performance for the last 90 days including points earned, tier progress, and recommendations.');
   }, [sendMessage]);
 
-  return {
+  return useMemo(() => ({
     messages,
     isLoading,
     isExpanded,
@@ -487,5 +530,17 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
     toggleVisible,
     setVisible: setVisibleState,
     refreshAnalysis,
-  };
+  }), [
+    messages,
+    isLoading,
+    isExpanded,
+    isVisible,
+    error,
+    sendMessage,
+    clearMessages,
+    toggleExpanded,
+    toggleVisible,
+    setVisibleState,
+    refreshAnalysis,
+  ]);
 });
