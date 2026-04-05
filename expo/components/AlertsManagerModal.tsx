@@ -226,7 +226,7 @@ export function AlertsManagerModal({ visible, onClose }: AlertsManagerModalProps
               {alert.message}
             </Text>
 
-            {alert.anomaly?.dataPoints && (
+            {alert.anomaly?.dataPoints ? (
               <View style={styles.dataPointsContainer}>
                 {alert.anomaly.dataPoints.metric && (
                   <View style={styles.dataPointRow}>
@@ -254,9 +254,9 @@ export function AlertsManagerModal({ visible, onClose }: AlertsManagerModalProps
                   </View>
                 )}
               </View>
-            )}
+            ) : null}
 
-            {alert.createdAt && (
+            {alert.createdAt ? (
               <Text style={styles.alertTime}>
                 Detected: {new Date(alert.createdAt).toLocaleDateString('en-US', { 
                   month: 'short', 
@@ -266,7 +266,7 @@ export function AlertsManagerModal({ visible, onClose }: AlertsManagerModalProps
                   minute: '2-digit',
                 })}
               </Text>
-            )}
+            ) : null}
 
             {isSnoozed && alert.snoozedUntil && (
               <View style={styles.snoozedBadge}>
@@ -278,7 +278,7 @@ export function AlertsManagerModal({ visible, onClose }: AlertsManagerModalProps
             )}
 
             <View style={styles.expandedActions}>
-              {alert.actionRoute && (
+              {alert.actionRoute ? (
                 <TouchableOpacity
                   style={[styles.viewDetailsBtn, { borderColor: `${color}50` }]}
                   onPress={() => handleNavigateToAlert(alert)}
@@ -289,7 +289,7 @@ export function AlertsManagerModal({ visible, onClose }: AlertsManagerModalProps
                     {alert.actionLabel || 'View Details'}
                   </Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
               <TouchableOpacity
                 style={styles.actionBtn}
                 onPress={() => handleSnooze(alert.id)}

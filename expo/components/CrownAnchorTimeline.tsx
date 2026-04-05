@@ -240,14 +240,14 @@ export function CrownAnchorTimeline({ currentPoints, bookedCruises }: CrownAncho
               entry.levelUp && !entry.crossesPinnacle && styles.cardLevelUp,
               entry.isCompleted && !entry.levelUp && !entry.crossesPinnacle && styles.cardCompleted,
             ]}>
-              {entry.crossesPinnacle && (
+              {entry.crossesPinnacle ? (
                 <LinearGradient
                   colors={['rgba(184,134,11,0.18)', 'rgba(184,134,11,0.04)']}
                   style={styles.cardPinnacleGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 />
-              )}
+              ) : null}
 
               <View style={styles.cardTop}>
                 <View style={styles.cardShipInfo}>
@@ -280,23 +280,23 @@ export function CrownAnchorTimeline({ currentPoints, bookedCruises }: CrownAncho
                 </View>
               </View>
 
-              {entry.levelUp && (
+              {entry.levelUp ? (
                 <View style={[styles.levelUpBadge, { backgroundColor: entry.levelAfter.bgColor, borderColor: entry.levelAfter.color }]}>
                   <Star size={11} color={entry.levelAfter.color} />
                   <Text style={[styles.levelUpText, { color: entry.levelAfter.color }]}>
                     Level Up → {entry.levelAfter.name}
                   </Text>
                 </View>
-              )}
+              ) : null}
 
-              {entry.crossesPinnacle && (
+              {entry.crossesPinnacle ? (
                 <View style={styles.pinnacleThresholdBadge}>
                   <Crown size={12} color={COLORS.goldAccent} />
                   <Text style={styles.pinnacleThresholdText}>
                     Pinnacle threshold crossed! First Pinnacle cruise is next sailing.
                   </Text>
                 </View>
-              )}
+              ) : null}
 
               {entry.isPinnacleFirstCruise && (
                 <View style={styles.firstPinnacleBadge}>

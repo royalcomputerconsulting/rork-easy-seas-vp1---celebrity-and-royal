@@ -169,7 +169,7 @@ export const AlertItem = React.memo(function AlertItem({ alert, onDismiss, onSno
         </Text>
 
         <View style={styles.alertActions}>
-          {alert.actionLabel && (
+          {alert.actionLabel ? (
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: `${priorityColor}20` }]}
               onPress={handleAction}
@@ -180,7 +180,7 @@ export const AlertItem = React.memo(function AlertItem({ alert, onDismiss, onSno
               </Text>
               <ChevronRight size={14} color={priorityColor} />
             </TouchableOpacity>
-          )}
+          ) : null}
           
           <View style={styles.secondaryActions}>
             <TouchableOpacity

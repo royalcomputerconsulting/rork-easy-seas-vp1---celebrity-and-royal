@@ -116,7 +116,7 @@ export function SeaPassCard({
 
               {/* Details Grid */}
               <View style={styles.detailsGrid}>
-                {booking.cabinNumber && (
+                {booking.cabinNumber ? (
                   <View style={styles.detailItem}>
                     <Layers size={11} color="rgba(255,255,255,0.6)" />
                     <View>
@@ -124,8 +124,8 @@ export function SeaPassCard({
                       <Text style={styles.detailValue}>{booking.cabinNumber}</Text>
                     </View>
                   </View>
-                )}
-                {booking.cabinType && (
+                ) : null}
+                {booking.cabinType ? (
                   <View style={styles.detailItem}>
                     <Anchor size={11} color="rgba(255,255,255,0.6)" />
                     <View>
@@ -133,8 +133,8 @@ export function SeaPassCard({
                       <Text style={styles.detailValue} numberOfLines={1}>{booking.cabinType}</Text>
                     </View>
                   </View>
-                )}
-                {booking.reservationNumber && (
+                ) : null}
+                {booking.reservationNumber ? (
                   <View style={styles.detailItem}>
                     <Hash size={11} color="rgba(255,255,255,0.6)" />
                     <View>
@@ -142,7 +142,7 @@ export function SeaPassCard({
                       <Text style={styles.detailValue}>{booking.reservationNumber}</Text>
                     </View>
                   </View>
-                )}
+                ) : null}
                 {departurePort && (
                   <View style={styles.detailItem}>
                     <Anchor size={11} color="rgba(255,255,255,0.6)" />

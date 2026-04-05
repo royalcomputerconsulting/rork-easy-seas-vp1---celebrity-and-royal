@@ -144,14 +144,14 @@ export function AtlasCard({
         </View>
 
         <View style={styles.contentSection}>
-          {machine.gameSeries && (
+          {machine.gameSeries ? (
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Series:</Text>
               <Text style={styles.infoValue} numberOfLines={1}>
                 {machine.gameSeries}
               </Text>
             </View>
-          )}
+          ) : null}
 
           <View style={styles.metaRow}>
             <View style={styles.metaInfoBox}>
@@ -160,14 +160,14 @@ export function AtlasCard({
                 {machine.cabinetType}
               </Text>
             </View>
-            {machine.rtpRanges && (
+            {machine.rtpRanges ? (
               <View style={styles.metaInfoBox}>
                 <Text style={styles.metaInfoLabel}>RTP</Text>
                 <Text style={styles.metaInfoValue} numberOfLines={1}>
                   {machine.rtpRanges.min}-{machine.rtpRanges.max}%
                 </Text>
               </View>
-            )}
+            ) : null}
           </View>
 
           {machine.denominationFamilies && machine.denominationFamilies.length > 0 && (
@@ -186,11 +186,11 @@ export function AtlasCard({
             </View>
           )}
 
-          {machine.description && (
+          {machine.description ? (
             <Text style={styles.description} numberOfLines={5}>
               {machine.description}
             </Text>
-          )}
+          ) : null}
 
           {machine.shipAssignments && machine.shipAssignments.length > 0 && (
             <View style={styles.shipAssignmentsSection}>

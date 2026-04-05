@@ -181,9 +181,9 @@ export default function MachineDetailScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>{displayMachine.machineName}</Text>
             <Text style={styles.manufacturer}>{displayMachine.manufacturer}</Text>
-            {displayMachine.gameSeries && (
+            {displayMachine.gameSeries ? (
               <Text style={styles.series}>Series: {displayMachine.gameSeries}</Text>
-            )}
+            ) : null}
           </View>
 
           <View style={styles.section}>
@@ -201,30 +201,30 @@ export default function MachineDetailScreen() {
                 <Text style={styles.infoLabel}>Release Year</Text>
                 <Text style={styles.infoValue}>{displayMachine.releaseYear}</Text>
               </View>
-              {displayMachine.theme && (
+              {displayMachine.theme ? (
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>Theme</Text>
                   <Text style={styles.infoValue}>{displayMachine.theme}</Text>
                 </View>
-              )}
+              ) : null}
             </View>
           </View>
 
-          {displayMachine.rtpRanges && (
+          {displayMachine.rtpRanges ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>RTP Range</Text>
               <Text style={styles.rtpText}>
                 {displayMachine.rtpRanges.min}% - {displayMachine.rtpRanges.max}%
               </Text>
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.bonusMechanics && (
+          {displayMachine.bonusMechanics ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Bonus Mechanics</Text>
               <Text style={styles.bodyText}>{displayMachine.bonusMechanics}</Text>
             </View>
-          )}
+          ) : null}
 
           {displayMachine.jackpotTypes && displayMachine.jackpotTypes.length > 0 && (
             <View style={styles.section}>
@@ -253,7 +253,7 @@ export default function MachineDetailScreen() {
             </View>
           )}
 
-          {displayMachine.apMetadata && (
+          {displayMachine.apMetadata ? (
             <View style={[styles.section, styles.apSection]}>
               <Text style={styles.sectionTitle}>AP Information</Text>
               
@@ -341,30 +341,30 @@ export default function MachineDetailScreen() {
                 </View>
               )}
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.simpleSummary && (
+          {displayMachine.simpleSummary ? (
             <View style={[styles.section, styles.summarySection]}>
               <Text style={styles.sectionTitle}>💡 Quick Summary</Text>
               <Text style={styles.bodyText}>{displayMachine.simpleSummary}</Text>
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.summary && (
+          {displayMachine.summary ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>📖 Full Verbose Reference</Text>
               <Text style={styles.bodyText}>{displayMachine.summary}</Text>
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.coreMechanics && (
+          {displayMachine.coreMechanics ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>⚙️ Core Mechanics</Text>
               <Text style={styles.bodyText}>{displayMachine.coreMechanics}</Text>
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.apTriggers && (
+          {displayMachine.apTriggers ? (
             <View style={[styles.section, styles.triggersSection]}>
               <Text style={styles.sectionTitle}>🎯 AP Triggers (When to Sit)</Text>
               {typeof displayMachine.apTriggers === 'string' ? (
@@ -378,9 +378,9 @@ export default function MachineDetailScreen() {
                 </View>
               ) : null}
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.walkAway && (
+          {displayMachine.walkAway ? (
             <View style={[styles.section, styles.dangerSection]}>
               <Text style={styles.sectionTitle}>🚫 Walk Away Conditions</Text>
               {typeof displayMachine.walkAway === 'string' ? (
@@ -391,9 +391,9 @@ export default function MachineDetailScreen() {
                 ))
               ) : null}
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.jackpotReset && (
+          {displayMachine.jackpotReset ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>🎰 Jackpot Reset Values</Text>
               {typeof displayMachine.jackpotReset === 'string' ? (
@@ -457,23 +457,23 @@ export default function MachineDetailScreen() {
                 </View>
               )}
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.shipNotes && (
+          {displayMachine.shipNotes ? (
             <View style={[styles.section, styles.shipSection]}>
               <Text style={styles.sectionTitle}>🚢 Cruise Ship Notes</Text>
               <Text style={styles.bodyText}>{displayMachine.shipNotes}</Text>
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.detailedProfile?.simpleSummary && (
+          {displayMachine.detailedProfile?.simpleSummary ? (
             <View style={[styles.section, styles.summarySection]}>
               <Text style={styles.sectionTitle}>💡 Detailed Summary</Text>
               <Text style={styles.bodyText}>{displayMachine.detailedProfile.simpleSummary}</Text>
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.detailedProfile?.jackpotResetValues && (
+          {displayMachine.detailedProfile?.jackpotResetValues ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>🎰 Detailed Jackpot Reset Values</Text>
               <View style={styles.resetGrid}>
@@ -511,9 +511,9 @@ export default function MachineDetailScreen() {
                 )}
               </View>
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.detailedProfile?.progressiveBehavior && (
+          {displayMachine.detailedProfile?.progressiveBehavior ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>📊 Progressive Behavior</Text>
               {displayMachine.detailedProfile.progressiveBehavior.growthRate && (
@@ -534,9 +534,9 @@ export default function MachineDetailScreen() {
                 </View>
               )}
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.detailedProfile?.specialMechanics && (
+          {displayMachine.detailedProfile?.specialMechanics ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>⚡ Special Mechanics</Text>
               <Text style={styles.bodyText}>{displayMachine.detailedProfile.specialMechanics.description}</Text>
@@ -568,9 +568,9 @@ export default function MachineDetailScreen() {
                 </View>
               )}
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.detailedProfile?.bonusGameBehavior && (
+          {displayMachine.detailedProfile?.bonusGameBehavior ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>🎁 Bonus Game Behavior</Text>
               <Text style={styles.bodyText}>{displayMachine.detailedProfile.bonusGameBehavior.description}</Text>
@@ -584,7 +584,7 @@ export default function MachineDetailScreen() {
                 </View>
               )}
             </View>
-          )}
+          ) : null}
 
           {displayMachine.detailedProfile?.denominationBehavior && displayMachine.detailedProfile.denominationBehavior.length > 0 && (
             <View style={styles.section}>
@@ -593,11 +593,11 @@ export default function MachineDetailScreen() {
                 <View key={idx} style={styles.denomItem}>
                   <View style={styles.denomHeader}>
                     <Text style={styles.denomLabel}>{denom.denom}</Text>
-                    {denom.recommendation && (
+                    {denom.recommendation ? (
                       <View style={styles.recommendationBadge}>
                         <Text style={styles.recommendationText}>{denom.recommendation}</Text>
                       </View>
-                    )}
+                    ) : null}
                   </View>
                   <Text style={styles.denomNotes}>{denom.notes}</Text>
                 </View>
@@ -605,7 +605,7 @@ export default function MachineDetailScreen() {
             </View>
           )}
 
-          {displayMachine.detailedProfile?.apTriggers && (
+          {displayMachine.detailedProfile?.apTriggers ? (
             <View style={[styles.section, styles.triggersSection]}>
               <Text style={styles.sectionTitle}>🎯 Detailed AP Triggers</Text>
               
@@ -636,25 +636,25 @@ export default function MachineDetailScreen() {
                 </View>
               )}
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.detailedProfile?.walkAwayConditions && (
+          {displayMachine.detailedProfile?.walkAwayConditions ? (
             <View style={[styles.section, styles.dangerSection]}>
               <Text style={styles.sectionTitle}>🚫 Detailed Walk Away Conditions</Text>
               {displayMachine.detailedProfile.walkAwayConditions.conditions.map((condition, idx) => (
                 <Text key={idx} style={styles.dangerListItem}>× {condition}</Text>
               ))}
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.detailedProfile?.bestDenominationForAP && (
+          {displayMachine.detailedProfile?.bestDenominationForAP ? (
             <View style={[styles.section, styles.recommendationSection]}>
               <Text style={styles.sectionTitle}>⭐ Best Denomination for AP</Text>
               <Text style={styles.highlightText}>{displayMachine.detailedProfile.bestDenominationForAP}</Text>
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.detailedProfile?.cruiseShipNotes && (
+          {displayMachine.detailedProfile?.cruiseShipNotes ? (
             <View style={[styles.section, styles.shipSection]}>
               <Text style={styles.sectionTitle}>🚢 Detailed Cruise Ship Notes</Text>
               {displayMachine.detailedProfile.cruiseShipNotes.reelStripDifferences && (
@@ -676,7 +676,7 @@ export default function MachineDetailScreen() {
                 </View>
               )}
             </View>
-          )}
+          ) : null}
 
           {recentWins.length > 0 && (
             <View style={styles.section}>
@@ -695,28 +695,28 @@ export default function MachineDetailScreen() {
                       +${(session.winLoss || 0).toFixed(2)}
                     </Text>
                   </View>
-                  {session.jackpotHit && (
+                  {session.jackpotHit ? (
                     <Text style={styles.jackpotBadge}>🎰 Jackpot Hit!</Text>
-                  )}
+                  ) : null}
                 </View>
               ))}
             </View>
           )}
 
-          {displayMachine.userNotes && (
+          {displayMachine.userNotes ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>My Notes</Text>
               <Text style={styles.bodyText}>{displayMachine.userNotes}</Text>
             </View>
-          )}
+          ) : null}
 
-          {displayMachine.source && (
+          {displayMachine.source ? (
             <View style={styles.sourceSection}>
               <Text style={styles.sourceText}>
                 Source: {displayMachine.source === 'global' ? 'Global Library' : displayMachine.source === 'user' ? 'User Created' : displayMachine.source}
               </Text>
             </View>
-          )}
+          ) : null}
         </ScrollView>
 
         <View style={styles.actionBar}>

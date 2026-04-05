@@ -275,11 +275,11 @@ export const OfferCard = React.memo(function OfferCard({
               : 'Casino Offer'}
           </Text>
           <View style={styles.offerCodeRow}>
-            {offer.offerCode && (
+            {offer.offerCode ? (
               <View style={styles.offerCodeHeaderBadge}>
                 <Text style={styles.offerCodeHeaderText}>CODE: {offer.offerCode}</Text>
               </View>
-            )}
+            ) : null}
             <View style={styles.totalValueHeaderCard}>
               <Text style={styles.totalValueHeaderLabel}>
                 TOTAL VALUE{aggregateValue && aggregateValue.cruiseCount > 1 ? ` (${aggregateValue.cruiseCount})` : ''}
@@ -330,23 +330,23 @@ export const OfferCard = React.memo(function OfferCard({
       )}
 
       <View style={styles.contentSection}>
-        {offer.destination && (
+        {offer.destination ? (
           <View style={styles.destinationsSection}>
             <Text style={styles.destinationsLabel}>DESTINATIONS</Text>
             <Text style={styles.destinationsText} numberOfLines={2}>
               {offer.destination}
             </Text>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.metaRow}>
-          {offer.cabinType && (
+          {offer.cabinType ? (
             <View style={styles.metaInfoBox}>
               <Text style={styles.metaInfoLabel}>ROOM TYPE</Text>
               <Text style={styles.metaInfoValue} numberOfLines={1}>{offer.cabinType}</Text>
             </View>
-          )}
-          {offer.offerExpiry && (
+          ) : null}
+          {offer.offerExpiry ? (
             <View style={styles.metaInfoBox}>
               <Text style={styles.metaInfoLabel}>EXPIRES</Text>
               <Text
@@ -361,7 +361,7 @@ export const OfferCard = React.memo(function OfferCard({
                 })}
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         <TouchableOpacity style={styles.viewAllCruisesButton} onPress={onPress}>

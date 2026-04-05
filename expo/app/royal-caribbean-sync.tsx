@@ -689,12 +689,12 @@ function RoyalCaribbeanSyncScreen() {
 
 
 
-        {state.error && (
+        {state.error ? (
           <View style={styles.errorContainer}>
             <XCircle size={20} color="#ef4444" />
             <Text style={styles.errorText}>{state.error}</Text>
           </View>
-        )}
+        ) : null}
 
         <Modal
           visible={showConfirmation}
@@ -791,14 +791,14 @@ function RoyalCaribbeanSyncScreen() {
                               </Text>
                             </View>
                           )}
-                          {extendedLoyaltyData?.crownAndAnchorNextTier && (
+                          {extendedLoyaltyData?.crownAndAnchorNextTier ? (
                             <View style={styles.loyaltyRow}>
                               <Text style={styles.loyaltyLabel}>Next Tier:</Text>
                               <Text style={styles.loyaltyValueMuted}>
                                 {extendedLoyaltyData.crownAndAnchorNextTier} ({extendedLoyaltyData.crownAndAnchorRemainingPoints} pts away)
                               </Text>
                             </View>
-                          )}
+                          ) : null}
                         </View>
                       )}
 
@@ -841,14 +841,14 @@ function RoyalCaribbeanSyncScreen() {
                             <Text style={styles.loyaltyLabel}>Points:</Text>
                             <Text style={styles.loyaltyValue}>{(extendedLoyaltyData.captainsClubPoints ?? 0).toLocaleString()}</Text>
                           </View>
-                          {extendedLoyaltyData.captainsClubNextTier && (
+                          {extendedLoyaltyData.captainsClubNextTier ? (
                             <View style={styles.loyaltyRow}>
                               <Text style={styles.loyaltyLabel}>Next Tier:</Text>
                               <Text style={styles.loyaltyValueMuted}>
                                 {extendedLoyaltyData.captainsClubNextTier} ({extendedLoyaltyData.captainsClubRemainingPoints} pts away)
                               </Text>
                             </View>
-                          )}
+                          ) : null}
                         </View>
                       )}
 
@@ -871,7 +871,7 @@ function RoyalCaribbeanSyncScreen() {
                       )}
 
                       {/* Venetian Society */}
-                      {extendedLoyaltyData?.venetianSocietyTier && (
+                      {extendedLoyaltyData?.venetianSocietyTier ? (
                         <View style={styles.loyaltySection} testID="loyalty-venetian">
                           <View style={styles.loyaltySectionHeader}>
                             <Ship size={16} color="#ec4899" />
@@ -894,7 +894,7 @@ function RoyalCaribbeanSyncScreen() {
                             </View>
                           )}
                         </View>
-                      )}
+                      ) : null}
                     </>
                   )}
                 </View>
@@ -938,9 +938,9 @@ function RoyalCaribbeanSyncScreen() {
             <View style={styles.successContent}>
               <Text style={styles.successTitle}>Sync Complete!</Text>
               <Text style={styles.successMessage}>
-                {state.syncCounts && (
+                {state.syncCounts ? (
                   `${state.syncCounts.offerCount} offer${state.syncCounts.offerCount !== 1 ? 's' : ''} (${state.syncCounts.offerRows} sailing${state.syncCounts.offerRows !== 1 ? 's' : ''}), ${state.syncCounts.upcomingCruises} upcoming cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}, ${state.syncCounts.courtesyHolds} courtesy hold${state.syncCounts.courtesyHolds !== 1 ? 's' : ''}`
-                )}
+                ) : null}
               </Text>
 
               {(extendedLoyaltyData || state.loyaltyData) && (
@@ -967,7 +967,7 @@ function RoyalCaribbeanSyncScreen() {
                       </Text>
                     </View>
                   )}
-                  {extendedLoyaltyData?.captainsClubTier && (
+                  {extendedLoyaltyData?.captainsClubTier ? (
                     <View style={styles.successLoyaltyRow}>
                       <Star size={12} color="#10b981" />
                       <Text style={styles.successLoyaltyText}>
@@ -976,8 +976,8 @@ function RoyalCaribbeanSyncScreen() {
                         {(extendedLoyaltyData.captainsClubPoints ?? 0) > 0 && ` — ${(extendedLoyaltyData.captainsClubPoints ?? 0).toLocaleString()} pts`}
                       </Text>
                     </View>
-                  )}
-                  {extendedLoyaltyData?.celebrityBlueChipTier && (
+                  ) : null}
+                  {extendedLoyaltyData?.celebrityBlueChipTier ? (
                     <View style={styles.successLoyaltyRow}>
                       <Award size={12} color="#8b5cf6" />
                       <Text style={styles.successLoyaltyText}>
@@ -985,7 +985,7 @@ function RoyalCaribbeanSyncScreen() {
                         {(extendedLoyaltyData.celebrityBlueChipPoints ?? 0) > 0 && ` — ${(extendedLoyaltyData.celebrityBlueChipPoints ?? 0).toLocaleString()} pts`}
                       </Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
               )}
 

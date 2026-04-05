@@ -311,13 +311,13 @@ export function CertificateManagerModal({
           </Text>
           <View style={styles.certMeta}>
             <Text style={styles.certValue}>${cert.value}</Text>
-            {cert.expiryDate && (
+            {cert.expiryDate ? (
               <Text style={styles.certExpiry}>Exp: {formatDateToMMDDYYYY(cert.expiryDate)}</Text>
-            )}
+            ) : null}
           </View>
-          {cert.description && (
+          {cert.description ? (
             <Text style={styles.certDescription} numberOfLines={1}>{cert.description}</Text>
-          )}
+          ) : null}
         </View>
 
         <View style={styles.certActions}>

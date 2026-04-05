@@ -601,11 +601,11 @@ export function UserProfileCard({
         {activeBrand === 'carnival' && renderCarnivalValues()}
       </View>
 
-      {enrichmentData?.lastSyncTimestamp && (
+      {enrichmentData?.lastSyncTimestamp ? (
         <View style={styles.syncTimestampContainer}>
           <Text style={styles.syncTimestampText}>Last synced: {formatDate(enrichmentData.lastSyncTimestamp)}</Text>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.editButtonContainer}>
         <TouchableOpacity 

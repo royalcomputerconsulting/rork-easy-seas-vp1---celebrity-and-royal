@@ -315,9 +315,9 @@ export const CasinoSessionTracker = React.memo(function CasinoSessionTracker({
                       <Text style={styles.sessionDuration}>
                         {formatMinutes(session.durationMinutes)}
                       </Text>
-                      {session.notes && (
+                      {session.notes ? (
                         <Text style={styles.sessionNotes}>{session.notes}</Text>
-                      )}
+                      ) : null}
                     </View>
                     <TouchableOpacity
                       style={styles.deleteButton}

@@ -716,12 +716,12 @@ function CarnivalSyncScreen() {
             )}
           </View>
 
-          {state.error && (
+          {state.error ? (
             <View style={styles.errorContainer}>
               <XCircle size={20} color="#ef4444" />
               <Text style={styles.errorText}>{state.error}</Text>
             </View>
-          )}
+          ) : null}
 
           <Modal
             visible={showConfirmation}

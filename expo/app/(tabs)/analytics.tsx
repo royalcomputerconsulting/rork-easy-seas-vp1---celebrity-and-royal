@@ -1337,9 +1337,9 @@ export default function AnalyticsScreen() {
                           {session.winLoss >= 0 ? '+' : ''}{formatCurrency(session.winLoss)}
                         </Text>
                       )}
-                      {session.notes && (
+                      {session.notes ? (
                         <Text style={styles.recentSessionNotes} numberOfLines={2}>{session.notes}</Text>
-                      )}
+                      ) : null}
                     </View>
                     <View style={styles.recentSessionStats}>
                       <View style={styles.recentSessionDuration}>

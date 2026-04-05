@@ -192,9 +192,9 @@ export default function DeckPlanPage() {
               <Grid3x3 size={20} color={COLORS.textPrimary} />
               <Text style={styles.mapTitle}>{selectedZone.name}</Text>
             </View>
-            {selectedZone.description && (
+            {selectedZone.description ? (
               <Text style={styles.mapDescription}>{selectedZone.description}</Text>
-            )}
+            ) : null}
 
             <View style={styles.gridContainer}>
               {selectedZone.machineSlots?.map(slot => {

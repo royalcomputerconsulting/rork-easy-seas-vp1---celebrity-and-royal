@@ -1291,11 +1291,11 @@ export default function DayAgendaScreen() {
                     <View style={styles.seaDayBadge}>
                       <Waves size={14} color={EVENT_COLORS.seaDay} />
                       <Text style={styles.seaDayText}>At Sea</Text>
-                      {itineraryDay.casinoOpen && (
+                      {itineraryDay.casinoOpen ? (
                         <View style={styles.casinoOpenBadge}>
                           <Text style={styles.casinoOpenText}>Casino Open</Text>
                         </View>
-                      )}
+                      ) : null}
                     </View>
                   ) : (
                     <View style={styles.portDayBadge}>

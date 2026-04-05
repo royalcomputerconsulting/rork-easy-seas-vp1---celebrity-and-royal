@@ -963,7 +963,7 @@ export default function ImportCruisesScreen() {
                             {result.portTaxesFees ? `${result.portTaxesFees.toLocaleString()}` : '—'}
                           </Text>
                         </View>
-                        {result.confidence && (
+                        {result.confidence ? (
                           <View style={[styles.syncPriceItem, styles.syncPriceItemWide]}>
                             <Text style={styles.syncPriceLabel}>Confidence</Text>
                             <View style={[styles.confidenceBadge,
@@ -974,7 +974,7 @@ export default function ImportCruisesScreen() {
                               <Text style={styles.confidenceText}>{result.confidence}</Text>
                             </View>
                           </View>
-                        )}
+                        ) : null}
                       </View>
                     ) : (
                       <View style={styles.syncFailedRow}>
@@ -983,12 +983,12 @@ export default function ImportCruisesScreen() {
                       </View>
                     )}
 
-                    {result.saved && (
+                    {result.saved ? (
                       <View style={styles.syncSavedRow}>
                         <CheckCircle size={12} color="#10b981" />
                         <Text style={styles.syncSavedText}>Saved to cruise record</Text>
                       </View>
-                    )}
+                    ) : null}
                   </View>
                 ))}
               </View>

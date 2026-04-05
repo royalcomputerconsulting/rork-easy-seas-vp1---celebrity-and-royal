@@ -131,9 +131,9 @@ export function W2GTracker({ records, onAddRecord, onRemoveRecord }: W2GTrackerP
                   </View>
 
                   <Text style={styles.recordDescription}>{record.description}</Text>
-                  {record.cruiseName && (
+                  {record.cruiseName ? (
                     <Text style={styles.recordCruise}>{record.cruiseName}</Text>
-                  )}
+                  ) : null}
 
                   <View style={styles.recordAmounts}>
                     <View style={styles.amountItem}>

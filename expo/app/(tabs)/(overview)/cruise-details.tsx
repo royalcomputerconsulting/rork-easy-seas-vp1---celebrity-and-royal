@@ -953,30 +953,30 @@ export default function CruiseDetailsScreen() {
                     <Text style={styles.offerTextCompact}>{cruise.offerCode || (cruise as any).offerCode}</Text>
                   </View>
                 )}
-                {cruise.freeGratuities && (
+                {cruise.freeGratuities ? (
                   <View style={styles.offerItemCompact}>
                     <Star size={12} color={COLORS.success} />
                     <Text style={styles.offerTextCompact}>Gratuities</Text>
                   </View>
-                )}
-                {cruise.freeDrinkPackage && (
+                ) : null}
+                {cruise.freeDrinkPackage ? (
                   <View style={styles.offerItemCompact}>
                     <Star size={12} color={COLORS.success} />
                     <Text style={styles.offerTextCompact}>Drinks</Text>
                   </View>
-                )}
-                {cruise.freeWifi && (
+                ) : null}
+                {cruise.freeWifi ? (
                   <View style={styles.offerItemCompact}>
                     <Star size={12} color={COLORS.success} />
                     <Text style={styles.offerTextCompact}>WiFi</Text>
                   </View>
-                )}
-                {cruise.freeSpecialtyDining && (
+                ) : null}
+                {cruise.freeSpecialtyDining ? (
                   <View style={styles.offerItemCompact}>
                     <Star size={12} color={COLORS.success} />
                     <Text style={styles.offerTextCompact}>Specialty Dining</Text>
                   </View>
-                )}
+                ) : null}
               </View>
             </View>
           )}

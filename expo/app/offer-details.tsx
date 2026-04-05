@@ -566,7 +566,7 @@ export default function OfferDetailsScreen() {
 
           {/* Stats Row - Expiry, Cruises */}
           <View style={styles.statsRow}>
-            {offerInfo.expiryDate && (
+            {offerInfo.expiryDate ? (
               <View style={styles.statItem}>
                 <Clock size={16} color={isExpiringSoon ? COLORS.warning : COLORS.navyDeep} />
                 <View style={styles.statTextGroup}>
@@ -577,7 +577,7 @@ export default function OfferDetailsScreen() {
                   </Text>
                 </View>
               </View>
-            )}
+            ) : null}
             <View style={styles.statItem}>
               <Ship size={16} color={COLORS.navyDeep} />
               <View style={styles.statTextGroup}>
