@@ -53,6 +53,27 @@ type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
 type ViewMode = 'list' | 'timeline' | 'points';
 
+function isCruiseCompleted(cruise: BookedCruise): boolean {
+  if (cruise.completionState === 'completed' || cruise.status === 'completed') {
+    return true;
+  }
+  if (cruise.returnDate) {
+    return isDateInPast(cruise.returnDate);
+  }
+  if (cruise.sailDate && cruise.nights) {
+    const sailDate = createDateFromString(cruise.sailDate);
+    const estimatedReturn = new Date(sailDate);
+    estimatedReturn.setDate(estimatedReturn.getDate() + cruise.nights);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return estimatedReturn < today;
+  }
+  if (cruise.sailDate) {
+    return isDateInPast(cruise.sailDate);
+  }
+  return false;
+}
+
 const FILTER_OPTIONS: { label: string; value: FilterType }[] = [
   { label: 'All', value: 'all' },
   { label: 'Upcoming', value: 'upcoming' },
@@ -100,9 +121,9 @@ export default function BookedScreen() {
     let result = [...bookedCruises];
 
     if (filter === 'upcoming') {
-      result = result.filter(cruise => !isDateInPast(cruise.returnDate));
+      result = result.filter(cruise => !isCruiseCompleted(cruise));
     } else if (filter === 'completed') {
-      result = result.filter(cruise => isDateInPast(cruise.returnDate));
+      result = result.filter(cruise => isCruiseCompleted(cruise));
     } else if (filter === 'celebrity') {
       result = result.filter(cruise => 
         cruise.cruiseSource === 'celebrity' || 
@@ -111,7 +132,7 @@ export default function BookedScreen() {
     }
 
     if (hideCompleted) {
-      result = result.filter(cruise => !isDateInPast(cruise.returnDate));
+      result = result.filter(cruise => !isCruiseCompleted(cruise));
     }
 
     if (searchQuery.trim()) {
@@ -160,8 +181,8 @@ export default function BookedScreen() {
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
 
   const stats = useMemo(() => {
-    const upcoming = bookedCruises.filter(c => !isDateInPast(c.returnDate)).length;
-    const completed = bookedCruises.filter(c => isDateInPast(c.returnDate)).length;
+    const upcoming = bookedCruises.filter(c => !isCruiseCompleted(c)).length;
+    const completed = bookedCruises.filter(c => isCruiseCompleted(c)).length;
     const withData = bookedCruises.filter(c => c.price && c.price > 0).length;
     const totalNights = crownAnchorPoints;
     const totalPoints = bookedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
@@ -170,16 +191,8 @@ export default function BookedScreen() {
   }, [bookedCruises, crownAnchorPoints]);
 
   const casinoStats = useMemo(() => {
-    const today = new Date();
-    const completedCruises = bookedCruises.filter(cruise => {
-      const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
-      return returnDate ? returnDate < today : cruise.completionState === 'completed';
-    });
-    
-    const upcomingCruises = bookedCruises.filter(cruise => {
-      const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
-      return returnDate ? returnDate >= today : cruise.completionState !== 'completed';
-    });
+    const completedCruises = bookedCruises.filter(cruise => isCruiseCompleted(cruise));
+    const upcomingCruises = bookedCruises.filter(cruise => !isCruiseCompleted(cruise));
     
     const completedPortfolio = calculatePortfolioValue(completedCruises);
     const upcomingPortfolio = calculatePortfolioValue(upcomingCruises);
@@ -212,7 +225,7 @@ export default function BookedScreen() {
 
   const nextCruise = useMemo(() => {
     const upcomingCruises = bookedCruises
-      .filter(c => !isDateInPast(c.returnDate))
+      .filter(c => !isCruiseCompleted(c))
       .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
     return upcomingCruises[0] || null;
   }, [bookedCruises]);
@@ -266,7 +279,7 @@ export default function BookedScreen() {
 
 
   const renderCruiseCard = useCallback(({ item }: { item: BookedCruise }) => {
-    const isPast = isDateInPast(item.returnDate);
+    const isPast = isCruiseCompleted(item);
     
     return (
       <CruiseCard
@@ -280,10 +293,10 @@ export default function BookedScreen() {
 
   const renderTimelineView = () => {
     const upcomingCruises = filteredCruises
-      .filter(c => !isDateInPast(c.returnDate))
+      .filter(c => !isCruiseCompleted(c))
       .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
     const completedCruises = filteredCruises
-      .filter(c => isDateInPast(c.returnDate))
+      .filter(c => isCruiseCompleted(c))
       .sort((a, b) => createDateFromString(b.returnDate || b.sailDate).getTime() - createDateFromString(a.returnDate || a.sailDate).getTime());
     
     return (
