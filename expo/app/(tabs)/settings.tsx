@@ -1306,6 +1306,15 @@ export default function SettingsScreen() {
         await new Promise(resolve => setTimeout(resolve, 300));
         await coreData.refreshData();
         
+        try {
+          if (typeof window !== 'undefined' && typeof window.dispatchEvent !== 'undefined') {
+            window.dispatchEvent(new Event('cloudDataRestored'));
+            console.log('[Settings] Dispatched cloudDataRestored event for crew recognition reload');
+          }
+        } catch (e) {
+          console.log('[Settings] Could not dispatch cloudDataRestored event:', e);
+        }
+        
         Alert.alert(
           'Import Successful',
           `Imported:\n• ${importedCruises} cruises\n• ${importedBooked} booked cruises\n• ${importedOffers} offers\n• ${calendarEvents} events\n• ${importedSessions} casino sessions\n• ${certificates} certificates\n• ${importedMachines} machines\n• Crew members\n• User profile (name, C&A #, playing hours)\n• Loyalty points\n\nData has been loaded successfully.`

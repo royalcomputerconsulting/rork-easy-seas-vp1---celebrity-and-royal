@@ -647,6 +647,28 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   }, [entriesQuery.data?.entries]);
   const backendTotal = entriesQuery.data?.total || 0;
 
+  useEffect(() => {
+    if (!isOfflineMode && entriesQuery.isSuccess && entriesQuery.data?.entries) {
+      const entriesToPersist = entriesQuery.data.entries;
+      if (entriesToPersist.length > 0) {
+        AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(entriesToPersist))
+          .then(() => console.log('[CrewRecognition] Synced', entriesToPersist.length, 'backend entries to AsyncStorage for export'))
+          .catch(e => console.error('[CrewRecognition] Error syncing backend entries to AsyncStorage:', e));
+      }
+    }
+  }, [isOfflineMode, entriesQuery.isSuccess, entriesQuery.data?.entries]);
+
+  useEffect(() => {
+    if (!isOfflineMode && sailingsQuery.isSuccess && sailingsQuery.data) {
+      const sailingsToPersist = sailingsQuery.data;
+      if (Array.isArray(sailingsToPersist) && sailingsToPersist.length > 0) {
+        AsyncStorage.setItem(skSailingsRef.current, JSON.stringify(sailingsToPersist))
+          .then(() => console.log('[CrewRecognition] Synced', sailingsToPersist.length, 'backend sailings to AsyncStorage for export'))
+          .catch(e => console.error('[CrewRecognition] Error syncing backend sailings to AsyncStorage:', e));
+      }
+    }
+  }, [isOfflineMode, sailingsQuery.isSuccess, sailingsQuery.data]);
+
   const refetch = useCallback(() => {
     void statsQuery.refetch();
     void entriesQuery.refetch();
