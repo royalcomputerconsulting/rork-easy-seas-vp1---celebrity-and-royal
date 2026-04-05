@@ -1481,7 +1481,7 @@ export default function AnalyticsScreen() {
   };
 
   const historicalCruiseData = useMemo(() => {
-    if (activeTab !== 'calcs') return { totalCruises: 0, totalPoints: 0, totalSessions: 0, cruises: [] as { id: string; shipName: string; sailDate: string; points: number; sessionCount: number; nights: number }[] };
+    if (activeTab !== 'calcs') return { totalCruises: 0, totalPoints: 0, totalSessions: 0, totalNights: 0, totalCoinIn: 0, totalWinLoss: 0, totalRetailValue: 0, totalTaxesFees: 0, totalProfit: 0, cruises: [] as { id: string; shipName: string; sailDate: string; points: number; sessionCount: number; nights: number }[] };
     const today = new Date();
     const cruiseData = bookedCruises
       .filter(cruise => {
@@ -1505,34 +1505,45 @@ export default function AnalyticsScreen() {
 
     const totalPoints = cruiseData.reduce((sum, c) => sum + c.points, 0);
     const totalSessions = cruiseData.reduce((sum, c) => sum + c.sessionCount, 0);
+    const totalNights = cruiseData.reduce((sum, c) => sum + c.nights, 0);
 
     return {
       totalCruises: cruiseData.length,
       totalPoints,
       totalSessions,
+      totalNights,
+      totalCoinIn: casinoAnalytics.totalCoinIn,
+      totalWinLoss: casinoAnalytics.netResult,
+      totalRetailValue: realAnalytics.completedRetailValue,
+      totalTaxesFees: realAnalytics.completedTaxesFees,
+      totalProfit: realAnalytics.completedProfit,
       cruises: cruiseData,
     };
-  }, [activeTab, bookedCruises, sessions]);
+  }, [activeTab, bookedCruises, sessions, casinoAnalytics, realAnalytics]);
 
   const highValueCalculations = useMemo(() => {
     if (activeTab !== 'calcs') return [] as { id: number; label: string; value: string; description: string; color: string; icon: any }[];
 
     const isHistorical = calcsMode === 'historical';
+    const DOLLARS_PER_POINT = 5;
+
     const totalCoinIn = isHistorical
       ? casinoAnalytics.totalCoinIn
       : (sessions.length > 0
-        ? sessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * 5), 0)
+        ? sessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0)
         : casinoAnalytics.totalCoinIn);
-    const DOLLARS_PER_POINT = 5;
     const totalSessions = isHistorical ? historicalCruiseData.totalSessions : sessions.length;
-    const totalProfit = realAnalytics.completedProfit;
+    const totalProfit = isHistorical ? realAnalytics.completedProfit : realAnalytics.completedProfit;
     const totalHours = sessionAnalytics.totalPlayTimeMinutes / 60;
-    const totalRetailValue = realAnalytics.completedRetailValue;
+    const totalRetailValue = isHistorical ? realAnalytics.completedRetailValue : realAnalytics.completedRetailValue;
+    const totalTaxesFees = isHistorical ? realAnalytics.completedTaxesFees : realAnalytics.completedTaxesFees;
+    const totalWinLoss = isHistorical ? casinoAnalytics.netResult : sessionAnalytics.netWinLoss;
     const avgSessionLength = sessionAnalytics.avgSessionLength;
     const modeLabel = isHistorical ? 'historical' : 'per session';
     const historicalTotalPoints = casinoAnalytics.totalPointsEarned;
+    const completedCruiseCount = casinoAnalytics.completedCruisesCount;
     const divisorLabel = isHistorical
-      ? `${historicalCruiseData.totalSessions} sessions across ${historicalCruiseData.totalCruises} cruises`
+      ? `${historicalCruiseData.totalSessions} sessions across ${completedCruiseCount} cruises`
       : `${sessions.length} tracked sessions`;
 
     const coinInPerUnit = totalSessions > 0 ? totalCoinIn / totalSessions : 0;
@@ -1579,6 +1590,8 @@ export default function AnalyticsScreen() {
     const theoStdDev = Math.sqrt(theoVariance);
     const adtSmoothingFactor = avgTheo > 0 ? (theoStdDev / avgTheo) : 0;
     
+    const roiPercentage = totalTaxesFees > 0 ? ((totalRetailValue - totalTaxesFees + totalWinLoss) / totalTaxesFees) * 100 : 0;
+    void roiPercentage;
     const profitPerUnit = totalSessions > 0 ? totalProfit / totalSessions : 0;
     
     const stopGap = 200;
@@ -1699,6 +1712,24 @@ export default function AnalyticsScreen() {
         color: isHistorical ? '#8B5CF6' : (sustainabilityScore >= 70 ? COLORS.success : sustainabilityScore >= 40 ? '#F59E0B' : COLORS.error),
         icon: isHistorical ? Award : BarChart3,
       },
+      ...(isHistorical ? [
+        {
+          id: 11,
+          label: 'Avg Coin-In / Cruise',
+          value: formatCurrency(casinoAnalytics.avgCoinInPerCruise),
+          description: `${formatCurrency(totalCoinIn)} ÷ ${completedCruiseCount} completed cruises`,
+          color: COLORS.navyDeep,
+          icon: Ship,
+        },
+        {
+          id: 12,
+          label: 'Avg Win/Loss / Cruise',
+          value: `${casinoAnalytics.avgWinLossPerCruise >= 0 ? '+' : ''}${formatCurrency(casinoAnalytics.avgWinLossPerCruise)}`,
+          description: `${formatCurrency(totalWinLoss)} ÷ ${completedCruiseCount} completed cruises`,
+          color: casinoAnalytics.avgWinLossPerCruise >= 0 ? COLORS.success : COLORS.error,
+          icon: TrendingUp,
+        },
+      ] : []),
     ];
   }, [activeTab, calcsMode, casinoAnalytics, sessions, realAnalytics, sessionAnalytics, historicalCruiseData]);
 
@@ -1749,10 +1780,10 @@ export default function AnalyticsScreen() {
             </TouchableOpacity>
           </View>
 
-          {calcsMode === 'historical' && historicalCruiseData.totalCruises > 0 && (
+          {calcsMode === 'historical' && casinoAnalytics.completedCruisesCount > 0 && (
             <View style={styles.calcsModeSummary}>
               <Text style={styles.calcsModeSummaryText}>
-                Based on {formatNumber(casinoAnalytics.totalPointsEarned)} points ({formatCurrency(casinoAnalytics.totalCoinIn)} coin-in) across {historicalCruiseData.totalSessions} sessions from {historicalCruiseData.totalCruises} completed cruises
+                Based on {formatNumber(casinoAnalytics.totalPointsEarned)} pts ({formatCurrency(casinoAnalytics.totalCoinIn)} coin-in) | {casinoAnalytics.netResult >= 0 ? '+' : ''}{formatCurrency(casinoAnalytics.netResult)} net | {formatCurrency(realAnalytics.completedRetailValue)} retail value | {casinoAnalytics.completedCruisesCount} cruises
               </Text>
             </View>
           )}
