@@ -1518,18 +1518,19 @@ export default function AnalyticsScreen() {
     if (activeTab !== 'calcs') return [] as { id: number; label: string; value: string; description: string; color: string; icon: any }[];
 
     const isHistorical = calcsMode === 'historical';
-    const DOLLARS_PER_POINT = 5;
     const totalCoinIn = isHistorical
-      ? historicalCruiseData.totalPoints * DOLLARS_PER_POINT
+      ? casinoAnalytics.totalCoinIn
       : (sessions.length > 0
-        ? sessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0)
+        ? sessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * 5), 0)
         : casinoAnalytics.totalCoinIn);
+    const DOLLARS_PER_POINT = 5;
     const totalSessions = isHistorical ? historicalCruiseData.totalSessions : sessions.length;
     const totalProfit = realAnalytics.completedProfit;
     const totalHours = sessionAnalytics.totalPlayTimeMinutes / 60;
     const totalRetailValue = realAnalytics.completedRetailValue;
     const avgSessionLength = sessionAnalytics.avgSessionLength;
     const modeLabel = isHistorical ? 'historical' : 'per session';
+    const historicalTotalPoints = casinoAnalytics.totalPointsEarned;
     const divisorLabel = isHistorical
       ? `${historicalCruiseData.totalSessions} sessions across ${historicalCruiseData.totalCruises} cruises`
       : `${sessions.length} tracked sessions`;
@@ -1610,7 +1611,7 @@ export default function AnalyticsScreen() {
     const sustainabilityScore = (trendScore * 0.6 + variabilityScore * 0.4) * 100;
 
     const pointsPerSession = isHistorical && historicalCruiseData.totalSessions > 0
-      ? historicalCruiseData.totalPoints / historicalCruiseData.totalSessions
+      ? historicalTotalPoints / historicalCruiseData.totalSessions
       : sessions.length > 0
         ? sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0) / sessions.length
         : 0;
@@ -1693,7 +1694,7 @@ export default function AnalyticsScreen() {
         label: isHistorical ? 'Points per session (hist.)' : 'Sustainability score',
         value: isHistorical ? formatNumber(Math.round(pointsPerSession)) + ' pts' : `${sustainabilityScore.toFixed(1)}%`,
         description: isHistorical
-          ? `${formatNumber(historicalCruiseData.totalPoints)} pts ÷ ${historicalCruiseData.totalSessions} sessions`
+          ? `${formatNumber(historicalTotalPoints)} pts ÷ ${historicalCruiseData.totalSessions} sessions`
           : 'Likelihood offers persist unchanged',
         color: isHistorical ? '#8B5CF6' : (sustainabilityScore >= 70 ? COLORS.success : sustainabilityScore >= 40 ? '#F59E0B' : COLORS.error),
         icon: isHistorical ? Award : BarChart3,
@@ -1751,7 +1752,7 @@ export default function AnalyticsScreen() {
           {calcsMode === 'historical' && historicalCruiseData.totalCruises > 0 && (
             <View style={styles.calcsModeSummary}>
               <Text style={styles.calcsModeSummaryText}>
-                Based on {formatNumber(historicalCruiseData.totalPoints)} points across {historicalCruiseData.totalSessions} sessions from {historicalCruiseData.totalCruises} completed cruises
+                Based on {formatNumber(casinoAnalytics.totalPointsEarned)} points ({formatCurrency(casinoAnalytics.totalCoinIn)} coin-in) across {historicalCruiseData.totalSessions} sessions from {historicalCruiseData.totalCruises} completed cruises
               </Text>
             </View>
           )}
