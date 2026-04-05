@@ -826,40 +826,7 @@ export default function CruiseDetailsScreen() {
             </View>
           )}
 
-          {(cruise.interiorPrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Interior</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.interiorPrice ?? 0)}</Text>
-            </View>
-          )}
 
-          {(cruise.oceanviewPrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Oceanview</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.oceanviewPrice ?? 0)}</Text>
-            </View>
-          )}
-
-          {(cruise.balconyPrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Balcony</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.balconyPrice ?? 0)}</Text>
-            </View>
-          )}
-
-          {(cruise.suitePrice ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Suite</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.suitePrice ?? 0)}</Text>
-            </View>
-          )}
-
-          {(cruise.taxes ?? 0) > 0 && (
-            <View style={styles.pricingCategoryCard}>
-              <Text style={styles.pricingCategoryLabel}>Port Taxes & Fees</Text>
-              <Text style={styles.pricingCategoryValue}>{formatCurrency(cruise.taxes ?? 0)}</Text>
-            </View>
-          )}
 
           {isBooked && (
             <TouchableOpacity 
@@ -1226,18 +1193,84 @@ export default function CruiseDetailsScreen() {
                 </TouchableOpacity>
               </View>
 
+              {((cruise.interiorPrice ?? 0) > 0 || (cruise.oceanviewPrice ?? 0) > 0 || (cruise.balconyPrice ?? 0) > 0 || (cruise.suitePrice ?? 0) > 0) && (
+                <View style={styles.cabinPricesGrid}>
+                  {(cruise.interiorPrice ?? 0) > 0 && (
+                    <View style={[
+                      styles.cabinPriceCell,
+                      cruise.cabinType && cruise.cabinType.toLowerCase().includes('interior') && styles.cabinPriceCellActive,
+                    ]}>
+                      <Text style={styles.cabinPriceCellLabel}>Interior</Text>
+                      <Text style={styles.cabinPriceCellValue}>{formatCurrency(cruise.interiorPrice ?? 0)}</Text>
+                    </View>
+                  )}
+                  {(cruise.oceanviewPrice ?? 0) > 0 && (
+                    <View style={[
+                      styles.cabinPriceCell,
+                      cruise.cabinType && cruise.cabinType.toLowerCase().includes('ocean') && styles.cabinPriceCellActive,
+                    ]}>
+                      <Text style={styles.cabinPriceCellLabel}>Oceanview</Text>
+                      <Text style={styles.cabinPriceCellValue}>{formatCurrency(cruise.oceanviewPrice ?? 0)}</Text>
+                    </View>
+                  )}
+                  {(cruise.balconyPrice ?? 0) > 0 && (
+                    <View style={[
+                      styles.cabinPriceCell,
+                      cruise.cabinType && cruise.cabinType.toLowerCase().includes('balcony') && styles.cabinPriceCellActive,
+                    ]}>
+                      <Text style={styles.cabinPriceCellLabel}>Balcony</Text>
+                      <Text style={styles.cabinPriceCellValue}>{formatCurrency(cruise.balconyPrice ?? 0)}</Text>
+                    </View>
+                  )}
+                  {(cruise.suitePrice ?? 0) > 0 && (
+                    <View style={[
+                      styles.cabinPriceCell,
+                      cruise.cabinType && cruise.cabinType.toLowerCase().includes('suite') && styles.cabinPriceCellActive,
+                    ]}>
+                      <Text style={styles.cabinPriceCellLabel}>Suite</Text>
+                      <Text style={styles.cabinPriceCellValue}>{formatCurrency(cruise.suitePrice ?? 0)}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {(cruise.taxes ?? 0) > 0 && (
+                <View style={styles.valueTaxesRow}>
+                  <Text style={styles.valueCompactLabel}>Port Taxes & Fees</Text>
+                  <Text style={styles.valueCompactValue}>{formatCurrency(cruise.taxes ?? 0)}</Text>
+                </View>
+              )}
+
               <View style={styles.valueCompactGrid}>
                 <View style={styles.valueCompactRow}>
-                  <Text style={styles.valueCompactLabel}>Retail</Text>
+                  <Text style={styles.valueCompactLabel}>Retail Value</Text>
                   <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown.totalRetailValue)}</Text>
                 </View>
+                {valueBreakdown.freePlayValue > 0 && (
+                  <View style={styles.valueCompactRow}>
+                    <Text style={styles.valueCompactLabel}>FreePlay</Text>
+                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown.freePlayValue)}</Text>
+                  </View>
+                )}
+                {valueBreakdown.obcValue > 0 && (
+                  <View style={styles.valueCompactRow}>
+                    <Text style={styles.valueCompactLabel}>OBC</Text>
+                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown.obcValue)}</Text>
+                  </View>
+                )}
+                {valueBreakdown.tradeInValue > 0 && (
+                  <View style={styles.valueCompactRow}>
+                    <Text style={styles.valueCompactLabel}>Trade-In</Text>
+                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown.tradeInValue)}</Text>
+                  </View>
+                )}
                 <TouchableOpacity
                   style={styles.valueCompactRow}
                   onPress={openFullEditModal}
                   activeOpacity={0.7}
                 >
                   <View style={styles.valueCompactLabelWithIcon}>
-                    <Text style={styles.valueCompactLabel}>Paid</Text>
+                    <Text style={styles.valueCompactLabel}>Paid (Taxes/Fees)</Text>
                     <Edit3 size={10} color={COLORS.textSecondary} />
                   </View>
                   <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown.amountPaid)}</Text>
@@ -2536,6 +2569,51 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 31, 63, 0.1)',
     backgroundColor: '#E0F2FE',
     ...SHADOW.sm,
+  },
+  cabinPricesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  cabinPriceCell: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#DBEAFE',
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.15)',
+  },
+  cabinPriceCellActive: {
+    backgroundColor: '#BFDBFE',
+    borderColor: '#3B82F6',
+    borderWidth: 2,
+  },
+  cabinPriceCellLabel: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  cabinPriceCellValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.money,
+  },
+  valueTaxesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    marginBottom: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: BORDER_RADIUS.sm,
   },
   valueCompactGrid: {
     gap: SPACING.xs,
