@@ -140,28 +140,47 @@ export default function CruiseDetailsScreen() {
     
     let found = allCruises.find(c => c.id === id);
     
-    // Enrich pricing from linked offer if cruise has missing prices
-    if (found && found.offerCode) {
+    if (found) {
       const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
-      const linkedOff = allOffers.find(o => 
-        o.offerCode === found!.offerCode || 
-        o.id === found!.offerCode ||
-        o.cruiseId === found!.id
+      const allAvailableCruises = [...(storeCruises || []), ...(localData.cruises || [])];
+      
+      let linkedOff: CasinoOffer | undefined;
+      if (found.offerCode) {
+        linkedOff = allOffers.find(o => 
+          o.offerCode === found!.offerCode || 
+          o.id === found!.offerCode ||
+          o.cruiseId === found!.id
+        );
+      }
+      
+      if (!linkedOff) {
+        linkedOff = allOffers.find(o =>
+          o.shipName === found!.shipName && o.sailingDate === found!.sailDate
+        );
+      }
+      
+      const matchingCsvCruise = allAvailableCruises.find(c =>
+        c.id !== found!.id &&
+        c.shipName === found!.shipName &&
+        c.sailDate === found!.sailDate &&
+        (c.interiorPrice || c.oceanviewPrice || c.balconyPrice || c.suitePrice)
       );
       
-      if (linkedOff) {
-        const needsPricing = !found.interiorPrice && !found.oceanviewPrice && !found.balconyPrice && !found.suitePrice;
-        if (needsPricing) {
-          console.log('[CruiseDetails] Enriching cruise pricing from linked offer:', linkedOff.offerCode);
+      const hasMissingPrices = !found.interiorPrice || !found.oceanviewPrice || !found.balconyPrice || !found.suitePrice;
+      
+      if (hasMissingPrices) {
+        const priceSource = linkedOff || matchingCsvCruise;
+        if (priceSource) {
+          console.log('[CruiseDetails] Enriching cruise pricing from:', linkedOff ? `offer ${linkedOff.offerCode}` : `matching cruise ${matchingCsvCruise?.id}`);
           found = {
             ...found,
-            interiorPrice: found.interiorPrice || linkedOff.interiorPrice,
-            oceanviewPrice: found.oceanviewPrice || linkedOff.oceanviewPrice,
-            balconyPrice: found.balconyPrice || linkedOff.balconyPrice,
-            suitePrice: found.suitePrice || linkedOff.suitePrice,
-            taxes: found.taxes || linkedOff.taxesFees,
-            portsAndTimes: found.portsAndTimes || linkedOff.portsAndTimes,
-            ports: found.ports || linkedOff.ports,
+            interiorPrice: found.interiorPrice || priceSource.interiorPrice,
+            oceanviewPrice: found.oceanviewPrice || priceSource.oceanviewPrice,
+            balconyPrice: found.balconyPrice || priceSource.balconyPrice,
+            suitePrice: found.suitePrice || priceSource.suitePrice,
+            taxes: found.taxes || (linkedOff?.taxesFees ?? (priceSource as any).taxes),
+            portsAndTimes: found.portsAndTimes || (linkedOff?.portsAndTimes ?? (priceSource as any).portsAndTimes),
+            ports: found.ports || (linkedOff?.ports ?? (priceSource as any).ports),
           };
         }
       }
