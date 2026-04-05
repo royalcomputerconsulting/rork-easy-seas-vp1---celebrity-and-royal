@@ -752,6 +752,55 @@ export function calculateOfferAggregateValue(
   };
 }
 
+export interface EstimatedCabinPrices {
+  interior: number;
+  oceanview: number;
+  balcony: number;
+  suite: number;
+  source: 'actual' | 'estimated' | 'mixed';
+}
+
+export function getEstimatedCabinPrices(
+  entity: Cruise | CasinoOffer | BookedCruise,
+  nights?: number
+): EstimatedCabinPrices {
+  const cruiseNights = nights || (entity as Cruise).nights || 7;
+  
+  const actualInterior = entity.interiorPrice;
+  const actualOceanview = entity.oceanviewPrice;
+  const actualBalcony = entity.balconyPrice;
+  const actualSuite = entity.suitePrice;
+  
+  const hasAny = (actualInterior && actualInterior > 0) ||
+                 (actualOceanview && actualOceanview > 0) ||
+                 (actualBalcony && actualBalcony > 0) ||
+                 (actualSuite && actualSuite > 0);
+  
+  if (hasAny) {
+    const knownPrice = actualBalcony || actualOceanview || actualInterior || actualSuite || 0;
+    const knownType = actualBalcony ? 'Balcony' 
+      : actualOceanview ? 'Oceanview' 
+      : actualInterior ? 'Interior' 
+      : 'Suite';
+    
+    return {
+      interior: (actualInterior && actualInterior > 0) ? actualInterior : estimateCabinPrice(knownPrice, knownType, 'Interior'),
+      oceanview: (actualOceanview && actualOceanview > 0) ? actualOceanview : estimateCabinPrice(knownPrice, knownType, 'Oceanview'),
+      balcony: (actualBalcony && actualBalcony > 0) ? actualBalcony : estimateCabinPrice(knownPrice, knownType, 'Balcony'),
+      suite: (actualSuite && actualSuite > 0) ? actualSuite : estimateCabinPrice(knownPrice, knownType, 'Junior Suite'),
+      source: 'mixed',
+    };
+  }
+  
+  return {
+    interior: estimateCabinRetailValue('Interior', cruiseNights),
+    oceanview: estimateCabinRetailValue('Oceanview', cruiseNights),
+    balcony: estimateCabinRetailValue('Balcony', cruiseNights),
+    suite: estimateCabinRetailValue('Junior Suite', cruiseNights),
+    source: 'estimated',
+  };
+}
+
 export function formatValueAsText(breakdown: ValueBreakdown): string {
   const lines = [
     `Cabin Value: $${breakdown.cabinValue.toLocaleString()} × 2 = $${breakdown.cabinValueForTwo.toLocaleString()}`,

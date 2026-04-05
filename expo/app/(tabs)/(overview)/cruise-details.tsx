@@ -13,6 +13,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 
 import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
+import { getEstimatedCabinPrices } from '@/lib/valueCalculator';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 
 type CompactFactProps = {
@@ -401,6 +402,11 @@ export default function CruiseDetailsScreen() {
     if (!cruise) return null;
     return getCruiseValueBreakdown(cruise);
   }, [cruise, getCruiseValueBreakdown]);
+
+  const estimatedPrices = useMemo(() => {
+    if (!cruise) return null;
+    return getEstimatedCabinPrices(cruise);
+  }, [cruise]);
 
   const casinoAvailability = useMemo(() => {
     if (!cruise) return null;
@@ -1193,43 +1199,38 @@ export default function CruiseDetailsScreen() {
                 </TouchableOpacity>
               </View>
 
-              {((cruise.interiorPrice ?? 0) > 0 || (cruise.oceanviewPrice ?? 0) > 0 || (cruise.balconyPrice ?? 0) > 0 || (cruise.suitePrice ?? 0) > 0) && (
+              {estimatedPrices && (
                 <View style={styles.cabinPricesGrid}>
-                  {(cruise.interiorPrice ?? 0) > 0 && (
-                    <View style={[
-                      styles.cabinPriceCell,
-                      cruise.cabinType && cruise.cabinType.toLowerCase().includes('interior') && styles.cabinPriceCellActive,
-                    ]}>
-                      <Text style={styles.cabinPriceCellLabel}>Interior</Text>
-                      <Text style={styles.cabinPriceCellValue}>{formatCurrency(cruise.interiorPrice ?? 0)}</Text>
-                    </View>
-                  )}
-                  {(cruise.oceanviewPrice ?? 0) > 0 && (
-                    <View style={[
-                      styles.cabinPriceCell,
-                      cruise.cabinType && cruise.cabinType.toLowerCase().includes('ocean') && styles.cabinPriceCellActive,
-                    ]}>
-                      <Text style={styles.cabinPriceCellLabel}>Oceanview</Text>
-                      <Text style={styles.cabinPriceCellValue}>{formatCurrency(cruise.oceanviewPrice ?? 0)}</Text>
-                    </View>
-                  )}
-                  {(cruise.balconyPrice ?? 0) > 0 && (
-                    <View style={[
-                      styles.cabinPriceCell,
-                      cruise.cabinType && cruise.cabinType.toLowerCase().includes('balcony') && styles.cabinPriceCellActive,
-                    ]}>
-                      <Text style={styles.cabinPriceCellLabel}>Balcony</Text>
-                      <Text style={styles.cabinPriceCellValue}>{formatCurrency(cruise.balconyPrice ?? 0)}</Text>
-                    </View>
-                  )}
-                  {(cruise.suitePrice ?? 0) > 0 && (
-                    <View style={[
-                      styles.cabinPriceCell,
-                      cruise.cabinType && cruise.cabinType.toLowerCase().includes('suite') && styles.cabinPriceCellActive,
-                    ]}>
-                      <Text style={styles.cabinPriceCellLabel}>Suite</Text>
-                      <Text style={styles.cabinPriceCellValue}>{formatCurrency(cruise.suitePrice ?? 0)}</Text>
-                    </View>
+                  <View style={[
+                    styles.cabinPriceCell,
+                    cruise.cabinType && cruise.cabinType.toLowerCase().includes('interior') && styles.cabinPriceCellActive,
+                  ]}>
+                    <Text style={styles.cabinPriceCellLabel}>Interior</Text>
+                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices.interior)}</Text>
+                  </View>
+                  <View style={[
+                    styles.cabinPriceCell,
+                    cruise.cabinType && cruise.cabinType.toLowerCase().includes('ocean') && styles.cabinPriceCellActive,
+                  ]}>
+                    <Text style={styles.cabinPriceCellLabel}>Oceanview</Text>
+                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices.oceanview)}</Text>
+                  </View>
+                  <View style={[
+                    styles.cabinPriceCell,
+                    cruise.cabinType && (cruise.cabinType.toLowerCase().includes('balcony') || cruise.cabinType.toLowerCase() === 'balcony gty') && styles.cabinPriceCellActive,
+                  ]}>
+                    <Text style={styles.cabinPriceCellLabel}>Balcony</Text>
+                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices.balcony)}</Text>
+                  </View>
+                  <View style={[
+                    styles.cabinPriceCell,
+                    cruise.cabinType && cruise.cabinType.toLowerCase().includes('suite') && styles.cabinPriceCellActive,
+                  ]}>
+                    <Text style={styles.cabinPriceCellLabel}>Suite</Text>
+                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices.suite)}</Text>
+                  </View>
+                  {estimatedPrices.source === 'estimated' && (
+                    <Text style={styles.cabinPriceCellLabel}>Estimated prices based on cabin type</Text>
                   )}
                 </View>
               )}
