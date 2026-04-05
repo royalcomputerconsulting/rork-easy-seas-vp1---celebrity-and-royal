@@ -186,9 +186,9 @@ export default function AtlasScreen() {
   const [showQuickSessionModal, setShowQuickSessionModal] = useState(false);
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [casinoOpenHoursData, setCasinoOpenHoursData] = useState<CasinoOpenHoursData | null>(null);
-  const nextUpcomingCruise = useMemo((): BookedCruise | null => {
+  const allUpcomingCruises = useMemo((): BookedCruise[] => {
     const now = new Date();
-    const upcoming = bookedCruises
+    return bookedCruises
       .filter(c => {
         if (c.completionState === 'completed') return false;
         if (!c.sailDate) return false;
@@ -196,8 +196,11 @@ export default function AtlasScreen() {
         return sail >= now || (c.returnDate && new Date(c.returnDate) >= now);
       })
       .sort((a, b) => new Date(a.sailDate!).getTime() - new Date(b.sailDate!).getTime());
-    return upcoming[0] ?? null;
   }, [bookedCruises]);
+
+  const nextUpcomingCruise = useMemo((): BookedCruise | null => {
+    return allUpcomingCruises[0] ?? null;
+  }, [allUpcomingCruises]);
 
   const currentPlayingHours = useMemo(() => {
     return currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
@@ -683,7 +686,7 @@ export default function AtlasScreen() {
             onSave={handleSavePlayingHours}
             isSaving={isSavingPlayingHours}
           />
-          <CasinoOpenHoursCard cruise={nextUpcomingCruise} onHoursDataLoaded={handleCasinoHoursLoaded} />
+          <CasinoOpenHoursCard cruise={nextUpcomingCruise} allUpcomingCruises={allUpcomingCruises} onHoursDataLoaded={handleCasinoHoursLoaded} />
 
           <View style={styles.sessionTrackerContainer}>
             <CasinoSessionTracker
@@ -824,6 +827,7 @@ export default function AtlasScreen() {
     handleSavePlayingHours,
     isSavingPlayingHours,
     nextUpcomingCruise,
+    allUpcomingCruises,
     handleCasinoHoursLoaded,
     todayDateString,
     goldenTimeSlots,

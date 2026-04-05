@@ -10,7 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { Clock, Save, Edit2, Ship, Anchor, ChevronDown, ChevronUp, X, Sparkles } from 'lucide-react-native';
+import { Clock, Save, Edit2, Ship, Anchor, ChevronDown, ChevronUp, X, Sparkles, ArrowLeftRight } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { formatTime12Hour } from '@/lib/format';
@@ -43,11 +43,61 @@ export interface CasinoOpenHoursData {
 
 interface CasinoOpenHoursCardProps {
   cruise: BookedCruise | null;
+  allUpcomingCruises?: BookedCruise[];
   onHoursUpdated?: () => void;
   onHoursDataLoaded?: (data: CasinoOpenHoursData | null) => void;
 }
 
-export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded }: CasinoOpenHoursCardProps) {
+function formatShortDate(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const d = new Date(year, month, day);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+function shortenPort(port: string): string {
+  if (!port) return '';
+  return port
+    .replace(', California', ', CA')
+    .replace(', Texas', ', TX')
+    .replace(', Florida', ', FL')
+    .replace(', Mexico', ', MX')
+    .replace(', Honduras', '')
+    .replace(', British Columbia', ', BC')
+    .replace(', Alaska', ', AK')
+    .replace(', Washington', ', WA')
+    .replace(', Hawaii', ', HI')
+    .replace(' (NY Metro)', '')
+    .replace(' (Ward Cove)', '')
+    .replace(' (Oahu)', '');
+}
+
+function formatSailingLabel(cruise: BookedCruise): string {
+  const sailParts = cruise.sailDate?.split('-') || [];
+  const returnParts = (cruise.returnDate || cruise.sailDate)?.split('-') || [];
+  const sMonth = parseInt(sailParts[1] || '0', 10);
+  const sDay = parseInt(sailParts[2] || '0', 10);
+  const rMonth = parseInt(returnParts[1] || '0', 10);
+  const rDay = parseInt(returnParts[2] || '0', 10);
+  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  if (sMonth === rMonth) {
+    return `${months[sMonth]} ${sDay}-${rDay}`;
+  }
+  return `${months[sMonth]} ${sDay} - ${months[rMonth]} ${rDay}`;
+}
+
+export function CasinoOpenHoursCard({ cruise, allUpcomingCruises, onHoursUpdated, onHoursDataLoaded }: CasinoOpenHoursCardProps) {
+  const [selectedCruise, setSelectedCruise] = useState<BookedCruise | null>(cruise);
   const [hoursData, setHoursData] = useState<CasinoOpenHoursData | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -55,21 +105,30 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
   const [editOpenTime, setEditOpenTime] = useState('');
   const [editCloseTime, setEditCloseTime] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [showCruisePicker, setShowCruisePicker] = useState(false);
+
+  useEffect(() => {
+    if (cruise && !selectedCruise) {
+      setSelectedCruise(cruise);
+    }
+  }, [cruise, selectedCruise]);
+
+  const activeCruise = selectedCruise || cruise;
 
   const storageKey = useMemo(() => {
-    if (!cruise?.id) return null;
-    return `${ALL_STORAGE_KEYS.CASINO_OPEN_HOURS}_${cruise.id}`;
-  }, [cruise?.id]);
+    if (!activeCruise?.id) return null;
+    return `${ALL_STORAGE_KEYS.CASINO_OPEN_HOURS}_${activeCruise.id}`;
+  }, [activeCruise?.id]);
 
   const casinoAvailability = useMemo(() => {
-    if (!cruise) return null;
+    if (!activeCruise) return null;
     try {
-      return calculateCasinoAvailabilityForCruise(cruise);
+      return calculateCasinoAvailabilityForCruise(activeCruise);
     } catch (e) {
       console.error('[CasinoOpenHours] Error calculating availability:', e);
       return null;
     }
-  }, [cruise]);
+  }, [activeCruise]);
 
   const buildDefaultDays = useCallback((): CasinoOpenHoursDay[] => {
     if (!casinoAvailability?.dailyAvailability) return [];
@@ -88,14 +147,14 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
   }, [casinoAvailability]);
 
   useEffect(() => {
-    if (!storageKey || !cruise) return;
+    if (!storageKey || !activeCruise) return;
 
     const loadSavedHours = async () => {
       try {
         const stored = await AsyncStorage.getItem(storageKey);
         if (stored) {
           const parsed = JSON.parse(stored) as CasinoOpenHoursData;
-          if (parsed.cruiseId === cruise.id) {
+          if (parsed.cruiseId === activeCruise.id) {
             const defaultDays = buildDefaultDays();
             const mergedDays = defaultDays.map((defaultDay) => {
               const savedDay = parsed.days.find(d => d.day === defaultDay.day);
@@ -112,27 +171,27 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
             const loaded = { ...parsed, days: mergedDays };
             setHoursData(loaded);
             onHoursDataLoaded?.(loaded);
-            console.log('[CasinoOpenHours] Loaded saved hours for cruise:', cruise.id);
+            console.log('[CasinoOpenHours] Loaded saved hours for cruise:', activeCruise.id);
             return;
           }
         }
 
         const defaultDays = buildDefaultDays();
         const defaultData = {
-          cruiseId: cruise.id,
-          cruiseName: cruise.shipName || 'Cruise',
+          cruiseId: activeCruise.id,
+          cruiseName: activeCruise.shipName || 'Cruise',
           days: defaultDays,
           updatedAt: new Date().toISOString(),
         };
         setHoursData(defaultData);
         onHoursDataLoaded?.(defaultData);
-        console.log('[CasinoOpenHours] Initialized default hours for cruise:', cruise.id);
+        console.log('[CasinoOpenHours] Initialized default hours for cruise:', activeCruise.id);
       } catch (e) {
         console.error('[CasinoOpenHours] Error loading hours:', e);
         const defaultDays = buildDefaultDays();
         const fallbackData = {
-          cruiseId: cruise?.id || '',
-          cruiseName: cruise?.shipName || 'Cruise',
+          cruiseId: activeCruise?.id || '',
+          cruiseName: activeCruise?.shipName || 'Cruise',
           days: defaultDays,
           updatedAt: new Date().toISOString(),
         };
@@ -142,7 +201,7 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
     };
 
     void loadSavedHours();
-  }, [storageKey, cruise, buildDefaultDays, onHoursDataLoaded]);
+  }, [storageKey, activeCruise, buildDefaultDays, onHoursDataLoaded]);
 
   const handleSave = useCallback(async () => {
     if (!hoursData || !storageKey) return;
@@ -224,14 +283,28 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
     setEditingDayIndex(null);
   }, [editingDayIndex, hoursData]);
 
+  const handleSelectCruise = useCallback((c: BookedCruise) => {
+    setSelectedCruise(c);
+    setShowCruisePicker(false);
+    setHoursData(null);
+    console.log('[CasinoOpenHours] Switched to cruise:', c.id, c.shipName, c.sailDate);
+  }, []);
+
   const hasAnyOverrides = useMemo(() => {
     return hoursData?.days.some(d => d.hasOverride) ?? false;
   }, [hoursData]);
 
-  if (!cruise) {
+  const availableCruises = useMemo(() => {
+    if (!allUpcomingCruises || allUpcomingCruises.length === 0) {
+      return activeCruise ? [activeCruise] : [];
+    }
+    return allUpcomingCruises;
+  }, [allUpcomingCruises, activeCruise]);
+
+  if (!activeCruise) {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={['#7C3AED', '#9333EA']} style={styles.header}>
+        <LinearGradient colors={['#1E3A5F', '#2E5077']} style={styles.header}>
           <View style={styles.headerContent}>
             <View style={styles.headerIcon}>
               <Clock size={20} color={COLORS.white} />
@@ -252,7 +325,7 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
   if (!hoursData) {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={['#7C3AED', '#9333EA']} style={styles.header}>
+        <LinearGradient colors={['#1E3A5F', '#2E5077']} style={styles.header}>
           <View style={styles.headerContent}>
             <View style={styles.headerIcon}>
               <Clock size={20} color={COLORS.white} />
@@ -264,7 +337,7 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
           </View>
         </LinearGradient>
         <View style={styles.loadingContent}>
-          <ActivityIndicator size="small" color="#7C3AED" />
+          <ActivityIndicator size="small" color="#1E3A5F" />
         </View>
       </View>
     );
@@ -275,15 +348,15 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
   return (
     <View style={styles.container}>
       <TouchableOpacity activeOpacity={0.8} onPress={() => setIsExpanded(!isExpanded)}>
-        <LinearGradient colors={['#7C3AED', '#9333EA']} style={styles.header}>
+        <LinearGradient colors={['#1E3A5F', '#2E5077']} style={styles.header}>
           <View style={styles.headerContent}>
             <View style={styles.headerIcon}>
               <Clock size={20} color={COLORS.white} />
             </View>
             <View style={styles.headerText}>
               <Text style={styles.headerTitle}>Casino Open Hours</Text>
-              <Text style={styles.headerSubtitle}>
-                {cruise.shipName} · {hoursData.days.length} days
+              <Text style={styles.headerSubtitle} numberOfLines={1}>
+                {activeCruise.shipName} · {formatSailingLabel(activeCruise)}
                 {overrideCount > 0 ? ` · ${overrideCount} edited` : ''}
               </Text>
             </View>
@@ -298,9 +371,24 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
 
       {isExpanded && (
         <View style={styles.content}>
+          {availableCruises.length > 1 && (
+            <TouchableOpacity
+              style={styles.switchSailingsButton}
+              onPress={() => setShowCruisePicker(true)}
+              activeOpacity={0.7}
+              testID="casino-hours-switch-sailing"
+            >
+              <ArrowLeftRight size={14} color="#1E3A5F" />
+              <Text style={styles.switchSailingsText}>Switch Sailing</Text>
+              <Text style={styles.switchSailingsCount}>
+                {availableCruises.length} sailings
+              </Text>
+            </TouchableOpacity>
+          )}
+
           <View style={styles.legendRow}>
             <View style={styles.legendItem}>
-              <Sparkles size={12} color="#7C3AED" />
+              <Sparkles size={12} color="#1E3A5F" />
               <Text style={styles.legendText}>Best Guess</Text>
             </View>
             <View style={styles.legendItem}>
@@ -322,40 +410,47 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
                 activeOpacity={0.7}
                 testID={`casino-hours-day-${day.day}`}
               >
-                <View style={styles.dayLeft}>
-                  <View style={[
-                    styles.dayBadge,
-                    day.isSeaDay ? styles.dayBadgeSea : styles.dayBadgePort,
-                  ]}>
-                    {day.isSeaDay ? (
-                      <Ship size={12} color={COLORS.white} />
-                    ) : (
-                      <Anchor size={12} color={COLORS.white} />
-                    )}
+                <View style={styles.dayTopRow}>
+                  <View style={styles.dayDateSection}>
+                    <View style={[
+                      styles.dayBadge,
+                      day.isSeaDay ? styles.dayBadgeSea : styles.dayBadgePort,
+                    ]}>
+                      {day.isSeaDay ? (
+                        <Ship size={11} color={COLORS.white} />
+                      ) : (
+                        <Anchor size={11} color={COLORS.white} />
+                      )}
+                    </View>
+                    <View style={styles.dayDateInfo}>
+                      <Text style={styles.dayDateText} numberOfLines={1}>
+                        {formatShortDate(day.date)}
+                      </Text>
+                      <Text style={styles.dayPortText} numberOfLines={1}>
+                        {day.isSeaDay ? 'At Sea' : shortenPort(day.port)}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.dayInfo}>
-                    <Text style={styles.dayLabel}>Day {day.day}</Text>
-                    <Text style={styles.dayPort} numberOfLines={1}>
-                      {day.port}
-                    </Text>
-                  </View>
+                  <Edit2 size={13} color={day.hasOverride ? '#059669' : '#9CA3AF'} />
                 </View>
 
-                <View style={styles.dayRight}>
-                  <View style={styles.hoursColumn}>
+                <View style={styles.dayHoursRow}>
+                  <View style={styles.hoursBlock}>
                     <Text style={styles.hoursLabel}>BEST GUESS</Text>
                     <Text style={[
                       styles.hoursValue,
                       !day.bestGuessOpen && styles.hoursValueClosed,
-                    ]}>
+                    ]} numberOfLines={1}>
                       {day.bestGuessOpen ? day.bestGuessHours : 'Closed'}
                     </Text>
                   </View>
 
-                  <View style={[styles.hoursColumn, styles.actualColumn]}>
+                  <View style={styles.hoursDivider} />
+
+                  <View style={styles.hoursBlock}>
                     <Text style={styles.hoursLabelActual}>ACTUAL</Text>
                     {day.hasOverride ? (
-                      <Text style={styles.hoursValueActual}>
+                      <Text style={styles.hoursValueActual} numberOfLines={1}>
                         {day.actualOpenTime && day.actualCloseTime
                           ? `${formatTime12Hour(day.actualOpenTime)} - ${formatTime12Hour(day.actualCloseTime)}`
                           : day.actualOpenTime
@@ -368,8 +463,6 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
                       <Text style={styles.hoursValuePlaceholder}>Tap to set</Text>
                     )}
                   </View>
-
-                  <Edit2 size={14} color={day.hasOverride ? '#059669' : '#9CA3AF'} />
                 </View>
               </TouchableOpacity>
             ))}
@@ -383,7 +476,7 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
               activeOpacity={0.7}
             >
               <LinearGradient
-                colors={['#7C3AED', '#9333EA']}
+                colors={['#1E3A5F', '#2E5077']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.saveButtonGradient}
@@ -413,10 +506,10 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <View style={styles.modalHeaderLeft}>
-                  <Clock size={20} color="#7C3AED" />
+                  <Clock size={20} color="#1E3A5F" />
                   <Text style={styles.modalTitle}>
                     {editingDayIndex !== null
-                      ? `Day ${hoursData.days[editingDayIndex]?.day} - ${hoursData.days[editingDayIndex]?.port}`
+                      ? `${formatShortDate(hoursData.days[editingDayIndex]?.date || '')} — ${hoursData.days[editingDayIndex]?.port}`
                       : 'Edit Hours'}
                   </Text>
                 </View>
@@ -431,7 +524,7 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
 
               {editingDayIndex !== null && (
                 <View style={styles.modalBestGuess}>
-                  <Sparkles size={14} color="#7C3AED" />
+                  <Sparkles size={14} color="#1E3A5F" />
                   <Text style={styles.modalBestGuessText}>
                     Best Guess: {hoursData.days[editingDayIndex]?.bestGuessOpen
                       ? hoursData.days[editingDayIndex]?.bestGuessHours
@@ -491,7 +584,7 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
                   activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={['#7C3AED', '#9333EA']}
+                    colors={['#1E3A5F', '#2E5077']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.modalSaveButtonGradient}
@@ -505,22 +598,75 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded 
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={showCruisePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCruisePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.pickerContainer}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Switch Sailing</Text>
+              <TouchableOpacity
+                onPress={() => setShowCruisePicker(false)}
+                activeOpacity={0.7}
+                style={styles.pickerCloseBtn}
+              >
+                <X size={22} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.pickerList} showsVerticalScrollIndicator={false}>
+              {availableCruises.map((c) => {
+                const isSelected = c.id === activeCruise?.id;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[styles.pickerItem, isSelected && styles.pickerItemSelected]}
+                    onPress={() => handleSelectCruise(c)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.pickerItemLeft}>
+                      <Ship size={16} color={isSelected ? '#1E3A5F' : '#6B7280'} />
+                      <View style={styles.pickerItemInfo}>
+                        <Text style={[styles.pickerItemShip, isSelected && styles.pickerItemShipSelected]}>
+                          {c.shipName}
+                        </Text>
+                        <Text style={styles.pickerItemDates}>
+                          {formatSailingLabel(c)} · {c.nights}N · {c.itineraryName || c.destination}
+                        </Text>
+                      </View>
+                    </View>
+                    {isSelected && (
+                      <View style={styles.pickerSelectedBadge}>
+                        <Text style={styles.pickerSelectedBadgeText}>Selected</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#F0F4F8',
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(124, 58, 237, 0.2)',
+    borderColor: 'rgba(30, 58, 95, 0.15)',
     ...SHADOW.sm,
     marginTop: SPACING.md,
   },
   header: {
     padding: SPACING.sm,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -532,10 +678,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -544,13 +690,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontSize: 15,
+    fontWeight: '700' as const,
     color: COLORS.white,
   },
   headerSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
   },
   emptyContent: {
     padding: SPACING.lg,
@@ -566,6 +712,30 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING.sm,
+    paddingTop: SPACING.md,
+  },
+  switchSailingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(30, 58, 95, 0.08)',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(30, 58, 95, 0.12)',
+  },
+  switchSailingsText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: '#1E3A5F',
+    flex: 1,
+  },
+  switchSailingsCount: {
+    fontSize: 11,
+    fontWeight: '500' as const,
+    color: '#6B7280',
   },
   legendRow: {
     flexDirection: 'row',
@@ -579,38 +749,41 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   legendText: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    fontSize: 11,
+    fontWeight: '500' as const,
     color: '#6B7280',
   },
   daysContainer: {
-    gap: 6,
+    gap: 8,
     marginBottom: SPACING.sm,
   },
   dayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.sm,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: 'rgba(124, 58, 237, 0.12)',
+    borderColor: 'rgba(30, 58, 95, 0.1)',
   },
   dayRowOverride: {
     backgroundColor: '#ECFDF5',
-    borderColor: 'rgba(5, 150, 105, 0.3)',
+    borderColor: 'rgba(5, 150, 105, 0.25)',
   },
   dayRowClosed: {
     backgroundColor: '#FEF2F2',
-    borderColor: 'rgba(220, 38, 38, 0.15)',
+    borderColor: 'rgba(220, 38, 38, 0.12)',
   },
-  dayLeft: {
+  dayTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  dayDateSection: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flex: 0.35,
+    flex: 1,
   },
   dayBadge: {
     width: 24,
@@ -625,64 +798,73 @@ const styles = StyleSheet.create({
   dayBadgePort: {
     backgroundColor: '#F59E0B',
   },
-  dayInfo: {
+  dayDateInfo: {
     flex: 1,
   },
-  dayLabel: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#374151',
+  dayDateText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: '#1E3A5F',
   },
-  dayPort: {
-    fontSize: 10,
-    color: '#6B7280',
+  dayPortText: {
+    fontSize: 12,
+    color: '#4B5563',
+    marginTop: 1,
   },
-  dayRight: {
+  dayHoursRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flex: 0.65,
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
   },
-  hoursColumn: {
-    alignItems: 'flex-end',
+  hoursBlock: {
+    flex: 1,
   },
-  actualColumn: {
-    minWidth: 70,
+  hoursDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    marginHorizontal: 10,
   },
   hoursLabel: {
-    fontSize: 8,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#7C3AED',
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: '#1E3A5F',
     letterSpacing: 0.5,
+    marginBottom: 2,
   },
   hoursLabelActual: {
-    fontSize: 8,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontSize: 9,
+    fontWeight: '700' as const,
     color: '#059669',
     letterSpacing: 0.5,
+    marginBottom: 2,
   },
   hoursValue: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    fontSize: 11,
+    fontWeight: '500' as const,
     color: '#374151',
   },
   hoursValueClosed: {
     color: '#DC2626',
+    fontWeight: '600' as const,
   },
   hoursValueActual: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    fontSize: 11,
+    fontWeight: '600' as const,
     color: '#059669',
   },
   hoursValuePlaceholder: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#9CA3AF',
     fontStyle: 'italic' as const,
   },
   saveButton: {
     borderRadius: BORDER_RADIUS.sm,
     overflow: 'hidden',
+    marginTop: 4,
   },
   saveButtonGradient: {
     flexDirection: 'row',
@@ -693,7 +875,7 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    fontWeight: '600' as const,
     color: COLORS.white,
   },
   modalOverlay: {
@@ -725,9 +907,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#7C3AED',
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: '#1E3A5F',
     flex: 1,
   },
   modalCloseButton: {
@@ -741,13 +923,13 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#EFF6FF',
     borderRadius: BORDER_RADIUS.sm,
   },
   modalBestGuessText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#7C3AED',
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: '#1E3A5F',
+    fontWeight: '500' as const,
   },
   modalContent: {
     padding: SPACING.lg,
@@ -758,8 +940,8 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#7C3AED',
+    fontWeight: '600' as const,
+    color: '#1E3A5F',
   },
   textInput: {
     backgroundColor: '#F9FAFB',
@@ -793,7 +975,7 @@ const styles = StyleSheet.create({
   },
   modalClearText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    fontWeight: '600' as const,
     color: '#DC2626',
   },
   modalCancelButton: {
@@ -805,7 +987,7 @@ const styles = StyleSheet.create({
   },
   modalCancelText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    fontWeight: '600' as const,
     color: '#6B7280',
   },
   modalSaveButton: {
@@ -822,7 +1004,84 @@ const styles = StyleSheet.create({
   },
   modalSaveText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    fontWeight: '600' as const,
+    color: COLORS.white,
+  },
+  pickerContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.xl,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  pickerTitle: {
+    fontSize: 17,
+    fontWeight: '700' as const,
+    color: '#1E3A5F',
+  },
+  pickerCloseBtn: {
+    padding: 4,
+  },
+  pickerList: {
+    padding: SPACING.sm,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: 6,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  pickerItemSelected: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#1E3A5F',
+  },
+  pickerItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  pickerItemInfo: {
+    flex: 1,
+  },
+  pickerItemShip: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: '#374151',
+  },
+  pickerItemShipSelected: {
+    color: '#1E3A5F',
+    fontWeight: '700' as const,
+  },
+  pickerItemDates: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  pickerSelectedBadge: {
+    backgroundColor: '#1E3A5F',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  pickerSelectedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
     color: COLORS.white,
   },
 });
