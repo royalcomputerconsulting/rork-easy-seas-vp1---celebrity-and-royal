@@ -65,7 +65,6 @@ import {
 import { useAlerts } from '@/state/AlertsProvider';
 import { AlertsCard } from '@/components/AlertsCard';
 import { CasinoMetricsCard } from '@/components/CasinoMetricsCard';
-import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { CasinoIntelligenceCard } from '@/components/CasinoIntelligenceCard';
@@ -153,9 +152,6 @@ export default function AnalyticsScreen() {
   const {
     sessions,
     addSession,
-    removeSession,
-    getSessionsForDate,
-    getDailySummary,
     getSessionAnalytics,
     generateHistoricalSessions,
   } = useCasinoSessions();
@@ -310,17 +306,6 @@ export default function AnalyticsScreen() {
     ];
   }, []);
 
-  const totalGoldenMinutes = useMemo(() => {
-    return goldenTimeSlots.reduce((total, slot) => total + slot.durationMinutes, 0);
-  }, [goldenTimeSlots]);
-
-  const todaySessions = useMemo(() => {
-    return getSessionsForDate(todayDateString);
-  }, [getSessionsForDate, todayDateString]);
-
-  const todaySummary = useMemo(() => {
-    return getDailySummary(todayDateString, totalGoldenMinutes);
-  }, [getDailySummary, todayDateString, totalGoldenMinutes]);
 
   const handleAddSession = useCallback(async (sessionData: {
     startTime: string;
@@ -384,10 +369,6 @@ export default function AnalyticsScreen() {
     console.log('[Analytics] Session added with gamification:', sessionData);
   }, [addSession, todayDateString, updateStreakFromSession, updateWeeklyGoalProgress, checkAndUnlockAchievements, sessions, streak.currentDailyStreak, haptics]);
 
-  const handleRemoveSession = useCallback(async (sessionId: string) => {
-    await removeSession(sessionId);
-    console.log('[Analytics] Session removed:', sessionId);
-  }, [removeSession]);
 
   getTierProgress(currentPoints, clubRoyaleTier);
   getLevelProgress(totalNights, crownAnchorLevel);
@@ -1316,17 +1297,6 @@ export default function AnalyticsScreen() {
 
       <View style={styles.section}>
         <GamificationCard compact={false} showAchievements={false} />
-      </View>
-
-      <View style={styles.section}>
-        <CasinoSessionTracker
-          date={todayDateString}
-          goldenTimeSlots={goldenTimeSlots}
-          sessions={todaySessions}
-          summary={todaySummary}
-          onAddSession={() => setShowAddSessionModal(true)}
-          onRemoveSession={handleRemoveSession}
-        />
       </View>
 
       <View style={styles.section}>

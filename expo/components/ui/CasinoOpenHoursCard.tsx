@@ -44,9 +44,10 @@ export interface CasinoOpenHoursData {
 interface CasinoOpenHoursCardProps {
   cruise: BookedCruise | null;
   onHoursUpdated?: () => void;
+  onHoursDataLoaded?: (data: CasinoOpenHoursData | null) => void;
 }
 
-export function CasinoOpenHoursCard({ cruise, onHoursUpdated }: CasinoOpenHoursCardProps) {
+export function CasinoOpenHoursCard({ cruise, onHoursUpdated, onHoursDataLoaded }: CasinoOpenHoursCardProps) {
   const [hoursData, setHoursData] = useState<CasinoOpenHoursData | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -108,34 +109,40 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated }: CasinoOpenHoursC
               }
               return defaultDay;
             });
-            setHoursData({ ...parsed, days: mergedDays });
+            const loaded = { ...parsed, days: mergedDays };
+            setHoursData(loaded);
+            onHoursDataLoaded?.(loaded);
             console.log('[CasinoOpenHours] Loaded saved hours for cruise:', cruise.id);
             return;
           }
         }
 
         const defaultDays = buildDefaultDays();
-        setHoursData({
+        const defaultData = {
           cruiseId: cruise.id,
           cruiseName: cruise.shipName || 'Cruise',
           days: defaultDays,
           updatedAt: new Date().toISOString(),
-        });
+        };
+        setHoursData(defaultData);
+        onHoursDataLoaded?.(defaultData);
         console.log('[CasinoOpenHours] Initialized default hours for cruise:', cruise.id);
       } catch (e) {
         console.error('[CasinoOpenHours] Error loading hours:', e);
         const defaultDays = buildDefaultDays();
-        setHoursData({
+        const fallbackData = {
           cruiseId: cruise?.id || '',
           cruiseName: cruise?.shipName || 'Cruise',
           days: defaultDays,
           updatedAt: new Date().toISOString(),
-        });
+        };
+        setHoursData(fallbackData);
+        onHoursDataLoaded?.(fallbackData);
       }
     };
 
     void loadSavedHours();
-  }, [storageKey, cruise, buildDefaultDays]);
+  }, [storageKey, cruise, buildDefaultDays, onHoursDataLoaded]);
 
   const handleSave = useCallback(async () => {
     if (!hoursData || !storageKey) return;
@@ -145,6 +152,7 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated }: CasinoOpenHoursC
       const toSave = { ...hoursData, updatedAt: new Date().toISOString() };
       await AsyncStorage.setItem(storageKey, JSON.stringify(toSave));
       setHoursData(toSave);
+      onHoursDataLoaded?.(toSave);
       console.log('[CasinoOpenHours] Saved hours for cruise:', hoursData.cruiseId);
       Alert.alert('Casino Hours Saved', 'Your actual casino open hours have been updated.');
       void onHoursUpdated?.();
@@ -154,7 +162,7 @@ export function CasinoOpenHoursCard({ cruise, onHoursUpdated }: CasinoOpenHoursC
     } finally {
       setIsSaving(false);
     }
-  }, [hoursData, storageKey, onHoursUpdated]);
+  }, [hoursData, storageKey, onHoursUpdated, onHoursDataLoaded]);
 
   const handleEditDay = useCallback((dayIndex: number) => {
     if (!hoursData) return;

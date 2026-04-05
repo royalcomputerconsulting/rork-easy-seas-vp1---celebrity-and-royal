@@ -30,10 +30,14 @@ import { MachineSessionsList } from '@/components/MachineSessionsList';
 import { EditMachineSessionModal } from '@/components/EditMachineSessionModal';
 import QuickMachineSessionModal from '@/components/QuickMachineSessionModal';
 import { PlayingHoursCard } from '@/components/ui/PlayingHoursCard';
-import { CasinoOpenHoursCard } from '@/components/ui/CasinoOpenHoursCard';
+import { CasinoOpenHoursCard, type CasinoOpenHoursData } from '@/components/ui/CasinoOpenHoursCard';
+import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
+import { AddSessionModal } from '@/components/AddSessionModal';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import type { PlayingHours } from '@/state/UserProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
+import { useGamification } from '@/state/GamificationProvider';
+import type { MachineType, Denomination } from '@/state/CasinoSessionProvider';
 import type { MachineEncyclopediaEntry, SlotManufacturer, BookedCruise } from '@/types/models';
 
 type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
@@ -161,9 +165,17 @@ export default function AtlasScreen() {
 
   const { 
     sessions,
+    addSession,
     updateSession,
     removeSession,
+    getSessionsForDate,
+    getDailySummary,
   } = useCasinoSessions();
+
+  const {
+    updateStreakFromSession,
+    updateWeeklyGoalProgress,
+  } = useGamification();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterOption>('all');
@@ -172,6 +184,8 @@ export default function AtlasScreen() {
   const [showSessionsSection, setShowSessionsSection] = useState(false);
   const [editingSession, setEditingSession] = useState<CasinoSession | null>(null);
   const [showQuickSessionModal, setShowQuickSessionModal] = useState(false);
+  const [showAddSessionModal, setShowAddSessionModal] = useState(false);
+  const [casinoOpenHoursData, setCasinoOpenHoursData] = useState<CasinoOpenHoursData | null>(null);
   const nextUpcomingCruise = useMemo((): BookedCruise | null => {
     const now = new Date();
     const upcoming = bookedCruises
@@ -188,6 +202,166 @@ export default function AtlasScreen() {
   const currentPlayingHours = useMemo(() => {
     return currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
   }, [currentUser?.playingHours]);
+
+  const todayDateString = useMemo(() => {
+    return new Date().toISOString().split('T')[0];
+  }, []);
+
+  const goldenTimeSlots = useMemo(() => {
+    const playingHours = currentPlayingHours;
+    const enabledSessions = (playingHours.sessions || []).filter(s => s.enabled);
+
+    if (!casinoOpenHoursData || casinoOpenHoursData.days.length === 0) {
+      return enabledSessions.map(s => {
+        const startParts = s.startTime.split(':').map(Number);
+        const endParts = s.endTime.split(':').map(Number);
+        let startMins = (startParts[0] || 0) * 60 + (startParts[1] || 0);
+        let endMins = (endParts[0] || 0) * 60 + (endParts[1] || 0);
+        if (endMins <= startMins) endMins += 24 * 60;
+        return {
+          id: s.id,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          durationMinutes: endMins - startMins,
+          label: s.name,
+        };
+      });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const todayDay = casinoOpenHoursData.days.find(d => d.date === today);
+    const currentDay = todayDay || casinoOpenHoursData.days[0];
+
+    if (!currentDay) return [];
+
+    let casinoOpen = '';
+    let casinoClose = '';
+    if (currentDay.hasOverride && currentDay.actualOpenTime && currentDay.actualCloseTime) {
+      casinoOpen = currentDay.actualOpenTime;
+      casinoClose = currentDay.actualCloseTime;
+    } else if (currentDay.bestGuessOpen && currentDay.bestGuessHours) {
+      const hoursParts = currentDay.bestGuessHours.split(' - ');
+      if (hoursParts.length === 2) {
+        casinoOpen = hoursParts[0].trim();
+        casinoClose = hoursParts[1].trim();
+      }
+    }
+
+    if (!casinoOpen || !casinoClose) {
+      return enabledSessions.map(s => {
+        const startParts = s.startTime.split(':').map(Number);
+        const endParts = s.endTime.split(':').map(Number);
+        let startMins = (startParts[0] || 0) * 60 + (startParts[1] || 0);
+        let endMins = (endParts[0] || 0) * 60 + (endParts[1] || 0);
+        if (endMins <= startMins) endMins += 24 * 60;
+        return {
+          id: s.id,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          durationMinutes: endMins - startMins,
+          label: s.name,
+        };
+      });
+    }
+
+    const toMins = (t: string): number => {
+      const parts = t.split(':').map(Number);
+      return (parts[0] || 0) * 60 + (parts[1] || 0);
+    };
+
+    const casinoOpenMins = toMins(casinoOpen);
+    let casinoCloseMins = toMins(casinoClose);
+    if (casinoCloseMins <= casinoOpenMins) casinoCloseMins += 24 * 60;
+
+    const slots: { id: string; startTime: string; endTime: string; durationMinutes: number; label: string }[] = [];
+
+    for (const s of enabledSessions) {
+      let sStart = toMins(s.startTime);
+      let sEnd = toMins(s.endTime);
+      if (sEnd <= sStart) sEnd += 24 * 60;
+
+      const overlapStart = Math.max(sStart, casinoOpenMins);
+      const overlapEnd = Math.min(sEnd, casinoCloseMins);
+
+      if (overlapEnd > overlapStart) {
+        const fmtTime = (m: number): string => {
+          const normalized = ((m % (24 * 60)) + 24 * 60) % (24 * 60);
+          const h = Math.floor(normalized / 60);
+          const min = normalized % 60;
+          return `${h.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+        };
+        slots.push({
+          id: `${s.id}_casino`,
+          startTime: fmtTime(overlapStart),
+          endTime: fmtTime(overlapEnd),
+          durationMinutes: overlapEnd - overlapStart,
+          label: `${s.name} (Casino Open)`,
+        });
+      }
+    }
+
+    console.log('[Machines] Golden time slots from casino hours + playing hours:', slots.length);
+    return slots;
+  }, [currentPlayingHours, casinoOpenHoursData]);
+
+  const totalGoldenMinutes = useMemo(() => {
+    return goldenTimeSlots.reduce((total, slot) => total + slot.durationMinutes, 0);
+  }, [goldenTimeSlots]);
+
+  const todaySessions = useMemo(() => {
+    return getSessionsForDate(todayDateString);
+  }, [getSessionsForDate, todayDateString]);
+
+  const todaySummary = useMemo(() => {
+    return getDailySummary(todayDateString, totalGoldenMinutes);
+  }, [getDailySummary, todayDateString, totalGoldenMinutes]);
+
+  const handleAddSessionFromTracker = useCallback(async (sessionData: {
+    startTime: string;
+    endTime: string;
+    durationMinutes: number;
+    notes?: string;
+    buyIn?: number;
+    cashOut?: number;
+    winLoss?: number;
+    machineType?: MachineType;
+    denomination?: Denomination;
+    pointsEarned?: number;
+  }) => {
+    await addSession({
+      date: todayDateString,
+      startTime: sessionData.startTime,
+      endTime: sessionData.endTime,
+      durationMinutes: sessionData.durationMinutes,
+      notes: sessionData.notes,
+      buyIn: sessionData.buyIn,
+      cashOut: sessionData.cashOut,
+      winLoss: sessionData.winLoss,
+      machineType: sessionData.machineType,
+      denomination: sessionData.denomination,
+      pointsEarned: sessionData.pointsEarned,
+    });
+
+    await updateStreakFromSession(todayDateString);
+    await updateWeeklyGoalProgress('sessions', 1);
+    await updateWeeklyGoalProgress('time', sessionData.durationMinutes);
+    if (sessionData.pointsEarned) {
+      await updateWeeklyGoalProgress('points', sessionData.pointsEarned);
+    }
+
+    setShowAddSessionModal(false);
+    console.log('[Machines] Session added from tracker:', sessionData);
+  }, [addSession, todayDateString, updateStreakFromSession, updateWeeklyGoalProgress]);
+
+  const handleRemoveSessionFromTracker = useCallback(async (sessionId: string) => {
+    await removeSession(sessionId);
+    console.log('[Machines] Session removed from tracker:', sessionId);
+  }, [removeSession]);
+
+  const handleCasinoHoursLoaded = useCallback((data: CasinoOpenHoursData | null) => {
+    setCasinoOpenHoursData(data);
+    console.log('[Machines] Casino open hours data loaded:', data?.days.length, 'days');
+  }, []);
 
   const handleSavePlayingHours = useCallback(async (playingHours: PlayingHours) => {
     try {
@@ -509,7 +683,18 @@ export default function AtlasScreen() {
             onSave={handleSavePlayingHours}
             isSaving={isSavingPlayingHours}
           />
-          <CasinoOpenHoursCard cruise={nextUpcomingCruise} />
+          <CasinoOpenHoursCard cruise={nextUpcomingCruise} onHoursDataLoaded={handleCasinoHoursLoaded} />
+
+          <View style={styles.sessionTrackerContainer}>
+            <CasinoSessionTracker
+              date={todayDateString}
+              goldenTimeSlots={goldenTimeSlots}
+              sessions={todaySessions}
+              summary={todaySummary}
+              onAddSession={() => setShowAddSessionModal(true)}
+              onRemoveSession={handleRemoveSessionFromTracker}
+            />
+          </View>
         </View>
 
         <View style={styles.searchSection}>
@@ -639,6 +824,12 @@ export default function AtlasScreen() {
     handleSavePlayingHours,
     isSavingPlayingHours,
     nextUpcomingCruise,
+    handleCasinoHoursLoaded,
+    todayDateString,
+    goldenTimeSlots,
+    todaySessions,
+    todaySummary,
+    handleRemoveSessionFromTracker,
     favoriteMachines.length,
     filteredMachines.length,
     handleClearFilters,
@@ -805,6 +996,14 @@ export default function AtlasScreen() {
       />
 
       <QuickMachineSessionModal visible={showQuickSessionModal} onClose={() => setShowQuickSessionModal(false)} />
+
+      <AddSessionModal
+        visible={showAddSessionModal}
+        onClose={() => setShowAddSessionModal(false)}
+        onSave={handleAddSessionFromTracker}
+        date={todayDateString}
+        goldenTimeSlots={goldenTimeSlots}
+      />
     </>
   );
 }
@@ -1014,6 +1213,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 8,
     marginBottom: 4,
+  },
+  sessionTrackerContainer: {
+    marginTop: SPACING.md,
   },
   searchSection: {
     paddingHorizontal: 20,
