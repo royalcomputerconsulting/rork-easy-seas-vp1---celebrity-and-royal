@@ -1405,6 +1405,10 @@ export default function DayAgendaScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          <View style={{ marginBottom: SPACING.md }}>
+            <TimeZoneConverter />
+          </View>
+
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>24-Hour Agenda</Text>
             <View style={styles.dayScheduleCard}>
@@ -1514,10 +1518,6 @@ export default function DayAgendaScreen() {
             </View>
           )}
           
-          <View style={styles.sectionContainer}>
-            <TimeZoneConverter />
-          </View>
-
         </ScrollView>
       </SafeAreaView>
       
