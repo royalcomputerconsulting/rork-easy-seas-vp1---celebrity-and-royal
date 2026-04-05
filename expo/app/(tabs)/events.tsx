@@ -127,6 +127,8 @@ export default function EventsScreen() {
     const day = String(date.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
 
+    const matchedCruiseIds = new Set<string>();
+
     calendarEvents.forEach(event => {
       const eventStart = event.startDate || event.start || '';
       const eventEnd = event.endDate || event.end || eventStart;
@@ -141,6 +143,8 @@ export default function EventsScreen() {
       if (dateStr >= startDate && dateStr <= endDate) {
         if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
           cruise++;
+          const cruiseId = (event as any).cruiseId || (event as any).metadata?.cruiseId;
+          if (cruiseId) matchedCruiseIds.add(cruiseId);
         } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
           travel++;
         } else {
@@ -149,8 +153,18 @@ export default function EventsScreen() {
       }
     });
 
+    bookedCruises.forEach((bc: BookedCruise) => {
+      if (matchedCruiseIds.has(bc.id)) return;
+      if (!bc.sailDate || !bc.returnDate) return;
+      const sailStr = String(bc.sailDate).split('T')[0];
+      const returnStr = String(bc.returnDate).split('T')[0];
+      if (sailStr && returnStr && dateStr >= sailStr && dateStr <= returnStr) {
+        cruise++;
+      }
+    });
+
     return { cruise, travel, personal };
-  }, [calendarEvents]);
+  }, [calendarEvents, bookedCruises]);
 
   const calendarDays = useMemo((): DayData[][] => {
     console.log('[Events] Recalculating calendar days, refreshKey:', refreshKey);
