@@ -53,8 +53,7 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from 
 import { LinearGradient } from 'expo-linear-gradient';
 import { isDateInPast } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
-import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
-import type { PlayingHours } from '@/state/UserProvider';
+import { useUser } from '@/state/UserProvider';
 import { 
   pickAndReadFile, 
   parseOffersCSV, 
@@ -91,7 +90,7 @@ import type { BookedCruise } from '@/types/models';
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { UserProfileCard } from '@/components/ui/UserProfileCard';
-import { PlayingHoursCard } from '@/components/ui/PlayingHoursCard';
+
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { saveMockData } from '@/lib/saveMockData';
@@ -147,7 +146,7 @@ export default function SettingsScreen() {
   const [isImportingAll, setIsImportingAll] = useState(false);
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
-  const [isSavingPlayingHours, setIsSavingPlayingHours] = useState(false);
+
   const [isImportingMachines, setIsImportingMachines] = useState(false);
   const [isExportingMachines, setIsExportingMachines] = useState(false);
   const [isSavingMockData, setIsSavingMockData] = useState(false);
@@ -283,13 +282,7 @@ export default function SettingsScreen() {
     loyaltyCrownAnchorPoints,
   ]);
 
-  const currentPlayingHours = useMemo(() => {
-    if (!isProfileDisplayReady) {
-      return DEFAULT_PLAYING_HOURS;
-    }
 
-    return currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
-  }, [currentUser?.playingHours, isProfileDisplayReady]);
 
   const profileTransitionSubtitle = useMemo(() => {
     if (authenticatedEmail) {
@@ -1624,32 +1617,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     });
   }, []);
 
-  const handleSavePlayingHours = useCallback(async (playingHours: PlayingHours) => {
-    if (!isProfileDisplayReady) {
-      console.log('[Settings] Blocked playing-hours save while account data is still loading');
-      Alert.alert('Profile Loading', 'Please wait for your account data to finish loading.');
-      return;
-    }
 
-    try {
-      setIsSavingPlayingHours(true);
-      console.log('[Settings] Saving playing hours:', playingHours);
-      
-      if (currentUser) {
-        await updateUser(currentUser.id, { playingHours });
-      } else {
-        const owner = await ensureOwner();
-        await updateUser(owner.id, { playingHours });
-      }
-      
-      Alert.alert('Playing Hours Saved', 'Your preferred playing times have been updated.');
-    } catch (error) {
-      console.error('[Settings] Save playing hours error:', error);
-      Alert.alert('Save Error', 'Failed to save playing hours. Please try again.');
-    } finally {
-      setIsSavingPlayingHours(false);
-    }
-  }, [currentUser, ensureOwner, isProfileDisplayReady, updateUser]);
 
   const handleImportMachinesJSON = useCallback(async () => {
     try {
@@ -2007,12 +1975,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 isSaving={isSaving}
               />
 
-              <PlayingHoursCard
-                key={`playing-hours-${normalizedAuthenticatedEmail ?? 'guest'}`}
-                currentValues={currentPlayingHours}
-                onSave={handleSavePlayingHours}
-                isSaving={isSavingPlayingHours}
-              />
+
             </>
           ) : (
             <>
@@ -2026,15 +1989,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 </View>
               </View>
 
-              <View style={styles.profileLoadingCard} testID="settings-playing-hours-loading-card">
-                <View style={styles.profileLoadingIconWrap}>
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                </View>
-                <View style={styles.profileLoadingCopy}>
-                  <Text style={styles.profileLoadingTitle}>Refreshing playing hours</Text>
-                  <Text style={styles.profileLoadingSubtitle}>Your account preferences will appear as soon as the correct profile is loaded.</Text>
-                </View>
-              </View>
+
             </>
           )}
 

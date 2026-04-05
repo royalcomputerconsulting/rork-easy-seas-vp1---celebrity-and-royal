@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   PanResponder,
@@ -15,7 +16,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download, Crown, RefreshCcw, ExternalLink } from 'lucide-react-native';
+import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
@@ -28,14 +29,23 @@ import { MachineSessionStats } from '@/components/MachineSessionStats';
 import { MachineSessionsList } from '@/components/MachineSessionsList';
 import { EditMachineSessionModal } from '@/components/EditMachineSessionModal';
 import QuickMachineSessionModal from '@/components/QuickMachineSessionModal';
-import type { MachineEncyclopediaEntry, SlotManufacturer } from '@/types/models';
+import { PlayingHoursCard } from '@/components/ui/PlayingHoursCard';
+import { CasinoOpenHoursCard } from '@/components/ui/CasinoOpenHoursCard';
+import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
+import type { PlayingHours } from '@/state/UserProvider';
+import { useCoreData } from '@/state/CoreDataProvider';
+import type { MachineEncyclopediaEntry, SlotManufacturer, BookedCruise } from '@/types/models';
 
 type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 
 export default function AtlasScreen() {
   const router = useRouter();
-  const entitlement = useEntitlement();
-  const auth = useAuth();
+  const _entitlement = useEntitlement();
+  useAuth();
+
+  const { currentUser, updateUser, ensureOwner } = useUser();
+  const { bookedCruises } = useCoreData();
+  const [isSavingPlayingHours, setIsSavingPlayingHours] = useState(false);
 
 
 
@@ -162,6 +172,42 @@ export default function AtlasScreen() {
   const [showSessionsSection, setShowSessionsSection] = useState(false);
   const [editingSession, setEditingSession] = useState<CasinoSession | null>(null);
   const [showQuickSessionModal, setShowQuickSessionModal] = useState(false);
+  const nextUpcomingCruise = useMemo((): BookedCruise | null => {
+    const now = new Date();
+    const upcoming = bookedCruises
+      .filter(c => {
+        if (c.completionState === 'completed') return false;
+        if (!c.sailDate) return false;
+        const sail = new Date(c.sailDate);
+        return sail >= now || (c.returnDate && new Date(c.returnDate) >= now);
+      })
+      .sort((a, b) => new Date(a.sailDate!).getTime() - new Date(b.sailDate!).getTime());
+    return upcoming[0] ?? null;
+  }, [bookedCruises]);
+
+  const currentPlayingHours = useMemo(() => {
+    return currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
+  }, [currentUser?.playingHours]);
+
+  const handleSavePlayingHours = useCallback(async (playingHours: PlayingHours) => {
+    try {
+      setIsSavingPlayingHours(true);
+      console.log('[Machines] Saving playing hours:', playingHours);
+      if (currentUser) {
+        await updateUser(currentUser.id, { playingHours });
+      } else {
+        const owner = await ensureOwner();
+        await updateUser(owner.id, { playingHours });
+      }
+      Alert.alert('Playing Hours Saved', 'Your preferred playing times have been updated.');
+    } catch (error) {
+      console.error('[Machines] Save playing hours error:', error);
+      Alert.alert('Save Error', 'Failed to save playing hours. Please try again.');
+    } finally {
+      setIsSavingPlayingHours(false);
+    }
+  }, [currentUser, ensureOwner, updateUser]);
+
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
 
@@ -288,7 +334,7 @@ export default function AtlasScreen() {
   }, [router]);
 
   const handleToggleFavorite = useCallback((id: string) => {
-    toggleFavorite(id);
+    void toggleFavorite(id);
   }, [toggleFavorite]);
 
   const handleExportFavorites = useCallback(async () => {
@@ -457,6 +503,15 @@ export default function AtlasScreen() {
           </View>
         )}
 
+        <View style={styles.hoursCardsSection}>
+          <PlayingHoursCard
+            currentValues={currentPlayingHours}
+            onSave={handleSavePlayingHours}
+            isSaving={isSavingPlayingHours}
+          />
+          <CasinoOpenHoursCard cruise={nextUpcomingCruise} />
+        </View>
+
         <View style={styles.searchSection}>
           <View style={styles.searchBar}>
             <Search size={18} color={COLORS.textMuted} />
@@ -580,7 +635,10 @@ export default function AtlasScreen() {
     );
   }, [
     activeFilter,
-    entitlement,
+    currentPlayingHours,
+    handleSavePlayingHours,
+    isSavingPlayingHours,
+    nextUpcomingCruise,
     favoriteMachines.length,
     filteredMachines.length,
     handleClearFilters,
@@ -593,7 +651,6 @@ export default function AtlasScreen() {
     isLoadingIndex,
     myAtlasMachines.length,
     reload,
-    router,
     searchQuery,
     sessions,
     showSessionsSection,
@@ -952,6 +1009,11 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: COLORS.textDarkGrey,
+  },
+  hoursCardsSection: {
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 4,
   },
   searchSection: {
     paddingHorizontal: 20,
