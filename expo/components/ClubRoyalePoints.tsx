@@ -73,9 +73,9 @@ export function ClubRoyalePoints({
             <Crown size={20} color={COLORS.gold} />
           </View>
           <View>
-            <Text style={styles.title}>Player & Loyalty Status</Text>
+            <Text style={styles.title}>Casino & Cruise Loyalty</Text>
             <Text style={styles.pointsText}>
-              {clubRoyalePoints.toLocaleString()} CR pts • {crownAnchorPoints} C&A pts
+              {clubRoyalePoints.toLocaleString()} Casino pts • {crownAnchorPoints} C&A nights
             </Text>
           </View>
         </View>
@@ -99,7 +99,7 @@ export function ClubRoyalePoints({
               <Text style={styles.statValue}>
                 {mastersProgress.pointsToNext.toLocaleString()}
               </Text>
-              <Text style={styles.statLabel}>Points to Masters</Text>
+              <Text style={styles.statLabel}>Casino Pts to Masters</Text>
             </View>
           </View>
 

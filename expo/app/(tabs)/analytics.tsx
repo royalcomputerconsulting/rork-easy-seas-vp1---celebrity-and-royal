@@ -53,6 +53,7 @@ import {
   getLevelProgress
 } from '@/constants/crownAnchor';
 import type { BookedCruise } from '@/types/models';
+import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
 import { getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import { TierProgressionChart } from '@/components/charts/TierProgressionChart';
 import { ROIProjectionChart } from '@/components/charts/ROIProjectionChart';
@@ -501,9 +502,48 @@ export default function AnalyticsScreen() {
       { label: 'Cruises', value: realAnalytics.totalCruises.toString(), icon: Ship },
       { label: 'Value/$1', value: realAnalytics.valuePerDollar >= 9999 ? '∞' : realAnalytics.valuePerDollar.toFixed(2), icon: DollarSign },
       { label: 'Profit', value: formatCurrency(realAnalytics.totalProfit), color: realAnalytics.totalProfit >= 0 ? COLORS.success : COLORS.error, icon: TrendingUp },
-      { label: 'Points', value: formatNumber(currentPoints), icon: Award },
+      { label: 'Casino Pts', value: formatNumber(currentPoints), icon: Award },
     ];
   }, [activeTab, realAnalytics, currentPoints]);
+
+  const perCruisePointsBreakdown = useMemo(() => {
+    if (activeTab !== 'intelligence') return [] as { id: string; shipName: string; sailDate: string; nights: number; cruiseSource: string; casinoPoints: number; loyaltyPoints: number; casinoLabel: string; loyaltyLabel: string }[];
+    const today = new Date();
+    return bookedCruises
+      .filter(cruise => {
+        const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
+        const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
+        return isCompleted;
+      })
+      .map(cruise => {
+        const casinoPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
+        const nights = cruise.nights || 0;
+        const isRCI = isRoyalCaribbeanShip(cruise.shipName);
+        const source = cruise.cruiseSource || (isRCI ? 'royal' : 'celebrity');
+        const isSolo = cruise.singleOccupancy !== false;
+        const cabinType = cruise.cabinType || cruise.cabinCategory || '';
+        const isSuite = cabinType.toLowerCase().includes('suite');
+        let loyaltyPoints: number;
+        if (isSuite && isSolo) loyaltyPoints = nights * 3;
+        else if (isSuite) loyaltyPoints = nights * 2;
+        else if (isSolo) loyaltyPoints = nights * 2;
+        else loyaltyPoints = nights;
+        const casinoLabel = source === 'royal' ? 'Club Royale' : source === 'celebrity' ? 'Blue Chip' : 'Casino';
+        const loyaltyLabel = source === 'royal' ? 'Crown & Anchor' : source === 'celebrity' ? "Captain's Club" : 'Cruise Loyalty';
+        return {
+          id: cruise.id,
+          shipName: cruise.shipName || 'Unknown',
+          sailDate: cruise.sailDate || '',
+          nights,
+          cruiseSource: source,
+          casinoPoints,
+          loyaltyPoints,
+          casinoLabel,
+          loyaltyLabel,
+        };
+      })
+      .sort((a, b) => createDateFromString(b.sailDate).getTime() - createDateFromString(a.sailDate).getTime());
+  }, [activeTab, bookedCruises]);
 
   const buildCasinoCruisesCsv = useCallback((cruises: BookedCruise[]): string => {
     console.log('[CasinoCruiseExport] Building CSV...', { cruiseCount: cruises.length });
@@ -912,7 +952,7 @@ export default function AnalyticsScreen() {
             </View>
             <View style={styles.compactMetric}>
               <Text style={styles.compactMetricValue}>{formatNumber(currentPoints)}</Text>
-              <Text style={styles.compactMetricLabel}>Points</Text>
+              <Text style={styles.compactMetricLabel}>Casino Pts</Text>
             </View>
           </View>
           {casinoAnalytics.completedCruisesCount > 0 && (
@@ -1003,6 +1043,68 @@ export default function AnalyticsScreen() {
                 </View>
               </View>
             ))}
+          </View>
+        </View>
+      )}
+
+      {perCruisePointsBreakdown.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.cleanCard}>
+            <View style={styles.cleanCardHeader}>
+              <Award size={16} color={COLORS.navyDeep} />
+              <Text style={styles.cleanCardTitle}>Points Breakdown by Cruise</Text>
+            </View>
+            <View style={styles.pointsBreakdownLegend}>
+              <View style={styles.pointsBreakdownLegendItem}>
+                <View style={[styles.pointsBreakdownLegendDot, { backgroundColor: '#F59E0B' }]} />
+                <Text style={styles.pointsBreakdownLegendText}>Casino Points (Club Royale / Blue Chip)</Text>
+              </View>
+              <View style={styles.pointsBreakdownLegendItem}>
+                <View style={[styles.pointsBreakdownLegendDot, { backgroundColor: '#3B82F6' }]} />
+                <Text style={styles.pointsBreakdownLegendText}>Cruise Loyalty (Crown & Anchor / Captain's Club)</Text>
+              </View>
+            </View>
+            {perCruisePointsBreakdown.slice(0, showAllCruises ? 50 : 10).map((entry) => {
+              const sailDate = createDateFromString(entry.sailDate);
+              const dateStr = sailDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+              const _sourceColor = entry.cruiseSource === 'royal' ? COLORS.navyDeep : entry.cruiseSource === 'celebrity' ? '#1E3A5F' : '#0D47A1';
+              return (
+                <View key={entry.id} style={styles.pointsBreakdownRow}>
+                  <View style={styles.pointsBreakdownShipCol}>
+                    <Text style={styles.pointsBreakdownShipName} numberOfLines={1}>{entry.shipName}</Text>
+                    <Text style={styles.pointsBreakdownDate}>{dateStr} · {entry.nights}N</Text>
+                  </View>
+                  <View style={styles.pointsBreakdownValuesCol}>
+                    <View style={styles.pointsBreakdownValueRow}>
+                      <View style={[styles.pointsBreakdownValueDot, { backgroundColor: '#F59E0B' }]} />
+                      <Text style={styles.pointsBreakdownValueLabel}>{entry.casinoLabel}</Text>
+                      <Text style={[styles.pointsBreakdownValue, { color: '#92400E' }]}>{formatNumber(entry.casinoPoints)}</Text>
+                    </View>
+                    <View style={styles.pointsBreakdownValueRow}>
+                      <View style={[styles.pointsBreakdownValueDot, { backgroundColor: '#3B82F6' }]} />
+                      <Text style={styles.pointsBreakdownValueLabel}>{entry.loyaltyLabel}</Text>
+                      <Text style={[styles.pointsBreakdownValue, { color: '#1D4ED8' }]}>{formatNumber(entry.loyaltyPoints)}</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+            {perCruisePointsBreakdown.length > 10 && (
+              <TouchableOpacity
+                style={styles.viewMoreButton}
+                activeOpacity={0.7}
+                onPress={() => setShowAllCruises(!showAllCruises)}
+              >
+                <Text style={styles.viewMoreText}>
+                  {showAllCruises ? 'Show fewer' : `View all ${perCruisePointsBreakdown.length} cruises`}
+                </Text>
+                <ChevronDown
+                  size={16}
+                  color={COLORS.navyDeep}
+                  style={{ transform: [{ rotate: showAllCruises ? '180deg' : '0deg' }] }}
+                />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       )}
@@ -3053,5 +3155,75 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: '#64748B',
     lineHeight: 20,
+  },
+  pointsBreakdownLegend: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  pointsBreakdownLegendItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+  },
+  pointsBreakdownLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  pointsBreakdownLegendText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  pointsBreakdownRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  pointsBreakdownShipCol: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  pointsBreakdownShipName: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  pointsBreakdownDate: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  pointsBreakdownValuesCol: {
+    alignItems: 'flex-end' as const,
+    gap: 3,
+  },
+  pointsBreakdownValueRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+  },
+  pointsBreakdownValueDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  pointsBreakdownValueLabel: {
+    fontSize: 10,
+    color: '#94A3B8',
+    minWidth: 80,
+  },
+  pointsBreakdownValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    minWidth: 36,
+    textAlign: 'right' as const,
   },
 });

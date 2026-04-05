@@ -390,12 +390,12 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{clubRoyalePoints.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>CR Points</Text>
+          <Text style={styles.statLabel}>Casino Pts (CR)</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{crownAnchorPoints}</Text>
-          <Text style={styles.statLabel}>C&A</Text>
+          <Text style={styles.statLabel}>C&A Nights</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
@@ -546,12 +546,12 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{celebrityBlueChipPoints.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>Blue Chip Pts</Text>
+          <Text style={styles.statLabel}>Casino Pts (BC)</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{celebrityCaptainsClubPoints}</Text>
-          <Text style={styles.statLabel}>Captain&apos;s Club</Text>
+          <Text style={styles.statLabel}>Capt's Club</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
