@@ -12,7 +12,6 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { 
   Tag,
@@ -47,7 +46,6 @@ import { AlertsManagerModal } from '@/components/AlertsManagerModal';
 import { AgentXAnalysisCard } from '@/components/AgentXAnalysisCard';
 import { QuickActionsFAB } from '@/components/ui/QuickActionsFAB';
 import { getDaysUntil, isDateInPast, formatDate } from '@/lib/date';
-import { getFocusTheme } from '@/constants/focusThemes';
 import { MachineStrategyCard } from '@/components/MachineStrategyCard';
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
@@ -140,7 +138,6 @@ function OverviewScreenContent() {
   const router = useRouter();
   const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile } = useCoreData();
   const { currentUser } = useUser();
-  const focusTheme = useMemo(() => getFocusTheme(currentUser?.preferredBrand), [currentUser?.preferredBrand]);
   const { logout } = useAuth();
   const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, toggleExpanded, isExpanded, refreshAnalysis } = useAgentX();
   const { summary } = useAlerts();
@@ -694,12 +691,7 @@ function OverviewScreenContent() {
   const keyExtractor = useCallback((item: CasinoOfferCardData | Cruise) => item.id, []);
 
   return (
-    <LinearGradient
-      colors={focusTheme.screenGradient as unknown as [string, string, ...string[]]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <CertificateManagerModal
         visible={showCertificateModal}
         onClose={() => setShowCertificateModal(false)}
@@ -756,8 +748,8 @@ function OverviewScreenContent() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={focusTheme.actionPrimary}
-              colors={[focusTheme.actionPrimary]}
+              tintColor={COLORS.navyDeep}
+              colors={[COLORS.navyDeep]}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -767,7 +759,7 @@ function OverviewScreenContent() {
           windowSize={7}
         />
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -797,6 +789,7 @@ export default function OverviewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0A1628',
   },
   safeArea: {
     flex: 1,
