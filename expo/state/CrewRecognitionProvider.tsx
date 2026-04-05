@@ -323,21 +323,11 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     sailingId?: string;
     userId: string;
   }) => {
-    if (!isOfflineMode) {
-      try {
-        const result = await createCrewMemberMutation.mutateAsync(data as any);
-        return result;
-      } catch (err) {
-        console.log('[CrewRecognition] Backend create failed, falling back to local:', err instanceof Error ? err.message : String(err));
-      }
-    }
-    console.log('[CrewRecognition] Creating crew member locally:', data.fullName);
-
     const now = new Date().toISOString();
     const crewId = `local_crew_manual_${Date.now()}`;
     const sailing = data.sailingId ? localSailings.find(s => s.id === data.sailingId) : undefined;
 
-    const newEntry: RecognitionEntryWithCrew = {
+    const newLocalEntry: RecognitionEntryWithCrew = {
       id: `local_entry_manual_${Date.now()}`,
       crewMemberId: crewId,
       sailingId: sailing?.id || '',
@@ -356,12 +346,23 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
       crewNotes: data.notes,
     };
 
-    const updatedEntries = [newEntry, ...localEntries];
+    const updatedEntries = [newLocalEntry, ...localEntries];
     setLocalEntries(updatedEntries);
-    setIsOfflineMode(true);
     await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
-    console.log('[CrewRecognition] Added crew member locally with notes:', data.fullName, data.notes ? '(has notes)' : '(no notes)');
-    return newEntry;
+    console.log('[CrewRecognition] Persisted crew member locally:', data.fullName, data.notes ? '(has notes)' : '(no notes)');
+
+    if (!isOfflineMode) {
+      try {
+        const result = await createCrewMemberMutation.mutateAsync(data as any);
+        console.log('[CrewRecognition] Also saved crew member to backend:', data.fullName);
+        return result;
+      } catch (err) {
+        console.log('[CrewRecognition] Backend create failed, local copy persisted:', err instanceof Error ? err.message : String(err));
+        setIsOfflineMode(true);
+      }
+    }
+
+    return newLocalEntry;
   }, [isOfflineMode, createCrewMemberMutation, localEntries, localSailings]);
 
   const updateCrewMemberMutation = trpc.crewRecognition.updateCrewMember.useMutation({
@@ -398,32 +399,24 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   });
 
   const deleteRecognitionEntryWithFallback = useCallback(async (data: { id: string }) => {
+    const updatedEntries = localEntries.filter(e => e.id !== data.id);
+    setLocalEntries(updatedEntries);
+    await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
+    console.log('[CrewRecognition] Deleted entry locally:', data.id);
+
     if (!isOfflineMode) {
       try {
         const result = await deleteRecognitionEntryMutation.mutateAsync(data);
         return result;
       } catch (err) {
-        console.log('[CrewRecognition] Backend delete failed, falling back to local:', err);
+        console.log('[CrewRecognition] Backend delete failed, local already removed:', err);
       }
     }
 
-    const updatedEntries = localEntries.filter(e => e.id !== data.id);
-    setLocalEntries(updatedEntries);
-    await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
-    console.log('[CrewRecognition] Deleted entry locally:', data.id);
     return { success: true };
   }, [isOfflineMode, deleteRecognitionEntryMutation, localEntries]);
 
   const updateRecognitionEntryWithFallback = useCallback(async (data: { id: string; department?: Department; roleTitle?: string; sourceText?: string; sailingId?: string }) => {
-    if (!isOfflineMode) {
-      try {
-        const result = await updateRecognitionEntryMutation.mutateAsync(data);
-        return result;
-      } catch (err) {
-        console.log('[CrewRecognition] Backend update failed, falling back to local:', err);
-      }
-    }
-
     const updatedEntries = localEntries.map(e => {
       if (e.id !== data.id) return e;
       const updated = { ...e, updatedAt: new Date().toISOString() };
@@ -446,23 +439,34 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     setLocalEntries(updatedEntries);
     await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
     console.log('[CrewRecognition] Updated entry locally:', data.id);
+
+    if (!isOfflineMode) {
+      try {
+        const result = await updateRecognitionEntryMutation.mutateAsync(data);
+        return result;
+      } catch (err) {
+        console.log('[CrewRecognition] Backend update failed, local already updated:', err);
+      }
+    }
+
     return { success: true };
   }, [isOfflineMode, updateRecognitionEntryMutation, localEntries, localSailings]);
 
   const deleteCrewMemberWithFallback = useCallback(async (data: { id: string }) => {
+    const updatedEntries = localEntries.filter(e => e.crewMemberId !== data.id);
+    setLocalEntries(updatedEntries);
+    await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
+    console.log('[CrewRecognition] Deleted crew member entries locally:', data.id);
+
     if (!isOfflineMode) {
       try {
         const result = await deleteCrewMemberMutation.mutateAsync(data);
         return result;
       } catch (err) {
-        console.log('[CrewRecognition] Backend delete crew member failed, falling back to local:', err);
+        console.log('[CrewRecognition] Backend delete crew member failed, local already removed:', err);
       }
     }
 
-    const updatedEntries = localEntries.filter(e => e.crewMemberId !== data.id);
-    setLocalEntries(updatedEntries);
-    await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
-    console.log('[CrewRecognition] Deleted crew member entries locally:', data.id);
     return { success: true };
   }, [isOfflineMode, deleteCrewMemberMutation, localEntries]);
 
@@ -649,10 +653,17 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
   useEffect(() => {
     if (!isOfflineMode && entriesQuery.isSuccess && entriesQuery.data?.entries) {
-      const entriesToPersist = entriesQuery.data.entries;
-      if (entriesToPersist.length > 0) {
-        AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(entriesToPersist))
-          .then(() => console.log('[CrewRecognition] Synced', entriesToPersist.length, 'backend entries to AsyncStorage for export'))
+      const backendEntriesPage = entriesQuery.data.entries;
+      if (backendEntriesPage.length > 0) {
+        AsyncStorage.getItem(skEntriesRef.current)
+          .then(stored => {
+            const existingLocal: RecognitionEntryWithCrew[] = stored ? JSON.parse(stored) : [];
+            const backendIds = new Set(backendEntriesPage.map(e => e.id));
+            const localOnlyEntries = existingLocal.filter(e => !backendIds.has(e.id) && e.id.startsWith('local_'));
+            const merged = [...backendEntriesPage, ...localOnlyEntries];
+            return AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(merged))
+              .then(() => console.log('[CrewRecognition] Synced', backendEntriesPage.length, 'backend +', localOnlyEntries.length, 'local-only entries to AsyncStorage'));
+          })
           .catch(e => console.error('[CrewRecognition] Error syncing backend entries to AsyncStorage:', e));
       }
     }
