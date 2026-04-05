@@ -32,6 +32,10 @@ import {
   MicOff,
   Volume2,
   VolumeX,
+  Cpu,
+  Workflow,
+  Radio,
+  SlidersHorizontal,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 
@@ -63,6 +67,37 @@ const QUICK_ACTIONS = [
   { id: 'tier', label: 'Tier Progress', icon: Award, prompt: 'Show my tier progress to Signature' },
   { id: 'optimize', label: 'Optimize', icon: TrendingUp, prompt: 'Recommend cruises to maximize my points' },
   { id: 'offers', label: 'Offers', icon: Gift, prompt: 'Show expiring offers' },
+];
+
+const DEV_ASSISTANT_CAPABILITIES = [
+  {
+    id: 'prompt-dev',
+    icon: Cpu,
+    label: 'App Structure',
+    desc: 'Generate initial app scaffolding',
+    prompt: 'I want to build a voice-enabled assistant app. Help me design the initial app structure with conversational AI capabilities. Include the recommended file structure, key components needed (voice input, chat interface, response display), navigation flow, and state management approach. Outline the architecture for both the frontend UI and the backend integration points.',
+  },
+  {
+    id: 'api-integration',
+    icon: Workflow,
+    label: 'API Integration',
+    desc: 'Connect LLMs & voice APIs',
+    prompt: 'Help me integrate external AI APIs into my app for conversational logic. I need guidance on: 1) Connecting to LLMs like GPT-4o or Anthropic Claude for natural language understanding, 2) Setting up voice-to-text and text-to-speech pipelines, 3) Managing API keys securely, 4) Structuring the request/response flow between the app and AI services, and 5) Handling streaming responses for real-time conversational feel.',
+  },
+  {
+    id: 'websocket',
+    icon: Radio,
+    label: 'Real-Time Audio',
+    desc: 'WebSocket streaming setup',
+    prompt: 'I need to set up WebSocket communication for real-time audio streaming between my app and a backend service. Walk me through: 1) Establishing a persistent WebSocket connection for bidirectional audio data, 2) Capturing and encoding audio from the device microphone in real-time, 3) Streaming audio chunks to the server for processing, 4) Receiving and playing back AI-generated audio responses, and 5) Handling connection lifecycle, reconnection logic, and error states gracefully.',
+  },
+  {
+    id: 'refinement',
+    icon: SlidersHorizontal,
+    label: 'Persona & Tone',
+    desc: 'Customize AI behavior',
+    prompt: 'Help me refine my AI assistant\'s persona, features, and conversational tone. I want to: 1) Define a custom system prompt that shapes the AI\'s personality and expertise, 2) Configure response style (formal vs casual, verbose vs concise), 3) Add domain-specific knowledge and constraints, 4) Set up conversation memory and context management, and 5) Create customizable settings so users can adjust the AI\'s behavior. Provide specific examples of system prompts and configuration patterns.',
+  },
 ];
 
 async function transcribeAudioNative(uri: string): Promise<string> {
@@ -513,6 +548,43 @@ export const AgentXChat = React.memo(function AgentXChat({
         <Mic size={16} color={COLORS.navyDeep} />
         <Text style={styles.voiceHintText}>Tap the mic to talk — I'll listen and respond with voice</Text>
       </View>
+
+      <View style={styles.devAssistantSection}>
+        <LinearGradient
+          colors={['#0F2439', '#1E3A5F', '#0097A7']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.devAssistantCard}
+        >
+          <View style={styles.devAssistantHeader}>
+            <View style={styles.devAssistantIconWrap}>
+              <Cpu size={20} color="#00E5FF" />
+            </View>
+            <View style={styles.devAssistantHeaderText}>
+              <Text style={styles.devAssistantTitle}>AI Dev Assistant</Text>
+              <Text style={styles.devAssistantDesc}>Build voice-enabled AI features</Text>
+            </View>
+          </View>
+
+          <View style={styles.devCapabilitiesGrid}>
+            {DEV_ASSISTANT_CAPABILITIES.map((cap) => (
+              <TouchableOpacity
+                key={cap.id}
+                style={styles.devCapabilityItem}
+                onPress={() => handleQuickAction(cap.prompt)}
+                activeOpacity={0.7}
+                testID={`dev-cap-${cap.id}`}
+              >
+                <View style={styles.devCapabilityIconWrap}>
+                  <cap.icon size={16} color="#00E5FF" />
+                </View>
+                <Text style={styles.devCapabilityLabel}>{cap.label}</Text>
+                <Text style={styles.devCapabilityDesc}>{cap.desc}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </LinearGradient>
+      </View>
       
       <View style={styles.quickActionsContainer}>
         <Text style={styles.quickActionsLabel}>Quick Actions</Text>
@@ -634,6 +706,24 @@ export const AgentXChat = React.memo(function AgentXChat({
       >
         {messages.length === 0 ? renderWelcome() : messages.map(renderMessage)}
       </ScrollView>
+
+      {messages.length > 0 && (
+        <View style={styles.devAssistantInlineBanner}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.devAssistantInlineScroll}>
+            {DEV_ASSISTANT_CAPABILITIES.map((cap) => (
+              <TouchableOpacity
+                key={cap.id}
+                style={styles.devAssistantInlineChip}
+                onPress={() => handleQuickAction(cap.prompt)}
+                activeOpacity={0.7}
+              >
+                <cap.icon size={13} color="#00ACC1" />
+                <Text style={styles.devAssistantInlineChipText}>{cap.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
       
       <View style={styles.inputContainer}>
         <View style={styles.inputWrapper}>
@@ -813,6 +903,104 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
     marginBottom: SPACING.md,
     textAlign: 'center',
+  },
+  devAssistantSection: {
+    width: '100%',
+    marginBottom: SPACING.lg,
+  },
+  devAssistantCard: {
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    overflow: 'hidden',
+  },
+  devAssistantHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  devAssistantIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 229, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+  },
+  devAssistantHeaderText: {
+    flex: 1,
+  },
+  devAssistantTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+  },
+  devAssistantDesc: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 1,
+  },
+  devCapabilitiesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  devCapabilityItem: {
+    width: '47%',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.12)',
+  },
+  devCapabilityIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  devCapabilityLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  devCapabilityDesc: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.55)',
+    lineHeight: 13,
+  },
+  devAssistantInlineBanner: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 31, 63, 0.08)',
+    backgroundColor: 'rgba(0, 172, 193, 0.04)',
+  },
+  devAssistantInlineScroll: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    gap: SPACING.xs,
+  },
+  devAssistantInlineChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 172, 193, 0.1)',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 172, 193, 0.15)',
+    marginRight: SPACING.xs,
+  },
+  devAssistantInlineChipText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: '#0097A7',
   },
   quickActionsGrid: {
     flexDirection: 'row',
