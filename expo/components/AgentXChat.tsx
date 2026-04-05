@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
@@ -17,7 +16,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import {
-  Send,
   Bot,
   User,
   Sparkles,
@@ -157,10 +155,8 @@ export const AgentXChat = React.memo(function AgentXChat({
   showHeader = true,
   placeholder = 'Ask about cruises, tier progress, offers...',
 }: AgentXChatProps) {
-  const [inputText, setInputText] = useState('');
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
-  const inputRef = useRef<TextInput>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const [isRecording, setIsRecording] = useState(false);
@@ -264,7 +260,7 @@ export const AgentXChat = React.memo(function AgentXChat({
     if (isSpeaking) {
       stopSpeaking();
     }
-    setTtsEnabled(prev => !prev);
+    setTtsEnabled((prev: boolean) => !prev);
   }, [isSpeaking, stopSpeaking]);
 
   const startRecordingNative = useCallback(async () => {
@@ -440,16 +436,6 @@ export const AgentXChat = React.memo(function AgentXChat({
       }
     }
   }, [isLoading, isTranscribing, isRecording, isSpeaking, stopSpeaking, stopRecordingWeb, stopRecordingNative, startRecordingWeb, startRecordingNative]);
-
-  const handleSend = useCallback(() => {
-    const trimmed = inputText.trim();
-    if (trimmed && !isLoading) {
-      console.log('[AgentXChat] Sending message:', trimmed);
-      if (isSpeaking) stopSpeaking();
-      onSendMessage(trimmed);
-      setInputText('');
-    }
-  }, [inputText, isLoading, onSendMessage, isSpeaking, stopSpeaking]);
 
   const handleQuickAction = useCallback((prompt: string) => {
     console.log('[AgentXChat] Quick action:', prompt);
@@ -726,24 +712,24 @@ export const AgentXChat = React.memo(function AgentXChat({
       )}
       
       <View style={styles.inputContainer}>
-        <View style={styles.inputWrapper}>
-          <TextInput
-            ref={inputRef}
-            style={styles.textInput}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder={isRecording ? 'Listening...' : placeholder}
-            placeholderTextColor={COLORS.textSecondary}
-            multiline
-            maxLength={1000}
-            editable={!isLoading && !isRecording && !isTranscribing}
-            onSubmitEditing={handleSend}
-            returnKeyType="send"
-          />
+        <View style={styles.inputWrapper} testID="voice-only-composer">
+          <View style={styles.voiceOnlyCard}>
+            <Text style={styles.voiceOnlyTitle}>
+              {isRecording ? 'Listening now' : isTranscribing ? 'Processing your voice' : 'Voice-only agent'}
+            </Text>
+            <Text style={styles.voiceOnlySubtitle}>
+              {isRecording
+                ? 'Speak naturally, then tap the mic again to send.'
+                : isTranscribing
+                  ? 'Please wait while your message is converted to text.'
+                  : `Manual typing is off. Say something like: ${placeholder}`}
+            </Text>
+          </View>
 
           <TouchableOpacity
             style={[
               styles.micButton,
+              styles.micButtonLarge,
               isRecording && styles.micButtonRecording,
               (isLoading || isTranscribing) && styles.micButtonDisabled,
             ]}
@@ -755,31 +741,15 @@ export const AgentXChat = React.memo(function AgentXChat({
             {isTranscribing ? (
               <ActivityIndicator size="small" color={COLORS.white} />
             ) : isRecording ? (
-              <MicOff size={20} color={COLORS.white} />
+              <MicOff size={24} color={COLORS.white} />
             ) : (
-              <Mic size={20} color={COLORS.white} />
-            )}
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!inputText.trim() || isLoading) && styles.sendButtonDisabled,
-            ]}
-            onPress={handleSend}
-            disabled={!inputText.trim() || isLoading}
-            activeOpacity={0.7}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
-            ) : (
-              <Send size={20} color={inputText.trim() ? COLORS.white : 'rgba(255,255,255,0.5)'} />
+              <Mic size={24} color={COLORS.white} />
             )}
           </TouchableOpacity>
         </View>
-        
+
         <Text style={styles.disclaimer}>
-          AI Analysis provides cruise recommendations. Verify important details.
+          AI Analysis is now voice-first. Use the mic or tap a suggested action.
         </Text>
       </View>
     </KeyboardAvoidingView>
@@ -1176,21 +1146,30 @@ const styles = StyleSheet.create({
   },
   inputWrapper: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: SPACING.sm,
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.lg,
     paddingHorizontal: SPACING.md,
-    paddingVertical: Platform.OS === 'ios' ? SPACING.sm : 0,
+    paddingVertical: SPACING.sm,
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.15)',
   },
-  textInput: {
+  voiceOnlyCard: {
     flex: 1,
+    paddingVertical: 2,
+  },
+  voiceOnlyTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.navyDeep,
-    maxHeight: 100,
-    paddingVertical: SPACING.sm,
+    marginBottom: 2,
+  },
+  voiceOnlySubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+    lineHeight: 18,
   },
   micButton: {
     width: 40,
@@ -1201,23 +1180,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Platform.OS === 'ios' ? 0 : SPACING.xs,
   },
+  micButtonLarge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    marginBottom: 0,
+  },
   micButtonRecording: {
     backgroundColor: '#DC2626',
   },
   micButtonDisabled: {
     backgroundColor: 'rgba(0, 151, 167, 0.3)',
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.navyDeep,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Platform.OS === 'ios' ? 0 : SPACING.xs,
-  },
-  sendButtonDisabled: {
-    backgroundColor: 'rgba(30, 58, 95, 0.3)',
   },
   disclaimer: {
     fontSize: TYPOGRAPHY.fontSizeXS,
