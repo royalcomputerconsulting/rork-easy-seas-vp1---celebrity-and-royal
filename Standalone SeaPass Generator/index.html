@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeaPass Generator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #EEF2F7;
+      --card: #FFFFFF;
+      --card-border: #E4EAF2;
+      --header-bg: #1C2140;
+      --accent: #4F2A95;
+      --accent-light: #5A319F;
+      --purple-bg: #F6F1FF;
+      --purple-border: #E7D8FF;
+      --input-bg: #F8FAFD;
+      --input-border: #D9E1EC;
+      --text-dark: #152033;
+      --text-mid: #61708B;
+      --text-label: #53627C;
+      --preview-surface: #DCE6F2;
+      --reset-bg: #F6F8FB;
+      --secondary-bg: #EEF3FB;
+      --secondary-border: #D8E2F0;
+      --navy: #0B1A3E;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    html, body { font-family: var(--font); background: var(--bg); color: var(--text-dark); min-height: 100vh; }
+
+    .topbar {
+      background: var(--accent);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .topbar svg { flex-shrink: 0; }
+    .topbar h1 { font-size: 20px; font-weight: 700; color: #fff; }
+
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    @media (min-width: 1080px) {
+      .container { flex-direction: row; align-items: flex-start; }
+      .preview-col { flex: 1.02; }
+      .form-col { flex: 0.98; }
+    }
+
+    .preview-header {
+      border-radius: 28px;
+      background: var(--header-bg);
+      padding: 24px;
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 6px 14px rgba(15,23,42,0.1);
+    }
+    .preview-header-icon {
+      width: 42px; height: 42px;
+      border-radius: 14px;
+      background: var(--accent-light);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .preview-header-icon svg { width: 18px; height: 18px; }
+    .preview-eyebrow {
+      font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase;
+      color: rgba(255,255,255,0.74); margin-bottom: 6px;
+    }
+    .preview-title { font-size: 26px; font-weight: 700; color: #fff; line-height: 1.15; }
+    .preview-subtitle { margin-top: 8px; font-size: 14px; line-height: 20px; color: rgba(255,255,255,0.78); }
+
+    .preview-surface {
+      border-radius: 30px;
+      background: var(--preview-surface);
+      padding: 24px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .preview-surface svg { max-width: 520px; width: 100%; height: auto; border-radius: 20px; }
+
+    .card {
+      border-radius: 28px;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .card-title { font-size: 24px; font-weight: 700; color: var(--text-dark); }
+    .card-subtitle { font-size: 14px; line-height: 20px; color: var(--text-mid); margin-top: 6px; }
+
+    .locked-info {
+      border-radius: 18px;
+      background: var(--purple-bg);
+      border: 1px solid var(--purple-border);
+      padding: 16px;
+      margin-top: 20px;
+    }
+    .locked-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      border-radius: 999px; background: #fff;
+      padding: 6px 10px; margin-bottom: 8px;
+    }
+    .locked-badge svg { width: 14px; height: 14px; }
+    .locked-badge span { font-size: 12px; font-weight: 700; color: var(--accent-light); text-transform: uppercase; letter-spacing: 0.8px; }
+    .locked-info-text { font-size: 14px; line-height: 20px; color: #4A5370; }
+
+    .fields { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; }
+    .field label {
+      display: block; font-size: 12px; font-weight: 700;
+      letter-spacing: 0.8px; text-transform: uppercase;
+      color: var(--text-label); margin-bottom: 8px;
+    }
+    .field input {
+      width: 100%; height: 54px; border-radius: 14px;
+      border: 1px solid var(--input-border); background: var(--input-bg);
+      padding: 0 16px; font-size: 16px; color: var(--text-dark);
+      font-family: var(--font); outline: none; transition: border-color 0.15s;
+    }
+    .field input:focus { border-color: var(--accent); }
+    .field input::placeholder { color: #9AA3B2; }
+
+    .btn-row { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 10px; min-height: 54px; border-radius: 18px;
+      padding: 0 24px; font-size: 16px; font-weight: 700;
+      cursor: pointer; border: none; font-family: var(--font);
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.88; }
+    .btn:active { opacity: 0.72; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: var(--secondary-bg); color: var(--navy); border: 1px solid var(--secondary-border); }
+    .btn-reset {
+      min-height: 48px; border-radius: 999px;
+      border: 1px solid var(--input-border); background: var(--reset-bg);
+      color: var(--navy); margin-top: 20px; width: 100%;
+    }
+    .btn-reset svg, .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+    .export-card .export-title { font-size: 20px; font-weight: 700; color: var(--text-dark); }
+    .export-card .export-subtitle { font-size: 14px; line-height: 20px; color: var(--text-mid); margin-top: 6px; margin-bottom: 16px; }
+
+    .toast {
+      position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+      background: #1C2140; color: #fff; padding: 14px 28px;
+      border-radius: 16px; font-size: 15px; font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+      opacity: 0; pointer-events: none; transition: opacity 0.3s;
+      z-index: 100;
+    }
+    .toast.visible { opacity: 1; pointer-events: auto; }
+
+    @media (max-width: 600px) {
+      .container { padding: 16px; }
+      .preview-header { padding: 18px; }
+      .card { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a6 6 0 0 1 6-6h8a6 6 0 0 1 6 6"/><path d="M12 14V4"/><path d="m4 7 8 4 8-4"/></svg>
+  <h1>SeaPass Generator — Standalone</h1>
+</div>
+
+<div class="container">
+  <div class="preview-col">
+    <div class="preview-header">
+      <div class="preview-header-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a6 6 0 0 1 6-6h8a6 6 0 0 1 6 6"/><path d="M12 14V4"/><path d="m4 7 8 4 8-4"/></svg>
+      </div>
+      <div>
+        <div class="preview-eyebrow">Locked Version 2 Web SeaPass</div>
+        <div class="preview-title">Live Preview</div>
+        <div class="preview-subtitle">The web SeaPass updates instantly as you edit the form. Works entirely offline — no app required.</div>
+      </div>
+    </div>
+    <div class="preview-surface" id="previewSurface"></div>
+  </div>
+
+  <div class="form-col">
+    <div class="card">
+      <div class="card-title">SeaPass Web Generator</div>
+      <div class="card-subtitle">Standalone generator for the finalized Royal Caribbean web SeaPass. No app dependencies.</div>
+
+      <div class="locked-info">
+        <div class="locked-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#5A319F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>Locked Elements</span>
+        </div>
+        <div class="locked-info-text">Scott Merlis &bull; DIAMOND PLUS &bull; SIGNATURE &bull; LOS ANGELES, CALIFORNIA</div>
+      </div>
+
+      <div class="fields" id="fieldsContainer"></div>
+
+      <button class="btn btn-reset" id="resetBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        Reset to Defaults
+      </button>
+    </div>
+
+    <div class="card export-card">
+      <div class="export-title">Export</div>
+      <div class="export-subtitle">Download a PNG image or open a print/PDF flow from this exact web pass layout.</div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="exportPngBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export PNG
+        </button>
+        <button class="btn btn-secondary" id="exportPrintBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+          Print / Save PDF
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var VIEWBOX_W = 1024;
+  var VIEWBOX_H = 1536;
+  var APPROVED_IMAGE_URL = 'https://r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png';
+  var PREVIEW_BG = '#EFF3F8';
+  var EXPORT_BG = '#FFFFFF';
+  var FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+
+  var DEFAULTS = {
+    time: '10:30 am',
+    date: 'Apr 07',
+    deck: '10',
+    stateroom: '10134',
+    muster: 'A4',
+    reservation: '182213',
+    ship: 'QN'
+  };
+
+  var FIELD_CONFIGS = [
+    { key: 'time', label: 'Boarding Time', placeholder: DEFAULTS.time },
+    { key: 'date', label: 'Sailing Date', placeholder: DEFAULTS.date },
+    { key: 'deck', label: 'Deck', placeholder: DEFAULTS.deck },
+    { key: 'stateroom', label: 'Stateroom', placeholder: DEFAULTS.stateroom },
+    { key: 'muster', label: 'Muster Station', placeholder: DEFAULTS.muster },
+    { key: 'reservation', label: 'Reservation Number', placeholder: DEFAULTS.reservation },
+    { key: 'ship', label: 'Ship Code', placeholder: DEFAULTS.ship }
+  ];
+
+  var OVERLAY_DEFS = {
+    time: { x: 956, y: 106, fill: '#FFFFFF', fontSize: 46, fontWeight: '400', letterSpacing: -1.1, textAnchor: 'end', mask: { x: 632, y: 36, width: 336, height: 84, fill: '#5A3C8E', radius: 8, sampleX: 632, sampleY: 228 } },
+    date: { x: 958, y: 178, fill: '#FFFFFF', fontSize: 62, fontWeight: '300', letterSpacing: -1.6, textAnchor: 'end', mask: { x: 632, y: 104, width: 336, height: 108, fill: '#5A3C8E', radius: 8, sampleX: 632, sampleY: 228 } },
+    deck: { x: 94, y: 608, fill: '#30333A', fontSize: 54, fontWeight: '400', letterSpacing: -0.8, mask: { x: 78, y: 558, width: 102, height: 70, fill: '#F4F4F5', radius: 6, sampleX: 474, sampleY: 558 } },
+    stateroom: { x: 250, y: 608, fill: '#30333A', fontSize: 54, fontWeight: '400', letterSpacing: -0.8, mask: { x: 232, y: 558, width: 214, height: 70, fill: '#F4F4F5', radius: 6, sampleX: 474, sampleY: 558 } },
+    muster: { x: 930, y: 608, fill: '#30333A', fontSize: 54, fontWeight: '400', letterSpacing: -0.8, textAnchor: 'end', mask: { x: 822, y: 558, width: 130, height: 70, fill: '#F4F4F5', radius: 6, sampleX: 644, sampleY: 558 } },
+    reservation: { x: 94, y: 755, fill: '#30333A', fontSize: 54, fontWeight: '400', letterSpacing: -0.8, mask: { x: 78, y: 702, width: 222, height: 76, fill: '#F4F4F5', radius: 6, sampleX: 474, sampleY: 702 } },
+    ship: { x: 930, y: 755, fill: '#30333A', fontSize: 54, fontWeight: '400', letterSpacing: -0.8, textAnchor: 'end', mask: { x: 822, y: 702, width: 130, height: 76, fill: '#F4F4F5', radius: 6, sampleX: 644, sampleY: 702 } },
+    barcodeCaption: { x: 512, y: 1308, fill: '#30333A', fontSize: 48, fontWeight: '400', letterSpacing: -0.6, textAnchor: 'middle', mask: { x: 310, y: 1258, width: 404, height: 72, fill: '#F8F8F9', radius: 6, sampleX: 78, sampleY: 1360 } }
+  };
+
+  var ORDERED_KEYS = ['time', 'date', 'deck', 'stateroom', 'muster', 'reservation', 'ship', 'barcodeCaption'];
+
+  function normalize(val, fallback) {
+    var t = (val || '').trim();
+    return t.length > 0 ? t : fallback;
+  }
+
+  function getData(input) {
+    var d = {};
+    for (var k in DEFAULTS) d[k] = normalize(input[k], DEFAULTS[k]);
+    return d;
+  }
+
+  function getBarcodeCaption(data) {
+    var d = getData(data);
+    return d.reservation + '-' + d.stateroom;
+  }
+
+  function escapeXml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  }
+
+  function getOverlayValue(key, data, barcodeCaption) {
+    return key === 'barcodeCaption' ? barcodeCaption : data[key];
+  }
+
+  function shouldRender(key, value) {
+    if (key === 'barcodeCaption') return value !== getBarcodeCaption(DEFAULTS);
+    return value !== DEFAULTS[key];
+  }
+
+  function getDynamicOverlays(input) {
+    var data = getData(input);
+    var bc = getBarcodeCaption(data);
+    var topRightChanged = data.time !== DEFAULTS.time || data.date !== DEFAULTS.date;
+    var result = [];
+
+    ORDERED_KEYS.forEach(function (key) {
+      var val = getOverlayValue(key, data, bc);
+      var render = (key === 'time' || key === 'date') ? topRightChanged : shouldRender(key, val);
+      if (!render) return;
+      var def = OVERLAY_DEFS[key];
+      result.push({
+        key: key, value: val,
+        x: def.x, y: def.y, fill: def.fill,
+        fontSize: def.fontSize, fontWeight: def.fontWeight,
+        letterSpacing: def.letterSpacing, textAnchor: def.textAnchor,
+        mask: def.mask
+      });
+    });
+
+    return result;
+  }
+
+  function buildOverlaySvg(input, imageHref) {
+    var data = getData(input);
+    var bc = getBarcodeCaption(data);
+    var overlays = getDynamicOverlays(data);
+    var safeHref = escapeXml(imageHref);
+    var defs = [];
+    var markup = '';
+
+    overlays.forEach(function (o) {
+      var m = o.mask;
+      var clipId = 'overlay-clip-' + o.key;
+      var ta = o.textAnchor ? ' text-anchor="' + o.textAnchor + '"' : '';
+      var ls = typeof o.letterSpacing === 'number' ? ' letter-spacing="' + o.letterSpacing + '"' : '';
+      var val = escapeXml(getOverlayValue(o.key, data, bc));
+      var hasSample = typeof m.sampleX === 'number' && typeof m.sampleY === 'number';
+      var erase;
+
+      if (hasSample) {
+        var sx = m.sampleX || 0;
+        var sy = m.sampleY || 0;
+        defs.push('<clipPath id="' + clipId + '"><rect x="' + m.x + '" y="' + m.y + '" width="' + m.width + '" height="' + m.height + '" rx="' + m.radius + '" ry="' + m.radius + '" /></clipPath>');
+        erase = '<g clip-path="url(#' + clipId + ')"><image href="' + safeHref + '" x="' + (m.x - sx) + '" y="' + (m.y - sy) + '" width="' + VIEWBOX_W + '" height="' + VIEWBOX_H + '" preserveAspectRatio="none" /></g>';
+      } else {
+        erase = '<rect x="' + m.x + '" y="' + m.y + '" width="' + m.width + '" height="' + m.height + '" rx="' + m.radius + '" fill="' + m.fill + '" />';
+      }
+
+      markup += erase + '<text x="' + o.x + '" y="' + o.y + '"' + ta + ls + ' font-family="' + FONT_STACK + '" font-size="' + o.fontSize + '" font-weight="' + o.fontWeight + '" fill="' + o.fill + '">' + val + '</text>';
+    });
+
+    return { defs: defs.join(''), overlay: markup };
+  }
+
+  function buildSvg(input, bg, imageHref) {
+    var safeBg = escapeXml(bg);
+    var safeHref = escapeXml(imageHref);
+    var parts = buildOverlaySvg(input, imageHref);
+    var defsSection = parts.defs.length > 0 ? '<defs>' + parts.defs + '</defs>' : '';
+
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + VIEWBOX_W + '" height="' + VIEWBOX_H + '" viewBox="0 0 ' + VIEWBOX_W + ' ' + VIEWBOX_H + '" fill="none">' + defsSection +
+      '<rect x="0" y="0" width="' + VIEWBOX_W + '" height="' + VIEWBOX_H + '" fill="' + safeBg + '" />' +
+      '<image href="' + safeHref + '" x="0" y="0" width="' + VIEWBOX_W + '" height="' + VIEWBOX_H + '" preserveAspectRatio="none" />' + parts.overlay +
+      '</svg>';
+  }
+
+  // ---- State ----
+  var formData = {};
+  for (var k in DEFAULTS) formData[k] = DEFAULTS[k];
+
+  var approvedDataUrl = null;
+
+  // ---- DOM ----
+  var previewSurface = document.getElementById('previewSurface');
+  var fieldsContainer = document.getElementById('fieldsContainer');
+  var resetBtn = document.getElementById('resetBtn');
+  var exportPngBtn = document.getElementById('exportPngBtn');
+  var exportPrintBtn = document.getElementById('exportPrintBtn');
+  var toastEl = document.getElementById('toast');
+  var toastTimer = null;
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('visible'); }, 3000);
+  }
+
+  function renderPreview() {
+    previewSurface.innerHTML = buildSvg(formData, PREVIEW_BG, APPROVED_IMAGE_URL);
+  }
+
+  function buildFields() {
+    fieldsContainer.innerHTML = '';
+    FIELD_CONFIGS.forEach(function (cfg) {
+      var div = document.createElement('div');
+      div.className = 'field';
+
+      var label = document.createElement('label');
+      label.textContent = cfg.label;
+      label.setAttribute('for', 'field-' + cfg.key);
+
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.id = 'field-' + cfg.key;
+      input.placeholder = cfg.placeholder;
+      input.value = formData[cfg.key];
+
+      if (cfg.key === 'ship' || cfg.key === 'muster') {
+        input.style.textTransform = 'uppercase';
+      }
+
+      input.addEventListener('input', function () {
+        var val = input.value;
+        if (cfg.key === 'ship' || cfg.key === 'muster') val = val.toUpperCase();
+        formData[cfg.key] = val;
+        renderPreview();
+      });
+
+      div.appendChild(label);
+      div.appendChild(input);
+      fieldsContainer.appendChild(div);
+    });
+  }
+
+  function resetForm() {
+    for (var k in DEFAULTS) formData[k] = DEFAULTS[k];
+    FIELD_CONFIGS.forEach(function (cfg) {
+      var el = document.getElementById('field-' + cfg.key);
+      if (el) el.value = DEFAULTS[cfg.key];
+    });
+    renderPreview();
+    showToast('Reset to defaults');
+  }
+
+  function fetchImageAsDataUrl(url) {
+    return fetch(url)
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.blob();
+      })
+      .then(function (blob) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onloadend = function () {
+            if (typeof reader.result === 'string') resolve(reader.result);
+            else reject(new Error('Failed to read image'));
+          };
+          reader.onerror = function () { reject(new Error('FileReader error')); };
+          reader.readAsDataURL(blob);
+        });
+      });
+  }
+
+  function getApprovedDataUrl() {
+    if (approvedDataUrl) return Promise.resolve(approvedDataUrl);
+    return fetchImageAsDataUrl(APPROVED_IMAGE_URL).then(function (du) {
+      approvedDataUrl = du;
+      return du;
+    });
+  }
+
+  function exportPng() {
+    exportPngBtn.disabled = true;
+    exportPngBtn.innerHTML = '<span style="display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite"></span> Exporting...';
+
+    getApprovedDataUrl()
+      .then(function (dataUrl) {
+        var svgMarkup = buildSvg(formData, EXPORT_BG, dataUrl);
+        var blob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
+        var objectUrl = URL.createObjectURL(blob);
+
+        return new Promise(function (resolve, reject) {
+          var img = new Image();
+          img.onload = function () {
+            try {
+              var canvas = document.createElement('canvas');
+              canvas.width = VIEWBOX_W;
+              canvas.height = VIEWBOX_H;
+              var ctx = canvas.getContext('2d');
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+              var pngUrl = canvas.toDataURL('image/png');
+              var link = document.createElement('a');
+              var d = getData(formData);
+              link.download = 'seapass-' + d.reservation + '-' + d.stateroom + '.png';
+              link.href = pngUrl;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(objectUrl);
+              resolve();
+            } catch (e) { reject(e); }
+          };
+          img.onerror = function () { URL.revokeObjectURL(objectUrl); reject(new Error('SVG render failed')); };
+          img.src = objectUrl;
+        });
+      })
+      .then(function () {
+        showToast('PNG downloaded successfully');
+      })
+      .catch(function (err) {
+        showToast('PNG export failed: ' + err.message);
+        console.error('[SeaPassStandalone] PNG export error', err);
+      })
+      .finally(function () {
+        exportPngBtn.disabled = false;
+        exportPngBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export PNG';
+      });
+  }
+
+  function exportPrint() {
+    var svg = buildSvg(formData, EXPORT_BG, APPROVED_IMAGE_URL);
+    var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' +
+      '@page{size:1024px 1536px;margin:0}html,body{margin:0;padding:0;background:#fff}' +
+      'body{display:flex;align-items:center;justify-content:center}' +
+      '.sheet{width:1024px;height:1536px}.sheet svg{width:100%;height:100%;display:block}' +
+      '</style></head><body><div class="sheet">' + svg + '</div></body></html>';
+
+    var win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      setTimeout(function () { win.print(); }, 400);
+      showToast('Print dialog opened');
+    } else {
+      showToast('Pop-up blocked — please allow pop-ups for this page');
+    }
+  }
+
+  // ---- Spinner keyframes ----
+  var styleTag = document.createElement('style');
+  styleTag.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+  document.head.appendChild(styleTag);
+
+  // ---- Init ----
+  buildFields();
+  renderPreview();
+  resetBtn.addEventListener('click', resetForm);
+  exportPngBtn.addEventListener('click', exportPng);
+  exportPrintBtn.addEventListener('click', exportPrint);
+
+  // Pre-warm the data URL for faster first PNG export
+  getApprovedDataUrl().then(function () {
+    console.log('[SeaPassStandalone] Approved image pre-cached as data URL');
+  }).catch(function () {
+    console.log('[SeaPassStandalone] Pre-cache skipped (will retry on export)');
+  });
+})();
+</script>
+</body>
+</html>
