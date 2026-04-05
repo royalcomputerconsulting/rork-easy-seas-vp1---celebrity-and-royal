@@ -29,7 +29,6 @@ import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
-import { SeaPassCard } from '@/components/SeaPassCard';
 import { DailyLuckSection } from '@/components/DailyLuckSection';
 
 const EVENT_COLORS = {
@@ -1483,26 +1482,6 @@ export default function DayAgendaScreen() {
             </View>
           )}
 
-          {mergedCruiseBookings.length > 0 && (
-            <View style={styles.sectionContainer}>
-              {mergedCruiseBookings.map((cruise) => {
-                const source = bookedCruises.find(b => b.id === cruise.id)?.cruiseSource;
-                return (
-                  <SeaPassCard
-                    key={`seapass-${cruise.id}`}
-                    shipName={cruise.shipName}
-                    sailDate={cruise.sailDate}
-                    returnDate={cruise.returnDate}
-                    nights={cruise.nights}
-                    dayNumber={getDayOfCruise(cruise)}
-                    departurePort={cruise.departurePort}
-                    bookings={cruise.bookings}
-                    brand={source}
-                  />
-                );
-              })}
-            </View>
-          )}
 
           {(opportunePlayingTimes.length > 0 || mergedCruiseBookings.length > 0) && (
             <View style={styles.sectionContainer}>
