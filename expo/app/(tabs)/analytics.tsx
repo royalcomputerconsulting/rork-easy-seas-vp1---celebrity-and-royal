@@ -146,6 +146,7 @@ export default function AnalyticsScreen() {
     type: 'achievement' | 'streak' | 'milestone';
   } | null>(null);
   const [targetPPH, setTargetPPH] = useState(100);
+  const [calcsMode, setCalcsMode] = useState<'per-session' | 'historical'>('per-session');
   const [isGeneratingSessions, setIsGeneratingSessions] = useState(false);
   
   const {
@@ -1377,19 +1378,59 @@ export default function AnalyticsScreen() {
     return `${hours}h ${mins}m`;
   };
 
+  const historicalCruiseData = useMemo(() => {
+    if (activeTab !== 'calcs') return { totalCruises: 0, totalPoints: 0, totalSessions: 0, cruises: [] as { id: string; shipName: string; sailDate: string; points: number; sessionCount: number; nights: number }[] };
+    const today = new Date();
+    const cruiseData = bookedCruises
+      .filter(cruise => {
+        const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
+        const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
+        const hasPoints = (cruise.earnedPoints || cruise.casinoPoints || 0) > 0;
+        return isCompleted && hasPoints;
+      })
+      .map(cruise => {
+        const cruiseSessions = sessions.filter(s => s.cruiseId === cruise.id);
+        const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+        return {
+          id: cruise.id,
+          shipName: cruise.shipName || 'Unknown',
+          sailDate: cruise.sailDate || '',
+          points,
+          sessionCount: cruiseSessions.length > 0 ? cruiseSessions.length : Math.max(1, (cruise.nights || 1) * 2),
+          nights: cruise.nights || 1,
+        };
+      });
+
+    const totalPoints = cruiseData.reduce((sum, c) => sum + c.points, 0);
+    const totalSessions = cruiseData.reduce((sum, c) => sum + c.sessionCount, 0);
+
+    return {
+      totalCruises: cruiseData.length,
+      totalPoints,
+      totalSessions,
+      cruises: cruiseData,
+    };
+  }, [activeTab, bookedCruises, sessions]);
+
   const highValueCalculations = useMemo(() => {
     if (activeTab !== 'calcs') return [] as { id: number; label: string; value: string; description: string; color: string; icon: any }[];
+
+    const isHistorical = calcsMode === 'historical';
     const totalCoinIn = casinoAnalytics.totalCoinIn;
-    const totalSessions = sessions.length;
+    const totalSessions = isHistorical ? historicalCruiseData.totalSessions : sessions.length;
     const totalProfit = realAnalytics.completedProfit;
     const totalHours = sessionAnalytics.totalPlayTimeMinutes / 60;
     const totalRetailValue = realAnalytics.completedRetailValue;
     const avgSessionLength = sessionAnalytics.avgSessionLength;
+    const modeLabel = isHistorical ? 'historical' : 'per session';
+    const divisorLabel = isHistorical
+      ? `${historicalCruiseData.totalSessions} sessions across ${historicalCruiseData.totalCruises} cruises`
+      : `${sessions.length} tracked sessions`;
 
-    const coinInPerSession = totalSessions > 0 ? totalCoinIn / totalSessions : 0;
+    const coinInPerUnit = totalSessions > 0 ? totalCoinIn / totalSessions : 0;
     
     const assumedHold = 0.08;
-    const theoPerSession = coinInPerSession * assumedHold;
+    const theoPerUnit = coinInPerUnit * assumedHold;
     
     const morningSessionsData = sessions.filter(s => {
       const hour = parseInt(s.startTime.split(':')[0]);
@@ -1402,8 +1443,18 @@ export default function AnalyticsScreen() {
     
     const morningCoinIn = morningSessionsData.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0);
     const eveningCoinIn = eveningSessionsData.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0);
-    const morningTheo = morningCoinIn * assumedHold;
-    const eveningTheo = eveningCoinIn * assumedHold;
+
+    let morningTheo: number;
+    let eveningTheo: number;
+    if (isHistorical && totalSessions > 0) {
+      const morningRatio = morningSessionsData.length / Math.max(sessions.length, 1);
+      const eveningRatio = eveningSessionsData.length / Math.max(sessions.length, 1);
+      morningTheo = (totalCoinIn * morningRatio) * assumedHold;
+      eveningTheo = (totalCoinIn * eveningRatio) * assumedHold;
+    } else {
+      morningTheo = morningCoinIn * assumedHold;
+      eveningTheo = eveningCoinIn * assumedHold;
+    }
     const theoPerTimeBlock = morningTheo > eveningTheo ? 'Morning' : 'Evening';
     const theoTimeBlockValue = Math.max(morningTheo, eveningTheo);
     
@@ -1420,7 +1471,7 @@ export default function AnalyticsScreen() {
     const theoStdDev = Math.sqrt(theoVariance);
     const adtSmoothingFactor = avgTheo > 0 ? (theoStdDev / avgTheo) : 0;
     
-    const profitPerSession = totalSessions > 0 ? totalProfit / totalSessions : 0;
+    const profitPerUnit = totalSessions > 0 ? totalProfit / totalSessions : 0;
     
     const stopGap = 200;
     const riskPerHour = avgSessionLength > 0 ? (stopGap / (avgSessionLength / 60)) : 0;
@@ -1440,7 +1491,10 @@ export default function AnalyticsScreen() {
     const spikeRisk = sessionWinLoss.length > 0 ? (Math.max(...sessionWinLoss.map(Math.abs)) / Math.max(avgWinLoss, 1)) : 0;
     const offerSafetyIndex = consistencyScore > 0 && spikeRisk > 0 ? consistencyScore / spikeRisk : 0;
     
-    const valuePerHourPlayed = totalHours > 0 ? totalRetailValue / totalHours : 0;
+    const totalHistoricalHours = isHistorical
+      ? (historicalCruiseData.totalSessions * avgSessionLength) / 60
+      : totalHours;
+    const valuePerHourPlayed = totalHistoricalHours > 0 ? totalRetailValue / totalHistoricalHours : 0;
     
     const recentProfit = sessions.slice(-10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
     const earlyProfit = sessions.slice(0, 10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
@@ -1448,28 +1502,34 @@ export default function AnalyticsScreen() {
     const variabilityScore = 1 - Math.min(adtSmoothingFactor, 1);
     const sustainabilityScore = (trendScore * 0.6 + variabilityScore * 0.4) * 100;
 
+    const pointsPerSession = isHistorical && historicalCruiseData.totalSessions > 0
+      ? historicalCruiseData.totalPoints / historicalCruiseData.totalSessions
+      : sessions.length > 0
+        ? sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0) / sessions.length
+        : 0;
+
     return [
       {
         id: 1,
-        label: 'Coin-in per session',
-        value: formatCurrency(coinInPerSession),
-        description: 'Total coin-in ÷ total sessions',
+        label: isHistorical ? 'Coin-in (historical avg)' : 'Coin-in per session',
+        value: formatCurrency(coinInPerUnit),
+        description: isHistorical ? `Total coin-in ÷ ${divisorLabel}` : 'Total coin-in ÷ total sessions',
         color: COLORS.navyDeep,
         icon: Coins,
       },
       {
         id: 2,
-        label: 'Theo per session',
-        value: formatCurrency(theoPerSession),
-        description: `Coin-in per session × ${(assumedHold * 100).toFixed(0)}% hold`,
+        label: isHistorical ? 'Theo (historical avg)' : 'Theo per session',
+        value: formatCurrency(theoPerUnit),
+        description: `Coin-in ${modeLabel} × ${(assumedHold * 100).toFixed(0)}% hold`,
         color: COLORS.royalPurple,
         icon: Target,
       },
       {
         id: 3,
-        label: 'Theo per time block',
+        label: isHistorical ? 'Theo per time block (hist.)' : 'Theo per time block',
         value: `${theoPerTimeBlock}: ${formatCurrency(theoTimeBlockValue)}`,
-        description: 'Morning vs evening efficiency',
+        description: isHistorical ? 'Scaled morning vs evening from cruise history' : 'Morning vs evening efficiency',
         color: '#F59E0B',
         icon: Dices,
       },
@@ -1483,10 +1543,10 @@ export default function AnalyticsScreen() {
       },
       {
         id: 5,
-        label: 'Profit per session',
-        value: formatCurrency(profitPerSession),
-        description: `${formatCurrency(totalProfit)} ÷ ${totalSessions} sessions`,
-        color: profitPerSession >= 0 ? COLORS.success : COLORS.error,
+        label: isHistorical ? 'Profit (historical avg)' : 'Profit per session',
+        value: formatCurrency(profitPerUnit),
+        description: `${formatCurrency(totalProfit)} ÷ ${totalSessions} ${isHistorical ? 'historical' : ''} sessions`,
+        color: profitPerUnit >= 0 ? COLORS.success : COLORS.error,
         icon: TrendingUp,
       },
       {
@@ -1515,22 +1575,24 @@ export default function AnalyticsScreen() {
       },
       {
         id: 9,
-        label: 'Value per hour played',
+        label: isHistorical ? 'Value/hr (historical)' : 'Value per hour played',
         value: formatCurrency(valuePerHourPlayed),
-        description: 'Total value extracted ÷ total hours',
+        description: isHistorical ? `Retail value ÷ est. ${totalHistoricalHours.toFixed(0)} total hours` : 'Total value extracted ÷ total hours',
         color: COLORS.goldDark,
         icon: DollarSign,
       },
       {
         id: 10,
-        label: 'Sustainability score',
-        value: `${sustainabilityScore.toFixed(1)}%`,
-        description: 'Likelihood offers persist unchanged',
-        color: sustainabilityScore >= 70 ? COLORS.success : sustainabilityScore >= 40 ? '#F59E0B' : COLORS.error,
-        icon: BarChart3,
+        label: isHistorical ? 'Points per session (hist.)' : 'Sustainability score',
+        value: isHistorical ? formatNumber(Math.round(pointsPerSession)) + ' pts' : `${sustainabilityScore.toFixed(1)}%`,
+        description: isHistorical
+          ? `${formatNumber(historicalCruiseData.totalPoints)} pts ÷ ${historicalCruiseData.totalSessions} sessions`
+          : 'Likelihood offers persist unchanged',
+        color: isHistorical ? '#8B5CF6' : (sustainabilityScore >= 70 ? COLORS.success : sustainabilityScore >= 40 ? '#F59E0B' : COLORS.error),
+        icon: isHistorical ? Award : BarChart3,
       },
     ];
-  }, [activeTab, casinoAnalytics, sessions, realAnalytics, sessionAnalytics]);
+  }, [activeTab, calcsMode, casinoAnalytics, sessions, realAnalytics, sessionAnalytics, historicalCruiseData]);
 
   const renderCalcsTab = () => (
     <View style={styles.tabContent}>
@@ -1545,6 +1607,47 @@ export default function AnalyticsScreen() {
               <Text style={styles.calcsHeaderSubtitle}>10 advanced metrics now unlocked</Text>
             </View>
           </View>
+
+          <View style={styles.calcsModeToggleContainer}>
+            <TouchableOpacity
+              style={[
+                styles.calcsModeToggleBtn,
+                calcsMode === 'per-session' && styles.calcsModeToggleBtnActive,
+              ]}
+              onPress={() => setCalcsMode('per-session')}
+              activeOpacity={0.7}
+              testID="calcs-mode-per-session"
+            >
+              <Dices size={13} color={calcsMode === 'per-session' ? COLORS.white : COLORS.navyDeep} />
+              <Text style={[
+                styles.calcsModeToggleText,
+                calcsMode === 'per-session' && styles.calcsModeToggleTextActive,
+              ]}>Per Session</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.calcsModeToggleBtn,
+                calcsMode === 'historical' && styles.calcsModeToggleBtnActive,
+              ]}
+              onPress={() => setCalcsMode('historical')}
+              activeOpacity={0.7}
+              testID="calcs-mode-historical"
+            >
+              <Ship size={13} color={calcsMode === 'historical' ? COLORS.white : COLORS.navyDeep} />
+              <Text style={[
+                styles.calcsModeToggleText,
+                calcsMode === 'historical' && styles.calcsModeToggleTextActive,
+              ]}>Historical</Text>
+            </TouchableOpacity>
+          </View>
+
+          {calcsMode === 'historical' && historicalCruiseData.totalCruises > 0 && (
+            <View style={styles.calcsModeSummary}>
+              <Text style={styles.calcsModeSummaryText}>
+                Based on {formatNumber(historicalCruiseData.totalPoints)} points across {historicalCruiseData.totalSessions} sessions from {historicalCruiseData.totalCruises} completed cruises
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.calcsGrid}>
@@ -2836,6 +2939,52 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: '#64748B',
     marginTop: 2,
+  },
+  calcsModeToggleContainer: {
+    flexDirection: 'row',
+    marginTop: SPACING.md,
+    backgroundColor: '#F1F5F9',
+    borderRadius: BORDER_RADIUS.md,
+    padding: 3,
+    gap: 3,
+  },
+  calcsModeToggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  calcsModeToggleBtnActive: {
+    backgroundColor: COLORS.navyDeep,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  calcsModeToggleText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  calcsModeToggleTextActive: {
+    color: COLORS.white,
+  },
+  calcsModeSummary: {
+    marginTop: SPACING.sm,
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingVertical: 8,
+    paddingHorizontal: SPACING.sm,
+  },
+  calcsModeSummaryText: {
+    fontSize: 11,
+    color: '#6B21A8',
+    textAlign: 'center',
+    lineHeight: 16,
   },
   calcsGrid: {
     gap: SPACING.sm,
