@@ -865,9 +865,9 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   headerLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 80,
+    height: 80,
+    borderRadius: 16,
   },
   memberTextInfo: {
     flex: 1,

@@ -596,10 +596,6 @@ export default function AtlasScreen() {
             style={styles.logoHeaderImage}
             resizeMode="contain"
           />
-          <View style={styles.logoHeaderTextContainer}>
-            <Text style={styles.logoHeaderTitle}>Easy Seas™</Text>
-            <Text style={styles.logoHeaderSubtitle}>Manage your Nautical Lifestyle™</Text>
-          </View>
         </View>
 
         <View style={styles.header}>
@@ -1167,15 +1163,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   logoHeaderContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: SPACING.sm,
     marginTop: SPACING.sm,
     paddingHorizontal: 20,
+    paddingVertical: SPACING.sm,
   },
   logoHeaderImage: {
-    width: 160,
-    height: 160,
+    width: 320,
+    height: 320,
+    maxWidth: '100%',
   },
   logoHeaderTextContainer: {
     marginLeft: SPACING.md,

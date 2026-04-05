@@ -6,9 +6,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, Alert
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useAppState } from '@/state/AppStateProvider';
-import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import type { CalendarEvent, BookedCruise } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
@@ -39,7 +37,6 @@ const EVENT_COLORS = {
 export default function EventsScreen() {
   const router = useRouter();
   const { localData } = useAppState();
-  const { clubRoyaleTier, crownAnchorLevel } = useLoyalty();
   const coreData = useCoreData();
   const { bookedCruises } = coreData;
   const [viewMode, setViewMode] = useState<ViewMode>('month');
@@ -57,7 +54,7 @@ export default function EventsScreen() {
     setRefreshKey(prev => prev + 1);
   }, [calendarEvents.length, bookedCruises.length]);
 
-  const eventCounts = useMemo(() => {
+  const _eventCounts = useMemo(() => {
     let cruise = 0;
     let travel = 0;
     let personal = 0;
@@ -110,7 +107,7 @@ export default function EventsScreen() {
     return count;
   }, [calendarEvents, bookedCruises, currentDate]);
 
-  const isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
+  const _isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
     const start = new Date(startStr);
     const end = new Date(endStr);
     const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -249,7 +246,7 @@ export default function EventsScreen() {
       });
     }
     return days;
-  }, [getEventsForDate, refreshKey]);
+  }, [getEventsForDate]);
 
   const next90Days = useMemo(() => {
     const today = new Date();
@@ -268,7 +265,7 @@ export default function EventsScreen() {
       });
     }
     return days;
-  }, [getEventsForDate, refreshKey]);
+  }, [getEventsForDate]);
 
   const navigateMonth = useCallback((direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
@@ -481,22 +478,15 @@ export default function EventsScreen() {
           <View style={styles.heroHeader}>
             <View style={styles.heroContent}>
               <View style={styles.logoSection}>
-                <Image 
+                <Image
                   source={{ uri: IMAGES.logo }}
                   style={styles.logoImage}
-                  resizeMode="cover"
+                  resizeMode="contain"
                 />
               </View>
               <View style={styles.heroTextSection}>
                 <Text style={styles.heroTitle}>Easy Seas™</Text>
-                <Text style={styles.heroSubtitle}>Manage Your Nautical Lifestyle</Text>
-                <View style={styles.tierBadgesRow}>
-                  <TierBadgeGroup 
-                    clubRoyaleTier={clubRoyaleTier}
-                    crownAnchorLevel={crownAnchorLevel}
-                    size="small"
-                  />
-                </View>
+                <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle</Text>
               </View>
             </View>
           </View>
@@ -732,30 +722,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoSection: {
-    marginRight: SPACING.md,
+    marginRight: SPACING.lg,
   },
   logoImage: {
-    width: 100,
-    height: 120,
-    borderRadius: BORDER_RADIUS.md,
+    width: 140,
+    height: 140,
   },
   heroTextSection: {
     flex: 1,
+    justifyContent: 'center',
   },
   heroTitle: {
-    fontSize: TYPOGRAPHY.fontSizeHeader,
+    fontSize: 30,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.white,
-    marginBottom: 2,
+    marginBottom: 6,
   },
   heroSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: SPACING.sm,
-  },
-  tierBadgesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.82)',
   },
   viewToggleContainer: {
     flexDirection: 'row',
