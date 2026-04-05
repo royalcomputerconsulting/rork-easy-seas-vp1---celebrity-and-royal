@@ -73,7 +73,7 @@ const DEFAULT_ANALYTICS: AnalyticsData = {
   pointsByMonth: [],
 };
 
-const DEFAULT_CASINO_ANALYTICS: CasinoAnalytics = {
+const _DEFAULT_CASINO_ANALYTICS: CasinoAnalytics = {
   totalCoinIn: 0,
   totalWinLoss: 0,
   totalPointsEarned: 0,
@@ -140,11 +140,7 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
       totalWinLoss += winnings;
     });
 
-    // For display purposes:
-    // - totalPointsEarned should show CURRENT balance (not historical sum)
-    // - totalCoinIn is calculated from current balance × $5
-    const totalPointsEarned = currentPointBalance;
-    // Total Coin-In = Current Points × $5 (standard formula)
+    const totalPointsEarned = currentPointBalance > 0 ? currentPointBalance : cruisePointsSum;
     const totalCoinIn = totalPointsEarned * DOLLARS_PER_POINT;
     const netResult = totalWinLoss;
     const count = completedCruises.length;
@@ -311,12 +307,12 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
     };
   }, [completedCruises]);
 
-  const getTotalCruises = () => analytics.totalCruises;
-  const getTotalNights = () => analytics.totalNights;
-  const getTotalSpent = () => analytics.totalSpent;
-  const getAveragePricePerNight = () => analytics.averagePricePerNight;
-  const getFavoriteShip = () => analytics.favoriteShip;
-  const getFavoriteDestination = () => analytics.favoriteDestination;
+  const getTotalCruises = useCallback(() => analytics.totalCruises, [analytics.totalCruises]);
+  const getTotalNights = useCallback(() => analytics.totalNights, [analytics.totalNights]);
+  const getTotalSpent = useCallback(() => analytics.totalSpent, [analytics.totalSpent]);
+  const getAveragePricePerNight = useCallback(() => analytics.averagePricePerNight, [analytics.averagePricePerNight]);
+  const getFavoriteShip = useCallback(() => analytics.favoriteShip, [analytics.favoriteShip]);
+  const getFavoriteDestination = useCallback(() => analytics.favoriteDestination, [analytics.favoriteDestination]);
   
   const getCruiseValueBreakdown = useCallback((cruise: Cruise | BookedCruise): ValueBreakdown => {
     return calculateCruiseValue(cruise);
@@ -346,7 +342,7 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
     );
   }, [bookedCruises, cruises]);
 
-  return {
+  return useMemo(() => ({
     analytics,
     casinoAnalytics,
     portfolioMetrics,
@@ -362,5 +358,5 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
     getOfferValueBreakdown,
     getCruiseCasinoAvailability,
     calculateCruiseROI,
-  };
+  }), [analytics, casinoAnalytics, portfolioMetrics, completedCruises, isLoading, getTotalCruises, getTotalNights, getTotalSpent, getAveragePricePerNight, getFavoriteShip, getFavoriteDestination, getCruiseValueBreakdown, getOfferValueBreakdown, getCruiseCasinoAvailability, calculateCruiseROI]);
 });

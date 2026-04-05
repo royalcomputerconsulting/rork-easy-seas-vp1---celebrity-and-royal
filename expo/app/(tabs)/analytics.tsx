@@ -1420,7 +1420,7 @@ export default function AnalyticsScreen() {
     const totalCoinIn = isHistorical
       ? historicalCruiseData.totalPoints * DOLLARS_PER_POINT
       : (sessions.length > 0
-        ? sessions.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0)
+        ? sessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0)
         : casinoAnalytics.totalCoinIn);
     const totalSessions = isHistorical ? historicalCruiseData.totalSessions : sessions.length;
     const totalProfit = realAnalytics.completedProfit;
@@ -1446,8 +1446,8 @@ export default function AnalyticsScreen() {
       return hour >= 17 || hour < 2;
     });
     
-    const morningCoinIn = morningSessionsData.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0);
-    const eveningCoinIn = eveningSessionsData.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0);
+    const morningCoinIn = morningSessionsData.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
+    const eveningCoinIn = eveningSessionsData.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
 
     let morningTheo: number;
     let eveningTheo: number;
@@ -1466,7 +1466,7 @@ export default function AnalyticsScreen() {
     const cruiseDates = new Set(sessions.map(s => s.date));
     const theoValues = Array.from(cruiseDates).map(date => {
       const daySessions = sessions.filter(s => s.date === date);
-      const dayCoinIn = daySessions.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0);
+      const dayCoinIn = daySessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
       return dayCoinIn * assumedHold;
     });
     const avgTheo = theoValues.length > 0 ? theoValues.reduce((a, b) => a + b, 0) / theoValues.length : 0;
