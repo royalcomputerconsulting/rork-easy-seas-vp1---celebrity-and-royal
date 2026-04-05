@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Linking, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
   X,
@@ -17,6 +17,8 @@ import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruis
 import type { Cruise, CasinoOffer } from '@/types/models';
 import { useAppState } from '@/state/AppStateProvider';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+import { getFocusTheme } from '@/constants/focusThemes';
+import { useUser } from '@/state/UserProvider';
 
 interface CasinoOfferCardProps {
   offerCode: string;
@@ -50,112 +52,136 @@ export const OfferSummaryCard = React.memo(function OfferSummaryCard({
   onHighestValuePress,
   activeSortMode = 'soonest',
 }: OfferSummaryCardProps) {
+  const { currentUser } = useUser();
+  const theme = getFocusTheme(currentUser?.preferredBrand);
+
   return (
-    <View style={summaryStyles.container}>
-      <ImageBackground 
-        source={{ uri: JACKPOT_BG }} 
-        style={summaryStyles.backgroundImage}
-        resizeMode="cover"
+    <View style={[summaryStyles.container, { borderColor: theme.cardBorder }]}>
+      <LinearGradient
+        colors={theme.marbleGradient as unknown as [string, string, ...string[]]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={summaryStyles.gradientOverlay}
       >
-        <LinearGradient
-          colors={['rgba(0, 151, 167, 0.9)', 'rgba(30, 58, 95, 0.92)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={summaryStyles.gradientOverlay}
-        >
-          <View style={summaryStyles.header}>
-            <View style={summaryStyles.titleRow}>
-              <Sparkles size={22} color="#FEF3C7" />
-              <Text style={summaryStyles.title}>Offer Summary</Text>
+        <View pointerEvents="none" style={[summaryStyles.marbleBlobPrimary, { backgroundColor: theme.marbleVein }]} />
+        <View pointerEvents="none" style={[summaryStyles.marbleBlobSecondary, { borderColor: theme.marbleVeinAlt }]} />
+
+        <View style={summaryStyles.header}>
+          <View style={summaryStyles.titleRow}>
+            <View style={[summaryStyles.titleIcon, { backgroundColor: theme.iconSurface, borderColor: theme.iconBorder }]}>
+              <Sparkles size={18} color={theme.actionPrimary} />
+            </View>
+            <Text style={[summaryStyles.title, { color: theme.textPrimary }]}>Offer Summary</Text>
+          </View>
+        </View>
+
+        <View style={[summaryStyles.statsRow, { backgroundColor: theme.panelSurface, borderColor: theme.cardBorder }]}> 
+          <View style={summaryStyles.statItem}>
+            <View style={[summaryStyles.statIconContainer, { backgroundColor: theme.pillSurface, borderColor: theme.pillBorder }]}>
+              <DollarSign size={18} color={theme.actionPrimary} />
+            </View>
+            <View>
+              <Text style={[summaryStyles.statLabel, { color: theme.textSecondary }]}>Total Value</Text>
+              <Text style={[summaryStyles.statValue, { color: COLORS.success }]}>
+                ${totalValue > 0 ? totalValue.toLocaleString() : '---'}
+              </Text>
             </View>
           </View>
 
-          <View style={summaryStyles.statsRow}>
-            <View style={summaryStyles.statItem}>
-              <View style={summaryStyles.statIconContainer}>
-                <DollarSign size={18} color="#A7F3D0" />
-              </View>
-              <View>
-                <Text style={summaryStyles.statLabel}>Total Value</Text>
-                <Text style={[summaryStyles.statValue, summaryStyles.valueText]}>
-                  ${totalValue > 0 ? totalValue.toLocaleString() : '---'}
-                </Text>
-              </View>
+          <View style={summaryStyles.statItem}>
+            <View style={[summaryStyles.statIconContainer, { backgroundColor: theme.pillSurface, borderColor: theme.pillBorder }]}>
+              <Ship size={18} color={theme.actionSecondary} />
             </View>
-
-            <View style={summaryStyles.statItem}>
-              <View style={summaryStyles.statIconContainer}>
-                <Ship size={18} color="#BAE6FD" />
-              </View>
-              <View>
-                <Text style={summaryStyles.statLabel}>Total Cruises</Text>
-                <Text style={summaryStyles.statValue}>{totalCruises}</Text>
-              </View>
-            </View>
-
-            <View style={summaryStyles.statItem}>
-              <View style={summaryStyles.statIconContainer}>
-                <Tag size={18} color="#FBBF24" />
-              </View>
-              <View>
-                <Text style={summaryStyles.statLabel}>Offers</Text>
-                <Text style={summaryStyles.statValue}>{totalOffers}</Text>
-              </View>
+            <View>
+              <Text style={[summaryStyles.statLabel, { color: theme.textSecondary }]}>Total Cruises</Text>
+              <Text style={[summaryStyles.statValue, { color: theme.textPrimary }]}>{totalCruises}</Text>
             </View>
           </View>
 
-          <View style={summaryStyles.buttonRow}>
-            <TouchableOpacity 
-              style={[
-                summaryStyles.filterButton, 
-                activeSortMode === 'soonest' && summaryStyles.filterButtonActive
-              ]} 
-              onPress={onSoonestPress}
-              activeOpacity={0.8}
-            >
-              <Text style={[
-                summaryStyles.filterButtonText,
-                activeSortMode !== 'soonest' && summaryStyles.filterButtonTextInactive
-              ]}>Sort by Soonest Expiring Offer</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[
-                summaryStyles.filterButton, 
-                activeSortMode === 'highestValue' && summaryStyles.filterButtonActive
-              ]} 
-              onPress={onHighestValuePress}
-              activeOpacity={0.8}
-            >
-              <Text style={[
-                summaryStyles.filterButtonText,
-                activeSortMode !== 'highestValue' && summaryStyles.filterButtonTextInactive
-              ]}>Sort by Value</Text>
-            </TouchableOpacity>
+          <View style={summaryStyles.statItem}>
+            <View style={[summaryStyles.statIconContainer, { backgroundColor: theme.pillSurface, borderColor: theme.pillBorder }]}>
+              <Tag size={18} color={theme.highlight} />
+            </View>
+            <View>
+              <Text style={[summaryStyles.statLabel, { color: theme.textSecondary }]}>Offers</Text>
+              <Text style={[summaryStyles.statValue, { color: theme.textPrimary }]}>{totalOffers}</Text>
+            </View>
           </View>
-        </LinearGradient>
-      </ImageBackground>
+        </View>
+
+        <View style={summaryStyles.buttonRow}>
+          <TouchableOpacity
+            style={[
+              summaryStyles.filterButton,
+              { backgroundColor: theme.cardSurface, borderColor: theme.cardBorder },
+              activeSortMode === 'soonest' && { backgroundColor: theme.actionPrimary, borderColor: theme.actionPrimary },
+            ]}
+            onPress={onSoonestPress}
+            activeOpacity={0.8}
+            testID="offer-summary-sort-soonest-button"
+          >
+            <Text style={[
+              summaryStyles.filterButtonText,
+              { color: theme.textPrimary },
+              activeSortMode === 'soonest' && { color: theme.actionText },
+            ]}>
+              Sort by Soonest Expiring Offer
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              summaryStyles.filterButton,
+              { backgroundColor: theme.cardSurface, borderColor: theme.cardBorder },
+              activeSortMode === 'highestValue' && { backgroundColor: theme.actionPrimary, borderColor: theme.actionPrimary },
+            ]}
+            onPress={onHighestValuePress}
+            activeOpacity={0.8}
+            testID="offer-summary-sort-value-button"
+          >
+            <Text style={[
+              summaryStyles.filterButtonText,
+              { color: theme.textPrimary },
+              activeSortMode === 'highestValue' && { color: theme.actionText },
+            ]}>
+              Sort by Value
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
     </View>
   );
 });
 
-// Keep JackpotDealsCard for backwards compatibility but mark as deprecated
-/** @deprecated Use OfferSummaryCard instead */
 export const JackpotDealsCard = OfferSummaryCard;
-
-const JACKPOT_BG = 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=600&q=80';
 
 const summaryStyles = StyleSheet.create({
   container: {
     borderRadius: BORDER_RADIUS.lg,
     marginBottom: SPACING.lg,
     overflow: 'hidden',
+    borderWidth: 1,
     ...SHADOW.lg,
-  },
-  backgroundImage: {
-    width: '100%',
   },
   gradientOverlay: {
     padding: SPACING.lg,
+    position: 'relative',
+  },
+  marbleBlobPrimary: {
+    position: 'absolute',
+    top: -30,
+    right: -48,
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+  },
+  marbleBlobSecondary: {
+    position: 'absolute',
+    left: -54,
+    bottom: -60,
+    width: 220,
+    height: 132,
+    borderRadius: 66,
+    borderWidth: 18,
   },
   header: {
     flexDirection: 'row',
@@ -168,21 +194,25 @@ const summaryStyles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
   },
+  titleIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
   title: {
     fontSize: 20,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: SPACING.lg,
-    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
+    borderWidth: 1,
   },
   statItem: {
     flexDirection: 'row',
@@ -193,23 +223,18 @@ const summaryStyles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   statLabel: {
     fontSize: 11,
     fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.8)',
     marginBottom: 2,
   },
   statValue: {
     fontSize: 16,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
-  },
-  valueText: {
-    color: '#A7F3D0',
   },
   buttonRow: {
     flexDirection: 'row',
@@ -217,24 +242,14 @@ const summaryStyles = StyleSheet.create({
   },
   filterButton: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  filterButtonActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FFFFFF',
   },
   filterButtonText: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: COLORS.navyDeep,
-  },
-  filterButtonTextInactive: {
-    color: '#FFFFFF',
   },
 });
 
@@ -247,8 +262,8 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   obc,
   cruises,
   onPress,
-  onCruisePress,
-  bookedCruiseIds = new Set(),
+  onCruisePress: _onCruisePress,
+  bookedCruiseIds: _bookedCruiseIds = new Set(),
   isActive = true,
   isBestValue = false,
 }: CasinoOfferCardProps) {

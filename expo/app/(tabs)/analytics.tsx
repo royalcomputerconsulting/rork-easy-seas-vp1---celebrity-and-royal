@@ -90,6 +90,8 @@ import { SessionsSummaryCard } from '@/components/SessionsSummaryCard';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+import { useUser } from '@/state/UserProvider';
+import { getFocusTheme } from '@/constants/focusThemes';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -117,6 +119,8 @@ export default function AnalyticsScreen() {
   const router = useRouter();
   useEntitlement();
   const { analytics, casinoAnalytics } = useSimpleAnalytics();
+  const { currentUser } = useUser();
+  const focusTheme = useMemo(() => getFocusTheme(currentUser?.preferredBrand), [currentUser?.preferredBrand]);
   const { 
     activeAlerts, 
     insights, 
@@ -356,7 +360,7 @@ export default function AnalyticsScreen() {
     });
     
     if (unlockedAchievements.length > 0) {
-      haptics.success();
+      void haptics.success();
       setCelebrationData({
         title: 'Achievement Unlocked!',
         subtitle: `You earned: ${unlockedAchievements[0].replace(/_/g, ' ').toUpperCase()}`,
@@ -530,7 +534,22 @@ export default function AnalyticsScreen() {
     console.log('[CasinoCruiseExport] Building CSV...', { cruiseCount: cruises.length });
 
     const escapeCsv = (value: unknown): string => {
-      const str = String(value ?? '');
+      let str = '';
+
+      if (typeof value === 'string') {
+        str = value;
+      } else if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+        str = String(value);
+      } else if (value instanceof Date) {
+        str = value.toISOString();
+      } else if (value !== null && value !== undefined) {
+        try {
+          str = JSON.stringify(value);
+        } catch {
+          str = '';
+        }
+      }
+
       const needsQuotes = /[\n\r\t",]/.test(str);
       const escaped = str.replace(/"/g, '""');
       return needsQuotes ? `"${escaped}"` : escaped;
@@ -639,7 +658,7 @@ export default function AnalyticsScreen() {
       }
 
       const file = new ExpoFile(ExpoPaths.cache, filename);
-      await file.write(csv);
+      file.write(csv);
 
       const fileUri = file.uri;
 
@@ -1127,7 +1146,7 @@ export default function AnalyticsScreen() {
     pointsEarned: number;
     pph: number;
   }) => {
-    handleAddSession({
+    void handleAddSession({
       startTime: new Date(Date.now() - data.durationMinutes * 60 * 1000).toTimeString().slice(0, 5),
       endTime: new Date().toTimeString().slice(0, 5),
       durationMinutes: data.durationMinutes,
@@ -1183,7 +1202,7 @@ export default function AnalyticsScreen() {
       console.log('[Analytics] Total sessions after generation:', sessions.length + count);
       
       if (count > 0) {
-        haptics.success();
+        void haptics.success();
         setCelebrationData({
           title: forceRegenerate ? 'Sessions Regenerated!' : 'Historical Sessions Generated!',
           subtitle: `Created ${count} session records from ${completedCruises.length} cruises`,
@@ -1284,7 +1303,7 @@ export default function AnalyticsScreen() {
         <WeeklyGoalsCard
           compact={true}
           onGoalComplete={(goal) => {
-            haptics.success();
+            void haptics.success();
             setCelebrationData({
               title: 'Goal Completed!',
               subtitle: `You completed: ${goal.type} goal`,
@@ -1839,7 +1858,9 @@ export default function AnalyticsScreen() {
 
   return (
     <LinearGradient
-      colors={['#E3F2FD', '#90CAF9']}
+      colors={focusTheme.screenGradient as unknown as [string, string, ...string[]]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={styles.container}
     >
       <Stack.Screen options={{ headerShown: false }} />
@@ -1916,8 +1937,8 @@ export default function AnalyticsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={COLORS.navyDeep}
-              colors={[COLORS.navyDeep]}
+              tintColor={focusTheme.actionPrimary}
+              colors={[focusTheme.actionPrimary]}
             />
           }
         >

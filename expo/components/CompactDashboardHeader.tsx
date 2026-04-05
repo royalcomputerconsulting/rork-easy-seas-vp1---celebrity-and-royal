@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
-import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
+import { getFocusTheme, resolveFocusTheme } from '@/constants/focusThemes';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS, LEVEL_ORDER } from '@/constants/crownAnchor';
 import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER, getCelebrityCaptainsClubLevelByPoints } from '@/constants/celebrityCaptainsClub';
@@ -57,14 +57,16 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     mastersProgress,
     projectedBookedPoints,
   } = useLoyalty();
-  const { currentUser } = useUser();
+  const { currentUser, updateUser } = useUser();
   const [activeBrand, setActiveBrand] = useState<BrandType>(currentUser?.preferredBrand || 'royal');
   const [showNumber, setShowNumber] = useState(false);
 
   const toggleShowNumber = useCallback(() => setShowNumber(v => !v), []);
 
   useEffect(() => {
-    setActiveBrand(currentUser?.preferredBrand || 'royal');
+    if (currentUser?.preferredBrand === 'royal' || currentUser?.preferredBrand === 'celebrity') {
+      setActiveBrand(currentUser.preferredBrand);
+    }
   }, [currentUser?.preferredBrand]);
 
   const celebrityCaptainsClubPoints = currentUser?.celebrityCaptainsClubPoints || 0;
@@ -97,7 +99,21 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     return `${mm}-${dd}-${yy}`;
   };
 
-  const marbleConfig = MARBLE_TEXTURES.lightBlue;
+  const focusThemeKey = activeBrand === 'royal' || activeBrand === 'celebrity'
+    ? activeBrand
+    : resolveFocusTheme(currentUser?.preferredBrand);
+  const focusTheme = getFocusTheme(focusThemeKey);
+
+  const handleBrandToggle = useCallback((brand: BrandType) => {
+    console.log('[CompactDashboardHeader] Brand toggle pressed:', brand);
+    setActiveBrand(brand);
+
+    if ((brand === 'royal' || brand === 'celebrity') && currentUser?.id && currentUser.preferredBrand !== brand) {
+      void updateUser(currentUser.id, { preferredBrand: brand }).catch((error) => {
+        console.error('[CompactDashboardHeader] Failed to persist preferred brand:', error);
+      });
+    }
+  }, [currentUser?.id, currentUser?.preferredBrand, updateUser]);
 
   const displayName = currentUser?.name || memberName;
   const rawNumber = activeBrand === 'royal' 
@@ -124,12 +140,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
   return (
     <LinearGradient
-      colors={marbleConfig.gradientColors as unknown as [string, string, ...string[]]}
-      locations={marbleConfig.gradientLocations}
+      colors={focusTheme.marbleGradient as unknown as [string, string, ...string[]]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.container}
+      style={[styles.container, { borderColor: focusTheme.cardBorder }]}
     >
+      <View pointerEvents="none" style={[styles.marbleBlobPrimary, { backgroundColor: focusTheme.marbleVein }]} />
+      <View pointerEvents="none" style={[styles.marbleBlobSecondary, { borderColor: focusTheme.marbleVeinAlt }]} />
       <View style={styles.topRow}>
         <View style={styles.memberInfoInline}>
           {!hideLogo && (
@@ -140,9 +157,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
             />
           )}
           <View style={styles.memberTextInfo}>
-            <Text style={styles.memberGreeting}>{displayName}</Text>
+            <Text style={[styles.memberGreeting, { color: focusTheme.textPrimary }]}>{displayName}</Text>
             <TouchableOpacity onPress={rawNumber ? toggleShowNumber : undefined} activeOpacity={rawNumber ? 0.7 : 1}>
-              <Text style={styles.memberSubtitle}>{displayNumberLabel} {displayNumber}</Text>
+              <Text style={[styles.memberSubtitle, { color: focusTheme.textSecondary }]}>{displayNumberLabel} {displayNumber}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -150,11 +167,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <View style={styles.actionsSection}>
           {onAlertsPress && (
             <TouchableOpacity 
-              style={styles.iconBtn} 
+              style={[styles.iconBtn, { backgroundColor: focusTheme.iconSurface, borderColor: focusTheme.iconBorder }]} 
               onPress={onAlertsPress}
               activeOpacity={0.7}
             >
-              <Bell size={18} color={CLEAN_THEME.text.primary} />
+              <Bell size={18} color={focusTheme.textPrimary} />
               {alertCount > 0 && (
                 <View style={styles.alertBadge}>
                   <Text style={styles.alertBadgeText}>
@@ -166,36 +183,36 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           )}
           {onLogoutPress && (
             <TouchableOpacity 
-              style={styles.iconBtn} 
+              style={[styles.iconBtn, { backgroundColor: focusTheme.iconSurface, borderColor: focusTheme.iconBorder }]} 
               onPress={onLogoutPress}
               activeOpacity={0.7}
             >
-              <LogOut size={18} color={CLEAN_THEME.text.primary} />
+              <LogOut size={18} color={focusTheme.textPrimary} />
             </TouchableOpacity>
           )}
           {onSettingsPress && (
             <TouchableOpacity 
-              style={styles.iconBtn} 
+              style={[styles.iconBtn, { backgroundColor: focusTheme.iconSurface, borderColor: focusTheme.iconBorder }]} 
               onPress={onSettingsPress}
               activeOpacity={0.7}
             >
-              <Settings size={18} color={CLEAN_THEME.text.primary} />
+              <Settings size={18} color={focusTheme.textPrimary} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
-      <BrandToggle activeBrand={activeBrand} onToggle={setActiveBrand} />
+      <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} />
 
       {activeBrand === 'royal' ? (
         <>
       {/* === ROYAL CARIBBEAN === */}
       <View style={styles.tierRow}>
-        <View style={[styles.tierBadge, { backgroundColor: '#FFFFFF', borderColor: 'rgba(0, 31, 63, 0.2)' }]}>
-          <Text style={[styles.tierText, { color: COLORS.navyDeep }]}>{clubRoyaleTier.toUpperCase()}</Text>
+        <View style={[styles.tierBadge, { backgroundColor: CLUB_ROYALE_TIERS[clubRoyaleTier]?.bgColor || focusTheme.pillSurface, borderColor: CLUB_ROYALE_TIERS[clubRoyaleTier]?.color || focusTheme.actionPrimary }]}>
+          <Text style={[styles.tierText, { color: CLUB_ROYALE_TIERS[clubRoyaleTier]?.color || focusTheme.actionPrimary }]}>{clubRoyaleTier.toUpperCase()}</Text>
         </View>
-        <View style={[styles.tierBadge, { backgroundColor: '#FFFFFF', borderColor: 'rgba(0, 31, 63, 0.2)' }]}>
-          <Text style={[styles.tierText, { color: COLORS.navyDeep }]}>{crownAnchorLevel.toUpperCase()}</Text>
+        <View style={[styles.tierBadge, { backgroundColor: CROWN_ANCHOR_LEVELS[crownAnchorLevel]?.bgColor || focusTheme.pillSurface, borderColor: CROWN_ANCHOR_LEVELS[crownAnchorLevel]?.color || focusTheme.actionSecondary }]}>
+          <Text style={[styles.tierText, { color: CROWN_ANCHOR_LEVELS[crownAnchorLevel]?.color || focusTheme.actionSecondary }]}>{crownAnchorLevel.toUpperCase()}</Text>
         </View>
       </View>
       {crewMemberCount > 0 && (
@@ -223,7 +240,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextLevelColor = nextLevel ? CROWN_ANCHOR_LEVELS[nextLevel]?.color : levelColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, { backgroundColor: focusTheme.cardSurface, borderColor: focusTheme.cardBorder }]}>
               <View style={styles.progressHeader}>
                 <Text style={styles.progressLabel}>
                   {isPinnacle 
@@ -308,7 +325,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextTierColor = nextTier ? CLUB_ROYALE_TIERS[nextTier]?.color : tierColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, { backgroundColor: focusTheme.cardSurface, borderColor: focusTheme.cardBorder }]}>
               <View style={styles.progressHeader}>
                 <Text style={styles.progressLabel}>
                   {isMasters 
@@ -387,7 +404,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
+      <View style={[styles.statsRow, { backgroundColor: focusTheme.cardSurface, borderColor: focusTheme.cardBorder }]}> 
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{clubRoyalePoints.toLocaleString()}</Text>
           <Text style={styles.statLabel}>Casino Pts (CR)</Text>
@@ -406,7 +423,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
       <View style={styles.quickStatsPillRow}>
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onCruisesPress}
           activeOpacity={0.7}
         >
@@ -416,7 +433,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onBookedPress}
           activeOpacity={0.7}
         >
@@ -426,7 +443,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onOffersPress}
           activeOpacity={0.7}
         >
@@ -465,7 +482,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextLevelColor = nextLevel ? CELEBRITY_CAPTAINS_CLUB_LEVELS[nextLevel]?.color : levelColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, { backgroundColor: focusTheme.cardSurface, borderColor: focusTheme.cardBorder }]}>
               <View style={styles.progressHeader}>
                 <Text style={styles.progressLabel}>
                   {isZenith 
@@ -508,7 +525,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextTierColor = nextTier ? CELEBRITY_BLUE_CHIP_TIERS[nextTier]?.color : tierColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, { backgroundColor: focusTheme.cardSurface, borderColor: focusTheme.cardBorder }]}>
               <View style={styles.progressHeader}>
                 <Text style={styles.progressLabel}>
                   {isRuby 
@@ -543,7 +560,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
+      <View style={[styles.statsRow, { backgroundColor: focusTheme.cardSurface, borderColor: focusTheme.cardBorder }]}> 
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{celebrityBlueChipPoints.toLocaleString()}</Text>
           <Text style={styles.statLabel}>Casino Pts (BC)</Text>
@@ -562,7 +579,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
       <View style={styles.quickStatsPillRow}>
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onCruisesPress}
           activeOpacity={0.7}
         >
@@ -572,7 +589,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onBookedPress}
           activeOpacity={0.7}
         >
@@ -582,7 +599,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onOffersPress}
           activeOpacity={0.7}
         >
@@ -618,7 +635,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextTierColor = nextTier ? SILVERSEA_VENETIAN_TIERS[nextTier]?.color : tierColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, { backgroundColor: focusTheme.cardSurface, borderColor: focusTheme.cardBorder }]}>
               <View style={styles.progressHeader}>
                 <Text style={styles.progressLabel}>
                   {isMax 
@@ -653,7 +670,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
+      <View style={[styles.statsRow, { backgroundColor: focusTheme.cardSurface, borderColor: focusTheme.cardBorder }]}> 
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{silverseaPoints}</Text>
           <Text style={styles.statLabel}>Cruise Days</Text>
@@ -676,7 +693,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
       <View style={styles.quickStatsPillRow}>
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onCruisesPress}
           activeOpacity={0.7}
         >
@@ -686,7 +703,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onBookedPress}
           activeOpacity={0.7}
         >
@@ -696,7 +713,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onOffersPress}
           activeOpacity={0.7}
         >
@@ -732,7 +749,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextTierColor = nextTier ? CARNIVAL_VIFP_TIERS[nextTier]?.color : tierColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, { backgroundColor: focusTheme.cardSurface, borderColor: focusTheme.cardBorder }]}>
               <View style={styles.progressHeader}>
                 <Text style={styles.progressLabel}>
                   {isMax 
@@ -770,7 +787,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const tierColor = CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color || '#1E90FF';
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, { backgroundColor: focusTheme.cardSurface, borderColor: focusTheme.cardBorder }]}>
               <View style={styles.progressHeader}>
                 <Text style={styles.progressLabel}>
                   Players Club: {carnivalPlayersClubTier} ({carnivalPlayersClubPoints.toLocaleString()} pts)
@@ -788,7 +805,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
+      <View style={[styles.statsRow, { backgroundColor: focusTheme.cardSurface, borderColor: focusTheme.cardBorder }]}> 
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{carnivalPlayersClubPoints.toLocaleString()}</Text>
           <Text style={styles.statLabel}>Players Pts</Text>
@@ -807,7 +824,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
       <View style={styles.quickStatsPillRow}>
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onCruisesPress}
           activeOpacity={0.7}
         >
@@ -817,7 +834,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onBookedPress}
           activeOpacity={0.7}
         >
@@ -827,7 +844,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, { backgroundColor: focusTheme.pillSurface, borderColor: focusTheme.pillBorder }]}
           onPress={onOffersPress}
           activeOpacity={0.7}
         >
@@ -894,6 +911,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    borderWidth: 1,
   },
   alertBadge: {
     position: 'absolute',
@@ -1084,6 +1102,23 @@ const styles = StyleSheet.create({
     gap: 3,
     borderWidth: 1,
     borderColor: CLEAN_THEME.border.light,
+  },
+  marbleBlobPrimary: {
+    position: 'absolute',
+    top: -18,
+    right: -28,
+    width: 164,
+    height: 164,
+    borderRadius: 82,
+  },
+  marbleBlobSecondary: {
+    position: 'absolute',
+    left: -42,
+    bottom: -58,
+    width: 198,
+    height: 124,
+    borderRadius: 62,
+    borderWidth: 18,
   },
   quickStatPillValue: {
     fontSize: TYPOGRAPHY.fontSizeXS,
