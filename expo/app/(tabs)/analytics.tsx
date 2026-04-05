@@ -1416,7 +1416,12 @@ export default function AnalyticsScreen() {
     if (activeTab !== 'calcs') return [] as { id: number; label: string; value: string; description: string; color: string; icon: any }[];
 
     const isHistorical = calcsMode === 'historical';
-    const totalCoinIn = casinoAnalytics.totalCoinIn;
+    const DOLLARS_PER_POINT = 5;
+    const totalCoinIn = isHistorical
+      ? historicalCruiseData.totalPoints * DOLLARS_PER_POINT
+      : (sessions.length > 0
+        ? sessions.reduce((sum, s) => sum + ((s.buyIn || 0) * 5), 0)
+        : casinoAnalytics.totalCoinIn);
     const totalSessions = isHistorical ? historicalCruiseData.totalSessions : sessions.length;
     const totalProfit = realAnalytics.completedProfit;
     const totalHours = sessionAnalytics.totalPlayTimeMinutes / 60;
