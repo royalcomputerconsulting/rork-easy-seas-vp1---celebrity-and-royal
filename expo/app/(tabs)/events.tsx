@@ -748,8 +748,8 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.82)',
   },
   heroSignature: {
-    width: 225,
-    height: 65,
+    width: 130,
+    height: 130,
     marginTop: 6,
     opacity: 0.75,
   },

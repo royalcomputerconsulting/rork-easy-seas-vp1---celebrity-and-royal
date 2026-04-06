@@ -928,8 +928,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   logoHeaderSignature: {
-    width: 250,
-    height: 70,
+    width: 130,
+    height: 130,
     marginTop: 6,
     opacity: 0.75,
   },
