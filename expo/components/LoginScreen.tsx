@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Dimensions, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
+import { IMAGES } from '@/constants/images';
 
 import { useAuth } from '@/state/AuthProvider';
 
@@ -68,7 +69,7 @@ export function LoginScreen() {
           <View style={styles.logoContainer}>
             {!logoError ? (
               <Image 
-                source={require('@/assets/images/splash-icon.png')}
+                source={{ uri: IMAGES.logo }}
                 style={styles.logoImage}
                 resizeMode="contain"
               />

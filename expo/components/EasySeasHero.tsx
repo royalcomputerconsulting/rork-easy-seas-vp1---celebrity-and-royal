@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, GRADIENTS } from '@/constants/theme';
+import { IMAGES } from '@/constants/images';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
@@ -63,7 +64,7 @@ export function EasySeasHero({
         <View style={styles.brandingSection}>
           <View style={styles.logoContainer}>
             <Image 
-              source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/drzllmgo03ok1wemgb3s9' }}
+              source={{ uri: IMAGES.logo }}
               style={styles.logoImage}
               resizeMode="contain"
             />
