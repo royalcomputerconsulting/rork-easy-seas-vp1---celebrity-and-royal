@@ -590,17 +590,28 @@ export default function AtlasScreen() {
   const listHeader = useMemo(() => {
     return (
       <>
-        <View style={styles.logoHeaderContainer}>
-          <Image
-            source={{ uri: IMAGES.logo }}
-            style={styles.logoHeaderImage}
-            resizeMode="contain"
+        <View style={styles.heroCard}>
+          <LinearGradient
+            colors={['#3AAFA9', '#2B7A78', '#17A398', '#1E8C82', '#3AAFA9']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
           />
-          <Image
-            source={{ uri: IMAGES.signature }}
-            style={styles.logoHeaderSignature}
-            resizeMode="contain"
+          <LinearGradient
+            colors={['rgba(255,255,255,0.18)', 'transparent', 'rgba(255,255,255,0.12)', 'transparent', 'rgba(255,255,255,0.08)']}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.8, y: 1 }}
+            style={StyleSheet.absoluteFill}
           />
+          <View style={styles.heroOverlay}>
+            <Text style={styles.heroTitle}>Easy Seas™</Text>
+            <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
+            <Image
+              source={{ uri: IMAGES.signature }}
+              style={styles.heroSignature}
+              resizeMode="contain"
+            />
+          </View>
         </View>
 
         <View style={styles.header}>
@@ -1167,41 +1178,42 @@ const styles = StyleSheet.create({
   sessionsContent: {
     marginBottom: 16,
   },
-  logoHeaderContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  heroCard: {
     marginBottom: SPACING.sm,
     marginTop: SPACING.sm,
-    paddingHorizontal: 20,
-    paddingVertical: SPACING.sm,
+    marginHorizontal: 20,
+    borderRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 200,
   },
-  logoHeaderImage: {
-    width: 320,
-    height: 320,
-    maxWidth: '100%',
+  heroOverlay: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
   },
-  logoHeaderSignature: {
-    width: 130,
-    height: 130,
-    marginTop: 4,
-    opacity: 0.7,
+  heroTitle: {
+    fontSize: 32,
+    fontWeight: '800' as const,
+    color: '#1A1A1A',
+    letterSpacing: 1,
+    textAlign: 'center',
   },
-  logoHeaderTextContainer: {
-    marginLeft: SPACING.md,
-    flex: 1,
-  },
-  logoHeaderTitle: {
-    fontSize: 24,
-    fontWeight: '700' as const,
-    color: COLORS.white,
-    letterSpacing: 0.5,
-  },
-  logoHeaderSubtitle: {
-    fontSize: 14,
+  heroSubtitle: {
+    fontSize: 15,
     fontWeight: '500' as const,
-    color: COLORS.white,
-    marginTop: 2,
+    color: 'rgba(0,0,0,0.65)',
+    marginTop: 6,
     letterSpacing: 0.3,
+    textAlign: 'center',
+  },
+  heroSignature: {
+    width: 240,
+    height: 100,
+    marginTop: 14,
+    opacity: 0.8,
   },
   header: {
     paddingHorizontal: 20,
