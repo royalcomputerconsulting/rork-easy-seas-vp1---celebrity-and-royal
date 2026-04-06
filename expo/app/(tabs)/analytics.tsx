@@ -1500,9 +1500,18 @@ export default function AnalyticsScreen() {
     const sessionCoinIn = sessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
     const hasSessionData = sessions.length > 0 && sessionCoinIn > 0;
 
-    const totalCoinIn = isHistorical
+    const sessionBuyInTotal = sessions.reduce((sum, s) => sum + (s.buyIn || 0), 0);
+    const estimatedCoinInFromBuyIns = sessionBuyInTotal > 0 ? sessionBuyInTotal * 4 : 0;
+    const estimatedCoinInFromNights = historicalCruiseData.totalNights > 0 ? historicalCruiseData.totalNights * 1500 : 0;
+
+    const rawTotalCoinIn = isHistorical
       ? casinoAnalytics.totalCoinIn
       : (hasSessionData ? sessionCoinIn : casinoAnalytics.totalCoinIn);
+
+    const totalCoinIn = rawTotalCoinIn > 0
+      ? rawTotalCoinIn
+      : (estimatedCoinInFromBuyIns > 0 ? estimatedCoinInFromBuyIns : estimatedCoinInFromNights);
+    const coinInIsEstimated = rawTotalCoinIn <= 0 && totalCoinIn > 0;
 
     const totalSessions = isHistorical
       ? historicalCruiseData.totalSessions
@@ -1525,7 +1534,7 @@ export default function AnalyticsScreen() {
       ? `${historicalCruiseData.totalSessions} sessions across ${completedCruiseCount} cruises`
       : (hasSessionData ? `${sessions.length} tracked sessions` : `${totalSessions} est. sessions from ${completedCruiseCount} cruises`);
 
-    console.log('[Calcs] Mode:', calcsMode, 'hasSessionData:', hasSessionData, 'totalCoinIn:', totalCoinIn, 'totalSessions:', totalSessions, 'casinoAnalytics.totalCoinIn:', casinoAnalytics.totalCoinIn);
+    console.log('[Calcs] Mode:', calcsMode, 'hasSessionData:', hasSessionData, 'totalCoinIn:', totalCoinIn, 'rawTotalCoinIn:', rawTotalCoinIn, 'coinInIsEstimated:', coinInIsEstimated, 'totalSessions:', totalSessions, 'casinoAnalytics.totalCoinIn:', casinoAnalytics.totalCoinIn);
 
     const coinInPerUnit = totalSessions > 0 ? totalCoinIn / totalSessions : 0;
     
@@ -1615,16 +1624,18 @@ export default function AnalyticsScreen() {
       {
         id: 1,
         label: isHistorical ? 'Coin-in (historical avg)' : 'Coin-in per session',
-        value: formatCurrency(coinInPerUnit),
-        description: isHistorical ? `Total coin-in ÷ ${divisorLabel}` : 'Total coin-in ÷ total sessions',
+        value: formatCurrency(coinInPerUnit) + (coinInIsEstimated ? ' (est.)' : ''),
+        description: coinInIsEstimated
+          ? (estimatedCoinInFromBuyIns > 0 ? 'Estimated from session buy-ins × 4' : 'Estimated from cruise nights × $1,500')
+          : (isHistorical ? `Total coin-in ÷ ${divisorLabel}` : 'Total coin-in ÷ total sessions'),
         color: COLORS.navyDeep,
         icon: Coins,
       },
       {
         id: 2,
         label: isHistorical ? 'Theo (historical avg)' : 'Theo per session',
-        value: formatCurrency(theoPerUnit),
-        description: `Coin-in ${modeLabel} × ${(assumedHold * 100).toFixed(0)}% hold`,
+        value: formatCurrency(theoPerUnit) + (coinInIsEstimated ? ' (est.)' : ''),
+        description: `Coin-in ${modeLabel} × ${(assumedHold * 100).toFixed(0)}% hold` + (coinInIsEstimated ? ' (estimated)' : ''),
         color: COLORS.royalPurple,
         icon: Target,
       },
