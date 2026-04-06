@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, LogOut, Target, Users } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
@@ -22,7 +22,6 @@ import { CARNIVAL_VIFP_TIERS, CARNIVAL_VIFP_TIER_ORDER, CARNIVAL_PLAYERS_CLUB_TI
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
 import { BrandToggle, BrandType } from '@/components/ui/BrandToggle';
-import { IMAGES } from '@/constants/images';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 
 interface CompactDashboardHeaderProps {
@@ -55,7 +54,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   onCruisesPress,
   onBookedPress,
   onOffersPress,
-  hideLogo = false,
+  hideLogo: _hideLogo = false,
   crewMemberCount = 0,
 }: CompactDashboardHeaderProps) {
   const {
@@ -165,16 +164,6 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     >
       <View style={styles.topRow}>
         <View style={styles.memberInfoInline}>
-          {!hideLogo && (
-            <View style={styles.logoSignatureGroup}>
-              <Image 
-                source={{ uri: IMAGES.logo }}
-                style={styles.headerLogo}
-                resizeMode="contain"
-              />
-
-            </View>
-          )}
           <View style={styles.memberTextInfo}>
             <Text style={[styles.memberGreeting, { color: playerCardTheme.topTextColor }]}>{displayName}</Text>
             <TouchableOpacity onPress={rawNumber ? toggleShowNumber : undefined} activeOpacity={rawNumber ? 0.7 : 1}>
