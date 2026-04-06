@@ -14,6 +14,7 @@ interface ProgressBarProps {
   gradientColors?: string[];
   backgroundColor?: string;
   eta?: string;
+  surfaceTone?: 'light' | 'dark' | 'auto';
 }
 
 export const ProgressBar = React.memo(function ProgressBar({
@@ -27,21 +28,26 @@ export const ProgressBar = React.memo(function ProgressBar({
   gradientColors,
   backgroundColor = 'rgba(255,255,255,0.1)',
   eta,
+  surfaceTone = 'auto',
 }: ProgressBarProps) {
   const clampedProgress = Math.min(100, Math.max(0, progress));
   const defaultGradient = [COLORS.beigeWarm, COLORS.goldDark];
   const fillColors = gradientColors || (color ? [color, color] : defaultGradient);
+  const useLightText = surfaceTone === 'dark' || (surfaceTone === 'auto' && backgroundColor === 'rgba(255,255,255,0.1)');
+  const primaryTextColor = useLightText ? COLORS.textOnDark : COLORS.textPrimary;
+  const secondaryTextColor = useLightText ? COLORS.textOnDarkSecondary : COLORS.textSecondary;
+  const emphasisTextColor = useLightText ? COLORS.white : COLORS.beigeWarm;
 
   return (
     <View style={styles.container}>
       {(label || showPercentage || eta) && (
         <View style={styles.header}>
-          {label && <Text style={styles.label}>{label}</Text>}
+          {label && <Text style={[styles.label, { color: primaryTextColor }]}>{label}</Text>}
           <View style={styles.headerRight}>
             {showPercentage && (
-              <Text style={styles.percentage}>{clampedProgress.toFixed(1)}%</Text>
+              <Text style={[styles.percentage, { color: emphasisTextColor }]}>{clampedProgress.toFixed(1)}%</Text>
             )}
-            {eta && <Text style={styles.eta}>ETA: {eta}</Text>}
+            {eta && <Text style={[styles.eta, { color: secondaryTextColor }]}>ETA: {eta}</Text>}
           </View>
         </View>
       )}
@@ -60,8 +66,8 @@ export const ProgressBar = React.memo(function ProgressBar({
       
       {(value || sublabel) && (
         <View style={styles.footer}>
-          {value && <Text style={styles.value}>{value}</Text>}
-          {sublabel && <Text style={styles.sublabel}>{sublabel}</Text>}
+          {value && <Text style={[styles.value, { color: primaryTextColor }]}>{value}</Text>}
+          {sublabel && <Text style={[styles.sublabel, { color: secondaryTextColor }]}>{sublabel}</Text>}
         </View>
       )}
     </View>

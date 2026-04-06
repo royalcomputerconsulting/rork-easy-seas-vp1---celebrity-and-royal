@@ -17,6 +17,7 @@ interface AnimatedProgressBarProps {
   animated?: boolean;
   showGlow?: boolean;
   milestones?: number[];
+  surfaceTone?: 'light' | 'dark' | 'auto';
 }
 
 export function AnimatedProgressBar({
@@ -33,10 +34,15 @@ export function AnimatedProgressBar({
   animated = true,
   showGlow = true,
   milestones = [],
+  surfaceTone = 'auto',
 }: AnimatedProgressBarProps) {
   const clampedProgress = Math.min(100, Math.max(0, progress));
   const defaultGradient = [COLORS.beigeWarm, COLORS.goldDark];
   const fillColors = gradientColors || (color ? [color, color] : defaultGradient);
+  const useLightText = surfaceTone === 'dark' || (surfaceTone === 'auto' && backgroundColor === 'rgba(255,255,255,0.1)');
+  const primaryTextColor = useLightText ? COLORS.textOnDark : COLORS.textPrimary;
+  const secondaryTextColor = useLightText ? COLORS.textOnDarkSecondary : COLORS.textSecondary;
+  const emphasisTextColor = useLightText ? COLORS.white : COLORS.beigeWarm;
 
   const animatedWidth = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -104,10 +110,10 @@ export function AnimatedProgressBar({
     <Animated.View style={[styles.container, { transform: [{ scale: pulseAnim }] }]}>
       {(label || showPercentage || eta) && (
         <View style={styles.header}>
-          {label && <Text style={styles.label}>{label}</Text>}
+          {label && <Text style={[styles.label, { color: primaryTextColor }]}>{label}</Text>}
           <View style={styles.headerRight}>
             {showPercentage && (
-              <Text style={styles.percentage}>{clampedProgress.toFixed(0)}%</Text>
+              <Text style={[styles.percentage, { color: emphasisTextColor }]}>{clampedProgress.toFixed(0)}%</Text>
             )}
           </View>
         </View>
@@ -148,14 +154,14 @@ export function AnimatedProgressBar({
       
       {eta && (
         <View style={styles.etaContainer}>
-          <Text style={styles.eta}>{eta}</Text>
+          <Text style={[styles.eta, { color: secondaryTextColor }]}>{eta}</Text>
         </View>
       )}
       
       {(value || sublabel) && (
         <View style={styles.footer}>
-          {value && <Text style={styles.value}>{value}</Text>}
-          {sublabel && <Text style={styles.sublabel}>{sublabel}</Text>}
+          {value && <Text style={[styles.value, { color: primaryTextColor }]}>{value}</Text>}
+          {sublabel && <Text style={[styles.sublabel, { color: secondaryTextColor }]}>{sublabel}</Text>}
         </View>
       )}
     </Animated.View>

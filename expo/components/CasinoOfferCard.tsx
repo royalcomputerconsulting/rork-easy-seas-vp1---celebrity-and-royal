@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Linking, ImageBackground } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
@@ -17,6 +17,7 @@ import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruis
 import type { Cruise, CasinoOffer } from '@/types/models';
 import { useAppState } from '@/state/AppStateProvider';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+import { getCertificatePdfMatch, openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
 
 interface CasinoOfferCardProps {
   offerCode: string;
@@ -247,8 +248,8 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   obc,
   cruises,
   onPress,
-  onCruisePress,
-  bookedCruiseIds = new Set(),
+  onCruisePress: _onCruisePress,
+  bookedCruiseIds: _bookedCruiseIds = new Set(),
   isActive = true,
   isBestValue = false,
 }: CasinoOfferCardProps) {
@@ -270,6 +271,9 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   }, [cruises]);
 
   const [cardImageUri, setCardImageUri] = useState<string>(offerImageUrl);
+  const certificatePdfMatch = useMemo(() => {
+    return getCertificatePdfMatch({ offerCode, offerName });
+  }, [offerCode, offerName]);
 
   const offerDetails = useMemo(() => {
     const offer = (localData.offers || []).find(
@@ -319,6 +323,15 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       console.log('[CasinoOfferCard] Error opening URL:', error);
     }
   };
+
+  const handleOpenCertificatePdf = useCallback(() => {
+    if (!certificatePdfMatch) {
+      console.log('[CasinoOfferCard] No certificate PDF available for offer:', offerCode);
+      return;
+    }
+
+    void openCertificatePdf(certificatePdfMatch.pdfUrl);
+  }, [certificatePdfMatch, offerCode]);
 
   const getStatusBadge = () => {
     if (!isActive) {
@@ -578,10 +591,24 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
         {/* ACTION ROW */}
         <View style={styles.actionRowLarge}>
-          <TouchableOpacity style={styles.primaryButtonLarge} onPress={onPress}>
+          <TouchableOpacity style={styles.primaryButtonLarge} onPress={onPress} testID="casino-offer-card.view-all-cruises">
             <Text style={styles.primaryButtonTextLarge}>View All Cruises</Text>
             <ChevronRight size={18} color={COLORS.white} />
           </TouchableOpacity>
+
+          {certificatePdfMatch ? (
+            <TouchableOpacity
+              style={styles.secondaryButtonLarge}
+              onPress={(event) => {
+                event.stopPropagation();
+                handleOpenCertificatePdf();
+              }}
+              testID="casino-offer-card.view-pdf-of-offer"
+            >
+              <ExternalLink size={16} color={COLORS.navyDeep} />
+              <Text style={styles.secondaryButtonLargeText}>View PDF of Offer</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
@@ -984,6 +1011,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700' as const,
     color: COLORS.white,
+  },
+  secondaryButtonLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  secondaryButtonLargeText: {
+    fontSize: 13,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
   },
   modalOverlay: {
     flex: 1,

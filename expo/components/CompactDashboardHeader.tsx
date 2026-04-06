@@ -119,6 +119,26 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     silverseaTier,
     carnivalVifpTier,
   }), [activeBrand, carnivalVifpTier, celebrityLevel, crownAnchorLevel, silverseaTier]);
+  const progressCardStyle = useMemo(() => ({
+    backgroundColor: playerCardTheme.surfaceColor,
+    borderColor: playerCardTheme.borderColor,
+  }), [playerCardTheme.borderColor, playerCardTheme.surfaceColor]);
+  const progressLabelStyle = useMemo(() => ({
+    color: playerCardTheme.topTextColor,
+  }), [playerCardTheme.topTextColor]);
+  const progressMetaStyle = useMemo(() => ({
+    color: playerCardTheme.secondaryTextColor,
+  }), [playerCardTheme.secondaryTextColor]);
+  const progressBarTrackStyle = useMemo(() => ({
+    backgroundColor: playerCardTheme.surfaceColorMuted,
+  }), [playerCardTheme.surfaceColorMuted]);
+  const progressDividerStyle = useMemo(() => ({
+    backgroundColor: playerCardTheme.borderColor,
+  }), [playerCardTheme.borderColor]);
+  const progressDetailRowStyle = useMemo(() => ({
+    backgroundColor: playerCardTheme.surfaceColorMuted,
+    borderColor: playerCardTheme.borderColor,
+  }), [playerCardTheme.borderColor, playerCardTheme.surfaceColorMuted]);
 
   const displayName = currentUser?.name || memberName;
   const rawNumber = activeBrand === 'royal' 
@@ -232,9 +252,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextLevelColor = nextLevel ? CROWN_ANCHOR_LEVELS[nextLevel]?.color : levelColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
+                <Text style={[styles.progressLabel, progressLabelStyle]}>
                   {isPinnacle 
                     ? `Pinnacle (${crownAnchorPoints}/700)`
                     : `${crownAnchorLevel} → ${nextLevel} (${crownAnchorPoints}/${nextThreshold})`
@@ -245,10 +265,10 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                     <Text style={styles.achievedBadgeText}>MAX LEVEL</Text>
                   </View>
                 ) : (
-                  <Text style={styles.progressPercent}>{percentComplete.toFixed(1)}%</Text>
+                  <Text style={[styles.progressPercent, progressLabelStyle]}>{percentComplete.toFixed(1)}%</Text>
                 )}
               </View>
-              <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
                   colors={[levelColor, nextLevelColor]}
                   start={{ x: 0, y: 0 }}
@@ -256,7 +276,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
                 />
               </View>
-              <Text style={styles.progressEta}>
+              <Text style={[styles.progressEta, progressMetaStyle]}>
                 {isPinnacle 
                   ? 'Pinnacle achieved! Maximum loyalty level reached'
                   : (() => {
@@ -269,23 +289,23 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
               {!isPinnacle && pinnacleProgress.thresholdCrossedShip && pinnacleProgress.thresholdCrossedSailDate && (
                 <View style={styles.pinnacleDetailsContainer}>
-                  <View style={styles.pinnacleDetailRow}>
+                  <View style={[styles.pinnacleDetailRow, progressDetailRowStyle]}>
                     <View style={styles.pinnacleIconBadge}>
                       <Target size={10} color="#DC2626" />
                     </View>
                     <View style={styles.pinnacleDetailContent}>
-                      <Text style={styles.pinnacleDetailLabel}>Threshold Crossed On:</Text>
-                      <Text style={styles.pinnacleDetailValue} numberOfLines={1}>
+                      <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>Threshold Crossed On:</Text>
+                      <Text style={[styles.pinnacleDetailValue, progressLabelStyle]} numberOfLines={1}>
                         {`${pinnacleProgress.thresholdCrossedShip} • ${formatCruiseDate(pinnacleProgress.thresholdCrossedSailDate)}`}
                       </Text>
                     </View>
                   </View>
-                  <View style={styles.pinnacleDetailRow}>
+                  <View style={[styles.pinnacleDetailRow, progressDetailRowStyle]}>
                     <View style={styles.pinnacleStarBadge}>
                       <Star size={10} color={COLORS.goldDark} fill={COLORS.goldDark} />
                     </View>
                     <View style={styles.pinnacleDetailContent}>
-                      <Text style={styles.pinnacleDetailLabel}>First Cruise AS Pinnacle:</Text>
+                      <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>First Cruise AS Pinnacle:</Text>
                       <Text style={[styles.pinnacleDetailValue, styles.pinnacleHighlight]} numberOfLines={1}>
                         {pinnacleProgress.pinnacleShip && pinnacleProgress.pinnacleSailDate
                           ? `${pinnacleProgress.pinnacleShip} • ${formatCruiseDate(pinnacleProgress.pinnacleSailDate)}`
@@ -317,9 +337,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextTierColor = nextTier ? CLUB_ROYALE_TIERS[nextTier]?.color : tierColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
+                <Text style={[styles.progressLabel, progressLabelStyle]}>
                   {isMasters 
                     ? `Masters (${clubRoyalePoints.toLocaleString()})`
                     : `${currentTier} → ${nextTier} (${clubRoyalePoints.toLocaleString()}/${nextThreshold.toLocaleString()})`
@@ -330,10 +350,10 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                     <Text style={styles.achievedBadgeText}>MAX TIER</Text>
                   </View>
                 ) : (
-                  <Text style={styles.progressPercent}>{percentComplete.toFixed(1)}%</Text>
+                  <Text style={[styles.progressPercent, progressLabelStyle]}>{percentComplete.toFixed(1)}%</Text>
                 )}
               </View>
-              <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
                   colors={[tierColor, nextTierColor]}
                   start={{ x: 0, y: 0 }}
@@ -341,7 +361,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
                 />
               </View>
-              <Text style={styles.progressEta}>
+              <Text style={[styles.progressEta, progressMetaStyle]}>
                 {isMasters 
                   ? 'Masters tier achieved! Maximum Club Royale tier'
                   : `ETA: ${formatETAFromDate(mastersProgress.projectedDate)} • ${pointsToNext.toLocaleString()} pts to ${nextTier} • Resets April 1`
@@ -368,11 +388,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const achievedThreshold = CLUB_ROYALE_TIERS[currentTier]?.threshold || 0;
           
           return (
-            <View style={[styles.progressCard, styles.achievedCard]}>
+            <View style={[styles.progressCard, styles.achievedCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
                 <View style={styles.achievedLabelRow}>
                   <CheckCircle2 size={14} color={CLEAN_THEME.badge.achieved.text} />
-                  <Text style={styles.progressLabel}>
+                  <Text style={[styles.progressLabel, progressLabelStyle]}>
                     {priorTier} → {currentTier} ({achievedThreshold.toLocaleString()} pts)
                   </Text>
                 </View>
@@ -380,7 +400,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   <Text style={styles.achievedBadgeText}>ACHIEVED</Text>
                 </View>
               </View>
-              <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
                   colors={[priorTierColor, currentTierColor]}
                   start={{ x: 0, y: 0 }}
@@ -388,7 +408,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   style={[styles.progressBarFill, { width: '100%' }]}
                 />
               </View>
-              <Text style={styles.progressEta}>
+              <Text style={[styles.progressEta, progressMetaStyle]}>
                 {currentTier} tier achieved! You have earned this status.
               </Text>
             </View>
@@ -396,52 +416,52 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
+      <View style={[styles.statsRow, progressCardStyle]}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{clubRoyalePoints.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>Casino Pts (CR)</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{clubRoyalePoints.toLocaleString()}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>Casino Pts (CR)</Text>
         </View>
-        <View style={styles.statDivider} />
+        <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{crownAnchorPoints}</Text>
-          <Text style={styles.statLabel}>C&A Nights</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{crownAnchorPoints}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>C&A Nights</Text>
         </View>
-        <View style={styles.statDivider} />
+        <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{pinnacleProgress.nightsToNext}</Text>
-          <Text style={styles.statLabel}>To Pinnacle</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{pinnacleProgress.nightsToNext}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>To Pinnacle</Text>
         </View>
       </View>
 
       <View style={styles.quickStatsPillRow}>
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onCruisesPress}
           activeOpacity={0.7}
         >
           <Anchor size={14} color={COLORS.points} />
-          <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Cruises</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onBookedPress}
           activeOpacity={0.7}
         >
           <Ship size={14} color={COLORS.money} />
-          <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Booked</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{bookedCruises}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Booked</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onOffersPress}
           activeOpacity={0.7}
         >
           <Tag size={14} color={COLORS.gold} />
-          <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
-          <Text style={styles.quickStatPillLabel}>Offers</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{activeOffers}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Offers</Text>
         </TouchableOpacity>
       </View>
         </>
@@ -470,9 +490,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextLevelColor = nextLevel ? CELEBRITY_CAPTAINS_CLUB_LEVELS[nextLevel]?.color : levelColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
+                <Text style={[styles.progressLabel, progressLabelStyle]}>
                   {isZenith 
                     ? `Zenith (${celebrityCaptainsClubPoints}/3,000)`
                     : `${celebrityLevel} → ${nextLevel} (${celebrityCaptainsClubPoints}/${nextThreshold})`
@@ -483,10 +503,10 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                     <Text style={styles.achievedBadgeText}>MAX LEVEL</Text>
                   </View>
                 ) : (
-                  <Text style={styles.progressPercent}>{percentComplete.toFixed(1)}%</Text>
+                  <Text style={[styles.progressPercent, progressLabelStyle]}>{percentComplete.toFixed(1)}%</Text>
                 )}
               </View>
-              <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
                   colors={[levelColor, nextLevelColor]}
                   start={{ x: 0, y: 0 }}
@@ -494,7 +514,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
                 />
               </View>
-              <Text style={styles.progressEta}>
+              <Text style={[styles.progressEta, progressMetaStyle]}>
                 {isZenith 
                   ? 'Zenith achieved! Maximum Captain\'s Club level'
                   : `${pointsToNext} pts to ${nextLevel}`
@@ -513,9 +533,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextTierColor = nextTier ? CELEBRITY_BLUE_CHIP_TIERS[nextTier]?.color : tierColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
+                <Text style={[styles.progressLabel, progressLabelStyle]}>
                   {isRuby 
                     ? `Ruby (${celebrityBlueChipPoints.toLocaleString()} pts)`
                     : `${celebrityTier} → ${nextTier} (${celebrityBlueChipPoints.toLocaleString()} pts)`
@@ -526,10 +546,10 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                     <Text style={styles.achievedBadgeText}>MAX TIER</Text>
                   </View>
                 ) : (
-                  <Text style={styles.progressPercent}>--</Text>
+                  <Text style={[styles.progressPercent, progressLabelStyle]}>--</Text>
                 )}
               </View>
-              <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
                   colors={[tierColor, nextTierColor]}
                   start={{ x: 0, y: 0 }}
@@ -537,7 +557,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   style={[styles.progressBarFill, { width: isRuby ? '100%' : '0%' }]}
                 />
               </View>
-              <Text style={styles.progressEta}>
+              <Text style={[styles.progressEta, progressMetaStyle]}>
                 {isRuby 
                   ? 'Ruby tier achieved! Maximum Blue Chip tier'
                   : 'Play in the casino to earn tier progress'
@@ -548,52 +568,52 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
+      <View style={[styles.statsRow, progressCardStyle]}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{celebrityBlueChipPoints.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>Casino Pts (BC)</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{celebrityBlueChipPoints.toLocaleString()}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>Casino Pts (BC)</Text>
         </View>
-        <View style={styles.statDivider} />
+        <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{celebrityCaptainsClubPoints}</Text>
-          <Text style={styles.statLabel}>Capt's Club</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{celebrityCaptainsClubPoints}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>Capt's Club</Text>
         </View>
-        <View style={styles.statDivider} />
+        <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{Math.max(0, 3000 - celebrityCaptainsClubPoints)}</Text>
-          <Text style={styles.statLabel}>To Zenith</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{Math.max(0, 3000 - celebrityCaptainsClubPoints)}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>To Zenith</Text>
         </View>
       </View>
 
       <View style={styles.quickStatsPillRow}>
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onCruisesPress}
           activeOpacity={0.7}
         >
           <Anchor size={14} color={COLORS.points} />
-          <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Cruises</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onBookedPress}
           activeOpacity={0.7}
         >
           <Ship size={14} color={COLORS.money} />
-          <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Booked</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{bookedCruises}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Booked</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onOffersPress}
           activeOpacity={0.7}
         >
           <Tag size={14} color={COLORS.gold} />
-          <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
-          <Text style={styles.quickStatPillLabel}>Offers</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{activeOffers}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Offers</Text>
         </TouchableOpacity>
       </View>
         </>
@@ -621,9 +641,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextTierColor = nextTier ? SILVERSEA_VENETIAN_TIERS[nextTier]?.color : tierColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
+                <Text style={[styles.progressLabel, progressLabelStyle]}>
                   {isMax 
                     ? `Diamond Elite (${silverseaPoints} days)`
                     : `${silverseaTier} → ${nextTier} (${silverseaPoints}/${nextThreshold} days)`
@@ -634,10 +654,10 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                     <Text style={styles.achievedBadgeText}>MAX TIER</Text>
                   </View>
                 ) : (
-                  <Text style={styles.progressPercent}>{percentComplete.toFixed(1)}%</Text>
+                  <Text style={[styles.progressPercent, progressLabelStyle]}>{percentComplete.toFixed(1)}%</Text>
                 )}
               </View>
-              <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
                   colors={[tierColor, nextTierColor]}
                   start={{ x: 0, y: 0 }}
@@ -645,7 +665,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
                 />
               </View>
-              <Text style={styles.progressEta}>
+              <Text style={[styles.progressEta, progressMetaStyle]}>
                 {isMax 
                   ? 'Diamond Elite achieved! Maximum Venetian Society tier'
                   : `${daysToNext} cruise days to ${nextTier}`
@@ -656,56 +676,56 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
+      <View style={[styles.statsRow, progressCardStyle]}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{silverseaPoints}</Text>
-          <Text style={styles.statLabel}>Cruise Days</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{silverseaPoints}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>Cruise Days</Text>
         </View>
-        <View style={styles.statDivider} />
+        <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{silverseaTier}</Text>
-          <Text style={styles.statLabel}>Venetian Tier</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{silverseaTier}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>Venetian Tier</Text>
         </View>
-        <View style={styles.statDivider} />
+        <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{(() => {
+          <Text style={[styles.statValue, progressLabelStyle]}>{(() => {
             const nextTier = getNextSilverseaTier(silverseaTier);
             if (!nextTier) return 0;
             return Math.max(0, (SILVERSEA_VENETIAN_TIERS[nextTier]?.cruiseDays || 0) - silverseaPoints);
           })()}</Text>
-          <Text style={styles.statLabel}>To Next Tier</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>To Next Tier</Text>
         </View>
       </View>
 
       <View style={styles.quickStatsPillRow}>
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onCruisesPress}
           activeOpacity={0.7}
         >
           <Anchor size={14} color={COLORS.points} />
-          <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Cruises</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onBookedPress}
           activeOpacity={0.7}
         >
           <Ship size={14} color={COLORS.money} />
-          <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Booked</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{bookedCruises}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Booked</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onOffersPress}
           activeOpacity={0.7}
         >
           <Tag size={14} color={COLORS.gold} />
-          <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
-          <Text style={styles.quickStatPillLabel}>Offers</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{activeOffers}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Offers</Text>
         </TouchableOpacity>
       </View>
         </>
@@ -731,9 +751,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextTierColor = nextTier ? CARNIVAL_VIFP_TIERS[nextTier]?.color : tierColor;
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
+                <Text style={[styles.progressLabel, progressLabelStyle]}>
                   {isMax 
                     ? `VIFP Diamond`
                     : `VIFP ${carnivalVifpTier} → ${nextTier}`
@@ -744,10 +764,10 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                     <Text style={styles.achievedBadgeText}>MAX TIER</Text>
                   </View>
                 ) : (
-                  <Text style={styles.progressPercent}>--</Text>
+                  <Text style={[styles.progressPercent, progressLabelStyle]}>--</Text>
                 )}
               </View>
-              <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
                   colors={[tierColor, nextTierColor]}
                   start={{ x: 0, y: 0 }}
@@ -755,7 +775,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   style={[styles.progressBarFill, { width: isMax ? '100%' : '0%' }]}
                 />
               </View>
-              <Text style={styles.progressEta}>
+              <Text style={[styles.progressEta, progressMetaStyle]}>
                 {isMax 
                   ? 'VIFP Diamond achieved! Maximum loyalty tier'
                   : `Cruise to earn VIFP tier progress`
@@ -769,17 +789,17 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const tierColor = CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color || '#1E90FF';
           
           return (
-            <View style={styles.progressCard}>
+            <View style={[styles.progressCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>
+                <Text style={[styles.progressLabel, progressLabelStyle]}>
                   Players Club: {carnivalPlayersClubTier} ({carnivalPlayersClubPoints.toLocaleString()} pts)
                 </Text>
-                <Text style={styles.progressPercent}>--</Text>
+                <Text style={[styles.progressPercent, progressLabelStyle]}>--</Text>
               </View>
-              <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <View style={[styles.progressBarFill, { width: '0%', backgroundColor: tierColor }]} />
               </View>
-              <Text style={styles.progressEta}>
+              <Text style={[styles.progressEta, progressMetaStyle]}>
                 Play in the casino to earn Players Club tier progress
               </Text>
             </View>
@@ -787,52 +807,52 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
       </View>
 
-      <View style={styles.statsRow}>
+      <View style={[styles.statsRow, progressCardStyle]}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{carnivalPlayersClubPoints.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>Players Pts</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{carnivalPlayersClubPoints.toLocaleString()}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>Players Pts</Text>
         </View>
-        <View style={styles.statDivider} />
+        <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{carnivalVifpTier}</Text>
-          <Text style={styles.statLabel}>VIFP Tier</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{carnivalVifpTier}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>VIFP Tier</Text>
         </View>
-        <View style={styles.statDivider} />
+        <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{carnivalPlayersClubTier}</Text>
-          <Text style={styles.statLabel}>Players Tier</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{carnivalPlayersClubTier}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>Players Tier</Text>
         </View>
       </View>
 
       <View style={styles.quickStatsPillRow}>
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onCruisesPress}
           activeOpacity={0.7}
         >
           <Anchor size={14} color={COLORS.points} />
-          <Text style={styles.quickStatPillValue}>{availableCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Cruises</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onBookedPress}
           activeOpacity={0.7}
         >
           <Ship size={14} color={COLORS.money} />
-          <Text style={styles.quickStatPillValue}>{bookedCruises}</Text>
-          <Text style={styles.quickStatPillLabel}>Booked</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{bookedCruises}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Booked</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.quickStatPill}
+          style={[styles.quickStatPill, progressCardStyle]}
           onPress={onOffersPress}
           activeOpacity={0.7}
         >
           <Tag size={14} color={COLORS.gold} />
-          <Text style={styles.quickStatPillValue}>{activeOffers}</Text>
-          <Text style={styles.quickStatPillLabel}>Offers</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{activeOffers}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Offers</Text>
         </TouchableOpacity>
       </View>
         </>

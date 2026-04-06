@@ -2389,6 +2389,18 @@ STEP 4: Optional Calendar Import
           <View style={styles.section}>
             <View style={styles.sectionCard}>
               {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan')}
+              <TouchableOpacity
+                style={styles.subscriptionPromoCard}
+                onPress={() => router.push('/paywall-monthly' as any)}
+                activeOpacity={0.9}
+                testID="settings.monthly-subscription-ad"
+              >
+                <Image
+                  source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/dzxosciyi8toy1ie8chx3.png' }}
+                  style={styles.subscriptionPromoImage}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
               <View style={styles.subscriptionStatusBanner}>
                 <Crown size={18} color={
                   entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? '#3B82F6' :
@@ -3269,6 +3281,19 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: '#FFFFFF',
+  },
+  subscriptionPromoCard: {
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(37, 99, 235, 0.18)',
+    backgroundColor: '#DDEBFF',
+    ...SHADOW.sm,
+  },
+  subscriptionPromoImage: {
+    width: '100%',
+    aspectRatio: 1,
   },
   subscriptionStatusBanner: {
     flexDirection: 'row',

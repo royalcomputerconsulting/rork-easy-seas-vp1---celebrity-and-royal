@@ -22,7 +22,7 @@ interface EasySeasHeroProps {
 }
 
 export function EasySeasHero({
-  memberName = 'Player',
+  memberName: _memberName = 'Player',
   onSettingsPress,
   onAlertsPress,
   alertCount = 0,
@@ -122,6 +122,7 @@ export function EasySeasHero({
             eta={`ETA: ${formatETA(pinnacleProgress.nightsToNext, 7)} • ${pinnacleProgress.nightsToNext} nights`}
             height={8}
             gradientColors={[COLORS.points, COLORS.pointsLight]}
+            surfaceTone="light"
           />
         </View>
         
@@ -145,6 +146,7 @@ export function EasySeasHero({
                 : CLUB_ROYALE_TIERS.Masters.color,
               COLORS.gold
             ]}
+            surfaceTone="light"
           />
         </View>
       </View>

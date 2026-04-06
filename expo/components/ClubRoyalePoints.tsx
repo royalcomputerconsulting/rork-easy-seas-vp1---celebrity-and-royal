@@ -111,6 +111,7 @@ export function ClubRoyalePoints({
                 eta={pinnacleETA}
                 height={6}
                 gradientColors={[COLORS.points, COLORS.pointsLight]}
+                surfaceTone="light"
               />
               {pinnacleProgress.pinnacleShip && pinnacleProgress.pinnacleSailDate && pinnacleProgress.nightsToNext > 0 && (
                 <View style={styles.pinnacleAchievementBadge}>
@@ -138,6 +139,7 @@ export function ClubRoyalePoints({
                       COLORS.loyalty,
                       COLORS.loyaltyLight
                     ]}
+                    surfaceTone="light"
                   />
                   
                   <View style={styles.progressSpacer} />
@@ -151,6 +153,7 @@ export function ClubRoyalePoints({
                       COLORS.gold,
                       COLORS.goldLight
                     ]}
+                    surfaceTone="light"
                   />
                 </>
               ) : clubRoyalePoints > primeThreshold ? (
@@ -163,6 +166,7 @@ export function ClubRoyalePoints({
                     CLUB_ROYALE_TIERS.Signature.color,
                     '#A78BFA'
                   ]}
+                  surfaceTone="light"
                 />
               ) : null}
             </View>

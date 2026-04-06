@@ -1,10 +1,11 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   CheckCircle,
   ChevronRight,
   Clock,
+  ExternalLink,
   Ship,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -14,6 +15,7 @@ import { getDaysUntil, createDateFromString } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise } from '@/types/models';
 import { calculateCruiseValue, calculateOfferAggregateValue, getCabinPriceFromEntity, GUEST_COUNT_DEFAULT, type ValueBreakdown, type OfferAggregateValue } from '@/lib/valueCalculator';
+import { getCertificatePdfMatch, openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
 
 interface OfferCardProps {
   offer: Cruise;
@@ -202,6 +204,21 @@ export const OfferCard = React.memo(function OfferCard({
   };
 
   const statusBadge = getStatusBadge();
+  const certificatePdfMatch = useMemo(() => {
+    return getCertificatePdfMatch({
+      offerCode: offer.offerCode,
+      offerName: offerNameOverride || inferredOfferName || offer.offerName,
+    });
+  }, [inferredOfferName, offer.offerCode, offer.offerName, offerNameOverride]);
+
+  const handleOpenCertificatePdf = useCallback(() => {
+    if (!certificatePdfMatch) {
+      console.log('[OfferCard] No certificate PDF available for offer:', offer.offerCode);
+      return;
+    }
+
+    void openCertificatePdf(certificatePdfMatch.pdfUrl);
+  }, [certificatePdfMatch, offer.offerCode]);
 
   if (compact) {
     return (
@@ -364,10 +381,26 @@ export const OfferCard = React.memo(function OfferCard({
           ) : null}
         </View>
 
-        <TouchableOpacity style={styles.viewAllCruisesButton} onPress={onPress}>
-          <Text style={styles.viewAllCruisesText}>View All Cruises</Text>
-          <ChevronRight size={16} color={COLORS.white} />
-        </TouchableOpacity>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.viewAllCruisesButton} onPress={onPress} testID="offer-card.view-all-cruises">
+            <Text style={styles.viewAllCruisesText}>View All Cruises</Text>
+            <ChevronRight size={16} color={COLORS.white} />
+          </TouchableOpacity>
+
+          {certificatePdfMatch ? (
+            <TouchableOpacity
+              style={styles.viewPdfButton}
+              onPress={(event) => {
+                event.stopPropagation();
+                handleOpenCertificatePdf();
+              }}
+              testID="offer-card.view-pdf-of-offer"
+            >
+              <ExternalLink size={16} color={COLORS.navyDeep} />
+              <Text style={styles.viewPdfButtonText}>View PDF of Offer</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
       </LinearGradient>
     </TouchableOpacity>
@@ -560,7 +593,13 @@ const styles = StyleSheet.create({
     color: '#DC2626',
   },
 
+  actionRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
   viewAllCruisesButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -569,12 +608,28 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.sm,
-    marginTop: SPACING.sm,
   },
   viewAllCruisesText: {
     fontSize: 14,
     fontWeight: '700' as const,
     color: COLORS.white,
+  },
+  viewPdfButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  viewPdfButtonText: {
+    fontSize: 13,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
   },
   divider: {
     height: 1,
