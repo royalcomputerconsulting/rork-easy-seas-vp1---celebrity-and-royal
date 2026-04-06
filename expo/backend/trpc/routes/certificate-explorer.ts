@@ -47,7 +47,15 @@ interface IndexEntry {
   monthlyIndexUrl: string;
 }
 
-interface SailingEntry {
+interface CertificateBenefitSnapshot {
+  cabinLabel: string | null;
+  cabinRank: number | null;
+  freePlay: number | null;
+  onBoardCredit: number | null;
+  benefitSummary: string[];
+}
+
+interface SailingEntry extends CertificateBenefitSnapshot {
   certificateCode: string;
   certificateType: 'A' | 'C';
   level: string;
@@ -56,6 +64,30 @@ interface SailingEntry {
   sailDate: string;
   pdfUrl: string;
   monthlyIndexUrl: string;
+}
+
+interface CertificateMatchLevel extends CertificateBenefitSnapshot {
+  certificateCode: string;
+  certificateType: 'A' | 'C';
+  level: string;
+  points: number | null;
+  pdfUrl: string;
+  monthlyIndexUrl: string;
+}
+
+interface CertificateOpportunity {
+  fromCode: string;
+  toCode: string;
+  additionalPoints: number | null;
+  summary: string;
+}
+
+interface SailingMatch {
+  shipName: string;
+  sailDate: string;
+  levels: CertificateMatchLevel[];
+  decisionGuide: string[];
+  opportunities: CertificateOpportunity[];
 }
 
 function getDefaultMonthCode(): string {
@@ -67,6 +99,229 @@ function getDefaultMonthCode(): string {
 
 function buildPdfUrl(code: string): string {
   return `${CERTIFICATE_PDF_BASE_URL}/${code}.pdf`;
+}
+
+interface CabinBenefitMatch {
+  label: string;
+  rank: number;
+  index: number;
+}
+
+const CABIN_BENEFIT_PATTERNS: Array<{ label: string; rank: number; patterns: RegExp[] }> = [
+  { label: 'Royal Suite', rank: 9, patterns: [/\broyal suite\b/i] },
+  { label: 'Owner\'s Suite', rank: 8, patterns: [/\bowner'?s suite(?:\s*2br)?\b/i] },
+  { label: 'Grand Suite', rank: 7, patterns: [/\bgrand suite(?:\s*2br)?\b/i] },
+  { label: 'Junior Suite', rank: 6, patterns: [/\bjunior suite\b/i, /\bjr\.?\s*suite\b/i] },
+  { label: 'Suite', rank: 5, patterns: [/\bsuite\b/i] },
+  { label: 'Balcony', rank: 4, patterns: [/\bbalcony\b/i, /\bveranda\b/i, /\bocean view balcony\b/i] },
+  { label: 'Oceanview', rank: 3, patterns: [/\bocean\s*view\b/i, /\boceanview\b/i, /\boutside stateroom\b/i] },
+  { label: 'Interior', rank: 2, patterns: [/\binterior\b/i, /\binside stateroom\b/i] },
+];
+
+function extractDollarValues(text: string, patterns: RegExp[]): number[] {
+  const values: number[] = [];
+
+  patterns.forEach((pattern) => {
+    for (const match of text.matchAll(pattern)) {
+      const rawValue = match[1] ?? '';
+      const parsedValue = parseInt(rawValue.replace(/,/g, ''), 10);
+      if (Number.isFinite(parsedValue)) {
+        values.push(parsedValue);
+      }
+    }
+  });
+
+  return values;
+}
+
+function extractCabinBenefit(text: string): { cabinLabel: string | null; cabinRank: number | null } {
+  const searchText = text.slice(0, 5000);
+  let bestMatch: CabinBenefitMatch | null = null;
+
+  for (const cabin of CABIN_BENEFIT_PATTERNS) {
+    for (const pattern of cabin.patterns) {
+      const matchIndex = searchText.search(pattern);
+      if (matchIndex < 0) {
+        continue;
+      }
+
+      if (
+        bestMatch === null ||
+        matchIndex < bestMatch.index ||
+        (matchIndex === bestMatch.index && cabin.rank > bestMatch.rank)
+      ) {
+        bestMatch = {
+          label: cabin.label,
+          rank: cabin.rank,
+          index: matchIndex,
+        };
+      }
+    }
+  }
+
+  if (bestMatch === null) {
+    return {
+      cabinLabel: null,
+      cabinRank: null,
+    };
+  }
+
+  return {
+    cabinLabel: bestMatch.label,
+    cabinRank: bestMatch.rank,
+  };
+}
+
+function extractCertificateBenefits(pdfText: string): CertificateBenefitSnapshot {
+  const normalizedText = pdfText.replace(/®/g, ' ').replace(/\s+/g, ' ').trim();
+  const { cabinLabel, cabinRank } = extractCabinBenefit(normalizedText);
+
+  const freePlayValues = extractDollarValues(normalizedText, [
+    /\$\s*([0-9][0-9,]*)\s*(?:in\s*)?(?:free\s*play|freeplay|fp)\b/gi,
+    /(?:free\s*play|freeplay|fp)\s*(?:of|included|:|up to)?\s*\$?\s*([0-9][0-9,]*)\b/gi,
+  ]);
+
+  const onBoardCreditValues = extractDollarValues(normalizedText, [
+    /\$\s*([0-9][0-9,]*)\s*(?:in\s*)?(?:obc|on[-\s]*board credit|onboard credit)\b/gi,
+    /(?:obc|on[-\s]*board credit|onboard credit)\s*(?:of|included|:)?\s*\$?\s*([0-9][0-9,]*)\b/gi,
+  ]);
+
+  const freePlay = freePlayValues.length > 0 ? Math.max(...freePlayValues) : null;
+  const onBoardCredit = onBoardCreditValues.length > 0 ? Math.max(...onBoardCreditValues) : null;
+
+  const benefitSummary: string[] = [];
+  if (cabinLabel) {
+    benefitSummary.push(cabinLabel);
+  }
+  if (freePlay !== null) {
+    benefitSummary.push(`${freePlay.toLocaleString()} free play`);
+  }
+  if (onBoardCredit !== null) {
+    benefitSummary.push(`${onBoardCredit.toLocaleString()} OBC`);
+  }
+
+  console.log('[CertificateExplorer] Parsed certificate benefits:', {
+    cabinLabel,
+    cabinRank,
+    freePlay,
+    onBoardCredit,
+    benefitSummary,
+  });
+
+  return {
+    cabinLabel,
+    cabinRank,
+    freePlay,
+    onBoardCredit,
+    benefitSummary,
+  };
+}
+
+function formatPointsLabel(points: number | null): string {
+  if (points === null) {
+    return 'unknown points';
+  }
+
+  return `${points.toLocaleString()} points`;
+}
+
+function describeVisibleBenefits(level: CertificateMatchLevel): string {
+  if (level.benefitSummary.length > 0) {
+    return level.benefitSummary.join(' + ');
+  }
+
+  return 'visible benefits still parsing';
+}
+
+function hasVisibleUpgrade(fromLevel: CertificateMatchLevel, toLevel: CertificateMatchLevel): boolean {
+  const cabinUpgrade = (toLevel.cabinRank ?? 0) > (fromLevel.cabinRank ?? 0);
+  const freePlayUpgrade = (toLevel.freePlay ?? 0) > (fromLevel.freePlay ?? 0);
+  const obcUpgrade = (toLevel.onBoardCredit ?? 0) > (fromLevel.onBoardCredit ?? 0);
+  return cabinUpgrade || freePlayUpgrade || obcUpgrade;
+}
+
+function buildOpportunity(fromLevel: CertificateMatchLevel, toLevel: CertificateMatchLevel): CertificateOpportunity {
+  const improvements: string[] = [];
+  const additionalPoints =
+    fromLevel.points !== null && toLevel.points !== null
+      ? Math.max(0, toLevel.points - fromLevel.points)
+      : null;
+
+  if ((toLevel.cabinRank ?? 0) > (fromLevel.cabinRank ?? 0) && toLevel.cabinLabel) {
+    if (fromLevel.cabinLabel) {
+      improvements.push(`upgrades the room from ${fromLevel.cabinLabel} to ${toLevel.cabinLabel}`);
+    } else {
+      improvements.push(`unlocks a ${toLevel.cabinLabel} room`);
+    }
+  }
+
+  const freePlayDelta = (toLevel.freePlay ?? 0) - (fromLevel.freePlay ?? 0);
+  if (freePlayDelta > 0) {
+    improvements.push(`adds ${freePlayDelta.toLocaleString()} free play`);
+  }
+
+  const obcDelta = (toLevel.onBoardCredit ?? 0) - (fromLevel.onBoardCredit ?? 0);
+  if (obcDelta > 0) {
+    improvements.push(`adds ${obcDelta.toLocaleString()} OBC`);
+  }
+
+  const summary = improvements.length > 0
+    ? `${additionalPoints !== null ? `+${additionalPoints.toLocaleString()} pts` : 'Higher level'} ${toLevel.certificateCode} ${improvements.join(' and ')}.`
+    : `${additionalPoints !== null ? `+${additionalPoints.toLocaleString()} pts` : 'Higher level'} ${toLevel.certificateCode} shows the same visible benefits.`;
+
+  return {
+    fromCode: fromLevel.certificateCode,
+    toCode: toLevel.certificateCode,
+    additionalPoints,
+    summary,
+  };
+}
+
+function buildDecisionGuide(levels: CertificateMatchLevel[]): string[] {
+  if (levels.length === 0) {
+    return [];
+  }
+
+  const baseline = levels[0];
+  const guide: string[] = [
+    `If you settle for ${formatPointsLabel(baseline.points)} with ${baseline.certificateCode}, you get ${describeVisibleBenefits(baseline)}.`,
+  ];
+
+  const upgradeCandidate = levels.slice(1).find((level) => hasVisibleUpgrade(baseline, level)) ?? levels[1];
+
+  if (upgradeCandidate) {
+    const additionalPoints =
+      baseline.points !== null && upgradeCandidate.points !== null
+        ? Math.max(0, upgradeCandidate.points - baseline.points)
+        : null;
+    const improvements: string[] = [];
+
+    if ((upgradeCandidate.cabinRank ?? 0) > (baseline.cabinRank ?? 0) && upgradeCandidate.cabinLabel) {
+      if (baseline.cabinLabel) {
+        improvements.push(`upgrade to ${upgradeCandidate.cabinLabel}`);
+      } else {
+        improvements.push(`unlock ${upgradeCandidate.cabinLabel}`);
+      }
+    }
+
+    const freePlayDelta = (upgradeCandidate.freePlay ?? 0) - (baseline.freePlay ?? 0);
+    if (freePlayDelta > 0) {
+      improvements.push(`add ${freePlayDelta.toLocaleString()} free play`);
+    }
+
+    const obcDelta = (upgradeCandidate.onBoardCredit ?? 0) - (baseline.onBoardCredit ?? 0);
+    if (obcDelta > 0) {
+      improvements.push(`add ${obcDelta.toLocaleString()} OBC`);
+    }
+
+    if (improvements.length > 0) {
+      guide.push(
+        `If you push to ${formatPointsLabel(upgradeCandidate.points)} with ${upgradeCandidate.certificateCode}, ${additionalPoints !== null ? `${additionalPoints.toLocaleString()} more points lets you ` : 'the higher level lets you '}${improvements.join(' and ')}.`
+      );
+    }
+  }
+
+  return guide;
 }
 
 function normalizeText(value?: string | null): string {
@@ -353,6 +608,7 @@ function resolveShipTargets(shipQuery: string): string[] {
 
 function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: string): SailingEntry[] {
   const normalizedText = pdfText.replace(/®/g, '').replace(/\s+/g, ' ').trim();
+  const benefits = extractCertificateBenefits(normalizedText);
   const sailings = new Map<string, SailingEntry>();
 
   ROYAL_SHIP_NAMES.forEach(shipName => {
@@ -389,6 +645,11 @@ function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: stri
         sailDate,
         pdfUrl: indexEntry.pdfUrl,
         monthlyIndexUrl: indexEntry.monthlyIndexUrl,
+        cabinLabel: benefits.cabinLabel,
+        cabinRank: benefits.cabinRank,
+        freePlay: benefits.freePlay,
+        onBoardCredit: benefits.onBoardCredit,
+        benefitSummary: benefits.benefitSummary,
       });
     }
   });
@@ -397,6 +658,7 @@ function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: stri
   console.log('[CertificateExplorer] Sailings extracted from certificate PDF:', {
     certificateCode: indexEntry.certificateCode,
     count: results.length,
+    benefits: benefits.benefitSummary,
   });
   return results;
 }
@@ -493,18 +755,7 @@ export const certificateExplorerRouter = createTRPCRouter({
         return shipMatches && dateMatches;
       });
 
-      const groupedMatches = new Map<string, {
-        shipName: string;
-        sailDate: string;
-        levels: Array<{
-          certificateCode: string;
-          certificateType: 'A' | 'C';
-          level: string;
-          points: number | null;
-          pdfUrl: string;
-          monthlyIndexUrl: string;
-        }>;
-      }>();
+      const groupedMatches = new Map<string, SailingMatch>();
 
       filteredSailings.forEach(sailing => {
         const key = `${sailing.shipName}__${sailing.sailDate}`;
@@ -513,6 +764,8 @@ export const certificateExplorerRouter = createTRPCRouter({
             shipName: sailing.shipName,
             sailDate: sailing.sailDate,
             levels: [],
+            decisionGuide: [],
+            opportunities: [],
           });
         }
 
@@ -523,21 +776,34 @@ export const certificateExplorerRouter = createTRPCRouter({
           points: sailing.points,
           pdfUrl: sailing.pdfUrl,
           monthlyIndexUrl: sailing.monthlyIndexUrl,
+          cabinLabel: sailing.cabinLabel,
+          cabinRank: sailing.cabinRank,
+          freePlay: sailing.freePlay,
+          onBoardCredit: sailing.onBoardCredit,
+          benefitSummary: sailing.benefitSummary,
         });
       });
 
       const matches = Array.from(groupedMatches.values())
-        .map(match => ({
-          ...match,
-          levels: [...match.levels].sort((left, right) => {
+        .map((match) => {
+          const levels = [...match.levels].sort((left, right) => {
             const leftPoints = left.points ?? Number.MAX_SAFE_INTEGER;
             const rightPoints = right.points ?? Number.MAX_SAFE_INTEGER;
             if (leftPoints !== rightPoints) {
-              return rightPoints - leftPoints;
+              return leftPoints - rightPoints;
             }
             return left.certificateCode.localeCompare(right.certificateCode);
-          }),
-        }))
+          });
+
+          const opportunities = levels.slice(1).map((level, index) => buildOpportunity(levels[index], level));
+
+          return {
+            ...match,
+            levels,
+            opportunities,
+            decisionGuide: buildDecisionGuide(levels),
+          };
+        })
         .sort((left, right) => {
           if (left.shipName !== right.shipName) {
             return left.shipName.localeCompare(right.shipName);

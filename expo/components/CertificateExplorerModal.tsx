@@ -38,6 +38,14 @@ function formatPoints(value: number | null): string {
   return `${value.toLocaleString()} pts`;
 }
 
+function formatCurrency(value: number | null): string {
+  if (value == null) {
+    return 'Unavailable';
+  }
+
+  return `${value.toLocaleString()}`;
+}
+
 export function CertificateExplorerModal({ visible, onClose }: CertificateExplorerModalProps) {
   const [shipQuery, setShipQuery] = useState<string>('Star, Legend, Icon');
   const [sailDate, setSailDate] = useState<string>('');
@@ -135,7 +143,7 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
             <Text style={styles.heroEyebrow}>Certificate intelligence</Text>
             <Text style={styles.heroTitle}>Examine Certificates</Text>
             <Text style={styles.heroSubtitle}>
-              Search a ship or optional sailing date and see which A and C certificate levels include it.
+              Search the certificate bank by ship or sailing date, then compare rooms, free play, and whether the next level is worth chasing.
             </Text>
           </LinearGradient>
 
@@ -215,7 +223,7 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                   <Search size={18} color="#FFFFFF" />
                 )}
                 <Text style={styles.searchButtonText}>
-                  {examineMutation.isPending ? 'Examining certificates…' : 'Search certificates'}
+                  {examineMutation.isPending ? 'Examining certificates…' : 'Search certificate bank'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -244,9 +252,23 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                         <Text style={styles.resultDate}>{formatDate(match.sailDate, 'medium')}</Text>
                       </View>
                       <View style={styles.matchCountBadge}>
-                        <Text style={styles.matchCountBadgeText}>{match.levels.length} matches</Text>
+                        <Text style={styles.matchCountBadgeText}>{match.levels.length} levels</Text>
                       </View>
                     </View>
+
+                    {match.decisionGuide.length > 0 ? (
+                      <View style={styles.insightCard}>
+                        <Text style={styles.insightTitle}>Decision guide</Text>
+                        {match.decisionGuide.map((step, stepIndex) => (
+                          <Text
+                            key={`${match.shipName}-${match.sailDate}-guide-${stepIndex}`}
+                            style={styles.insightText}
+                          >
+                            • {step}
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
 
                     <View style={styles.levelsList}>
                       {match.levels.map((level) => (
@@ -261,6 +283,25 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                             <Text style={styles.levelMeta}>
                               {level.certificateType} source · level {level.level}
                             </Text>
+                            {level.benefitSummary.length > 0 ? (
+                              <View style={styles.benefitChipRow}>
+                                {level.cabinLabel ? (
+                                  <View style={styles.benefitChip}>
+                                    <Text style={styles.benefitChipText}>{level.cabinLabel}</Text>
+                                  </View>
+                                ) : null}
+                                {level.freePlay !== null ? (
+                                  <View style={styles.benefitChip}>
+                                    <Text style={styles.benefitChipText}>{formatCurrency(level.freePlay)} FP</Text>
+                                  </View>
+                                ) : null}
+                                {level.onBoardCredit !== null ? (
+                                  <View style={styles.benefitChip}>
+                                    <Text style={styles.benefitChipText}>{formatCurrency(level.onBoardCredit)} OBC</Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                            ) : null}
                           </View>
 
                           <View style={styles.levelActions}>
@@ -285,6 +326,20 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                         </View>
                       ))}
                     </View>
+
+                    {match.opportunities.length > 0 ? (
+                      <View style={styles.opportunityCard}>
+                        <Text style={styles.opportunityTitle}>Point jump opportunities</Text>
+                        {match.opportunities.map((opportunity) => (
+                          <Text
+                            key={`${opportunity.fromCode}-${opportunity.toCode}`}
+                            style={styles.opportunityText}
+                          >
+                            • {opportunity.summary}
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
                   </View>
                 ))
               : null}
@@ -560,6 +615,24 @@ const styles = StyleSheet.create({
     color: CLEAN_THEME.text.secondary,
     fontSize: TYPOGRAPHY.fontSizeSM,
   },
+  benefitChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+  },
+  benefitChip: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: '#D9E5F3',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+  },
+  benefitChipText: {
+    color: COLORS.navyDeep,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
   levelActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -591,6 +664,44 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  insightCard: {
+    backgroundColor: '#F6FAFF',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: '#D8E7F6',
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    gap: SPACING.xs,
+  },
+  insightTitle: {
+    color: COLORS.navyDeep,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  insightText: {
+    color: CLEAN_THEME.text.primary,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 20,
+  },
+  opportunityCard: {
+    backgroundColor: '#FFF9ED',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: '#F4D9A7',
+    padding: SPACING.md,
+    marginTop: SPACING.md,
+    gap: SPACING.xs,
+  },
+  opportunityTitle: {
+    color: '#8A5A00',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  opportunityText: {
+    color: '#7A5C1F',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 20,
   },
   emptyState: {
     backgroundColor: '#FFFFFF',
