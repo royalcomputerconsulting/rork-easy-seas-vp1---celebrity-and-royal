@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { inflateRawSync, inflateSync } from 'node:zlib';
+import pako from 'pako';
 import { createTRPCRouter, publicProcedure } from '../create-context';
 
 const CERTIFICATE_PDF_BASE_URL = 'https://www.royalcaribbean.com/content/dam/royal/resources/pdf/casino/offers';
@@ -777,28 +777,46 @@ function sanitizePdfText(value: string): string {
     .join('');
 }
 
+function uint8ToLatin1(bytes: Uint8Array): string {
+  let result = '';
+  for (let i = 0; i < bytes.length; i++) {
+    result += String.fromCharCode(bytes[i]);
+  }
+  return result;
+}
+
+function stringToUint8(str: string): Uint8Array {
+  const bytes = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) {
+    bytes[i] = str.charCodeAt(i) & 0xFF;
+  }
+  return bytes;
+}
+
 function extractPdfText(pdfBytes: Uint8Array): string {
-  const raw = Buffer.from(pdfBytes).toString('latin1');
+  const raw = uint8ToLatin1(pdfBytes);
   const streamRegex = /(<<[\s\S]*?>>)\s*stream\r?\n([\s\S]*?)\r?\nendstream/g;
   const extracted: string[] = [];
 
   for (const match of raw.matchAll(streamRegex)) {
     const dictionary = match[1] ?? '';
-    const streamBinary = Buffer.from(match[2] ?? '', 'latin1');
+    const streamBinary = stringToUint8(match[2] ?? '');
     let decodedStream: string | null = null;
 
     if (dictionary.includes('/FlateDecode')) {
       try {
-        decodedStream = inflateSync(streamBinary).toString('latin1');
+        const inflated = pako.inflate(streamBinary);
+        decodedStream = uint8ToLatin1(inflated);
       } catch {
         try {
-          decodedStream = inflateRawSync(streamBinary).toString('latin1');
+          const inflatedRaw = pako.inflateRaw(streamBinary);
+          decodedStream = uint8ToLatin1(inflatedRaw);
         } catch {
           decodedStream = null;
         }
       }
     } else {
-      decodedStream = streamBinary.toString('latin1');
+      decodedStream = uint8ToLatin1(streamBinary);
     }
 
     if (!decodedStream) {

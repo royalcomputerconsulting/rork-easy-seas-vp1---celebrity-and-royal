@@ -87,9 +87,8 @@ app.get("/seapass-approved-shell", async (c) => {
   }
 });
 
-// Simple health check endpoint
 app.get("/", (c) => {
-  return c.json({ status: "ok", message: "API is running", timestamp: Date.now() });
+  return c.json({ status: "ok", message: "API is running", timestamp: Date.now(), version: 2 });
 });
 
 export default app;
