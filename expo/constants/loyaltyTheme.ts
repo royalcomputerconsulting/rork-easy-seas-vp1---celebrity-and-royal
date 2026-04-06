@@ -17,6 +17,7 @@ export interface LoyaltyCardTheme {
   surfaceColorMuted: string;
   topTextColor: string;
   secondaryTextColor: string;
+  progressBarGradient: [string, string];
 }
 
 interface PlayerCardThemeOptions {
@@ -42,6 +43,47 @@ function normalizeHex(hex: string): string | null {
   }
 
   return null;
+}
+
+function hexToHsl(hex: string): [number, number, number] {
+  const normalized = normalizeHex(hex);
+  if (!normalized) return [0, 0, 50];
+  const num = Number.parseInt(normalized, 16);
+  if (Number.isNaN(num)) return [0, 0, 50];
+  const r = ((num >> 16) & 255) / 255;
+  const g = ((num >> 8) & 255) / 255;
+  const b = (num & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l * 100];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h * 360, s * 100, l * 100];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const sN = s / 100;
+  const lN = l / 100;
+  const a = sN * Math.min(lN, 1 - lN);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = lN - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function getComplementaryGradient(accentHex: string): [string, string] {
+  const [h, s, l] = hexToHsl(accentHex);
+  const compH = (h + 180) % 360;
+  const c1 = hslToHex(compH, Math.min(s + 10, 100), Math.max(Math.min(l, 60), 45));
+  const c2 = hslToHex((compH + 20) % 360, Math.min(s + 15, 100), Math.max(Math.min(l + 10, 70), 50));
+  return [c1, c2];
 }
 
 function mixHexColors(sourceHex: string, targetHex: string, weight: number): string {
@@ -90,6 +132,7 @@ export function createLoyaltyCardTheme(accentColor?: string | null): LoyaltyCard
     surfaceColorMuted: 'rgba(255, 255, 255, 0.12)',
     topTextColor: '#FFFFFF',
     secondaryTextColor: 'rgba(255, 255, 255, 0.82)',
+    progressBarGradient: getComplementaryGradient(resolvedAccent),
   };
 }
 

@@ -251,8 +251,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const percentComplete = isPinnacle ? 100 : Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100));
           const nightsToNext = isPinnacle ? 0 : Math.max(0, nextThreshold - crownAnchorPoints);
           
-          const levelColor = CROWN_ANCHOR_LEVELS[crownAnchorLevel]?.color || COLORS.points;
-          const nextLevelColor = nextLevel ? CROWN_ANCHOR_LEVELS[nextLevel]?.color : levelColor;
+          const _levelColor = CROWN_ANCHOR_LEVELS[crownAnchorLevel]?.color || COLORS.points;
           
           return (
             <View style={[styles.progressCard, progressCardStyle]}>
@@ -273,7 +272,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
-                  colors={[levelColor, nextLevelColor]}
+                  colors={playerCardTheme.progressBarGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
@@ -336,8 +335,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const percentComplete = isMasters ? 100 : (rangeSize > 0 ? Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100)) : 100);
           const pointsToNext = isMasters ? 0 : Math.max(0, nextThreshold - clubRoyalePoints);
           
-          const tierColor = CLUB_ROYALE_TIERS[currentTier]?.color || '#8B5CF6';
-          const nextTierColor = nextTier ? CLUB_ROYALE_TIERS[nextTier]?.color : tierColor;
+          const _tierColor = CLUB_ROYALE_TIERS[currentTier]?.color || '#8B5CF6';
           
           return (
             <View style={[styles.progressCard, progressCardStyle]}>
@@ -358,7 +356,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
-                  colors={[tierColor, nextTierColor]}
+                  colors={playerCardTheme.progressBarGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
@@ -386,8 +384,6 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           
           // The "achieved" bar shows the transition TO the current tier
           const priorTier = TIER_ORDER[currentTierIndex - 1];
-          const priorTierColor = CLUB_ROYALE_TIERS[priorTier]?.color || '#6B7280';
-          const currentTierColor = CLUB_ROYALE_TIERS[currentTier]?.color || '#8B5CF6';
           const achievedThreshold = CLUB_ROYALE_TIERS[currentTier]?.threshold || 0;
           
           return (
@@ -405,7 +401,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
-                  colors={[priorTierColor, currentTierColor]}
+                  colors={playerCardTheme.progressBarGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressBarFill, { width: '100%' }]}
@@ -489,8 +485,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const percentComplete = isZenith ? 100 : Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100));
           const pointsToNext = isZenith ? 0 : Math.max(0, nextThreshold - celebrityCaptainsClubPoints);
           
-          const levelColor = CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color || '#708090';
-          const nextLevelColor = nextLevel ? CELEBRITY_CAPTAINS_CLUB_LEVELS[nextLevel]?.color : levelColor;
+          const _levelColor = CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color || '#708090';
           
           return (
             <View style={[styles.progressCard, progressCardStyle]}>
@@ -511,7 +506,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
-                  colors={[levelColor, nextLevelColor]}
+                  colors={playerCardTheme.progressBarGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
@@ -532,8 +527,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextTier = currentTierIndex < CELEBRITY_TIER_ORDER.length - 1 ? CELEBRITY_TIER_ORDER[currentTierIndex + 1] : null;
           const isRuby = celebrityTier === 'Ruby';
           
-          const tierColor = CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#F0EAD6';
-          const nextTierColor = nextTier ? CELEBRITY_BLUE_CHIP_TIERS[nextTier]?.color : tierColor;
+          const _tierColor = CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#F0EAD6';
           
           return (
             <View style={[styles.progressCard, progressCardStyle]}>
@@ -554,7 +548,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
-                  colors={[tierColor, nextTierColor]}
+                  colors={playerCardTheme.progressBarGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressBarFill, { width: isRuby ? '100%' : '0%' }]}
@@ -640,8 +634,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const percentComplete = isMax ? 100 : Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100));
           const daysToNext = isMax ? 0 : Math.max(0, nextThreshold - silverseaPoints);
           
-          const tierColor = SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color || '#708090';
-          const nextTierColor = nextTier ? SILVERSEA_VENETIAN_TIERS[nextTier]?.color : tierColor;
+          const _tierColor = SILVERSEA_VENETIAN_TIERS[silverseaTier]?.color || '#708090';
           
           return (
             <View style={[styles.progressCard, progressCardStyle]}>
@@ -662,7 +655,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
-                  colors={[tierColor, nextTierColor]}
+                  colors={playerCardTheme.progressBarGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressBarFill, { width: `${Math.min(100, percentComplete)}%` }]}
@@ -750,8 +743,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const nextThreshold = nextTier ? CARNIVAL_VIFP_TIERS[nextTier]?.cruiseDays : 500;
           const _rangeSize = nextThreshold - currentThreshold;
           
-          const tierColor = CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.color || '#1E90FF';
-          const nextTierColor = nextTier ? CARNIVAL_VIFP_TIERS[nextTier]?.color : tierColor;
+          const _tierColor = CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.color || '#1E90FF';
           
           return (
             <View style={[styles.progressCard, progressCardStyle]}>
@@ -772,7 +764,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <View style={[styles.progressBarBg, progressBarTrackStyle]}>
                 <LinearGradient
-                  colors={[tierColor, nextTierColor]}
+                  colors={playerCardTheme.progressBarGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressBarFill, { width: isMax ? '100%' : '0%' }]}
@@ -789,7 +781,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
 
         {(() => {
-          const tierColor = CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color || '#1E90FF';
+          const _tierColor = CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color || '#1E90FF';
           
           return (
             <View style={[styles.progressCard, progressCardStyle]}>
@@ -800,7 +792,12 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 <Text style={[styles.progressPercent, progressLabelStyle]}>--</Text>
               </View>
               <View style={[styles.progressBarBg, progressBarTrackStyle]}>
-                <View style={[styles.progressBarFill, { width: '0%', backgroundColor: tierColor }]} />
+                <LinearGradient
+                  colors={playerCardTheme.progressBarGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.progressBarFill, { width: '0%' }]}
+                />
               </View>
               <Text style={[styles.progressEta, progressMetaStyle]}>
                 Play in the casino to earn Players Club tier progress
@@ -982,14 +979,14 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   progressBarBg: {
-    height: 4,
+    height: 10,
     backgroundColor: CLEAN_THEME.border.light,
-    borderRadius: 2,
+    borderRadius: 5,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 5,
   },
   progressEta: {
     fontSize: 10,
@@ -1068,7 +1065,7 @@ const styles = StyleSheet.create({
     color: COLORS.goldDark,
   },
   pinnacleHighlightWhite: {
-    color: COLORS.navyDeep,
+    color: '#FFFFFF',
     fontWeight: '700' as const,
   },
   achievedBadge: {
