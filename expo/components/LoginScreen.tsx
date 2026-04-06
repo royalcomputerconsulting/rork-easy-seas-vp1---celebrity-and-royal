@@ -529,8 +529,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   signatureImage: {
-    width: width * 0.35,
-    height: 30,
+    width: width * 0.75,
+    height: 75,
     marginBottom: SPACING.sm,
     opacity: 0.8,
   },

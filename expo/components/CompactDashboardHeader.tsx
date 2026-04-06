@@ -172,11 +172,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 style={styles.headerLogo}
                 resizeMode="contain"
               />
-              <Image
-                source={{ uri: IMAGES.signature }}
-                style={styles.headerSignature}
-                resizeMode="contain"
-              />
+
             </View>
           )}
           <View style={styles.memberTextInfo}>
@@ -898,12 +894,7 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 16,
   },
-  headerSignature: {
-    width: 64,
-    height: 20,
-    marginTop: 2,
-    opacity: 0.7,
-  },
+
   memberTextInfo: {
     flex: 1,
   },

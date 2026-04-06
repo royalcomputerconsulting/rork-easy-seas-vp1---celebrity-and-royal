@@ -530,11 +530,7 @@ export default function OfferDetailsScreen() {
                 style={styles.offerLogo}
                 resizeMode="contain"
               />
-              <Image
-                source={{ uri: IMAGES.signature }}
-                style={styles.offerSignature}
-                resizeMode="contain"
-              />
+
             </View>
             <View style={styles.offerNameRow}>
               <Text style={styles.featuredOfferName} numberOfLines={2}>{offerInfo.offerName}</Text>
@@ -737,12 +733,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 12,
   },
-  offerSignature: {
-    width: 48,
-    height: 16,
-    marginTop: 2,
-    opacity: 0.6,
-  },
+
   featuredOfferName: {
     fontSize: 22,
     fontWeight: '700' as const,

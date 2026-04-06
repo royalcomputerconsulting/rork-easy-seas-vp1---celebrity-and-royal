@@ -68,11 +68,7 @@ export function EasySeasHero({
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <Image
-              source={{ uri: IMAGES.signature }}
-              style={styles.signatureImage}
-              resizeMode="contain"
-            />
+
           </View>
           <View style={styles.titleContainer}>
             <Text style={styles.appTitle}>Easy Seas</Text>
@@ -217,12 +213,7 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: BORDER_RADIUS.sm,
   },
-  signatureImage: {
-    width: 40,
-    height: 14,
-    marginTop: 2,
-    opacity: 0.6,
-  },
+
   titleContainer: {
     flex: 1,
   },

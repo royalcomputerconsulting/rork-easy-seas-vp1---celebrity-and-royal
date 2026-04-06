@@ -43,11 +43,7 @@ export function HeroHeaderCompact({
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <Image
-              source={{ uri: IMAGES.signature }}
-              style={styles.signatureImage}
-              resizeMode="contain"
-            />
+
           </View>
           <View style={styles.welcomeText}>
             <Text style={styles.greeting}>Welcome back,</Text>
@@ -109,12 +105,7 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 8,
   },
-  signatureImage: {
-    width: 40,
-    height: 14,
-    marginTop: 2,
-    opacity: 0.7,
-  },
+
   welcomeText: {
     flex: 1,
   },
