@@ -100,6 +100,14 @@ interface CertificateOpportunity {
   summary: string;
 }
 
+interface PdfScanLogEntry {
+  certificateCode: string;
+  status: 'ok' | 'empty' | 'error' | 'no_sailings';
+  textLength: number;
+  sailingsFound: number;
+  errorMessage: string | null;
+}
+
 interface SailingMatch {
   shipName: string;
   sailDate: string;
@@ -688,82 +696,155 @@ function decodePdfLiteralString(value: string): string {
   return result;
 }
 
-function extractHexStringsFromStream(streamText: string): string[] {
-  const results: string[] = [];
-  const hexRegex = /<([0-9A-Fa-f\s]+)>/g;
+function readLiteralStringAt(text: string, startPos: number): { str: string; endPos: number } {
+  let raw = '';
+  let depth = 1;
+  let escaping = false;
+  let pos = startPos;
 
-  for (const match of streamText.matchAll(hexRegex)) {
-    const hex = (match[1] ?? '').replace(/\s/g, '');
-    if (hex.length < 2 || hex.length > 2000) {
+  while (pos < text.length && depth > 0) {
+    const ch = text[pos];
+    if (escaping) {
+      raw += '\\' + ch;
+      escaping = false;
+      pos += 1;
       continue;
     }
-
-    let decoded = '';
-    for (let i = 0; i < hex.length; i += 2) {
-      const byte = parseInt(hex.slice(i, i + 2), 16);
-      if (!Number.isNaN(byte) && byte > 0) {
-        decoded += String.fromCharCode(byte);
-      }
+    if (ch === '\\') {
+      escaping = true;
+      pos += 1;
+      continue;
     }
-
-    const trimmed = decoded.trim();
-    if (trimmed.length > 0) {
-      results.push(trimmed);
+    if (ch === '(') {
+      depth += 1;
+      raw += ch;
+      pos += 1;
+      continue;
     }
+    if (ch === ')') {
+      depth -= 1;
+      if (depth > 0) raw += ch;
+      pos += 1;
+      continue;
+    }
+    raw += ch;
+    pos += 1;
   }
 
-  return results;
+  return { str: decodePdfLiteralString(raw), endPos: pos };
 }
 
-function extractLiteralStringsFromStream(streamText: string): string[] {
-  const results: string[] = [];
-  let buffer = '';
-  let depth = 0;
-  let escaping = false;
+function readHexStringAt(text: string, startPos: number): { str: string; endPos: number } {
+  let hex = '';
+  let pos = startPos;
 
-  for (let index = 0; index < streamText.length; index += 1) {
-    const char = streamText[index];
+  while (pos < text.length && text[pos] !== '>') {
+    hex += text[pos];
+    pos += 1;
+  }
+  pos += 1;
 
-    if (depth === 0) {
-      if (char === '(') {
-        depth = 1;
-        buffer = '';
-      }
-      continue;
+  hex = hex.replace(/\s/g, '');
+  let decoded = '';
+  for (let i = 0; i < hex.length; i += 2) {
+    const byte = parseInt(hex.slice(i, i + 2), 16);
+    if (!Number.isNaN(byte) && byte > 0) {
+      decoded += String.fromCharCode(byte);
     }
-
-    if (escaping) {
-      buffer += `\\${char}`;
-      escaping = false;
-      continue;
-    }
-
-    if (char === '\\') {
-      escaping = true;
-      continue;
-    }
-
-    if (char === '(') {
-      depth += 1;
-      buffer += char;
-      continue;
-    }
-
-    if (char === ')') {
-      depth -= 1;
-      if (depth === 0) {
-        results.push(decodePdfLiteralString(buffer));
-        buffer = '';
-        continue;
-      }
-      buffer += char;
-      continue;
-    }
-
-    buffer += char;
   }
 
-  return results;
+  return { str: decoded, endPos: pos };
+}
+
+const TJ_WORD_SPACE_THRESHOLD = 120;
+
+function parseTJArrayAt(text: string, startPos: number): { str: string; endPos: number } {
+  let pos = startPos;
+  let wordBuf = '';
+  const words: string[] = [];
+
+  while (pos < text.length && text[pos] !== ']') {
+    while (pos < text.length && /\s/.test(text[pos])) pos += 1;
+    if (pos >= text.length || text[pos] === ']') break;
+
+    if (text[pos] === '(') {
+      pos += 1;
+      const r = readLiteralStringAt(text, pos);
+      wordBuf += r.str;
+      pos = r.endPos;
+    } else if (text[pos] === '<') {
+      pos += 1;
+      const r = readHexStringAt(text, pos);
+      wordBuf += r.str;
+      pos = r.endPos;
+    } else if (/[-\d.]/.test(text[pos])) {
+      let numStr = '';
+      while (pos < text.length && /[-\d.]/.test(text[pos])) {
+        numStr += text[pos];
+        pos += 1;
+      }
+      const num = parseFloat(numStr);
+      if (!Number.isNaN(num) && Math.abs(num) > TJ_WORD_SPACE_THRESHOLD) {
+        if (wordBuf) {
+          words.push(wordBuf);
+          wordBuf = '';
+        }
+      }
+    } else {
+      pos += 1;
+    }
+  }
+
+  if (wordBuf) words.push(wordBuf);
+  if (pos < text.length && text[pos] === ']') pos += 1;
+
+  return { str: words.join(' '), endPos: pos };
+}
+
+function extractTextFromContentStream(streamText: string): string {
+  const segments: string[] = [];
+  let pos = 0;
+
+  while (pos < streamText.length) {
+    while (pos < streamText.length && /\s/.test(streamText[pos])) pos += 1;
+    if (pos >= streamText.length) break;
+
+    if (streamText[pos] === '[') {
+      const savedPos = pos;
+      pos += 1;
+      const r = parseTJArrayAt(streamText, pos);
+      pos = r.endPos;
+
+      while (pos < streamText.length && /\s/.test(streamText[pos])) pos += 1;
+      if (streamText.slice(pos, pos + 2) === 'TJ') {
+        pos += 2;
+        if (r.str.trim()) segments.push(r.str.trim());
+        continue;
+      }
+      pos = savedPos + 1;
+      continue;
+    }
+
+    if (streamText[pos] === '(') {
+      const savedPos = pos;
+      pos += 1;
+      const r = readLiteralStringAt(streamText, pos);
+      pos = r.endPos;
+
+      while (pos < streamText.length && /\s/.test(streamText[pos])) pos += 1;
+      if (streamText.slice(pos, pos + 2) === 'Tj') {
+        pos += 2;
+        if (r.str.trim()) segments.push(r.str.trim());
+        continue;
+      }
+      pos = savedPos + 1;
+      continue;
+    }
+
+    pos += 1;
+  }
+
+  return segments.join(' ');
 }
 
 function sanitizePdfText(value: string): string {
@@ -823,16 +904,13 @@ function extractPdfText(pdfBytes: Uint8Array): string {
       continue;
     }
 
-    const literalStrings = extractLiteralStringsFromStream(decodedStream);
-    const hexStrings = extractHexStringsFromStream(decodedStream);
-    const combined = [...literalStrings, ...hexStrings];
-    if (combined.length > 0) {
-      extracted.push(combined.join(' '));
+    const text = extractTextFromContentStream(decodedStream);
+    if (text.trim()) {
+      extracted.push(text.trim());
     }
   }
 
   return sanitizePdfText(extracted.join(' '))
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -868,6 +946,13 @@ async function fetchPdfText(url: string, retries = 3): Promise<string> {
       if (response.status === 503 || response.status === 429) {
         lastError = new Error(`Server returned ${response.status} for ${url}`);
         console.warn('[CertificateExplorer] Retryable status:', { status: response.status, url, attempt });
+        continue;
+      }
+
+      if (response.status === 403) {
+        lastError = new Error(`Blocked by CDN (403) for ${url}`);
+        console.warn('[CertificateExplorer] CDN blocked (403), retrying:', { url, attempt });
+        await sleep(500 + Math.random() * 1000);
         continue;
       }
 
@@ -1176,14 +1261,48 @@ export const certificateExplorerRouter = createTRPCRouter({
         };
       }
 
+      const pdfScanLog: PdfScanLogEntry[] = [];
+
       const sailingResults = await mapWithConcurrency(allIndexEntries, 4, async (entry) => {
         try {
           const pdfText = await fetchPdfText(entry.pdfUrl);
-          return extractSailingsFromCertificatePdf(entry, pdfText);
+
+          if (!pdfText || pdfText.length < 20) {
+            console.warn('[CertificateExplorer] PDF returned empty/tiny text:', {
+              certificateCode: entry.certificateCode,
+              textLength: pdfText.length,
+            });
+            pdfScanLog.push({
+              certificateCode: entry.certificateCode,
+              status: 'empty',
+              textLength: pdfText.length,
+              sailingsFound: 0,
+              errorMessage: pdfText.length === 0 ? 'PDF returned no text (may be 404 or image-only)' : 'PDF text too short to contain sailings',
+            });
+            return [] as SailingEntry[];
+          }
+
+          const sailings = extractSailingsFromCertificatePdf(entry, pdfText);
+          pdfScanLog.push({
+            certificateCode: entry.certificateCode,
+            status: sailings.length > 0 ? 'ok' : 'no_sailings',
+            textLength: pdfText.length,
+            sailingsFound: sailings.length,
+            errorMessage: sailings.length === 0 ? 'Text extracted but no ship+date pairs found' : null,
+          });
+          return sailings;
         } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
           console.error('[CertificateExplorer] Failed to inspect certificate PDF:', {
             certificateCode: entry.certificateCode,
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMsg,
+          });
+          pdfScanLog.push({
+            certificateCode: entry.certificateCode,
+            status: 'error',
+            textLength: 0,
+            sailingsFound: 0,
+            errorMessage: errorMsg,
           });
           return [] as SailingEntry[];
         }
@@ -1271,6 +1390,18 @@ export const certificateExplorerRouter = createTRPCRouter({
         matchedCertificateCount,
       });
 
+      const errorCount = pdfScanLog.filter(e => e.status === 'error').length;
+      const emptyCount = pdfScanLog.filter(e => e.status === 'empty').length;
+      const noSailingsCount = pdfScanLog.filter(e => e.status === 'no_sailings').length;
+      const okCount = pdfScanLog.filter(e => e.status === 'ok').length;
+
+      console.log('[CertificateExplorer] PDF scan summary:', {
+        ok: okCount,
+        noSailings: noSailingsCount,
+        empty: emptyCount,
+        errors: errorCount,
+      });
+
       return {
         monthCode,
         filters: {
@@ -1286,6 +1417,7 @@ export const certificateExplorerRouter = createTRPCRouter({
           matchedSailingCount: matches.length,
           matchedCertificateCount,
         },
+        pdfScanLog,
         matches,
       };
     }),

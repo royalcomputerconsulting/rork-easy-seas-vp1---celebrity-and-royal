@@ -122,7 +122,7 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
     const result = examineMutation.data;
     if (!result) return;
 
-    const { summary, filters } = result;
+    const { summary, filters, pdfScanLog } = result;
 
     if (filters.resolvedShips.length > 0) {
       addLog('success', `Ships resolved: ${filters.resolvedShips.join(', ')}`);
@@ -139,11 +139,43 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
       addLog('error', 'Index PDF returned 0 certificate entries — PDF may be unreachable or empty');
     } else {
       addLog('success', `Index loaded: ${summary.indexCount} certificate entries found`);
-      addLog('step', `Scanning ${summary.searchedCertificateCount} individual certificate PDFs…`);
+      addLog('step', `Scanned ${summary.searchedCertificateCount} individual certificate PDFs`);
+    }
+
+    if (pdfScanLog && pdfScanLog.length > 0) {
+      const okCount = pdfScanLog.filter((e: { status: string }) => e.status === 'ok').length;
+      const errorCount = pdfScanLog.filter((e: { status: string }) => e.status === 'error').length;
+      const emptyCount = pdfScanLog.filter((e: { status: string }) => e.status === 'empty').length;
+      const noSailingsCount = pdfScanLog.filter((e: { status: string }) => e.status === 'no_sailings').length;
+
+      if (okCount > 0) {
+        addLog('success', `${okCount} PDF(s) had matching sailings`);
+      }
+      if (noSailingsCount > 0) {
+        addLog('info', `${noSailingsCount} PDF(s) parsed OK but had no matching ship+date`);
+      }
+      if (emptyCount > 0) {
+        addLog('warn', `${emptyCount} PDF(s) returned empty/unreadable text`);
+      }
+      if (errorCount > 0) {
+        addLog('error', `${errorCount} PDF(s) failed to fetch (blocked or unreachable)`);
+        const errorEntries = pdfScanLog.filter((e: { status: string }) => e.status === 'error');
+        errorEntries.slice(0, 5).forEach((e: { certificateCode: string; errorMessage: string | null }) => {
+          addLog('error', `  ${e.certificateCode}: ${e.errorMessage ?? 'unknown error'}`);
+        });
+        if (errorEntries.length > 5) {
+          addLog('error', `  …and ${errorEntries.length - 5} more`);
+        }
+      }
+
+      const withSailings = pdfScanLog.filter((e: { status: string; sailingsFound: number }) => e.sailingsFound > 0);
+      withSailings.forEach((e: { certificateCode: string; sailingsFound: number; textLength: number }) => {
+        addLog('step', `${e.certificateCode}: ${e.sailingsFound} sailing(s) extracted (${Math.round(e.textLength / 1024)}KB text)`);
+      });
     }
 
     if (summary.matchedSailingCount === 0) {
-      addLog('warn', `No sailings matched after scanning all ${summary.searchedCertificateCount} PDFs`);
+      addLog('warn', `No sailings matched your ship/date filter after scanning all ${summary.searchedCertificateCount} PDFs`);
       addLog('info', 'Tip: try broadening ship name (e.g. just "Legend") or clearing sail date');
     } else {
       addLog('success', `Found ${summary.matchedSailingCount} matching sailing(s) across ${summary.matchedCertificateCount} certificate level(s)`);
