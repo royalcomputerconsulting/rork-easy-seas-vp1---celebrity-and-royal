@@ -928,10 +928,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   logoHeaderSignature: {
-    width: 130,
-    height: 130,
+    width: 110,
+    height: 110,
     marginTop: 6,
     opacity: 0.75,
+    alignSelf: 'flex-start',
   },
   sectionHeader: {
     flexDirection: 'row',
