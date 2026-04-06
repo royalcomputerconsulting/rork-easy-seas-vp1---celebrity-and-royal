@@ -2849,8 +2849,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   footerSignature: {
-    width: 130,
-    height: 130,
+    width: 260,
+    height: 260,
     marginBottom: SPACING.md,
     opacity: 0.7,
   },

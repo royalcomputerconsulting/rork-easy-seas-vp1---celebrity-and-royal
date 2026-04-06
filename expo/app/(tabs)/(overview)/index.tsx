@@ -876,8 +876,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   heroSignature: {
-    width: 120,
-    height: 50,
+    width: 240,
+    height: 100,
     marginTop: 14,
     opacity: 0.8,
   },

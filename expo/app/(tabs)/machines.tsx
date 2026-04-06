@@ -1181,8 +1181,8 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   logoHeaderSignature: {
-    width: 130,
-    height: 130,
+    width: 260,
+    height: 260,
     marginTop: 4,
     opacity: 0.7,
   },
