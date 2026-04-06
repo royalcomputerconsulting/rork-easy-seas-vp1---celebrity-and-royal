@@ -4,7 +4,7 @@ import { createTRPCRouter, publicProcedure } from '../create-context';
 
 const CERTIFICATE_PDF_BASE_URL = 'https://www.royalcaribbean.com/content/dam/royal/resources/pdf/casino/offers';
 const MONTH_CODE_REGEX = /^\d{4}$/;
-const DATE_TEXT_REGEX = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},\s+\d{4}\b/gi;
+const DATE_TEXT_REGEX = /(?<![a-zA-Z])(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},\s+\d{4}\b/gi;
 
 const ROYAL_SHIP_NAMES = [
   'Adventure Of The Seas',
@@ -780,11 +780,12 @@ function extractPdfText(pdfBytes: Uint8Array): string {
 
     const literalStrings = extractLiteralStringsFromStream(decodedStream);
     if (literalStrings.length > 0) {
-      extracted.push(literalStrings.join(''));
+      extracted.push(literalStrings.join(' '));
     }
   }
 
-  return sanitizePdfText(extracted.join('\n'))
+  return sanitizePdfText(extracted.join(' '))
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/\s+/g, ' ')
     .trim();
 }
