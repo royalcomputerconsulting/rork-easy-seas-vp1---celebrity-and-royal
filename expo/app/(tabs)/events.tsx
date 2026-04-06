@@ -476,23 +476,19 @@ export default function EventsScreen() {
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.heroHeader}>
-            <View style={styles.heroContent}>
-              <View style={styles.logoSection}>
-                <Image
-                  source={{ uri: IMAGES.logo }}
-                  style={styles.logoImage}
-                  resizeMode="contain"
-                />
-              </View>
-              <View style={styles.heroTextSection}>
-                <Text style={styles.heroTitle}>Easy Seas™</Text>
-                <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle</Text>
-                <Image
-                  source={{ uri: IMAGES.signature }}
-                  style={styles.heroSignature}
-                  resizeMode="contain"
-                />
-              </View>
+            <Image
+              source={{ uri: IMAGES.logo }}
+              style={styles.heroBgLogo}
+              resizeMode="contain"
+            />
+            <View style={styles.heroOverlay}>
+              <Text style={styles.heroTitle}>Easy Seas™</Text>
+              <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
+              <Image
+                source={{ uri: IMAGES.signature }}
+                style={styles.heroSignature}
+                resizeMode="contain"
+              />
             </View>
           </View>
 
@@ -716,42 +712,47 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.navyDeep,
     borderBottomLeftRadius: BORDER_RADIUS.xl,
     borderBottomRightRadius: BORDER_RADIUS.xl,
-    padding: SPACING.lg,
     marginHorizontal: SPACING.md,
     marginBottom: SPACING.md,
     marginTop: SPACING.xs,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 200,
     ...SHADOW.lg,
   },
-  heroContent: {
-    flexDirection: 'row',
+  heroBgLogo: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    opacity: 0.18,
+  },
+  heroOverlay: {
     alignItems: 'center',
-  },
-  logoSection: {
-    marginRight: SPACING.lg,
-  },
-  logoImage: {
-    width: 140,
-    height: 140,
-  },
-  heroTextSection: {
-    flex: 1,
     justifyContent: 'center',
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
   },
   heroTitle: {
-    fontSize: 30,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    fontSize: 32,
+    fontWeight: '800' as const,
     color: COLORS.white,
-    marginBottom: 6,
+    letterSpacing: 1,
+    textAlign: 'center' as const,
   },
   heroSubtitle: {
     fontSize: 15,
+    fontWeight: '500' as const,
     color: 'rgba(255, 255, 255, 0.82)',
+    marginTop: 6,
+    letterSpacing: 0.3,
+    textAlign: 'center' as const,
   },
   heroSignature: {
-    width: 130,
-    height: 130,
-    marginTop: 6,
-    opacity: 0.75,
+    width: 120,
+    height: 50,
+    marginTop: 14,
+    opacity: 0.8,
   },
   viewToggleContainer: {
     flexDirection: 'row',

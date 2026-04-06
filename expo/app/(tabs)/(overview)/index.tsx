@@ -488,19 +488,18 @@ function OverviewScreenContent() {
 
   const renderHeader = () => (
     <View style={styles.headerContent}>
-      {/* Logo with branding text */}
-      <View style={styles.logoHeaderContainer}>
+      <View style={styles.heroCard}>
         <Image
           source={{ uri: IMAGES.logo }}
-          style={styles.logoHeaderImage}
+          style={styles.heroBgLogo}
           resizeMode="contain"
         />
-        <View style={styles.logoHeaderTextContainer}>
-          <Text style={styles.logoHeaderTitle}>Easy Seas™</Text>
-          <Text style={styles.logoHeaderSubtitle}>Manage your Nautical Lifestyle™</Text>
+        <View style={styles.heroOverlay}>
+          <Text style={styles.heroTitle}>Easy Seas™</Text>
+          <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
           <Image
             source={{ uri: IMAGES.signature }}
-            style={styles.logoHeaderSignature}
+            style={styles.heroSignature}
             resizeMode="contain"
           />
         </View>
@@ -835,104 +834,49 @@ const styles = StyleSheet.create({
   footerContent: {
     marginTop: SPACING.md,
   },
-  heroSection: {
-    height: 200,
-    marginBottom: SPACING.md,
+
+  heroCard: {
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.sm,
     borderRadius: BORDER_RADIUS.xl,
     overflow: 'hidden',
-    marginHorizontal: -SPACING.md,
-    marginTop: -SPACING.md,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 200,
   },
-  heroImage: {
-    width: '100%',
-    height: '100%',
+  heroBgLogo: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    opacity: 0.18,
   },
-  heroGradientOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
-    padding: SPACING.lg,
-  },
-  heroTitleContainer: {
-    marginBottom: SPACING.md,
-  },
-  heroWelcome: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500' as const,
-    letterSpacing: 0.5,
+  heroOverlay: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
   },
   heroTitle: {
-    fontSize: 26,
+    fontSize: 32,
     fontWeight: '800' as const,
     color: '#FFFFFF',
-    marginTop: 4,
+    letterSpacing: 1,
+    textAlign: 'center',
   },
-  heroStatsRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  heroStatPill: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.round,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  heroStatText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600' as const,
-  },
-  centeredLogoContainer: {
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  centeredLogo: {
-    width: '100%',
-    height: 160,
-    maxWidth: 400,
-  },
-  logoHeaderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-    marginTop: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: '#000000',
-    borderRadius: BORDER_RADIUS.xl,
-    minHeight: 188,
-  },
-  logoHeaderImage: {
-    width: 160,
-    height: 160,
-  },
-  logoHeaderTextContainer: {
-    marginLeft: SPACING.lg,
-    flex: 1,
-  },
-  logoHeaderTitle: {
-    fontSize: 30,
-    fontWeight: '700' as const,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  logoHeaderSubtitle: {
+  heroSubtitle: {
     fontSize: 15,
     fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.88)',
-    marginTop: 4,
-    letterSpacing: 0.3,
-  },
-  logoHeaderSignature: {
-    width: 110,
-    height: 110,
+    color: 'rgba(255,255,255,0.82)',
     marginTop: 6,
-    opacity: 0.75,
-    alignSelf: 'flex-start',
+    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
+  heroSignature: {
+    width: 120,
+    height: 50,
+    marginTop: 14,
+    opacity: 0.8,
   },
   sectionHeader: {
     flexDirection: 'row',
