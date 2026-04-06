@@ -8,6 +8,7 @@ import {
   calculateSeaDays,
   isPreferredPort,
 } from '@/lib/recommendationEngine';
+import { executeCertificateLevelSearch, type CertificateLevelSearchInput } from '@/lib/certificateLevelSearch';
 
 export interface AgentToolContext {
   cruises: Cruise[];
@@ -67,6 +68,8 @@ export interface OfferAnalysisInput {
   expiryDays?: number;
   sortBy?: 'value' | 'expiry' | 'freeplay' | 'cabin';
 }
+
+export type { CertificateLevelSearchInput };
 
 export function executeCruiseSearch(input: CruiseSearchInput, context: AgentToolContext): string {
   console.log('[AgentTools] Cruise search input:', input);
@@ -508,6 +511,16 @@ export function executeTierProgress(input: TierProgressInput, context: AgentTool
   }
   
   return lines.join('\n');
+}
+
+export function executeCertificateSearch(input: CertificateLevelSearchInput, context: AgentToolContext): string {
+  console.log('[AgentTools] Certificate level search input:', input);
+
+  return executeCertificateLevelSearch(input, {
+    cruises: context.cruises,
+    bookedCruises: context.bookedCruises,
+    offers: context.offers,
+  });
 }
 
 export function executeOfferAnalysis(input: OfferAnalysisInput, context: AgentToolContext): string {

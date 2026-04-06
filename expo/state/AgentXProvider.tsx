@@ -13,6 +13,7 @@ import {
   executeOfferAnalysis,
   executeRecommendations,
   executeMachineRecommendations,
+  executeCertificateSearch,
   CruiseSearchInput,
   BookingAnalysisInput,
   PortfolioOptimizerInput,
@@ -20,6 +21,7 @@ import {
   OfferAnalysisInput,
   RecommendationInput,
   MachineRecommendationInput,
+  CertificateLevelSearchInput,
 } from '@/lib/agentTools';
 import { useSlotMachines } from './SlotMachineProvider';
 import { useSlotMachineLibrary } from './SlotMachineLibraryProvider';
@@ -50,6 +52,7 @@ function buildSystemPrompt(context: { globalLibrary?: any[], myAtlasMachines?: a
 - Track Club Royale tier progress (Choice, Prime, Signature, Masters)
 - Optimize their cruise portfolio for maximum points and value
 - Understand casino offers and their values
+- Identify which A or C certificate levels match specific ships or sailing dates
 - Recommend slot machines on specific ships for advantage play (AP) and optimal returns
 - Analyze slot machine session data and performance
 - Track machine locations on specific ships via deck plans
@@ -121,6 +124,7 @@ function isDevAssistantRequest(message: string): boolean {
 }
 
 function parseToolCall(message: string): { tool: string; params: unknown } | null {
+  const certificateMatch = message.match(/certificate|certificates|levels?\s+of\s+certificates?|what\s+levels?|appears?\s+on.*certificate|a\s+or\s+c\s+certificate/i);
   const searchMatch = message.match(/search.*cruise|find.*cruise|available.*cruise|cruise.*search/i);
   const tierMatch = message.match(/tier.*progress|progress.*tier|points.*tier|signature|masters|pinnacle/i);
   const recommendMatch = message.match(/recommend.*for.*me|for.*you|best.*for.*me|suggest.*for.*me|what.*should.*book|which.*cruise|recommended/i);
@@ -128,6 +132,11 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
   const analyzeMatch = message.match(/analyze|roi|value.*breakdown|portfolio.*summary/i);
   const offerMatch = message.match(/offer|expiring|freeplay|trade.*in|casino.*offer/i);
   const machineMatch = message.match(/slot.*machine|machine.*recommend|what.*machine|which.*machine|slot.*play|best.*machine|machine.*on|ap.*machine|advantage.*play/i);
+
+  if (certificateMatch) {
+    const params: CertificateLevelSearchInput = { query: message };
+    return { tool: 'searchCertificateLevels', params };
+  }
 
   if (searchMatch) {
     const params: CruiseSearchInput = { onlyAvailable: true, limit: 5 };
@@ -316,6 +325,8 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         return executeTierProgress(params as TierProgressInput, toolContext);
       case 'analyzeOffers':
         return executeOfferAnalysis(params as OfferAnalysisInput, toolContext);
+      case 'searchCertificateLevels':
+        return executeCertificateSearch(params as CertificateLevelSearchInput, toolContext);
       case 'getRecommendations':
         return executeRecommendations(params as RecommendationInput, toolContext);
       case 'recommendMachines':
