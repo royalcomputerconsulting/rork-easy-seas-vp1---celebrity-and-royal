@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CalendarDays, ExternalLink, Search, Sparkles, X } from 'lucide-react-native';
+import { CalendarDays, ChevronDown, ChevronUp, ExternalLink, Search, Sparkles, Terminal, X } from 'lucide-react-native';
 
 import { BORDER_RADIUS, CLEAN_THEME, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { formatDate } from '@/lib/date';
@@ -22,6 +22,43 @@ interface CertificateExplorerModalProps {
   visible: boolean;
   onClose: () => void;
 }
+
+type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'step';
+
+interface LogEntry {
+  id: string;
+  level: LogLevel;
+  message: string;
+  timestamp: string;
+}
+
+function nowTimestamp(): string {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
+
+function makeLog(level: LogLevel, message: string): LogEntry {
+  return { id: `${Date.now()}-${Math.random()}`, level, message, timestamp: nowTimestamp() };
+}
+
+const LOG_LEVEL_ICON: Record<LogLevel, string> = {
+  info: '›',
+  success: '✓',
+  warn: '⚠',
+  error: '✕',
+  step: '→',
+};
+
+const LOG_LEVEL_COLOR: Record<LogLevel, string> = {
+  info: '#8BAFD4',
+  success: '#4ADE80',
+  warn: '#FACC15',
+  error: '#F87171',
+  step: '#60C8F5',
+};
 
 function getDefaultMonthCode(): string {
   const now = new Date();
@@ -52,6 +89,15 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
   const [monthCode, setMonthCode] = useState<string>(getDefaultMonthCode());
   const [includeA, setIncludeA] = useState<boolean>(true);
   const [includeC, setIncludeC] = useState<boolean>(true);
+  const [debugLog, setDebugLog] = useState<LogEntry[]>([]);
+  const [logExpanded, setLogExpanded] = useState<boolean>(false);
+  const logScrollRef = useRef<ScrollView>(null);
+
+  const addLog = useCallback((level: LogLevel, message: string) => {
+    const entry = makeLog(level, message);
+    setDebugLog(prev => [...prev, entry]);
+    console.log(`[CertExplorer:${level.toUpperCase()}] ${message}`);
+  }, []);
 
   const examineMutation = trpc.certificateExplorer.examine.useMutation();
 
@@ -70,6 +116,55 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
       { label: 'Certificate levels', value: String(result.summary.matchedCertificateCount) },
     ];
   }, [result]);
+
+  useEffect(() => {
+    if (examineMutation.isPending) return;
+    const result = examineMutation.data;
+    if (!result) return;
+
+    const { summary, filters } = result;
+
+    if (filters.resolvedShips.length > 0) {
+      addLog('success', `Ships resolved: ${filters.resolvedShips.join(', ')}`);
+    } else {
+      addLog('warn', `No exact ships matched — searched broadly for "${filters.shipQuery}"`);
+    }
+
+    const types: string[] = [];
+    if (filters.includeA) types.push('A');
+    if (filters.includeC) types.push('C');
+    addLog('info', `Certificate types requested: ${types.join(', ')}`);
+
+    if (summary.indexCount === 0) {
+      addLog('error', 'Index PDF returned 0 certificate entries — PDF may be unreachable or empty');
+    } else {
+      addLog('success', `Index loaded: ${summary.indexCount} certificate entries found`);
+      addLog('step', `Scanning ${summary.searchedCertificateCount} individual certificate PDFs…`);
+    }
+
+    if (summary.matchedSailingCount === 0) {
+      addLog('warn', `No sailings matched after scanning all ${summary.searchedCertificateCount} PDFs`);
+      addLog('info', 'Tip: try broadening ship name (e.g. just "Legend") or clearing sail date');
+    } else {
+      addLog('success', `Found ${summary.matchedSailingCount} matching sailing(s) across ${summary.matchedCertificateCount} certificate level(s)`);
+    }
+
+    addLog('info', `Done — month code: ${result.monthCode}`);
+  }, [examineMutation.data, examineMutation.isPending, addLog]);
+
+  useEffect(() => {
+    if (examineMutation.isError && examineMutation.error) {
+      const err = examineMutation.error;
+      const msg = err instanceof Error ? err.message : 'Unknown error — check connection';
+      addLog('error', `Request failed: ${msg}`);
+    }
+  }, [examineMutation.isError, examineMutation.error, addLog]);
+
+  useEffect(() => {
+    if (logExpanded && debugLog.length > 0) {
+      setTimeout(() => logScrollRef.current?.scrollToEnd({ animated: true }), 80);
+    }
+  }, [debugLog.length, logExpanded]);
 
   const handleSearch = useCallback(async () => {
     const trimmedShipQuery = shipQuery.trim();
@@ -91,6 +186,15 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
       return;
     }
 
+    setDebugLog([]);
+    setLogExpanded(true);
+    addLog('step', `Starting examination — month ${trimmedMonthCode}`);
+    addLog('info', `Query: "${trimmedShipQuery}"${trimmedSailDate ? ` · Sail date: ${trimmedSailDate}` : ''}`);
+    const types: string[] = [];
+    if (includeA) types.push('A');
+    if (includeC) types.push('C');
+    addLog('step', `Fetching ${types.join(' + ')} index PDF(s) from Royal Caribbean…`);
+
     console.log('[CertificateExplorerModal] Starting certificate examination:', {
       shipQuery: trimmedShipQuery,
       sailDate: trimmedSailDate,
@@ -109,12 +213,13 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
       });
     } catch (error) {
       console.error('[CertificateExplorerModal] Certificate examination failed:', error);
+      addLog('error', error instanceof Error ? error.message : 'Unknown error — check connection');
       Alert.alert(
         'Search failed',
         error instanceof Error ? error.message : 'Unable to examine certificates right now.'
       );
     }
-  }, [shipQuery, monthCode, sailDate, includeA, includeC, examineMutation]);
+  }, [shipQuery, monthCode, sailDate, includeA, includeC, examineMutation, addLog]);
 
   const handleOpenPdf = useCallback((url: string) => {
     console.log('[CertificateExplorerModal] Opening certificate PDF:', url);
@@ -359,6 +464,57 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                 <Text style={styles.emptyStateText}>
                   Try a different ship name, remove the sail date, or switch the month code to another certificate cycle.
                 </Text>
+              </View>
+            ) : null}
+
+            {debugLog.length > 0 ? (
+              <View style={styles.debugPanel}>
+                <TouchableOpacity
+                  style={styles.debugHeader}
+                  onPress={() => setLogExpanded(prev => !prev)}
+                  activeOpacity={0.8}
+                  testID="certificate-explorer.debug-toggle"
+                >
+                  <View style={styles.debugHeaderLeft}>
+                    <Terminal size={13} color="#60C8F5" />
+                    <Text style={styles.debugHeaderTitle}>Connection Log</Text>
+                    {examineMutation.isPending ? (
+                      <View style={styles.debugLiveChip}>
+                        <View style={styles.debugLiveDot} />
+                        <Text style={styles.debugLiveText}>LIVE</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={styles.debugHeaderRight}>
+                    <Text style={styles.debugEntryCount}>{debugLog.length} entries</Text>
+                    {logExpanded ? (
+                      <ChevronUp size={14} color="#60C8F5" />
+                    ) : (
+                      <ChevronDown size={14} color="#60C8F5" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+
+                {logExpanded ? (
+                  <ScrollView
+                    ref={logScrollRef}
+                    style={styles.debugScroll}
+                    showsVerticalScrollIndicator={false}
+                    nestedScrollEnabled
+                  >
+                    {debugLog.map((entry) => (
+                      <View key={entry.id} style={styles.debugRow}>
+                        <Text style={styles.debugTime}>{entry.timestamp}</Text>
+                        <Text style={[styles.debugIcon, { color: LOG_LEVEL_COLOR[entry.level] }]}>
+                          {LOG_LEVEL_ICON[entry.level]}
+                        </Text>
+                        <Text style={[styles.debugMessage, { color: entry.level === 'error' ? '#F87171' : entry.level === 'warn' ? '#FACC15' : entry.level === 'success' ? '#4ADE80' : '#CBD5E1' }]}>
+                          {entry.message}
+                        </Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                ) : null}
               </View>
             ) : null}
           </ScrollView>
@@ -743,5 +899,94 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     lineHeight: 20,
     textAlign: 'center',
+  },
+  debugPanel: {
+    backgroundColor: '#0D1B2A',
+    borderRadius: BORDER_RADIUS.xl,
+    borderWidth: 1,
+    borderColor: '#1E3A52',
+    overflow: 'hidden',
+  },
+  debugHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E3A52',
+  },
+  debugHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  debugHeaderTitle: {
+    color: '#60C8F5',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase' as const,
+  },
+  debugLiveChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(74, 222, 128, 0.15)',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  debugLiveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#4ADE80',
+  },
+  debugLiveText: {
+    color: '#4ADE80',
+    fontSize: 9,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.6,
+  },
+  debugHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  debugEntryCount: {
+    color: '#4B6A85',
+    fontSize: 10,
+  },
+  debugScroll: {
+    maxHeight: 200,
+    paddingVertical: SPACING.sm,
+  },
+  debugRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 3,
+  },
+  debugTime: {
+    color: '#3A5470',
+    fontSize: 9,
+    fontFamily: 'monospace' as const,
+    paddingTop: 1,
+    minWidth: 46,
+  },
+  debugIcon: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    paddingTop: 1,
+    minWidth: 12,
+    textAlign: 'center' as const,
+  },
+  debugMessage: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 16,
+    fontFamily: 'monospace' as const,
   },
 });
