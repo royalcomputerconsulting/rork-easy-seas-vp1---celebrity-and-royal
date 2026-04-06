@@ -166,11 +166,18 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
       <View style={styles.topRow}>
         <View style={styles.memberInfoInline}>
           {!hideLogo && (
-            <Image 
-              source={{ uri: IMAGES.logo }}
-              style={styles.headerLogo}
-              resizeMode="contain"
-            />
+            <View style={styles.logoSignatureGroup}>
+              <Image 
+                source={{ uri: IMAGES.logo }}
+                style={styles.headerLogo}
+                resizeMode="contain"
+              />
+              <Image
+                source={{ uri: IMAGES.signature }}
+                style={styles.headerSignature}
+                resizeMode="contain"
+              />
+            </View>
           )}
           <View style={styles.memberTextInfo}>
             <Text style={[styles.memberGreeting, { color: playerCardTheme.topTextColor }]}>{displayName}</Text>
@@ -883,10 +890,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
   },
+  logoSignatureGroup: {
+    alignItems: 'center',
+  },
   headerLogo: {
     width: 80,
     height: 80,
     borderRadius: 16,
+  },
+  headerSignature: {
+    width: 64,
+    height: 20,
+    marginTop: 2,
+    opacity: 0.7,
   },
   memberTextInfo: {
     flex: 1,

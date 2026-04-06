@@ -596,6 +596,11 @@ export default function AtlasScreen() {
             style={styles.logoHeaderImage}
             resizeMode="contain"
           />
+          <Image
+            source={{ uri: IMAGES.signature }}
+            style={styles.logoHeaderSignature}
+            resizeMode="contain"
+          />
         </View>
 
         <View style={styles.header}>
@@ -1174,6 +1179,12 @@ const styles = StyleSheet.create({
     width: 320,
     height: 320,
     maxWidth: '100%',
+  },
+  logoHeaderSignature: {
+    width: 120,
+    height: 34,
+    marginTop: 4,
+    opacity: 0.7,
   },
   logoHeaderTextContainer: {
     marginLeft: SPACING.md,

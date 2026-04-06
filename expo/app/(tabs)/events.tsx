@@ -487,6 +487,11 @@ export default function EventsScreen() {
               <View style={styles.heroTextSection}>
                 <Text style={styles.heroTitle}>Easy Seas™</Text>
                 <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle</Text>
+                <Image
+                  source={{ uri: IMAGES.signature }}
+                  style={styles.heroSignature}
+                  resizeMode="contain"
+                />
               </View>
             </View>
           </View>
@@ -741,6 +746,12 @@ const styles = StyleSheet.create({
   heroSubtitle: {
     fontSize: 15,
     color: 'rgba(255, 255, 255, 0.82)',
+  },
+  heroSignature: {
+    width: 90,
+    height: 26,
+    marginTop: 6,
+    opacity: 0.75,
   },
   viewToggleContainer: {
     flexDirection: 'row',

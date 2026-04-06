@@ -498,6 +498,11 @@ function OverviewScreenContent() {
         <View style={styles.logoHeaderTextContainer}>
           <Text style={styles.logoHeaderTitle}>Easy Seas™</Text>
           <Text style={styles.logoHeaderSubtitle}>Manage your Nautical Lifestyle™</Text>
+          <Image
+            source={{ uri: IMAGES.signature }}
+            style={styles.logoHeaderSignature}
+            resizeMode="contain"
+          />
         </View>
       </View>
 
@@ -921,6 +926,12 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.88)',
     marginTop: 4,
     letterSpacing: 0.3,
+  },
+  logoHeaderSignature: {
+    width: 100,
+    height: 28,
+    marginTop: 6,
+    opacity: 0.75,
   },
   sectionHeader: {
     flexDirection: 'row',

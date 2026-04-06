@@ -524,11 +524,18 @@ export default function OfferDetailsScreen() {
 
           {/* Featured Offer Name & Code */}
           <View style={styles.featuredOfferSection}>
-            <Image 
-              source={{ uri: IMAGES.logo }}
-              style={styles.offerLogo}
-              resizeMode="contain"
-            />
+            <View style={styles.offerLogoGroup}>
+              <Image 
+                source={{ uri: IMAGES.logo }}
+                style={styles.offerLogo}
+                resizeMode="contain"
+              />
+              <Image
+                source={{ uri: IMAGES.signature }}
+                style={styles.offerSignature}
+                resizeMode="contain"
+              />
+            </View>
             <View style={styles.offerNameRow}>
               <Text style={styles.featuredOfferName} numberOfLines={2}>{offerInfo.offerName}</Text>
               {offerInfo.totalValue > 0 && (
@@ -721,11 +728,20 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     gap: SPACING.md,
   },
+  offerLogoGroup: {
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
   offerLogo: {
     width: 60,
     height: 60,
     borderRadius: 12,
-    marginBottom: SPACING.sm,
+  },
+  offerSignature: {
+    width: 48,
+    height: 16,
+    marginTop: 2,
+    opacity: 0.6,
   },
   featuredOfferName: {
     fontSize: 22,

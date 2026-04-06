@@ -79,6 +79,11 @@ export function LoginScreen() {
               </View>
             )}
           </View>
+          <Image
+            source={{ uri: IMAGES.signature }}
+            style={styles.signatureImage}
+            resizeMode="contain"
+          />
 
           <Text style={styles.brandTitle}>EASY SEAS™</Text>
           <Text style={styles.brandTagline}>Manage your Nautical Lifestyle</Text>
@@ -522,6 +527,12 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
     color: COLORS.white,
     textAlign: 'center',
+  },
+  signatureImage: {
+    width: width * 0.35,
+    height: 30,
+    marginBottom: SPACING.sm,
+    opacity: 0.8,
   },
   card: {
     backgroundColor: COLORS.white,

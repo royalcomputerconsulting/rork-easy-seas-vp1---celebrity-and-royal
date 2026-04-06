@@ -101,6 +101,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+import { IMAGES } from '@/constants/images';
 
 function normalizeAccountEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -2663,6 +2664,11 @@ STEP 4: Optional Calendar Import
               <Text style={styles.footerAppName}>EasySeas</Text>
             </View>
             <Text style={styles.footerTagline}>Cruise Point Tracker</Text>
+            <Image
+              source={{ uri: IMAGES.signature }}
+              style={styles.footerSignature}
+              resizeMode="contain"
+            />
 
             <Text style={styles.footerCopyright}>© 2025 Royal Computer Consulting, LLC</Text>
             
@@ -2840,7 +2846,13 @@ const styles = StyleSheet.create({
   footerTagline: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: CLEAN_THEME.text.secondary,
+    marginBottom: SPACING.xs,
+  },
+  footerSignature: {
+    width: 100,
+    height: 28,
     marginBottom: SPACING.md,
+    opacity: 0.7,
   },
   footerCopyright: {
     fontSize: TYPOGRAPHY.fontSizeXS,
