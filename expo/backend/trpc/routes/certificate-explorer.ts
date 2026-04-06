@@ -819,22 +819,63 @@ function extractPdfText(pdfBytes: Uint8Array): string {
     .trim();
 }
 
-async function fetchPdfText(url: string): Promise<string> {
-  console.log('[CertificateExplorer] Fetching PDF:', url);
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0',
-      Accept: 'application/pdf,*/*',
-    },
-  });
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-  if (!response.ok) {
-    throw new Error(`Request failed with ${response.status} for ${url}`);
+async function fetchPdfText(url: string, retries = 3): Promise<string> {
+  console.log('[CertificateExplorer] Fetching PDF:', url);
+
+  const HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'application/pdf,application/octet-stream,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Cache-Control': 'no-cache',
+    'Referer': 'https://www.royalcaribbean.com/',
+  };
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    if (attempt > 0) {
+      const delay = 1000 * attempt;
+      console.log(`[CertificateExplorer] Retry ${attempt}/${retries - 1} after ${delay}ms for ${url}`);
+      await sleep(delay);
+    }
+
+    try {
+      const response = await fetch(url, { headers: HEADERS });
+
+      if (response.status === 503 || response.status === 429) {
+        lastError = new Error(`Server returned ${response.status} for ${url}`);
+        console.warn('[CertificateExplorer] Retryable status:', { status: response.status, url, attempt });
+        continue;
+      }
+
+      if (response.status === 404) {
+        console.log('[CertificateExplorer] PDF not found (404):', url);
+        return '';
+      }
+
+      if (!response.ok) {
+        throw new Error(`Request failed with ${response.status} for ${url}`);
+      }
+
+      const pdfBytes = new Uint8Array(await response.arrayBuffer());
+      console.log('[CertificateExplorer] PDF downloaded:', { url, bytes: pdfBytes.length });
+      return extractPdfText(pdfBytes);
+    } catch (error) {
+      if (error instanceof Error && (error.message.includes('503') || error.message.includes('429') || error.message.includes('fetch'))) {
+        lastError = error;
+        console.warn('[CertificateExplorer] Network error on attempt', attempt, ':', error.message);
+        continue;
+      }
+      throw error;
+    }
   }
 
-  const pdfBytes = new Uint8Array(await response.arrayBuffer());
-  console.log('[CertificateExplorer] PDF downloaded:', { url, bytes: pdfBytes.length });
-  return extractPdfText(pdfBytes);
+  throw lastError ?? new Error(`Failed to fetch ${url} after ${retries} attempts`);
 }
 
 function extractIndexEntries(monthCode: string, certificateType: 'A' | 'C', pdfText: string): IndexEntry[] {
@@ -1082,8 +1123,17 @@ export const certificateExplorerRouter = createTRPCRouter({
       const indexResults = await Promise.all(
         certificateTypes.map(async certificateType => {
           const monthlyIndexUrl = buildPdfUrl(`${monthCode}${certificateType}`);
-          const pdfText = await fetchPdfText(monthlyIndexUrl);
-          return extractIndexEntries(monthCode, certificateType, pdfText);
+          try {
+            const pdfText = await fetchPdfText(monthlyIndexUrl);
+            return extractIndexEntries(monthCode, certificateType, pdfText);
+          } catch (error) {
+            console.error('[CertificateExplorer] Failed to fetch index PDF:', {
+              type: certificateType,
+              url: monthlyIndexUrl,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return [] as IndexEntry[];
+          }
         })
       );
 
