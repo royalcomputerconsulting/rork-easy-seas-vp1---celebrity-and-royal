@@ -12,6 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { 
   Tag,
@@ -489,6 +490,18 @@ function OverviewScreenContent() {
   const renderHeader = () => (
     <View style={styles.headerContent}>
       <View style={styles.heroCard}>
+        <LinearGradient
+          colors={['#3AAFA9', '#2B7A78', '#17A398', '#1E8C82', '#3AAFA9']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <LinearGradient
+          colors={['rgba(255,255,255,0.18)', 'transparent', 'rgba(255,255,255,0.12)', 'transparent', 'rgba(255,255,255,0.08)']}
+          start={{ x: 0.2, y: 0 }}
+          end={{ x: 0.8, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         <Image
           source={{ uri: IMAGES.logo }}
           style={styles.heroBgLogo}
@@ -840,7 +853,6 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
     borderRadius: BORDER_RADIUS.xl,
     overflow: 'hidden',
-    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 200,
@@ -860,14 +872,14 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 32,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: '#1A1A1A',
     letterSpacing: 1,
     textAlign: 'center',
   },
   heroSubtitle: {
     fontSize: 15,
     fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.82)',
+    color: 'rgba(0,0,0,0.65)',
     marginTop: 6,
     letterSpacing: 0.3,
     textAlign: 'center',
