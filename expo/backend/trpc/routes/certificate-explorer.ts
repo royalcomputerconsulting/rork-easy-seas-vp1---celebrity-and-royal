@@ -981,82 +981,61 @@ async function fetchPdfText(url: string, retries = 3): Promise<string> {
   throw lastError ?? new Error(`Failed to fetch ${url} after ${retries} attempts`);
 }
 
-function extractIndexEntries(monthCode: string, certificateType: 'A' | 'C', pdfText: string): IndexEntry[] {
-  const entryMap = new Map<string, IndexEntry>();
-  const monthlyIndexUrl = buildPdfUrl(`${monthCode}${certificateType}`);
+const KNOWN_CERTIFICATE_SUFFIXES = [
+  'VIP2',
+  '01',
+  '02',
+  '02A',
+  '03',
+  '03A',
+  '04',
+  '05',
+  '06',
+  '07',
+  '08',
+  '09',
+  '10',
+];
 
-  const registerEntry = (code: string, points: number | null) => {
-    const certificateCode = code.toUpperCase();
-    if (!certificateCode || entryMap.has(certificateCode)) return;
-    entryMap.set(certificateCode, {
+function buildKnownIndexEntries(monthCode: string, certificateType: 'A' | 'C'): IndexEntry[] {
+  const monthlyIndexUrl = buildPdfUrl(`${monthCode}${certificateType}`);
+  const entries: IndexEntry[] = KNOWN_CERTIFICATE_SUFFIXES.map(suffix => {
+    const certificateCode = `${monthCode}${certificateType}${suffix}`.toUpperCase();
+    return {
       certificateCode,
       certificateType,
-      points,
+      points: null,
       pdfUrl: buildPdfUrl(certificateCode),
       monthlyIndexUrl,
-    });
-  };
+    };
+  });
 
-  // Pattern 1: code followed by points (e.g. "2604C01 - 400 points" or "2604C01 400 points")
-  const pointsRegex = new RegExp(
-    `(${monthCode}${certificateType}[A-Z0-9]{1,6})\\s*(?:[–—\\-]\\s*)?([\\d,]+)\\s*points`,
-    'gi'
-  );
-  for (const match of pdfText.matchAll(pointsRegex)) {
-    const pts = parseInt((match[2] ?? '0').replace(/,/g, ''), 10);
-    registerEntry(match[1] ?? '', Number.isFinite(pts) ? pts : null);
-  }
-
-  // Pattern 2: code followed by a dollar amount (e.g. "2604A03 $600" or "2604C05 - $1,000")
-  const dollarRegex = new RegExp(
-    `(${monthCode}${certificateType}[A-Z0-9]{1,6})\\s*(?:[–—\\-]\\s*)?\\$\\s*([\\d,]+)`,
-    'gi'
-  );
-  for (const match of pdfText.matchAll(dollarRegex)) {
-    const pts = parseInt((match[2] ?? '0').replace(/,/g, ''), 10);
-    registerEntry(match[1] ?? '', Number.isFinite(pts) ? pts : null);
-  }
-
-  // Pattern 3: dollar amount before code (e.g. "$600 2604A03")
-  const dollarBeforeRegex = new RegExp(
-    `\\$\\s*([\\d,]+)\\s*(?:[–—\\-]\\s*)?(${monthCode}${certificateType}[A-Z0-9]{1,6})`,
-    'gi'
-  );
-  for (const match of pdfText.matchAll(dollarBeforeRegex)) {
-    const pts = parseInt((match[1] ?? '0').replace(/,/g, ''), 10);
-    registerEntry(match[2] ?? '', Number.isFinite(pts) ? pts : null);
-  }
-
-  // Pattern 4: slot play amount near code (e.g. "2604A03 600 Slot Play")
-  const slotPlayRegex = new RegExp(
-    `(${monthCode}${certificateType}[A-Z0-9]{1,6})\\s*(?:[–—\\-]\\s*)?([\\d,]+)\\s*(?:slot\\s*play|casino\\s*play)`,
-    'gi'
-  );
-  for (const match of pdfText.matchAll(slotPlayRegex)) {
-    const pts = parseInt((match[2] ?? '0').replace(/,/g, ''), 10);
-    registerEntry(match[1] ?? '', Number.isFinite(pts) ? pts : null);
-  }
-
-  // Fallback: just find all matching certificate codes with no point info
-  if (entryMap.size === 0) {
-    console.log('[CertificateExplorer] No point-annotated entries found, falling back to code-only scan. Raw text sample:', pdfText.slice(0, 500));
-    const codeOnlyRegex = new RegExp(
-      `\\b(${monthCode}${certificateType}[A-Z0-9]{1,6})\\b`,
-      'gi'
-    );
-    for (const match of pdfText.matchAll(codeOnlyRegex)) {
-      registerEntry(match[1] ?? '', null);
-    }
-  }
-
-  const entries = Array.from(entryMap.values());
-  console.log('[CertificateExplorer] Index entries extracted:', {
+  console.log('[CertificateExplorer] Built known index entries:', {
     monthCode,
     certificateType,
     count: entries.length,
     codes: entries.map(e => e.certificateCode),
   });
   return entries;
+}
+
+function extractPointsFromPdfText(certificateCode: string, pdfText: string): number | null {
+  const normalizedText = pdfText.replace(/®/g, ' ').replace(/\s+/g, ' ').trim();
+  const pointsPatterns = [
+    new RegExp(`${escapeRegExp(certificateCode)}\\s*(?:[–—\\-]\\s*)?([\\d,]+)\\s*points`, 'i'),
+    new RegExp(`${escapeRegExp(certificateCode)}\\s*(?:[–—\\-]\\s*)?\\$\\s*([\\d,]+)`, 'i'),
+    new RegExp(`\\$\\s*([\\d,]+)\\s*(?:[–—\\-]\\s*)?${escapeRegExp(certificateCode)}`, 'i'),
+  ];
+
+  for (const pattern of pointsPatterns) {
+    const match = normalizedText.match(pattern);
+    if (match?.[1]) {
+      const pts = parseInt(match[1].replace(/,/g, ''), 10);
+      if (Number.isFinite(pts)) return pts;
+    }
+  }
+
+  return null;
 }
 
 function resolveShipTargets(shipQuery: string): string[] {
@@ -1223,52 +1202,24 @@ export const certificateExplorerRouter = createTRPCRouter({
         throw new Error('Select at least one certificate source.');
       }
 
-      const indexResults = await Promise.all(
-        certificateTypes.map(async certificateType => {
-          const monthlyIndexUrl = buildPdfUrl(`${monthCode}${certificateType}`);
-          try {
-            const pdfText = await fetchPdfText(monthlyIndexUrl);
-            return extractIndexEntries(monthCode, certificateType, pdfText);
-          } catch (error) {
-            console.error('[CertificateExplorer] Failed to fetch index PDF:', {
-              type: certificateType,
-              url: monthlyIndexUrl,
-              error: error instanceof Error ? error.message : String(error),
-            });
-            return [] as IndexEntry[];
-          }
-        })
+      const allIndexEntries = certificateTypes.flatMap(certificateType =>
+        buildKnownIndexEntries(monthCode, certificateType)
       );
 
-      const allIndexEntries = indexResults.flat();
-      if (allIndexEntries.length === 0) {
-        return {
-          monthCode,
-          filters: {
-            shipQuery: input.shipQuery,
-            sailDate: requestedSailDate,
-            includeA,
-            includeC,
-            resolvedShips: targetShips,
-          },
-          summary: {
-            indexCount: 0,
-            searchedCertificateCount: 0,
-            matchedSailingCount: 0,
-            matchedCertificateCount: 0,
-          },
-          matches: [],
-        };
-      }
+      console.log('[CertificateExplorer] Using known certificate codes:', {
+        monthCode,
+        types: certificateTypes,
+        totalEntries: allIndexEntries.length,
+      });
 
       const pdfScanLog: PdfScanLogEntry[] = [];
 
-      const sailingResults = await mapWithConcurrency(allIndexEntries, 4, async (entry) => {
+      const sailingResults = await mapWithConcurrency<IndexEntry, SailingEntry[]>(allIndexEntries, 4, async (entry) => {
         try {
           const pdfText = await fetchPdfText(entry.pdfUrl);
 
           if (!pdfText || pdfText.length < 20) {
-            console.warn('[CertificateExplorer] PDF returned empty/tiny text:', {
+            console.log('[CertificateExplorer] PDF not available or empty (skipping):', {
               certificateCode: entry.certificateCode,
               textLength: pdfText.length,
             });
@@ -1277,9 +1228,14 @@ export const certificateExplorerRouter = createTRPCRouter({
               status: 'empty',
               textLength: pdfText.length,
               sailingsFound: 0,
-              errorMessage: pdfText.length === 0 ? 'PDF returned no text (may be 404 or image-only)' : 'PDF text too short to contain sailings',
+              errorMessage: pdfText.length === 0 ? 'PDF not found for this code (404 or unavailable)' : 'PDF text too short to contain sailings',
             });
             return [] as SailingEntry[];
+          }
+
+          const detectedPoints = extractPointsFromPdfText(entry.certificateCode, pdfText);
+          if (detectedPoints !== null) {
+            entry.points = detectedPoints;
           }
 
           const sailings = extractSailingsFromCertificatePdf(entry, pdfText);
