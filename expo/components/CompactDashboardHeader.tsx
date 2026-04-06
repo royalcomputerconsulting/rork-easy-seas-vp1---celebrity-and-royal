@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, Star, LogOut, Target, Users } from 'lucide-react-native';
+import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, LogOut, Target, Users } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import {
   getCarnivalPlayersClubTierColor,
@@ -300,13 +300,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                       </Text>
                     </View>
                   </View>
-                  <View style={[styles.pinnacleDetailRow, progressDetailRowStyle]}>
-                    <View style={styles.pinnacleStarBadge}>
-                      <Star size={10} color={COLORS.goldDark} fill={COLORS.goldDark} />
+                  <View style={[styles.pinnacleDetailRow, styles.pinnacleDetailRowWhite, progressDetailRowStyle]}>
+                    <View style={styles.pinnacleStarBadgeWhite}>
+                      <Text style={styles.pinnaclePText}>P</Text>
                     </View>
                     <View style={styles.pinnacleDetailContent}>
                       <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>First Cruise AS Pinnacle:</Text>
-                      <Text style={[styles.pinnacleDetailValue, styles.pinnacleHighlight]} numberOfLines={1}>
+                      <Text style={[styles.pinnacleDetailValue, styles.pinnacleHighlightWhite]} numberOfLines={1}>
                         {pinnacleProgress.pinnacleShip && pinnacleProgress.pinnacleSailDate
                           ? `${pinnacleProgress.pinnacleShip} • ${formatCruiseDate(pinnacleProgress.pinnacleSailDate)}`
                           : 'Not booked yet'}
@@ -1022,6 +1022,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 2,
   },
+  pinnacleStarBadgeWhite: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginTop: 2,
+    borderWidth: 1.5,
+    borderColor: COLORS.navyDeep,
+  },
+  pinnaclePText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+    lineHeight: 13,
+  },
+  pinnacleDetailRowWhite: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(0, 31, 63, 0.15)',
+  },
   pinnacleDetailContent: {
     flex: 1,
   },
@@ -1038,6 +1059,10 @@ const styles = StyleSheet.create({
   },
   pinnacleHighlight: {
     color: COLORS.goldDark,
+  },
+  pinnacleHighlightWhite: {
+    color: COLORS.navyDeep,
+    fontWeight: '700' as const,
   },
   achievedBadge: {
     backgroundColor: CLEAN_THEME.badge.achieved.bg,
