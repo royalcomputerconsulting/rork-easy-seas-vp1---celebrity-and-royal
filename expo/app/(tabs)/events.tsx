@@ -476,11 +476,7 @@ export default function EventsScreen() {
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.heroHeader}>
-            <Image
-              source={{ uri: IMAGES.logo }}
-              style={styles.heroBgLogo}
-              resizeMode="contain"
-            />
+
             <View style={styles.heroOverlay}>
               <Text style={styles.heroTitle}>Easy Seas™</Text>
               <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
@@ -721,12 +717,7 @@ const styles = StyleSheet.create({
     minHeight: 200,
     ...SHADOW.lg,
   },
-  heroBgLogo: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    opacity: 0.18,
-  },
+
   heroOverlay: {
     alignItems: 'center',
     justifyContent: 'center',
