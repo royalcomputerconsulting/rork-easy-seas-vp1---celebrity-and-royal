@@ -62,6 +62,10 @@ interface SailingEntry extends CertificateBenefitSnapshot {
   points: number | null;
   shipName: string;
   sailDate: string;
+  departurePort: string | null;
+  itinerary: string | null;
+  offerTypeLabel: string | null;
+  nextCruiseBonusLabel: string | null;
   pdfUrl: string;
   monthlyIndexUrl: string;
 }
@@ -71,8 +75,22 @@ interface CertificateMatchLevel extends CertificateBenefitSnapshot {
   certificateType: 'A' | 'C';
   level: string;
   points: number | null;
+  departurePort: string | null;
+  itinerary: string | null;
+  offerTypeLabel: string | null;
+  nextCruiseBonusLabel: string | null;
   pdfUrl: string;
   monthlyIndexUrl: string;
+}
+
+interface StructuredCertificateRow {
+  shipName: string;
+  sailDate: string;
+  departurePort: string | null;
+  itinerary: string | null;
+  offerTypeLabel: string | null;
+  nextCruiseBonusLabel: string | null;
+  benefits: CertificateBenefitSnapshot;
 }
 
 interface CertificateOpportunity {
@@ -107,6 +125,12 @@ interface CabinBenefitMatch {
   index: number;
 }
 
+interface TextMatch {
+  label: string;
+  index: number;
+  raw: string;
+}
+
 const CABIN_BENEFIT_PATTERNS: Array<{ label: string; rank: number; patterns: RegExp[] }> = [
   { label: 'Royal Suite', rank: 9, patterns: [/\broyal suite\b/i] },
   { label: 'Owner\'s Suite', rank: 8, patterns: [/\bowner'?s suite(?:\s*2br)?\b/i] },
@@ -116,6 +140,19 @@ const CABIN_BENEFIT_PATTERNS: Array<{ label: string; rank: number; patterns: Reg
   { label: 'Balcony', rank: 4, patterns: [/\bbalcony\b/i, /\bveranda\b/i, /\bocean view balcony\b/i] },
   { label: 'Oceanview', rank: 3, patterns: [/\bocean\s*view\b/i, /\boceanview\b/i, /\boutside stateroom\b/i] },
   { label: 'Interior', rank: 2, patterns: [/\binterior\b/i, /\binside stateroom\b/i] },
+];
+
+const OFFER_TYPE_PATTERNS: RegExp[] = [
+  /cruise fare for 2 guests/gi,
+  /cruise fare for 1 guest/gi,
+  /cruise fare for 2 guest/gi,
+  /cruise fare for 1 guests/gi,
+  /cruise fare/gi,
+];
+
+const BONUS_TEXT_PATTERNS: RegExp[] = [
+  /\$\s*[0-9][0-9,]*\s*(?:free\s*play|freeplay|fp|obc|on[-\s]*board credit|onboard credit)\b/gi,
+  /(?:free\s*play|freeplay|fp|obc|on[-\s]*board credit|onboard credit)\s*\$\s*[0-9][0-9,]*\b/gi,
 ];
 
 function extractDollarValues(text: string, patterns: RegExp[]): number[] {
@@ -134,7 +171,7 @@ function extractDollarValues(text: string, patterns: RegExp[]): number[] {
   return values;
 }
 
-function extractCabinBenefit(text: string): { cabinLabel: string | null; cabinRank: number | null } {
+function findCabinBenefitMatch(text: string): CabinBenefitMatch | null {
   const searchText = text.slice(0, 5000);
   let bestMatch: CabinBenefitMatch | null = null;
 
@@ -158,6 +195,12 @@ function extractCabinBenefit(text: string): { cabinLabel: string | null; cabinRa
       }
     }
   }
+
+  return bestMatch;
+}
+
+function extractCabinBenefit(text: string): { cabinLabel: string | null; cabinRank: number | null } {
+  const bestMatch = findCabinBenefitMatch(text);
 
   if (bestMatch === null) {
     return {
@@ -355,6 +398,233 @@ function parseDateToIso(value?: string | null): string | null {
   return `${year}-${month}-${day}`;
 }
 
+function cleanStructuredValue(value?: string | null): string | null {
+  const cleaned = String(value ?? '')
+    .replace(/\bOffer Code\b/gi, ' ')
+    .replace(/\bShip\b/gi, ' ')
+    .replace(/\bDeparture Port\b/gi, ' ')
+    .replace(/\bSail Date\b/gi, ' ')
+    .replace(/\bItinerary\b/gi, ' ')
+    .replace(/\bStateroom Type\b/gi, ' ')
+    .replace(/\bOffer Type\b/gi, ' ')
+    .replace(/\bNext Cruise Bonus\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s:|–—-]+|[\s:|–—-]+$/g, '')
+    .trim();
+
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function findFirstTextMatch(text: string, patterns: RegExp[]): TextMatch | null {
+  let bestMatch: TextMatch | null = null;
+
+  patterns.forEach((pattern) => {
+    const flags = pattern.flags.replace(/g/g, '');
+    const matcher = new RegExp(pattern.source, flags);
+    const match = matcher.exec(text);
+    const index = match?.index ?? -1;
+
+    if (index < 0 || !match?.[0]) {
+      return;
+    }
+
+    if (bestMatch === null || index < bestMatch.index) {
+      bestMatch = {
+        label: cleanStructuredValue(match[0]) ?? match[0],
+        index,
+        raw: match[0],
+      };
+    }
+  });
+
+  return bestMatch;
+}
+
+function findLastTextMatch(text: string, patterns: RegExp[]): TextMatch | null {
+  let bestMatch: TextMatch | null = null;
+
+  patterns.forEach((pattern) => {
+    const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+    const matcher = new RegExp(pattern.source, flags);
+
+    for (const match of text.matchAll(matcher)) {
+      const index = match.index ?? -1;
+      if (index < 0 || !match[0]) {
+        continue;
+      }
+
+      if (bestMatch === null || index > bestMatch.index) {
+        bestMatch = {
+          label: cleanStructuredValue(match[0]) ?? match[0],
+          index,
+          raw: match[0],
+        };
+      }
+    }
+  });
+
+  return bestMatch;
+}
+
+function findShipOccurrence(text: string): { shipName: string; start: number; end: number } | null {
+  let bestMatch: { shipName: string; start: number; end: number } | null = null;
+
+  ROYAL_SHIP_NAMES.forEach((shipName) => {
+    const normalizedShipName = shipName.replace(/®/g, '');
+    const matcher = new RegExp(escapeRegExp(normalizedShipName), 'i');
+    const match = matcher.exec(text);
+    const start = match?.index ?? -1;
+
+    if (start < 0) {
+      return;
+    }
+
+    const end = start + normalizedShipName.length;
+    if (bestMatch === null || start < bestMatch.start) {
+      bestMatch = { shipName, start, end };
+    }
+  });
+
+  return bestMatch;
+}
+
+function extractStructuredBenefitSnapshot(segment: string, nextCruiseBonusLabel: string | null): CertificateBenefitSnapshot {
+  const normalizedBonusText = cleanStructuredValue(nextCruiseBonusLabel) ?? '';
+  const { cabinLabel, cabinRank } = extractCabinBenefit(segment);
+
+  const freePlayValues = extractDollarValues(normalizedBonusText, [
+    /\$\s*([0-9][0-9,]*)\s*(?:in\s*)?(?:free\s*play|freeplay|fp)\b/gi,
+    /(?:free\s*play|freeplay|fp)\s*(?:of|included|:)?\s*\$?\s*([0-9][0-9,]*)\b/gi,
+  ]);
+
+  const onBoardCreditValues = extractDollarValues(normalizedBonusText, [
+    /\$\s*([0-9][0-9,]*)\s*(?:in\s*)?(?:obc|on[-\s]*board credit|onboard credit)\b/gi,
+    /(?:obc|on[-\s]*board credit|onboard credit)\s*(?:of|included|:)?\s*\$?\s*([0-9][0-9,]*)\b/gi,
+  ]);
+
+  const freePlay = freePlayValues.length > 0 ? Math.max(...freePlayValues) : null;
+  const onBoardCredit = onBoardCreditValues.length > 0 ? Math.max(...onBoardCreditValues) : null;
+  const benefitSummary: string[] = [];
+
+  if (cabinLabel) {
+    benefitSummary.push(cabinLabel);
+  }
+  if (normalizedBonusText) {
+    benefitSummary.push(normalizedBonusText);
+  }
+
+  return {
+    cabinLabel,
+    cabinRank,
+    freePlay,
+    onBoardCredit,
+    benefitSummary,
+  };
+}
+
+function splitStructuredRowSegments(indexEntry: IndexEntry, pdfText: string): string[] {
+  const normalizedText = pdfText.replace(/®/g, '').replace(/\s+/g, ' ').trim();
+  const startRegex = new RegExp(`(?=${escapeRegExp(indexEntry.certificateCode)}\\b)`, 'g');
+  const starts = Array.from(normalizedText.matchAll(startRegex))
+    .map((match) => match.index ?? -1)
+    .filter((index) => index >= 0);
+
+  if (starts.length === 0) {
+    return [];
+  }
+
+  return starts.map((start, index) => {
+    const end = starts[index + 1] ?? normalizedText.length;
+    return normalizedText.slice(start, end).trim();
+  }).filter(Boolean);
+}
+
+function parseStructuredCertificateRow(segment: string): StructuredCertificateRow | null {
+  const cleanedSegment = cleanStructuredValue(segment);
+  if (!cleanedSegment) {
+    return null;
+  }
+
+  const shipMatch = findShipOccurrence(cleanedSegment);
+  if (!shipMatch) {
+    return null;
+  }
+
+  const dateMatch = Array.from(cleanedSegment.matchAll(DATE_TEXT_REGEX)).find((match) => {
+    const index = match.index ?? -1;
+    return index >= shipMatch.end;
+  });
+  const dateText = dateMatch?.[0] ?? null;
+  const dateIndex = dateMatch?.index ?? -1;
+
+  if (!dateText || dateIndex < 0) {
+    return null;
+  }
+
+  const sailDate = parseDateToIso(dateText);
+  if (!sailDate) {
+    return null;
+  }
+
+  const departurePort = cleanStructuredValue(cleanedSegment.slice(shipMatch.end, dateIndex));
+  const tailText = cleanStructuredValue(cleanedSegment.slice(dateIndex + dateText.length)) ?? '';
+
+  const cabinMatch = findCabinBenefitMatch(tailText);
+  const offerTypeMatch = findFirstTextMatch(tailText, OFFER_TYPE_PATTERNS);
+  const bonusMatch = findLastTextMatch(tailText, BONUS_TEXT_PATTERNS);
+  const itineraryBoundaryCandidates = [cabinMatch?.index, offerTypeMatch?.index, bonusMatch?.index]
+    .filter((value): value is number => typeof value === 'number' && value >= 0);
+  const itineraryBoundary = itineraryBoundaryCandidates.length > 0 ? Math.min(...itineraryBoundaryCandidates) : tailText.length;
+  const itinerary = cleanStructuredValue(tailText.slice(0, itineraryBoundary));
+  const offerTypeLabel = cleanStructuredValue(offerTypeMatch?.label);
+  const nextCruiseBonusLabel = cleanStructuredValue(bonusMatch?.label);
+  const benefits = extractStructuredBenefitSnapshot(tailText, nextCruiseBonusLabel);
+
+  console.log('[CertificateExplorer] Parsed structured certificate row:', {
+    shipName: shipMatch.shipName,
+    sailDate,
+    departurePort,
+    itinerary,
+    offerTypeLabel,
+    nextCruiseBonusLabel,
+    benefits: benefits.benefitSummary,
+  });
+
+  return {
+    shipName: shipMatch.shipName,
+    sailDate,
+    departurePort,
+    itinerary,
+    offerTypeLabel,
+    nextCruiseBonusLabel,
+    benefits,
+  };
+}
+
+function extractStructuredRowsFromCertificatePdf(indexEntry: IndexEntry, pdfText: string): StructuredCertificateRow[] {
+  const rowSegments = splitStructuredRowSegments(indexEntry, pdfText);
+  const rowMap = new Map<string, StructuredCertificateRow>();
+
+  rowSegments.forEach((segment) => {
+    const parsedRow = parseStructuredCertificateRow(segment);
+    if (!parsedRow) {
+      return;
+    }
+
+    const key = `${parsedRow.shipName}__${parsedRow.sailDate}`;
+    if (!rowMap.has(key)) {
+      rowMap.set(key, parsedRow);
+    }
+  });
+
+  const rows = Array.from(rowMap.values());
+  console.log('[CertificateExplorer] Structured rows extracted from certificate PDF:', {
+    certificateCode: indexEntry.certificateCode,
+    rowCount: rows.length,
+  });
+  return rows;
+}
+
 function decodePdfLiteralString(value: string): string {
   let result = '';
 
@@ -539,7 +809,7 @@ async function fetchPdfText(url: string): Promise<string> {
 
 function extractIndexEntries(monthCode: string, certificateType: 'A' | 'C', pdfText: string): IndexEntry[] {
   const entryMap = new Map<string, IndexEntry>();
-  const regex = new RegExp(`(\\d{4}${certificateType}[A-Z0-9]{1,8})\\s*[–—-]\\s*([\\d,]+)\\s*points`, 'gi');
+  const regex = new RegExp(`(\\d{4}${certificateType}[A-Z0-9]{1,8})\\s*(?:[–—-]\\s*)?([\\d,]+)\\s*points`, 'gi');
 
   for (const match of pdfText.matchAll(regex)) {
     const certificateCode = (match[1] ?? '').toUpperCase();
@@ -608,6 +878,30 @@ function resolveShipTargets(shipQuery: string): string[] {
 
 function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: string): SailingEntry[] {
   const normalizedText = pdfText.replace(/®/g, '').replace(/\s+/g, ' ').trim();
+  const structuredRows = extractStructuredRowsFromCertificatePdf(indexEntry, normalizedText);
+
+  if (structuredRows.length > 0) {
+    return structuredRows.map((row) => ({
+      certificateCode: indexEntry.certificateCode,
+      certificateType: indexEntry.certificateType,
+      level: indexEntry.certificateCode.slice(4),
+      points: indexEntry.points,
+      shipName: row.shipName,
+      sailDate: row.sailDate,
+      departurePort: row.departurePort,
+      itinerary: row.itinerary,
+      offerTypeLabel: row.offerTypeLabel,
+      nextCruiseBonusLabel: row.nextCruiseBonusLabel,
+      pdfUrl: indexEntry.pdfUrl,
+      monthlyIndexUrl: indexEntry.monthlyIndexUrl,
+      cabinLabel: row.benefits.cabinLabel,
+      cabinRank: row.benefits.cabinRank,
+      freePlay: row.benefits.freePlay,
+      onBoardCredit: row.benefits.onBoardCredit,
+      benefitSummary: row.benefits.benefitSummary,
+    }));
+  }
+
   const benefits = extractCertificateBenefits(normalizedText);
   const sailings = new Map<string, SailingEntry>();
 
@@ -643,6 +937,10 @@ function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: stri
         points: indexEntry.points,
         shipName,
         sailDate,
+        departurePort: null,
+        itinerary: null,
+        offerTypeLabel: null,
+        nextCruiseBonusLabel: null,
         pdfUrl: indexEntry.pdfUrl,
         monthlyIndexUrl: indexEntry.monthlyIndexUrl,
         cabinLabel: benefits.cabinLabel,
@@ -659,6 +957,7 @@ function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: stri
     certificateCode: indexEntry.certificateCode,
     count: results.length,
     benefits: benefits.benefitSummary,
+    usedStructuredRows: false,
   });
   return results;
 }
@@ -774,6 +1073,10 @@ export const certificateExplorerRouter = createTRPCRouter({
           certificateType: sailing.certificateType,
           level: sailing.level,
           points: sailing.points,
+          departurePort: sailing.departurePort,
+          itinerary: sailing.itinerary,
+          offerTypeLabel: sailing.offerTypeLabel,
+          nextCruiseBonusLabel: sailing.nextCruiseBonusLabel,
           pdfUrl: sailing.pdfUrl,
           monthlyIndexUrl: sailing.monthlyIndexUrl,
           cabinLabel: sailing.cabinLabel,

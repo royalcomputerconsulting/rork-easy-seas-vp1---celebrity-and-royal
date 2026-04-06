@@ -283,6 +283,15 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                             <Text style={styles.levelMeta}>
                               {level.certificateType} source · level {level.level}
                             </Text>
+                            {level.itinerary ? (
+                              <Text style={styles.levelDetailText}>{level.itinerary}</Text>
+                            ) : null}
+                            {level.departurePort ? (
+                              <Text style={styles.levelSubMeta}>From {level.departurePort}</Text>
+                            ) : null}
+                            {level.offerTypeLabel ? (
+                              <Text style={styles.levelSubMeta}>{level.offerTypeLabel}</Text>
+                            ) : null}
                             {level.benefitSummary.length > 0 ? (
                               <View style={styles.benefitChipRow}>
                                 {level.cabinLabel ? (
@@ -614,6 +623,17 @@ const styles = StyleSheet.create({
   levelMeta: {
     color: CLEAN_THEME.text.secondary,
     fontSize: TYPOGRAPHY.fontSizeSM,
+  },
+  levelDetailText: {
+    color: CLEAN_THEME.text.primary,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    lineHeight: 19,
+  },
+  levelSubMeta: {
+    color: CLEAN_THEME.text.secondary,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 17,
   },
   benefitChipRow: {
     flexDirection: 'row',
