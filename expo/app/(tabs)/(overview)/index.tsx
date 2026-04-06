@@ -47,6 +47,7 @@ import { AgentXAnalysisCard } from '@/components/AgentXAnalysisCard';
 import { QuickActionsFAB } from '@/components/ui/QuickActionsFAB';
 import { getDaysUntil, isDateInPast, formatDate } from '@/lib/date';
 import { MachineStrategyCard } from '@/components/MachineStrategyCard';
+import { CertificateExplorerModal } from '@/components/CertificateExplorerModal';
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
@@ -146,6 +147,7 @@ function OverviewScreenContent() {
   
   const [refreshing, setRefreshing] = useState(false);
   const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const [showCertificateExplorerModal, setShowCertificateExplorerModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
   const { 
     certificates, 
@@ -570,6 +572,7 @@ function OverviewScreenContent() {
           availableCruises={availableCruisesCount}
           onManagePress={() => setShowCertificateModal(true)}
           onViewOffersPress={() => router.push('/scheduling' as any)}
+          onExaminePress={() => setShowCertificateExplorerModal(true)}
         />
       </CollapsibleSection>
 
@@ -699,6 +702,11 @@ function OverviewScreenContent() {
         onAddCertificate={addCertificate}
         onUpdateCertificate={updateCertificate}
         onDeleteCertificate={deleteCertificate}
+      />
+
+      <CertificateExplorerModal
+        visible={showCertificateExplorerModal}
+        onClose={() => setShowCertificateExplorerModal(false)}
       />
       
       <AlertsManagerModal

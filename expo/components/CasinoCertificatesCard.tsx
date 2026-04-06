@@ -8,7 +8,7 @@ import {
   Ticket,
   Gift,
 } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 
 interface CertificateInfo {
   type: 'fpp' | 'nextCruise' | 'obc';
@@ -23,6 +23,7 @@ interface CasinoCertificatesCardProps {
   availableCruises: number;
   onManagePress?: () => void;
   onViewOffersPress?: () => void;
+  onExaminePress?: () => void;
 }
 
 export const CasinoCertificatesCard = React.memo(function CasinoCertificatesCard({
@@ -31,6 +32,7 @@ export const CasinoCertificatesCard = React.memo(function CasinoCertificatesCard
   availableCruises,
   onManagePress,
   onViewOffersPress,
+  onExaminePress,
 }: CasinoCertificatesCardProps) {
   const getCertIcon = (type: string) => {
     switch (type) {
@@ -99,17 +101,34 @@ export const CasinoCertificatesCard = React.memo(function CasinoCertificatesCard
               <Text style={styles.availableLabel}>Available Cruises</Text>
               <Text style={styles.availableValue}>{availableCruises.toLocaleString()}</Text>
             </View>
-            
-            {onViewOffersPress && (
-              <TouchableOpacity 
-                style={styles.viewOffersButton}
-                onPress={onViewOffersPress}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.viewOffersText}>View Offers</Text>
-              </TouchableOpacity>
-            )}
           </View>
+
+          {(onViewOffersPress || onExaminePress) ? (
+            <View style={styles.actionRow}>
+              {onViewOffersPress ? (
+                <TouchableOpacity 
+                  style={styles.viewOffersButton}
+                  onPress={onViewOffersPress}
+                  activeOpacity={0.7}
+                  testID="casino-certificates-card.view-offers-button"
+                >
+                  <Text style={styles.viewOffersText}>View Offers</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {onExaminePress ? (
+                <TouchableOpacity 
+                  style={styles.examineButton}
+                  onPress={onExaminePress}
+                  activeOpacity={0.7}
+                  testID="casino-certificates-card.examine-certificates-button"
+                >
+                  <Sparkles size={16} color={COLORS.navyDeep} />
+                  <Text style={styles.examineButtonText}>Examine Certificates</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
         </LinearGradient>
       </ImageBackground>
     </View>
@@ -220,6 +239,11 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.15)',
   },
   availableInfo: {},
+  actionRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
   availableLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: 'rgba(255,255,255,0.7)',
@@ -230,12 +254,33 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   viewOffersButton: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 46,
   },
   viewOffersText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  examineButton: {
+    flex: 1.35,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 46,
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  examineButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.navyDeep,

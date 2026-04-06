@@ -11,9 +11,22 @@ const DEFAULT_RENDER_URL = "https://easy-seas-backend-v2.onrender.com";
 export const RENDER_BACKEND_URL =
   process.env.EXPO_PUBLIC_RENDER_BACKEND_URL?.trim() || DEFAULT_RENDER_URL;
 
+const LOCAL_API_BASE_URL = process.env.EXPO_PUBLIC_RORK_API_BASE_URL?.trim() || '';
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
 export const isRenderBackendAvailable = () => true;
 
 const getBackendUrl = (): string => {
+  if (LOCAL_API_BASE_URL.length > 0) {
+    const normalizedLocalApiBaseUrl = trimTrailingSlash(LOCAL_API_BASE_URL);
+    return normalizedLocalApiBaseUrl.endsWith('/api')
+      ? normalizedLocalApiBaseUrl
+      : `${normalizedLocalApiBaseUrl}/api`;
+  }
+
   return RENDER_BACKEND_URL;
 };
 
