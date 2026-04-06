@@ -688,6 +688,33 @@ function decodePdfLiteralString(value: string): string {
   return result;
 }
 
+function extractHexStringsFromStream(streamText: string): string[] {
+  const results: string[] = [];
+  const hexRegex = /<([0-9A-Fa-f\s]+)>/g;
+
+  for (const match of streamText.matchAll(hexRegex)) {
+    const hex = (match[1] ?? '').replace(/\s/g, '');
+    if (hex.length < 2 || hex.length > 2000) {
+      continue;
+    }
+
+    let decoded = '';
+    for (let i = 0; i < hex.length; i += 2) {
+      const byte = parseInt(hex.slice(i, i + 2), 16);
+      if (!Number.isNaN(byte) && byte > 0) {
+        decoded += String.fromCharCode(byte);
+      }
+    }
+
+    const trimmed = decoded.trim();
+    if (trimmed.length > 0) {
+      results.push(trimmed);
+    }
+  }
+
+  return results;
+}
+
 function extractLiteralStringsFromStream(streamText: string): string[] {
   const results: string[] = [];
   let buffer = '';
@@ -779,8 +806,10 @@ function extractPdfText(pdfBytes: Uint8Array): string {
     }
 
     const literalStrings = extractLiteralStringsFromStream(decodedStream);
-    if (literalStrings.length > 0) {
-      extracted.push(literalStrings.join(' '));
+    const hexStrings = extractHexStringsFromStream(decodedStream);
+    const combined = [...literalStrings, ...hexStrings];
+    if (combined.length > 0) {
+      extracted.push(combined.join(' '));
     }
   }
 
@@ -810,23 +839,70 @@ async function fetchPdfText(url: string): Promise<string> {
 
 function extractIndexEntries(monthCode: string, certificateType: 'A' | 'C', pdfText: string): IndexEntry[] {
   const entryMap = new Map<string, IndexEntry>();
-  const regex = new RegExp(`(\\d{4}${certificateType}[A-Z0-9]{1,8})\\s*(?:[–—-]\\s*)?([\\d,]+)\\s*points`, 'gi');
+  const monthlyIndexUrl = buildPdfUrl(`${monthCode}${certificateType}`);
 
-  for (const match of pdfText.matchAll(regex)) {
-    const certificateCode = (match[1] ?? '').toUpperCase();
-    const pointsValue = parseInt((match[2] ?? '0').replace(/,/g, ''), 10);
-
-    if (!certificateCode || entryMap.has(certificateCode)) {
-      continue;
-    }
-
+  const registerEntry = (code: string, points: number | null) => {
+    const certificateCode = code.toUpperCase();
+    if (!certificateCode || entryMap.has(certificateCode)) return;
     entryMap.set(certificateCode, {
       certificateCode,
       certificateType,
-      points: Number.isFinite(pointsValue) ? pointsValue : null,
+      points,
       pdfUrl: buildPdfUrl(certificateCode),
-      monthlyIndexUrl: buildPdfUrl(`${monthCode}${certificateType}`),
+      monthlyIndexUrl,
     });
+  };
+
+  // Pattern 1: code followed by points (e.g. "2604C01 - 400 points" or "2604C01 400 points")
+  const pointsRegex = new RegExp(
+    `(${monthCode}${certificateType}[A-Z0-9]{1,6})\\s*(?:[–—\\-]\\s*)?([\\d,]+)\\s*points`,
+    'gi'
+  );
+  for (const match of pdfText.matchAll(pointsRegex)) {
+    const pts = parseInt((match[2] ?? '0').replace(/,/g, ''), 10);
+    registerEntry(match[1] ?? '', Number.isFinite(pts) ? pts : null);
+  }
+
+  // Pattern 2: code followed by a dollar amount (e.g. "2604A03 $600" or "2604C05 - $1,000")
+  const dollarRegex = new RegExp(
+    `(${monthCode}${certificateType}[A-Z0-9]{1,6})\\s*(?:[–—\\-]\\s*)?\\$\\s*([\\d,]+)`,
+    'gi'
+  );
+  for (const match of pdfText.matchAll(dollarRegex)) {
+    const pts = parseInt((match[2] ?? '0').replace(/,/g, ''), 10);
+    registerEntry(match[1] ?? '', Number.isFinite(pts) ? pts : null);
+  }
+
+  // Pattern 3: dollar amount before code (e.g. "$600 2604A03")
+  const dollarBeforeRegex = new RegExp(
+    `\\$\\s*([\\d,]+)\\s*(?:[–—\\-]\\s*)?(${monthCode}${certificateType}[A-Z0-9]{1,6})`,
+    'gi'
+  );
+  for (const match of pdfText.matchAll(dollarBeforeRegex)) {
+    const pts = parseInt((match[1] ?? '0').replace(/,/g, ''), 10);
+    registerEntry(match[2] ?? '', Number.isFinite(pts) ? pts : null);
+  }
+
+  // Pattern 4: slot play amount near code (e.g. "2604A03 600 Slot Play")
+  const slotPlayRegex = new RegExp(
+    `(${monthCode}${certificateType}[A-Z0-9]{1,6})\\s*(?:[–—\\-]\\s*)?([\\d,]+)\\s*(?:slot\\s*play|casino\\s*play)`,
+    'gi'
+  );
+  for (const match of pdfText.matchAll(slotPlayRegex)) {
+    const pts = parseInt((match[2] ?? '0').replace(/,/g, ''), 10);
+    registerEntry(match[1] ?? '', Number.isFinite(pts) ? pts : null);
+  }
+
+  // Fallback: just find all matching certificate codes with no point info
+  if (entryMap.size === 0) {
+    console.log('[CertificateExplorer] No point-annotated entries found, falling back to code-only scan. Raw text sample:', pdfText.slice(0, 500));
+    const codeOnlyRegex = new RegExp(
+      `\\b(${monthCode}${certificateType}[A-Z0-9]{1,6})\\b`,
+      'gi'
+    );
+    for (const match of pdfText.matchAll(codeOnlyRegex)) {
+      registerEntry(match[1] ?? '', null);
+    }
   }
 
   const entries = Array.from(entryMap.values());
@@ -834,6 +910,7 @@ function extractIndexEntries(monthCode: string, certificateType: 'A' | 'C', pdfT
     monthCode,
     certificateType,
     count: entries.length,
+    codes: entries.map(e => e.certificateCode),
   });
   return entries;
 }
