@@ -830,6 +830,39 @@ export default function DayAgendaScreen() {
     return { start, end };
   }, [selectedDate]);
 
+  const upcomingCruisesForWeather = useMemo(() => {
+    const sevenDaysAhead = new Date(selectedDate);
+    sevenDaysAhead.setDate(sevenDaysAhead.getDate() + 7);
+    sevenDaysAhead.setHours(23, 59, 59, 999);
+    const activeIds = new Set(mergedCruiseBookings.map((c) => c.id));
+    return bookedCruises
+      .filter((c) => {
+        if (!c.sailDate || !c.returnDate) return false;
+        if (activeIds.has(c.id)) return false;
+        const sail = createDateFromString(c.sailDate);
+        sail.setHours(0, 0, 0, 0);
+        const today = new Date(selectedDate);
+        today.setHours(0, 0, 0, 0);
+        return sail > today && sail <= sevenDaysAhead;
+      })
+      .map((c) => ({
+        id: c.id,
+        shipName: c.shipName,
+        sailDate: c.sailDate,
+        returnDate: c.returnDate!,
+        departurePort: c.departurePort,
+        destination: c.destination,
+        itineraryName: c.itineraryName,
+        nights: c.nights,
+        itinerary: c.itinerary,
+      }));
+  }, [bookedCruises, mergedCruiseBookings, selectedDate]);
+
+  const allWeatherCruises = useMemo(
+    () => [...mergedCruiseBookings, ...upcomingCruisesForWeather],
+    [mergedCruiseBookings, upcomingCruisesForWeather]
+  );
+
   useEffect(() => {
     if (!isWeatherHydrated || mergedCruiseBookings.length === 0) {
       return;
@@ -1461,27 +1494,29 @@ export default function DayAgendaScreen() {
             <TimeZoneConverter />
           </View>
 
-          {mergedCruiseBookings.length > 0 && (
+          {allWeatherCruises.length > 0 && (
             <View style={styles.sectionContainer}>
               <Text style={styles.sectionTitle}>Sailing Weather</Text>
               <Text style={styles.sectionDescription}>
-                Full-day weather, wind, and sea-state snapshots with offline saving for spotty-at-sea service.
+                {mergedCruiseBookings.length > 0
+                  ? 'Full-day weather, wind, and sea-state snapshots with offline saving for spotty-at-sea service.'
+                  : `Upcoming cruise weather — starting soon. Forecasts refresh automatically.`}
               </Text>
               <MarineAlertsPanel
-                cruises={mergedCruiseBookings}
+                cruises={allWeatherCruises}
                 startDate={selectedDate}
-                daysAhead={0}
-                maxItems={2}
+                daysAhead={upcomingCruisesForWeather.length > 0 ? 7 : 0}
+                maxItems={3}
                 title="Rough seas / weather alerts"
-                description="Heads-up for this cruise day before you dive into the full forecast card below."
+                description="Heads-up for rough conditions in your sailing window."
                 testID="agenda-marine-alerts-panel"
               />
               <View style={styles.weatherCardsStack}>
-                {mergedCruiseBookings.map((cruise) => (
+                {allWeatherCruises.map((cruise) => (
                   <SailingWeatherCard
                     key={`sailing-weather-${cruise.id}`}
                     cruise={cruise}
-                    selectedDate={selectedDate}
+                    selectedDate={mergedCruiseBookings.some((m) => m.id === cruise.id) ? selectedDate : createDateFromString(cruise.sailDate)}
                   />
                 ))}
               </View>

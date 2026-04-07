@@ -2280,14 +2280,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('⚠️ No extended loyalty payload available at sync time', 'warning');
       }
 
-      // Sync user profile data: name from passenger data + Crown & Anchor number from loyalty
+      // Sync user profile data: name from passenger data + loyalty numbers/tiers
       if (syncSource !== 'carnival' && currentUser && updateUserProfile) {
         try {
-          const profileUpdates: Record<string, string> = {};
+          const profileUpdates: Record<string, unknown> = {};
 
-          // Extract name from first booked cruise's primary passenger
+          // Extract name from first booked cruise's primary passenger (rawBooking first, then top-level)
           const firstExtracted = state.extractedBookedCruises[0] as any;
-          const primaryPassenger = firstExtracted?.passengers?.[0] ?? firstExtracted?.passengersInStateroom?.[0];
+          const rawBooking = firstExtracted?.rawBooking;
+          const primaryPassenger =
+            rawBooking?.passengers?.[0] ??
+            rawBooking?.passengersInStateroom?.[0] ??
+            firstExtracted?.passengers?.[0] ??
+            firstExtracted?.passengersInStateroom?.[0];
           if (primaryPassenger?.firstName || primaryPassenger?.lastName) {
             const fullName = [primaryPassenger.firstName, primaryPassenger.lastName]
               .filter((s: string | undefined) => typeof s === 'string' && s.trim().length > 0)
@@ -2306,10 +2311,31 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`  → Crown & Anchor #: ${cAndAId.trim()}`, 'info');
           }
 
+          // Sync Celebrity loyalty numbers to user profile
+          if (effectiveExtendedLoyalty) {
+            if (typeof effectiveExtendedLoyalty.captainsClubPoints === 'number') {
+              profileUpdates.celebrityCaptainsClubPoints = effectiveExtendedLoyalty.captainsClubPoints;
+              addLog(`  → Captain's Club points: ${effectiveExtendedLoyalty.captainsClubPoints}`, 'info');
+            }
+            if (typeof effectiveExtendedLoyalty.celebrityBlueChipPoints === 'number') {
+              profileUpdates.celebrityBlueChipPoints = effectiveExtendedLoyalty.celebrityBlueChipPoints;
+              addLog(`  → Blue Chip points: ${effectiveExtendedLoyalty.celebrityBlueChipPoints}`, 'info');
+            }
+            if (effectiveExtendedLoyalty.venetianSocietyTier) {
+              profileUpdates.silverseaVenetianTier = effectiveExtendedLoyalty.venetianSocietyTier;
+              addLog(`  → Venetian Society tier: ${effectiveExtendedLoyalty.venetianSocietyTier}`, 'info');
+            }
+            if (effectiveExtendedLoyalty.venetianSocietyMemberNumber) {
+              profileUpdates.silverseaVenetianNumber = effectiveExtendedLoyalty.venetianSocietyMemberNumber;
+            }
+          }
+
           if (Object.keys(profileUpdates).length > 0) {
             addLog('Syncing user profile from loyalty data...', 'info');
-            await updateUserProfile(currentUser.id, profileUpdates);
+            await updateUserProfile(currentUser.id, profileUpdates as any);
             addLog('✅ User profile updated from sync', 'success');
+          } else {
+            addLog('ℹ️ No passenger or loyalty profile fields found to update', 'info');
           }
         } catch (profileSyncError) {
           console.error('[RoyalCaribbeanSync] Error syncing user profile:', profileSyncError);
