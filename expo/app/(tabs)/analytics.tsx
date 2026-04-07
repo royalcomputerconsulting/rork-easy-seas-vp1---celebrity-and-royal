@@ -1783,7 +1783,7 @@ export default function AnalyticsScreen() {
 
     const totalProfit = realAnalytics.completedEconomicValue;
     const totalHours = sessionAnalytics.totalPlayTimeMinutes / 60;
-    const totalRetailValue = realAnalytics.completedRetailValue;
+    const _totalRetailValue = realAnalytics.completedRetailValue;
     const totalTaxesFees = realAnalytics.completedTaxesFees;
 
     const sessionNetWinLoss = hasSessionData ? sessionAnalytics.netWinLoss : realAnalytics.completedCashResult;
@@ -1845,8 +1845,8 @@ export default function AnalyticsScreen() {
     const theoStdDev = Math.sqrt(theoVariance);
     const adtSmoothingFactor = avgTheo > 0 ? (theoStdDev / avgTheo) : 0;
     
-    const roiPercentage = totalTaxesFees > 0 ? ((totalRetailValue - totalTaxesFees + totalWinLoss) / totalTaxesFees) * 100 : 0;
-    void roiPercentage;
+    const totalEconomicRoiPercentage = totalTaxesFees > 0 ? (totalProfit / totalTaxesFees) * 100 : 0;
+    void totalEconomicRoiPercentage;
     const profitPerUnit = totalSessions > 0 ? totalProfit / totalSessions : (totalProfit !== 0 ? totalProfit : 0);
     
     const stopGap = 200;

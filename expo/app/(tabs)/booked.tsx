@@ -49,8 +49,8 @@ import { getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruise
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { formatCurrency, formatNumber as formatNum } from '@/lib/format';
-import { calculatePortfolioValue } from '@/lib/valueCalculator';
 import { CrownAnchorTimeline } from '@/components/CrownAnchorTimeline';
+import { buildCruiseEconomicsSummary } from '@/lib/casinoCruiseEconomics';
 
 type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
@@ -195,38 +195,43 @@ export default function BookedScreen() {
     return { upcoming, completed, withData, total: bookedCruises.length, totalNights, totalPoints, totalSpent };
   }, [bookedCruises, crownAnchorPoints]);
 
+  const cruiseEconomicsSummary = useMemo(() => {
+    return buildCruiseEconomicsSummary(bookedCruises);
+  }, [bookedCruises]);
+
   const casinoStats = useMemo(() => {
-    const completedCruises = bookedCruises.filter(cruise => isCruiseCompleted(cruise));
-    const upcomingCruises = bookedCruises.filter(cruise => !isCruiseCompleted(cruise));
-    
-    const completedPortfolio = calculatePortfolioValue(completedCruises);
-    const upcomingPortfolio = calculatePortfolioValue(upcomingCruises);
-    const totalWinnings = completedCruises.reduce((sum, c) => sum + (c.winnings || 0), 0);
-    
-    const totalRetailValue = upcomingPortfolio.totalRetailValue || 0;
-    const totalTaxesFees = upcomingPortfolio.totalTaxesFees || 0;
-    const netProfit = (totalRetailValue - totalTaxesFees) + totalWinnings;
-    
-    console.log('[Booked] Casino stats calculated:', {
-      upcomingCount: upcomingCruises.length,
-      completedCount: completedCruises.length,
+    const scopedCruiseCount = cruiseEconomicsSummary.totals.cruises;
+    const totalCoinIn = cruiseEconomicsSummary.totals.totalCoinIn || casinoAnalytics.totalCoinIn || 0;
+    const totalCashResult = cruiseEconomicsSummary.totals.totalCashResult;
+    const totalRetailValue = cruiseEconomicsSummary.totals.totalRetailValue;
+    const totalPaid = cruiseEconomicsSummary.totals.totalPaid;
+    const totalCruiseValueCaptured = cruiseEconomicsSummary.totals.totalCruiseValueCaptured;
+    const totalEconomicValue = cruiseEconomicsSummary.totals.totalEconomicValue;
+
+    console.log('[Booked] Casino stats calculated from annual economics summary:', {
+      scopedCruiseCount,
       totalRetailValue,
-      totalTaxesFees,
-      totalWinnings,
-      netProfit,
+      totalPaid,
+      totalCruiseValueCaptured,
+      totalCashResult,
+      totalEconomicValue,
+      totalCoinIn,
+      hasEstimates: cruiseEconomicsSummary.totals.hasEstimates,
     });
-    
+
     return {
-      totalCoinIn: casinoAnalytics.totalCoinIn || completedPortfolio.totalCoinIn || 0,
-      netResult: casinoAnalytics.netResult || totalWinnings || 0,
-      avgCoinInPerCruise: casinoAnalytics.avgCoinInPerCruise || (completedCruises.length > 0 ? completedPortfolio.totalCoinIn / completedCruises.length : 0),
-      avgWinLossPerCruise: casinoAnalytics.avgWinLossPerCruise || (completedCruises.length > 0 ? totalWinnings / completedCruises.length : 0),
+      totalCoinIn,
+      netResult: totalCashResult,
+      avgCoinInPerCruise: scopedCruiseCount > 0 ? totalCoinIn / scopedCruiseCount : casinoAnalytics.avgCoinInPerCruise,
+      avgCashResultPerCruise: scopedCruiseCount > 0 ? totalCashResult / scopedCruiseCount : 0,
       totalRetailValue,
-      totalTaxesFees,
-      totalProfit: netProfit,
-      completedCount: completedCruises.length,
+      totalPaid,
+      totalCruiseValueCaptured,
+      totalEconomicValue,
+      completedCount: scopedCruiseCount,
+      hasEstimates: cruiseEconomicsSummary.totals.hasEstimates,
     };
-  }, [bookedCruises, casinoAnalytics]);
+  }, [casinoAnalytics.avgCoinInPerCruise, casinoAnalytics.totalCoinIn, cruiseEconomicsSummary]);
 
   const nextCruise = useMemo(() => {
     const upcomingCruises = bookedCruises
@@ -493,7 +498,7 @@ export default function BookedScreen() {
               <Text style={[styles.casinoMetricValue, { color: '#FFFFFF' }]}>
                 {casinoStats.netResult >= 0 ? '+' : ''}{formatCurrency(casinoStats.netResult)}
               </Text>
-              <Text style={[styles.casinoMetricLabel, { color: 'rgba(255,255,255,0.85)' }]}>Net Win/Loss</Text>
+              <Text style={[styles.casinoMetricLabel, { color: 'rgba(255,255,255,0.85)' }]}>Cash Result</Text>
             </View>
             
             <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
@@ -519,9 +524,9 @@ export default function BookedScreen() {
             <View style={styles.casinoFinancialItem}>
               <DollarSign size={14} color={'#FFFFFF'} />
               <View style={styles.casinoFinancialText}>
-                <Text style={[styles.casinoFinancialLabel, { color: 'rgba(255,255,255,0.85)' }]}>Taxes Paid</Text>
+                <Text style={[styles.casinoFinancialLabel, { color: 'rgba(255,255,255,0.85)' }]}>Amount Paid</Text>
                 <Text style={[styles.casinoFinancialValue, { color: '#FFFFFF' }]}>
-                  {formatCurrency(casinoStats.totalTaxesFees)}
+                  {formatCurrency(casinoStats.totalPaid)}
                 </Text>
               </View>
             </View>
@@ -529,9 +534,9 @@ export default function BookedScreen() {
             <View style={styles.casinoFinancialItem}>
               <TrendingUp size={14} color={'#FFFFFF'} />
               <View style={styles.casinoFinancialText}>
-                <Text style={[styles.casinoFinancialLabel, { color: 'rgba(255,255,255,0.85)' }]}>Net Profit</Text>
+                <Text style={[styles.casinoFinancialLabel, { color: 'rgba(255,255,255,0.85)' }]}>Total Economic Value</Text>
                 <Text style={[styles.casinoFinancialValue, { color: '#FFFFFF' }]}> 
-                  {casinoStats.totalProfit >= 0 ? '+' : ''}{formatCurrency(casinoStats.totalProfit)}
+                  {casinoStats.totalEconomicValue >= 0 ? '+' : ''}{formatCurrency(casinoStats.totalEconomicValue)}
                 </Text>
               </View>
             </View>
@@ -545,9 +550,9 @@ export default function BookedScreen() {
               </View>
               <View style={[styles.casinoAvgDivider, { backgroundColor: withAlpha('#FFFFFF', 0.14) }]} />
               <View style={styles.casinoAvgItem}>
-                <Text style={[styles.casinoAvgLabel, { color: 'rgba(255,255,255,0.85)' }]}>Avg Win/Loss</Text>
+                <Text style={[styles.casinoAvgLabel, { color: 'rgba(255,255,255,0.85)' }]}>Avg Cash Result</Text>
                 <Text style={[styles.casinoAvgValue, { color: '#FFFFFF' }]}> 
-                  {casinoStats.avgWinLossPerCruise >= 0 ? '+' : ''}{formatCurrency(casinoStats.avgWinLossPerCruise)}
+                  {casinoStats.avgCashResultPerCruise >= 0 ? '+' : ''}{formatCurrency(casinoStats.avgCashResultPerCruise)}
                 </Text>
               </View>
             </View>

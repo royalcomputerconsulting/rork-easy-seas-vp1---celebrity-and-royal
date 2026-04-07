@@ -1,6 +1,6 @@
 import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
 import { createDateFromString } from '@/lib/date';
-import { calculateCruiseValue } from '@/lib/valueCalculator';
+import { calculateCruiseValue, type ValueBreakdown } from '@/lib/valueCalculator';
 import type { BookedCruise } from '@/types/models';
 import { DOLLARS_PER_POINT } from '@/types/models';
 
@@ -116,6 +116,16 @@ const ANNUAL_SCOPE_START = '2025-04-01' as const;
 const ANNUAL_SCOPE_END = '2026-04-01' as const;
 const DEFAULT_HOUSE_EDGE = 0.08;
 const DEFAULT_POINT_DOLLAR_VALUE = 0.01;
+const DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS = 162;
+const TWO_PERSON_PORT_FEE_THRESHOLD = 200;
+
+interface TaxesFeesEstimateInfo {
+  value: number;
+  rawValue: number | null;
+  isEstimated: boolean;
+  wasNormalized: boolean;
+  note: string | null;
+}
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -253,6 +263,62 @@ export function calcValuePerHour(totalEconomicValue: number, hoursPlayed: number
   return round2(totalEconomicValue / hoursPlayed);
 }
 
+function getEconomicsGuestCount(cruise: BookedCruise): number {
+  if (isNumber(cruise.guests) && cruise.guests > 0) {
+    return Math.max(1, Math.round(cruise.guests));
+  }
+
+  return cruise.singleOccupancy ? 1 : 2;
+}
+
+function estimatePerPersonTaxesFees(nights: number): number {
+  const normalizedNights = nights > 0 ? nights : 7;
+  return round2((DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS / 7) * normalizedNights);
+}
+
+function getTaxesFeesEstimate(
+  cruise: BookedCruise,
+  breakdown: ValueBreakdown,
+): TaxesFeesEstimateInfo {
+  const rawTaxesFeesEstimate = getFirstNumber(
+    cruise.taxesFeesEstimate,
+    cruise.taxes,
+    breakdown.amountPaid,
+    breakdown.taxesFees,
+  );
+
+  if (isNumber(rawTaxesFeesEstimate) && rawTaxesFeesEstimate > 0) {
+    const guestCount = getEconomicsGuestCount(cruise);
+    if (guestCount > 1 && rawTaxesFeesEstimate > TWO_PERSON_PORT_FEE_THRESHOLD) {
+      const normalizedPerPersonTaxesFees = round2(rawTaxesFeesEstimate / guestCount);
+      return {
+        value: normalizedPerPersonTaxesFees,
+        rawValue: round2(rawTaxesFeesEstimate),
+        isEstimated: false,
+        wasNormalized: true,
+        note: `Taxes/fees looked like a ${guestCount}-guest total, so the economics model normalized ${round2(rawTaxesFeesEstimate).toFixed(2)} to ${normalizedPerPersonTaxesFees.toFixed(2)} per person.`,
+      };
+    }
+
+    return {
+      value: round2(rawTaxesFeesEstimate),
+      rawValue: round2(rawTaxesFeesEstimate),
+      isEstimated: false,
+      wasNormalized: false,
+      note: null,
+    };
+  }
+
+  const estimatedTaxesFees = estimatePerPersonTaxesFees(cruise.nights || 0);
+  return {
+    value: estimatedTaxesFees,
+    rawValue: null,
+    isEstimated: true,
+    wasNormalized: false,
+    note: `Taxes/fees estimated at ${estimatedTaxesFees.toFixed(2)} using the ${DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS.toFixed(0)} per-person port-fee baseline.`,
+  };
+}
+
 function getNetEffectivePaid(cruise: BookedCruise, taxesFeesEstimate: number): { value: number; isActual: boolean; nextCruiseOffsetApplied: boolean | null; note: string | null } {
   const actualAmountPaid = getFirstNumber(cruise.amountPaid, cruise.pricePaid, cruise.totalPrice, cruise.price, cruise.netEffectivePaid);
   if (isNumber(actualAmountPaid)) {
@@ -362,7 +428,8 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
   const retailValue = applyRetailOverrides(ship, nights, rawRetailValue);
   const retailIsActual = isNumber(rawRetailValue) || ship === 'Star of the Seas' || ship === 'Harmony of the Seas' || (ship === 'Liberty of the Seas' && nights === 9);
 
-  const taxesFeesEstimate = round2(getFirstNumber(cruise.taxesFeesEstimate, cruise.taxes, breakdown.amountPaid, breakdown.taxesFees) ?? 0);
+  const taxesFeesInfo = getTaxesFeesEstimate(cruise, breakdown);
+  const taxesFeesEstimate = taxesFeesInfo.value;
   const paidInfo = getNetEffectivePaid(cruise, taxesFeesEstimate);
   const winningsInfo = getEstimatedWinnings(cruise);
   const pointsInfo = getEstimatedPoints(cruise);
@@ -406,6 +473,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
       : 'mixed';
 
   const notes = [
+    taxesFeesInfo.note,
     paidInfo.note,
     winningsInfo.note,
     pointsInfo.note,
@@ -418,6 +486,10 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     ship,
     sailDate,
     retailValue: retailForCalc,
+    taxesFeesEstimate,
+    taxesFeesRawValue: taxesFeesInfo.rawValue,
+    taxesFeesWasEstimated: taxesFeesInfo.isEstimated,
+    taxesFeesWereNormalized: taxesFeesInfo.wasNormalized,
     netEffectivePaid,
     winningsBroughtHome,
     cashResult,

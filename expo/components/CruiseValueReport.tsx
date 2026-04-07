@@ -134,10 +134,10 @@ export function CruiseValueReport({ cruise }: CruiseValueReportProps) {
       </View>
 
       <View style={[styles.section, styles.summarySection]}>
-        <Text style={styles.sectionTitle}>Net Value Analysis</Text>
+        <Text style={styles.sectionTitle}>Economic Value Analysis</Text>
         
         <View style={styles.row}>
-          <Text style={styles.label}>Total Profit</Text>
+          <Text style={styles.label}>Total Economic Value</Text>
           <Text style={[styles.value, styles.profitValue]}>
             ${breakdown.totalProfit.toLocaleString()}
           </Text>

@@ -710,7 +710,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
               <FieldList items={[
                 { field: 'Actual Onboard Spend', description: 'Enter total folio amount' },
                 { field: 'Casino Winnings', description: 'Enter net casino result' },
-                { field: 'Net Profit/Loss', description: 'Calculation: Winnings - Spend + Comp Value' },
+                { field: 'Total Economic Value', description: 'Calculation: Cruise Value Captured + Cash Result' },
                 { field: 'Folio Reference', description: 'Store folio number for records' },
               ]} />
             </Subsection>
