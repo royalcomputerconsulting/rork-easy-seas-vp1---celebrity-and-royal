@@ -130,8 +130,8 @@ export function createLoyaltyCardTheme(accentColor?: string | null): LoyaltyCard
     borderColor: withAlpha(resolvedAccent, 0.25),
     surfaceColor: withAlpha(resolvedAccent, 0.08),
     surfaceColorMuted: withAlpha(resolvedAccent, 0.05),
-    topTextColor: mixHexColors(resolvedAccent, '#000000', 0.35),
-    secondaryTextColor: mixHexColors(resolvedAccent, '#000000', 0.50),
+    topTextColor: mixHexColors(resolvedAccent, '#000000', 0.65),
+    secondaryTextColor: mixHexColors(resolvedAccent, '#000000', 0.55),
     progressBarGradient: getComplementaryGradient(resolvedAccent),
   };
 }
