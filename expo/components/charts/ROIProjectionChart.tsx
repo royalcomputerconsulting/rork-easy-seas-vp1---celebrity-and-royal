@@ -272,14 +272,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: COLORS.aquaAccent,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: SPACING.sm,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
     flex: 1,
+    flexShrink: 1,
   },
   headerIcon: {
     width: 36,
@@ -289,7 +291,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#006064',
   },
@@ -308,6 +310,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.round,
+    flexShrink: 0,
   },
   roiValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
