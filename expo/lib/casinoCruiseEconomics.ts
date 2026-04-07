@@ -1,21 +1,50 @@
+import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
 import { createDateFromString } from '@/lib/date';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import type { BookedCruise } from '@/types/models';
+import { DOLLARS_PER_POINT } from '@/types/models';
 
-export type CruiseEconomicsStatus = 'known' | 'est. winnings' | 'pending';
+export type CruiseEconomicsStatus = 'actual' | 'estimated' | 'mixed';
 
 export interface CruiseEconomicsRow {
   cruiseId: string;
-  sailDate: string;
   ship: string;
+  sailDate: string;
+  returnDate: string;
   nights: number;
+  brand: string;
+  status: 'completed' | 'booked' | 'other';
+  retailValue: number | null;
+  amountPaid: number | null;
+  taxesFeesEstimate: number | null;
+  nextCruiseOffsetApplied: boolean | null;
+  netEffectivePaid: number | null;
+  winningsBroughtHome: number | null;
+  casinoChargesRoomBilled: number | null;
+  coinIn: number | null;
+  houseEdge: number | null;
+  pointsEarned: number | null;
+  pointDollarValue: number | null;
+  pointValueEarned: number | null;
+  hoursPlayed: number | null;
+  cashResult: number | null;
+  cruiseValueCaptured: number | null;
+  totalEconomicValue: number | null;
+  theoreticalLoss: number | null;
+  netTheoretical: number | null;
+  coinInPerHour: number | null;
+  pointsPerHour: number | null;
+  valuePerHour: number | null;
+  calculationConfidence: CruiseEconomicsStatus;
+  notes: string | null;
   retail: number;
   paid: number;
   discount: number;
   points: number;
   winningsHome: number;
   netCash: number;
-  status: CruiseEconomicsStatus;
+  totalEconomic: number;
+  pointValue: number;
   pointsPerNight: number;
 }
 
@@ -28,6 +57,17 @@ export interface CruiseEconomicsTotals {
   totalPoints: number;
   totalWinningsHome: number;
   totalNetCash: number;
+  totalRetailValue: number;
+  totalCruiseValueCaptured: number;
+  totalCashResult: number;
+  totalEconomicValue: number;
+  totalCoinIn: number;
+  totalHours: number;
+  totalTheoreticalLoss: number;
+  totalPointValueEarned: number;
+  totalNetTheoretical: number;
+  totalRowsWithEstimatedValues: number;
+  hasEstimates: boolean;
 }
 
 export interface CruiseEconomicsAverages {
@@ -37,6 +77,7 @@ export interface CruiseEconomicsAverages {
   winningsPerCruise: number;
   pointsPerCruise: number;
   netCashPerCruise: number;
+  totalEconomicValuePerCruise: number;
   pointsPerNight: number;
 }
 
@@ -46,6 +87,11 @@ export interface CruiseEconomicsROIStyleSummary {
   retailToPaidMultiple: number;
   winningsMultipleVsPaid: number;
   netRoiOnPaid: number;
+  cashROI: number;
+  cruiseValueMultiple: number;
+  compCoverageRate: number;
+  winningsMultiple: number;
+  valuePerHour: number;
 }
 
 export interface CruiseEconomicsSnapshots {
@@ -54,6 +100,7 @@ export interface CruiseEconomicsSnapshots {
   bestPointsCruise: CruiseEconomicsRow | null;
   bestPointsPerNightCruise: CruiseEconomicsRow | null;
   weakestPointsCruise: CruiseEconomicsRow | null;
+  bestEconomicValueCruise: CruiseEconomicsRow | null;
 }
 
 export interface CruiseEconomicsSummary {
@@ -62,84 +109,209 @@ export interface CruiseEconomicsSummary {
   averages: CruiseEconomicsAverages;
   roiStyle: CruiseEconomicsROIStyleSummary;
   snapshots: CruiseEconomicsSnapshots;
+  footnotes: string[];
 }
 
-function isFiniteNumber(value: number | undefined | null): value is number {
+const ANNUAL_SCOPE_START = '2025-04-01' as const;
+const ANNUAL_SCOPE_END = '2026-04-01' as const;
+const DEFAULT_HOUSE_EDGE = 0.08;
+const DEFAULT_POINT_DOLLAR_VALUE = 0.01;
+
+function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function isNumber(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-function getFirstNumber(...values: Array<number | undefined | null>): number | undefined {
-  return values.find((value) => isFiniteNumber(value));
+function getFirstNumber(...values: Array<number | null | undefined>): number | null {
+  for (const value of values) {
+    if (isNumber(value)) {
+      return value;
+    }
+  }
+
+  return null;
 }
 
-function isCompletedCruise(cruise: BookedCruise, today: Date): boolean {
+function getCruiseBrand(cruise: BookedCruise): string {
+  if (cruise.brand && cruise.brand.trim().length > 0) {
+    return cruise.brand;
+  }
+
+  if (cruise.cruiseSource === 'royal' || isRoyalCaribbeanShip(cruise.shipName || '')) {
+    return 'Royal Caribbean';
+  }
+
+  if (cruise.cruiseSource === 'celebrity') {
+    return 'Celebrity';
+  }
+
+  if (cruise.cruiseSource === 'carnival') {
+    return 'Carnival';
+  }
+
+  return 'Other';
+}
+
+function getCruiseStatus(cruise: BookedCruise, today: Date): 'completed' | 'booked' | 'other' {
+  if (cruise.status === 'cancelled') {
+    return 'other';
+  }
+
   if (cruise.completionState === 'completed' || cruise.status === 'completed') {
-    return true;
+    return 'completed';
   }
 
   if (cruise.returnDate) {
-    return createDateFromString(cruise.returnDate).getTime() < today.getTime();
+    const returnDate = createDateFromString(cruise.returnDate);
+    if (returnDate.getTime() < today.getTime()) {
+      return 'completed';
+    }
   }
 
-  return false;
+  if (cruise.status === 'booked' || cruise.completionState === 'upcoming' || cruise.bookingStatus === 'booked') {
+    return 'booked';
+  }
+
+  return 'other';
 }
 
-function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
-  const breakdown = calculateCruiseValue(cruise);
-  const retail = getFirstNumber(
-    cruise.totalRetailCost,
-    cruise.retailValue,
-    cruise.originalPrice,
-    breakdown.cabinValueForTwo,
-  ) ?? 0;
-  const paid = getFirstNumber(
-    cruise.pricePaid,
-    cruise.totalPrice,
-    cruise.price,
-    cruise.taxes,
-    breakdown.amountPaid,
-  ) ?? 0;
-  const discount = getFirstNumber(
-    cruise.totalCasinoDiscount,
-    cruise.compValue,
-    retail > 0 ? Math.max(0, retail - paid) : undefined,
-  ) ?? 0;
-  const points = getFirstNumber(cruise.earnedPoints, cruise.casinoPoints) ?? 0;
-  const winningsHome = getFirstNumber(cruise.winnings, cruise.totalWinnings, cruise.netResult) ?? 0;
-  const netCash = winningsHome - paid;
-  const status: CruiseEconomicsStatus = isFiniteNumber(cruise.winnings) || isFiniteNumber(cruise.totalWinnings) || isFiniteNumber(cruise.netResult)
-    ? 'known'
-    : points > 0
-      ? 'est. winnings'
-      : 'pending';
-  const nights = cruise.nights || 0;
+function inAnnualScope(cruise: BookedCruise, today: Date): boolean {
+  const brand = getCruiseBrand(cruise);
+  const status = getCruiseStatus(cruise, today);
+  const sailDate = cruise.sailDate || '';
 
-  console.log('[CasinoCruiseEconomics] Row built', {
-    cruiseId: cruise.id,
-    ship: cruise.shipName,
-    sailDate: cruise.sailDate,
-    retail,
-    paid,
-    discount,
-    points,
-    winningsHome,
-    netCash,
-    status,
-  });
+  return brand === 'Royal Caribbean'
+    && status === 'completed'
+    && sailDate >= ANNUAL_SCOPE_START
+    && sailDate <= ANNUAL_SCOPE_END;
+}
+
+function applyRetailOverrides(ship: string, nights: number, retailValue: number | null): number | null {
+  if (ship === 'Star of the Seas') {
+    return 6500;
+  }
+
+  if (ship === 'Harmony of the Seas') {
+    return 4650;
+  }
+
+  if (ship === 'Liberty of the Seas' && nights === 9) {
+    return 3500;
+  }
+
+  return retailValue;
+}
+
+export function calcCruiseValueCaptured(retailValue: number, netEffectivePaid: number): number {
+  return round2(retailValue - netEffectivePaid);
+}
+
+export function calcCashResult(winningsBroughtHome: number, netEffectivePaid: number): number {
+  return round2(winningsBroughtHome - netEffectivePaid);
+}
+
+export function calcTotalEconomicValue(retailValue: number, winningsBroughtHome: number, netEffectivePaid: number): number {
+  return round2(retailValue + winningsBroughtHome - netEffectivePaid);
+}
+
+export function calcTheoreticalLoss(coinIn: number, houseEdge: number): number {
+  return round2(coinIn * houseEdge);
+}
+
+export function calcPointValue(pointsEarned: number, pointDollarValue: number): number {
+  return round2(pointsEarned * pointDollarValue);
+}
+
+export function calcNetTheoretical(pointValueEarned: number, theoreticalLoss: number): number {
+  return round2(pointValueEarned - theoreticalLoss);
+}
+
+export function calcCoinInPerHour(coinIn: number, hoursPlayed: number): number {
+  if (!hoursPlayed) {
+    return 0;
+  }
+
+  return round2(coinIn / hoursPlayed);
+}
+
+export function calcPointsPerHour(pointsEarned: number, hoursPlayed: number): number {
+  if (!hoursPlayed) {
+    return 0;
+  }
+
+  return round2(pointsEarned / hoursPlayed);
+}
+
+export function calcValuePerHour(totalEconomicValue: number, hoursPlayed: number): number {
+  if (!hoursPlayed) {
+    return 0;
+  }
+
+  return round2(totalEconomicValue / hoursPlayed);
+}
+
+function getNetEffectivePaid(cruise: BookedCruise, taxesFeesEstimate: number): { value: number; isActual: boolean; nextCruiseOffsetApplied: boolean | null; note: string | null } {
+  const actualAmountPaid = getFirstNumber(cruise.amountPaid, cruise.pricePaid, cruise.totalPrice, cruise.price, cruise.netEffectivePaid);
+  if (isNumber(actualAmountPaid)) {
+    return {
+      value: round2(actualAmountPaid),
+      isActual: true,
+      nextCruiseOffsetApplied: cruise.nextCruiseOffsetApplied ?? cruise.usedNextCruiseCertificate ?? null,
+      note: null,
+    };
+  }
+
+  const estimatedOffset = taxesFeesEstimate * 0.9;
+  const netPaid = Math.max(0, taxesFeesEstimate - estimatedOffset);
 
   return {
-    cruiseId: cruise.id,
-    sailDate: cruise.sailDate,
-    ship: cruise.shipName || 'Unknown Ship',
-    nights,
-    retail,
-    paid,
-    discount,
-    points,
-    winningsHome,
-    netCash,
-    status,
-    pointsPerNight: nights > 0 ? points / nights : 0,
+    value: round2(netPaid),
+    isActual: false,
+    nextCruiseOffsetApplied: cruise.nextCruiseOffsetApplied ?? cruise.usedNextCruiseCertificate ?? (taxesFeesEstimate > 0 ? true : null),
+    note: taxesFeesEstimate > 0 ? 'Net paid estimated from taxes/fees with 90% Next Cruise offset.' : 'No paid amount available; defaulted to $0.',
+  };
+}
+
+function getEstimatedWinnings(cruise: BookedCruise): { value: number; isActual: boolean; note: string | null } {
+  const actualWinnings = getFirstNumber(cruise.winningsBroughtHome, cruise.winnings, cruise.totalWinnings, cruise.netResult);
+  if (isNumber(actualWinnings)) {
+    return {
+      value: round2(actualWinnings),
+      isActual: true,
+      note: null,
+    };
+  }
+
+  const estimatedWinnings = (cruise.nights || 0) <= 3 ? 300 : 700;
+
+  return {
+    value: estimatedWinnings,
+    isActual: false,
+    note: estimatedWinnings === 300
+      ? 'Winnings estimated at the 3-night/weak-row baseline of $300.'
+      : 'Winnings estimated at the default baseline of $700.',
+  };
+}
+
+function getEstimatedPoints(cruise: BookedCruise): { value: number; isActual: boolean; note: string | null } {
+  const actualPoints = getFirstNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints);
+  if (isNumber(actualPoints)) {
+    return {
+      value: Math.round(actualPoints),
+      isActual: true,
+      note: null,
+    };
+  }
+
+  const estimatedPoints = Math.round((cruise.nights || 0) * 300);
+
+  return {
+    value: estimatedPoints,
+    isActual: false,
+    note: 'Points estimated at 300 points per night.',
   };
 }
 
@@ -171,17 +343,145 @@ function getLowestBy(rows: CruiseEconomicsRow[], selector: (row: CruiseEconomics
   }, null);
 }
 
+function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
+  const breakdown = calculateCruiseValue(cruise);
+  const ship = cruise.shipName || 'Unknown Ship';
+  const sailDate = cruise.sailDate || '';
+  const returnDate = cruise.returnDate || sailDate;
+  const nights = cruise.nights || 0;
+  const brand = getCruiseBrand(cruise);
+  const status = cruise.status === 'completed' || cruise.completionState === 'completed' ? 'completed' : cruise.status === 'booked' ? 'booked' : 'other';
+
+  const rawRetailValue = getFirstNumber(
+    cruise.retailValue,
+    cruise.totalRetailCost,
+    cruise.originalPrice,
+    breakdown.totalRetailValue,
+    breakdown.cabinValueForTwo,
+  );
+  const retailValue = applyRetailOverrides(ship, nights, rawRetailValue);
+  const retailIsActual = isNumber(rawRetailValue) || ship === 'Star of the Seas' || ship === 'Harmony of the Seas' || (ship === 'Liberty of the Seas' && nights === 9);
+
+  const taxesFeesEstimate = round2(getFirstNumber(cruise.taxesFeesEstimate, cruise.taxes, breakdown.amountPaid, breakdown.taxesFees) ?? 0);
+  const paidInfo = getNetEffectivePaid(cruise, taxesFeesEstimate);
+  const winningsInfo = getEstimatedWinnings(cruise);
+  const pointsInfo = getEstimatedPoints(cruise);
+
+  const pointDollarValue = round2(getFirstNumber(cruise.pointDollarValue, DEFAULT_POINT_DOLLAR_VALUE) ?? DEFAULT_POINT_DOLLAR_VALUE);
+  const pointValueEarned = calcPointValue(pointsInfo.value, pointDollarValue);
+
+  const explicitCoinIn = getFirstNumber(cruise.coinIn);
+  const coinIn = isNumber(explicitCoinIn)
+    ? round2(explicitCoinIn)
+    : round2(pointsInfo.value * DOLLARS_PER_POINT);
+  const coinInWasEstimated = !isNumber(explicitCoinIn);
+
+  const houseEdge = round2(getFirstNumber(cruise.houseEdge, DEFAULT_HOUSE_EDGE) ?? DEFAULT_HOUSE_EDGE);
+  const hoursPlayed = getFirstNumber(cruise.hoursPlayed);
+  const theoreticalLoss = calcTheoreticalLoss(coinIn, houseEdge);
+  const netTheoretical = calcNetTheoretical(pointValueEarned, theoreticalLoss);
+
+  const retailForCalc = round2(retailValue ?? 0);
+  const netEffectivePaid = paidInfo.value;
+  const winningsBroughtHome = winningsInfo.value;
+  const cruiseValueCaptured = calcCruiseValueCaptured(retailForCalc, netEffectivePaid);
+  const cashResult = calcCashResult(winningsBroughtHome, netEffectivePaid);
+  const totalEconomicValue = calcTotalEconomicValue(retailForCalc, winningsBroughtHome, netEffectivePaid);
+  const coinInPerHour = isNumber(hoursPlayed) ? calcCoinInPerHour(coinIn, hoursPlayed) : null;
+  const pointsPerHour = isNumber(hoursPlayed) ? calcPointsPerHour(pointsInfo.value, hoursPlayed) : null;
+  const valuePerHour = isNumber(hoursPlayed) ? calcValuePerHour(totalEconomicValue, hoursPlayed) : null;
+
+  const estimationFlags = [
+    !retailIsActual,
+    !paidInfo.isActual,
+    !winningsInfo.isActual,
+    !pointsInfo.isActual,
+    coinInWasEstimated,
+  ];
+  const estimatedCount = estimationFlags.filter(Boolean).length;
+  const calculationConfidence: CruiseEconomicsStatus = estimatedCount === 0
+    ? 'actual'
+    : estimatedCount === estimationFlags.length
+      ? 'estimated'
+      : 'mixed';
+
+  const notes = [
+    paidInfo.note,
+    winningsInfo.note,
+    pointsInfo.note,
+    coinInWasEstimated ? 'Coin-in derived from points at $5 coin-in per point.' : null,
+    !isNumber(hoursPlayed) ? 'Hours played not available for this row.' : null,
+  ].filter((note): note is string => Boolean(note));
+
+  console.log('[CasinoCruiseEconomics] Row built', {
+    cruiseId: cruise.id,
+    ship,
+    sailDate,
+    retailValue: retailForCalc,
+    netEffectivePaid,
+    winningsBroughtHome,
+    cashResult,
+    cruiseValueCaptured,
+    totalEconomicValue,
+    coinIn,
+    houseEdge,
+    theoreticalLoss,
+    calculationConfidence,
+  });
+
+  return {
+    cruiseId: cruise.id,
+    ship,
+    sailDate,
+    returnDate,
+    nights,
+    brand,
+    status,
+    retailValue: retailForCalc,
+    amountPaid: getFirstNumber(cruise.amountPaid, cruise.pricePaid, cruise.totalPrice, cruise.price),
+    taxesFeesEstimate,
+    nextCruiseOffsetApplied: paidInfo.nextCruiseOffsetApplied,
+    netEffectivePaid,
+    winningsBroughtHome,
+    casinoChargesRoomBilled: getFirstNumber(cruise.casinoChargesRoomBilled, cruise.actualSpend),
+    coinIn,
+    houseEdge,
+    pointsEarned: pointsInfo.value,
+    pointDollarValue,
+    pointValueEarned,
+    hoursPlayed,
+    cashResult,
+    cruiseValueCaptured,
+    totalEconomicValue,
+    theoreticalLoss,
+    netTheoretical,
+    coinInPerHour,
+    pointsPerHour,
+    valuePerHour,
+    calculationConfidence,
+    notes: notes.length > 0 ? notes.join(' ') : null,
+    retail: retailForCalc,
+    paid: netEffectivePaid,
+    discount: cruiseValueCaptured,
+    points: pointsInfo.value,
+    winningsHome: winningsBroughtHome,
+    netCash: cashResult,
+    totalEconomic: totalEconomicValue,
+    pointValue: pointValueEarned,
+    pointsPerNight: nights > 0 ? round2(pointsInfo.value / nights) : 0,
+  };
+}
+
 export function buildCruiseEconomicsSummary(
   cruises: BookedCruise[],
   today: Date = new Date(),
 ): CruiseEconomicsSummary {
-  const completedRows = cruises
-    .filter((cruise) => isCompletedCruise(cruise, today))
+  const scopedRows = cruises
+    .filter((cruise) => inAnnualScope(cruise, today))
     .map(buildCruiseEconomicsRow)
-    .filter((row) => row.points > 0 || row.retail > 0 || row.paid > 0 || row.winningsHome !== 0)
     .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
 
-  const totals = completedRows.reduce<CruiseEconomicsTotals>((acc, row) => {
+  const totals = scopedRows.reduce<CruiseEconomicsTotals>((acc, row) => {
     acc.cruises += 1;
     acc.totalNights += row.nights;
     acc.totalRetail += row.retail;
@@ -190,6 +490,18 @@ export function buildCruiseEconomicsSummary(
     acc.totalPoints += row.points;
     acc.totalWinningsHome += row.winningsHome;
     acc.totalNetCash += row.netCash;
+    acc.totalRetailValue += row.retail;
+    acc.totalCruiseValueCaptured += row.cruiseValueCaptured ?? 0;
+    acc.totalCashResult += row.cashResult ?? 0;
+    acc.totalEconomicValue += row.totalEconomicValue ?? 0;
+    acc.totalCoinIn += row.coinIn ?? 0;
+    acc.totalHours += row.hoursPlayed ?? 0;
+    acc.totalTheoreticalLoss += row.theoreticalLoss ?? 0;
+    acc.totalPointValueEarned += row.pointValueEarned ?? 0;
+    acc.totalNetTheoretical += row.netTheoretical ?? 0;
+    if (row.calculationConfidence !== 'actual') {
+      acc.totalRowsWithEstimatedValues += 1;
+    }
     return acc;
   }, {
     cruises: 0,
@@ -200,53 +512,93 @@ export function buildCruiseEconomicsSummary(
     totalPoints: 0,
     totalWinningsHome: 0,
     totalNetCash: 0,
+    totalRetailValue: 0,
+    totalCruiseValueCaptured: 0,
+    totalCashResult: 0,
+    totalEconomicValue: 0,
+    totalCoinIn: 0,
+    totalHours: 0,
+    totalTheoreticalLoss: 0,
+    totalPointValueEarned: 0,
+    totalNetTheoretical: 0,
+    totalRowsWithEstimatedValues: 0,
+    hasEstimates: false,
   });
+
+  totals.totalRetail = round2(totals.totalRetail);
+  totals.totalPaid = round2(totals.totalPaid);
+  totals.totalDiscount = round2(totals.totalDiscount);
+  totals.totalWinningsHome = round2(totals.totalWinningsHome);
+  totals.totalNetCash = round2(totals.totalNetCash);
+  totals.totalRetailValue = round2(totals.totalRetailValue);
+  totals.totalCruiseValueCaptured = round2(totals.totalCruiseValueCaptured);
+  totals.totalCashResult = round2(totals.totalCashResult);
+  totals.totalEconomicValue = round2(totals.totalEconomicValue);
+  totals.totalCoinIn = round2(totals.totalCoinIn);
+  totals.totalHours = round2(totals.totalHours);
+  totals.totalTheoreticalLoss = round2(totals.totalTheoreticalLoss);
+  totals.totalPointValueEarned = round2(totals.totalPointValueEarned);
+  totals.totalNetTheoretical = round2(totals.totalNetTheoretical);
+  totals.hasEstimates = totals.totalRowsWithEstimatedValues > 0;
 
   const cruiseCount = totals.cruises || 1;
   const averages: CruiseEconomicsAverages = {
-    nightsPerCruise: totals.cruises > 0 ? totals.totalNights / cruiseCount : 0,
-    retailPerCruise: totals.cruises > 0 ? totals.totalRetail / cruiseCount : 0,
-    paidPerCruise: totals.cruises > 0 ? totals.totalPaid / cruiseCount : 0,
-    winningsPerCruise: totals.cruises > 0 ? totals.totalWinningsHome / cruiseCount : 0,
-    pointsPerCruise: totals.cruises > 0 ? totals.totalPoints / cruiseCount : 0,
-    netCashPerCruise: totals.cruises > 0 ? totals.totalNetCash / cruiseCount : 0,
-    pointsPerNight: totals.totalNights > 0 ? totals.totalPoints / totals.totalNights : 0,
+    nightsPerCruise: totals.cruises > 0 ? round2(totals.totalNights / cruiseCount) : 0,
+    retailPerCruise: totals.cruises > 0 ? round2(totals.totalRetailValue / cruiseCount) : 0,
+    paidPerCruise: totals.cruises > 0 ? round2(totals.totalPaid / cruiseCount) : 0,
+    winningsPerCruise: totals.cruises > 0 ? round2(totals.totalWinningsHome / cruiseCount) : 0,
+    pointsPerCruise: totals.cruises > 0 ? round2(totals.totalPoints / cruiseCount) : 0,
+    netCashPerCruise: totals.cruises > 0 ? round2(totals.totalCashResult / cruiseCount) : 0,
+    totalEconomicValuePerCruise: totals.cruises > 0 ? round2(totals.totalEconomicValue / cruiseCount) : 0,
+    pointsPerNight: totals.totalNights > 0 ? round2(totals.totalPoints / totals.totalNights) : 0,
   };
 
   const roiStyle: CruiseEconomicsROIStyleSummary = {
-    paidAsPercentOfRetail: totals.totalRetail > 0 ? (totals.totalPaid / totals.totalRetail) * 100 : 0,
-    compCoverage: totals.totalRetail > 0 ? (totals.totalDiscount / totals.totalRetail) * 100 : 0,
-    retailToPaidMultiple: totals.totalPaid > 0 ? totals.totalRetail / totals.totalPaid : 0,
-    winningsMultipleVsPaid: totals.totalPaid > 0 ? totals.totalWinningsHome / totals.totalPaid : 0,
-    netRoiOnPaid: totals.totalPaid > 0 ? (totals.totalNetCash / totals.totalPaid) * 100 : 0,
+    paidAsPercentOfRetail: totals.totalRetailValue > 0 ? round2((totals.totalPaid / totals.totalRetailValue) * 100) : 0,
+    compCoverage: totals.totalRetailValue > 0 ? round2((totals.totalCruiseValueCaptured / totals.totalRetailValue) * 100) : 0,
+    retailToPaidMultiple: totals.totalPaid > 0 ? round2(totals.totalRetailValue / totals.totalPaid) : 0,
+    winningsMultipleVsPaid: totals.totalPaid > 0 ? round2(totals.totalWinningsHome / totals.totalPaid) : 0,
+    netRoiOnPaid: totals.totalPaid > 0 ? round2((totals.totalCashResult / totals.totalPaid) * 100) : 0,
+    cashROI: totals.totalPaid > 0 ? round2(totals.totalCashResult / totals.totalPaid) : 0,
+    cruiseValueMultiple: totals.totalPaid > 0 ? round2(totals.totalRetailValue / totals.totalPaid) : 0,
+    compCoverageRate: totals.totalRetailValue > 0 ? round2(totals.totalCruiseValueCaptured / totals.totalRetailValue) : 0,
+    winningsMultiple: totals.totalPaid > 0 ? round2(totals.totalWinningsHome / totals.totalPaid) : 0,
+    valuePerHour: totals.totalHours > 0 ? round2(totals.totalEconomicValue / totals.totalHours) : 0,
   };
 
-  const rowsWithPoints = completedRows.filter((row) => row.points > 0);
+  const rowsWithPoints = scopedRows.filter((row) => row.points > 0);
   const snapshots: CruiseEconomicsSnapshots = {
-    bestCashCruise: getHighestBy(completedRows, (row) => row.netCash),
-    biggestCompValueCruise: getHighestBy(completedRows, (row) => row.discount),
+    bestCashCruise: getHighestBy(scopedRows, (row) => row.cashResult ?? 0),
+    biggestCompValueCruise: getHighestBy(scopedRows, (row) => row.cruiseValueCaptured ?? 0),
     bestPointsCruise: getHighestBy(rowsWithPoints, (row) => row.points),
     bestPointsPerNightCruise: getHighestBy(rowsWithPoints, (row) => row.pointsPerNight),
     weakestPointsCruise: getLowestBy(rowsWithPoints, (row) => row.points),
+    bestEconomicValueCruise: getHighestBy(scopedRows, (row) => row.totalEconomicValue ?? 0),
   };
+
+  const footnotes = totals.hasEstimates
+    ? ['Annual totals include estimated values where paid amount, winnings, points, coin-in, or hours were missing.']
+    : [];
 
   console.log('[CasinoCruiseEconomics] Summary built', {
     cruiseCount: totals.cruises,
-    totalNights: totals.totalNights,
-    totalRetail: totals.totalRetail,
+    totalRetailValue: totals.totalRetailValue,
     totalPaid: totals.totalPaid,
-    totalDiscount: totals.totalDiscount,
-    totalPoints: totals.totalPoints,
+    totalCruiseValueCaptured: totals.totalCruiseValueCaptured,
     totalWinningsHome: totals.totalWinningsHome,
-    totalNetCash: totals.totalNetCash,
-    roiStyle,
+    totalCashResult: totals.totalCashResult,
+    totalEconomicValue: totals.totalEconomicValue,
+    totalCoinIn: totals.totalCoinIn,
+    totalHours: totals.totalHours,
+    totalRowsWithEstimatedValues: totals.totalRowsWithEstimatedValues,
   });
 
   return {
-    rows: completedRows,
+    rows: scopedRows,
     totals,
     averages,
     roiStyle,
     snapshots,
+    footnotes,
   };
 }

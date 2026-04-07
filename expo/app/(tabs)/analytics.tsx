@@ -42,7 +42,7 @@ import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { formatCurrency, formatCurrencyDetailed, formatNumber, formatPercentage } from '@/lib/format';
-import { calculateCruiseValue, calculatePortfolioValue } from '@/lib/valueCalculator';
+import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { createDateFromString } from '@/lib/date';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import { 
@@ -406,82 +406,79 @@ export default function AnalyticsScreen() {
     router.push({ pathname: '/(tabs)/(overview)/cruise-details' as any, params: { id: cruiseId } });
   }, [router]);
 
+  const cruiseEconomicsSummary = useMemo(() => {
+    return buildCruiseEconomicsSummary(bookedCruises);
+  }, [bookedCruises]);
+
+  const cruiseEconomicsRowById = useMemo(() => {
+    return new Map(cruiseEconomicsSummary.rows.map((row) => [row.cruiseId, row]));
+  }, [cruiseEconomicsSummary.rows]);
+
   const realAnalytics = useMemo(() => {
-    const today = new Date();
+    const scopedCruiseIds = new Set(cruiseEconomicsSummary.rows.map((row) => row.cruiseId));
     const destinationCounts: Record<string, number> = {};
-    
-    const completedCruises: BookedCruise[] = [];
-    let totalNights = 0;
-    
+
     bookedCruises.forEach((cruise: BookedCruise) => {
-      const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
-      const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
-      
-      totalNights += cruise.nights || 0;
-      
+      if (!scopedCruiseIds.has(cruise.id)) {
+        return;
+      }
+
       if (cruise.destination) {
         destinationCounts[cruise.destination] = (destinationCounts[cruise.destination] || 0) + 1;
       }
-      
-      if (isCompleted) {
-        completedCruises.push(cruise);
-      }
     });
 
-    const allPortfolio = calculatePortfolioValue(bookedCruises);
-    const completedPortfolio = calculatePortfolioValue(completedCruises);
-    
     const destinationDistribution = Object.entries(destinationCounts)
       .map(([destination, count]) => ({ destination, count }))
       .sort((a, b) => b.count - a.count);
 
-    const valuePerDollar = allPortfolio.avgValuePerDollar === Infinity 
-      ? 9999 
-      : allPortfolio.avgValuePerDollar;
+    const valuePerDollar = cruiseEconomicsSummary.totals.totalPaid > 0
+      ? cruiseEconomicsSummary.totals.totalEconomicValue / cruiseEconomicsSummary.totals.totalPaid
+      : 0;
 
     console.log('[Analytics] realAnalytics calculated:', {
-      totalCruises: bookedCruises.length,
-      completedCruisesCount: completedCruises.length,
-      totalNights,
-      totalTaxesFees: allPortfolio.totalTaxesFees,
-      totalRetailValue: allPortfolio.totalRetailValue,
-      totalCoinIn: allPortfolio.totalCoinIn,
-      totalWinnings: allPortfolio.totalWinnings,
-      totalProfit: allPortfolio.totalProfit,
+      totalCruises: cruiseEconomicsSummary.totals.cruises,
+      totalNights: cruiseEconomicsSummary.totals.totalNights,
+      totalPaid: cruiseEconomicsSummary.totals.totalPaid,
+      totalRetailValue: cruiseEconomicsSummary.totals.totalRetailValue,
+      totalCruiseValueCaptured: cruiseEconomicsSummary.totals.totalCruiseValueCaptured,
+      totalWinnings: cruiseEconomicsSummary.totals.totalWinningsHome,
+      totalCashResult: cruiseEconomicsSummary.totals.totalCashResult,
+      totalEconomicValue: cruiseEconomicsSummary.totals.totalEconomicValue,
+      totalCoinIn: cruiseEconomicsSummary.totals.totalCoinIn,
       valuePerDollar,
-      portfolioROI: allPortfolio.avgROI,
+      cashROI: cruiseEconomicsSummary.roiStyle.cashROI,
     });
 
     return {
-      totalCruises: bookedCruises.length,
-      completedCruisesCount: completedCruises.length,
-      totalNights,
-      totalTaxesFees: allPortfolio.totalTaxesFees,
-      totalOutOfPocket: allPortfolio.totalTaxesFees,
-      totalRetailValue: allPortfolio.totalRetailValue,
-      totalCoinIn: allPortfolio.totalCoinIn,
-      totalWinnings: allPortfolio.totalWinnings,
-      netCasinoResult: allPortfolio.totalWinnings,
-      totalProfit: allPortfolio.totalProfit,
-      totalPoints: allPortfolio.totalPoints,
-      portfolioROI: allPortfolio.avgROI,
+      totalCruises: cruiseEconomicsSummary.totals.cruises,
+      completedCruisesCount: cruiseEconomicsSummary.totals.cruises,
+      totalNights: cruiseEconomicsSummary.totals.totalNights,
+      totalTaxesFees: cruiseEconomicsSummary.totals.totalPaid,
+      totalOutOfPocket: cruiseEconomicsSummary.totals.totalPaid,
+      totalRetailValue: cruiseEconomicsSummary.totals.totalRetailValue,
+      totalCruiseValueCaptured: cruiseEconomicsSummary.totals.totalCruiseValueCaptured,
+      totalCoinIn: cruiseEconomicsSummary.totals.totalCoinIn,
+      totalWinnings: cruiseEconomicsSummary.totals.totalWinningsHome,
+      netCasinoResult: cruiseEconomicsSummary.totals.totalCashResult,
+      totalEconomicValue: cruiseEconomicsSummary.totals.totalEconomicValue,
+      totalPoints: cruiseEconomicsSummary.totals.totalPoints,
+      cashROI: cruiseEconomicsSummary.roiStyle.cashROI,
       valuePerDollar,
       destinationDistribution,
-      completedTaxesFees: completedPortfolio.totalTaxesFees,
-      completedOutOfPocket: completedPortfolio.totalTaxesFees,
-      completedRetailValue: completedPortfolio.totalRetailValue,
-      completedCoinIn: completedPortfolio.totalCoinIn,
-      completedWinnings: completedPortfolio.totalWinnings,
-      completedNetCasinoResult: completedPortfolio.totalWinnings,
-      completedProfit: completedPortfolio.totalProfit,
-      completedPoints: completedPortfolio.totalPoints,
-      completedROI: completedPortfolio.avgROI,
+      completedTaxesFees: cruiseEconomicsSummary.totals.totalPaid,
+      completedOutOfPocket: cruiseEconomicsSummary.totals.totalPaid,
+      completedRetailValue: cruiseEconomicsSummary.totals.totalRetailValue,
+      completedCruiseValueCaptured: cruiseEconomicsSummary.totals.totalCruiseValueCaptured,
+      completedCoinIn: cruiseEconomicsSummary.totals.totalCoinIn,
+      completedWinnings: cruiseEconomicsSummary.totals.totalWinningsHome,
+      completedNetCasinoResult: cruiseEconomicsSummary.totals.totalCashResult,
+      completedCashResult: cruiseEconomicsSummary.totals.totalCashResult,
+      completedEconomicValue: cruiseEconomicsSummary.totals.totalEconomicValue,
+      completedPoints: cruiseEconomicsSummary.totals.totalPoints,
+      completedROI: cruiseEconomicsSummary.roiStyle.netRoiOnPaid,
     };
-  }, [bookedCruises]);
-
-  const cruiseEconomicsSummary = useMemo(() => {
-    return buildCruiseEconomicsSummary(bookedCruises);
-  }, [bookedCruises]);
+  }, [bookedCruises, cruiseEconomicsSummary]);
 
   const visibleEconomicsRows = useMemo((): CruiseEconomicsRow[] => {
     return showAllEconomicsRows
@@ -503,9 +500,9 @@ export default function AnalyticsScreen() {
         icon: DollarSign,
       },
       {
-        label: 'Net Cash',
-        value: formatCurrency(cruiseEconomicsSummary.totals.totalNetCash),
-        color: cruiseEconomicsSummary.totals.totalNetCash >= 0 ? COLORS.success : COLORS.error,
+        label: 'Cash Result',
+        value: formatCurrency(cruiseEconomicsSummary.totals.totalCashResult),
+        color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error,
         icon: TrendingUp,
       },
       { label: 'Points', value: formatNumber(cruiseEconomicsSummary.totals.totalPoints), icon: Award },
@@ -739,8 +736,9 @@ export default function AnalyticsScreen() {
 
   const renderPortfolioCard = (cruise: typeof cruisesWithROI[0]) => {
     const breakdown = calculateCruiseValue(cruise);
-    const winnings = cruise.winnings || 0;
-    const earnedPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
+    const economicsRow = cruiseEconomicsRowById.get(cruise.id);
+    const winnings = economicsRow?.winningsHome ?? cruise.winnings ?? 0;
+    const earnedPoints = economicsRow?.points ?? cruise.earnedPoints ?? cruise.casinoPoints ?? 0;
     
     const roiColor = cruise.roiLevel === 'high' 
       ? COLORS.success 
@@ -748,9 +746,12 @@ export default function AnalyticsScreen() {
         ? COLORS.warning 
         : COLORS.error;
 
-    const valuePerDollarDisplay = cruise.valuePerDollar >= 9999 
-      ? '∞' 
-      : `${cruise.valuePerDollar.toFixed(2)}`;
+    const effectiveValuePerDollar = economicsRow && economicsRow.paid > 0
+      ? economicsRow.totalEconomic / economicsRow.paid
+      : cruise.valuePerDollar;
+    const valuePerDollarDisplay = effectiveValuePerDollar >= 9999
+      ? '∞'
+      : `${effectiveValuePerDollar.toFixed(2)}`;
 
     const imageHash = cruise.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const cruiseImage = getImageForDestination(cruise.destination || '', imageHash + 1);
@@ -855,22 +856,22 @@ export default function AnalyticsScreen() {
           <View style={styles.portfolioCardMetrics}>
             <View style={styles.portfolioMetric}>
               <Text style={styles.portfolioMetricLabel}>Retail</Text>
-              <Text style={styles.portfolioMetricValue}>{formatCurrency(breakdown.cabinValueForTwo)}</Text>
+              <Text style={styles.portfolioMetricValue}>{formatCurrency(economicsRow?.retail ?? breakdown.cabinValueForTwo)}</Text>
             </View>
             <View style={styles.portfolioMetric}>
-              <Text style={styles.portfolioMetricLabel}>Taxes</Text>
-              <Text style={styles.portfolioMetricValue}>{formatCurrency(breakdown.taxesFees)}</Text>
+              <Text style={styles.portfolioMetricLabel}>Paid</Text>
+              <Text style={styles.portfolioMetricValue}>{formatCurrency(economicsRow?.paid ?? breakdown.amountPaid)}</Text>
             </View>
             <View style={styles.portfolioMetric}>
-              <Text style={styles.portfolioMetricLabel}>Win</Text>
-              <Text style={[styles.portfolioMetricValue, { color: winnings >= 0 ? COLORS.success : COLORS.error }]}>
-                {winnings >= 0 ? '+' : ''}{formatCurrency(winnings)}
+              <Text style={styles.portfolioMetricLabel}>Cash Result</Text>
+              <Text style={[styles.portfolioMetricValue, { color: (economicsRow?.netCash ?? winnings) >= 0 ? COLORS.success : COLORS.error }]}>
+                {(economicsRow?.netCash ?? winnings) >= 0 ? '+' : ''}{formatCurrency(economicsRow?.netCash ?? winnings)}
               </Text>
             </View>
             <View style={styles.portfolioMetric}>
-              <Text style={styles.portfolioMetricLabel}>Profit</Text>
-              <Text style={[styles.portfolioMetricValue, { color: breakdown.totalProfit >= 0 ? COLORS.success : COLORS.error }]}>
-                {formatCurrency(breakdown.totalProfit)}
+              <Text style={styles.portfolioMetricLabel}>Total Econ</Text>
+              <Text style={[styles.portfolioMetricValue, { color: (economicsRow?.totalEconomic ?? breakdown.totalProfit) >= 0 ? COLORS.success : COLORS.error }]}>
+                {formatCurrency(economicsRow?.totalEconomic ?? breakdown.totalProfit)}
               </Text>
             </View>
           </View>
@@ -924,23 +925,29 @@ export default function AnalyticsScreen() {
               <Text style={[styles.dataValue, { color: COLORS.success }]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetail)}</Text>
             </View>
             <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Paid</Text>
+              <Text style={styles.dataLabel}>Amount Paid</Text>
               <Text style={styles.dataValue}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid)}</Text>
             </View>
             <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Discount / Comp Value</Text>
-              <Text style={styles.dataValue}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalDiscount)}</Text>
+              <Text style={styles.dataLabel}>Cruise Value Captured</Text>
+              <Text style={[styles.dataValue, { color: COLORS.success }]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}</Text>
             </View>
             <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Winnings Home</Text>
+              <Text style={styles.dataLabel}>Winnings Brought Home</Text>
               <Text style={[styles.dataValue, { color: cruiseEconomicsSummary.totals.totalWinningsHome >= 0 ? COLORS.success : COLORS.error }]}>
                 {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome)}
               </Text>
             </View>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Cash Result</Text>
+              <Text style={[styles.dataValue, { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error }]}>
+                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
+              </Text>
+            </View>
             <View style={[styles.dataRow, styles.dataRowTotal]}>
-              <Text style={styles.dataTotalLabel}>Net Cash</Text>
-              <Text style={[styles.dataTotalValue, { color: cruiseEconomicsSummary.totals.totalNetCash >= 0 ? COLORS.success : COLORS.error }]}>
-                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalNetCash)}
+              <Text style={styles.dataTotalLabel}>Total Economic Value</Text>
+              <Text style={[styles.dataTotalValue, { color: cruiseEconomicsSummary.totals.totalEconomicValue >= 0 ? COLORS.success : COLORS.error }]}>
+                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}
               </Text>
             </View>
           </View>
@@ -956,7 +963,7 @@ export default function AnalyticsScreen() {
               </View>
               <View style={styles.economicsHeaderContent}>
                 <Text style={styles.economicsTitle}>Cruise Economics</Text>
-                <Text style={styles.economicsSubtitle}>Completed-cruise retail, paid, discount, points, winnings, and net cash</Text>
+                <Text style={styles.economicsSubtitle}>Completed Royal Caribbean annual report with retail, paid, cruise value, winnings, cash result, and total economic value</Text>
               </View>
             </View>
 
@@ -970,14 +977,20 @@ export default function AnalyticsScreen() {
                 <Text style={styles.economicsHeroStatLabel}>Paid</Text>
               </View>
               <View style={styles.economicsHeroStat}>
-                <Text style={styles.economicsHeroStatValue}>{formatCurrency(cruiseEconomicsSummary.totals.totalWinningsHome)}</Text>
-                <Text style={styles.economicsHeroStatLabel}>Winnings</Text>
+                <Text style={[styles.economicsHeroStatValue, { color: COLORS.success }]}>{formatCurrency(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}</Text>
+                <Text style={styles.economicsHeroStatLabel}>Cruise Value</Text>
               </View>
               <View style={styles.economicsHeroStat}>
-                <Text style={[styles.economicsHeroStatValue, { color: cruiseEconomicsSummary.totals.totalNetCash >= 0 ? COLORS.success : COLORS.error }]}>
-                  {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalNetCash)}
+                <Text style={[styles.economicsHeroStatValue, { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error }]}>
+                  {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
                 </Text>
-                <Text style={styles.economicsHeroStatLabel}>Net Cash</Text>
+                <Text style={styles.economicsHeroStatLabel}>Cash Result</Text>
+              </View>
+              <View style={styles.economicsHeroStat}>
+                <Text style={[styles.economicsHeroStatValue, { color: cruiseEconomicsSummary.totals.totalEconomicValue >= 0 ? COLORS.success : COLORS.error }]}>
+                  {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}
+                </Text>
+                <Text style={styles.economicsHeroStatLabel}>Total Econ</Text>
               </View>
             </View>
 
@@ -994,20 +1007,26 @@ export default function AnalyticsScreen() {
                   <Text style={[styles.economicsHeaderCell, styles.economicsNightsCell]}>Nights</Text>
                   <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Retail</Text>
                   <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Paid</Text>
-                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Discount</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Cruise Value</Text>
                   <Text style={[styles.economicsHeaderCell, styles.economicsPointsCell]}>Points</Text>
-                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Winnings Home</Text>
-                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Net Cash</Text>
-                  <Text style={[styles.economicsHeaderCell, styles.economicsStatusCell]}>Status</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Winnings</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Cash Result</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Total Econ</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsStatusCell]}>Confidence</Text>
                 </View>
 
                 {visibleEconomicsRows.map((row, index) => {
                   const isLastVisibleRow = index === visibleEconomicsRows.length - 1;
-                  const statusStyle = row.status === 'known'
+                  const statusStyle = row.calculationConfidence === 'actual'
                     ? styles.economicsStatusKnown
-                    : row.status === 'est. winnings'
+                    : row.calculationConfidence === 'estimated'
                       ? styles.economicsStatusEstimated
                       : styles.economicsStatusPending;
+                  const confidenceLabel = row.calculationConfidence === 'mixed'
+                    ? 'Partial'
+                    : row.calculationConfidence === 'actual'
+                      ? 'Actual'
+                      : 'Estimated';
 
                   return (
                     <View
@@ -1024,8 +1043,9 @@ export default function AnalyticsScreen() {
                       <Text style={[styles.economicsCell, styles.economicsPointsCell]}>{formatNumber(row.points)}</Text>
                       <Text style={[styles.economicsCell, styles.economicsMoneyCell, { color: row.winningsHome >= 0 ? COLORS.success : COLORS.error }]}>{formatSignedCurrencyDetailed(row.winningsHome)}</Text>
                       <Text style={[styles.economicsCell, styles.economicsMoneyCell, row.netCash >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(row.netCash)}</Text>
+                      <Text style={[styles.economicsCell, styles.economicsMoneyCell, row.totalEconomic >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(row.totalEconomic)}</Text>
                       <View style={[styles.economicsStatusPill, statusStyle]}>
-                        <Text style={styles.economicsStatusText}>{row.status}</Text>
+                        <Text style={styles.economicsStatusText}>{confidenceLabel}</Text>
                       </View>
                     </View>
                   );
@@ -1035,14 +1055,15 @@ export default function AnalyticsScreen() {
                   <Text style={[styles.economicsCell, styles.economicsDateCell]}>TOTAL</Text>
                   <Text style={[styles.economicsCell, styles.economicsShipCell]} numberOfLines={1}>Annual Totals</Text>
                   <Text style={[styles.economicsCell, styles.economicsNightsCell]}>{cruiseEconomicsSummary.totals.totalNights}</Text>
-                  <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetail)}</Text>
+                  <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue)}</Text>
                   <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid)}</Text>
-                  <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalDiscount)}</Text>
+                  <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}</Text>
                   <Text style={[styles.economicsCell, styles.economicsPointsCell]}>{formatNumber(cruiseEconomicsSummary.totals.totalPoints)}</Text>
                   <Text style={[styles.economicsCell, styles.economicsMoneyCell, { color: cruiseEconomicsSummary.totals.totalWinningsHome >= 0 ? COLORS.success : COLORS.error }]}>{formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome)}</Text>
-                  <Text style={[styles.economicsCell, styles.economicsMoneyCell, cruiseEconomicsSummary.totals.totalNetCash >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalNetCash)}</Text>
-                  <View style={[styles.economicsStatusPill, styles.economicsStatusKnown]}>
-                    <Text style={styles.economicsStatusText}>summary</Text>
+                  <Text style={[styles.economicsCell, styles.economicsMoneyCell, cruiseEconomicsSummary.totals.totalCashResult >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}</Text>
+                  <Text style={[styles.economicsCell, styles.economicsMoneyCell, cruiseEconomicsSummary.totals.totalEconomicValue >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}</Text>
+                  <View style={[styles.economicsStatusPill, cruiseEconomicsSummary.totals.hasEstimates ? styles.economicsStatusPending : styles.economicsStatusKnown]}>
+                    <Text style={styles.economicsStatusText}>{cruiseEconomicsSummary.totals.hasEstimates ? 'Partial' : 'Actual'}</Text>
                   </View>
                 </View>
               </View>
@@ -1066,16 +1087,22 @@ export default function AnalyticsScreen() {
               </TouchableOpacity>
             )}
 
+            {cruiseEconomicsSummary.footnotes.length > 0 && (
+              <View style={styles.avgStatsRow}>
+                <Text style={styles.avgStatText}>{cruiseEconomicsSummary.footnotes[0]}</Text>
+              </View>
+            )}
+
             <View style={styles.economicsSummarySection}>
-              <Text style={styles.economicsSectionTitle}>Final annual averages</Text>
+              <Text style={styles.economicsSectionTitle}>Annual averages</Text>
               <View style={styles.economicsSummaryGrid}>
                 {[
                   { label: 'Avg nights / cruise', value: cruiseEconomicsSummary.averages.nightsPerCruise.toFixed(2) },
                   { label: 'Avg retail / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.retailPerCruise) },
                   { label: 'Avg paid / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise) },
                   { label: 'Avg winnings / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise) },
-                  { label: 'Avg points / cruise', value: formatNumber(Math.round(cruiseEconomicsSummary.averages.pointsPerCruise)) },
-                  { label: 'Avg net cash / cruise', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise) },
+                  { label: 'Avg cash result / cruise', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise) },
+                  { label: 'Avg total econ / cruise', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.totalEconomicValuePerCruise) },
                   { label: 'Avg points / night', value: cruiseEconomicsSummary.averages.pointsPerNight.toFixed(2) },
                 ].map((item) => (
                   <View key={item.label} style={styles.economicsSummaryCard}>
@@ -1087,14 +1114,14 @@ export default function AnalyticsScreen() {
             </View>
 
             <View style={styles.economicsSummarySection}>
-              <Text style={styles.economicsSectionTitle}>Final ROI-style summary</Text>
+              <Text style={styles.economicsSectionTitle}>Annual KPI summary</Text>
               <View style={styles.economicsSummaryGrid}>
                 {[
-                  { label: 'Paid as % of retail', value: formatPercentage(cruiseEconomicsSummary.roiStyle.paidAsPercentOfRetail, 2) },
-                  { label: 'Comp coverage', value: formatPercentage(cruiseEconomicsSummary.roiStyle.compCoverage, 2) },
-                  { label: 'Retail-to-paid multiple', value: `${cruiseEconomicsSummary.roiStyle.retailToPaidMultiple.toFixed(2)}x` },
-                  { label: 'Winnings multiple vs paid', value: `${cruiseEconomicsSummary.roiStyle.winningsMultipleVsPaid.toFixed(2)}x` },
-                  { label: 'Net ROI on paid', value: formatPercentage(cruiseEconomicsSummary.roiStyle.netRoiOnPaid, 1) },
+                  { label: 'Cash ROI', value: `${cruiseEconomicsSummary.roiStyle.cashROI.toFixed(2)}x` },
+                  { label: 'Cruise value multiple', value: `${cruiseEconomicsSummary.roiStyle.cruiseValueMultiple.toFixed(2)}x` },
+                  { label: 'Comp coverage rate', value: formatPercentage(cruiseEconomicsSummary.roiStyle.compCoverageRate * 100, 2) },
+                  { label: 'Winnings multiple', value: `${cruiseEconomicsSummary.roiStyle.winningsMultiple.toFixed(2)}x` },
+                  { label: 'Value per hour', value: cruiseEconomicsSummary.roiStyle.valuePerHour > 0 ? formatCurrencyDetailed(cruiseEconomicsSummary.roiStyle.valuePerHour) : '—' },
                 ].map((item) => (
                   <View key={item.label} style={styles.economicsSummaryCard}>
                     <Text style={styles.economicsSummaryLabel}>{item.label}</Text>
@@ -1115,7 +1142,7 @@ export default function AnalyticsScreen() {
                     detail: cruiseEconomicsSummary.snapshots.bestCashCruise ? `Paid ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.bestCashCruise.paid)} • Winnings ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.bestCashCruise.winningsHome)}` : 'No data',
                   },
                   {
-                    label: 'Biggest comp-value cruise',
+                    label: 'Biggest cruise-value capture',
                     row: cruiseEconomicsSummary.snapshots.biggestCompValueCruise,
                     value: cruiseEconomicsSummary.snapshots.biggestCompValueCruise ? formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.biggestCompValueCruise.discount) : '—',
                     detail: cruiseEconomicsSummary.snapshots.biggestCompValueCruise ? `Retail ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.biggestCompValueCruise.retail)} • Paid ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.biggestCompValueCruise.paid)}` : 'No data',
@@ -1158,7 +1185,7 @@ export default function AnalyticsScreen() {
         <View style={styles.cleanCard}>
           <View style={styles.cleanCardHeader}>
             <PieChart size={16} color={COLORS.goldDark} />
-            <Text style={styles.cleanCardTitle}>Casino Stats</Text>
+            <Text style={styles.cleanCardTitle}>Annual Casino Summary</Text>
           </View>
           <View style={styles.compactMetricsGrid}>
             <View style={styles.compactMetric}>
@@ -1166,10 +1193,16 @@ export default function AnalyticsScreen() {
               <Text style={styles.compactMetricLabel}>Winnings Home</Text>
             </View>
             <View style={styles.compactMetric}>
-              <Text style={[styles.compactMetricValue, { color: cruiseEconomicsSummary.totals.totalNetCash >= 0 ? COLORS.success : COLORS.error }]}>
-                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalNetCash)}
+              <Text style={[styles.compactMetricValue, { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error }]}>
+                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
               </Text>
-              <Text style={styles.compactMetricLabel}>Net Cash</Text>
+              <Text style={styles.compactMetricLabel}>Cash Result</Text>
+            </View>
+            <View style={styles.compactMetric}>
+              <Text style={[styles.compactMetricValue, { color: cruiseEconomicsSummary.totals.totalEconomicValue >= 0 ? COLORS.success : COLORS.error }]}>
+                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}
+              </Text>
+              <Text style={styles.compactMetricLabel}>Total Econ</Text>
             </View>
             <View style={styles.compactMetric}>
               <Text style={styles.compactMetricValue}>{formatNumber(cruiseEconomicsSummary.totals.totalPoints)}</Text>
@@ -1178,7 +1211,7 @@ export default function AnalyticsScreen() {
           </View>
           {cruiseEconomicsSummary.totals.cruises > 0 && (
             <View style={styles.avgStatsRow}>
-              <Text style={styles.avgStatText}>Avg/Cruise: {formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise)} paid • {formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise)} winnings • {formatNumber(Math.round(cruiseEconomicsSummary.averages.pointsPerCruise))} pts</Text>
+              <Text style={styles.avgStatText}>Avg/Cruise: {formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise)} paid • {formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise)} winnings • {formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise)} cash result</Text>
             </View>
           )}
         </View>
@@ -1186,16 +1219,7 @@ export default function AnalyticsScreen() {
 
       <View style={styles.section}>
         <CasinoMetricsCard
-          completedCruises={bookedCruises.filter(c => {
-            if (c.completionState === 'completed' || c.status === 'completed') return true;
-            if (c.returnDate) {
-              const returnDate = new Date(c.returnDate);
-              return returnDate < new Date();
-            }
-            return false;
-          })}
-          currentPoints={currentPoints}
-          currentTier={clubRoyaleTier}
+          summary={cruiseEconomicsSummary}
           alwaysExpanded={true}
         />
       </View>
@@ -1723,10 +1747,10 @@ export default function AnalyticsScreen() {
       totalSessions,
       totalNights,
       totalCoinIn: casinoAnalytics.totalCoinIn,
-      totalWinLoss: casinoAnalytics.netResult,
+      totalWinLoss: realAnalytics.completedCashResult,
       totalRetailValue: realAnalytics.completedRetailValue,
       totalTaxesFees: realAnalytics.completedTaxesFees,
-      totalProfit: realAnalytics.completedProfit,
+      totalProfit: realAnalytics.completedEconomicValue,
       cruises: cruiseData,
     };
   }, [activeTab, bookedCruises, sessions, casinoAnalytics, realAnalytics]);
@@ -1757,19 +1781,20 @@ export default function AnalyticsScreen() {
       ? historicalCruiseData.totalSessions
       : (hasSessionData ? sessions.length : historicalCruiseData.totalSessions || Math.max(1, casinoAnalytics.completedCruisesCount * 2));
 
-    const totalProfit = realAnalytics.completedProfit;
+    const totalProfit = realAnalytics.completedEconomicValue;
     const totalHours = sessionAnalytics.totalPlayTimeMinutes / 60;
     const totalRetailValue = realAnalytics.completedRetailValue;
     const totalTaxesFees = realAnalytics.completedTaxesFees;
 
-    const sessionNetWinLoss = hasSessionData ? sessionAnalytics.netWinLoss : casinoAnalytics.netResult;
-    const totalWinLoss = isHistorical ? casinoAnalytics.netResult : sessionNetWinLoss;
+    const sessionNetWinLoss = hasSessionData ? sessionAnalytics.netWinLoss : realAnalytics.completedCashResult;
+    const totalWinLoss = isHistorical ? realAnalytics.completedCashResult : sessionNetWinLoss;
 
     const defaultAvgSessionMinutes = 90;
     const avgSessionLength = sessionAnalytics.avgSessionLength > 0 ? sessionAnalytics.avgSessionLength : defaultAvgSessionMinutes;
     const modeLabel = isHistorical ? 'historical' : (hasSessionData ? 'per session' : 'per session (est.)');
     const historicalTotalPoints = casinoAnalytics.totalPointsEarned;
     const completedCruiseCount = casinoAnalytics.completedCruisesCount;
+    const avgCashResultPerCruise = completedCruiseCount > 0 ? realAnalytics.completedCashResult / completedCruiseCount : 0;
     const divisorLabel = isHistorical
       ? `${historicalCruiseData.totalSessions} sessions across ${completedCruiseCount} cruises`
       : (hasSessionData ? `${sessions.length} tracked sessions` : `${totalSessions} est. sessions from ${completedCruiseCount} cruises`);
@@ -1845,7 +1870,7 @@ export default function AnalyticsScreen() {
     const totalHistoricalHours = isHistorical
       ? (historicalCruiseData.totalSessions * avgSessionLength) / 60
       : (totalHours > 0 ? totalHours : (totalSessions * avgSessionLength) / 60);
-    const valuePerHourPlayed = totalHistoricalHours > 0 ? totalRetailValue / totalHistoricalHours : 0;
+    const valuePerHourPlayed = totalHistoricalHours > 0 ? totalProfit / totalHistoricalHours : 0;
     
     const recentProfit = sessions.slice(-10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
     const earlyProfit = sessions.slice(0, 10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
@@ -1897,7 +1922,7 @@ export default function AnalyticsScreen() {
       },
       {
         id: 5,
-        label: isHistorical ? 'Profit (historical avg)' : 'Profit per session',
+        label: isHistorical ? 'Total Econ (historical avg)' : 'Total Econ per session',
         value: formatCurrency(profitPerUnit),
         description: `${formatCurrency(totalProfit)} ÷ ${totalSessions} ${isHistorical ? 'historical' : ''} sessions`,
         color: profitPerUnit >= 0 ? COLORS.success : COLORS.error,
@@ -1915,7 +1940,7 @@ export default function AnalyticsScreen() {
         id: 7,
         label: 'Press efficiency ratio',
         value: pressEfficiencyRatio.toFixed(2) + 'x',
-        description: 'Profit during press spins ÷ press exposure',
+        description: 'Cash result during press spins ÷ press exposure',
         color: COLORS.success,
         icon: PieChart,
       },
@@ -1931,7 +1956,7 @@ export default function AnalyticsScreen() {
         id: 9,
         label: isHistorical ? 'Value/hr (historical)' : 'Value per hour played',
         value: formatCurrency(valuePerHourPlayed),
-        description: isHistorical ? `Retail value ÷ est. ${totalHistoricalHours.toFixed(0)} total hours` : 'Total value extracted ÷ total hours',
+        description: isHistorical ? `Total economic value ÷ est. ${totalHistoricalHours.toFixed(0)} total hours` : 'Total economic value ÷ total hours',
         color: COLORS.goldDark,
         icon: DollarSign,
       },
@@ -1956,10 +1981,10 @@ export default function AnalyticsScreen() {
         },
         {
           id: 12,
-          label: 'Avg Win/Loss / Cruise',
-          value: `${casinoAnalytics.avgWinLossPerCruise >= 0 ? '+' : ''}${formatCurrency(casinoAnalytics.avgWinLossPerCruise)}`,
+          label: 'Avg Cash Result / Cruise',
+          value: `${avgCashResultPerCruise >= 0 ? '+' : ''}${formatCurrency(avgCashResultPerCruise)}`,
           description: `${formatCurrency(totalWinLoss)} ÷ ${completedCruiseCount} completed cruises`,
-          color: casinoAnalytics.avgWinLossPerCruise >= 0 ? COLORS.success : COLORS.error,
+          color: avgCashResultPerCruise >= 0 ? COLORS.success : COLORS.error,
           icon: TrendingUp,
         },
       ] : []),
@@ -2016,7 +2041,7 @@ export default function AnalyticsScreen() {
           {calcsMode === 'historical' && casinoAnalytics.completedCruisesCount > 0 && (
             <View style={styles.calcsModeSummary}>
               <Text style={styles.calcsModeSummaryText}>
-                Based on {formatNumber(casinoAnalytics.totalPointsEarned)} pts ({formatCurrency(casinoAnalytics.totalCoinIn)} coin-in) | {casinoAnalytics.netResult >= 0 ? '+' : ''}{formatCurrency(casinoAnalytics.netResult)} net | {formatCurrency(realAnalytics.completedRetailValue)} retail value | {casinoAnalytics.completedCruisesCount} cruises
+                Based on {formatNumber(casinoAnalytics.totalPointsEarned)} pts ({formatCurrency(casinoAnalytics.totalCoinIn)} coin-in) | {realAnalytics.completedCashResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedCashResult)} cash result | {formatCurrency(realAnalytics.completedRetailValue)} retail value | {casinoAnalytics.completedCruisesCount} cruises
               </Text>
             </View>
           )}
@@ -2070,7 +2095,9 @@ export default function AnalyticsScreen() {
           comparisonROI={baselineSimulation.roiProjection.projectedROI}
           totalSpent={realAnalytics.totalOutOfPocket}
           totalRetailValue={realAnalytics.totalRetailValue}
-          totalPointsEarned={currentPoints}
+          totalCruiseValueCaptured={realAnalytics.totalCruiseValueCaptured}
+          totalCashResult={realAnalytics.completedCashResult}
+          totalEconomicValue={realAnalytics.completedEconomicValue}
         />
       </View>
 
@@ -2079,8 +2106,9 @@ export default function AnalyticsScreen() {
           riskAnalysis={baselineSimulation.riskAnalysis}
           totalSpent={realAnalytics.completedOutOfPocket}
           totalRetailValue={realAnalytics.completedRetailValue}
-          totalSavings={realAnalytics.completedProfit}
-          casinoNetResult={realAnalytics.completedNetCasinoResult || 0}
+          cruiseValueCaptured={realAnalytics.completedCruiseValueCaptured}
+          cashResult={realAnalytics.completedCashResult || 0}
+          totalEconomicValue={realAnalytics.completedEconomicValue}
           totalCruises={realAnalytics.completedCruisesCount}
           pointsEarned={currentPoints}
         />

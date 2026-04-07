@@ -40,6 +40,7 @@ export interface Cruise {
   destination: string;
   nights: number;
   category?: string;
+  brand?: string;
   price?: number;
   pricePerNight?: number;
   cabinType?: CabinCategory | 'Interior' | 'Oceanview' | 'Balcony' | 'Suite' | string;
@@ -177,6 +178,24 @@ export interface BookedCruise extends Cruise {
   nextCruiseCertificateValue?: number;
   nextCruiseCertificateId?: string;
   singleOccupancy?: boolean;
+  amountPaid?: number;
+  taxesFeesEstimate?: number;
+  nextCruiseOffsetApplied?: boolean;
+  netEffectivePaid?: number;
+  winningsBroughtHome?: number;
+  casinoChargesRoomBilled?: number;
+  coinIn?: number;
+  houseEdge?: number;
+  pointsEarned?: number;
+  pointDollarValue?: number;
+  cashResult?: number;
+  cruiseValueCaptured?: number;
+  totalEconomicValue?: number;
+  netTheoretical?: number;
+  coinInPerHour?: number;
+  pointsPerHour?: number;
+  valuePerHour?: number;
+  calculationConfidence?: 'actual' | 'estimated' | 'mixed';
 }
 
 export type OfferClassification = 

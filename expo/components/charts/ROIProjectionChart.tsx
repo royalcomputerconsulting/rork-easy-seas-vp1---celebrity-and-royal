@@ -1,257 +1,179 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TrendingUp, DollarSign, PiggyBank, Percent, ArrowUpRight, ArrowDownRight, CreditCard, Wallet } from 'lucide-react-native';
+import { TrendingUp, CreditCard, Gem, DollarSign, Wallet } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
-import { ROIProjection } from '@/lib/whatIfSimulator';
+import type { ROIProjection } from '@/lib/whatIfSimulator';
 import { formatCurrency, formatPercentage } from '@/lib/format';
-import { DOLLARS_PER_POINT } from '@/types/models';
-
-
 
 interface ROIProjectionChartProps {
-  roiProjection: ROIProjection;
+  roiProjection?: ROIProjection;
   comparisonROI?: number;
   title?: string;
   totalSpent?: number;
   totalRetailValue?: number;
-  totalPointsEarned?: number;
+  totalCruiseValueCaptured?: number;
+  totalCashResult?: number;
+  totalEconomicValue?: number;
 }
 
 export function ROIProjectionChart({
-  roiProjection,
-  comparisonROI,
-  title = 'Spending vs Savings Analysis',
-  totalSpent,
-  totalRetailValue,
-  totalPointsEarned,
+  title = 'Annual Value Capture',
+  totalSpent = 0,
+  totalRetailValue = 0,
+  totalCruiseValueCaptured = 0,
+  totalCashResult = 0,
+  totalEconomicValue = 0,
 }: ROIProjectionChartProps) {
-  const actualSpent = totalSpent ?? roiProjection.totalInvestment;
-  const actualRetailValue = totalRetailValue ?? roiProjection.projectedValue;
-  const actualSavings = Math.max(0, actualRetailValue - actualSpent);
-  const pointsValue = (totalPointsEarned ?? 0) * DOLLARS_PER_POINT;
-  const totalValueWithPoints = actualRetailValue + pointsValue;
-  const roiTrend = useMemo(() => {
-    if (comparisonROI === undefined) return 'neutral';
-    if (roiProjection.projectedROI > comparisonROI) return 'up';
-    if (roiProjection.projectedROI < comparisonROI) return 'down';
-    return 'neutral';
-  }, [roiProjection.projectedROI, comparisonROI]);
+  const effectiveWinnings = useMemo(() => {
+    return totalEconomicValue - totalCruiseValueCaptured;
+  }, [totalCruiseValueCaptured, totalEconomicValue]);
 
-  const roiColor = useMemo(() => {
-    if (roiProjection.projectedROI >= 50) return COLORS.success;
-    if (roiProjection.projectedROI >= 20) return COLORS.warning;
-    if (roiProjection.projectedROI >= 0) return COLORS.aquaAccent;
-    return COLORS.error;
-  }, [roiProjection.projectedROI]);
+  const valueMultiple = useMemo(() => {
+    if (totalSpent <= 0) {
+      return 0;
+    }
 
-  const barData = useMemo(() => {
-    const maxValue = Math.max(
-      actualSpent,
-      totalValueWithPoints,
-      1
-    );
-    
+    return totalEconomicValue / totalSpent;
+  }, [totalEconomicValue, totalSpent]);
+
+  const chartBars = useMemo(() => {
+    const maxValue = Math.max(totalSpent, totalCruiseValueCaptured, totalEconomicValue, 1);
+
     return {
-      spentWidth: (actualSpent / maxValue) * 100,
-      retailWidth: (actualRetailValue / maxValue) * 100,
-      pointsValueWidth: (pointsValue / maxValue) * 100,
-      savingsWidth: (actualSavings / maxValue) * 100,
+      paidWidth: (totalSpent / maxValue) * 100,
+      cruiseValueWidth: (totalCruiseValueCaptured / maxValue) * 100,
+      economicWidth: (totalEconomicValue / maxValue) * 100,
     };
-  }, [actualSpent, actualRetailValue, pointsValue, actualSavings, totalValueWithPoints]);
+  }, [totalCruiseValueCaptured, totalEconomicValue, totalSpent]);
 
-  const valueBreakdown = useMemo(() => {
-    const total = totalValueWithPoints;
-    if (total === 0) return { spent: 50, savings: 30, points: 20 };
-    
+  const stackBreakdown = useMemo(() => {
+    const total = Math.max(totalEconomicValue, 1);
+    const cruiseShare = Math.max(0, (totalCruiseValueCaptured / total) * 100);
+    const cashShare = Math.max(0, (Math.max(totalCashResult, 0) / total) * 100);
+
     return {
-      spent: Math.min(100, (actualSpent / total) * 100),
-      savings: Math.min(100 - (actualSpent / total) * 100, (actualSavings / total) * 100),
-      points: Math.min(100, (pointsValue / total) * 100),
+      cruiseShare: Math.min(100, cruiseShare),
+      cashShare: Math.min(100 - cruiseShare, cashShare),
+      remainder: Math.max(0, 100 - cruiseShare - cashShare),
     };
-  }, [actualSpent, actualSavings, pointsValue, totalValueWithPoints]);
+  }, [totalCashResult, totalCruiseValueCaptured, totalEconomicValue]);
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={[styles.headerIcon, { backgroundColor: 'rgba(77, 208, 225, 0.15)' }]}>
+          <View style={styles.headerIcon}>
             <TrendingUp size={18} color={COLORS.aquaAccent} />
           </View>
           <View>
             <Text style={styles.title}>{title}</Text>
-            <Text style={styles.subtitle}>Compare spending to value received</Text>
+            <Text style={styles.subtitle}>Cash result and cruise value are separated from gaming activity</Text>
           </View>
         </View>
-        <View style={[styles.roiBadge, { backgroundColor: `${roiColor}20` }]}>
-          {roiTrend === 'up' && <ArrowUpRight size={12} color={COLORS.success} />}
-          {roiTrend === 'down' && <ArrowDownRight size={12} color={COLORS.error} />}
-          <Text style={[styles.roiValue, { color: roiColor }]}>
-            {formatPercentage(roiProjection.projectedROI, 1)} ROI
-          </Text>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{totalSpent > 0 ? `${valueMultiple.toFixed(2)}x` : '—'}</Text>
+          <Text style={styles.badgeSubtext}>value / paid</Text>
         </View>
       </View>
 
       <View style={styles.content}>
-
         <View style={styles.chartSection}>
-          <View style={styles.barChartContainer}>
-            <View style={styles.barRow}>
-              <View style={styles.barLabelContainer}>
-                <CreditCard size={12} color={COLORS.error} />
-                <Text style={styles.barLabel}>Spent</Text>
-              </View>
-              <View style={styles.barWrapper}>
-                <View
-                  style={[
-                    styles.bar,
-                    styles.spentBar,
-                    { width: `${barData.spentWidth}%` },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.barValue, { color: COLORS.error }]}>{formatCurrency(actualSpent)}</Text>
+          <View style={styles.barRow}>
+            <View style={styles.barLabelContainer}>
+              <CreditCard size={12} color={COLORS.error} />
+              <Text style={styles.barLabel}>Amount Paid</Text>
             </View>
-            
-            <View style={styles.barRow}>
-              <View style={styles.barLabelContainer}>
-                <DollarSign size={12} color={COLORS.aquaAccent} />
-                <Text style={styles.barLabel}>Retail</Text>
-              </View>
-              <View style={styles.barWrapper}>
-                <View
-                  style={[
-                    styles.bar,
-                    styles.retailBar,
-                    { width: `${barData.retailWidth}%` },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.barValue, { color: COLORS.aquaAccent }]}>
-                {formatCurrency(actualRetailValue)}
-              </Text>
+            <View style={styles.barWrapper}>
+              <View style={[styles.bar, styles.paidBar, { width: `${chartBars.paidWidth}%` }]} />
             </View>
-
-            <View style={styles.barRow}>
-              <View style={styles.barLabelContainer}>
-                <Wallet size={12} color={COLORS.success} />
-                <Text style={styles.barLabel}>Saved</Text>
-              </View>
-              <View style={styles.barWrapper}>
-                <LinearGradient
-                  colors={[COLORS.success, COLORS.aquaAccent]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[
-                    styles.bar,
-                    { width: `${barData.savingsWidth}%`, borderRadius: 4 },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.barValue, { color: COLORS.success }]}>
-                {formatCurrency(actualSavings)}
-              </Text>
-            </View>
+            <Text style={[styles.barValue, { color: COLORS.error }]}>{formatCurrency(totalSpent)}</Text>
           </View>
 
-          <View style={styles.valueStackContainer}>
-            <Text style={styles.stackLabel}>Value Breakdown</Text>
-            <View style={styles.valueStack}>
-              <View
-                style={[
-                  styles.stackSegment,
-                  styles.stackSpent,
-                  { width: `${valueBreakdown.spent}%` },
-                ]}
-              />
-              <View
-                style={[
-                  styles.stackSegment,
-                  styles.stackSavings,
-                  { width: `${valueBreakdown.savings}%` },
-                ]}
-              />
-              {pointsValue > 0 && (
-                <View
-                  style={[
-                    styles.stackSegment,
-                    styles.stackPoints,
-                    { width: `${valueBreakdown.points}%` },
-                  ]}
-                />
-              )}
+          <View style={styles.barRow}>
+            <View style={styles.barLabelContainer}>
+              <Gem size={12} color={COLORS.success} />
+              <Text style={styles.barLabel}>Cruise Value Captured</Text>
             </View>
-            <View style={styles.stackLegend}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: COLORS.error }]} />
-                <Text style={styles.legendText}>Out-of-Pocket</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: COLORS.success }]} />
-                <Text style={styles.legendText}>Savings</Text>
-              </View>
-              {pointsValue > 0 && (
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: COLORS.goldAccent }]} />
-                  <Text style={styles.legendText}>Points Value</Text>
-                </View>
-              )}
+            <View style={styles.barWrapper}>
+              <LinearGradient
+                colors={[COLORS.success, COLORS.aquaAccent]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.bar, { width: `${chartBars.cruiseValueWidth}%` }]}
+              />
+            </View>
+            <Text style={[styles.barValue, { color: COLORS.success }]}>{formatCurrency(totalCruiseValueCaptured)}</Text>
+          </View>
+
+          <View style={styles.barRow}>
+            <View style={styles.barLabelContainer}>
+              <Wallet size={12} color={COLORS.goldAccent} />
+              <Text style={styles.barLabel}>Total Economic Value</Text>
+            </View>
+            <View style={styles.barWrapper}>
+              <LinearGradient
+                colors={[COLORS.goldAccent, COLORS.aquaAccent]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.bar, { width: `${chartBars.economicWidth}%` }]}
+              />
+            </View>
+            <Text style={[styles.barValue, { color: COLORS.goldAccent }]}>{formatCurrency(totalEconomicValue)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.stackSection}>
+          <Text style={styles.stackTitle}>Economic composition</Text>
+          <View style={styles.stackBar}>
+            <View style={[styles.stackSegment, styles.stackCruiseValue, { width: `${stackBreakdown.cruiseShare}%` }]} />
+            <View style={[styles.stackSegment, styles.stackCash, { width: `${stackBreakdown.cashShare}%` }]} />
+            <View style={[styles.stackSegment, styles.stackRemainder, { width: `${stackBreakdown.remainder}%` }]} />
+          </View>
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: COLORS.success }]} />
+              <Text style={styles.legendText}>Cruise value</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: COLORS.goldAccent }]} />
+              <Text style={styles.legendText}>Cash result</Text>
             </View>
           </View>
         </View>
 
         <View style={styles.metricsGrid}>
           <View style={styles.metricCard}>
-            <DollarSign size={16} color={COLORS.success} />
-            <Text style={[styles.metricValue, { color: COLORS.success }]}>{formatCurrency(actualSavings)}</Text>
-            <Text style={styles.metricLabel}>Total Saved</Text>
+            <DollarSign size={16} color={COLORS.aquaAccent} />
+            <Text style={[styles.metricValue, { color: COLORS.aquaAccent }]}>{formatCurrency(totalRetailValue)}</Text>
+            <Text style={styles.metricLabel}>Retail Value</Text>
           </View>
           <View style={styles.metricCard}>
-            <PiggyBank size={16} color={COLORS.goldAccent} />
-            <Text style={[styles.metricValue, { color: COLORS.goldAccent }]}>{formatCurrency(pointsValue)}</Text>
-            <Text style={styles.metricLabel}>Points @ $5/pt</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Percent size={16} color={roiColor} />
-            <Text style={[styles.metricValue, { color: roiColor }]}>
-              {actualSpent > 0 ? formatPercentage((actualSavings / actualSpent) * 100, 0) : '0%'}
+            <Wallet size={16} color={effectiveWinnings >= 0 ? COLORS.success : COLORS.error} />
+            <Text style={[styles.metricValue, { color: effectiveWinnings >= 0 ? COLORS.success : COLORS.error }]}>
+              {effectiveWinnings >= 0 ? '+' : ''}{formatCurrency(effectiveWinnings)}
             </Text>
-            <Text style={styles.metricLabel}>Savings Rate</Text>
+            <Text style={styles.metricLabel}>Winnings Home</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <TrendingUp size={16} color={totalCashResult >= 0 ? COLORS.success : COLORS.error} />
+            <Text style={[styles.metricValue, { color: totalCashResult >= 0 ? COLORS.success : COLORS.error }]}>
+              {totalCashResult >= 0 ? '+' : ''}{formatCurrency(totalCashResult)}
+            </Text>
+            <Text style={styles.metricLabel}>Cash Result</Text>
           </View>
         </View>
 
-        {actualSavings > 0 && (
-          <View style={styles.summaryInfo}>
-            <Text style={styles.summaryText}>
-              You have saved{' '}
-              <Text style={{ fontWeight: '700' as const, color: COLORS.success }}>
-                {formatCurrency(actualSavings)}
-              </Text>
-              <Text>{' '}off retail prices.</Text>
-              {pointsValue > 0 ? (
-                <Text>
-                  {' '}Your {totalPointsEarned?.toLocaleString() ?? 0} points are worth{' '}
-                  <Text style={{ fontWeight: '700' as const, color: COLORS.goldAccent }}>
-                    {formatCurrency(pointsValue)}
-                  </Text>
-                  <Text>{' '}at $5/point machine play.</Text>
-                </Text>
-              ) : null}
+        <View style={styles.summaryInfo}>
+          <Text style={styles.summaryText}>
+            Cash result is shown separately from cruise value, and Coin-In is excluded from every value bar on this chart.
+            {' '}
+            <Text style={styles.summaryHighlight}>
+              {totalSpent > 0 ? formatPercentage((totalCashResult / totalSpent) * 100, 1) : '0.0%'}
             </Text>
-          </View>
-        )}
-
-        {actualSavings <= 0 && actualSpent > 0 && (
-          <View style={[styles.summaryInfo, { borderLeftColor: COLORS.warning, backgroundColor: '#FEF3C7' }]}>
-            <Text style={styles.summaryText}>
-              You paid{' '}
-              <Text style={{ fontWeight: '700' as const, color: COLORS.error }}>
-                {formatCurrency(Math.abs(actualSavings))}
-              </Text>
-              {' '}more than retail value. Consider looking for better offers.
-            </Text>
-          </View>
-        )}
+            {' '}cash ROI on paid spend.
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -260,213 +182,186 @@ export function ROIProjectionChart({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.xl,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: COLORS.aquaAccent,
-    ...SHADOW.md,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: CLEAN_THEME.border.light,
+    ...SHADOW.sm,
   },
   header: {
-    backgroundColor: '#E0F7FA',
-    padding: SPACING.md,
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.aquaAccent,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+    gap: SPACING.md,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.md,
     flex: 1,
-    flexShrink: 1,
   },
   headerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(77, 208, 225, 0.15)',
   },
   title: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#006064',
+    color: COLORS.navyDeep,
   },
   subtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#006064',
-    opacity: 0.8,
+    color: CLEAN_THEME.text.secondary,
+    marginTop: 2,
+  },
+  badge: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: 'rgba(77, 208, 225, 0.12)',
+    alignItems: 'center',
+  },
+  badgeText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.aquaAccent,
+  },
+  badgeSubtext: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: CLEAN_THEME.text.secondary,
+    marginTop: 2,
   },
   content: {
-    padding: SPACING.md,
-  },
-  roiBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.round,
-    flexShrink: 0,
-  },
-  roiValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    gap: SPACING.lg,
   },
   chartSection: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  barChartContainer: {
     gap: SPACING.md,
-    marginBottom: SPACING.md,
   },
   barRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
   },
+  barLabelContainer: {
+    width: 124,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   barLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#000000',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   barWrapper: {
     flex: 1,
-    height: 20,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 4,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#E5EEF8',
     overflow: 'hidden',
   },
   bar: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 999,
   },
-  spentBar: {
-    backgroundColor: 'rgba(239, 68, 68, 0.6)',
-  },
-  retailBar: {
-    backgroundColor: 'rgba(77, 208, 225, 0.6)',
-  },
-  barLabelContainer: {
-    width: 65,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  paidBar: {
+    backgroundColor: COLORS.error,
   },
   barValue: {
-    width: 70,
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    width: 88,
     textAlign: 'right',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
-  valueStackContainer: {
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+  stackSection: {
+    gap: SPACING.sm,
   },
-  stackLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#000000',
-    marginBottom: SPACING.xs,
+  stackTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
-  valueStack: {
-    flexDirection: 'row',
+  stackBar: {
     height: 12,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 6,
+    borderRadius: 999,
     overflow: 'hidden',
+    flexDirection: 'row',
+    backgroundColor: '#E5EEF8',
   },
   stackSegment: {
     height: '100%',
   },
-  stackSpent: {
-    backgroundColor: 'rgba(239, 68, 68, 0.5)',
-  },
-  stackSavings: {
+  stackCruiseValue: {
     backgroundColor: COLORS.success,
   },
-  stackPoints: {
+  stackCash: {
     backgroundColor: COLORS.goldAccent,
   },
-  stackLegend: {
+  stackRemainder: {
+    backgroundColor: '#D7E4F4',
+  },
+  legendRow: {
     flexDirection: 'row',
     gap: SPACING.md,
-    marginTop: SPACING.xs,
+    flexWrap: 'wrap',
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   legendDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: 999,
   },
   legendText: {
-    fontSize: 10,
-    color: '#000000',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: CLEAN_THEME.text.secondary,
   },
   metricsGrid: {
     flexDirection: 'row',
     gap: SPACING.sm,
-    marginBottom: SPACING.sm,
   },
   metricCard: {
     flex: 1,
-    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#F8FBFF',
     padding: SPACING.md,
-    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5EEF8',
+    alignItems: 'center',
+    gap: 6,
   },
   metricValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
-    marginTop: 4,
+    textAlign: 'center',
   },
   metricLabel: {
-    fontSize: 9,
-    color: CLEAN_THEME.text.secondary,
-    marginTop: 2,
-  },
-  riskAdjustedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  riskAdjustedLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: CLEAN_THEME.text.secondary,
-  },
-  riskAdjustedValue: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textAlign: 'center',
   },
   summaryInfo: {
-    backgroundColor: '#F0FDF4',
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.sm,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.success,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#F8FBFF',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.aquaAccent,
   },
   summaryText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#000000',
-    lineHeight: 18,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    lineHeight: 20,
+  },
+  summaryHighlight: {
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.success,
   },
 });
