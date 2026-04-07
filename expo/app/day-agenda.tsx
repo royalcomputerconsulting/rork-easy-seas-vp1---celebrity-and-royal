@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,6 +31,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { DailyLuckSection } from '@/components/DailyLuckSection';
 import { SailingWeatherCard } from '@/components/SailingWeatherCard';
+import { useSailingWeather } from '@/state/SailingWeatherProvider';
 
 const EVENT_COLORS = {
   cruise: '#3B82F6',
@@ -231,6 +232,7 @@ export default function DayAgendaScreen() {
   const { currentUser } = useUser();
   const coreData = useCoreData();
   const { bookedCruises } = coreData;
+  const { isHydrated: isWeatherHydrated, prefetchCruiseForecastWindow } = useSailingWeather();
 
   const playingHours: PlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
   const { getSessionsForDate, getDailySummary, addSession, removeSession } = useCasinoSessions();
@@ -814,6 +816,40 @@ export default function DayAgendaScreen() {
     end.setDate(end.getDate() + 1);
     return { start, end };
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (!isWeatherHydrated || mergedCruiseBookings.length === 0) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const prefetchForecasts = async () => {
+      console.log('[DayAgenda] Prefetching sailing weather forecasts for booked cruises', {
+        date: dateStr,
+        cruises: mergedCruiseBookings.map((cruise) => ({
+          id: cruise.id,
+          shipName: cruise.shipName,
+        })),
+      });
+
+      for (const cruise of mergedCruiseBookings) {
+        if (isCancelled) {
+          return;
+        }
+
+        await prefetchCruiseForecastWindow(cruise, {
+          anchorDate: selectedDate,
+        });
+      }
+    };
+
+    void prefetchForecasts();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [dateStr, isWeatherHydrated, mergedCruiseBookings, prefetchCruiseForecastWindow, selectedDate]);
 
   const dayScheduleData = useMemo(() => {
     const scheduleBlocks: DayScheduleBlockInput[] = [];
@@ -1413,6 +1449,9 @@ export default function DayAgendaScreen() {
           {mergedCruiseBookings.length > 0 && (
             <View style={styles.sectionContainer}>
               <Text style={styles.sectionTitle}>Sailing Weather</Text>
+              <Text style={styles.sectionDescription}>
+                Full-day weather, wind, and sea-state snapshots with offline saving for spotty-at-sea service.
+              </Text>
               <View style={styles.weatherCardsStack}>
                 {mergedCruiseBookings.map((cruise) => (
                   <SailingWeatherCard
@@ -1617,6 +1656,12 @@ const styles = StyleSheet.create({
   },
   weatherCardsStack: {
     gap: SPACING.md,
+  },
+  sectionDescription: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255, 255, 255, 0.76)',
+    lineHeight: 20,
+    marginBottom: SPACING.sm,
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,

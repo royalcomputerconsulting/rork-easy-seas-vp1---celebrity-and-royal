@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
-import { CloudSun, MapPin, Waves, Wind } from 'lucide-react-native';
+import { AlertTriangle, CloudSun, MapPin, Waves, Wind } from 'lucide-react-native';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useSailingWeather, type SailingWeatherCruiseInput, type SailingWeatherForecast } from '@/state/SailingWeatherProvider';
 
@@ -32,6 +32,15 @@ function formatMetricValue(value: number | null, suffix: string, decimals = 0): 
   return `${value.toFixed(decimals)}${suffix}`;
 }
 
+function formatDirectionLabel(value: number | null): string {
+  if (value === null || Number.isNaN(value)) return '—';
+
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const normalized = ((value % 360) + 360) % 360;
+  const index = Math.round(normalized / 45) % directions.length;
+  return directions[index] ?? '—';
+}
+
 function getSourceMeta(forecast: SailingWeatherForecast | null): { label: string; style: object } {
   if (!forecast) {
     return {
@@ -57,6 +66,30 @@ function getSourceMeta(forecast: SailingWeatherForecast | null): { label: string
   return {
     label: 'Cached',
     style: styles.statusCached,
+  };
+}
+
+function getAdvisoryMeta(severity: 'info' | 'watch' | 'warning'): { accent: string; backgroundColor: string; borderColor: string } {
+  if (severity === 'warning') {
+    return {
+      accent: '#FCA5A5',
+      backgroundColor: 'rgba(239, 68, 68, 0.16)',
+      borderColor: 'rgba(252, 165, 165, 0.32)',
+    };
+  }
+
+  if (severity === 'watch') {
+    return {
+      accent: '#FCD34D',
+      backgroundColor: 'rgba(245, 158, 11, 0.16)',
+      borderColor: 'rgba(252, 211, 77, 0.30)',
+    };
+  }
+
+  return {
+    accent: '#93C5FD',
+    backgroundColor: 'rgba(59, 130, 246, 0.14)',
+    borderColor: 'rgba(147, 197, 253, 0.28)',
   };
 }
 
@@ -180,6 +213,30 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
         </View>
       </View>
 
+      <View style={styles.detailGrid}>
+        <View style={styles.detailChip} testID={`sailing-weather-gusts-${cruise.id}`}>
+          <Text style={styles.detailChipLabel}>Gusts</Text>
+          <Text style={styles.detailChipValue}>{formatMetricValue(forecast.metrics.maxWindGustMph, ' mph')}</Text>
+        </View>
+        <View style={styles.detailChip} testID={`sailing-weather-swell-${cruise.id}`}>
+          <Text style={styles.detailChipLabel}>Swell</Text>
+          <Text style={styles.detailChipValue}>{formatMetricValue(forecast.metrics.maxSwellHeightFt, ' ft', 1)}</Text>
+        </View>
+        <View style={styles.detailChip} testID={`sailing-weather-direction-${cruise.id}`}>
+          <Text style={styles.detailChipLabel}>Wind Dir</Text>
+          <Text style={styles.detailChipValue}>{formatDirectionLabel(forecast.metrics.dominantWindDirectionDegrees)}</Text>
+        </View>
+        <View style={styles.detailChip} testID={`sailing-weather-rain-${cruise.id}`}>
+          <Text style={styles.detailChipLabel}>Rain Risk</Text>
+          <Text style={styles.detailChipValue}>{formatMetricValue(forecast.metrics.precipitationChance, '%')}</Text>
+        </View>
+      </View>
+
+      <View style={styles.snapshotHeaderRow}>
+        <Text style={styles.snapshotSectionTitle}>4 daily snapshots</Text>
+        <Text style={styles.snapshotSectionHint}>Morning · Midday · Afternoon · Evening</Text>
+      </View>
+
       <View style={styles.snapshotGrid}>
         {forecast.snapshots.map((snapshot) => (
           <View key={`${snapshot.label}-${snapshot.isoTime || 'empty'}`} style={styles.snapshotCard}>
@@ -191,12 +248,44 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
         ))}
       </View>
 
+      {forecast.advisories.length > 0 ? (
+        <View style={styles.advisoriesSection} testID={`sailing-weather-advisories-${cruise.id}`}>
+          <Text style={styles.advisoriesTitle}>Marine watchouts</Text>
+          {forecast.advisories.map((advisory) => {
+            const advisoryMeta = getAdvisoryMeta(advisory.severity);
+            return (
+              <View
+                key={advisory.id}
+                style={[
+                  styles.advisoryCard,
+                  {
+                    backgroundColor: advisoryMeta.backgroundColor,
+                    borderColor: advisoryMeta.borderColor,
+                  },
+                ]}
+              >
+                <View style={[styles.advisoryIconBadge, { backgroundColor: `${advisoryMeta.accent}22` }]}>
+                  <AlertTriangle size={13} color={advisoryMeta.accent} />
+                </View>
+                <View style={styles.advisoryTextWrap}>
+                  <Text style={[styles.advisoryTitle, { color: advisoryMeta.accent }]}>{advisory.title}</Text>
+                  <Text style={styles.advisoryDetail}>{advisory.detail}</Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+
       <View style={styles.footerRow}>
         <Text style={styles.footerText}>
           Updated {formatUpdatedTime(forecast.updatedAt)} · {forecast.timezone}
         </Text>
         <Text style={styles.footerText}>Updates up to 4x/day</Text>
       </View>
+      <Text style={styles.offlineHint}>
+        Saved locally for this sailing day, so you can still read the forecast when service gets patchy offshore.
+      </Text>
     </LinearGradient>
   );
 }
@@ -296,6 +385,51 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.white,
   },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  detailChip: {
+    width: '48%',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    gap: 4,
+  },
+  detailChipLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(231, 248, 255, 0.70)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  detailChipValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  snapshotHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  snapshotSectionTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#E7F8FF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  snapshotSectionHint: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(231, 248, 255, 0.68)',
+  },
   snapshotGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -326,6 +460,45 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: '#D9F3FF',
   },
+  advisoriesSection: {
+    gap: SPACING.sm,
+  },
+  advisoriesTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#E7F8FF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  advisoryCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    borderWidth: 1,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  advisoryIconBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  advisoryTextWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  advisoryTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  advisoryDetail: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(231, 248, 255, 0.80)',
+    lineHeight: 18,
+  },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -335,6 +508,11 @@ const styles = StyleSheet.create({
   footerText: {
     flex: 1,
     fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(231, 248, 255, 0.66)',
+  },
+  offlineHint: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 18,
     color: 'rgba(231, 248, 255, 0.66)',
   },
   statusPill: {

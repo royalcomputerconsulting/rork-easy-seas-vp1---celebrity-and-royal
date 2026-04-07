@@ -8,6 +8,10 @@ import { useAuth } from './AuthProvider';
 const BASE_STORAGE_KEY = '@easy_seas_sailing_weather_cache_v1';
 const CACHE_REFRESH_MS = 1000 * 60 * 60 * 6;
 const CACHE_RETENTION_MS = 1000 * 60 * 60 * 24 * 10;
+const FORECAST_PREFETCH_HORIZON_DAYS = 15;
+const FORECAST_PREFETCH_START_SOON_DAYS = 3;
+const FORECAST_PREFETCH_WINDOW_DAYS = 2;
+const FORECAST_PREFETCH_MAX_CRUISE_DAYS = 8;
 
 const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; label: string }> = {
   miami: { latitude: 25.7781, longitude: -80.1794, label: 'Miami' },
@@ -23,6 +27,24 @@ const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; la
   vancouver: { latitude: 49.2827, longitude: -123.1207, label: 'Vancouver' },
   'los angeles': { latitude: 33.7405, longitude: -118.2775, label: 'Los Angeles' },
   'long beach': { latitude: 33.7683, longitude: -118.1956, label: 'Long Beach' },
+  'san pedro': { latitude: 33.7361, longitude: -118.2923, label: 'San Pedro' },
+  'san diego': { latitude: 32.7157, longitude: -117.1611, label: 'San Diego' },
+  'catalina island': { latitude: 33.3879, longitude: -118.4163, label: 'Catalina Island' },
+  avalon: { latitude: 33.3428, longitude: -118.3278, label: 'Avalon' },
+  ensenada: { latitude: 31.8667, longitude: -116.6167, label: 'Ensenada' },
+  'ensenada mexico': { latitude: 31.8667, longitude: -116.6167, label: 'Ensenada' },
+  'cabo san lucas': { latitude: 22.8905, longitude: -109.9167, label: 'Cabo San Lucas' },
+  cabo: { latitude: 22.8905, longitude: -109.9167, label: 'Cabo San Lucas' },
+  mazatlan: { latitude: 23.2494, longitude: -106.4111, label: 'Mazatlán' },
+  'puerto vallarta': { latitude: 20.6534, longitude: -105.2253, label: 'Puerto Vallarta' },
+  'la paz': { latitude: 24.1426, longitude: -110.3128, label: 'La Paz' },
+  loreto: { latitude: 26.011, longitude: -111.3447, label: 'Loreto' },
+  manzanillo: { latitude: 19.0522, longitude: -104.3158, label: 'Manzanillo' },
+  acapulco: { latitude: 16.8531, longitude: -99.8237, label: 'Acapulco' },
+  huatulco: { latitude: 15.7683, longitude: -96.1292, label: 'Huatulco' },
+  'puerto chiapas': { latitude: 14.7069, longitude: -92.3983, label: 'Puerto Chiapas' },
+  salina: { latitude: 16.175, longitude: -95.2, label: 'Salina Cruz' },
+  'salina cruz': { latitude: 16.175, longitude: -95.2, label: 'Salina Cruz' },
   nassau: { latitude: 25.078, longitude: -77.3431, label: 'Nassau' },
   cococay: { latitude: 25.8184, longitude: -77.9428, label: 'Perfect Day at CocoCay' },
   'coco cay': { latitude: 25.8184, longitude: -77.9428, label: 'Perfect Day at CocoCay' },
@@ -65,9 +87,23 @@ interface SailingWeatherPoint {
   label: string;
   temperatureF: number | null;
   windMph: number | null;
+  windGustMph: number | null;
+  windDirectionDegrees: number | null;
   waveHeightFt: number | null;
+  waveDirectionDegrees: number | null;
+  wavePeriodSeconds: number | null;
+  swellWaveHeightFt: number | null;
+  swellWaveDirectionDegrees: number | null;
+  swellWavePeriodSeconds: number | null;
   precipitationProbability: number | null;
   weatherCode: number | null;
+}
+
+interface SailingWeatherAdvisory {
+  id: string;
+  severity: 'info' | 'watch' | 'warning';
+  title: string;
+  detail: string;
 }
 
 export interface SailingWeatherForecast {
@@ -87,11 +123,18 @@ export interface SailingWeatherForecast {
   isSeaDay: boolean;
   summary: string;
   headline: string;
+  advisories: SailingWeatherAdvisory[];
   metrics: {
     highTempF: number | null;
     lowTempF: number | null;
     maxWindMph: number | null;
+    maxWindGustMph: number | null;
+    dominantWindDirectionDegrees: number | null;
     maxWaveHeightFt: number | null;
+    maxWavePeriodSeconds: number | null;
+    dominantWaveDirectionDegrees: number | null;
+    maxSwellHeightFt: number | null;
+    dominantSwellDirectionDegrees: number | null;
     precipitationChance: number | null;
     conditionLabel: string;
   };
@@ -118,6 +161,10 @@ interface SailingWeatherState {
     targetDate: Date,
     options?: { force?: boolean }
   ) => Promise<SailingWeatherForecast | null>;
+  prefetchCruiseForecastWindow: (
+    cruise: SailingWeatherCruiseInput,
+    options?: { anchorDate?: Date; force?: boolean }
+  ) => Promise<void>;
   clearWeatherCache: () => Promise<void>;
 }
 
@@ -140,6 +187,8 @@ interface ForecastApiResponse {
     temperature_2m_min?: number[];
     precipitation_probability_max?: number[];
     wind_speed_10m_max?: number[];
+    wind_gusts_10m_max?: number[];
+    wind_direction_10m_dominant?: number[];
     weather_code?: number[];
   };
   hourly?: {
@@ -147,14 +196,28 @@ interface ForecastApiResponse {
     temperature_2m?: number[];
     precipitation_probability?: number[];
     wind_speed_10m?: number[];
+    wind_gusts_10m?: number[];
+    wind_direction_10m?: number[];
     weather_code?: number[];
   };
 }
 
 interface MarineApiResponse {
+  daily?: {
+    wave_height_max?: number[];
+    wave_direction_dominant?: number[];
+    wave_period_max?: number[];
+    swell_wave_height_max?: number[];
+    swell_wave_direction_dominant?: number[];
+  };
   hourly?: {
     time?: string[];
     wave_height?: number[];
+    wave_direction?: number[];
+    wave_period?: number[];
+    swell_wave_height?: number[];
+    swell_wave_direction?: number[];
+    swell_wave_period?: number[];
   };
 }
 
@@ -179,6 +242,64 @@ function formatDateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function startOfDay(date: Date): Date {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
+function addDays(date: Date, days: number): Date {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function isSameDay(left: Date, right: Date): boolean {
+  return formatDateKey(left) === formatDateKey(right);
+}
+
+function buildCruiseDateRange(cruise: SailingWeatherCruiseInput): Date[] {
+  const start = startOfDay(new Date(cruise.sailDate));
+  const end = startOfDay(new Date(cruise.returnDate));
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return [];
+  }
+
+  const dates: Date[] = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    dates.push(new Date(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return dates;
+}
+
+function buildPrefetchDates(cruise: SailingWeatherCruiseInput, anchorDate?: Date): Date[] {
+  const today = startOfDay(new Date());
+  const anchor = startOfDay(anchorDate ?? today);
+  const horizonEnd = addDays(today, FORECAST_PREFETCH_HORIZON_DAYS);
+  const cruiseDates = buildCruiseDateRange(cruise).filter((date) => date <= horizonEnd);
+  if (cruiseDates.length === 0) {
+    return [];
+  }
+
+  const cruiseStart = cruiseDates[0];
+  const startsSoon = cruiseStart >= today && cruiseStart <= addDays(today, FORECAST_PREFETCH_START_SOON_DAYS);
+  if (startsSoon && cruiseDates.length <= FORECAST_PREFETCH_MAX_CRUISE_DAYS) {
+    return cruiseDates.filter((date) => date >= today);
+  }
+
+  const remainingCruiseDates = cruiseDates.filter((date) => date >= anchor && date >= today);
+  if (remainingCruiseDates.length > 0 && remainingCruiseDates.length <= FORECAST_PREFETCH_MAX_CRUISE_DAYS) {
+    return remainingCruiseDates;
+  }
+
+  const windowStart = addDays(anchor, -1);
+  const windowEnd = addDays(anchor, FORECAST_PREFETCH_WINDOW_DAYS);
+  return cruiseDates.filter((date) => date >= windowStart && date <= windowEnd && (date >= today || isSameDay(date, today)));
 }
 
 function createCacheKey(cruiseId: string, dateKey: string, latitude: number, longitude: number): string {
@@ -272,6 +393,16 @@ function getMinValue(values: Array<number | null>): number | null {
   return roundNumber(Math.min(...filtered), 1);
 }
 
+function toDegrees(value: number | null): number | null {
+  if (!isNumber(value)) return null;
+  const normalized = ((value % 360) + 360) % 360;
+  return roundNumber(normalized, 0);
+}
+
+function withinRange(value: number, min: number, max: number): boolean {
+  return value >= min && value <= max;
+}
+
 function buildSnapshots(hourly: SailingWeatherPoint[]): SailingWeatherPoint[] {
   const targetHours = [
     { hour: 8, label: 'Morning' },
@@ -294,7 +425,14 @@ function buildSnapshots(hourly: SailingWeatherPoint[]): SailingWeatherPoint[] {
         label: target.label,
         temperatureF: null,
         windMph: null,
+        windGustMph: null,
+        windDirectionDegrees: null,
         waveHeightFt: null,
+        waveDirectionDegrees: null,
+        wavePeriodSeconds: null,
+        swellWaveHeightFt: null,
+        swellWaveDirectionDegrees: null,
+        swellWavePeriodSeconds: null,
         precipitationProbability: null,
         weatherCode: null,
       };
@@ -313,21 +451,123 @@ function buildSummary(metrics: SailingWeatherForecast['metrics'], isSeaDay: bool
     ? `${Math.round(metrics.lowTempF)}°-${Math.round(metrics.highTempF)}°F`
     : 'temps pending';
   const windLabel = metrics.maxWindMph !== null ? `${Math.round(metrics.maxWindMph)} mph wind` : 'wind pending';
+  const gustLabel = metrics.maxWindGustMph !== null ? `gusts ${Math.round(metrics.maxWindGustMph)} mph` : windLabel;
   const waveLabel = metrics.maxWaveHeightFt !== null ? `${roundNumber(metrics.maxWaveHeightFt, 1)} ft seas` : 'wave data pending';
+  const swellLabel = metrics.maxSwellHeightFt !== null ? `${roundNumber(metrics.maxSwellHeightFt, 1)} ft swell` : waveLabel;
   const precipLabel = metrics.precipitationChance !== null ? `${Math.round(metrics.precipitationChance)}% precip` : 'precip pending';
 
   return {
     headline: `${condition} · ${tempLabel}`,
-    summary: isSeaDay ? `${waveLabel} · ${windLabel} · ${precipLabel}` : `${windLabel} · ${waveLabel} · ${precipLabel}`,
+    summary: isSeaDay ? `${waveLabel} · ${gustLabel} · ${precipLabel}` : `${windLabel} · ${swellLabel} · ${precipLabel}`,
   };
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+function buildMarineAdvisories(
+  cruise: SailingWeatherCruiseInput,
+  resolvedPoint: ResolvedCruiseWeatherPoint,
+  metrics: SailingWeatherForecast['metrics'],
+): SailingWeatherAdvisory[] {
+  const advisories: SailingWeatherAdvisory[] = [];
+  const normalizedContext = [resolvedPoint.label, cruise.destination, cruise.itineraryName, cruise.departurePort]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  const inBajaZone = withinRange(resolvedPoint.latitude, 22, 32.6) && withinRange(resolvedPoint.longitude, -118.8, -105);
+  const inTehuantepecZone = withinRange(resolvedPoint.latitude, 13.2, 17.6) && withinRange(resolvedPoint.longitude, -97.8, -91.8);
+  const severeWind = Math.max(metrics.maxWindMph ?? 0, metrics.maxWindGustMph ?? 0) >= 28;
+  const severeSeas = (metrics.maxWaveHeightFt ?? 0) >= 8;
+  const stormRisk = metrics.conditionLabel === 'Storm risk' || (metrics.precipitationChance ?? 0) >= 70;
+
+  if (inTehuantepecZone || normalizedContext.includes('tehuantepec') || normalizedContext.includes('huatulco') || normalizedContext.includes('puerto chiapas')) {
+    advisories.push({
+      id: 'tehuantepec-gap-wind',
+      severity: severeWind || severeSeas ? 'warning' : 'watch',
+      title: 'Gulf of Tehuantepec watch',
+      detail: 'Gap-wind events here can ramp quickly and build steep seas. Recheck the latest forecast before sailaway and tender operations.',
+    });
   }
-  return response.json() as Promise<T>;
+
+  if (inBajaZone || normalizedContext.includes('ensenada') || normalizedContext.includes('cabo') || normalizedContext.includes('mazatlan') || normalizedContext.includes('vallarta') || normalizedContext.includes('baja')) {
+    advisories.push({
+      id: 'baja-pacific-pattern',
+      severity: severeWind ? 'watch' : 'info',
+      title: 'Baja / Mexican Riviera pattern',
+      detail: 'The outer Baja and Riviera corridor often sees fresh NW flow and building swell. North of Punta Eugenia can turn choppier than the port forecast suggests.',
+    });
+  }
+
+  if (severeWind || severeSeas) {
+    advisories.push({
+      id: 'rougher-marine-window',
+      severity: severeWind && severeSeas ? 'warning' : 'watch',
+      title: 'Rougher marine window',
+      detail: `Model guidance is showing up to ${Math.round(metrics.maxWindGustMph ?? metrics.maxWindMph ?? 0)} mph wind and ${roundNumber(metrics.maxWaveHeightFt ?? 0, 1)} ft seas for this cruise day.`,
+    });
+  }
+
+  if (stormRisk) {
+    advisories.push({
+      id: 'storm-or-squall-risk',
+      severity: 'watch',
+      title: 'Squall / rain risk',
+      detail: 'Rain bands or squalls may shift timing quickly. Download the forecast early so you still have it offline when service drops.',
+    });
+  }
+
+  return advisories.slice(0, 3);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function fetchJson<T>(url: string, options?: { retries?: number; timeoutMs?: number }): Promise<T> {
+  const retries = options?.retries ?? 2;
+  const timeoutMs = options?.timeoutMs ?? 15000;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      console.log('[SailingWeather] Fetching JSON resource', {
+        url,
+        attempt: attempt + 1,
+        timeoutMs,
+      });
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      return response.json() as Promise<T>;
+    } catch (error) {
+      lastError = error;
+      console.error('[SailingWeather] JSON fetch attempt failed', {
+        url,
+        attempt: attempt + 1,
+        retries: retries + 1,
+        error,
+      });
+
+      if (attempt < retries) {
+        await sleep(500 * (attempt + 1));
+      }
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Failed to fetch forecast data');
 }
 
 export const [SailingWeatherProvider, useSailingWeather] = createContextHook((): SailingWeatherState => {
@@ -495,8 +735,8 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
   ): Promise<SailingWeatherForecast> => {
     const dateKey = formatDateKey(targetDate);
     const query = `latitude=${resolvedPoint.latitude}&longitude=${resolvedPoint.longitude}&timezone=auto&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=percent&start_date=${dateKey}&end_date=${dateKey}`;
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?${query}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,weather_code&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code`;
-    const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${resolvedPoint.latitude}&longitude=${resolvedPoint.longitude}&timezone=auto&start_date=${dateKey}&end_date=${dateKey}&hourly=wave_height`;
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?${query}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,weather_code&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code`;
+    const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${resolvedPoint.latitude}&longitude=${resolvedPoint.longitude}&timezone=auto&start_date=${dateKey}&end_date=${dateKey}&daily=wave_height_max,wave_direction_dominant,wave_period_max,swell_wave_height_max,swell_wave_direction_dominant&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period`;
 
     console.log('[SailingWeather] Fetching live forecast', {
       cruiseId: cruise.id,
@@ -521,12 +761,20 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     const hourlyTimes = weatherJson.hourly?.time ?? [];
     const hourly = hourlyTimes.map<SailingWeatherPoint>((time, index) => {
       const marineIndex = marineTimeIndex.get(time);
+      const marineHourIndex = isNumber(marineIndex) ? marineIndex : null;
       return {
         isoTime: time,
         label: formatHourLabel(time),
         temperatureF: toNullableNumber(weatherJson.hourly?.temperature_2m?.[index]),
         windMph: toNullableNumber(weatherJson.hourly?.wind_speed_10m?.[index]),
-        waveHeightFt: toFeetFromMeters(toNullableNumber(isNumber(marineIndex) ? marineJson.hourly?.wave_height?.[marineIndex] : null)),
+        windGustMph: toNullableNumber(weatherJson.hourly?.wind_gusts_10m?.[index]),
+        windDirectionDegrees: toDegrees(toNullableNumber(weatherJson.hourly?.wind_direction_10m?.[index])),
+        waveHeightFt: toFeetFromMeters(toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.wave_height?.[marineHourIndex] : null)),
+        waveDirectionDegrees: toDegrees(toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.wave_direction?.[marineHourIndex] : null)),
+        wavePeriodSeconds: toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.wave_period?.[marineHourIndex] : null),
+        swellWaveHeightFt: toFeetFromMeters(toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.swell_wave_height?.[marineHourIndex] : null)),
+        swellWaveDirectionDegrees: toDegrees(toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.swell_wave_direction?.[marineHourIndex] : null)),
+        swellWavePeriodSeconds: toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.swell_wave_period?.[marineHourIndex] : null),
         precipitationProbability: toNullableNumber(weatherJson.hourly?.precipitation_probability?.[index]),
         weatherCode: toNullableNumber(weatherJson.hourly?.weather_code?.[index]),
       };
@@ -535,7 +783,13 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     const dailyHigh = toNullableNumber(weatherJson.daily?.temperature_2m_max?.[0]) ?? getMaxValue(hourly.map((item) => item.temperatureF));
     const dailyLow = toNullableNumber(weatherJson.daily?.temperature_2m_min?.[0]) ?? getMinValue(hourly.map((item) => item.temperatureF));
     const maxWind = toNullableNumber(weatherJson.daily?.wind_speed_10m_max?.[0]) ?? getMaxValue(hourly.map((item) => item.windMph));
-    const maxWave = getMaxValue(hourly.map((item) => item.waveHeightFt));
+    const maxWindGust = toNullableNumber(weatherJson.daily?.wind_gusts_10m_max?.[0]) ?? getMaxValue(hourly.map((item) => item.windGustMph));
+    const dominantWindDirectionDegrees = toDegrees(toNullableNumber(weatherJson.daily?.wind_direction_10m_dominant?.[0]) ?? hourly.find((item) => item.windDirectionDegrees !== null)?.windDirectionDegrees ?? null);
+    const maxWave = toFeetFromMeters(toNullableNumber(marineJson.daily?.wave_height_max?.[0])) ?? getMaxValue(hourly.map((item) => item.waveHeightFt));
+    const maxWavePeriodSeconds = toNullableNumber(marineJson.daily?.wave_period_max?.[0]) ?? getMaxValue(hourly.map((item) => item.wavePeriodSeconds));
+    const dominantWaveDirectionDegrees = toDegrees(toNullableNumber(marineJson.daily?.wave_direction_dominant?.[0]) ?? hourly.find((item) => item.waveDirectionDegrees !== null)?.waveDirectionDegrees ?? null);
+    const maxSwellHeightFt = toFeetFromMeters(toNullableNumber(marineJson.daily?.swell_wave_height_max?.[0])) ?? getMaxValue(hourly.map((item) => item.swellWaveHeightFt));
+    const dominantSwellDirectionDegrees = toDegrees(toNullableNumber(marineJson.daily?.swell_wave_direction_dominant?.[0]) ?? hourly.find((item) => item.swellWaveDirectionDegrees !== null)?.swellWaveDirectionDegrees ?? null);
     const precipitationChance = toNullableNumber(weatherJson.daily?.precipitation_probability_max?.[0]) ?? getMaxValue(hourly.map((item) => item.precipitationProbability));
     const weatherCode = toNullableNumber(weatherJson.daily?.weather_code?.[0]) ?? hourly.find((item) => item.weatherCode !== null)?.weatherCode ?? null;
 
@@ -543,13 +797,20 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       highTempF: dailyHigh,
       lowTempF: dailyLow,
       maxWindMph: maxWind,
+      maxWindGustMph: maxWindGust,
+      dominantWindDirectionDegrees,
       maxWaveHeightFt: maxWave,
+      maxWavePeriodSeconds,
+      dominantWaveDirectionDegrees,
+      maxSwellHeightFt,
+      dominantSwellDirectionDegrees,
       precipitationChance,
       conditionLabel: describeWeatherCode(weatherCode),
     };
 
     const summary = buildSummary(metrics, resolvedPoint.isSeaDay);
     const updatedAt = new Date().toISOString();
+    const advisories = buildMarineAdvisories(cruise, resolvedPoint, metrics);
 
     return {
       cacheKey: createCacheKey(cruise.id, dateKey, resolvedPoint.latitude, resolvedPoint.longitude),
@@ -568,6 +829,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       isSeaDay: resolvedPoint.isSeaDay,
       summary: summary.summary,
       headline: summary.headline,
+      advisories,
       metrics,
       snapshots: buildSnapshots(hourly),
       hourly,
@@ -642,6 +904,41 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     return forecastPromise;
   }, [fetchForecast, resolveCruiseWeatherPoint]);
 
+  const prefetchCruiseForecastWindow = useCallback(async (
+    cruise: SailingWeatherCruiseInput,
+    options?: { anchorDate?: Date; force?: boolean },
+  ): Promise<void> => {
+    const datesToPrefetch = buildPrefetchDates(cruise, options?.anchorDate);
+    if (datesToPrefetch.length === 0) {
+      console.log('[SailingWeather] No prefetchable forecast dates for cruise window', {
+        cruiseId: cruise.id,
+        shipName: cruise.shipName,
+        anchorDate: options?.anchorDate ? formatDateKey(options.anchorDate) : null,
+      });
+      return;
+    }
+
+    console.log('[SailingWeather] Prefetching forecast window', {
+      cruiseId: cruise.id,
+      shipName: cruise.shipName,
+      dates: datesToPrefetch.map((date) => formatDateKey(date)),
+      force: options?.force === true,
+    });
+
+    for (const forecastDate of datesToPrefetch) {
+      try {
+        await getForecastForCruiseDay(cruise, forecastDate, { force: options?.force === true });
+      } catch (error) {
+        console.error('[SailingWeather] Failed to prefetch cruise forecast date:', {
+          cruiseId: cruise.id,
+          shipName: cruise.shipName,
+          date: formatDateKey(forecastDate),
+          error,
+        });
+      }
+    }
+  }, [getForecastForCruiseDay]);
+
   const clearWeatherCache = useCallback(async () => {
     setCache({});
     cacheRef.current = {};
@@ -656,6 +953,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
   return useMemo(() => ({
     isHydrated,
     getForecastForCruiseDay,
+    prefetchCruiseForecastWindow,
     clearWeatherCache,
-  }), [clearWeatherCache, getForecastForCruiseDay, isHydrated]);
+  }), [clearWeatherCache, getForecastForCruiseDay, isHydrated, prefetchCruiseForecastWindow]);
 });
