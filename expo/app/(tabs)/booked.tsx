@@ -99,8 +99,9 @@ export default function BookedScreen() {
   useUser();
   const { casinoAnalytics } = useSimpleAnalytics();
   const {
-    clubRoyalePoints: loyaltyClubRoyalePoints,
     clubRoyaleTier: loyaltyClubRoyaleTier,
+    clubRoyaleCurrentYearPoints,
+    clubRoyaleHistoricalPoints,
     crownAnchorPoints,
   } = useLoyalty();
 
@@ -180,7 +181,8 @@ export default function BookedScreen() {
     return result;
   }, [bookedCruises, filter, hideCompleted, searchQuery, sortBy]);
 
-  const currentPoints = loyaltyClubRoyalePoints || clubRoyaleProfile?.tierPoints || 0;
+  const currentYearPoints = clubRoyaleCurrentYearPoints;
+  const historicalPoints = casinoAnalytics.historicalPointsEarned || clubRoyaleHistoricalPoints;
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
   const clubRoyaleTierColor = getClubRoyaleTierColor(clubRoyaleTier);
   const casinoCardTheme = useMemo(() => createLoyaltyCardTheme(clubRoyaleTierColor), [clubRoyaleTierColor]);
@@ -455,8 +457,8 @@ export default function BookedScreen() {
             <View style={styles.heroStatDivider} />
             <View style={styles.heroStatItem}>
               <Award size={16} color={COLORS.goldAccent} />
-              <Text style={styles.heroStatValue}>{formatNumber(currentPoints)}</Text>
-              <Text style={styles.heroStatLabel}>Points</Text>
+              <Text style={styles.heroStatValue}>{formatNumber(currentYearPoints)}</Text>
+              <Text style={styles.heroStatLabel}>Season Pts</Text>
             </View>
           </View>
         </View>
@@ -505,8 +507,8 @@ export default function BookedScreen() {
               <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
                 <Award size={16} color={clubRoyaleTierColor} />
               </View>
-              <Text style={[styles.casinoMetricValue, { color: '#FFFFFF' }]}>{formatNumber(currentPoints)}</Text>
-              <Text style={[styles.casinoMetricLabel, { color: 'rgba(255,255,255,0.85)' }]}>Current Points</Text>
+              <Text style={[styles.casinoMetricValue, { color: '#FFFFFF' }]}>{formatNumber(currentYearPoints)}</Text>
+              <Text style={[styles.casinoMetricLabel, { color: 'rgba(255,255,255,0.85)' }]}>Current Season</Text>
             </View>
           </View>
           
@@ -542,6 +544,18 @@ export default function BookedScreen() {
             </View>
           </View>
           
+          <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.2), marginBottom: SPACING.sm }]}>
+            <View style={styles.casinoAvgItem}>
+              <Text style={[styles.casinoAvgLabel, { color: 'rgba(255,255,255,0.85)' }]}>Historical Points</Text>
+              <Text style={[styles.casinoAvgValue, { color: '#FFFFFF' }]}>{formatNumber(historicalPoints)}</Text>
+            </View>
+            <View style={[styles.casinoAvgDivider, { backgroundColor: withAlpha('#FFFFFF', 0.14) }]} />
+            <View style={styles.casinoAvgItem}>
+              <Text style={[styles.casinoAvgLabel, { color: 'rgba(255,255,255,0.85)' }]}>Status Tier</Text>
+              <Text style={[styles.casinoAvgValue, { color: '#FFFFFF' }]}>{clubRoyaleTier}</Text>
+            </View>
+          </View>
+
           {casinoStats.completedCount > 0 && (
             <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.2) }]}>
               <View style={styles.casinoAvgItem}>

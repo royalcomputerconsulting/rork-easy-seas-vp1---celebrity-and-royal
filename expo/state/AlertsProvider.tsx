@@ -30,6 +30,7 @@ import {
 } from '@/lib/alertRules';
 import { useEntitlement } from './EntitlementProvider';
 import { useAuth } from './AuthProvider';
+import { useLoyalty } from './LoyaltyProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
 
 const BASE_ALERTS_KEY = '@easy_seas_alerts';
@@ -66,6 +67,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   const { tier } = useEntitlement();
   const { bookedCruises, casinoOffers } = useCoreData();
   const { clubRoyaleProfile } = useAppState();
+  const { clubRoyalePoints } = useLoyalty();
   const { authenticatedEmail } = useAuth();
   const priceHistoryState = usePriceHistory();
   const priceDropAlerts = useMemo(() => priceHistoryState?.priceDropAlerts ?? [], [priceHistoryState?.priceDropAlerts]);
@@ -207,7 +209,11 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     console.log('[AlertsProvider] Running anomaly detection...');
 
     try {
-      const currentPoints = clubRoyaleProfile?.tierPoints || 26331;
+      const currentPoints = clubRoyalePoints;
+      console.log('[AlertsProvider] Using current-season Club Royale points for detection:', {
+        currentPoints,
+        profileTierPoints: clubRoyaleProfile?.tierPoints ?? null,
+      });
       
       if (trackUpgradePricesForBooked) {
         trackUpgradePricesForBooked(bookedCruises, casinoOffers);
@@ -258,7 +264,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     } finally {
       setIsLoading(false);
     }
-  }, [tier, bookedCruises, casinoOffers, clubRoyaleProfile, config, rules, priceDropAlerts, upgradePrices, trackUpgradePricesForBooked]);
+  }, [tier, bookedCruises, casinoOffers, clubRoyalePoints, clubRoyaleProfile, config, rules, priceDropAlerts, upgradePrices, trackUpgradePricesForBooked]);
 
   useEffect(() => {
     if ((bookedCruises?.length ?? 0) > 0 || (casinoOffers?.length ?? 0) > 0 || (priceDropAlerts?.length ?? 0) > 0) {

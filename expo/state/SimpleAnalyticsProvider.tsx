@@ -19,6 +19,13 @@ export interface CasinoAnalytics {
   totalCoinIn: number;
   totalWinLoss: number;
   totalPointsEarned: number;
+  historicalPointsEarned: number;
+  currentPointBalance: number;
+  currentStatusTier: string;
+  historicalTier: string;
+  pointBalanceSource: 'api' | 'manual' | 'historical';
+  seasonStartDate: string;
+  nextResetDate: string;
   netResult: number;
   avgCoinInPerCruise: number;
   avgWinLossPerCruise: number;
@@ -77,6 +84,13 @@ const _DEFAULT_CASINO_ANALYTICS: CasinoAnalytics = {
   totalCoinIn: 0,
   totalWinLoss: 0,
   totalPointsEarned: 0,
+  historicalPointsEarned: 0,
+  currentPointBalance: 0,
+  currentStatusTier: 'Choice',
+  historicalTier: 'Choice',
+  pointBalanceSource: 'historical',
+  seasonStartDate: '',
+  nextResetDate: '',
   netResult: 0,
   avgCoinInPerCruise: 0,
   avgWinLossPerCruise: 0,
@@ -97,7 +111,15 @@ const DOLLARS_PER_POINT = 5;
 
 export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((): SimpleAnalyticsState => {
   const { bookedCruises: storedBookedCruises, cruises, casinoOffers, isLoading } = useCoreData();
-  const { clubRoyalePoints: loyaltyClubRoyalePoints } = useLoyalty();
+  const {
+    clubRoyalePoints: loyaltyClubRoyalePoints,
+    clubRoyaleTier: loyaltyClubRoyaleTier,
+    clubRoyaleHistoricalPoints,
+    clubRoyaleHistoricalTier,
+    clubRoyalePointsSource,
+    clubRoyaleSeasonStartDate,
+    clubRoyaleNextResetDate,
+  } = useLoyalty();
 
   const bookedCruises = useMemo((): BookedCruise[] => {
     if (storedBookedCruises && storedBookedCruises.length > 0) {
@@ -124,55 +146,71 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
   }, [bookedCruises]);
 
   const casinoAnalytics = useMemo((): CasinoAnalytics => {
-    // IMPORTANT: loyaltyClubRoyalePoints is the CURRENT Club Royale point balance
-    // This is NOT the sum of all cruise points - it's the actual account balance
     const currentPointBalance = loyaltyClubRoyalePoints || 0;
-    
-    // Sum points from completed cruises for historical calculations
     let cruisePointsSum = 0;
     let totalWinLoss = 0;
 
     completedCruises.forEach((cruise: BookedCruise) => {
       const points = cruise.earnedPoints || cruise.casinoPoints || 0;
       cruisePointsSum += points;
-      
+
       const winnings = cruise.winnings || 0;
       totalWinLoss += winnings;
     });
 
-    const totalPointsEarned = currentPointBalance > 0 ? currentPointBalance : cruisePointsSum;
-    const totalCoinIn = totalPointsEarned * DOLLARS_PER_POINT;
+    const historicalPointsEarned = clubRoyaleHistoricalPoints > 0 ? clubRoyaleHistoricalPoints : cruisePointsSum;
+    const totalPointsEarned = historicalPointsEarned;
+    const totalCoinIn = historicalPointsEarned * DOLLARS_PER_POINT;
     const netResult = totalWinLoss;
     const count = completedCruises.length;
-
-    // For averages, use the cruise points sum divided by count
-    // This gives a more accurate per-cruise average
-    const avgPointsPerCruise = count > 0 ? cruisePointsSum / count : 0;
+    const avgPointsPerCruise = count > 0 ? historicalPointsEarned / count : 0;
     const avgCoinInPerCruise = avgPointsPerCruise * DOLLARS_PER_POINT;
+    const seasonStartDate = clubRoyaleSeasonStartDate.toISOString();
+    const nextResetDate = clubRoyaleNextResetDate.toISOString();
 
     console.log('[CasinoAnalytics] Calculated:', {
       completedCruisesCount: count,
       currentPointBalance,
-      cruisePointsSum,
-      totalPointsEarned,
+      historicalPointsEarned,
       totalCoinIn,
       totalWinLoss,
       netResult,
       avgPointsPerCruise,
       avgCoinInPerCruise,
+      currentStatusTier: loyaltyClubRoyaleTier,
+      historicalTier: clubRoyaleHistoricalTier,
+      pointBalanceSource: clubRoyalePointsSource,
+      seasonStartDate,
+      nextResetDate,
     });
 
     return {
       totalCoinIn,
       totalWinLoss,
       totalPointsEarned,
+      historicalPointsEarned,
+      currentPointBalance,
+      currentStatusTier: loyaltyClubRoyaleTier,
+      historicalTier: clubRoyaleHistoricalTier,
+      pointBalanceSource: clubRoyalePointsSource,
+      seasonStartDate,
+      nextResetDate,
       netResult,
       avgCoinInPerCruise,
       avgWinLossPerCruise: count > 0 ? totalWinLoss / count : 0,
       avgPointsPerCruise,
       completedCruisesCount: count,
     };
-  }, [completedCruises, loyaltyClubRoyalePoints]);
+  }, [
+    clubRoyaleHistoricalPoints,
+    clubRoyaleHistoricalTier,
+    clubRoyaleNextResetDate,
+    clubRoyalePointsSource,
+    clubRoyaleSeasonStartDate,
+    completedCruises,
+    loyaltyClubRoyalePoints,
+    loyaltyClubRoyaleTier,
+  ]);
 
   const analytics = useMemo((): AnalyticsData => {
     if (bookedCruises.length === 0) {

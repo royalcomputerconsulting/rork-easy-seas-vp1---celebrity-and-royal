@@ -22,6 +22,12 @@ import type { ExtendedLoyaltyData } from "@/lib/royalCaribbean/types";
 interface LoyaltyState {
   clubRoyalePoints: number;
   clubRoyaleTier: ClubRoyaleTier;
+  clubRoyaleCurrentYearPoints: number;
+  clubRoyaleHistoricalPoints: number;
+  clubRoyaleHistoricalTier: ClubRoyaleTier;
+  clubRoyalePointsSource: 'api' | 'manual' | 'historical';
+  clubRoyaleSeasonStartDate: Date;
+  clubRoyaleNextResetDate: Date;
   crownAnchorPoints: number;
   crownAnchorLevel: CrownAnchorLevel;
   
@@ -476,19 +482,48 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
 
     upcomingBookedCruises.sort((a, b) => a.sailDate.getTime() - b.sailDate.getTime());
 
-    const effectiveClubRoyalePoints = manualClubRoyalePoints ?? calculatedClubRoyalePoints;
+    const historicalClubRoyalePoints = calculatedClubRoyalePoints;
+    const historicalClubRoyaleTier = getTierByPoints(historicalClubRoyalePoints) as ClubRoyaleTier;
+    const liveClubRoyalePoints = extendedLoyalty?.clubRoyalePointsFromApi;
+    const hasLiveClubRoyalePoints = typeof liveClubRoyalePoints === 'number' && Number.isFinite(liveClubRoyalePoints);
+    const daysSinceSeasonStart = Math.max(0, Math.floor((today.getTime() - lastApril1.getTime()) / (1000 * 60 * 60 * 24)));
+    const shouldForceSeasonResetBalance = currentYearClubRoyalePoints === 0
+      && daysSinceSeasonStart <= 14
+      && ((manualClubRoyalePoints ?? 0) > 0 || (hasLiveClubRoyalePoints && liveClubRoyalePoints > 0));
+
+    let effectiveClubRoyalePoints = currentYearClubRoyalePoints;
+    let clubRoyalePointsSource: 'api' | 'manual' | 'historical' = 'historical';
+
+    if (!shouldForceSeasonResetBalance && hasLiveClubRoyalePoints) {
+      effectiveClubRoyalePoints = liveClubRoyalePoints;
+      clubRoyalePointsSource = 'api';
+    } else if (!shouldForceSeasonResetBalance && manualClubRoyalePoints !== null) {
+      effectiveClubRoyalePoints = manualClubRoyalePoints;
+      clubRoyalePointsSource = 'manual';
+    }
+
+    const currentClubRoyaleTier = getTierByPoints(effectiveClubRoyalePoints) as ClubRoyaleTier;
+    const tierFromApi = extendedLoyalty?.clubRoyaleTierFromApi;
+    const clubRoyaleTier = (tierFromApi && CLUB_ROYALE_TIERS[tierFromApi])
+      ? tierFromApi as ClubRoyaleTier
+      : historicalClubRoyaleTier;
+
+    if (shouldForceSeasonResetBalance) {
+      console.log('[LoyaltyProvider] Forcing Club Royale current-season balance to reset state', {
+        manualClubRoyalePoints,
+        liveClubRoyalePoints,
+        currentYearClubRoyalePoints,
+        daysSinceSeasonStart,
+      });
+    }
     
-    // Crown & Anchor uses cruise nights directly
     const effectiveCrownAnchorPoints = manualCrownAnchorPoints ?? completedNights;
-    
-    const clubRoyaleTier = getTierByPoints(effectiveClubRoyalePoints) as ClubRoyaleTier;
     const crownAnchorLevel = getLevelByNights(effectiveCrownAnchorPoints) as CrownAnchorLevel;
     
-    // Include booked cruise points in projection (using 2x or 3x multiplier)
     const projectedCrownAnchorPoints = effectiveCrownAnchorPoints + projectedBookedPoints;
     const projectedCrownAnchorLevel = getLevelByNights(projectedCrownAnchorPoints) as CrownAnchorLevel;
 
-    const clubRoyaleProgress = getTierProgress(effectiveClubRoyalePoints, clubRoyaleTier);
+    const clubRoyaleProgress = getTierProgress(effectiveClubRoyalePoints, currentClubRoyaleTier);
     const crownAnchorProgress = getLevelProgress(effectiveCrownAnchorPoints, crownAnchorLevel);
 
     const pinnacleThreshold = CROWN_ANCHOR_LEVELS.Pinnacle.cruiseNights;
@@ -584,10 +619,9 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     }
 
     const mastersThreshold = CLUB_ROYALE_TIERS.Masters.threshold;
-    const effectiveCurrentYearPoints = manualClubRoyalePoints !== null ? manualClubRoyalePoints : currentYearClubRoyalePoints;
-    const effectiveTotalPoints = manualClubRoyalePoints ?? calculatedClubRoyalePoints;
+    const effectiveCurrentYearPoints = effectiveClubRoyalePoints;
     
-    const pointsNeededForMasters = Math.max(0, mastersThreshold - effectiveTotalPoints);
+    const pointsNeededForMasters = Math.max(0, mastersThreshold - effectiveCurrentYearPoints);
     let projectedMastersDate: Date | null = null;
     
     if (pointsNeededForMasters > 0 && upcomingBookedCruises.length > 0) {
@@ -626,7 +660,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     
     const mastersProgress = {
       pointsToNext: pointsNeededForMasters,
-      percentComplete: Math.min(100, (effectiveTotalPoints / mastersThreshold) * 100),
+      percentComplete: Math.min(100, (effectiveCurrentYearPoints / mastersThreshold) * 100),
       currentYearPoints: effectiveCurrentYearPoints,
       resetDate: nextApril1,
       projectedDate: projectedMastersDate,
@@ -635,6 +669,11 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     console.log('[LoyaltyProvider] Calculated loyalty data:', {
       clubRoyalePoints: effectiveClubRoyalePoints,
       clubRoyaleTier,
+      currentClubRoyaleTier,
+      clubRoyaleCurrentYearPoints: effectiveCurrentYearPoints,
+      clubRoyaleHistoricalPoints: historicalClubRoyalePoints,
+      clubRoyaleHistoricalTier: historicalClubRoyaleTier,
+      clubRoyalePointsSource,
       crownAnchorPoints: effectiveCrownAnchorPoints,
       crownAnchorLevel,
       completedNights,
@@ -644,8 +683,6 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       projectedCrownAnchorLevel,
       pinnacleProgress,
       mastersProgress,
-      currentYearClubRoyalePoints,
-      calculatedClubRoyalePoints,
       totalCruisesProcessed: bookedCruises.length,
       averageCasinoPointsPerNight,
       upcomingCruisesCount: upcomingBookedCruises.length,
@@ -669,6 +706,12 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     return {
       clubRoyalePoints: effectiveClubRoyalePoints,
       clubRoyaleTier,
+      clubRoyaleCurrentYearPoints: effectiveCurrentYearPoints,
+      clubRoyaleHistoricalPoints: historicalClubRoyalePoints,
+      clubRoyaleHistoricalTier: historicalClubRoyaleTier,
+      clubRoyalePointsSource,
+      clubRoyaleSeasonStartDate: lastApril1,
+      clubRoyaleNextResetDate: nextApril1,
       crownAnchorPoints: effectiveCrownAnchorPoints,
       crownAnchorLevel,
       totalCompletedNights: completedNights,

@@ -131,6 +131,10 @@ export default function AnalyticsScreen() {
   const {
     clubRoyalePoints: loyaltyClubRoyalePoints,
     clubRoyaleTier: loyaltyClubRoyaleTier,
+    clubRoyaleCurrentYearPoints,
+    clubRoyaleHistoricalPoints,
+    clubRoyaleHistoricalTier,
+    clubRoyaleNextResetDate,
     crownAnchorPoints: loyaltyCrownAnchorPoints,
     crownAnchorLevel: loyaltyCrownAnchorLevel,
   } = useLoyalty();
@@ -190,10 +194,14 @@ export default function AnalyticsScreen() {
 
 
 
-  const currentPoints = loyaltyClubRoyalePoints || clubRoyaleProfile?.tierPoints || analytics.totalPoints || 0;
+  const currentPoints = loyaltyClubRoyalePoints;
+  const currentYearPoints = clubRoyaleCurrentYearPoints;
+  const historicalPoints = casinoAnalytics.historicalPointsEarned || clubRoyaleHistoricalPoints || analytics.totalPoints || 0;
   const totalNights = loyaltyCrownAnchorPoints || clubRoyaleProfile?.lifetimeNights || analytics.totalNights || 0;
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
+  const historicalClubRoyaleTier = clubRoyaleHistoricalTier || clubRoyaleTier;
   const crownAnchorLevel = loyaltyCrownAnchorLevel || clubRoyaleProfile?.crownAnchorLevel || 'Gold';
+  const resetDateLabel = clubRoyaleNextResetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
   const cruisesWithROI = useMemo(() => {
     if (activeTab !== 'intelligence') return [] as (BookedCruise & { calculatedROI: number; valuePerDollar: number; roiLevel: 'high' | 'medium' | 'low' })[];
@@ -494,20 +502,19 @@ export default function AnalyticsScreen() {
     if (activeTab !== 'intelligence') return [] as { label: string; value: string; icon: any; color?: string }[];
     return [
       { label: 'Cruises', value: cruiseEconomicsSummary.totals.cruises.toString(), icon: Ship },
+      { label: 'Status Tier', value: clubRoyaleTier, icon: Award },
       {
-        label: 'Retail/Paid',
-        value: `${cruiseEconomicsSummary.roiStyle.retailToPaidMultiple.toFixed(2)}x`,
+        label: 'Current Pts',
+        value: formatNumber(currentYearPoints),
+        icon: Calendar,
+      },
+      {
+        label: 'Historical Pts',
+        value: formatNumber(historicalPoints),
         icon: DollarSign,
       },
-      {
-        label: 'Cash Result',
-        value: formatCurrency(cruiseEconomicsSummary.totals.totalCashResult),
-        color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error,
-        icon: TrendingUp,
-      },
-      { label: 'Points', value: formatNumber(cruiseEconomicsSummary.totals.totalPoints), icon: Award },
     ];
-  }, [activeTab, cruiseEconomicsSummary]);
+  }, [activeTab, clubRoyaleTier, cruiseEconomicsSummary, currentYearPoints, historicalPoints]);
 
   const perCruisePointsBreakdown = useMemo(() => {
     if (activeTab !== 'intelligence') return [] as { id: string; shipName: string; sailDate: string; nights: number; cruiseSource: string; casinoPoints: number; loyaltyPoints: number; casinoLabel: string; loyaltyLabel: string }[];
@@ -914,6 +921,40 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
+        <View style={styles.cleanCard} testID="casino-current-vs-historical-card">
+          <View style={styles.cleanCardHeader}>
+            <Calendar size={16} color={COLORS.navyDeep} />
+            <Text style={styles.cleanCardTitle}>Current vs Historical</Text>
+          </View>
+          <View style={styles.dataGrid}>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Current Status Tier</Text>
+              <Text style={[styles.dataValue, { color: COLORS.navyDeep }]}>{clubRoyaleTier}</Text>
+            </View>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Current Season Points</Text>
+              <Text style={styles.dataValue}>{formatNumber(currentYearPoints)}</Text>
+            </View>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Historical Points Earned</Text>
+              <Text style={[styles.dataValue, { color: COLORS.goldDark }]}>{formatNumber(historicalPoints)}</Text>
+            </View>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Historical Tier Earned</Text>
+              <Text style={[styles.dataValue, { color: COLORS.success }]}>{historicalClubRoyaleTier}</Text>
+            </View>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Next Reset Date</Text>
+              <Text style={styles.dataValue}>{resetDateLabel}</Text>
+            </View>
+          </View>
+          <View style={styles.avgStatsRow}>
+            <Text style={styles.avgStatText}>April 1 resets current-year Club Royale points only. Historical ROI, coin-in, cash result, and annual cruise analytics stay historical.</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <View style={styles.cleanCard}>
           <View style={styles.cleanCardHeader}>
             <Receipt size={16} color={COLORS.navyDeep} />
@@ -1185,7 +1226,7 @@ export default function AnalyticsScreen() {
         <View style={styles.cleanCard}>
           <View style={styles.cleanCardHeader}>
             <PieChart size={16} color={COLORS.goldDark} />
-            <Text style={styles.cleanCardTitle}>Annual Casino Summary</Text>
+            <Text style={styles.cleanCardTitle}>Historical Annual Casino Summary</Text>
           </View>
           <View style={styles.compactMetricsGrid}>
             <View style={styles.compactMetric}>
@@ -1212,6 +1253,7 @@ export default function AnalyticsScreen() {
           {cruiseEconomicsSummary.totals.cruises > 0 && (
             <View style={styles.avgStatsRow}>
               <Text style={styles.avgStatText}>Avg/Cruise: {formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise)} paid • {formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise)} winnings • {formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise)} cash result</Text>
+              <Text style={styles.avgStatText}>Historical totals stay fixed after the April 1 point reset. Only the current-season point balance resets.</Text>
             </View>
           )}
         </View>
@@ -1297,7 +1339,7 @@ export default function AnalyticsScreen() {
           <View style={styles.cleanCard}>
             <View style={styles.cleanCardHeader}>
               <Award size={16} color={COLORS.navyDeep} />
-              <Text style={styles.cleanCardTitle}>Points Breakdown by Cruise</Text>
+              <Text style={styles.cleanCardTitle}>Historical Points Breakdown by Cruise</Text>
             </View>
             <View style={styles.pointsBreakdownLegend}>
               <View style={styles.pointsBreakdownLegendItem}>
@@ -2041,7 +2083,7 @@ export default function AnalyticsScreen() {
           {calcsMode === 'historical' && casinoAnalytics.completedCruisesCount > 0 && (
             <View style={styles.calcsModeSummary}>
               <Text style={styles.calcsModeSummaryText}>
-                Based on {formatNumber(casinoAnalytics.totalPointsEarned)} pts ({formatCurrency(casinoAnalytics.totalCoinIn)} coin-in) | {realAnalytics.completedCashResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedCashResult)} cash result | {formatCurrency(realAnalytics.completedRetailValue)} retail value | {casinoAnalytics.completedCruisesCount} cruises
+                Historical: {formatNumber(casinoAnalytics.historicalPointsEarned)} pts ({formatCurrency(casinoAnalytics.totalCoinIn)} coin-in) • Current season: {formatNumber(casinoAnalytics.currentPointBalance)} pts • Status: {casinoAnalytics.currentStatusTier} • {realAnalytics.completedCashResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedCashResult)} cash result • {casinoAnalytics.completedCruisesCount} cruises
               </Text>
             </View>
           )}
@@ -2110,7 +2152,7 @@ export default function AnalyticsScreen() {
           cashResult={realAnalytics.completedCashResult || 0}
           totalEconomicValue={realAnalytics.completedEconomicValue}
           totalCruises={realAnalytics.completedCruisesCount}
-          pointsEarned={currentPoints}
+          pointsEarned={historicalPoints}
         />
       </View>
     </View>

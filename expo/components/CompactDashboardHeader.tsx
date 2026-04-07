@@ -58,8 +58,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   crewMemberCount = 0,
 }: CompactDashboardHeaderProps) {
   const {
-    clubRoyalePoints,
     clubRoyaleTier,
+    clubRoyaleCurrentYearPoints,
+    clubRoyaleHistoricalPoints,
+    clubRoyaleHistoricalTier,
+    clubRoyaleNextResetDate,
     crownAnchorPoints,
     crownAnchorLevel,
     pinnacleProgress,
@@ -310,29 +313,28 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           );
         })()}
 
-        {/* BAR 2: Current Club Royale Progress - Current tier → Next tier */}
+        {/* BAR 2: Current season Club Royale progress */}
         {(() => {
-          const currentTier = getTierByPoints(clubRoyalePoints);
-          const currentTierIndex = TIER_ORDER.indexOf(currentTier);
+          const currentSeasonTier = getTierByPoints(clubRoyaleCurrentYearPoints);
+          const currentTierIndex = TIER_ORDER.indexOf(currentSeasonTier);
           const nextTier = currentTierIndex < TIER_ORDER.length - 1 ? TIER_ORDER[currentTierIndex + 1] : null;
-          const isMasters = currentTier === 'Masters';
-          
-          const currentThreshold = CLUB_ROYALE_TIERS[currentTier]?.threshold || 0;
+          const isMasters = currentSeasonTier === 'Masters';
+
+          const currentThreshold = CLUB_ROYALE_TIERS[currentSeasonTier]?.threshold || 0;
           const nextThreshold = nextTier ? CLUB_ROYALE_TIERS[nextTier]?.threshold : currentThreshold;
           const rangeSize = nextThreshold - currentThreshold;
-          const progressInRange = clubRoyalePoints - currentThreshold;
+          const progressInRange = clubRoyaleCurrentYearPoints - currentThreshold;
           const percentComplete = isMasters ? 100 : (rangeSize > 0 ? Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100)) : 100);
-          const pointsToNext = isMasters ? 0 : Math.max(0, nextThreshold - clubRoyalePoints);
-          
-          const _tierColor = CLUB_ROYALE_TIERS[currentTier]?.color || '#8B5CF6';
-          
+          const pointsToNext = isMasters ? 0 : Math.max(0, nextThreshold - clubRoyaleCurrentYearPoints);
+          const resetDateLabel = clubRoyaleNextResetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
           return (
             <View style={[styles.progressCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
                 <Text style={[styles.progressLabel, progressLabelStyle]}>
-                  {isMasters 
-                    ? `Masters (${clubRoyalePoints.toLocaleString()})`
-                    : `${currentTier} → ${nextTier} (${clubRoyalePoints.toLocaleString()}/${nextThreshold.toLocaleString()})`
+                  {isMasters
+                    ? `Current season • Masters (${clubRoyaleCurrentYearPoints.toLocaleString()})`
+                    : `Current season • ${currentSeasonTier} → ${nextTier} (${clubRoyaleCurrentYearPoints.toLocaleString()}/${nextThreshold.toLocaleString()})`
                   }
                 </Text>
                 {isMasters ? (
@@ -352,40 +354,38 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 />
               </View>
               <Text style={[styles.progressEta, progressMetaStyle]}>
-                {isMasters 
-                  ? 'Masters tier achieved! Maximum Club Royale tier'
-                  : `ETA: ${formatETAFromDate(mastersProgress.projectedDate)} • ${pointsToNext.toLocaleString()} pts to ${nextTier} • Resets April 1`
+                {isMasters
+                  ? 'Current season already at Masters pace.'
+                  : `ETA: ${formatETAFromDate(mastersProgress.projectedDate)} • ${pointsToNext.toLocaleString()} pts to ${nextTier} • Resets ${resetDateLabel}`
                 }
               </Text>
             </View>
           );
         })()}
 
-        {/* BAR 3: Prior Club Royale Level (ACHIEVED) - Only show if user is above Choice tier */}
+        {/* BAR 3: Historical tier earned */}
         {(() => {
-          const currentTier = getTierByPoints(clubRoyalePoints);
-          const currentTierIndex = TIER_ORDER.indexOf(currentTier);
-          
-          // Only show this bar if user has achieved at least Prime (index >= 1)
-          if (currentTierIndex < 1) {
+          const achievedTier = clubRoyaleHistoricalTier;
+          const achievedTierIndex = TIER_ORDER.indexOf(achievedTier);
+
+          if (achievedTierIndex < 1) {
             return null;
           }
-          
-          // The "achieved" bar shows the transition TO the current tier
-          const priorTier = TIER_ORDER[currentTierIndex - 1];
-          const achievedThreshold = CLUB_ROYALE_TIERS[currentTier]?.threshold || 0;
-          
+
+          const priorTier = TIER_ORDER[achievedTierIndex - 1];
+          const achievedThreshold = CLUB_ROYALE_TIERS[achievedTier]?.threshold || 0;
+
           return (
             <View style={[styles.progressCard, styles.achievedCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
                 <View style={styles.achievedLabelRow}>
                   <CheckCircle2 size={14} color={CLEAN_THEME.badge.achieved.text} />
                   <Text style={[styles.progressLabel, progressLabelStyle]}>
-                    {priorTier} → {currentTier} ({achievedThreshold.toLocaleString()} pts)
+                    {priorTier} → {achievedTier} ({achievedThreshold.toLocaleString()} pts)
                   </Text>
                 </View>
                 <View style={styles.achievedBadge}>
-                  <Text style={styles.achievedBadgeText}>ACHIEVED</Text>
+                  <Text style={styles.achievedBadgeText}>HISTORICAL</Text>
                 </View>
               </View>
               <View style={[styles.progressBarBg, progressBarTrackStyle]}>
@@ -397,7 +397,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 />
               </View>
               <Text style={[styles.progressEta, progressMetaStyle]}>
-                {currentTier} tier achieved! You have earned this status.
+                {achievedTier} status earned historically. Current-year points reset separately.
               </Text>
             </View>
           );
@@ -406,18 +406,18 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
       <View style={[styles.statsRow, progressCardStyle]}>
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, progressLabelStyle]}>{clubRoyalePoints.toLocaleString()}</Text>
-          <Text style={[styles.statLabel, progressMetaStyle]}>Casino Pts (CR)</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{clubRoyaleCurrentYearPoints.toLocaleString()}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>Current Season</Text>
+        </View>
+        <View style={[styles.statDivider, progressDividerStyle]} />
+        <View style={styles.statItem}>
+          <Text style={[styles.statValue, progressLabelStyle]}>{clubRoyaleHistoricalPoints.toLocaleString()}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>Historical Pts</Text>
         </View>
         <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
           <Text style={[styles.statValue, progressLabelStyle]}>{crownAnchorPoints}</Text>
           <Text style={[styles.statLabel, progressMetaStyle]}>C&A Nights</Text>
-        </View>
-        <View style={[styles.statDivider, progressDividerStyle]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, progressLabelStyle]}>{pinnacleProgress.nightsToNext}</Text>
-          <Text style={[styles.statLabel, progressMetaStyle]}>To Pinnacle</Text>
         </View>
       </View>
 
