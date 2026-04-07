@@ -181,7 +181,7 @@ export function calculateCasinoPayTable(
 
 export function calculateOfferValue(
   offer: CasinoOffer,
-  amountPaid: number = 0
+  _amountPaid: number = 0
 ): ValueBreakdown {
   const cabinType = offer.roomType || 'Balcony';
   const cabinPrice = getCabinPriceFromEntity(offer, cabinType) || 0;
@@ -273,19 +273,20 @@ export function calculateCruiseValue(
   let hasReceiptData = false;
   
   if (bookedCruise.totalRetailCost && bookedCruise.pricePaid !== undefined) {
-    cabinValueForTwo = bookedCruise.totalRetailCost * 2;
-    trueOutOfPocket = bookedCruise.pricePaid * 2;
-    casinoDiscount = (bookedCruise.totalCasinoDiscount || 0) * 2;
+    cabinValueForTwo = bookedCruise.totalRetailCost * guestCount;
+    trueOutOfPocket = bookedCruise.pricePaid * guestCount;
+    casinoDiscount = (bookedCruise.totalCasinoDiscount || 0) * guestCount;
     hasReceiptData = true;
-    console.log('[ValueCalculator] Using ACTUAL receipt data (doubled for 2 people):', {
+    console.log('[ValueCalculator] Using ACTUAL receipt data (× ' + guestCount + ' guests):', {
       cruiseId: cruise.id,
       shipName: cruise.shipName,
       totalRetailCostPerPerson: bookedCruise.totalRetailCost,
-      totalRetailCostForTwo: cabinValueForTwo,
+      totalRetailCostForGuests: cabinValueForTwo,
       pricePaidPerPerson: bookedCruise.pricePaid,
-      pricePaidForTwo: trueOutOfPocket,
+      pricePaidForGuests: trueOutOfPocket,
       casinoDiscountPerPerson: bookedCruise.totalCasinoDiscount || 0,
-      casinoDiscountForTwo: casinoDiscount,
+      casinoDiscountForGuests: casinoDiscount,
+      guestCount,
     });
   } else {
     let cabinPrice = getCabinPriceFromEntity(cruise, cabinType) || cruise.price || 0;
