@@ -31,6 +31,7 @@ import {
   MicOff,
   Volume2,
   VolumeX,
+  StopCircle,
   Cpu,
   Workflow,
   Radio,
@@ -794,26 +795,39 @@ export const AgentXChat = React.memo(function AgentXChat({
               </Text>
             </View>
 
-            <TouchableOpacity
-              style={[
-                styles.micButton,
-                styles.micButtonLarge,
-                isRecording && styles.micButtonRecording,
-                (isLoading || isTranscribing) && styles.micButtonDisabled,
-              ]}
-              onPress={handleMicPress}
-              disabled={isLoading || isTranscribing}
-              activeOpacity={0.7}
-              testID="mic-button"
-            >
-              {isTranscribing ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : isRecording ? (
-                <MicOff size={24} color={COLORS.white} />
-              ) : (
-                <Mic size={24} color={COLORS.white} />
+            <View style={styles.sendStopRow}>
+              <TouchableOpacity
+                style={[
+                  styles.micButton,
+                  styles.micButtonLarge,
+                  isRecording && styles.micButtonRecording,
+                  (isLoading || isTranscribing) && styles.micButtonDisabled,
+                ]}
+                onPress={handleMicPress}
+                disabled={isLoading || isTranscribing}
+                activeOpacity={0.7}
+                testID="mic-button"
+              >
+                {isTranscribing ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : isRecording ? (
+                  <MicOff size={24} color={COLORS.white} />
+                ) : (
+                  <Mic size={24} color={COLORS.white} />
+                )}
+              </TouchableOpacity>
+
+              {isSpeaking && (
+                <TouchableOpacity
+                  style={styles.stopSpeakingButton}
+                  onPress={stopSpeaking}
+                  activeOpacity={0.7}
+                  testID="agentx-stop-speaking-voice"
+                >
+                  <StopCircle size={20} color={COLORS.white} />
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <View style={[styles.inputWrapper, styles.manualComposer]} testID="agentx-composer">
@@ -831,18 +845,31 @@ export const AgentXChat = React.memo(function AgentXChat({
               testID="agentx-manual-input"
             />
 
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                (!manualInput.trim() || isLoading || isTranscribing || isRecording) && styles.sendButtonDisabled,
-              ]}
-              onPress={handleManualSend}
-              disabled={!manualInput.trim() || isLoading || isTranscribing || isRecording}
-              activeOpacity={0.7}
-              testID="agentx-send-button"
-            >
-              <Text style={styles.sendButtonText}>Send</Text>
-            </TouchableOpacity>
+            <View style={styles.sendStopRow}>
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  (!manualInput.trim() || isLoading || isTranscribing || isRecording) && styles.sendButtonDisabled,
+                ]}
+                onPress={handleManualSend}
+                disabled={!manualInput.trim() || isLoading || isTranscribing || isRecording}
+                activeOpacity={0.7}
+                testID="agentx-send-button"
+              >
+                <Text style={styles.sendButtonText}>Send</Text>
+              </TouchableOpacity>
+
+              {isSpeaking && (
+                <TouchableOpacity
+                  style={styles.stopSpeakingButton}
+                  onPress={stopSpeaking}
+                  activeOpacity={0.7}
+                  testID="agentx-stop-speaking-button"
+                >
+                  <StopCircle size={20} color={COLORS.white} />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
 
@@ -1325,6 +1352,19 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.white,
+  },
+  sendStopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stopSpeakingButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#DC2626',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   micButton: {
     width: 40,
