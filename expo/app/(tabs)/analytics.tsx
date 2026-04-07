@@ -41,7 +41,7 @@ import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { formatCurrency, formatNumber } from '@/lib/format';
+import { formatCurrency, formatCurrencyDetailed, formatNumber, formatPercentage } from '@/lib/format';
 import { calculateCruiseValue, calculatePortfolioValue } from '@/lib/valueCalculator';
 import { createDateFromString } from '@/lib/date';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
@@ -90,6 +90,7 @@ import { SessionsSummaryCard } from '@/components/SessionsSummaryCard';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+import { buildCruiseEconomicsSummary, type CruiseEconomicsRow } from '@/lib/casinoCruiseEconomics';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -138,6 +139,7 @@ export default function AnalyticsScreen() {
   const [roiFilter, setRoiFilter] = useState<ROIFilter>('high');
   const [refreshing, setRefreshing] = useState(false);
   const [showAllCruises, setShowAllCruises] = useState(false);
+  const [showAllEconomicsRows, setShowAllEconomicsRows] = useState<boolean>(false);
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationData, setCelebrationData] = useState<{
@@ -356,7 +358,7 @@ export default function AnalyticsScreen() {
     });
     
     if (unlockedAchievements.length > 0) {
-      haptics.success();
+      void haptics.success();
       setCelebrationData({
         title: 'Achievement Unlocked!',
         subtitle: `You earned: ${unlockedAchievements[0].replace(/_/g, ' ').toUpperCase()}`,
@@ -477,15 +479,38 @@ export default function AnalyticsScreen() {
     };
   }, [bookedCruises]);
 
+  const cruiseEconomicsSummary = useMemo(() => {
+    return buildCruiseEconomicsSummary(bookedCruises);
+  }, [bookedCruises]);
+
+  const visibleEconomicsRows = useMemo((): CruiseEconomicsRow[] => {
+    return showAllEconomicsRows
+      ? cruiseEconomicsSummary.rows
+      : cruiseEconomicsSummary.rows.slice(0, 8);
+  }, [cruiseEconomicsSummary.rows, showAllEconomicsRows]);
+
+  const formatSignedCurrencyDetailed = useCallback((amount: number): string => {
+    return `${amount >= 0 ? '+' : '-'}${formatCurrencyDetailed(Math.abs(amount))}`;
+  }, []);
+
   const stats = useMemo(() => {
     if (activeTab !== 'intelligence') return [] as { label: string; value: string; icon: any; color?: string }[];
     return [
-      { label: 'Cruises', value: realAnalytics.totalCruises.toString(), icon: Ship },
-      { label: 'Value/$1', value: realAnalytics.valuePerDollar >= 9999 ? '∞' : realAnalytics.valuePerDollar.toFixed(2), icon: DollarSign },
-      { label: 'Profit', value: formatCurrency(realAnalytics.totalProfit), color: realAnalytics.totalProfit >= 0 ? COLORS.success : COLORS.error, icon: TrendingUp },
-      { label: 'Casino Pts', value: formatNumber(currentPoints), icon: Award },
+      { label: 'Cruises', value: cruiseEconomicsSummary.totals.cruises.toString(), icon: Ship },
+      {
+        label: 'Retail/Paid',
+        value: `${cruiseEconomicsSummary.roiStyle.retailToPaidMultiple.toFixed(2)}x`,
+        icon: DollarSign,
+      },
+      {
+        label: 'Net Cash',
+        value: formatCurrency(cruiseEconomicsSummary.totals.totalNetCash),
+        color: cruiseEconomicsSummary.totals.totalNetCash >= 0 ? COLORS.success : COLORS.error,
+        icon: TrendingUp,
+      },
+      { label: 'Points', value: formatNumber(cruiseEconomicsSummary.totals.totalPoints), icon: Award },
     ];
-  }, [activeTab, realAnalytics, currentPoints]);
+  }, [activeTab, cruiseEconomicsSummary]);
 
   const perCruisePointsBreakdown = useMemo(() => {
     if (activeTab !== 'intelligence') return [] as { id: string; shipName: string; sailDate: string; nights: number; cruiseSource: string; casinoPoints: number; loyaltyPoints: number; casinoLabel: string; loyaltyLabel: string }[];
@@ -530,7 +555,15 @@ export default function AnalyticsScreen() {
     console.log('[CasinoCruiseExport] Building CSV...', { cruiseCount: cruises.length });
 
     const escapeCsv = (value: unknown): string => {
-      const str = String(value ?? '');
+      if (value === null || value === undefined) {
+        return '';
+      }
+
+      const str = typeof value === 'string'
+        ? value
+        : typeof value === 'number' || typeof value === 'boolean'
+          ? String(value)
+          : JSON.stringify(value);
       const needsQuotes = /[\n\r\t",]/.test(str);
       const escaped = str.replace(/"/g, '""');
       return needsQuotes ? `"${escaped}"` : escaped;
@@ -639,7 +672,7 @@ export default function AnalyticsScreen() {
       }
 
       const file = new ExpoFile(ExpoPaths.cache, filename);
-      await file.write(csv);
+      file.write(csv);
 
       const fileUri = file.uri;
 
@@ -888,31 +921,238 @@ export default function AnalyticsScreen() {
           <View style={styles.dataGrid}>
             <View style={styles.dataRow}>
               <Text style={styles.dataLabel}>Retail Value</Text>
-              <Text style={[styles.dataValue, { color: COLORS.success }]}>{formatCurrency(realAnalytics.completedRetailValue)}</Text>
+              <Text style={[styles.dataValue, { color: COLORS.success }]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetail)}</Text>
             </View>
             <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Taxes & Fees</Text>
-              <Text style={styles.dataValue}>-{formatCurrency(realAnalytics.completedTaxesFees)}</Text>
+              <Text style={styles.dataLabel}>Paid</Text>
+              <Text style={styles.dataValue}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid)}</Text>
             </View>
             <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Coin-In</Text>
-              <Text style={styles.dataValue}>{formatCurrency(casinoAnalytics.totalCoinIn)}</Text>
+              <Text style={styles.dataLabel}>Discount / Comp Value</Text>
+              <Text style={styles.dataValue}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalDiscount)}</Text>
             </View>
             <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Casino Result</Text>
-              <Text style={[styles.dataValue, { color: realAnalytics.completedNetCasinoResult >= 0 ? COLORS.success : COLORS.error }]}>
-                {realAnalytics.completedNetCasinoResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedNetCasinoResult)}
+              <Text style={styles.dataLabel}>Winnings Home</Text>
+              <Text style={[styles.dataValue, { color: cruiseEconomicsSummary.totals.totalWinningsHome >= 0 ? COLORS.success : COLORS.error }]}>
+                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome)}
               </Text>
             </View>
             <View style={[styles.dataRow, styles.dataRowTotal]}>
-              <Text style={styles.dataTotalLabel}>Net Profit</Text>
-              <Text style={[styles.dataTotalValue, { color: realAnalytics.completedProfit >= 0 ? COLORS.success : COLORS.error }]}>
-                {realAnalytics.completedProfit >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedProfit)}
+              <Text style={styles.dataTotalLabel}>Net Cash</Text>
+              <Text style={[styles.dataTotalValue, { color: cruiseEconomicsSummary.totals.totalNetCash >= 0 ? COLORS.success : COLORS.error }]}>
+                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalNetCash)}
               </Text>
             </View>
           </View>
         </View>
       </View>
+
+      {cruiseEconomicsSummary.rows.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.economicsCard} testID="casino-cruise-economics-card">
+            <View style={styles.economicsHeader}>
+              <View style={styles.economicsHeaderIcon}>
+                <TrendingUp size={18} color={COLORS.navyDeep} />
+              </View>
+              <View style={styles.economicsHeaderContent}>
+                <Text style={styles.economicsTitle}>Cruise Economics</Text>
+                <Text style={styles.economicsSubtitle}>Completed-cruise retail, paid, discount, points, winnings, and net cash</Text>
+              </View>
+            </View>
+
+            <View style={styles.economicsHeroStatsRow}>
+              <View style={styles.economicsHeroStat}>
+                <Text style={styles.economicsHeroStatValue}>{cruiseEconomicsSummary.totals.cruises}</Text>
+                <Text style={styles.economicsHeroStatLabel}>Cruises</Text>
+              </View>
+              <View style={styles.economicsHeroStat}>
+                <Text style={styles.economicsHeroStatValue}>{formatCurrency(cruiseEconomicsSummary.totals.totalPaid)}</Text>
+                <Text style={styles.economicsHeroStatLabel}>Paid</Text>
+              </View>
+              <View style={styles.economicsHeroStat}>
+                <Text style={styles.economicsHeroStatValue}>{formatCurrency(cruiseEconomicsSummary.totals.totalWinningsHome)}</Text>
+                <Text style={styles.economicsHeroStatLabel}>Winnings</Text>
+              </View>
+              <View style={styles.economicsHeroStat}>
+                <Text style={[styles.economicsHeroStatValue, { color: cruiseEconomicsSummary.totals.totalNetCash >= 0 ? COLORS.success : COLORS.error }]}>
+                  {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalNetCash)}
+                </Text>
+                <Text style={styles.economicsHeroStatLabel}>Net Cash</Text>
+              </View>
+            </View>
+
+            <ScrollView
+              horizontal={true}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.economicsTableContent}
+              testID="casino-cruise-economics-table"
+            >
+              <View style={styles.economicsTable}>
+                <View style={styles.economicsTableHeader}>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsDateCell]}>Sail Date</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsShipCell]}>Ship</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsNightsCell]}>Nights</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Retail</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Paid</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Discount</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsPointsCell]}>Points</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Winnings Home</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Net Cash</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsStatusCell]}>Status</Text>
+                </View>
+
+                {visibleEconomicsRows.map((row, index) => {
+                  const isLastVisibleRow = index === visibleEconomicsRows.length - 1;
+                  const statusStyle = row.status === 'known'
+                    ? styles.economicsStatusKnown
+                    : row.status === 'est. winnings'
+                      ? styles.economicsStatusEstimated
+                      : styles.economicsStatusPending;
+
+                  return (
+                    <View
+                      key={row.cruiseId}
+                      style={[styles.economicsTableRow, isLastVisibleRow && styles.economicsTableRowLast]}
+                      testID={`casino-economics-row-${row.cruiseId}`}
+                    >
+                      <Text style={[styles.economicsCell, styles.economicsDateCell]}>{row.sailDate}</Text>
+                      <Text style={[styles.economicsCell, styles.economicsShipCell]} numberOfLines={1}>{row.ship}</Text>
+                      <Text style={[styles.economicsCell, styles.economicsNightsCell]}>{row.nights}</Text>
+                      <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(row.retail)}</Text>
+                      <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(row.paid)}</Text>
+                      <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(row.discount)}</Text>
+                      <Text style={[styles.economicsCell, styles.economicsPointsCell]}>{formatNumber(row.points)}</Text>
+                      <Text style={[styles.economicsCell, styles.economicsMoneyCell, { color: row.winningsHome >= 0 ? COLORS.success : COLORS.error }]}>{formatSignedCurrencyDetailed(row.winningsHome)}</Text>
+                      <Text style={[styles.economicsCell, styles.economicsMoneyCell, row.netCash >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(row.netCash)}</Text>
+                      <View style={[styles.economicsStatusPill, statusStyle]}>
+                        <Text style={styles.economicsStatusText}>{row.status}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+
+                <View style={[styles.economicsTableRow, styles.economicsTotalsRow]}>
+                  <Text style={[styles.economicsCell, styles.economicsDateCell]}>TOTAL</Text>
+                  <Text style={[styles.economicsCell, styles.economicsShipCell]} numberOfLines={1}>Annual Totals</Text>
+                  <Text style={[styles.economicsCell, styles.economicsNightsCell]}>{cruiseEconomicsSummary.totals.totalNights}</Text>
+                  <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetail)}</Text>
+                  <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid)}</Text>
+                  <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalDiscount)}</Text>
+                  <Text style={[styles.economicsCell, styles.economicsPointsCell]}>{formatNumber(cruiseEconomicsSummary.totals.totalPoints)}</Text>
+                  <Text style={[styles.economicsCell, styles.economicsMoneyCell, { color: cruiseEconomicsSummary.totals.totalWinningsHome >= 0 ? COLORS.success : COLORS.error }]}>{formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome)}</Text>
+                  <Text style={[styles.economicsCell, styles.economicsMoneyCell, cruiseEconomicsSummary.totals.totalNetCash >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalNetCash)}</Text>
+                  <View style={[styles.economicsStatusPill, styles.economicsStatusKnown]}>
+                    <Text style={styles.economicsStatusText}>summary</Text>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+
+            {cruiseEconomicsSummary.rows.length > 8 && (
+              <TouchableOpacity
+                style={styles.viewMoreButton}
+                activeOpacity={0.7}
+                onPress={() => setShowAllEconomicsRows(!showAllEconomicsRows)}
+                testID="toggle-cruise-economics-rows"
+              >
+                <Text style={styles.viewMoreText}>
+                  {showAllEconomicsRows ? 'Show fewer economics rows' : `View all ${cruiseEconomicsSummary.rows.length} rows`}
+                </Text>
+                <ChevronDown
+                  size={16}
+                  color={COLORS.navyDeep}
+                  style={{ transform: [{ rotate: showAllEconomicsRows ? '180deg' : '0deg' }] }}
+                />
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.economicsSummarySection}>
+              <Text style={styles.economicsSectionTitle}>Final annual averages</Text>
+              <View style={styles.economicsSummaryGrid}>
+                {[
+                  { label: 'Avg nights / cruise', value: cruiseEconomicsSummary.averages.nightsPerCruise.toFixed(2) },
+                  { label: 'Avg retail / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.retailPerCruise) },
+                  { label: 'Avg paid / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise) },
+                  { label: 'Avg winnings / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise) },
+                  { label: 'Avg points / cruise', value: formatNumber(Math.round(cruiseEconomicsSummary.averages.pointsPerCruise)) },
+                  { label: 'Avg net cash / cruise', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise) },
+                  { label: 'Avg points / night', value: cruiseEconomicsSummary.averages.pointsPerNight.toFixed(2) },
+                ].map((item) => (
+                  <View key={item.label} style={styles.economicsSummaryCard}>
+                    <Text style={styles.economicsSummaryLabel}>{item.label}</Text>
+                    <Text style={styles.economicsSummaryValue}>{item.value}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.economicsSummarySection}>
+              <Text style={styles.economicsSectionTitle}>Final ROI-style summary</Text>
+              <View style={styles.economicsSummaryGrid}>
+                {[
+                  { label: 'Paid as % of retail', value: formatPercentage(cruiseEconomicsSummary.roiStyle.paidAsPercentOfRetail, 2) },
+                  { label: 'Comp coverage', value: formatPercentage(cruiseEconomicsSummary.roiStyle.compCoverage, 2) },
+                  { label: 'Retail-to-paid multiple', value: `${cruiseEconomicsSummary.roiStyle.retailToPaidMultiple.toFixed(2)}x` },
+                  { label: 'Winnings multiple vs paid', value: `${cruiseEconomicsSummary.roiStyle.winningsMultipleVsPaid.toFixed(2)}x` },
+                  { label: 'Net ROI on paid', value: formatPercentage(cruiseEconomicsSummary.roiStyle.netRoiOnPaid, 1) },
+                ].map((item) => (
+                  <View key={item.label} style={styles.economicsSummaryCard}>
+                    <Text style={styles.economicsSummaryLabel}>{item.label}</Text>
+                    <Text style={styles.economicsSummaryValue}>{item.value}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.economicsSummarySection}>
+              <Text style={styles.economicsSectionTitle}>Best / worst snapshots</Text>
+              <View style={styles.economicsSnapshotsList}>
+                {[
+                  {
+                    label: 'Best cash cruise',
+                    row: cruiseEconomicsSummary.snapshots.bestCashCruise,
+                    value: cruiseEconomicsSummary.snapshots.bestCashCruise ? formatSignedCurrencyDetailed(cruiseEconomicsSummary.snapshots.bestCashCruise.netCash) : '—',
+                    detail: cruiseEconomicsSummary.snapshots.bestCashCruise ? `Paid ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.bestCashCruise.paid)} • Winnings ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.bestCashCruise.winningsHome)}` : 'No data',
+                  },
+                  {
+                    label: 'Biggest comp-value cruise',
+                    row: cruiseEconomicsSummary.snapshots.biggestCompValueCruise,
+                    value: cruiseEconomicsSummary.snapshots.biggestCompValueCruise ? formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.biggestCompValueCruise.discount) : '—',
+                    detail: cruiseEconomicsSummary.snapshots.biggestCompValueCruise ? `Retail ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.biggestCompValueCruise.retail)} • Paid ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.biggestCompValueCruise.paid)}` : 'No data',
+                  },
+                  {
+                    label: 'Best points cruise',
+                    row: cruiseEconomicsSummary.snapshots.bestPointsCruise,
+                    value: cruiseEconomicsSummary.snapshots.bestPointsCruise ? formatNumber(cruiseEconomicsSummary.snapshots.bestPointsCruise.points) : '—',
+                    detail: cruiseEconomicsSummary.snapshots.bestPointsCruise ? `${cruiseEconomicsSummary.snapshots.bestPointsCruise.nights} nights` : 'No data',
+                  },
+                  {
+                    label: 'Best points-per-night',
+                    row: cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise,
+                    value: cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise ? cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise.pointsPerNight.toFixed(2) : '—',
+                    detail: cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise ? `${formatNumber(cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise.points)} pts across ${cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise.nights} nights` : 'No data',
+                  },
+                  {
+                    label: 'Weakest points cruise',
+                    row: cruiseEconomicsSummary.snapshots.weakestPointsCruise,
+                    value: cruiseEconomicsSummary.snapshots.weakestPointsCruise ? formatNumber(cruiseEconomicsSummary.snapshots.weakestPointsCruise.points) : '—',
+                    detail: cruiseEconomicsSummary.snapshots.weakestPointsCruise ? `${cruiseEconomicsSummary.snapshots.weakestPointsCruise.nights} nights` : 'No data',
+                  },
+                ].map((item) => (
+                  <View key={item.label} style={styles.economicsSnapshotCard}>
+                    <View style={styles.economicsSnapshotHeader}>
+                      <Text style={styles.economicsSnapshotLabel}>{item.label}</Text>
+                      <Text style={styles.economicsSnapshotValue}>{item.value}</Text>
+                    </View>
+                    <Text style={styles.economicsSnapshotShip}>{item.row ? `${item.row.ship} • ${item.row.sailDate}` : 'No cruise matched yet'}</Text>
+                    <Text style={styles.economicsSnapshotDetail}>{item.detail}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
 
       <View style={styles.section}>
         <View style={styles.cleanCard}>
@@ -922,23 +1162,23 @@ export default function AnalyticsScreen() {
           </View>
           <View style={styles.compactMetricsGrid}>
             <View style={styles.compactMetric}>
-              <Text style={styles.compactMetricValue}>{formatCurrency(casinoAnalytics.totalCoinIn)}</Text>
-              <Text style={styles.compactMetricLabel}>Coin-In</Text>
+              <Text style={styles.compactMetricValue}>{formatCurrency(cruiseEconomicsSummary.totals.totalWinningsHome)}</Text>
+              <Text style={styles.compactMetricLabel}>Winnings Home</Text>
             </View>
             <View style={styles.compactMetric}>
-              <Text style={[styles.compactMetricValue, { color: casinoAnalytics.netResult >= 0 ? COLORS.success : COLORS.error }]}>
-                {casinoAnalytics.netResult >= 0 ? '+' : ''}{formatCurrency(casinoAnalytics.netResult)}
+              <Text style={[styles.compactMetricValue, { color: cruiseEconomicsSummary.totals.totalNetCash >= 0 ? COLORS.success : COLORS.error }]}>
+                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalNetCash)}
               </Text>
-              <Text style={styles.compactMetricLabel}>Win/Loss</Text>
+              <Text style={styles.compactMetricLabel}>Net Cash</Text>
             </View>
             <View style={styles.compactMetric}>
-              <Text style={styles.compactMetricValue}>{formatNumber(currentPoints)}</Text>
-              <Text style={styles.compactMetricLabel}>Casino Pts</Text>
+              <Text style={styles.compactMetricValue}>{formatNumber(cruiseEconomicsSummary.totals.totalPoints)}</Text>
+              <Text style={styles.compactMetricLabel}>Total Pts</Text>
             </View>
           </View>
-          {casinoAnalytics.completedCruisesCount > 0 && (
+          {cruiseEconomicsSummary.totals.cruises > 0 && (
             <View style={styles.avgStatsRow}>
-              <Text style={styles.avgStatText}>Avg/Cruise: {formatCurrency(casinoAnalytics.avgCoinInPerCruise)} coin-in • {casinoAnalytics.avgWinLossPerCruise >= 0 ? '+' : ''}{formatCurrency(casinoAnalytics.avgWinLossPerCruise)} • {formatNumber(Math.round(casinoAnalytics.avgPointsPerCruise))} pts</Text>
+              <Text style={styles.avgStatText}>Avg/Cruise: {formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise)} paid • {formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise)} winnings • {formatNumber(Math.round(cruiseEconomicsSummary.averages.pointsPerCruise))} pts</Text>
             </View>
           )}
         </View>
@@ -1127,7 +1367,7 @@ export default function AnalyticsScreen() {
     pointsEarned: number;
     pph: number;
   }) => {
-    handleAddSession({
+    void handleAddSession({
       startTime: new Date(Date.now() - data.durationMinutes * 60 * 1000).toTimeString().slice(0, 5),
       endTime: new Date().toTimeString().slice(0, 5),
       durationMinutes: data.durationMinutes,
@@ -1183,7 +1423,7 @@ export default function AnalyticsScreen() {
       console.log('[Analytics] Total sessions after generation:', sessions.length + count);
       
       if (count > 0) {
-        haptics.success();
+        void haptics.success();
         setCelebrationData({
           title: forceRegenerate ? 'Sessions Regenerated!' : 'Historical Sessions Generated!',
           subtitle: `Created ${count} session records from ${completedCruises.length} cruises`,
@@ -1284,7 +1524,7 @@ export default function AnalyticsScreen() {
         <WeeklyGoalsCard
           compact={true}
           onGoalComplete={(goal) => {
-            haptics.success();
+            void haptics.success();
             setCelebrationData({
               title: 'Goal Completed!',
               subtitle: `You completed: ${goal.type} goal`,
@@ -3250,5 +3490,238 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
     minWidth: 36,
     textAlign: 'right' as const,
+  },
+  economicsCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    ...SHADOW.sm,
+  },
+  economicsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  economicsHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(30, 58, 95, 0.08)',
+    marginRight: SPACING.sm,
+  },
+  economicsHeaderContent: {
+    flex: 1,
+  },
+  economicsTitle: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  economicsSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#475569',
+    marginTop: 2,
+  },
+  economicsHeroStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  economicsHeroStat: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    backgroundColor: '#F8FBFF',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  economicsHeroStatValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  economicsHeroStatLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 4,
+  },
+  economicsTableContent: {
+    paddingBottom: SPACING.sm,
+  },
+  economicsTable: {
+    minWidth: 1040,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: BORDER_RADIUS.md,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+  },
+  economicsTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#DBEAFE',
+  },
+  economicsHeaderCell: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  economicsTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  economicsTableRowLast: {
+    borderBottomColor: '#E2E8F0',
+  },
+  economicsTotalsRow: {
+    backgroundColor: '#F8FAFC',
+    borderTopWidth: 1,
+    borderTopColor: '#CBD5E1',
+    borderBottomWidth: 0,
+  },
+  economicsCell: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    fontSize: 12,
+    color: '#0F172A',
+  },
+  economicsDateCell: {
+    width: 98,
+  },
+  economicsShipCell: {
+    width: 190,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  economicsNightsCell: {
+    width: 58,
+    textAlign: 'center',
+  },
+  economicsMoneyCell: {
+    width: 116,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  economicsPointsCell: {
+    width: 92,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  economicsStatusCell: {
+    width: 110,
+  },
+  economicsStatusPill: {
+    width: 98,
+    marginHorizontal: 6,
+    marginVertical: 6,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  economicsStatusKnown: {
+    backgroundColor: 'rgba(5, 150, 105, 0.14)',
+  },
+  economicsStatusEstimated: {
+    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+  },
+  economicsStatusPending: {
+    backgroundColor: 'rgba(148, 163, 184, 0.18)',
+  },
+  economicsStatusText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  economicsPositiveValue: {
+    color: COLORS.success,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  economicsNegativeValue: {
+    color: COLORS.error,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  economicsSummarySection: {
+    marginTop: SPACING.md,
+  },
+  economicsSectionTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    marginBottom: SPACING.sm,
+  },
+  economicsSummaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  economicsSummaryCard: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  economicsSummaryLabel: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  economicsSummaryValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    marginTop: 4,
+  },
+  economicsSnapshotsList: {
+    gap: SPACING.sm,
+  },
+  economicsSnapshotCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  economicsSnapshotHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  economicsSnapshotLabel: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  economicsSnapshotValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  economicsSnapshotShip: {
+    fontSize: 11,
+    color: '#0F172A',
+    marginTop: 6,
+  },
+  economicsSnapshotDetail: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
   },
 });
