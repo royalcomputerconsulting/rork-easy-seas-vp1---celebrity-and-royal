@@ -919,29 +919,49 @@ async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function fetchPdfText(url: string, retries = 3): Promise<string> {
+function jitteredDelay(baseMs: number): number {
+  return baseMs + Math.floor(Math.random() * baseMs * 0.5);
+}
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+const MAX_RETRIES = 5;
+const FETCH_TIMEOUT_MS = 25000;
+const BASE_RETRY_DELAY_MS = 1500;
+
+async function fetchPdfText(url: string, retries = MAX_RETRIES): Promise<string> {
   console.log('[CertificateExplorer] Fetching PDF:', url);
 
-  const HEADERS = {
+  const HEADERS: Record<string, string> = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'Accept': 'application/pdf,application/octet-stream,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'gzip, deflate, br',
     'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
     'Referer': 'https://www.royalcaribbean.com/',
+    'Origin': 'https://www.royalcaribbean.com',
   };
 
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < retries; attempt += 1) {
     if (attempt > 0) {
-      const delay = 1000 * attempt;
+      const delay = jitteredDelay(BASE_RETRY_DELAY_MS * attempt);
       console.log(`[CertificateExplorer] Retry ${attempt}/${retries - 1} after ${delay}ms for ${url}`);
       await sleep(delay);
     }
 
     try {
-      const response = await fetch(url, { headers: HEADERS });
+      const response = await fetchWithTimeout(url, { headers: HEADERS }, FETCH_TIMEOUT_MS);
 
       if (response.status === 503 || response.status === 429) {
         lastError = new Error(`Server returned ${response.status} for ${url}`);
@@ -952,7 +972,6 @@ async function fetchPdfText(url: string, retries = 3): Promise<string> {
       if (response.status === 403) {
         lastError = new Error(`Blocked by CDN (403) for ${url}`);
         console.warn('[CertificateExplorer] CDN blocked (403), retrying:', { url, attempt });
-        await sleep(500 + Math.random() * 1000);
         continue;
       }
 
@@ -961,24 +980,60 @@ async function fetchPdfText(url: string, retries = 3): Promise<string> {
         return '';
       }
 
+      if (response.status >= 500) {
+        lastError = new Error(`Server error ${response.status} for ${url}`);
+        console.warn('[CertificateExplorer] Server error, retrying:', { status: response.status, url, attempt });
+        continue;
+      }
+
       if (!response.ok) {
-        throw new Error(`Request failed with ${response.status} for ${url}`);
+        lastError = new Error(`Request failed with ${response.status} for ${url}`);
+        console.warn('[CertificateExplorer] Non-OK response:', { status: response.status, url, attempt });
+        continue;
       }
 
       const pdfBytes = new Uint8Array(await response.arrayBuffer());
+      if (pdfBytes.length === 0) {
+        console.warn('[CertificateExplorer] Empty response body for:', url);
+        lastError = new Error(`Empty response body for ${url}`);
+        continue;
+      }
+
       console.log('[CertificateExplorer] PDF downloaded:', { url, bytes: pdfBytes.length });
       return extractPdfText(pdfBytes);
     } catch (error) {
-      if (error instanceof Error && (error.message.includes('503') || error.message.includes('429') || error.message.includes('fetch'))) {
-        lastError = error;
-        console.warn('[CertificateExplorer] Network error on attempt', attempt, ':', error.message);
+      const isAbort = error instanceof DOMException && error.name === 'AbortError';
+      const isNetworkError = error instanceof TypeError && (
+        error.message.includes('fetch') ||
+        error.message.includes('Failed') ||
+        error.message.includes('network') ||
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('ENOTFOUND') ||
+        error.message.includes('ETIMEDOUT')
+      );
+      const isRetryableError = error instanceof Error && (
+        error.message.includes('503') ||
+        error.message.includes('429') ||
+        error.message.includes('fetch') ||
+        error.message.includes('Failed') ||
+        error.message.includes('timeout') ||
+        error.message.includes('ECONNRESET') ||
+        error.message.includes('socket')
+      );
+
+      if (isAbort || isNetworkError || isRetryableError) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        console.warn(`[CertificateExplorer] ${isAbort ? 'Timeout' : 'Network error'} on attempt ${attempt}:`, lastError.message);
         continue;
       }
-      throw error;
+
+      console.error('[CertificateExplorer] Non-retryable error:', error);
+      return '';
     }
   }
 
-  throw lastError ?? new Error(`Failed to fetch ${url} after ${retries} attempts`);
+  console.error(`[CertificateExplorer] All ${retries} attempts exhausted for ${url}:`, lastError?.message);
+  return '';
 }
 
 const KNOWN_CERTIFICATE_SUFFIXES = [
@@ -1214,7 +1269,10 @@ export const certificateExplorerRouter = createTRPCRouter({
 
       const pdfScanLog: PdfScanLogEntry[] = [];
 
-      const sailingResults = await mapWithConcurrency<IndexEntry, SailingEntry[]>(allIndexEntries, 4, async (entry) => {
+      const sailingResults = await mapWithConcurrency<IndexEntry, SailingEntry[]>(allIndexEntries, 2, async (entry, entryIndex) => {
+        if (entryIndex > 0 && entryIndex % 4 === 0) {
+          await sleep(jitteredDelay(800));
+        }
         try {
           const pdfText = await fetchPdfText(entry.pdfUrl);
 

@@ -245,10 +245,16 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
       });
     } catch (error) {
       console.error('[CertificateExplorerModal] Certificate examination failed:', error);
-      addLog('error', error instanceof Error ? error.message : 'Unknown error — check connection');
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      const isNetworkError = errorMsg.includes('fetch') || errorMsg.includes('Failed') || errorMsg.includes('network') || errorMsg.includes('timeout');
+      const userMessage = isNetworkError
+        ? 'Network issue — check your connection and try again. Royal Caribbean\'s server may be temporarily slow.'
+        : errorMsg;
+      addLog('error', `Request failed: ${userMessage}`);
+      addLog('info', 'Tip: wait a few seconds and try again. The Royal Caribbean CDN can be intermittent.');
       Alert.alert(
         'Search failed',
-        error instanceof Error ? error.message : 'Unable to examine certificates right now.'
+        userMessage
       );
     }
   }, [shipQuery, monthCode, sailDate, includeA, includeC, examineMutation, addLog]);
