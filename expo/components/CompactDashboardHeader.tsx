@@ -1054,7 +1054,7 @@ const styles = StyleSheet.create({
     color: COLORS.goldDark,
   },
   pinnacleHighlightWhite: {
-    color: '#FFFFFF',
+    color: COLORS.navyDeep,
     fontWeight: '700' as const,
   },
   achievedBadge: {
