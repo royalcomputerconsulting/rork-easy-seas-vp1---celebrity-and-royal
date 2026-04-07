@@ -41,6 +41,11 @@ export interface RoyalCaribbeanLoyaltyApiResponse {
 export interface LoyaltyApiInformation {
   captainsClubId?: string;
   crownAndAnchorId?: string;
+  crownAndAnchorNumber?: string;
+  crownAnchorNumber?: string;
+  crownAndAnchorSocietyId?: string;
+  crownAndAnchorSocietyNumber?: string;
+  crownAndAnchorMembershipNumber?: string;
 
   captainsClubLoyaltyTier?: string;
   captainsClubLoyaltyIndividualPoints?: number;
@@ -59,6 +64,11 @@ export interface LoyaltyApiInformation {
   clubRoyaleLoyaltyRelationshipPoints?: number;
 
   crownAndAnchorSocietyLoyaltyTier?: string;
+  crownAndAnchorSocietyTier?: string;
+  crownAndAnchorTier?: string;
+  crownAnchorTier?: string;
+  crownAndAnchorLevel?: string;
+  crownAnchorLevel?: string;
   crownAndAnchorSocietyLoyaltyIndividualPoints?: number;
   crownAndAnchorSocietyLoyaltyRelationshipPoints?: number;
   crownAndAnchorSocietyNextTier?: string;

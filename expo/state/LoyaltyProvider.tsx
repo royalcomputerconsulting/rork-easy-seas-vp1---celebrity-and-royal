@@ -341,8 +341,18 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
         console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor points:', data.crownAndAnchorPointsFromApi);
       }
       
+      const royalUpdates: Record<string, string | number> = {};
+      if (typeof data.crownAndAnchorId === 'string' && data.crownAndAnchorId.trim().length > 0) {
+        royalUpdates.crownAnchorNumber = data.crownAndAnchorId.trim();
+        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor number:', data.crownAndAnchorId.trim());
+      }
+      if (typeof data.crownAndAnchorTier === 'string' && data.crownAndAnchorTier.trim().length > 0) {
+        royalUpdates.crownAnchorLevel = data.crownAndAnchorTier.trim();
+        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor level:', data.crownAndAnchorTier.trim());
+      }
+
       // Update Celebrity loyalty data
-      const celebrityUpdates: any = {};
+      const celebrityUpdates: Record<string, string | number> = {};
       if (data.celebrityBlueChipPoints !== undefined) {
         celebrityUpdates.celebrityBlueChipPoints = data.celebrityBlueChipPoints;
         console.log('[LoyaltyProvider] ✓ Updated Celebrity Blue Chip points:', data.celebrityBlueChipPoints);
@@ -353,15 +363,15 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       }
       
       // Update Silversea loyalty data
-      const silverseaUpdates: any = {};
+      const silverseaUpdates: Record<string, string | number> = {};
       if (data.venetianSocietyTier !== undefined && data.venetianSocietyTier !== null) {
         silverseaUpdates.silverseaVenetianTier = data.venetianSocietyTier;
         console.log('[LoyaltyProvider] ✓ Updated Silversea Venetian tier:', data.venetianSocietyTier);
       }
       
       // Apply all updates to user profile if any exist
-      if (Object.keys(celebrityUpdates).length > 0 || Object.keys(silverseaUpdates).length > 0) {
-        const allUpdates = { ...celebrityUpdates, ...silverseaUpdates };
+      if (Object.keys(royalUpdates).length > 0 || Object.keys(celebrityUpdates).length > 0 || Object.keys(silverseaUpdates).length > 0) {
+        const allUpdates = { ...royalUpdates, ...celebrityUpdates, ...silverseaUpdates };
         console.log('[LoyaltyProvider] ✓ Updating user profile with all cruise line data:', allUpdates);
         
         // Store to AsyncStorage to persist across all three cruise lines

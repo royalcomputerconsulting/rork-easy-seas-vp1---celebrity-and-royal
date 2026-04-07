@@ -2311,6 +2311,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`  → Crown & Anchor #: ${cAndAId.trim()}`, 'info');
           }
 
+          const cAndALevel = effectiveExtendedLoyalty?.crownAndAnchorTier;
+          if (cAndALevel && cAndALevel.trim().length > 0) {
+            profileUpdates.crownAnchorLevel = cAndALevel.trim();
+            addLog(`  → Crown & Anchor level: ${cAndALevel.trim()}`, 'info');
+          }
+
           // Sync Celebrity loyalty numbers to user profile
           if (effectiveExtendedLoyalty) {
             if (typeof effectiveExtendedLoyalty.captainsClubPoints === 'number') {

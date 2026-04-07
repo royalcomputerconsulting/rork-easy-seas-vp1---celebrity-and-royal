@@ -42,9 +42,11 @@ function buildExtendedLoyaltyData(
 
   const crownAndAnchorTierRaw = toStringValue(getValue(loyalty, [
     'crownAndAnchorSocietyLoyaltyTier',
+    'crownAndAnchorSocietyTier',
     'crownAndAnchorTier',
     'crownAnchorTier',
     'crownAndAnchorLevel',
+    'crownAnchorLevel',
   ]));
   const crownAndAnchorPointsRaw = toNumber(getValue(loyalty, [
     'crownAndAnchorSocietyLoyaltyIndividualPoints',
@@ -55,6 +57,15 @@ function buildExtendedLoyaltyData(
   const crownAndAnchorRelationshipPointsRaw = toNumber(getValue(loyalty, [
     'crownAndAnchorSocietyLoyaltyRelationshipPoints',
     'crownAndAnchorRelationshipPoints',
+  ]));
+
+  const crownAndAnchorIdRaw = toStringValue(getValue(loyalty, [
+    'crownAndAnchorId',
+    'crownAndAnchorNumber',
+    'crownAnchorNumber',
+    'crownAndAnchorSocietyId',
+    'crownAndAnchorSocietyNumber',
+    'crownAndAnchorMembershipNumber',
   ]));
 
   const clubRoyaleTierRaw = toStringValue(getValue(loyalty, [
@@ -93,7 +104,7 @@ function buildExtendedLoyaltyData(
 
   return {
     accountId,
-    crownAndAnchorId: toStringValue(loyalty.crownAndAnchorId),
+    crownAndAnchorId: crownAndAnchorIdRaw,
     crownAndAnchorLevel: formatTierName(crownAndAnchorTierRaw),
     crownAndAnchorTier: formatTierName(crownAndAnchorTierRaw),
     crownAndAnchorPoints: crownAndAnchorPointsRaw?.toString(),

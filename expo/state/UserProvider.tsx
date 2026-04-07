@@ -43,6 +43,7 @@ export interface UserProfile {
   isOwner?: boolean;
   avatarUrl?: string;
   crownAnchorNumber?: string;
+  crownAnchorLevel?: string;
   playingHours?: PlayingHours;
   celebrityEmail?: string;
   celebrityCaptainsClubNumber?: string;
@@ -84,6 +85,7 @@ const DEFAULT_OWNER = {
   name: 'Player',
   email: 'player@easyseas.app',
   crownAnchorNumber: '',
+  crownAnchorLevel: '',
   celebrityEmail: '',
   celebrityCaptainsClubNumber: '',
   celebrityCaptainsClubPoints: 0,
@@ -120,6 +122,7 @@ function createOwnerProfile(email: string | null): UserProfile {
     email: email ?? DEFAULT_OWNER.email,
     isOwner: true,
     crownAnchorNumber: DEFAULT_OWNER.crownAnchorNumber,
+    crownAnchorLevel: DEFAULT_OWNER.crownAnchorLevel,
     celebrityEmail: DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: DEFAULT_OWNER.celebrityCaptainsClubNumber,
     celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
@@ -189,6 +192,7 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     isOwner: userRecord.isOwner === true,
     avatarUrl: typeof userRecord.avatarUrl === 'string' ? userRecord.avatarUrl : undefined,
     crownAnchorNumber: typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber,
+    crownAnchorLevel: typeof userRecord.crownAnchorLevel === 'string' ? userRecord.crownAnchorLevel : DEFAULT_OWNER.crownAnchorLevel,
     playingHours: sanitizePlayingHours(userRecord.playingHours),
     celebrityEmail: typeof userRecord.celebrityEmail === 'string' ? userRecord.celebrityEmail : DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: typeof userRecord.celebrityCaptainsClubNumber === 'string' ? userRecord.celebrityCaptainsClubNumber : DEFAULT_OWNER.celebrityCaptainsClubNumber,
