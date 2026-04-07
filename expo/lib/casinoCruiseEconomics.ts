@@ -127,6 +127,26 @@ interface TaxesFeesEstimateInfo {
   note: string | null;
 }
 
+interface AnnualCruiseOverride {
+  ship: string;
+  sailDate: string;
+  amountPaid?: number;
+  netEffectivePaid?: number;
+  winningsBroughtHome?: number;
+  nextCruiseOffsetApplied?: boolean;
+}
+
+const ANNUAL_CRUISE_OVERRIDES: AnnualCruiseOverride[] = [
+  {
+    ship: 'Harmony of the Seas',
+    sailDate: '2025-04-20',
+    amountPaid: 142,
+    netEffectivePaid: -60,
+    winningsBroughtHome: 8000,
+    nextCruiseOffsetApplied: true,
+  },
+];
+
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -213,6 +233,24 @@ function applyRetailOverrides(ship: string, nights: number, retailValue: number 
   }
 
   return retailValue;
+}
+
+function applyAnnualCruiseOverrides(cruise: BookedCruise): BookedCruise {
+  const matchedOverride = ANNUAL_CRUISE_OVERRIDES.find((override) => (
+    override.ship === (cruise.shipName ?? '') && override.sailDate === (cruise.sailDate ?? '')
+  ));
+
+  if (!matchedOverride) {
+    return cruise;
+  }
+
+  return {
+    ...cruise,
+    amountPaid: matchedOverride.amountPaid ?? cruise.amountPaid,
+    netEffectivePaid: matchedOverride.netEffectivePaid ?? cruise.netEffectivePaid,
+    winningsBroughtHome: matchedOverride.winningsBroughtHome ?? cruise.winningsBroughtHome,
+    nextCruiseOffsetApplied: matchedOverride.nextCruiseOffsetApplied ?? cruise.nextCruiseOffsetApplied,
+  };
 }
 
 export function calcCruiseValueCaptured(retailValue: number, netEffectivePaid: number): number {
@@ -320,7 +358,24 @@ function getTaxesFeesEstimate(
 }
 
 function getNetEffectivePaid(cruise: BookedCruise, taxesFeesEstimate: number): { value: number; isActual: boolean; nextCruiseOffsetApplied: boolean | null; note: string | null } {
-  const actualAmountPaid = getFirstNumber(cruise.amountPaid, cruise.pricePaid, cruise.totalPrice, cruise.price, cruise.netEffectivePaid);
+  const explicitNetEffectivePaid = getFirstNumber(cruise.netEffectivePaid);
+  if (isNumber(explicitNetEffectivePaid)) {
+    const actualAmountPaid = getFirstNumber(cruise.amountPaid, cruise.pricePaid, cruise.totalPrice, cruise.price);
+    const prepaidOffset = isNumber(actualAmountPaid)
+      ? round2(actualAmountPaid - explicitNetEffectivePaid)
+      : null;
+
+    return {
+      value: round2(explicitNetEffectivePaid),
+      isActual: true,
+      nextCruiseOffsetApplied: cruise.nextCruiseOffsetApplied ?? cruise.usedNextCruiseCertificate ?? (isNumber(prepaidOffset) && prepaidOffset > 0 ? true : null),
+      note: isNumber(prepaidOffset) && prepaidOffset > 0
+        ? `Net paid uses stored effective paid amount after ${prepaidOffset.toFixed(2)} in prepaid credits/offsets.`
+        : 'Net paid uses stored effective paid amount.',
+    };
+  }
+
+  const actualAmountPaid = getFirstNumber(cruise.amountPaid, cruise.pricePaid, cruise.totalPrice, cruise.price);
   if (isNumber(actualAmountPaid)) {
     return {
       value: round2(actualAmountPaid),
@@ -410,41 +465,42 @@ function getLowestBy(rows: CruiseEconomicsRow[], selector: (row: CruiseEconomics
 }
 
 function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
-  const breakdown = calculateCruiseValue(cruise);
-  const ship = cruise.shipName || 'Unknown Ship';
-  const sailDate = cruise.sailDate || '';
-  const returnDate = cruise.returnDate || sailDate;
-  const nights = cruise.nights || 0;
-  const brand = getCruiseBrand(cruise);
-  const status = cruise.status === 'completed' || cruise.completionState === 'completed' ? 'completed' : cruise.status === 'booked' ? 'booked' : 'other';
+  const cruiseForEconomics = applyAnnualCruiseOverrides(cruise);
+  const breakdown = calculateCruiseValue(cruiseForEconomics);
+  const ship = cruiseForEconomics.shipName || 'Unknown Ship';
+  const sailDate = cruiseForEconomics.sailDate || '';
+  const returnDate = cruiseForEconomics.returnDate || sailDate;
+  const nights = cruiseForEconomics.nights || 0;
+  const brand = getCruiseBrand(cruiseForEconomics);
+  const status = cruiseForEconomics.status === 'completed' || cruiseForEconomics.completionState === 'completed' ? 'completed' : cruiseForEconomics.status === 'booked' ? 'booked' : 'other';
 
   const rawRetailValue = getFirstNumber(
-    cruise.retailValue,
-    cruise.totalRetailCost,
-    cruise.originalPrice,
+    cruiseForEconomics.retailValue,
+    cruiseForEconomics.totalRetailCost,
+    cruiseForEconomics.originalPrice,
     breakdown.totalRetailValue,
     breakdown.cabinValueForTwo,
   );
   const retailValue = applyRetailOverrides(ship, nights, rawRetailValue);
   const retailIsActual = isNumber(rawRetailValue) || ship === 'Star of the Seas' || ship === 'Harmony of the Seas' || (ship === 'Liberty of the Seas' && nights === 9);
 
-  const taxesFeesInfo = getTaxesFeesEstimate(cruise, breakdown);
+  const taxesFeesInfo = getTaxesFeesEstimate(cruiseForEconomics, breakdown);
   const taxesFeesEstimate = taxesFeesInfo.value;
-  const paidInfo = getNetEffectivePaid(cruise, taxesFeesEstimate);
-  const winningsInfo = getEstimatedWinnings(cruise);
-  const pointsInfo = getEstimatedPoints(cruise);
+  const paidInfo = getNetEffectivePaid(cruiseForEconomics, taxesFeesEstimate);
+  const winningsInfo = getEstimatedWinnings(cruiseForEconomics);
+  const pointsInfo = getEstimatedPoints(cruiseForEconomics);
 
-  const pointDollarValue = round2(getFirstNumber(cruise.pointDollarValue, DEFAULT_POINT_DOLLAR_VALUE) ?? DEFAULT_POINT_DOLLAR_VALUE);
+  const pointDollarValue = round2(getFirstNumber(cruiseForEconomics.pointDollarValue, DEFAULT_POINT_DOLLAR_VALUE) ?? DEFAULT_POINT_DOLLAR_VALUE);
   const pointValueEarned = calcPointValue(pointsInfo.value, pointDollarValue);
 
-  const explicitCoinIn = getFirstNumber(cruise.coinIn);
+  const explicitCoinIn = getFirstNumber(cruiseForEconomics.coinIn);
   const coinIn = isNumber(explicitCoinIn)
     ? round2(explicitCoinIn)
     : round2(pointsInfo.value * DOLLARS_PER_POINT);
   const coinInWasEstimated = !isNumber(explicitCoinIn);
 
-  const houseEdge = round2(getFirstNumber(cruise.houseEdge, DEFAULT_HOUSE_EDGE) ?? DEFAULT_HOUSE_EDGE);
-  const hoursPlayed = getFirstNumber(cruise.hoursPlayed);
+  const houseEdge = round2(getFirstNumber(cruiseForEconomics.houseEdge, DEFAULT_HOUSE_EDGE) ?? DEFAULT_HOUSE_EDGE);
+  const hoursPlayed = getFirstNumber(cruiseForEconomics.hoursPlayed);
   const theoreticalLoss = calcTheoreticalLoss(coinIn, houseEdge);
   const netTheoretical = calcNetTheoretical(pointValueEarned, theoreticalLoss);
 
@@ -510,12 +566,12 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     brand,
     status,
     retailValue: retailForCalc,
-    amountPaid: getFirstNumber(cruise.amountPaid, cruise.pricePaid, cruise.totalPrice, cruise.price),
+    amountPaid: getFirstNumber(cruiseForEconomics.amountPaid, cruiseForEconomics.pricePaid, cruiseForEconomics.totalPrice, cruiseForEconomics.price),
     taxesFeesEstimate,
     nextCruiseOffsetApplied: paidInfo.nextCruiseOffsetApplied,
     netEffectivePaid,
     winningsBroughtHome,
-    casinoChargesRoomBilled: getFirstNumber(cruise.casinoChargesRoomBilled, cruise.actualSpend),
+    casinoChargesRoomBilled: getFirstNumber(cruiseForEconomics.casinoChargesRoomBilled, cruiseForEconomics.actualSpend),
     coinIn,
     houseEdge,
     pointsEarned: pointsInfo.value,
