@@ -30,6 +30,7 @@ import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { DailyLuckSection } from '@/components/DailyLuckSection';
+import { SailingWeatherCard } from '@/components/SailingWeatherCard';
 
 const EVENT_COLORS = {
   cruise: '#3B82F6',
@@ -1409,6 +1410,21 @@ export default function DayAgendaScreen() {
             <TimeZoneConverter />
           </View>
 
+          {mergedCruiseBookings.length > 0 && (
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Sailing Weather</Text>
+              <View style={styles.weatherCardsStack}>
+                {mergedCruiseBookings.map((cruise) => (
+                  <SailingWeatherCard
+                    key={`sailing-weather-${cruise.id}`}
+                    cruise={cruise}
+                    selectedDate={selectedDate}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>24-Hour Agenda</Text>
             <View style={styles.dayScheduleCard}>
@@ -1598,6 +1614,9 @@ const styles = StyleSheet.create({
   },
   sectionContainer: {
     marginBottom: SPACING.lg,
+  },
+  weatherCardsStack: {
+    gap: SPACING.md,
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,

@@ -41,6 +41,7 @@ import { CrewRecognitionProvider } from "@/state/CrewRecognitionProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 import { composeProviders } from "@/lib/composeProviders";
 import { ensureStorageHealthy } from "@/lib/storage/storageRecovery";
+import { SailingWeatherProvider } from "@/state/SailingWeatherProvider";
 
 try {
   void SplashScreen.preventAutoHideAsync();
@@ -551,6 +552,7 @@ const ServiceProviders = composeProviders(
   AlertsProvider,
   AgentXProvider,
   CertificatesProvider,
+  SailingWeatherProvider,
 );
 
 export default function RootLayout() {
