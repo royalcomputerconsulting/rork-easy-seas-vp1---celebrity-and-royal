@@ -120,18 +120,18 @@ function mixHexColors(sourceHex: string, targetHex: string, weight: number): str
 
 export function createLoyaltyCardTheme(accentColor?: string | null): LoyaltyCardTheme {
   const resolvedAccent = accentColor ?? COLORS.navyDeep;
-  const gradientStart = mixHexColors(resolvedAccent, '#FFFFFF', 0.18);
-  const gradientMiddle = mixHexColors(resolvedAccent, '#0F172A', 0.14);
-  const gradientEnd = mixHexColors(resolvedAccent, '#020617', 0.36);
+  const gradientStart = mixHexColors(resolvedAccent, '#FFFFFF', 0.90);
+  const gradientMiddle = mixHexColors(resolvedAccent, '#FFFFFF', 0.85);
+  const gradientEnd = mixHexColors(resolvedAccent, '#FFFFFF', 0.78);
 
   return {
     accentColor: resolvedAccent,
     gradientColors: [gradientStart, gradientMiddle, gradientEnd],
-    borderColor: withAlpha(resolvedAccent, 0.34),
-    surfaceColor: 'rgba(255, 255, 255, 0.18)',
-    surfaceColorMuted: 'rgba(255, 255, 255, 0.12)',
-    topTextColor: '#FFFFFF',
-    secondaryTextColor: 'rgba(255, 255, 255, 0.82)',
+    borderColor: withAlpha(resolvedAccent, 0.25),
+    surfaceColor: withAlpha(resolvedAccent, 0.08),
+    surfaceColorMuted: withAlpha(resolvedAccent, 0.05),
+    topTextColor: mixHexColors(resolvedAccent, '#000000', 0.35),
+    secondaryTextColor: mixHexColors(resolvedAccent, '#000000', 0.50),
     progressBarGradient: getComplementaryGradient(resolvedAccent),
   };
 }
