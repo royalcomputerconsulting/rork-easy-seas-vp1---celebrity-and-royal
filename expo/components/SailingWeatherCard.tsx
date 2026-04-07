@@ -110,6 +110,10 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
 
   const forecast = weatherQuery.data ?? null;
   const sourceMeta = getSourceMeta(forecast);
+  const primaryAlert = useMemo(() => {
+    if (!forecast) return null;
+    return forecast.advisories.find((advisory) => advisory.severity !== 'info') ?? forecast.advisories[0] ?? null;
+  }, [forecast]);
 
   if (!forecast && weatherQuery.isLoading) {
     return (
@@ -182,6 +186,36 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
       <Text style={styles.shipLabel}>{cruise.shipName}</Text>
       <Text style={styles.headline}>{forecast.headline}</Text>
       <Text style={styles.summary}>{forecast.summary}</Text>
+
+      {primaryAlert ? (
+        <View
+          style={[
+            styles.primaryAlertBanner,
+            {
+              backgroundColor: getAdvisoryMeta(primaryAlert.severity).backgroundColor,
+              borderColor: getAdvisoryMeta(primaryAlert.severity).borderColor,
+            },
+          ]}
+          testID={`sailing-weather-primary-alert-${cruise.id}`}
+        >
+          <View
+            style={[
+              styles.primaryAlertIconBadge,
+              { backgroundColor: `${getAdvisoryMeta(primaryAlert.severity).accent}22` },
+            ]}
+          >
+            <AlertTriangle size={14} color={getAdvisoryMeta(primaryAlert.severity).accent} />
+          </View>
+          <View style={styles.primaryAlertCopy}>
+            <Text style={[styles.primaryAlertTitle, { color: getAdvisoryMeta(primaryAlert.severity).accent }]}>
+              {primaryAlert.title}
+            </Text>
+            <Text style={styles.primaryAlertDetail} numberOfLines={2}>
+              {primaryAlert.detail}
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.locationRow}>
         <MapPin size={13} color="#D9F3FF" />
@@ -343,6 +377,35 @@ const styles = StyleSheet.create({
   summary: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     lineHeight: 20,
+    color: 'rgba(231, 248, 255, 0.82)',
+  },
+  primaryAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    borderWidth: 1,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  primaryAlertIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryAlertCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  primaryAlertTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  primaryAlertDetail: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 18,
     color: 'rgba(231, 248, 255, 0.82)',
   },
   locationRow: {

@@ -44,6 +44,7 @@ import { isDateInPast, createDateFromString } from '@/lib/date';
 import { CruiseCard } from '@/components/CruiseCard';
 import type { BookedCruise } from '@/types/models';
 import { AddBookedCruiseModal } from '@/components/AddBookedCruiseModal';
+import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
 
 import { getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -234,6 +235,10 @@ export default function BookedScreen() {
       hasEstimates: cruiseEconomicsSummary.totals.hasEstimates,
     };
   }, [casinoAnalytics.avgCoinInPerCruise, casinoAnalytics.totalCoinIn, cruiseEconomicsSummary]);
+
+  const upcomingCruisesForAlerts = useMemo(() => {
+    return bookedCruises.filter((cruise) => !isCruiseCompleted(cruise));
+  }, [bookedCruises]);
 
   const nextCruise = useMemo(() => {
     const upcomingCruises = bookedCruises
@@ -462,6 +467,18 @@ export default function BookedScreen() {
             </View>
           </View>
         </View>
+      </View>
+
+      <View style={styles.marineAlertsSection}>
+        <MarineAlertsPanel
+          cruises={upcomingCruisesForAlerts}
+          startDate={new Date()}
+          daysAhead={7}
+          maxItems={3}
+          title="Rough seas / weather alerts"
+          description="Checks upcoming sailings for rough-seas, squall, and bad-weather watchouts so you can see issues before embarkation."
+          testID="booked-marine-alerts-panel"
+        />
       </View>
 
       {/* Combined Casino Section */}
@@ -882,6 +899,9 @@ const styles = StyleSheet.create({
   heroStatDivider: {
     width: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  marineAlertsSection: {
+    marginBottom: SPACING.md,
   },
   casinoSection: {
     marginBottom: SPACING.md,

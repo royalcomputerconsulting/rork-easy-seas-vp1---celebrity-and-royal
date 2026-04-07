@@ -31,6 +31,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { DailyLuckSection } from '@/components/DailyLuckSection';
 import { SailingWeatherCard } from '@/components/SailingWeatherCard';
+import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
 import { useSailingWeather } from '@/state/SailingWeatherProvider';
 
 const EVENT_COLORS = {
@@ -1452,6 +1453,15 @@ export default function DayAgendaScreen() {
               <Text style={styles.sectionDescription}>
                 Full-day weather, wind, and sea-state snapshots with offline saving for spotty-at-sea service.
               </Text>
+              <MarineAlertsPanel
+                cruises={mergedCruiseBookings}
+                startDate={selectedDate}
+                daysAhead={0}
+                maxItems={2}
+                title="Rough seas / weather alerts"
+                description="Heads-up for this cruise day before you dive into the full forecast card below."
+                testID="agenda-marine-alerts-panel"
+              />
               <View style={styles.weatherCardsStack}>
                 {mergedCruiseBookings.map((cruise) => (
                   <SailingWeatherCard
@@ -1656,6 +1666,7 @@ const styles = StyleSheet.create({
   },
   weatherCardsStack: {
     gap: SPACING.md,
+    marginTop: SPACING.md,
   },
   sectionDescription: {
     fontSize: TYPOGRAPHY.fontSizeSM,
