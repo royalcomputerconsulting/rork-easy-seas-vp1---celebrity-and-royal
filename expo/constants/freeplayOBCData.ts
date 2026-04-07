@@ -85,7 +85,7 @@ export const FREEPLAY_OBC_DATA: FreeplayOBCRecord[] = [
     shipName: 'Quantum',
     sailDate: '2025-04-21',
     freePlay: 75,
-    obc: 0,
+    obc: 50,
   },
   {
     offerCode: '2512A07',
