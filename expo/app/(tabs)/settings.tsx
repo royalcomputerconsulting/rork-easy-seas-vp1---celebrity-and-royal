@@ -101,7 +101,6 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
-import { IMAGES } from '@/constants/images';
 
 function normalizeAccountEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -2665,18 +2664,14 @@ STEP 4: Optional Calendar Import
           </View>
 
           <View style={styles.footer}>
-            <View style={styles.footerLogoRow}>
-              <Ship size={20} color={COLORS.navyDeep} />
-              <Text style={styles.footerAppName}>EasySeas</Text>
+            <View style={styles.footerHeroCard}>
+              <View style={styles.footerHeroOverlay}>
+                <Text style={styles.footerHeroTitle}>Easy Seas™</Text>
+                <Text style={styles.footerHeroSubtitle}>Manage your Nautical Lifestyle™</Text>
+              </View>
             </View>
-            <Text style={styles.footerTagline}>Cruise Point Tracker</Text>
-            <Image
-              source={{ uri: IMAGES.signature }}
-              style={styles.footerSignature}
-              resizeMode="contain"
-            />
 
-            <Text style={styles.footerCopyright}>© 2025 Royal Computer Consulting, LLC</Text>
+            <Text style={styles.footerCopyright}>© Easy Seas Ventures LLC</Text>
             
             <View style={styles.legalDisclaimerSection}>
               <Text style={styles.legalDisclaimerTitle}>LEGAL DISCLAIMER</Text>
@@ -2837,28 +2832,37 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xl,
     marginTop: SPACING.lg,
   },
-  footerLogoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.xs,
-  },
-  footerAppName: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    letterSpacing: 0.5,
-  },
-  footerTagline: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: CLEAN_THEME.text.secondary,
-    marginBottom: SPACING.xs,
-  },
-  footerSignature: {
-    width: 130,
-    height: 130,
+  footerHeroCard: {
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    minHeight: 160,
+    width: '100%' as const,
     marginBottom: SPACING.md,
-    opacity: 0.7,
+    ...SHADOW.lg,
+  },
+  footerHeroOverlay: {
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+  },
+  footerHeroTitle: {
+    fontSize: 28,
+    fontWeight: '800' as const,
+    color: COLORS.white,
+    letterSpacing: 1,
+    textAlign: 'center' as const,
+  },
+  footerHeroSubtitle: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: 'rgba(255, 255, 255, 0.82)',
+    marginTop: 6,
+    letterSpacing: 0.3,
+    textAlign: 'center' as const,
   },
   footerCopyright: {
     fontSize: TYPOGRAPHY.fontSizeXS,
