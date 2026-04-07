@@ -104,8 +104,21 @@ function createCruiseEvent(event: CalendarEvent): CalendarEvent {
 
 function createCruiseSpanEvent(cruise: BookedCruise): CalendarEvent | null {
   const sailDate = normalizeDateOnly(cruise.sailDate);
-  const returnDate = normalizeDateOnly(cruise.returnDate);
-  if (!sailDate || !returnDate) return null;
+  if (!sailDate) return null;
+
+  let returnDate = normalizeDateOnly(cruise.returnDate);
+
+  // Fall back to calculating return date from nights if not explicitly stored
+  if (!returnDate && typeof cruise.nights === 'number' && cruise.nights > 0) {
+    returnDate = addDaysToDateOnly(sailDate, cruise.nights);
+    console.log(`[CruiseEvents] Calculated returnDate for ${cruise.shipName}: ${returnDate} (${cruise.nights} nights)`);
+  }
+
+  // Last resort: use sail date as a single-day marker so at least embarkation day shows
+  if (!returnDate) {
+    returnDate = sailDate;
+    console.log(`[CruiseEvents] No returnDate for ${cruise.shipName}, using sailDate as single-day event`);
+  }
 
   return createCruiseEvent({
     id: `generated-cruise-span-${cruise.id}`,

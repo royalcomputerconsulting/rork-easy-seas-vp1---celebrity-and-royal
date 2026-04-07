@@ -2280,6 +2280,43 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog('⚠️ No extended loyalty payload available at sync time', 'warning');
       }
 
+      // Sync user profile data: name from passenger data + Crown & Anchor number from loyalty
+      if (syncSource !== 'carnival' && currentUser && updateUserProfile) {
+        try {
+          const profileUpdates: Record<string, string> = {};
+
+          // Extract name from first booked cruise's primary passenger
+          const firstExtracted = state.extractedBookedCruises[0] as any;
+          const primaryPassenger = firstExtracted?.passengers?.[0] ?? firstExtracted?.passengersInStateroom?.[0];
+          if (primaryPassenger?.firstName || primaryPassenger?.lastName) {
+            const fullName = [primaryPassenger.firstName, primaryPassenger.lastName]
+              .filter((s: string | undefined) => typeof s === 'string' && s.trim().length > 0)
+              .join(' ')
+              .trim();
+            if (fullName.length > 1) {
+              profileUpdates.name = fullName;
+              addLog(`  → Name: ${fullName}`, 'info');
+            }
+          }
+
+          // Extract Crown & Anchor number from extended loyalty data
+          const cAndAId = effectiveExtendedLoyalty?.crownAndAnchorId;
+          if (cAndAId && cAndAId.trim().length > 0) {
+            profileUpdates.crownAnchorNumber = cAndAId.trim();
+            addLog(`  → Crown & Anchor #: ${cAndAId.trim()}`, 'info');
+          }
+
+          if (Object.keys(profileUpdates).length > 0) {
+            addLog('Syncing user profile from loyalty data...', 'info');
+            await updateUserProfile(currentUser.id, profileUpdates);
+            addLog('✅ User profile updated from sync', 'success');
+          }
+        } catch (profileSyncError) {
+          console.error('[RoyalCaribbeanSync] Error syncing user profile:', profileSyncError);
+          addLog(`⚠️ Could not sync user profile data: ${String(profileSyncError)}`, 'warning');
+        }
+      }
+
       if (typeof coreDataContext.syncToBackend === 'function') {
         try {
           addLog('Flushing merged cruise data to backend...', 'info');
