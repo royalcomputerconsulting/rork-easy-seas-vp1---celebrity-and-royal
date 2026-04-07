@@ -9,6 +9,7 @@ import type {
   PriceDropAlert,
 } from '@/types/models';
 import { DEFAULT_ANOMALY_CONFIG } from '@/types/models';
+import { findUpgradeOpportunities, convertUpgradeOpportunitiesToAnomalies } from '@/lib/upgradeMonitor';
 
 function generateId(): string {
   return `anomaly_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -720,9 +721,13 @@ export function runFullAnomalyDetection(
   offers: CasinoOffer[],
   currentPoints: number,
   config: AnomalyDetectionConfig = DEFAULT_ANOMALY_CONFIG,
-  priceDropAlerts: PriceDropAlert[] = []
+  priceDropAlerts: PriceDropAlert[] = [],
+  previousUpgradePrices?: Map<string, number>
 ): AnomalyDetectionResult {
   console.log('[AnomalyDetection] Running full anomaly detection...');
+
+  const upgradeOpportunities = findUpgradeOpportunities(cruises, offers, previousUpgradePrices);
+  const upgradeAnomalies = convertUpgradeOpportunitiesToAnomalies(upgradeOpportunities);
 
   const allAnomalies: Anomaly[] = [
     ...detectROIAnomalies(cruises, config),
@@ -735,6 +740,7 @@ export function runFullAnomalyDetection(
     ...detectBookingConflicts(cruises),
     ...detectSpendingSpikes(cruises, config),
     ...detectPriceDrops(priceDropAlerts, 5, cruises),
+    ...upgradeAnomalies,
   ];
 
   const insights = generatePatternInsights(cruises);

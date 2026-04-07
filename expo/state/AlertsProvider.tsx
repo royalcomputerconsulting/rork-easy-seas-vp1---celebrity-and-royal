@@ -69,6 +69,8 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   const { authenticatedEmail } = useAuth();
   const priceHistoryState = usePriceHistory();
   const priceDropAlerts = useMemo(() => priceHistoryState?.priceDropAlerts ?? [], [priceHistoryState?.priceDropAlerts]);
+  const upgradePrices = useMemo(() => priceHistoryState?.upgradePrices ?? new Map<string, number>(), [priceHistoryState?.upgradePrices]);
+  const trackUpgradePricesForBooked = priceHistoryState?.trackUpgradePricesForBooked;
 
   const skRef = useRef({
     ALERTS: getUserScopedKey(BASE_ALERTS_KEY, authenticatedEmail),
@@ -207,12 +209,18 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     try {
       const currentPoints = clubRoyaleProfile?.tierPoints || 26331;
       
+      if (trackUpgradePricesForBooked) {
+        trackUpgradePricesForBooked(bookedCruises, casinoOffers);
+        console.log('[AlertsProvider] Tracked upgrade prices for booked cruises');
+      }
+
       const result: AnomalyDetectionResult = runFullAnomalyDetection(
         bookedCruises,
         casinoOffers,
         currentPoints,
         config,
-        priceDropAlerts
+        priceDropAlerts,
+        upgradePrices
       );
 
       setAnomalies(result.anomalies);
@@ -250,7 +258,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     } finally {
       setIsLoading(false);
     }
-  }, [tier, bookedCruises, casinoOffers, clubRoyaleProfile, config, rules, priceDropAlerts]);
+  }, [tier, bookedCruises, casinoOffers, clubRoyaleProfile, config, rules, priceDropAlerts, upgradePrices, trackUpgradePricesForBooked]);
 
   useEffect(() => {
     if ((bookedCruises?.length ?? 0) > 0 || (casinoOffers?.length ?? 0) > 0 || (priceDropAlerts?.length ?? 0) > 0) {

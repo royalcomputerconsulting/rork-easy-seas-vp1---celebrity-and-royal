@@ -6,21 +6,26 @@ import type {
   PriceDropAlert,
   CasinoOffer,
   Cruise,
+  BookedCruise,
 } from '@/types/models';
 import { generateCruiseKey } from '@/types/models';
+import { getCabinTier, getHigherCabinTypes } from '@/lib/upgradeMonitor';
 
 const PRICE_HISTORY_STORAGE_KEY = '@easy_seas_price_history';
 const PRICE_DROP_ALERTS_STORAGE_KEY = '@easy_seas_price_drop_alerts';
+const UPGRADE_PRICES_STORAGE_KEY = '@easy_seas_upgrade_prices';
 
 interface PriceHistoryState {
   priceHistory: PriceHistoryRecord[];
   priceDropAlerts: PriceDropAlert[];
+  upgradePrices: Map<string, number>;
   isLoading: boolean;
   
   recordPrice: (record: Omit<PriceHistoryRecord, 'id' | 'recordedAt'>) => PriceDropAlert | null;
   recordPriceFromOffer: (offer: CasinoOffer, cabinType?: string) => PriceDropAlert | null;
   recordPriceFromCruise: (cruise: Cruise) => PriceDropAlert | null;
   bulkRecordFromOffers: (offers: CasinoOffer[]) => PriceDropAlert[];
+  trackUpgradePricesForBooked: (bookedCruises: BookedCruise[], offers: CasinoOffer[]) => void;
   
   getPriceHistory: (cruiseKey: string) => PriceHistoryRecord[];
   getLowestPrice: (cruiseKey: string) => PriceHistoryRecord | null;
@@ -50,17 +55,30 @@ function extractCabinPrice(offer: CasinoOffer, cabinType?: string): number {
   return offer.balconyPrice || offer.oceanviewPrice || offer.interiorPrice || offer.value || 0;
 }
 
+function extractUpgradeCabinPrice(offer: CasinoOffer, tierLabel: string): number {
+  const label = tierLabel.toLowerCase();
+  if (label.includes('interior')) return offer.interiorPrice || 0;
+  if (label.includes('oceanview') || label.includes('ocean view')) return offer.oceanviewPrice || 0;
+  if (label.includes('balcony')) return offer.balconyPrice || 0;
+  if (label.includes('junior suite') || label.includes('jr suite')) return offer.juniorSuitePrice || 0;
+  if (label.includes('grand suite')) return offer.grandSuitePrice || 0;
+  if (label.includes('suite')) return offer.suitePrice || 0;
+  return 0;
+}
+
 export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): PriceHistoryState => {
   const [priceHistory, setPriceHistory] = useState<PriceHistoryRecord[]>([]);
   const [priceDropAlerts, setPriceDropAlerts] = useState<PriceDropAlert[]>([]);
+  const [upgradePrices, setUpgradePrices] = useState<Map<string, number>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadStoredData = async () => {
       try {
-        const [storedHistory, storedAlerts] = await Promise.all([
+        const [storedHistory, storedAlerts, storedUpgradePrices] = await Promise.all([
           AsyncStorage.getItem(PRICE_HISTORY_STORAGE_KEY),
           AsyncStorage.getItem(PRICE_DROP_ALERTS_STORAGE_KEY),
+          AsyncStorage.getItem(UPGRADE_PRICES_STORAGE_KEY),
         ]);
 
         if (storedHistory) {
@@ -74,6 +92,13 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
           setPriceDropAlerts(parsed);
           console.log('[PriceHistoryProvider] Loaded price drop alerts:', parsed.length);
         }
+
+        if (storedUpgradePrices) {
+          const parsed = JSON.parse(storedUpgradePrices);
+          const map = new Map<string, number>(Object.entries(parsed));
+          setUpgradePrices(map);
+          console.log('[PriceHistoryProvider] Loaded upgrade prices:', map.size, 'tracked');
+        }
       } catch (error) {
         console.error('[PriceHistoryProvider] Error loading stored data:', error);
       } finally {
@@ -81,7 +106,7 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
       }
     };
 
-    loadStoredData();
+    void loadStoredData();
   }, []);
 
   useEffect(() => {
@@ -94,7 +119,7 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     };
 
     if (priceHistory.length > 0) {
-      saveHistory();
+      void saveHistory();
     }
   }, [priceHistory]);
 
@@ -107,7 +132,7 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
       }
     };
 
-    saveAlerts();
+    void saveAlerts();
   }, [priceDropAlerts]);
 
   const getPriceHistory = useCallback((cruiseKey: string): PriceHistoryRecord[] => {
@@ -318,14 +343,76 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     console.log('[PriceHistoryProvider] Dismissed price drop alert for:', cruiseKey);
   }, []);
 
+  const trackUpgradePricesForBooked = useCallback((bookedCruises: BookedCruise[], offers: CasinoOffer[]) => {
+    const now = new Date();
+    const upcomingBooked = bookedCruises.filter(c => {
+      const sailDate = new Date(c.sailDate);
+      return sailDate > now && (c.status === 'booked' || c.completionState === 'upcoming' || c.status === 'Courtesy Hold');
+    });
+
+    if (upcomingBooked.length === 0 || offers.length === 0) return;
+
+    let updatedCount = 0;
+    const newPrices = new Map(upgradePrices);
+
+    for (const booked of upcomingBooked) {
+      const bookedTier = getCabinTier(booked.cabinType);
+      const higherTiers = getHigherCabinTypes(bookedTier.tier);
+
+      const matchingOffers = offers.filter(offer => {
+        if (!offer.shipName || !offer.sailingDate) return false;
+        const shipMatch = offer.shipName.toLowerCase().trim() === booked.shipName.toLowerCase().trim();
+        const dateMatch = offer.sailingDate === booked.sailDate;
+        if (shipMatch && dateMatch) return true;
+        if (!shipMatch) return false;
+        const offerDate = new Date(offer.sailingDate);
+        const bookedDate = new Date(booked.sailDate);
+        const daysDiff = Math.abs(offerDate.getTime() - bookedDate.getTime()) / (1000 * 60 * 60 * 24);
+        return daysDiff <= 3;
+      });
+
+      for (const offer of matchingOffers) {
+        for (const higherTier of higherTiers) {
+          const price = extractUpgradeCabinPrice(offer, higherTier.label);
+          if (price <= 0) continue;
+
+          const upgradeKey = `${booked.id}_${higherTier.label}`;
+          const existingPrice = newPrices.get(upgradeKey);
+
+          if (!existingPrice || price !== existingPrice) {
+            newPrices.set(upgradeKey, price);
+            updatedCount++;
+
+            if (existingPrice && price < existingPrice) {
+              const drop = existingPrice - price;
+              const dropPercent = (drop / existingPrice) * 100;
+              console.log(`[PriceHistoryProvider] Upgrade price drop: ${booked.shipName} ${higherTier.label} dropped ${drop.toFixed(0)} (${dropPercent.toFixed(1)}%)`);
+            }
+          }
+        }
+      }
+    }
+
+    if (updatedCount > 0) {
+      setUpgradePrices(newPrices);
+      const obj = Object.fromEntries(newPrices);
+      AsyncStorage.setItem(UPGRADE_PRICES_STORAGE_KEY, JSON.stringify(obj)).catch(err => {
+        console.error('[PriceHistoryProvider] Error saving upgrade prices:', err);
+      });
+      console.log('[PriceHistoryProvider] Updated', updatedCount, 'upgrade price entries, total tracked:', newPrices.size);
+    }
+  }, [upgradePrices]);
+
   const clearPriceHistory = useCallback(async () => {
     try {
       await Promise.all([
         AsyncStorage.removeItem(PRICE_HISTORY_STORAGE_KEY),
         AsyncStorage.removeItem(PRICE_DROP_ALERTS_STORAGE_KEY),
+        AsyncStorage.removeItem(UPGRADE_PRICES_STORAGE_KEY),
       ]);
       setPriceHistory([]);
       setPriceDropAlerts([]);
+      setUpgradePrices(new Map());
       console.log('[PriceHistoryProvider] Cleared all price history');
     } catch (error) {
       console.error('[PriceHistoryProvider] Error clearing price history:', error);
@@ -338,14 +425,16 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
 
   console.log('[PriceHistoryProvider] Tracking', uniqueCruiseKeys.length, 'unique cruises with', priceHistory.length, 'price records');
 
-  return {
+  return useMemo(() => ({
     priceHistory,
     priceDropAlerts,
+    upgradePrices,
     isLoading,
     recordPrice,
     recordPriceFromOffer,
     recordPriceFromCruise,
     bulkRecordFromOffers,
+    trackUpgradePricesForBooked,
     getPriceHistory,
     getLowestPrice,
     getHighestPrice,
@@ -354,5 +443,5 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     getActivePriceDrops,
     dismissPriceDrop,
     clearPriceHistory,
-  };
+  }), [priceHistory, priceDropAlerts, upgradePrices, isLoading, recordPrice, recordPriceFromOffer, recordPriceFromCruise, bulkRecordFromOffers, trackUpgradePricesForBooked, getPriceHistory, getLowestPrice, getHighestPrice, getLatestPrice, getPriceDrops, getActivePriceDrops, dismissPriceDrop, clearPriceHistory]);
 });
