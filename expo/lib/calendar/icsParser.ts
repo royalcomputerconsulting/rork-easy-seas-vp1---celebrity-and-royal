@@ -84,25 +84,67 @@ export function generateCalendarICS(events: CalendarEvent[]): string {
     'METHOD:PUBLISH',
   ];
 
+  const escapeText = (value: string): string => value.replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  const normalizeDateOnly = (value: string): string => {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return `${match[1]}${match[2]}${match[3]}`;
+    }
+    const parts = value.split('-');
+    if (parts.length === 3 && parts[0].length <= 2) {
+      return `${parts[2]}${parts[0].padStart(2, '0')}${parts[1].padStart(2, '0')}`;
+    }
+    return value.replace(/[^\d]/g, '').slice(0, 8);
+  };
+  const normalizeDateTime = (value: string): string => {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (match) {
+      return `${match[1]}${match[2]}${match[3]}T${match[4]}${match[5]}${match[6] ?? '00'}`;
+    }
+    return value.replace(/[^\dT]/g, '');
+  };
+  const addDays = (value: string, days: number): string => {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return value;
+    const parsed = new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+    parsed.setDate(parsed.getDate() + days);
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+  };
+  const addMinutes = (value: string, minutes: number): string => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    parsed.setMinutes(parsed.getMinutes() + minutes);
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}T${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}:00`;
+  };
+
   for (const event of events) {
-    const formatDate = (dateStr: string): string => {
-      const parts = dateStr.split('-');
-      if (parts.length === 3 && parts[0].length <= 2) {
-        return `${parts[2]}${parts[0]}${parts[1]}`;
-      }
-      return dateStr.replace(/-/g, '');
-    };
+    const startValue = event.start || event.startDate || '';
+    const endValue = event.end || event.endDate || startValue;
+    if (!startValue) continue;
+
+    const isTimedEvent = !event.allDay && (startValue.includes('T') || endValue.includes('T'));
 
     lines.push('BEGIN:VEVENT');
     lines.push(`UID:${event.id}`);
-    lines.push(`DTSTART:${formatDate(event.startDate || event.start || '')}`);
-    lines.push(`DTEND:${formatDate(event.endDate || event.end || '')}`);
-    lines.push(`SUMMARY:${(event.title || '').replace(/,/g, '\\,').replace(/\n/g, '\\n')}`);
+
+    if (isTimedEvent) {
+      const startDateTime = normalizeDateTime(startValue);
+      const endDateTime = normalizeDateTime(endValue.includes('T') ? endValue : addMinutes(startValue, 30));
+      lines.push(`DTSTART:${startDateTime}`);
+      lines.push(`DTEND:${endDateTime || startDateTime}`);
+    } else {
+      const startDate = normalizeDateOnly(startValue);
+      const endDateExclusive = normalizeDateOnly(addDays(endValue || startValue, 1));
+      lines.push(`DTSTART;VALUE=DATE:${startDate}`);
+      lines.push(`DTEND;VALUE=DATE:${endDateExclusive || startDate}`);
+    }
+
+    lines.push(`SUMMARY:${escapeText(event.title || 'Untitled Event')}`);
     if (event.location) {
-      lines.push(`LOCATION:${event.location.replace(/,/g, '\\,').replace(/\n/g, '\\n')}`);
+      lines.push(`LOCATION:${escapeText(event.location)}`);
     }
     if (event.description) {
-      lines.push(`DESCRIPTION:${event.description.replace(/,/g, '\\,').replace(/\n/g, '\\n')}`);
+      lines.push(`DESCRIPTION:${escapeText(event.description)}`);
     }
     lines.push('END:VEVENT');
   }

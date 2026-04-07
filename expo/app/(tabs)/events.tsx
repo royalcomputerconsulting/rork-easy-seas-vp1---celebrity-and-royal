@@ -11,6 +11,7 @@ import type { CalendarEvent, BookedCruise } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
+import { getCalendarEventsWithGeneratedCruiseEvents } from '@/lib/calendar/cruiseEvents';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -44,10 +45,16 @@ export default function EventsScreen() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const calendarEvents = useMemo(() => {
-    const events = [...(localData.calendar || []), ...(localData.tripit || [])];
-    console.log('[Events] Calendar events updated:', events.length);
-    return events;
-  }, [localData.calendar, localData.tripit]);
+    const mergedEvents = getCalendarEventsWithGeneratedCruiseEvents(
+      bookedCruises,
+      [...(localData.calendar || []), ...(localData.tripit || [])]
+    );
+    console.log('[Events] Calendar events updated:', {
+      mergedEvents: mergedEvents.length,
+      bookedCruises: bookedCruises.length,
+    });
+    return mergedEvents;
+  }, [bookedCruises, localData.calendar, localData.tripit]);
 
   useEffect(() => {
     console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', bookedCruises.length);
@@ -58,12 +65,10 @@ export default function EventsScreen() {
     let cruise = 0;
     let travel = 0;
     let personal = 0;
-    const countedCruiseIds = new Set<string>();
 
     calendarEvents.forEach(event => {
       if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
         cruise++;
-        if ((event as any).cruiseId) countedCruiseIds.add((event as any).cruiseId);
       } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
         travel++;
       } else {
@@ -71,14 +76,8 @@ export default function EventsScreen() {
       }
     });
 
-    bookedCruises.forEach((bc) => {
-      if (!countedCruiseIds.has(bc.id)) {
-        cruise++;
-      }
-    });
-
     return { cruise, travel, personal };
-  }, [calendarEvents, bookedCruises]);
+  }, [calendarEvents]);
 
   const totalEventsThisMonth = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -95,17 +94,8 @@ export default function EventsScreen() {
       }
     });
 
-    bookedCruises.forEach((bc: BookedCruise) => {
-      if (bc.sailDate) {
-        const sailDate = new Date(bc.sailDate);
-        if (sailDate.getFullYear() === year && sailDate.getMonth() === month) {
-          count++;
-        }
-      }
-    });
-
     return count;
-  }, [calendarEvents, bookedCruises, currentDate]);
+  }, [calendarEvents, currentDate]);
 
   const _isDateInRange = useCallback((date: Date, startStr: string, endStr: string): boolean => {
     const start = new Date(startStr);
@@ -125,8 +115,6 @@ export default function EventsScreen() {
     const day = String(date.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
 
-    const matchedCruiseIds = new Set<string>();
-
     calendarEvents.forEach(event => {
       const eventStart = event.startDate || event.start || '';
       const eventEnd = event.endDate || event.end || eventStart;
@@ -141,8 +129,6 @@ export default function EventsScreen() {
       if (dateStr >= startDate && dateStr <= endDate) {
         if (event.type === 'cruise' || (event as any).sourceType === 'cruise') {
           cruise++;
-          const cruiseId = (event as any).cruiseId || (event as any).metadata?.cruiseId;
-          if (cruiseId) matchedCruiseIds.add(cruiseId);
         } else if (event.type === 'travel' || event.type === 'flight' || event.type === 'hotel') {
           travel++;
         } else {
@@ -151,18 +137,8 @@ export default function EventsScreen() {
       }
     });
 
-    bookedCruises.forEach((bc: BookedCruise) => {
-      if (matchedCruiseIds.has(bc.id)) return;
-      if (!bc.sailDate || !bc.returnDate) return;
-      const sailStr = String(bc.sailDate).split('T')[0];
-      const returnStr = String(bc.returnDate).split('T')[0];
-      if (sailStr && returnStr && dateStr >= sailStr && dateStr <= returnStr) {
-        cruise++;
-      }
-    });
-
     return { cruise, travel, personal };
-  }, [calendarEvents, bookedCruises]);
+  }, [calendarEvents]);
 
   const calendarDays = useMemo((): DayData[][] => {
     console.log('[Events] Recalculating calendar days, refreshKey:', refreshKey);

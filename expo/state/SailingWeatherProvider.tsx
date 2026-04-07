@@ -523,6 +523,65 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
+function stringifyLogValue(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function serializeError(error: unknown): string {
+  if (error instanceof Error) {
+    return stringifyLogValue({
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause,
+    });
+  }
+
+  return stringifyLogValue(error);
+}
+
+function logSailingWeather(level: 'warn' | 'error', message: string, details?: Record<string, unknown>): void {
+  const logger = level === 'warn' ? console.warn : console.error;
+  if (!details) {
+    logger(message);
+    return;
+  }
+
+  logger(`${message} ${stringifyLogValue(details)}`);
+}
+
+function getResponseBodySnippet(bodyText: string): string | null {
+  const trimmed = bodyText.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.slice(0, 220);
+}
+
+function buildResponseError(message: string, response: Response, bodyText: string, url: string): Error {
+  const bodySnippet = getResponseBodySnippet(bodyText);
+  const contentType = response.headers.get('content-type');
+
+  const detailParts = [
+    `status=${response.status}`,
+    response.statusText ? `statusText=${response.statusText}` : null,
+    contentType ? `contentType=${contentType}` : null,
+    bodySnippet ? `body=${bodySnippet}` : null,
+    `url=${url}`,
+  ].filter(Boolean);
+
+  return new Error(`${message} (${detailParts.join(', ')})`);
+}
+
 async function fetchJson<T>(url: string, options?: { retries?: number; timeoutMs?: number }): Promise<T> {
   const retries = options?.retries ?? 2;
   const timeoutMs = options?.timeoutMs ?? 15000;
@@ -543,20 +602,33 @@ async function fetchJson<T>(url: string, options?: { retries?: number; timeoutMs
 
       const response = await fetch(url, {
         signal: controller.signal,
+        headers: {
+          Accept: 'application/json',
+        },
       });
+      const responseText = await response.text();
 
       if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
+        throw buildResponseError('Request failed', response, responseText, url);
       }
 
-      return response.json() as Promise<T>;
+      if (!responseText.trim()) {
+        throw buildResponseError('Response body was empty', response, responseText, url);
+      }
+
+      try {
+        return JSON.parse(responseText) as T;
+      } catch (error) {
+        throw buildResponseError(`Failed to parse JSON: ${serializeError(error)}`, response, responseText, url);
+      }
     } catch (error) {
       lastError = error;
-      console.error('[SailingWeather] JSON fetch attempt failed', {
+      const logLevel = attempt < retries ? 'warn' : 'error';
+      logSailingWeather(logLevel, '[SailingWeather] JSON fetch attempt failed', {
         url,
         attempt: attempt + 1,
         retries: retries + 1,
-        error,
+        error: serializeError(error),
       });
 
       if (attempt < retries) {
@@ -603,7 +675,9 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
         cacheRef.current = pruned;
         console.log('[SailingWeather] Loaded cached forecasts:', Object.keys(pruned).length);
       } catch (error) {
-        console.error('[SailingWeather] Failed to load stored weather cache:', error);
+        logSailingWeather('error', '[SailingWeather] Failed to load stored weather cache', {
+          error: serializeError(error),
+        });
         setCache({});
         cacheRef.current = {};
       } finally {
@@ -628,7 +702,9 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
         await AsyncStorage.setItem(storageKeyRef.current, JSON.stringify(pruned));
         console.log('[SailingWeather] Persisted cached forecasts:', Object.keys(pruned).length);
       } catch (error) {
-        console.error('[SailingWeather] Failed to persist weather cache:', error);
+        logSailingWeather('error', '[SailingWeather] Failed to persist weather cache', {
+          error: serializeError(error),
+        });
       }
     };
 
@@ -670,7 +746,10 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       geocodeCacheRef.current.set(normalized, resolved);
       return resolved;
     } catch (error) {
-      console.error('[SailingWeather] Geocoding failed for port:', portName, error);
+      logSailingWeather('error', '[SailingWeather] Geocoding failed for port', {
+        portName,
+        error: serializeError(error),
+      });
       return null;
     }
   }, []);
@@ -748,13 +827,20 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       isSeaDay: resolvedPoint.isSeaDay,
     });
 
-    const [weatherJson, marineJson] = await Promise.all([
-      fetchJson<ForecastApiResponse>(weatherUrl),
-      fetchJson<MarineApiResponse>(marineUrl),
-    ]);
+    const weatherJson = await fetchJson<ForecastApiResponse>(weatherUrl);
+    const marineJson = await fetchJson<MarineApiResponse>(marineUrl, { retries: 1 }).catch((error: unknown) => {
+      logSailingWeather('warn', '[SailingWeather] Marine forecast request failed, continuing with weather-only data', {
+        cruiseId: cruise.id,
+        shipName: cruise.shipName,
+        dateKey,
+        url: marineUrl,
+        error: serializeError(error),
+      });
+      return null;
+    });
 
     const marineTimeIndex = new Map<string, number>();
-    (marineJson.hourly?.time ?? []).forEach((time, index) => {
+    (marineJson?.hourly?.time ?? []).forEach((time, index) => {
       marineTimeIndex.set(time, index);
     });
 
@@ -769,12 +855,12 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
         windMph: toNullableNumber(weatherJson.hourly?.wind_speed_10m?.[index]),
         windGustMph: toNullableNumber(weatherJson.hourly?.wind_gusts_10m?.[index]),
         windDirectionDegrees: toDegrees(toNullableNumber(weatherJson.hourly?.wind_direction_10m?.[index])),
-        waveHeightFt: toFeetFromMeters(toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.wave_height?.[marineHourIndex] : null)),
-        waveDirectionDegrees: toDegrees(toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.wave_direction?.[marineHourIndex] : null)),
-        wavePeriodSeconds: toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.wave_period?.[marineHourIndex] : null),
-        swellWaveHeightFt: toFeetFromMeters(toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.swell_wave_height?.[marineHourIndex] : null)),
-        swellWaveDirectionDegrees: toDegrees(toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.swell_wave_direction?.[marineHourIndex] : null)),
-        swellWavePeriodSeconds: toNullableNumber(marineHourIndex !== null ? marineJson.hourly?.swell_wave_period?.[marineHourIndex] : null),
+        waveHeightFt: toFeetFromMeters(toNullableNumber(marineHourIndex !== null ? marineJson?.hourly?.wave_height?.[marineHourIndex] : null)),
+        waveDirectionDegrees: toDegrees(toNullableNumber(marineHourIndex !== null ? marineJson?.hourly?.wave_direction?.[marineHourIndex] : null)),
+        wavePeriodSeconds: toNullableNumber(marineHourIndex !== null ? marineJson?.hourly?.wave_period?.[marineHourIndex] : null),
+        swellWaveHeightFt: toFeetFromMeters(toNullableNumber(marineHourIndex !== null ? marineJson?.hourly?.swell_wave_height?.[marineHourIndex] : null)),
+        swellWaveDirectionDegrees: toDegrees(toNullableNumber(marineHourIndex !== null ? marineJson?.hourly?.swell_wave_direction?.[marineHourIndex] : null)),
+        swellWavePeriodSeconds: toNullableNumber(marineHourIndex !== null ? marineJson?.hourly?.swell_wave_period?.[marineHourIndex] : null),
         precipitationProbability: toNullableNumber(weatherJson.hourly?.precipitation_probability?.[index]),
         weatherCode: toNullableNumber(weatherJson.hourly?.weather_code?.[index]),
       };
@@ -785,11 +871,11 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     const maxWind = toNullableNumber(weatherJson.daily?.wind_speed_10m_max?.[0]) ?? getMaxValue(hourly.map((item) => item.windMph));
     const maxWindGust = toNullableNumber(weatherJson.daily?.wind_gusts_10m_max?.[0]) ?? getMaxValue(hourly.map((item) => item.windGustMph));
     const dominantWindDirectionDegrees = toDegrees(toNullableNumber(weatherJson.daily?.wind_direction_10m_dominant?.[0]) ?? hourly.find((item) => item.windDirectionDegrees !== null)?.windDirectionDegrees ?? null);
-    const maxWave = toFeetFromMeters(toNullableNumber(marineJson.daily?.wave_height_max?.[0])) ?? getMaxValue(hourly.map((item) => item.waveHeightFt));
-    const maxWavePeriodSeconds = toNullableNumber(marineJson.daily?.wave_period_max?.[0]) ?? getMaxValue(hourly.map((item) => item.wavePeriodSeconds));
-    const dominantWaveDirectionDegrees = toDegrees(toNullableNumber(marineJson.daily?.wave_direction_dominant?.[0]) ?? hourly.find((item) => item.waveDirectionDegrees !== null)?.waveDirectionDegrees ?? null);
-    const maxSwellHeightFt = toFeetFromMeters(toNullableNumber(marineJson.daily?.swell_wave_height_max?.[0])) ?? getMaxValue(hourly.map((item) => item.swellWaveHeightFt));
-    const dominantSwellDirectionDegrees = toDegrees(toNullableNumber(marineJson.daily?.swell_wave_direction_dominant?.[0]) ?? hourly.find((item) => item.swellWaveDirectionDegrees !== null)?.swellWaveDirectionDegrees ?? null);
+    const maxWave = toFeetFromMeters(toNullableNumber(marineJson?.daily?.wave_height_max?.[0])) ?? getMaxValue(hourly.map((item) => item.waveHeightFt));
+    const maxWavePeriodSeconds = toNullableNumber(marineJson?.daily?.wave_period_max?.[0]) ?? getMaxValue(hourly.map((item) => item.wavePeriodSeconds));
+    const dominantWaveDirectionDegrees = toDegrees(toNullableNumber(marineJson?.daily?.wave_direction_dominant?.[0]) ?? hourly.find((item) => item.waveDirectionDegrees !== null)?.waveDirectionDegrees ?? null);
+    const maxSwellHeightFt = toFeetFromMeters(toNullableNumber(marineJson?.daily?.swell_wave_height_max?.[0])) ?? getMaxValue(hourly.map((item) => item.swellWaveHeightFt));
+    const dominantSwellDirectionDegrees = toDegrees(toNullableNumber(marineJson?.daily?.swell_wave_direction_dominant?.[0]) ?? hourly.find((item) => item.swellWaveDirectionDegrees !== null)?.swellWaveDirectionDegrees ?? null);
     const precipitationChance = toNullableNumber(weatherJson.daily?.precipitation_probability_max?.[0]) ?? getMaxValue(hourly.map((item) => item.precipitationProbability));
     const weatherCode = toNullableNumber(weatherJson.daily?.weather_code?.[0]) ?? hourly.find((item) => item.weatherCode !== null)?.weatherCode ?? null;
 
@@ -885,7 +971,13 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
         });
         return liveForecast;
       } catch (error) {
-        console.error('[SailingWeather] Live forecast fetch failed:', error);
+        logSailingWeather('error', '[SailingWeather] Live forecast fetch failed', {
+          cacheKey,
+          cruiseId: cruise.id,
+          shipName: cruise.shipName,
+          dateKey,
+          error: serializeError(error),
+        });
         if (cached) {
           const staleForecast: SailingWeatherForecast = {
             ...cached,
@@ -929,11 +1021,11 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       try {
         await getForecastForCruiseDay(cruise, forecastDate, { force: options?.force === true });
       } catch (error) {
-        console.error('[SailingWeather] Failed to prefetch cruise forecast date:', {
+        logSailingWeather('error', '[SailingWeather] Failed to prefetch cruise forecast date', {
           cruiseId: cruise.id,
           shipName: cruise.shipName,
           date: formatDateKey(forecastDate),
-          error,
+          error: serializeError(error),
         });
       }
     }
@@ -946,7 +1038,9 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       await AsyncStorage.removeItem(storageKeyRef.current);
       console.log('[SailingWeather] Cleared all cached forecasts');
     } catch (error) {
-      console.error('[SailingWeather] Failed to clear weather cache:', error);
+      logSailingWeather('error', '[SailingWeather] Failed to clear weather cache', {
+        error: serializeError(error),
+      });
     }
   }, []);
 

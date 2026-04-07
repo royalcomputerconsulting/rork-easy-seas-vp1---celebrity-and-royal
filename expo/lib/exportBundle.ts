@@ -18,6 +18,7 @@ import { generateFinancialReport } from './financialValidation';
 import type { FinancialValidationResult } from './financialValidation';
 import { generateLifecycleReport } from './lifecycleManager';
 import type { LifecycleReport } from './lifecycleManager';
+import { getCalendarEventsWithGeneratedCruiseEvents } from './calendar/cruiseEvents';
 
 export interface ExportData {
   cruises: Cruise[];
@@ -191,6 +192,7 @@ export function generateAnalyticsJSON(
 }
 
 export function generateFullDataJSON(exportData: ExportData): string {
+  const exportCalendarEvents = getCalendarEventsWithGeneratedCruiseEvents(exportData.bookedCruises, exportData.calendarEvents);
   const data = {
     exportDate: new Date().toISOString(),
     version: '1.0.0',
@@ -198,14 +200,14 @@ export function generateFullDataJSON(exportData: ExportData): string {
       cruises: exportData.cruises.length,
       offers: exportData.offers.length,
       bookedCruises: exportData.bookedCruises.length,
-      calendarEvents: exportData.calendarEvents.length,
+      calendarEvents: exportCalendarEvents.length,
       casinoSessions: exportData.casinoSessions?.length || 0,
     },
     profile: exportData.profile,
     cruises: exportData.cruises,
     offers: exportData.offers,
     bookedCruises: exportData.bookedCruises,
-    calendarEvents: exportData.calendarEvents,
+    calendarEvents: exportCalendarEvents,
     casinoSessions: exportData.casinoSessions,
     analytics: exportData.analytics,
   };
@@ -241,7 +243,7 @@ export async function exportSingleFile(
     }
 
     const file = new ExpoFile(ExpoPaths.cache, fileName);
-    await file.write(content);
+    file.write(content);
 
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
@@ -287,6 +289,7 @@ export async function exportDataBundle(
   const results: ExportResult[] = [];
   const errors: string[] = [];
   const timestamp = new Date().toISOString().split('T')[0];
+  const exportCalendarEvents = getCalendarEventsWithGeneratedCruiseEvents(exportData.bookedCruises, exportData.calendarEvents);
 
   console.log('[ExportBundle] Starting data bundle export');
 
@@ -312,8 +315,8 @@ export async function exportDataBundle(
     if (!result.success && result.error) errors.push(result.error);
   }
 
-  if (includeICS && exportData.calendarEvents.length > 0) {
-    const icsContent = generateCalendarICS(exportData.calendarEvents);
+  if (includeICS && exportCalendarEvents.length > 0) {
+    const icsContent = generateCalendarICS(exportCalendarEvents);
     const result = await exportSingleFile(
       icsContent,
       `easyseas_calendar_${timestamp}.ics`,

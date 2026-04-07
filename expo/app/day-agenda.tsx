@@ -33,6 +33,11 @@ import { DailyLuckSection } from '@/components/DailyLuckSection';
 import { SailingWeatherCard } from '@/components/SailingWeatherCard';
 import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
 import { useSailingWeather } from '@/state/SailingWeatherProvider';
+import {
+  generateCruiseCalendarEvents,
+  getDisplayCalendarEvents,
+  isCruiseCalendarEventBackedByBookedCruise,
+} from '@/lib/calendar/cruiseEvents';
 
 const EVENT_COLORS = {
   cruise: '#3B82F6',
@@ -257,8 +262,15 @@ export default function DayAgendaScreen() {
   }, [selectedDate]);
 
   const calendarEvents = useMemo(() => {
-    return [...(localData.calendar || []), ...(localData.tripit || [])];
-  }, [localData.calendar, localData.tripit]);
+    const mergedEvents = [...(localData.calendar || []), ...(localData.tripit || [])];
+    const visibleEvents = getDisplayCalendarEvents(bookedCruises, mergedEvents);
+    console.log('[DayAgenda] Visible calendar events prepared for selected day', {
+      bookedCruises: bookedCruises.length,
+      mergedEvents: mergedEvents.length,
+      visibleEvents: visibleEvents.length,
+    });
+    return visibleEvents;
+  }, [bookedCruises, localData.calendar, localData.tripit]);
 
   const isDateInRange = useCallback((targetDate: Date, startStr: string, endStr: string): boolean => {
     const start = createDateFromString(startStr);
@@ -922,8 +934,8 @@ export default function DayAgendaScreen() {
         if (arrivalMinutes !== null && departureMinutes !== null) {
           addScheduleBlock({
             id: `port-window-${cruise.id}-${dayNum}`,
-            title: `In Port • ${itineraryDay.port}`,
-            subtitle: cruise.shipName,
+            title: 'TIME IN PORT',
+            subtitle: `${itineraryDay.port} • ${cruise.shipName}`,
             location: itineraryDay.port,
             notes: itineraryDay.notes,
             startMinutes: arrivalMinutes,
@@ -935,8 +947,8 @@ export default function DayAgendaScreen() {
         } else if (departureMinutes !== null) {
           addScheduleBlock({
             id: `port-window-${cruise.id}-${dayNum}`,
-            title: `In Port • ${itineraryDay.port}`,
-            subtitle: `${cruise.shipName} embarkation window`,
+            title: 'TIME IN PORT',
+            subtitle: `${itineraryDay.port} • ${cruise.shipName}`,
             location: itineraryDay.port,
             startMinutes: 0,
             endMinutes: departureMinutes,
@@ -947,8 +959,8 @@ export default function DayAgendaScreen() {
         } else if (arrivalMinutes !== null) {
           addScheduleBlock({
             id: `port-window-${cruise.id}-${dayNum}`,
-            title: `In Port • ${itineraryDay.port}`,
-            subtitle: `${cruise.shipName} disembarkation window`,
+            title: 'TIME IN PORT',
+            subtitle: `${itineraryDay.port} • ${cruise.shipName}`,
             location: itineraryDay.port,
             startMinutes: arrivalMinutes,
             endMinutes: MINUTES_PER_DAY,
@@ -1086,10 +1098,22 @@ export default function DayAgendaScreen() {
     });
 
     const timedBlocks = layoutDayScheduleBlocks(scheduleBlocks);
-    const portMinutes = timedBlocks.filter((b) => b.type === 'port').reduce((t, b) => t + (b.endMinutes - b.startMinutes), 0);
+    const portBlocks = timedBlocks.filter((block) => block.type === 'port').sort((left, right) => left.startMinutes - right.startMinutes);
+    const portMinutes = portBlocks.reduce((total, block) => total + (block.endMinutes - block.startMinutes), 0);
     const casinoMinutes = timedBlocks.filter((b) => b.type === 'casino').reduce((t, b) => t + (b.endMinutes - b.startMinutes), 0);
+    const primaryPortWindowLabel = portBlocks[0]
+      ? formatScheduleTimeRange(portBlocks[0].startMinutes, portBlocks[0].endMinutes)
+      : null;
+    const primaryPortWindowLocation = portBlocks[0]?.location ?? null;
 
-    return { timedBlocks, allDayItems, portMinutes, casinoMinutes };
+    return {
+      timedBlocks,
+      allDayItems,
+      portMinutes,
+      casinoMinutes,
+      primaryPortWindowLabel,
+      primaryPortWindowLocation,
+    };
   }, [calendarEvents, getCasinoContext, getDayOfCruise, getItineraryForDay, mergedCruiseBookings, selectedDate, selectedDayWindow.end, selectedDayWindow.start]);
 
   const handleAddSession = useCallback(() => {
@@ -1118,28 +1142,18 @@ export default function DayAgendaScreen() {
     setIsSyncing(true);
     
     try {
-      const existingEvents = coreData.calendarEvents.filter(e => e.sourceType !== 'cruise');
-      
-      const cruiseEvents: CalendarEvent[] = bookedCruises.map(cruise => ({
-        id: `cruise-event-${cruise.id}`,
-        title: `${cruise.shipName} - ${cruise.destination || cruise.itineraryName || 'Cruise'}`,
-        startDate: cruise.sailDate,
-        endDate: cruise.returnDate,
-        start: cruise.sailDate,
-        end: cruise.returnDate,
-        type: 'cruise' as const,
-        sourceType: 'cruise' as const,
-        location: cruise.departurePort,
-        description: `${cruise.nights} night cruise${cruise.reservationNumber ? ` - Res# ${cruise.reservationNumber}` : ''}${cruise.cabinNumber ? ` - Cabin ${cruise.cabinNumber}` : ''}`,
-        cruiseId: cruise.id,
-        allDay: true,
-        source: 'import' as const,
-      }));
-      
+      const existingEvents = coreData.calendarEvents.filter(
+        (event) => !isCruiseCalendarEventBackedByBookedCruise(event, bookedCruises)
+      );
+      const cruiseEvents: CalendarEvent[] = generateCruiseCalendarEvents(bookedCruises);
       const allEvents = [...existingEvents, ...cruiseEvents];
       coreData.setCalendarEvents(allEvents);
       
-      console.log(`[DayAgenda] Synced ${cruiseEvents.length} cruise events`);
+      console.log('[DayAgenda] Synced generated cruise events', {
+        generatedEvents: cruiseEvents.length,
+        existingEvents: existingEvents.length,
+        totalEvents: allEvents.length,
+      });
     } catch (error) {
       console.error('[DayAgenda] Error syncing events:', error);
     } finally {
@@ -1272,8 +1286,8 @@ export default function DayAgendaScreen() {
     const IconComponent = getIcon(item.type);
     const isCruise = item.type === 'cruise' && 'bookings' in item.data;
     const cruiseData = isCruise ? (item.data as MergedCruiseData) : null;
-    const dayNum = cruiseData ? getDayOfCruise(cruiseData) : 0;
-    const itineraryDay = cruiseData ? getItineraryForDay(cruiseData, dayNum) : null;
+    const dayNum = cruiseData ? getDayOfCruise(cruiseData) : null;
+    const itineraryDay = cruiseData && dayNum !== null ? getItineraryForDay(cruiseData, dayNum) : null;
     
     return (
       <TouchableOpacity
@@ -1297,7 +1311,7 @@ export default function DayAgendaScreen() {
             
             {item.isAllDay ? (
               <View style={styles.allDayBadge}>
-                <Text style={styles.allDayText}>Day {dayNum}</Text>
+                <Text style={styles.allDayText}>{isCruise && dayNum ? `Day ${dayNum}` : 'All day'}</Text>
               </View>
             ) : item.startTime && (
               <View style={styles.timeContainer}>
@@ -1486,8 +1500,8 @@ export default function DayAgendaScreen() {
                 </View>
                 <View style={styles.dayScheduleMetricsRow}>
                   <View style={styles.dayScheduleMetricChip}>
-                    <Text style={styles.dayScheduleMetricValue}>{formatDurationLabel(dayScheduleData.portMinutes)}</Text>
-                    <Text style={styles.dayScheduleMetricLabel}>In port</Text>
+                    <Text style={styles.dayScheduleMetricValue}>{dayScheduleData.primaryPortWindowLabel ?? formatDurationLabel(dayScheduleData.portMinutes)}</Text>
+                    <Text style={styles.dayScheduleMetricLabel}>{dayScheduleData.primaryPortWindowLocation ? `Time in port • ${dayScheduleData.primaryPortWindowLocation}` : 'Time in port'}</Text>
                   </View>
                   <View style={styles.dayScheduleMetricChip}>
                     <Text style={styles.dayScheduleMetricValue}>{formatDurationLabel(dayScheduleData.casinoMinutes)}</Text>

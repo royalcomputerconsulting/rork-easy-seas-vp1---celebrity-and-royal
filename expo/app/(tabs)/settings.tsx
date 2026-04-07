@@ -87,7 +87,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as XLSX from 'xlsx';
 import type { BookedCruise } from '@/types/models';
-
+import { getCalendarEventsWithGeneratedCruiseEvents } from '@/lib/calendar/cruiseEvents';
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { UserProfileCard } from '@/components/ui/UserProfileCard';
@@ -359,6 +359,10 @@ export default function SettingsScreen() {
     const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
     const upcoming = allBooked.filter(c => !isDateInPast(c.returnDate)).length;
     const completed = allBooked.filter(c => isDateInPast(c.returnDate)).length;
+    const generatedCalendarEvents = getCalendarEventsWithGeneratedCruiseEvents(
+      allBooked,
+      [...(localData.calendar || []), ...(localData.tripit || [])]
+    );
 
     return {
       cruises: cruises.length || localData.cruises?.length || 0,
@@ -367,7 +371,7 @@ export default function SettingsScreen() {
       completed,
       sailings: allOffers.length,
       uniqueOffers: uniqueOfferCount,
-      events: localData.calendar?.length || 0,
+      events: generatedCalendarEvents.length,
       machines: myAtlasMachines.length || 0,
       crewMembers: crewStats?.crewMemberCount || 0,
     };
@@ -1111,7 +1115,11 @@ export default function SettingsScreen() {
       setIsExporting(true);
       console.log('[Settings] Starting calendar ICS export');
       
-      const allEvents = localData.calendar || [];
+      const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
+      const allEvents = getCalendarEventsWithGeneratedCruiseEvents(
+        allBooked,
+        [...(localData.calendar || []), ...(localData.tripit || [])]
+      );
       
       if (allEvents.length === 0) {
         Alert.alert('No Data', 'No calendar events to export. Import events first.');
@@ -1128,14 +1136,17 @@ export default function SettingsScreen() {
       } else {
         Alert.alert('Export Info', 'File saved but sharing may not be available on this device.');
       }
-      console.log('[Settings] Export complete');
+      console.log('[Settings] Export complete', {
+        exportedEvents: allEvents.length,
+        bookedCruises: allBooked.length,
+      });
     } catch (error) {
       console.error('[Settings] Export error:', error);
       Alert.alert('Export Error', 'Failed to export calendar. Please try again.');
     } finally {
       setIsExporting(false);
     }
-  }, [localData.calendar]);
+  }, [bookedCruises, localData.booked, localData.calendar, localData.tripit]);
 
   const handleClearData = useCallback(() => {
     Alert.alert(
