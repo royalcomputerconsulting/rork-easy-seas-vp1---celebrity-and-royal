@@ -39,6 +39,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useGamification } from '@/state/GamificationProvider';
 import type { MachineType, Denomination } from '@/state/CasinoSessionProvider';
 import type { MachineEncyclopediaEntry, SlotManufacturer, BookedCruise } from '@/types/models';
+import { createDateFromString } from '@/lib/date';
 
 type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 
@@ -187,15 +188,50 @@ export default function AtlasScreen() {
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [casinoOpenHoursData, setCasinoOpenHoursData] = useState<CasinoOpenHoursData | null>(null);
   const allUpcomingCruises = useMemo((): BookedCruise[] => {
-    const now = new Date();
-    return bookedCruises
-      .filter(c => {
-        if (c.completionState === 'completed') return false;
-        if (!c.sailDate) return false;
-        const sail = new Date(c.sailDate);
-        return sail >= now || (c.returnDate && new Date(c.returnDate) >= now);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const sortedCruises = [...bookedCruises]
+      .filter((cruise) => {
+        return Boolean(cruise.id && cruise.sailDate) && cruise.status !== 'cancelled';
       })
-      .sort((a, b) => new Date(a.sailDate!).getTime() - new Date(b.sailDate!).getTime());
+      .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
+
+    const upcomingCruises = sortedCruises.filter((cruise) => {
+      if (cruise.completionState === 'completed' || cruise.status === 'completed') {
+        return false;
+      }
+
+      const sailDate = createDateFromString(cruise.sailDate);
+      const returnDate = createDateFromString(cruise.returnDate || cruise.sailDate);
+      sailDate.setHours(0, 0, 0, 0);
+      returnDate.setHours(0, 0, 0, 0);
+
+      return sailDate >= today || returnDate >= today || cruise.completionState === 'in-progress';
+    });
+
+    console.log('[Machines] Resolved cruises for casino open hours card:', {
+      bookedCruises: bookedCruises.length,
+      sortedCruises: sortedCruises.length,
+      upcomingCruises: upcomingCruises.length,
+      nextUpcomingCruise: upcomingCruises[0]?.id,
+      nextUpcomingCruiseShip: upcomingCruises[0]?.shipName,
+    });
+
+    if (upcomingCruises.length > 0) {
+      return upcomingCruises;
+    }
+
+    const fallbackCruises = sortedCruises.filter((cruise) => {
+      return cruise.completionState !== 'completed' && cruise.status !== 'completed';
+    });
+
+    console.log('[Machines] Falling back to non-completed booked cruises for casino open hours card:', {
+      fallbackCruises: fallbackCruises.length,
+      firstFallbackCruise: fallbackCruises[0]?.id,
+    });
+
+    return fallbackCruises;
   }, [bookedCruises]);
 
   const nextUpcomingCruise = useMemo((): BookedCruise | null => {
