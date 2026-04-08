@@ -32,6 +32,7 @@ import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { DailyLuckSection } from '@/components/DailyLuckSection';
 import { SailingWeatherCard } from '@/components/SailingWeatherCard';
 import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
+import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useSailingWeather } from '@/state/SailingWeatherProvider';
 import {
   generateCruiseCalendarEvents,
@@ -1455,8 +1456,9 @@ export default function DayAgendaScreen() {
         style={StyleSheet.absoluteFill}
       />
       
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.header}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <ResponsiveContainer>
+          <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
@@ -1478,21 +1480,23 @@ export default function DayAgendaScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.dateHeader}>
-          <Text style={styles.dateText}>{formattedDate}</Text>
-          <Text style={styles.eventCount}>
-            {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
-          </Text>
-        </View>
+          <View style={styles.dateHeader}>
+            <Text style={styles.dateText}>{formattedDate}</Text>
+            <Text style={styles.eventCount}>
+              {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
+            </Text>
+          </View>
+        </ResponsiveContainer>
 
         <ScrollView 
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ marginBottom: SPACING.md }}>
-            <TimeZoneConverter />
-          </View>
+          <ResponsiveContainer>
+            <View style={{ marginBottom: SPACING.md }}>
+              <TimeZoneConverter />
+            </View>
 
           {allWeatherCruises.length > 0 && (
             <View style={styles.sectionContainer}>
@@ -1631,7 +1635,7 @@ export default function DayAgendaScreen() {
               </View>
             </View>
           )}
-          
+          </ResponsiveContainer>
         </ScrollView>
       </SafeAreaView>
       

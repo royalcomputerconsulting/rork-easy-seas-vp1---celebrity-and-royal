@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
   TouchableOpacity,
   RefreshControl,
   Image,
@@ -88,12 +87,10 @@ import { useTax } from '@/state/TaxProvider';
 import type { MachineType, Denomination } from '@/state/CasinoSessionProvider';
 import { SessionsSummaryCard } from '@/components/SessionsSummaryCard';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
+import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { buildCruiseEconomicsSummary, type CruiseEconomicsRow } from '@/lib/casinoCruiseEconomics';
-
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type AnalyticsTab = 'intelligence' | 'charts' | 'session' | 'calcs';
 type ROIFilter = 'all' | 'high' | 'medium' | 'low';
@@ -2166,24 +2163,25 @@ export default function AnalyticsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.header}>
-          <View style={styles.brandingRow}>
-            <View style={styles.titleContainer}>
-              <BarChart3 size={22} color={COLORS.navyDeep} />
-              <Text style={styles.appTitle}>Analytics</Text>
+        <ResponsiveContainer>
+          <View style={styles.header}>
+            <View style={styles.brandingRow}>
+              <View style={styles.titleContainer}>
+                <BarChart3 size={22} color={COLORS.navyDeep} />
+                <Text style={styles.appTitle}>Analytics</Text>
+              </View>
+            </View>
+            
+            <View style={styles.tierBadges}>
+              <TierBadgeGroup 
+                clubRoyaleTier={clubRoyaleTier}
+                crownAnchorLevel={crownAnchorLevel}
+                size="small"
+              />
             </View>
           </View>
-          
-          <View style={styles.tierBadges}>
-            <TierBadgeGroup 
-              clubRoyaleTier={clubRoyaleTier}
-              crownAnchorLevel={crownAnchorLevel}
-              size="small"
-            />
-          </View>
-        </View>
 
-        <View style={styles.tabsContainer}>
+          <View style={styles.tabsContainer}>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'intelligence' && styles.tabButtonActive]}
             onPress={() => setActiveTab('intelligence')}
@@ -2227,7 +2225,8 @@ export default function AnalyticsScreen() {
               Calcs
             </Text>
           </TouchableOpacity>
-        </View>
+          </View>
+        </ResponsiveContainer>
 
         <ScrollView 
           showsVerticalScrollIndicator={false}
@@ -2242,32 +2241,34 @@ export default function AnalyticsScreen() {
             />
           }
         >
-          {!isScreenReady ? (
-            <View style={{ paddingTop: 40, alignItems: 'center' }}>
-              <ActivityIndicator size="large" color={COLORS.navyDeep} />
-            </View>
-          ) : (
-            <>
-              {activeTab === 'intelligence' && renderIntelligenceTab()}
-              {activeTab === 'charts' && renderChartsTab()}
-              {activeTab === 'session' && renderSessionTab()}
-              {activeTab === 'calcs' && renderCalcsTab()}
-            </>
-          )}
-
-          {realAnalytics.totalCruises === 0 && !storeLoading && (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIconContainer}>
-                <BarChart3 size={56} color={COLORS.navyDeep} />
+          <ResponsiveContainer>
+            {!isScreenReady ? (
+              <View style={{ paddingTop: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={COLORS.navyDeep} />
               </View>
-              <Text style={styles.emptyTitle}>No Analytics Data Yet</Text>
-              <Text style={styles.emptyText}>
-                Book and complete cruises to see your{'\n'}personalized statistics here
-              </Text>
-            </View>
-          )}
+            ) : (
+              <>
+                {activeTab === 'intelligence' && renderIntelligenceTab()}
+                {activeTab === 'charts' && renderChartsTab()}
+                {activeTab === 'session' && renderSessionTab()}
+                {activeTab === 'calcs' && renderCalcsTab()}
+              </>
+            )}
 
-          <View style={styles.bottomSpacer} />
+            {realAnalytics.totalCruises === 0 && !storeLoading && (
+              <View style={styles.emptyState}>
+                <View style={styles.emptyIconContainer}>
+                  <BarChart3 size={56} color={COLORS.navyDeep} />
+                </View>
+                <Text style={styles.emptyTitle}>No Analytics Data Yet</Text>
+                <Text style={styles.emptyText}>
+                  Book and complete cruises to see your{'\n'}personalized statistics here
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.bottomSpacer} />
+          </ResponsiveContainer>
         </ScrollView>
       </SafeAreaView>
 
@@ -2493,7 +2494,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   statCard: {
-    width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.sm) / 2 - SPACING.sm / 2,
+    width: '48.5%',
+    minWidth: 160,
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,

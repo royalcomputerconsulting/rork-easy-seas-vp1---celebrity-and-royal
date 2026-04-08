@@ -45,6 +45,7 @@ import { CruiseCard } from '@/components/CruiseCard';
 import type { BookedCruise } from '@/types/models';
 import { AddBookedCruiseModal } from '@/components/AddBookedCruiseModal';
 import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
+import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 
 import { getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -299,12 +300,14 @@ export default function BookedScreen() {
     const isPast = isCruiseCompleted(item);
     
     return (
-      <CruiseCard
-        cruise={item}
-        onPress={() => handleCruisePress(item)}
-        variant={isPast ? 'completed' : 'booked'}
-        mini={true}
-      />
+      <ResponsiveContainer>
+        <CruiseCard
+          cruise={item}
+          onPress={() => handleCruisePress(item)}
+          variant={isPast ? 'completed' : 'booked'}
+          mini={true}
+        />
+      </ResponsiveContainer>
     );
   }, [handleCruisePress]);
 
@@ -412,7 +415,8 @@ export default function BookedScreen() {
   }, [nextCruise]);
 
   const renderHeader = () => (
-    <View style={styles.headerContent}>
+    <ResponsiveContainer>
+      <View style={styles.headerContent}>
       {/* Colorful Hero Header */}
       <View style={styles.heroContainer}>
         <Image source={{ uri: heroImage }} style={styles.heroImage} resizeMode="cover" />
@@ -684,11 +688,13 @@ export default function BookedScreen() {
           ))}
         </View>
       )}
-    </View>
+      </View>
+    </ResponsiveContainer>
   );
 
   const renderEmpty = () => (
-    <View style={styles.emptyState}>
+    <ResponsiveContainer>
+      <View style={styles.emptyState}>
       <View style={styles.emptyIconContainer}>
         <Ship size={56} color={COLORS.beigeWarm} />
       </View>
@@ -716,7 +722,8 @@ export default function BookedScreen() {
           </LinearGradient>
         </TouchableOpacity>
       )}
-    </View>
+      </View>
+    </ResponsiveContainer>
   );
 
   if (appLoading) {

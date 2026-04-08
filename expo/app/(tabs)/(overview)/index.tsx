@@ -42,6 +42,7 @@ import { CertificateManagerModal } from '@/components/CertificateManagerModal';
 import { AgentXChat } from '@/components/AgentXChat';
 import { useCertificates } from '@/state/CertificatesProvider';
 import { OfferCard } from '@/components/OfferCard';
+import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { CasinoOfferCard, OfferSummaryCard } from '@/components/CasinoOfferCard';
 import { AlertsManagerModal } from '@/components/AlertsManagerModal';
 import { AgentXAnalysisCard } from '@/components/AgentXAnalysisCard';
@@ -488,7 +489,8 @@ function OverviewScreenContent() {
 
 
   const renderHeader = () => (
-    <View style={styles.headerContent}>
+    <ResponsiveContainer>
+      <View style={styles.headerContent}>
       <View style={styles.heroCard}>
         <LinearGradient
           colors={['#3AAFA9', '#2B7A78', '#17A398', '#1E8C82', '#3AAFA9']}
@@ -567,11 +569,12 @@ function OverviewScreenContent() {
           </View>
         )}
       </View>
-    </View>
+    </ResponsiveContainer>
   );
 
   const renderFooter = () => (
-    <View style={styles.footerContent}>
+    <ResponsiveContainer>
+      <View style={styles.footerContent}>
       <CollapsibleSection
         title="Casino & Certificates"
         subtitle={`${certificateSummary.reduce((sum, c) => sum + c.value, 0)} available`}
@@ -660,13 +663,15 @@ function OverviewScreenContent() {
           })}
         </View>
       )}
-    </View>
+      </View>
+    </ResponsiveContainer>
   );
 
   const renderOfferCard = useCallback(({ item, index }: { item: CasinoOfferCardData | Cruise; index: number }) => {
     if ('cruises' in item) {
       return (
-        <CasinoOfferCard
+        <ResponsiveContainer>
+          <CasinoOfferCard
           offerCode={item.offerCode}
           offerName={item.offerName}
           expiryDate={item.expiryDate}
@@ -678,7 +683,8 @@ function OverviewScreenContent() {
           onCruisePress={handleCruiseItemPress}
           bookedCruiseIds={bookedCruiseIds}
           isBestValue={index === 0}
-        />
+          />
+        </ResponsiveContainer>
       );
     }
 
@@ -693,14 +699,16 @@ function OverviewScreenContent() {
     }
 
     return (
-      <OfferCard 
+      <ResponsiveContainer>
+        <OfferCard 
         offer={item as Cruise} 
         allCruises={cruisesData}
         offerNameOverride={offerNameOverride}
         onPress={() => handleOfferPress(item)} 
         isBooked={bookedCruiseIds.has(item.id)}
         recommended={index === 0}
-      />
+        />
+      </ResponsiveContainer>
     );
   }, [handleOfferPress, handleCruiseItemPress, bookedCruiseIds, cruisesData, offerNameByCode]);
 
@@ -764,7 +772,11 @@ function OverviewScreenContent() {
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={renderHeader}
           ListFooterComponent={renderFooter}
-          ListEmptyComponent={<AnimatedEmptyState onImportPress={() => router.push('/settings' as any)} />}
+          ListEmptyComponent={
+            <ResponsiveContainer>
+              <AnimatedEmptyState onImportPress={() => router.push('/settings' as any)} />
+            </ResponsiveContainer>
+          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

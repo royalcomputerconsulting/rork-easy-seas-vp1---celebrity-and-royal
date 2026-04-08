@@ -9,15 +9,20 @@ import {
   Gamepad2
 } from "lucide-react-native";
 import React, { useCallback } from "react";
-import { Platform, View, StyleSheet } from "react-native";
+import { Platform, View, StyleSheet, useWindowDimensions } from "react-native";
 import { COLORS } from '../../constants/theme';
 import * as Haptics from 'expo-haptics';
+import { LARGE_SCREEN_BREAKPOINT, getResponsiveTabBarWidth } from '@/constants/layout';
 export default function TabLayout() {
+  const { width } = useWindowDimensions();
   const handleTabPress = useCallback(() => {
     if (Platform.OS !== 'web') {
       Haptics.selectionAsync().catch(() => {});
     }
   }, []);
+
+  const isLargeScreen = width >= LARGE_SCREEN_BREAKPOINT;
+  const tabBarWidth = getResponsiveTabBarWidth(width);
 
   return (
     <Tabs
@@ -39,6 +44,14 @@ export default function TabLayout() {
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.08,
           shadowRadius: 8,
+          ...(isLargeScreen
+            ? {
+                width: tabBarWidth,
+                left: (width - tabBarWidth) / 2,
+                borderRadius: 22,
+                bottom: 12,
+              }
+            : null),
         },
         tabBarLabelStyle: {
           fontSize: 9,

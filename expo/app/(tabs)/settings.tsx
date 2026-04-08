@@ -99,6 +99,7 @@ import { generateSampleData, SAMPLE_LOYALTY_POINTS } from '@/lib/sampleData';
 import { useAuth } from '@/state/AuthProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
+import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 
@@ -1847,7 +1848,8 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           persistentScrollbar={true}
           contentContainerStyle={styles.scrollContent}
         >
-          <View style={styles.header}>
+          <ResponsiveContainer>
+            <View style={styles.header}>
             <View style={styles.titleRow}>
               <SettingsIcon size={24} color={COLORS.navyDeep} />
               <Text style={styles.screenTitle}>Settings</Text>
@@ -2705,6 +2707,7 @@ STEP 4: Optional Calendar Import
               </Text>
             </View>
           </View>
+          </ResponsiveContainer>
         </ScrollView>
       </SafeAreaView>
       

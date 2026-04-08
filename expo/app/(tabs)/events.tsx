@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle, Ban } from 'lucide-react-native';
@@ -12,8 +12,7 @@ import { createDateFromString } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { getCalendarEventsWithGeneratedCruiseEvents } from '@/lib/calendar/cruiseEvents';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 
 type ViewMode = 'events' | 'week' | 'month' | '90days';
 
@@ -451,7 +450,8 @@ export default function EventsScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          <View style={styles.heroHeader}>
+          <ResponsiveContainer>
+            <View style={styles.heroHeader}>
 
             <View style={styles.heroOverlay}>
               <Text style={styles.heroTitle}>Easy Seas™</Text>
@@ -662,7 +662,8 @@ export default function EventsScreen() {
             <CrewRecognitionSection />
           </View>
           
-          <View style={styles.bottomSpacer} />
+            <View style={styles.bottomSpacer} />
+          </ResponsiveContainer>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -926,7 +927,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   ninetyDayCell: {
-    width: Math.floor((SCREEN_WIDTH - SPACING.md * 4 - 28) / 15),
+    width: '6.1%',
     aspectRatio: 1,
     borderRadius: 3,
     backgroundColor: 'rgba(0, 31, 63, 0.08)',

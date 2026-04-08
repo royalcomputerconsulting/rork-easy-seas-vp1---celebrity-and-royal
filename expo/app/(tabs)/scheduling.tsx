@@ -38,6 +38,7 @@ import { useAgentX } from '@/state/AgentXProvider';
 import { getRecommendedCruises, type RecommendationScore } from '@/lib/recommendationEngine';
 import { AgentXChat } from '@/components/AgentXChat';
 import { AlertsManagerModal } from '@/components/AlertsManagerModal';
+import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { FavoriteStateroomsSection } from '@/components/favorite-staterooms/FavoriteStateroomsSection';
 import { findBackToBackSets, type BackToBackSet, type CruiseOffer } from '@/lib/backToBackFinder';
 import { Link2, Calendar, Tag, Anchor } from 'lucide-react-native';
@@ -381,12 +382,14 @@ export default function SchedulingScreen() {
     const isBooked = bookedIds.has(item.id) || activeTab === 'booked';
     
     return (
-      <CruiseCard
-        cruise={item}
-        onPress={() => handleCruisePress(item)}
-        variant={isBooked ? 'booked' : 'available'}
-        mini={true}
-      />
+      <ResponsiveContainer>
+        <CruiseCard
+          cruise={item}
+          onPress={() => handleCruisePress(item)}
+          variant={isBooked ? 'booked' : 'available'}
+          mini={true}
+        />
+      </ResponsiveContainer>
     );
   }, [bookedIds, handleCruisePress, activeTab]);
 
@@ -463,7 +466,8 @@ export default function SchedulingScreen() {
     const setValue = set.cruises.reduce((sum, c) => sum + calculateCruiseValue(c).totalRetailValue, 0);
     
     return (
-      <View key={set.id} style={styles.b2bSetCard}>
+      <ResponsiveContainer>
+        <View key={set.id} style={styles.b2bSetCard}>
         <LinearGradient
           colors={['#E0F7FA', '#DBEAFE', '#E0F2FE']}
           start={{ x: 0, y: 0 }}
@@ -554,12 +558,13 @@ export default function SchedulingScreen() {
             Pick ONE offer per sailing. Each sailing in the chain can use a different code.
           </Text>
         </View>
-      </View>
+      </ResponsiveContainer>
     );
   }, [renderSlotOffers]);
 
   const renderHeader = () => (
-    <View style={styles.headerContent}>
+    <ResponsiveContainer>
+      <View style={styles.headerContent}>
       <CompactDashboardHeader
         memberName={currentUser?.name || clubRoyaleProfile.memberName}
         onSettingsPress={handleSettingsPress}
@@ -742,7 +747,8 @@ export default function SchedulingScreen() {
           </Text>
         </View>
       )}
-    </View>
+      </View>
+    </ResponsiveContainer>
   );
 
   const renderListFooter = useCallback(() => {
@@ -756,7 +762,8 @@ export default function SchedulingScreen() {
   const renderEmpty = () => {
     if (activeTab === 'foryou') {
       return (
-        <View style={styles.emptyState}>
+        <ResponsiveContainer>
+          <View style={styles.emptyState}>
           <View style={styles.emptyIconContainer}>
             <Link2 size={56} color={COLORS.navyDeep} />
           </View>
@@ -764,12 +771,14 @@ export default function SchedulingScreen() {
           <Text style={styles.emptyText}>
             {"No consecutive cruise pairs with different offer codes were found that don't conflict with your booked cruises."}
           </Text>
-        </View>
+          </View>
+        </ResponsiveContainer>
       );
     }
     
     return (
-      <View style={styles.emptyState}>
+      <ResponsiveContainer>
+        <View style={styles.emptyState}>
         <View style={styles.emptyIconContainer}>
           <Ship size={56} color={COLORS.navyDeep} />
         </View>
@@ -791,7 +800,8 @@ export default function SchedulingScreen() {
             </LinearGradient>
           </TouchableOpacity>
         )}
-      </View>
+        </View>
+      </ResponsiveContainer>
     );
   };
 
