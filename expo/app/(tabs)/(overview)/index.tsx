@@ -569,6 +569,7 @@ function OverviewScreenContent() {
           </View>
         )}
       </View>
+      </View>
     </ResponsiveContainer>
   );
 
