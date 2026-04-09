@@ -558,6 +558,7 @@ export default function SchedulingScreen() {
             Pick ONE offer per sailing. Each sailing in the chain can use a different code.
           </Text>
         </View>
+        </View>
       </ResponsiveContainer>
     );
   }, [renderSlotOffers]);
