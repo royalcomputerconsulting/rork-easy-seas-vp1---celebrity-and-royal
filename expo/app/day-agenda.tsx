@@ -37,6 +37,7 @@ import { useSailingWeather } from '@/state/SailingWeatherProvider';
 import {
   generateCruiseCalendarEvents,
   getDisplayCalendarEvents,
+  getNormalizedCruiseDateRange,
   isCruiseCalendarEventBackedByBookedCruise,
 } from '@/lib/calendar/cruiseEvents';
 
@@ -238,8 +239,25 @@ export default function DayAgendaScreen() {
   const { localData } = useAppState();
   const { currentUser } = useUser();
   const coreData = useCoreData();
-  const { bookedCruises } = coreData;
+  const { bookedCruises: storedBookedCruises } = coreData;
   const { isHydrated: isWeatherHydrated, prefetchCruiseForecastWindow } = useSailingWeather();
+
+  const normalizedBookedCruises = useMemo((): BookedCruise[] => {
+    return storedBookedCruises
+      .map((cruise) => {
+        const cruiseDateRange = getNormalizedCruiseDateRange(cruise);
+        if (!cruiseDateRange) {
+          return null;
+        }
+
+        return {
+          ...cruise,
+          sailDate: cruiseDateRange.sailDate,
+          returnDate: cruiseDateRange.returnDate,
+        };
+      })
+      .filter((cruise): cruise is BookedCruise => cruise !== null);
+  }, [storedBookedCruises]);
 
   const playingHours: PlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
   const { getSessionsForDate, getDailySummary, addSession, removeSession } = useCasinoSessions();
@@ -264,14 +282,14 @@ export default function DayAgendaScreen() {
 
   const calendarEvents = useMemo(() => {
     const mergedEvents = [...(localData.calendar || []), ...(localData.tripit || [])];
-    const visibleEvents = getDisplayCalendarEvents(bookedCruises, mergedEvents);
+    const visibleEvents = getDisplayCalendarEvents(normalizedBookedCruises, mergedEvents);
     console.log('[DayAgenda] Visible calendar events prepared for selected day', {
-      bookedCruises: bookedCruises.length,
+      bookedCruises: normalizedBookedCruises.length,
       mergedEvents: mergedEvents.length,
       visibleEvents: visibleEvents.length,
     });
     return visibleEvents;
-  }, [bookedCruises, localData.calendar, localData.tripit]);
+  }, [normalizedBookedCruises, localData.calendar, localData.tripit]);
 
   const isDateInRange = useCallback((targetDate: Date, startStr: string, endStr: string): boolean => {
     const start = createDateFromString(startStr);
@@ -304,7 +322,7 @@ export default function DayAgendaScreen() {
   const mergedCruiseBookings = useMemo((): MergedCruiseData[] => {
     const cruiseMap = new Map<string, MergedCruiseData>();
     
-    bookedCruises.forEach((cruise: BookedCruise) => {
+    normalizedBookedCruises.forEach((cruise: BookedCruise) => {
       if (!cruise.sailDate || !cruise.returnDate) return;
       if (!isDateInRange(selectedDate, cruise.sailDate, cruise.returnDate)) return;
       
@@ -342,7 +360,7 @@ export default function DayAgendaScreen() {
     });
     
     return Array.from(cruiseMap.values());
-  }, [bookedCruises, selectedDate, isDateInRange]);
+  }, [normalizedBookedCruises, selectedDate, isDateInRange]);
 
   const getDayOfCruise = useCallback((cruise: MergedCruiseData): number => {
     const start = createDateFromString(cruise.sailDate);
@@ -836,7 +854,7 @@ export default function DayAgendaScreen() {
     sevenDaysAhead.setDate(sevenDaysAhead.getDate() + 7);
     sevenDaysAhead.setHours(23, 59, 59, 999);
     const activeIds = new Set(mergedCruiseBookings.map((c) => c.id));
-    return bookedCruises
+    return normalizedBookedCruises
       .filter((c) => {
         if (!c.sailDate || !c.returnDate) return false;
         if (activeIds.has(c.id)) return false;
@@ -857,7 +875,7 @@ export default function DayAgendaScreen() {
         nights: c.nights,
         itinerary: c.itinerary,
       }));
-  }, [bookedCruises, mergedCruiseBookings, selectedDate]);
+  }, [normalizedBookedCruises, mergedCruiseBookings, selectedDate]);
 
   const fallbackCruisesForWeather = useMemo(() => {
     if (mergedCruiseBookings.length > 0 || upcomingCruisesForWeather.length > 0) {
@@ -878,7 +896,7 @@ export default function DayAgendaScreen() {
       itinerary?: ItineraryDay[];
     }>();
 
-    bookedCruises.forEach((cruise) => {
+    normalizedBookedCruises.forEach((cruise) => {
       if (!cruise.sailDate || !cruise.returnDate) {
         return;
       }
@@ -910,7 +928,7 @@ export default function DayAgendaScreen() {
         return Math.abs(aSail.getTime() - selectedDayTime.getTime()) - Math.abs(bSail.getTime() - selectedDayTime.getTime());
       })
       .slice(0, 2);
-  }, [bookedCruises, mergedCruiseBookings.length, upcomingCruisesForWeather.length, selectedDate]);
+  }, [normalizedBookedCruises, mergedCruiseBookings.length, upcomingCruisesForWeather.length, selectedDate]);
 
   const allWeatherCruises = useMemo(() => {
     const cruiseMap = new Map<string, MergedCruiseData | {
@@ -1250,9 +1268,9 @@ export default function DayAgendaScreen() {
     
     try {
       const existingEvents = coreData.calendarEvents.filter(
-        (event) => !isCruiseCalendarEventBackedByBookedCruise(event, bookedCruises)
+        (event) => !isCruiseCalendarEventBackedByBookedCruise(event, normalizedBookedCruises)
       );
-      const cruiseEvents: CalendarEvent[] = generateCruiseCalendarEvents(bookedCruises);
+      const cruiseEvents: CalendarEvent[] = generateCruiseCalendarEvents(normalizedBookedCruises);
       const allEvents = [...existingEvents, ...cruiseEvents];
       coreData.setCalendarEvents(allEvents);
       
@@ -1266,7 +1284,7 @@ export default function DayAgendaScreen() {
     } finally {
       setIsSyncing(false);
     }
-  }, [bookedCruises, coreData]);
+  }, [normalizedBookedCruises, coreData]);
 
   const renderAllDayScheduleItem = useCallback((item: AllDayScheduleItem) => {
     const IconComponent = getTimelineIcon(item.icon);

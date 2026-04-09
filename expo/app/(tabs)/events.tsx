@@ -11,7 +11,7 @@ import type { CalendarEvent, BookedCruise } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
-import { getCalendarEventsWithGeneratedCruiseEvents } from '@/lib/calendar/cruiseEvents';
+import { getCalendarEventsWithGeneratedCruiseEvents, getNormalizedCruiseDateRange } from '@/lib/calendar/cruiseEvents';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 
 type ViewMode = 'events' | 'week' | 'month' | '90days';
@@ -43,22 +43,36 @@ export default function EventsScreen() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const normalizedBookedCruises = useMemo((): BookedCruise[] => {
+    return bookedCruises
+      .map((cruise) => {
+        const cruiseDateRange = getNormalizedCruiseDateRange(cruise);
+        if (!cruiseDateRange) return null;
+        return {
+          ...cruise,
+          sailDate: cruiseDateRange.sailDate,
+          returnDate: cruiseDateRange.returnDate,
+        };
+      })
+      .filter((cruise): cruise is BookedCruise => cruise !== null);
+  }, [bookedCruises]);
+
   const calendarEvents = useMemo(() => {
     const mergedEvents = getCalendarEventsWithGeneratedCruiseEvents(
-      bookedCruises,
+      normalizedBookedCruises,
       [...(localData.calendar || []), ...(localData.tripit || [])]
     );
     console.log('[Events] Calendar events updated:', {
       mergedEvents: mergedEvents.length,
-      bookedCruises: bookedCruises.length,
+      bookedCruises: normalizedBookedCruises.length,
     });
     return mergedEvents;
-  }, [bookedCruises, localData.calendar, localData.tripit]);
+  }, [normalizedBookedCruises, localData.calendar, localData.tripit]);
 
   useEffect(() => {
-    console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', bookedCruises.length);
-    setRefreshKey(prev => prev + 1);
-  }, [calendarEvents.length, bookedCruises.length]);
+    console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', normalizedBookedCruises.length);
+    setRefreshKey((prev) => prev + 1);
+  }, [calendarEvents.length, normalizedBookedCruises.length]);
 
   const _eventCounts = useMemo(() => {
     let cruise = 0;
@@ -355,30 +369,59 @@ export default function EventsScreen() {
     );
   }, [renderEventDots, handleDayPress, getDayBackgroundColor]);
 
+  const allEventItems = useMemo(() => {
+    const allEvents: { event: CalendarEvent | BookedCruise; type: 'calendar' | 'cruise'; date: Date }[] = [];
+
+    calendarEvents.forEach((event) => {
+      const startValue = event.startDate || event.start || '';
+      if (!startValue) {
+        return;
+      }
+
+      allEvents.push({
+        event,
+        type: 'calendar',
+        date: createDateFromString(startValue),
+      });
+    });
+
+    normalizedBookedCruises.forEach((cruise) => {
+      const cruiseDateRange = getNormalizedCruiseDateRange(cruise);
+      if (!cruiseDateRange) {
+        return;
+      }
+
+      allEvents.push({
+        event: cruise,
+        type: 'cruise',
+        date: createDateFromString(cruiseDateRange.sailDate),
+      });
+    });
+
+    return allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [calendarEvents, normalizedBookedCruises]);
+
   const upcomingEvents = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    const allEvents: { event: CalendarEvent | BookedCruise; type: 'calendar' | 'cruise'; date: Date }[] = [];
-    
-    calendarEvents.forEach(event => {
-      const startDate = createDateFromString(event.startDate || event.start || '');
-      if (startDate >= today) {
-        allEvents.push({ event, type: 'calendar', date: startDate });
-      }
-    });
-    
-    bookedCruises.forEach(cruise => {
-      if (cruise.sailDate) {
-        const sailDate = createDateFromString(cruise.sailDate);
-        if (sailDate >= today) {
-          allEvents.push({ event: cruise, type: 'cruise', date: sailDate });
-        }
-      }
-    });
-    
-    return allEvents.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 5);
-  }, [calendarEvents, bookedCruises]);
+    return allEventItems.filter((item) => item.date >= today).slice(0, 5);
+  }, [allEventItems]);
+
+  const recentEvents = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return [...allEventItems]
+      .filter((item) => item.date < today)
+      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .slice(0, 5);
+  }, [allEventItems]);
+
+  const featuredEvents = upcomingEvents.length > 0 ? upcomingEvents : recentEvents;
+  const hasFutureEvents = upcomingEvents.length > 0;
+
+  const handleJumpToEventMonth = useCallback((date: Date) => {
+    setCurrentDate(new Date(date.getFullYear(), date.getMonth(), 1));
+  }, []);
 
   const renderEventCard = useCallback((item: { event: CalendarEvent | BookedCruise; type: 'calendar' | 'cruise'; date: Date }, index: number) => {
     if (item.type === 'cruise') {
@@ -523,6 +566,25 @@ export default function EventsScreen() {
             </View>
           )}
 
+          {(viewMode === 'month' || viewMode === 'week') && totalEventsThisMonth === 0 && featuredEvents.length > 0 && (
+            <TouchableOpacity
+              style={styles.jumpBanner}
+              onPress={() => handleJumpToEventMonth(featuredEvents[0].date)}
+              activeOpacity={0.82}
+              testID="jump-to-events-month-button"
+            >
+              <View style={styles.jumpBannerTextGroup}>
+                <Text style={styles.jumpBannerTitle}>No events in {formatMonthYear(currentDate)}</Text>
+                <Text style={styles.jumpBannerText}>
+                  {hasFutureEvents
+                    ? `Jump to ${formatMonthYear(featuredEvents[0].date)} to see your next cruise.`
+                    : `Jump to ${formatMonthYear(featuredEvents[0].date)} to review your cruise history.`}
+                </Text>
+              </View>
+              <ChevronRight size={20} color={COLORS.navyDeep} />
+            </TouchableOpacity>
+          )}
+
           {totalEventsThisMonth > 10 && viewMode === 'month' && (
             <View style={styles.alertBadge}>
               <AlertTriangle size={14} color={COLORS.white} />
@@ -612,18 +674,22 @@ export default function EventsScreen() {
             <View style={styles.eventsListSection}>
               <View style={styles.sectionHeader}>
                 <CalendarDays size={20} color={COLORS.navyDeep} />
-                <Text style={styles.sectionTitle}>Upcoming Events</Text>
-                <Text style={styles.eventCountBadge}>{upcomingEvents.length}</Text>
+                <Text style={styles.sectionTitle}>
+                  {hasFutureEvents ? 'Upcoming Events' : featuredEvents.length > 0 ? 'Recent Cruise Events' : 'Upcoming Events'}
+                </Text>
+                <Text style={styles.eventCountBadge}>{featuredEvents.length}</Text>
               </View>
               
-              {upcomingEvents.length === 0 ? (
+              {featuredEvents.length === 0 ? (
                 <View style={styles.emptyState}>
                   <View style={styles.emptyIconContainer}>
                     <CalendarDays size={48} color={COLORS.navyDeep} />
                   </View>
-                  <Text style={styles.emptyTitle}>No Upcoming Events</Text>
+                  <Text style={styles.emptyTitle}>No Events Found</Text>
                   <Text style={styles.emptyText}>
-                    Import calendar events or book a cruise to see them here
+                    {normalizedBookedCruises.length > 0
+                      ? 'Your cruises are loaded, but none have usable dates yet.'
+                      : 'Import calendar events or book a cruise to see them here'}
                   </Text>
                   <TouchableOpacity 
                     style={styles.addEventButton}
@@ -636,20 +702,20 @@ export default function EventsScreen() {
                 </View>
               ) : (
                 <View style={styles.eventsList}>
-                  {upcomingEvents.map((item, index) => renderEventCard(item, index))}
+                  {featuredEvents.map((item, index) => renderEventCard(item, index))}
                 </View>
               )}
             </View>
           )}
 
-          {viewMode !== 'events' && upcomingEvents.length > 0 && (
+          {viewMode !== 'events' && featuredEvents.length > 0 && (
             <View style={styles.eventsListSection}>
               <View style={styles.sectionHeader}>
                 <CalendarDays size={20} color={COLORS.navyDeep} />
-                <Text style={styles.sectionTitle}>Next Up</Text>
+                <Text style={styles.sectionTitle}>{hasFutureEvents ? 'Next Up' : 'Cruise History'}</Text>
               </View>
               <View style={styles.eventsList}>
-                {upcomingEvents.slice(0, 3).map((item, index) => renderEventCard(item, index))}
+                {featuredEvents.slice(0, 3).map((item, index) => renderEventCard(item, index))}
               </View>
             </View>
           )}
@@ -778,6 +844,35 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(220, 38, 38, 0.3)',
     marginLeft: 6,
+  },
+  jumpBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: BORDER_RADIUS.lg,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
+    ...SHADOW.sm,
+  },
+  jumpBannerTextGroup: {
+    flex: 1,
+    paddingRight: SPACING.sm,
+  },
+  jumpBannerTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+    marginBottom: 2,
+  },
+  jumpBannerText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.72,
   },
   monthYearContainer: {
     alignItems: 'center',
