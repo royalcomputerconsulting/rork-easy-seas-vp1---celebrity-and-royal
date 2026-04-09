@@ -491,84 +491,84 @@ function OverviewScreenContent() {
   const renderHeader = () => (
     <ResponsiveContainer>
       <View style={styles.headerContent}>
-      <View style={styles.heroCard}>
-        <LinearGradient
-          colors={['#3AAFA9', '#2B7A78', '#17A398', '#1E8C82', '#3AAFA9']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <LinearGradient
-          colors={['rgba(255,255,255,0.18)', 'transparent', 'rgba(255,255,255,0.12)', 'transparent', 'rgba(255,255,255,0.08)']}
-          start={{ x: 0.2, y: 0 }}
-          end={{ x: 0.8, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-
-        <View style={styles.heroOverlay}>
-          <Text style={styles.heroTitle}>Easy Seas™</Text>
-          <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
-          <Image
-            source={{ uri: IMAGES.signature }}
-            style={styles.heroSignature}
-            resizeMode="contain"
+        <View style={styles.heroCard}>
+          <LinearGradient
+            colors={['#3AAFA9', '#2B7A78', '#17A398', '#1E8C82', '#3AAFA9']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
           />
-        </View>
-      </View>
+          <LinearGradient
+            colors={['rgba(255,255,255,0.18)', 'transparent', 'rgba(255,255,255,0.12)', 'transparent', 'rgba(255,255,255,0.08)']}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.8, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
 
-      <CompactDashboardHeader
-        hideLogo={true}
-        memberName={currentUser?.name || clubRoyaleProfile.memberName}
-        onSettingsPress={handleSettingsPress}
-        onAlertsPress={handleAlertsPress}
-        onLogoutPress={handleLogoutPress}
-        alertCount={summary.totalActive}
-        availableCruises={availableCruisesCount}
-        bookedCruises={bookedCruises.length}
-        activeOffers={groupedOffers.length || offersData.length}
-        onCruisesPress={handleCruisesPress}
-        onBookedPress={handleBookedPress}
-        onOffersPress={() => console.log('Active offers pressed')}
-      />
-
-      <CollapsibleSection
-        title="AI Analysis"
-        subtitle="Performance insights"
-        icon={<Bot size={18} color="#FFFFFF" />}
-        defaultExpanded={true}
-        showBorder={false}
-      >
-        <AgentXAnalysisCard 
-          onViewDetails={() => setVisible(true)}
-          onRefresh={refreshAnalysis}
-        />
-      </CollapsibleSection>
-
-      {offerSummary && (
-        <OfferSummaryCard
-          totalValue={offerSummary.totalValue}
-          totalCruises={offerSummary.totalCruises}
-          totalOffers={offerSummary.totalOffers}
-          onSoonestPress={() => setSortMode('soonest')}
-          onHighestValuePress={() => setSortMode('highestValue')}
-          activeSortMode={sortMode}
-        />
-      )}
-
-      <View style={styles.sectionHeader}>
-        <View style={styles.sectionTitleRow}>
-          <Tag size={18} color={COLORS.navyDeep} />
-          <Text style={styles.sectionTitle}>CASINO OFFERS</Text>
-        </View>
-        {expiringSoonCount > 0 && (
-          <View style={styles.expiringAlert}>
-            <AlertTriangle size={14} color={COLORS.warning} />
-            <Text style={styles.expiringAlertText}>
-              {expiringSoonCount} expiring soon
-            </Text>
+          <View style={styles.heroOverlay}>
+            <Text style={styles.heroTitle}>Easy Seas™</Text>
+            <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
+            <Image
+              source={{ uri: IMAGES.signature }}
+              style={styles.heroSignature}
+              resizeMode="contain"
+            />
           </View>
+        </View>
+
+        <CompactDashboardHeader
+          hideLogo={true}
+          memberName={currentUser?.name || clubRoyaleProfile.memberName}
+          onSettingsPress={handleSettingsPress}
+          onAlertsPress={handleAlertsPress}
+          onLogoutPress={handleLogoutPress}
+          alertCount={summary.totalActive}
+          availableCruises={availableCruisesCount}
+          bookedCruises={bookedCruises.length}
+          activeOffers={groupedOffers.length || offersData.length}
+          onCruisesPress={handleCruisesPress}
+          onBookedPress={handleBookedPress}
+          onOffersPress={() => console.log('Active offers pressed')}
+        />
+
+        <CollapsibleSection
+          title="AI Analysis"
+          subtitle="Performance insights"
+          icon={<Bot size={18} color="#FFFFFF" />}
+          defaultExpanded={true}
+          showBorder={false}
+        >
+          <AgentXAnalysisCard
+            onViewDetails={() => setVisible(true)}
+            onRefresh={refreshAnalysis}
+          />
+        </CollapsibleSection>
+
+        {offerSummary && (
+          <OfferSummaryCard
+            totalValue={offerSummary.totalValue}
+            totalCruises={offerSummary.totalCruises}
+            totalOffers={offerSummary.totalOffers}
+            onSoonestPress={() => setSortMode('soonest')}
+            onHighestValuePress={() => setSortMode('highestValue')}
+            activeSortMode={sortMode}
+          />
         )}
-      </View>
+
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleRow}>
+            <Tag size={18} color={COLORS.navyDeep} />
+            <Text style={styles.sectionTitle}>CASINO OFFERS</Text>
+          </View>
+          {expiringSoonCount > 0 && (
+            <View style={styles.expiringAlert}>
+              <AlertTriangle size={14} color={COLORS.warning} />
+              <Text style={styles.expiringAlertText}>
+                {expiringSoonCount} expiring soon
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
     </ResponsiveContainer>
   );
@@ -576,94 +576,94 @@ function OverviewScreenContent() {
   const renderFooter = () => (
     <ResponsiveContainer>
       <View style={styles.footerContent}>
-      <CollapsibleSection
-        title="Casino & Certificates"
-        subtitle={`${certificateSummary.reduce((sum, c) => sum + c.value, 0)} available`}
-        icon={<Sparkles size={18} color="#FFFFFF" />}
-        defaultExpanded={true}
-        showBorder={false}
-      >
-        <CasinoCertificatesCard
-          certificates={certificateSummary}
-          totalCertificates={certificateSummary.reduce((sum, c) => sum + c.value, 0)}
-          availableCruises={availableCruisesCount}
-          onManagePress={() => setShowCertificateModal(true)}
-          onViewOffersPress={() => router.push('/scheduling' as any)}
-          onExaminePress={() => setShowCertificateExplorerModal(true)}
-        />
-      </CollapsibleSection>
+        <CollapsibleSection
+          title="Casino & Certificates"
+          subtitle={`${certificateSummary.reduce((sum, c) => sum + c.value, 0)} available`}
+          icon={<Sparkles size={18} color="#FFFFFF" />}
+          defaultExpanded={true}
+          showBorder={false}
+        >
+          <CasinoCertificatesCard
+            certificates={certificateSummary}
+            totalCertificates={certificateSummary.reduce((sum, c) => sum + c.value, 0)}
+            availableCruises={availableCruisesCount}
+            onManagePress={() => setShowCertificateModal(true)}
+            onViewOffersPress={() => router.push('/scheduling' as any)}
+            onExaminePress={() => setShowCertificateExplorerModal(true)}
+          />
+        </CollapsibleSection>
 
-      <CollapsibleSection
-        title="Machine Strategy"
-        subtitle="Personalized recommendations"
-        icon={<Target size={18} color="#FFFFFF" />}
-        defaultExpanded={false}
-        showBorder={false}
-      >
-        <MachineStrategyCard />
-      </CollapsibleSection>
+        <CollapsibleSection
+          title="Machine Strategy"
+          subtitle="Personalized recommendations"
+          icon={<Target size={18} color="#FFFFFF" />}
+          defaultExpanded={false}
+          showBorder={false}
+        >
+          <MachineStrategyCard />
+        </CollapsibleSection>
 
-      {cruisesWithCasinoData.length > 0 && (
-        <View style={styles.casinoHistorySection}>
-          <View style={styles.casinoHistoryHeader}>
-            <View style={styles.casinoHistoryTitleRow}>
-              <Coins size={18} color={COLORS.navyDeep} />
-              <Text style={styles.casinoHistoryTitle}>CASINO HISTORY</Text>
+        {cruisesWithCasinoData.length > 0 && (
+          <View style={styles.casinoHistorySection}>
+            <View style={styles.casinoHistoryHeader}>
+              <View style={styles.casinoHistoryTitleRow}>
+                <Coins size={18} color={COLORS.navyDeep} />
+                <Text style={styles.casinoHistoryTitle}>CASINO HISTORY</Text>
+              </View>
+              <Text style={styles.casinoHistorySubtitle}>
+                {cruisesWithCasinoData.length} cruise{cruisesWithCasinoData.length !== 1 ? 's' : ''} with casino data
+              </Text>
             </View>
-            <Text style={styles.casinoHistorySubtitle}>
-              {cruisesWithCasinoData.length} cruise{cruisesWithCasinoData.length !== 1 ? 's' : ''} with casino data
-            </Text>
+            {cruisesWithCasinoData.map((cruise: BookedCruise) => {
+              const winnings = cruise.winnings || 0;
+              const earnedPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
+              const isWin = winnings >= 0;
+              const itineraryText = `${cruise.nights} night${cruise.nights !== 1 ? 's' : ''} to ${cruise.destination || cruise.itineraryName || 'Caribbean'}`;
+
+              return (
+                <TouchableOpacity
+                  key={cruise.id}
+                  style={styles.casinoHistoryItem}
+                  onPress={() => handleCruiseItemPress(cruise.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.casinoHistoryItemHeader}>
+                    <View style={styles.casinoHistoryShipInfo}>
+                      <Ship size={16} color={COLORS.navyDeep} />
+                      <Text style={styles.casinoHistoryShipName}>{cruise.shipName}</Text>
+                    </View>
+                    <View style={styles.casinoHistoryDateRow}>
+                      <Calendar size={12} color="#64748B" />
+                      <Text style={styles.casinoHistoryDate}>{formatDate(cruise.sailDate)}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.casinoHistoryItinerary}>{itineraryText}</Text>
+                  <View style={styles.casinoHistoryStats}>
+                    <View style={styles.casinoHistoryStat}>
+                      {isWin ? (
+                        <TrendingUp size={14} color={COLORS.success} />
+                      ) : (
+                        <TrendingDown size={14} color={COLORS.error} />
+                      )}
+                      <Text style={[styles.casinoHistoryStatValue, { color: isWin ? COLORS.success : COLORS.error }]}> 
+                        {isWin ? '+' : ''}${winnings.toLocaleString()}
+                      </Text>
+                      <Text style={styles.casinoHistoryStatLabel}>Win/Loss</Text>
+                    </View>
+                    <View style={styles.casinoHistoryStatDivider} />
+                    <View style={styles.casinoHistoryStat}>
+                      <Sparkles size={14} color="#D4A574" />
+                      <Text style={styles.casinoHistoryStatValuePoints}>
+                        {earnedPoints.toLocaleString()}
+                      </Text>
+                      <Text style={styles.casinoHistoryStatLabel}>Points Earned</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-          {cruisesWithCasinoData.map((cruise: BookedCruise) => {
-            const winnings = cruise.winnings || 0;
-            const earnedPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
-            const isWin = winnings >= 0;
-            const itineraryText = `${cruise.nights} night${cruise.nights !== 1 ? 's' : ''} to ${cruise.destination || cruise.itineraryName || 'Caribbean'}`;
-            
-            return (
-              <TouchableOpacity
-                key={cruise.id}
-                style={styles.casinoHistoryItem}
-                onPress={() => handleCruiseItemPress(cruise.id)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.casinoHistoryItemHeader}>
-                  <View style={styles.casinoHistoryShipInfo}>
-                    <Ship size={16} color={COLORS.navyDeep} />
-                    <Text style={styles.casinoHistoryShipName}>{cruise.shipName}</Text>
-                  </View>
-                  <View style={styles.casinoHistoryDateRow}>
-                    <Calendar size={12} color="#64748B" />
-                    <Text style={styles.casinoHistoryDate}>{formatDate(cruise.sailDate)}</Text>
-                  </View>
-                </View>
-                <Text style={styles.casinoHistoryItinerary}>{itineraryText}</Text>
-                <View style={styles.casinoHistoryStats}>
-                  <View style={styles.casinoHistoryStat}>
-                    {isWin ? (
-                      <TrendingUp size={14} color={COLORS.success} />
-                    ) : (
-                      <TrendingDown size={14} color={COLORS.error} />
-                    )}
-                    <Text style={[styles.casinoHistoryStatValue, { color: isWin ? COLORS.success : COLORS.error }]}>
-                      {isWin ? '+' : ''}${winnings.toLocaleString()}
-                    </Text>
-                    <Text style={styles.casinoHistoryStatLabel}>Win/Loss</Text>
-                  </View>
-                  <View style={styles.casinoHistoryStatDivider} />
-                  <View style={styles.casinoHistoryStat}>
-                    <Sparkles size={14} color="#D4A574" />
-                    <Text style={styles.casinoHistoryStatValuePoints}>
-                      {earnedPoints.toLocaleString()}
-                    </Text>
-                    <Text style={styles.casinoHistoryStatLabel}>Points Earned</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
+        )}
       </View>
     </ResponsiveContainer>
   );
