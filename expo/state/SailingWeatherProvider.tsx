@@ -64,7 +64,7 @@ const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; la
   'philipsburg': { latitude: 18.0252, longitude: -63.0458, label: 'Philipsburg' },
   keywest: { latitude: 24.5551, longitude: -81.78, label: 'Key West' },
   'key west': { latitude: 24.5551, longitude: -81.78, label: 'Key West' },
-  'civitavecchia': { latitude: 42.0933, longitude: 11.7956, label: 'Civitavecchia' },
+  civitavecchia: { latitude: 42.0933, longitude: 11.7956, label: 'Civitavecchia' },
   rome: { latitude: 42.0933, longitude: 11.7956, label: 'Civitavecchia' },
   barcelona: { latitude: 41.3851, longitude: 2.1734, label: 'Barcelona' },
   marseille: { latitude: 43.2965, longitude: 5.3698, label: 'Marseille' },
@@ -79,6 +79,8 @@ const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; la
   sitka: { latitude: 57.0531, longitude: -135.33, label: 'Sitka' },
   victoria: { latitude: 48.4284, longitude: -123.3656, label: 'Victoria' },
 };
+
+const SORTED_PORT_COORDINATE_KEYS = Object.keys(PORT_COORDINATES).sort((left, right) => right.length - left.length);
 
 type SailingWeatherSource = 'live' | 'cache-fresh' | 'cache-stale';
 
@@ -230,6 +232,65 @@ function normalizePortName(value: string): string {
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function buildPortLookupCandidates(rawValue: string): string[] {
+  const normalized = normalizePortName(rawValue);
+  if (!normalized) {
+    return [];
+  }
+
+  const candidates = new Set<string>([normalized]);
+
+  rawValue
+    .split(/[,&/;]|→|->/)
+    .map((segment) => normalizePortName(segment))
+    .filter(Boolean)
+    .forEach((segment) => {
+      candidates.add(segment);
+    });
+
+  normalized
+    .split(/\b(?:and|to|via)\b/)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .forEach((segment) => {
+      candidates.add(segment);
+    });
+
+  return Array.from(candidates);
+}
+
+function matchKnownPortCoordinates(normalizedValue: string): PortCoordinates | null {
+  const directMatch = PORT_COORDINATES[normalizedValue];
+  if (directMatch) {
+    return directMatch;
+  }
+
+  for (const key of SORTED_PORT_COORDINATE_KEYS) {
+    if (
+      normalizedValue.startsWith(`${key} `)
+      || normalizedValue.endsWith(` ${key}`)
+      || normalizedValue.includes(` ${key} `)
+      || key.startsWith(`${normalizedValue} `)
+      || key.endsWith(` ${normalizedValue}`)
+    ) {
+      return PORT_COORDINATES[key] ?? null;
+    }
+  }
+
+  return null;
+}
+
+function resolveKnownPortCoordinates(rawValue: string): PortCoordinates | null {
+  for (const candidate of buildPortLookupCandidates(rawValue)) {
+    const knownCoordinates = matchKnownPortCoordinates(candidate);
+    if (knownCoordinates) {
+      return knownCoordinates;
+    }
+  }
+
+  return null;
 }
 
 function roundNumber(value: number, decimals = 1): number {
@@ -718,8 +779,16 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     const normalized = normalizePortName(portName);
     if (!normalized) return null;
 
-    if (PORT_COORDINATES[normalized]) {
-      return PORT_COORDINATES[normalized];
+    const localCoordinates = resolveKnownPortCoordinates(portName);
+    if (localCoordinates) {
+      console.log('[SailingWeather] Resolved port from bundled coordinates', {
+        portName,
+        label: localCoordinates.label,
+        latitude: localCoordinates.latitude,
+        longitude: localCoordinates.longitude,
+      });
+      geocodeCacheRef.current.set(normalized, localCoordinates);
+      return localCoordinates;
     }
 
     const cached = geocodeCacheRef.current.get(normalized);
@@ -727,31 +796,52 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       return cached;
     }
 
-    const searchName = encodeURIComponent(portName.replace(/\bPort\b/gi, '').trim());
-    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${searchName}&count=1&language=en&format=json`;
+    const candidates = buildPortLookupCandidates(portName);
 
-    try {
-      const json = await fetchJson<{ results?: Array<{ name?: string; latitude?: number; longitude?: number; country?: string; admin1?: string }> }>(url);
-      const first = json.results?.[0];
-      if (!first || !isNumber(first.latitude) || !isNumber(first.longitude)) {
-        return null;
+    for (const candidate of candidates) {
+      const searchName = encodeURIComponent(candidate.replace(/\bport\b/gi, '').trim());
+      if (!searchName) {
+        continue;
       }
 
-      const labelParts = [first.name, first.admin1, first.country].filter(Boolean);
-      const resolved: PortCoordinates = {
-        latitude: first.latitude,
-        longitude: first.longitude,
-        label: labelParts.join(', ') || portName,
-      };
-      geocodeCacheRef.current.set(normalized, resolved);
-      return resolved;
-    } catch (error) {
-      logSailingWeather('error', '[SailingWeather] Geocoding failed for port', {
-        portName,
-        error: serializeError(error),
-      });
-      return null;
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${searchName}&count=1&language=en&format=json`;
+
+      try {
+        const json = await fetchJson<{ results?: Array<{ name?: string; latitude?: number; longitude?: number; country?: string; admin1?: string }> }>(url);
+        const first = json.results?.[0];
+        if (!first || !isNumber(first.latitude) || !isNumber(first.longitude)) {
+          continue;
+        }
+
+        const labelParts = [first.name, first.admin1, first.country].filter(Boolean);
+        const resolved: PortCoordinates = {
+          latitude: first.latitude,
+          longitude: first.longitude,
+          label: labelParts.join(', ') || portName,
+        };
+        geocodeCacheRef.current.set(normalized, resolved);
+        console.log('[SailingWeather] Resolved port via geocoding', {
+          portName,
+          candidate,
+          label: resolved.label,
+          latitude: resolved.latitude,
+          longitude: resolved.longitude,
+        });
+        return resolved;
+      } catch (error) {
+        logSailingWeather('warn', '[SailingWeather] Geocoding attempt failed for port candidate', {
+          portName,
+          candidate,
+          error: serializeError(error),
+        });
+      }
     }
+
+    logSailingWeather('error', '[SailingWeather] Geocoding failed for port', {
+      portName,
+      candidates,
+    });
+    return null;
   }, []);
 
   const resolveCruiseWeatherPoint = useCallback(async (cruise: SailingWeatherCruiseInput, targetDate: Date): Promise<ResolvedCruiseWeatherPoint | null> => {
@@ -813,8 +903,13 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     resolvedPoint: ResolvedCruiseWeatherPoint,
   ): Promise<SailingWeatherForecast> => {
     const dateKey = formatDateKey(targetDate);
+    const targetDay = startOfDay(targetDate);
+    const today = startOfDay(new Date());
+    const weatherApiHost = targetDay < today
+      ? 'https://archive-api.open-meteo.com/v1/archive'
+      : 'https://api.open-meteo.com/v1/forecast';
     const query = `latitude=${resolvedPoint.latitude}&longitude=${resolvedPoint.longitude}&timezone=auto&temperature_unit=fahrenheit&wind_speed_unit=mph&start_date=${dateKey}&end_date=${dateKey}`;
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?${query}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,weather_code&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code`;
+    const weatherUrl = `${weatherApiHost}?${query}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,weather_code&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code`;
     const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${resolvedPoint.latitude}&longitude=${resolvedPoint.longitude}&timezone=auto&start_date=${dateKey}&end_date=${dateKey}&daily=wave_height_max,wave_direction_dominant,wave_period_max,swell_wave_height_max,swell_wave_direction_dominant&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period`;
 
     console.log('[SailingWeather] Fetching live forecast', {
@@ -825,6 +920,8 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       latitude: resolvedPoint.latitude,
       longitude: resolvedPoint.longitude,
       isSeaDay: resolvedPoint.isSeaDay,
+      weatherApiHost,
+      marineUrl,
     });
 
     const weatherJson = await fetchJson<ForecastApiResponse>(weatherUrl);
