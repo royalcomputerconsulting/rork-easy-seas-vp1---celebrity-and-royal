@@ -15,7 +15,8 @@ export function LoginScreen() {
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
-  const [logoError] = useState<boolean>(false);
+  const [logoError, setLogoError] = useState<boolean>(false);
+  const [signatureError, setSignatureError] = useState<boolean>(false);
   const { login } = useAuth();
 
   
@@ -68,22 +69,37 @@ export function LoginScreen() {
           <View style={styles.content}>
           <View style={styles.logoContainer}>
             {!logoError ? (
-              <Image 
+              <Image
                 source={{ uri: IMAGES.logo }}
                 style={styles.logoImage}
                 resizeMode="contain"
+                onError={() => {
+                  console.warn('[LoginScreen] Logo image failed to load, using local fallback');
+                  setLogoError(true);
+                }}
+                testID="login-logo-image"
               />
             ) : (
-              <View style={styles.logoFallback}>
-                <Text style={styles.logoFallbackText}>Easy Seas</Text>
-              </View>
+              <Image
+                source={require('@/assets/images/icon.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+                testID="login-logo-fallback-image"
+              />
             )}
           </View>
-          <Image
-            source={{ uri: IMAGES.signature }}
-            style={styles.signatureImage}
-            resizeMode="contain"
-          />
+          {!signatureError ? (
+            <Image
+              source={{ uri: IMAGES.signature }}
+              style={styles.signatureImage}
+              resizeMode="contain"
+              onError={() => {
+                console.warn('[LoginScreen] Signature image failed to load, hiding signature');
+                setSignatureError(true);
+              }}
+              testID="login-signature-image"
+            />
+          ) : null}
 
           <Text style={styles.brandTitle}>EASY SEAS™</Text>
           <Text style={styles.brandTagline}>Manage your Nautical Lifestyle</Text>
