@@ -859,34 +859,107 @@ export default function DayAgendaScreen() {
       }));
   }, [bookedCruises, mergedCruiseBookings, selectedDate]);
 
-  const allWeatherCruises = useMemo(
-    () => [...mergedCruiseBookings, ...upcomingCruisesForWeather],
-    [mergedCruiseBookings, upcomingCruisesForWeather]
-  );
+  const fallbackCruisesForWeather = useMemo(() => {
+    if (mergedCruiseBookings.length > 0 || upcomingCruisesForWeather.length > 0) {
+      return [];
+    }
+
+    const selectedDayTime = new Date(selectedDate);
+    selectedDayTime.setHours(0, 0, 0, 0);
+    const uniqueCruises = new Map<string, {
+      id: string;
+      shipName: string;
+      sailDate: string;
+      returnDate: string;
+      departurePort?: string;
+      destination?: string;
+      itineraryName?: string;
+      nights: number;
+      itinerary?: ItineraryDay[];
+    }>();
+
+    bookedCruises.forEach((cruise) => {
+      if (!cruise.sailDate || !cruise.returnDate) {
+        return;
+      }
+
+      const key = `${cruise.shipName}-${cruise.sailDate}`;
+      if (uniqueCruises.has(key)) {
+        return;
+      }
+
+      uniqueCruises.set(key, {
+        id: cruise.id,
+        shipName: cruise.shipName || 'Upcoming sailing',
+        sailDate: cruise.sailDate,
+        returnDate: cruise.returnDate,
+        departurePort: cruise.departurePort,
+        destination: cruise.destination,
+        itineraryName: cruise.itineraryName,
+        nights: cruise.nights || 0,
+        itinerary: cruise.itinerary,
+      });
+    });
+
+    return Array.from(uniqueCruises.values())
+      .sort((a, b) => {
+        const aSail = createDateFromString(a.sailDate);
+        const bSail = createDateFromString(b.sailDate);
+        aSail.setHours(0, 0, 0, 0);
+        bSail.setHours(0, 0, 0, 0);
+        return Math.abs(aSail.getTime() - selectedDayTime.getTime()) - Math.abs(bSail.getTime() - selectedDayTime.getTime());
+      })
+      .slice(0, 2);
+  }, [bookedCruises, mergedCruiseBookings.length, upcomingCruisesForWeather.length, selectedDate]);
+
+  const allWeatherCruises = useMemo(() => {
+    const cruiseMap = new Map<string, MergedCruiseData | {
+      id: string;
+      shipName: string;
+      sailDate: string;
+      returnDate: string;
+      departurePort?: string;
+      destination?: string;
+      itineraryName?: string;
+      nights: number;
+      itinerary?: ItineraryDay[];
+    }>();
+
+    [...mergedCruiseBookings, ...upcomingCruisesForWeather, ...fallbackCruisesForWeather].forEach((cruise) => {
+      cruiseMap.set(cruise.id, cruise);
+    });
+
+    return Array.from(cruiseMap.values());
+  }, [fallbackCruisesForWeather, mergedCruiseBookings, upcomingCruisesForWeather]);
 
   useEffect(() => {
-    if (!isWeatherHydrated || mergedCruiseBookings.length === 0) {
+    if (!isWeatherHydrated || allWeatherCruises.length === 0) {
       return;
     }
 
     let isCancelled = false;
 
     const prefetchForecasts = async () => {
-      console.log('[DayAgenda] Prefetching sailing weather forecasts for booked cruises', {
+      console.log('[DayAgenda] Prefetching sailing weather forecasts for available cruises', {
         date: dateStr,
-        cruises: mergedCruiseBookings.map((cruise) => ({
+        cruises: allWeatherCruises.map((cruise) => ({
           id: cruise.id,
           shipName: cruise.shipName,
+          anchorDate: mergedCruiseBookings.some((mergedCruise) => mergedCruise.id === cruise.id)
+            ? dateStr
+            : cruise.sailDate,
         })),
       });
 
-      for (const cruise of mergedCruiseBookings) {
+      for (const cruise of allWeatherCruises) {
         if (isCancelled) {
           return;
         }
 
         await prefetchCruiseForecastWindow(cruise, {
-          anchorDate: selectedDate,
+          anchorDate: mergedCruiseBookings.some((mergedCruise) => mergedCruise.id === cruise.id)
+            ? selectedDate
+            : createDateFromString(cruise.sailDate),
         });
       }
     };
@@ -896,7 +969,7 @@ export default function DayAgendaScreen() {
     return () => {
       isCancelled = true;
     };
-  }, [dateStr, isWeatherHydrated, mergedCruiseBookings, prefetchCruiseForecastWindow, selectedDate]);
+  }, [allWeatherCruises, dateStr, isWeatherHydrated, mergedCruiseBookings, prefetchCruiseForecastWindow, selectedDate]);
 
   const dayScheduleData = useMemo(() => {
     const scheduleBlocks: DayScheduleBlockInput[] = [];
@@ -1498,34 +1571,48 @@ export default function DayAgendaScreen() {
               <TimeZoneConverter />
             </View>
 
-          {allWeatherCruises.length > 0 && (
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Sailing Weather</Text>
-              <Text style={styles.sectionDescription}>
-                {mergedCruiseBookings.length > 0
-                  ? 'Full-day weather, wind, and sea-state snapshots with offline saving for spotty-at-sea service.'
-                  : `Upcoming cruise weather — starting soon. Forecasts refresh automatically.`}
-              </Text>
-              <MarineAlertsPanel
-                cruises={allWeatherCruises}
-                startDate={selectedDate}
-                daysAhead={upcomingCruisesForWeather.length > 0 ? 7 : 0}
-                maxItems={3}
-                title="Rough seas / weather alerts"
-                description="Heads-up for rough conditions in your sailing window."
-                testID="agenda-marine-alerts-panel"
-              />
-              <View style={styles.weatherCardsStack}>
-                {allWeatherCruises.map((cruise) => (
-                  <SailingWeatherCard
-                    key={`sailing-weather-${cruise.id}`}
-                    cruise={cruise}
-                    selectedDate={mergedCruiseBookings.some((m) => m.id === cruise.id) ? selectedDate : createDateFromString(cruise.sailDate)}
-                  />
-                ))}
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Sailing Weather</Text>
+            <Text style={styles.sectionDescription}>
+              {mergedCruiseBookings.length > 0
+                ? 'Full-day weather, wind, and sea-state snapshots with offline saving for spotty-at-sea service.'
+                : allWeatherCruises.length > 0
+                  ? 'Upcoming cruise weather is pinned here so the build always shows the latest forecast cards.'
+                  : 'Add a booked cruise to unlock weather, wind, and sea-state snapshots here.'}
+            </Text>
+            {allWeatherCruises.length > 0 ? (
+              <>
+                <MarineAlertsPanel
+                  cruises={allWeatherCruises}
+                  startDate={selectedDate}
+                  daysAhead={upcomingCruisesForWeather.length > 0 ? 7 : 0}
+                  maxItems={3}
+                  title="Rough seas / weather alerts"
+                  description="Heads-up for rough conditions in your sailing window."
+                  testID="agenda-marine-alerts-panel"
+                />
+                <View style={styles.weatherCardsStack}>
+                  {allWeatherCruises.map((cruise) => (
+                    <SailingWeatherCard
+                      key={`sailing-weather-${cruise.id}`}
+                      cruise={cruise}
+                      selectedDate={mergedCruiseBookings.some((m) => m.id === cruise.id) ? selectedDate : createDateFromString(cruise.sailDate)}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : (
+              <View style={styles.emptyState} testID="agenda-weather-empty-state">
+                <View style={styles.emptyIconContainer}>
+                  <Waves size={32} color="#8BE0FF" />
+                </View>
+                <Text style={styles.emptyTitle}>No sailing weather yet</Text>
+                <Text style={styles.emptyText}>
+                  Import or add a booked cruise and the app will surface forecast cards here automatically.
+                </Text>
               </View>
-            </View>
-          )}
+            )}
+          </View>
 
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>24-Hour Agenda</Text>

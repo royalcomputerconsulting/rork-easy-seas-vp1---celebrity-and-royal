@@ -28,7 +28,7 @@ import {
 } from 'lucide-react-native';
 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
-import { IMAGES } from '@/constants/images';
+import { IMAGES, LOCAL_IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { useAuth } from '@/state/AuthProvider';
@@ -151,6 +151,7 @@ function OverviewScreenContent() {
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [showCertificateExplorerModal, setShowCertificateExplorerModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
+  const [heroSignatureFailed, setHeroSignatureFailed] = useState<boolean>(false);
   const { 
     certificates, 
     addCertificate, 
@@ -508,11 +509,25 @@ function OverviewScreenContent() {
           <View style={styles.heroOverlay}>
             <Text style={styles.heroTitle}>Easy Seas™</Text>
             <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
-            <Image
-              source={{ uri: IMAGES.signature }}
-              style={styles.heroSignature}
-              resizeMode="contain"
-            />
+            {!heroSignatureFailed ? (
+              <Image
+                source={{ uri: IMAGES.signature }}
+                style={styles.heroSignature}
+                resizeMode="contain"
+                onError={() => {
+                  console.warn('[Overview] Signature image failed to load, using bundled fallback');
+                  setHeroSignatureFailed(true);
+                }}
+                testID="offers-hero-signature-image"
+              />
+            ) : (
+              <Image
+                source={LOCAL_IMAGES.signature}
+                style={styles.heroSignature}
+                resizeMode="contain"
+                testID="offers-hero-signature-fallback-image"
+              />
+            )}
           </View>
         </View>
 
