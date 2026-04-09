@@ -70,13 +70,17 @@ export const CruiseCard = React.memo(function CruiseCard({
 
   const [heroImageUri, setHeroImageUri] = useState<string>(shipImageUrl || DEFAULT_CRUISE_IMAGE);
   const [compactImageUri, setCompactImageUri] = useState<string>(destinationImage || DEFAULT_CRUISE_IMAGE);
+  const [showHeroImage, setShowHeroImage] = useState<boolean>(true);
+  const [showCompactImage, setShowCompactImage] = useState<boolean>(true);
 
   useEffect(() => {
     setHeroImageUri(shipImageUrl || DEFAULT_CRUISE_IMAGE);
+    setShowHeroImage(true);
   }, [shipImageUrl]);
 
   useEffect(() => {
     setCompactImageUri(destinationImage || DEFAULT_CRUISE_IMAGE);
+    setShowCompactImage(true);
   }, [destinationImage]);
 
   const retailValue = useMemo(() => {
@@ -188,6 +192,24 @@ export const CruiseCard = React.memo(function CruiseCard({
     return ['#FFF3E0', '#FFE0B2', '#FFF8E1'];
   }, [cruiseStatus]);
 
+  const handleCompactImageError = useCallback(() => {
+    console.log('[CruiseCard] Compact image load error', { currentUri: compactImageUri });
+    if (compactImageUri !== DEFAULT_CRUISE_IMAGE) {
+      setCompactImageUri(DEFAULT_CRUISE_IMAGE);
+      return;
+    }
+    setShowCompactImage(false);
+  }, [compactImageUri]);
+
+  const handleHeroImageError = useCallback(() => {
+    console.log('[CruiseCard] Hero image load error', { currentUri: heroImageUri });
+    if (heroImageUri !== DEFAULT_CRUISE_IMAGE) {
+      setHeroImageUri(DEFAULT_CRUISE_IMAGE);
+      return;
+    }
+    setShowHeroImage(false);
+  }, [heroImageUri]);
+
   if (mini) {
     const miniPorts = bookedCruise.itinerary?.map((day: ItineraryDay) => day.port).filter(Boolean) || bookedCruise.ports || [];
     const guestCount = bookedCruise.guestNames?.length || bookedCruise.guests || 2;
@@ -208,15 +230,14 @@ export const CruiseCard = React.memo(function CruiseCard({
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-        <Image 
-          source={{ uri: compactImageUri }} 
-          style={styles.miniBackgroundImage}
-          resizeMode="cover"
-          onError={() => {
-            console.log('Mini image load error, using default');
-            setCompactImageUri(DEFAULT_CRUISE_IMAGE);
-          }}
-        />
+        {showCompactImage ? (
+          <Image 
+            source={{ uri: compactImageUri }} 
+            style={styles.miniBackgroundImage}
+            resizeMode="cover"
+            onError={handleCompactImageError}
+          />
+        ) : null}
         <View style={styles.miniImageOverlay} />
         <View style={styles.miniContent}>
           <View style={styles.miniTopRow}>
@@ -417,15 +438,14 @@ export const CruiseCard = React.memo(function CruiseCard({
         activeOpacity={1}
         testID="cruise-card-compact"
       >
-        <Image 
-          source={{ uri: compactImageUri }} 
-          style={styles.compactImage}
-          resizeMode="cover"
-          onError={() => {
-            console.log('Compact image load error, using default');
-            setCompactImageUri(DEFAULT_CRUISE_IMAGE);
-          }}
-        />
+        {showCompactImage ? (
+          <Image 
+            source={{ uri: compactImageUri }} 
+            style={styles.compactImage}
+            resizeMode="cover"
+            onError={handleCompactImageError}
+          />
+        ) : null}
         <View style={styles.compactContent}>
           <Text style={styles.compactShipName}>{cruise.shipName}</Text>
           <Text style={styles.compactDestination} numberOfLines={1}>{cruise.destination}</Text>
@@ -453,15 +473,14 @@ export const CruiseCard = React.memo(function CruiseCard({
       testID="cruise-card"
     >
       <View style={styles.imageSection}>
-        <Image 
-          source={{ uri: heroImageUri }} 
-          style={styles.heroImage}
-          resizeMode="cover"
-          onError={() => {
-            console.log('Hero image load error, using default');
-            setHeroImageUri(DEFAULT_CRUISE_IMAGE);
-          }}
-        />
+        {showHeroImage ? (
+          <Image 
+            source={{ uri: heroImageUri }} 
+            style={styles.heroImage}
+            resizeMode="cover"
+            onError={handleHeroImageError}
+          />
+        ) : null}
         
         {cruiseStatus === 'upcoming' && !isBooked && (
           <View style={styles.saleBadge}>

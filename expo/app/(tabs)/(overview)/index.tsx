@@ -518,7 +518,7 @@ function OverviewScreenContent() {
 
         <CompactDashboardHeader
           hideLogo={true}
-          memberName={currentUser?.name || clubRoyaleProfile.memberName}
+          memberName={currentUser?.name || clubRoyaleProfile?.memberName || 'Player'}
           onSettingsPress={handleSettingsPress}
           onAlertsPress={handleAlertsPress}
           onLogoutPress={handleLogoutPress}
