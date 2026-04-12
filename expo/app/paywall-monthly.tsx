@@ -1,15 +1,15 @@
 import { useCallback } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ExternalLink, RefreshCcw, Shield } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
 import { COLORS } from '@/constants/theme';
 import { useEntitlement } from '@/state/EntitlementProvider';
 
 const MONTHLY_SUBSCRIPTION_AD_URI = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/0241udq93h66h62ok6ab2.png' as const;
-const INCLUDED_FEATURES = ['Advanced Sonar', 'GPS & Charts', 'Fish Finder', 'Exclusive Perks'] as const;
+const PURCHASE_BUTTON_LABEL = 'PURCHASE SUBSCRIPTION FOR $9.99' as const;
+const SUBSCRIBED_BUTTON_LABEL = 'SUBSCRIPTION ACTIVE' as const;
 
 export default function PaywallMonthlyScreen() {
   const router = useRouter();
@@ -23,26 +23,6 @@ export default function PaywallMonthlyScreen() {
   const handleSubscribe = useCallback(async () => {
     console.log('[PaywallMonthly] Subscribe monthly requested');
     await entitlement.subscribeProMonthly();
-  }, [entitlement]);
-
-  const handleRestore = useCallback(async () => {
-    console.log('[PaywallMonthly] Restore purchases requested');
-    await entitlement.restore();
-  }, [entitlement]);
-
-  const handleManage = useCallback(async () => {
-    console.log('[PaywallMonthly] Manage subscription requested');
-    await entitlement.openManageSubscription();
-  }, [entitlement]);
-
-  const handlePrivacy = useCallback(async () => {
-    console.log('[PaywallMonthly] Privacy policy requested');
-    await entitlement.openPrivacyPolicy();
-  }, [entitlement]);
-
-  const handleTerms = useCallback(async () => {
-    console.log('[PaywallMonthly] Terms requested');
-    await entitlement.openTerms();
   }, [entitlement]);
 
   return (
@@ -78,28 +58,7 @@ export default function PaywallMonthlyScreen() {
               />
             </View>
 
-            <View style={styles.offerCard}>
-              <View style={styles.offerHeaderRow}>
-                <View style={styles.planPill}>
-                  <Text style={styles.planPillText}>Monthly subscription</Text>
-                </View>
-                <Text style={styles.priceCaption}>Cancel anytime</Text>
-              </View>
-
-              <Text style={styles.priceHero}>
-                $9.99
-                <Text style={styles.priceUnit}> / month</Text>
-              </Text>
-              <Text style={styles.subtitle}>One full month of Easy Seas access with every premium feature included.</Text>
-
-              <View style={styles.featuresGrid}>
-                {INCLUDED_FEATURES.map((feature) => (
-                  <View key={feature} style={styles.featureChip}>
-                    <Text style={styles.featureChipText}>{feature}</Text>
-                  </View>
-                ))}
-              </View>
-
+            <View style={styles.purchaseSection}>
               <TouchableOpacity
                 style={[styles.purchaseButton, (entitlement.isLoading || entitlement.isPro) && styles.purchaseButtonDisabled]}
                 onPress={() => {
@@ -113,11 +72,7 @@ export default function PaywallMonthlyScreen() {
                   <ActivityIndicator color={COLORS.white} />
                 ) : (
                   <Text style={styles.purchaseButtonText}>
-                    {entitlement.isPro
-                      ? 'Subscribed'
-                      : Platform.OS === 'android'
-                        ? 'Subscribe for $9.99 on Google Play'
-                        : 'Start Monthly Access for $9.99'}
+                    {entitlement.isPro ? SUBSCRIBED_BUTTON_LABEL : PURCHASE_BUTTON_LABEL}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -128,62 +83,6 @@ export default function PaywallMonthlyScreen() {
                   <Text style={styles.errorBody}>{entitlement.error}</Text>
                 </View>
               )}
-
-              <View style={styles.rowButtons}>
-                <TouchableOpacity
-                  style={[styles.secondaryButton, entitlement.isLoading && styles.secondaryButtonDisabled]}
-                  onPress={() => {
-                    void handleRestore();
-                  }}
-                  activeOpacity={0.9}
-                  disabled={entitlement.isLoading}
-                  testID="paywall-monthly.restore"
-                >
-                  <RefreshCcw size={18} color={COLORS.navyDeep} />
-                  <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={() => {
-                    void handleManage();
-                  }}
-                  activeOpacity={0.9}
-                  testID="paywall-monthly.manage"
-                >
-                  <ExternalLink size={18} color={COLORS.navyDeep} />
-                  <Text style={styles.secondaryButtonText} numberOfLines={1}>Manage Subscription</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.disclosureBox}>
-              <Text style={styles.disclosureBody}>
-                Payment will be charged to your {Platform.OS === 'android' ? 'Google Play' : 'Apple ID'} account at confirmation of purchase. The subscription automatically renews at $9.99/month unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your {Platform.OS === 'android' ? 'Google Play' : 'App Store'} account settings.
-              </Text>
-            </View>
-
-            <View style={styles.legalRow}>
-              <TouchableOpacity
-                style={styles.legalLink}
-                onPress={() => {
-                  void handlePrivacy();
-                }}
-                testID="paywall-monthly.privacy"
-              >
-                <Shield size={16} color={'#163754'} />
-                <Text style={styles.legalLinkText}>Privacy Policy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.legalLink}
-                onPress={() => {
-                  void handleTerms();
-                }}
-                testID="paywall-monthly.terms"
-              >
-                <Shield size={16} color={'#163754'} />
-                <Text style={styles.legalLinkText}>Terms of Use (EULA)</Text>
-              </TouchableOpacity>
             </View>
           </ScrollView>
         </SafeAreaView>
@@ -229,7 +128,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 18,
     paddingBottom: 28,
-    gap: 16,
+    gap: 18,
   },
   posterShell: {
     borderRadius: 28,
@@ -248,82 +147,23 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     backgroundColor: '#0B2D4C',
   },
-  offerCard: {
-    borderRadius: 24,
-    padding: 18,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  offerHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  purchaseSection: {
     gap: 12,
-    marginBottom: 14,
-  },
-  planPill: {
-    backgroundColor: '#D9F3FF',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  planPillText: {
-    color: '#0A4C77',
-    fontSize: 13,
-    fontWeight: '800' as const,
-  },
-  priceCaption: {
-    color: '#486274',
-    fontSize: 13,
-    fontWeight: '700' as const,
-  },
-  priceHero: {
-    fontSize: 42,
-    lineHeight: 46,
-    fontWeight: '900' as const,
-    color: '#0C3454',
-  },
-  priceUnit: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    color: '#486274',
-  },
-  subtitle: {
-    marginTop: 10,
-    color: '#23445F',
-    fontSize: 16,
-    lineHeight: 23,
-    fontWeight: '600' as const,
-  },
-  featuresGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 16,
-    marginBottom: 18,
-  },
-  featureChip: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#ECF8FF',
-    borderWidth: 1,
-    borderColor: '#D2ECFB',
-  },
-  featureChipText: {
-    color: '#0D4A73',
-    fontSize: 13,
-    fontWeight: '800' as const,
   },
   purchaseButton: {
+    minHeight: 64,
     backgroundColor: '#0A77A4',
-    borderRadius: 18,
+    borderRadius: 20,
+    paddingHorizontal: 20,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    marginBottom: 12,
+    shadowColor: '#012338',
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 6,
   },
   purchaseButtonDisabled: {
     opacity: 0.6,
@@ -331,75 +171,11 @@ const styles = StyleSheet.create({
   purchaseButtonText: {
     color: COLORS.white,
     fontWeight: '900' as const,
-    fontSize: 16,
+    fontSize: 18,
     textAlign: 'center',
-  },
-  rowButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  secondaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EDF7FB',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#D7EAF2',
-  },
-  secondaryButtonDisabled: {
-    opacity: 0.6,
-  },
-  secondaryButtonText: {
-    color: '#163754',
-    fontWeight: '800' as const,
-    fontSize: 12,
-    flexShrink: 1,
-  },
-  disclosureBox: {
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-  },
-  disclosureBody: {
-    color: '#173754',
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: '600' as const,
-    textAlign: 'center',
-  },
-  legalRow: {
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-  },
-  legalLink: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-  },
-  legalLinkText: {
-    color: '#163754',
-    fontWeight: '800' as const,
-    fontSize: 14,
+    letterSpacing: 0.2,
   },
   errorBox: {
-    marginBottom: 12,
     padding: 14,
     borderRadius: 16,
     borderWidth: 1,

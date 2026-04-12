@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { trpc, isBackendAvailable } from "@/lib/trpc";
@@ -76,6 +77,36 @@ function normalizeLoyaltySyncPayload(loyaltyData: unknown): {
     manualClubRoyalePoints: null,
     manualCrownAnchorPoints: null,
   };
+}
+
+function parseStoredTimestamp(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsedValue = new Date(value).getTime();
+  return Number.isNaN(parsedValue) ? null : parsedValue;
+}
+
+function getStoredItemCount(rawValue: string | null): number {
+  if (!rawValue) {
+    return 0;
+  }
+
+  try {
+    const parsedValue = JSON.parse(rawValue) as unknown;
+    if (Array.isArray(parsedValue)) {
+      return parsedValue.length;
+    }
+
+    if (parsedValue && typeof parsedValue === 'object') {
+      return Object.keys(parsedValue as Record<string, unknown>).length > 0 ? 1 : 0;
+    }
+
+    return parsedValue ? 1 : 0;
+  } catch {
+    return rawValue.trim().length > 0 ? 1 : 0;
+  }
 }
 
 const getFirstTimeUserSampleData = (): { sampleCruises: BookedCruise[]; sampleOffers: CasinoOffer[] } => {
@@ -309,6 +340,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const [clubRoyaleProfile, setClubRoyaleProfileState] = useState<ClubRoyaleProfile>(SAMPLE_CLUB_ROYALE_PROFILE);
   const isSyncingRef = useRef(false);
   const isInitialLoadRef = useRef(true);
+  const foregroundRefreshAttemptRef = useRef(0);
 
   const hasLocalData = cruises.length > 0 || bookedCruises.length > 0 || casinoOffers.length > 0 || calendarEvents.length > 0;
 
@@ -338,19 +370,42 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const hasActiveFilters = activeFilterCount > 0;
 
-  const persistData = useCallback(async <T,>(key: string, data: T) => {
+  const persistLastSyncDate = useCallback(async (timestamp?: string) => {
+    const nextTimestamp = timestamp ?? new Date().toISOString();
+
+    try {
+      await AsyncStorage.setItem(skRef.current.LAST_SYNC, nextTimestamp);
+      setLastSyncDate(nextTimestamp);
+      console.log('[CoreData] Updated last sync timestamp:', nextTimestamp);
+    } catch (error) {
+      console.error('[CoreData] Failed to persist last sync timestamp:', error);
+    }
+  }, []);
+
+  const persistData = useCallback(async <T,>(
+    key: string,
+    data: T,
+    options?: { updateLastSync?: boolean; syncTimestamp?: string }
+  ) => {
     try {
       await AsyncStorage.setItem(key, JSON.stringify(data));
+      if (options?.updateLastSync ?? true) {
+        await persistLastSyncDate(options?.syncTimestamp);
+      }
       console.log(`[CoreData] Persisted ${key}`);
     } catch (error) {
       console.error(`[CoreData] Failed to persist ${key}:`, error);
     }
-  }, []);
+  }, [persistLastSyncDate]);
 
   const syncToBackend = useCallback(async () => {
-    if (!isBackendAvailable() || !authenticatedEmail) {
-      console.log('[CoreData] Backend sync skipped - not authenticated or backend unavailable');
+    if (!authenticatedEmail) {
+      console.log('[CoreData] Backend sync skipped - no authenticated email');
       return;
+    }
+
+    if (!isBackendAvailable()) {
+      console.log('[CoreData] Backend health cache says unavailable, attempting sync anyway to avoid stale cloud data');
     }
     
     try {
@@ -404,7 +459,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         events: parsedEvents.length,
       });
       
-      await saveAllUserDataMutateAsync({
+      const syncResult = await saveAllUserDataMutateAsync({
         email: authenticatedEmail,
         cruises: parsedCruises,
         bookedCruises: parsedBooked,
@@ -415,6 +470,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         clubRoyaleProfile: parsedProfile,
         loyaltyData: parsedExtendedLoyalty,
       });
+
+      const syncTimestamp = typeof syncResult?.updatedAt === 'string' ? syncResult.updatedAt : new Date().toISOString();
+      await AsyncStorage.setItem(scopedKeys.LAST_SYNC, syncTimestamp);
+      setLastSyncDate(syncTimestamp);
       
       console.log('[CoreData] ✅ Backend sync successful');
     } catch (error) {
@@ -443,6 +502,40 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       if (result.data && result.data.found && result.data.data) {
         const userData = result.data.data;
+        const scopedKeys = getScopedStorageKeys(authenticatedEmail);
+        const [localLastSyncRaw, localCruisesRaw, localBookedRaw, localOffersRaw, localEventsRaw] = await Promise.all([
+          AsyncStorage.getItem(scopedKeys.LAST_SYNC),
+          AsyncStorage.getItem(scopedKeys.CRUISES),
+          AsyncStorage.getItem(scopedKeys.BOOKED_CRUISES),
+          AsyncStorage.getItem(scopedKeys.CASINO_OFFERS),
+          AsyncStorage.getItem(scopedKeys.CALENDAR_EVENTS),
+        ]);
+
+        const backendUpdatedAtMs = parseStoredTimestamp(userData.updatedAt);
+        const localLastSyncMs = parseStoredTimestamp(localLastSyncRaw);
+        const localSummary = {
+          cruises: getStoredItemCount(localCruisesRaw),
+          bookedCruises: getStoredItemCount(localBookedRaw),
+          casinoOffers: getStoredItemCount(localOffersRaw),
+          calendarEvents: getStoredItemCount(localEventsRaw),
+        };
+        const backendSummary = {
+          cruises: userData.cruises?.length ?? 0,
+          bookedCruises: userData.bookedCruises?.length ?? 0,
+          casinoOffers: userData.casinoOffers?.length ?? 0,
+          calendarEvents: userData.calendarEvents?.length ?? 0,
+        };
+        const localHasMeaningfulData = Object.values(localSummary).some((count) => count > 0);
+        const localHasMoreData =
+          localSummary.cruises > backendSummary.cruises ||
+          localSummary.bookedCruises > backendSummary.bookedCruises ||
+          localSummary.casinoOffers > backendSummary.casinoOffers ||
+          localSummary.calendarEvents > backendSummary.calendarEvents;
+        const shouldPreferLocalData =
+          localHasMeaningfulData &&
+          ((localLastSyncMs !== null && (backendUpdatedAtMs === null || localLastSyncMs > backendUpdatedAtMs)) ||
+            (localHasMoreData && (backendUpdatedAtMs === null || localLastSyncMs === null || localLastSyncMs >= backendUpdatedAtMs)));
+
         console.log('[CoreData] ✅ Backend data found:', {
           email: authenticatedEmail,
           availableCruises: userData.cruises?.length || 0,
@@ -450,10 +543,22 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           offers: userData.casinoOffers?.length || 0,
           events: userData.calendarEvents?.length || 0,
           updatedAt: userData.updatedAt,
+          localLastSync: localLastSyncRaw,
+          localSummary,
         });
+
+        if (shouldPreferLocalData) {
+          console.log('[CoreData] Skipping backend restore because local data is newer or richer than cloud data', {
+            email: authenticatedEmail,
+            localLastSync: localLastSyncRaw,
+            backendUpdatedAt: userData.updatedAt,
+            localSummary,
+            backendSummary,
+          });
+          return false;
+        }
         
-        const scopedKeys = getScopedStorageKeys(authenticatedEmail);
-        const savePromises = [];
+        const savePromises: Promise<void>[] = [];
         if (userData.cruises) {
           savePromises.push(AsyncStorage.setItem(scopedKeys.CRUISES, JSON.stringify(userData.cruises)));
         }
@@ -505,8 +610,12 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
             savePromises.push(AsyncStorage.removeItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS));
           }
         }
+
+        const backendTimestamp = typeof userData.updatedAt === 'string' ? userData.updatedAt : new Date().toISOString();
+        savePromises.push(AsyncStorage.setItem(scopedKeys.LAST_SYNC, backendTimestamp));
         
         await Promise.all(savePromises);
+        setLastSyncDate(backendTimestamp);
         await AsyncStorage.setItem(scopedKeys.HAS_IMPORTED_DATA, 'true');
         
         console.log('[CoreData] ✅ Backend data loaded and cached locally');
@@ -714,6 +823,34 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.log('[CoreData] === Cleanup: clearing timeout ===');
       isMounted = false;
       clearTimeout(loadTimeout);
+    };
+  }, [loadFromStorage, isAuthenticated, authenticatedEmail, initialCheckComplete]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !authenticatedEmail || !initialCheckComplete) {
+      return;
+    }
+
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState !== 'active') {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - foregroundRefreshAttemptRef.current < 30000) {
+        console.log('[CoreData] Foreground refresh skipped because the last refresh was too recent');
+        return;
+      }
+
+      foregroundRefreshAttemptRef.current = now;
+      console.log('[CoreData] App became active - forcing backend/local refresh to pick up latest data');
+      void loadFromStorage(true);
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription.remove();
     };
   }, [loadFromStorage, isAuthenticated, authenticatedEmail, initialCheckComplete]);
 
@@ -1090,19 +1227,28 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const updateSettings = useCallback((updates: Partial<AppSettings>) => {
     setSettings(prev => {
       const updated = { ...prev, ...updates };
+      const nextSyncTimestamp = new Date().toISOString();
       AsyncStorage.setItem(skRef.current.SETTINGS, JSON.stringify(updated)).catch(console.error);
+      AsyncStorage.setItem(skRef.current.LAST_SYNC, nextSyncTimestamp).catch(console.error);
+      setLastSyncDate(nextSyncTimestamp);
       return updated;
     });
   }, []);
 
   const setUserPoints = useCallback((points: number) => {
+    const nextSyncTimestamp = new Date().toISOString();
     setUserPointsState(points);
+    setLastSyncDate(nextSyncTimestamp);
     AsyncStorage.setItem(skRef.current.USER_POINTS, points.toString()).catch(console.error);
+    AsyncStorage.setItem(skRef.current.LAST_SYNC, nextSyncTimestamp).catch(console.error);
   }, []);
 
   const setClubRoyaleProfile = useCallback((profile: ClubRoyaleProfile) => {
+    const nextSyncTimestamp = new Date().toISOString();
     setClubRoyaleProfileState(profile);
+    setLastSyncDate(nextSyncTimestamp);
     AsyncStorage.setItem(skRef.current.CLUB_PROFILE, JSON.stringify(profile)).catch(console.error);
+    AsyncStorage.setItem(skRef.current.LAST_SYNC, nextSyncTimestamp).catch(console.error);
   }, []);
 
   const clearAllData = useCallback(async () => {
