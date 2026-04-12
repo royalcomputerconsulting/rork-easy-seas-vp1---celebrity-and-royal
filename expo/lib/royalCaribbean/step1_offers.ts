@@ -46,41 +46,84 @@ export const STEP1_OFFERS_SCRIPT = `
     return String(val);
   }
 
+  function pad2(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function getDateParts(dateStr) {
+    if (!dateStr) return null;
+
+    const normalized = String(dateStr).trim();
+
+    let match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+    if (match) {
+      return {
+        year: parseInt(match[1], 10),
+        month: parseInt(match[2], 10),
+        day: parseInt(match[3], 10),
+      };
+    }
+
+    match = normalized.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (match) {
+      return {
+        year: parseInt(match[1], 10),
+        month: parseInt(match[2], 10),
+        day: parseInt(match[3], 10),
+      };
+    }
+
+    match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (match) {
+      const year = match[3].length === 2 ? 2000 + parseInt(match[3], 10) : parseInt(match[3], 10);
+      return {
+        year: year,
+        month: parseInt(match[1], 10),
+        day: parseInt(match[2], 10),
+      };
+    }
+
+    try {
+      const date = new Date(normalized);
+      if (!isNaN(date.getTime())) {
+        return {
+          year: date.getFullYear(),
+          month: date.getMonth() + 1,
+          day: date.getDate(),
+        };
+      }
+    } catch (e) {
+    }
+
+    return null;
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return '';
-    try {
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return months[date.getMonth()] + ' ' + date.getDate() + ', ' + date.getFullYear();
-    } catch (e) {
-      return dateStr;
-    }
+
+    const parts = getDateParts(dateStr);
+    if (!parts) return dateStr;
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[parts.month - 1] + ' ' + parts.day + ', ' + parts.year;
   }
 
   function formatSailDate(dateStr) {
     if (!dateStr) return '';
-    try {
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const year = date.getFullYear();
-      return month + '/' + day + '/' + year;
-    } catch (e) {
-      return dateStr;
-    }
+
+    const parts = getDateParts(dateStr);
+    if (!parts) return dateStr;
+
+    return pad2(parts.month) + '/' + pad2(parts.day) + '/' + parts.year;
   }
 
   function toISODate(dateStr) {
     if (!dateStr) return '';
-    try {
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-      return date.toISOString().split('T')[0];
-    } catch (e) {
-      return dateStr;
-    }
+
+    const parts = getDateParts(dateStr);
+    if (!parts) return dateStr;
+
+    return parts.year + '-' + pad2(parts.month) + '-' + pad2(parts.day);
   }
 
   async function extractClubRoyaleStatus() {

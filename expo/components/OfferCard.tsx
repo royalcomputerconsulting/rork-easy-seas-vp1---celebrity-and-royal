@@ -11,7 +11,7 @@ import {
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import { formatCurrency } from '@/lib/format';
-import { getDaysUntil, createDateFromString } from '@/lib/date';
+import { getDaysUntil, formatDate } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise } from '@/types/models';
 import { calculateCruiseValue, calculateOfferAggregateValue, getCabinPriceFromEntity, GUEST_COUNT_DEFAULT, type ValueBreakdown, type OfferAggregateValue } from '@/lib/valueCalculator';
@@ -241,11 +241,7 @@ export const OfferCard = React.memo(function OfferCard({
             </Text>
             <View style={styles.compactDetails}>
               <Text style={styles.compactDate}>
-                {createDateFromString(offer.sailDate).toLocaleDateString('en-US', {
-                  timeZone: 'UTC',
-                  month: 'short',
-                  day: 'numeric',
-                })}
+                {formatDate(offer.sailDate, 'short')}
               </Text>
               <View style={styles.compactDot} />
               <Text style={styles.compactNights}>{offer.nights} nights</Text>
@@ -370,12 +366,7 @@ export const OfferCard = React.memo(function OfferCard({
                 style={[styles.metaInfoValue, isExpiringSoon && styles.metaInfoValueUrgent]}
                 numberOfLines={1}
               >
-                {createDateFromString(offer.offerExpiry).toLocaleDateString('en-US', {
-                  timeZone: 'UTC',
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
+                {formatDate(offer.offerExpiry, 'medium')}
               </Text>
             </View>
           ) : null}

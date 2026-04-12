@@ -98,11 +98,11 @@ export function formatDate(date: Date | string, format: 'short' | 'medium' | 'lo
       const shortDay = String(d.getDate());
       return `${shortMonth}/${shortDay}`;
     case 'medium':
-      const mediumMonth = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+      const mediumMonth = d.toLocaleDateString('en-US', { month: 'short' });
       return `${mediumMonth} ${d.getDate()}, ${d.getFullYear()}`;
     case 'long':
-      const longWeekday = d.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
-      const longMonth = d.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+      const longWeekday = d.toLocaleDateString('en-US', { weekday: 'long' });
+      const longMonth = d.toLocaleDateString('en-US', { month: 'long' });
       return `${longWeekday}, ${longMonth} ${d.getDate()}, ${d.getFullYear()}`;
     case 'full':
       return formatDateMMDDYYYY(d);
@@ -115,8 +115,8 @@ export function formatDateRange(startDate: Date | string, endDate: Date | string
   const start = typeof startDate === 'string' ? createDateFromString(startDate) : startDate;
   const end = typeof endDate === 'string' ? createDateFromString(endDate) : endDate;
   
-  const startMonth = start.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
-  const endMonth = end.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+  const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
+  const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
   
   if (startMonth === endMonth && start.getFullYear() === end.getFullYear()) {
     return `${startMonth} ${start.getDate()}-${end.getDate()}, ${start.getFullYear()}`;

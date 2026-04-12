@@ -102,13 +102,13 @@ export const CruiseCard = React.memo(function CruiseCard({
 
   const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {
     const start = createDateFromString(sailDate);
-    const startMonth = start.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+    const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
     const startDay = start.getDate();
     const startYear = start.getFullYear();
     
     if (returnDate) {
       const end = createDateFromString(returnDate);
-      const endMonth = end.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+      const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
       const endDay = end.getDate();
       
       if (startMonth === endMonth) {
@@ -120,7 +120,7 @@ export const CruiseCard = React.memo(function CruiseCard({
     if (nights) {
       const end = new Date(start);
       end.setDate(end.getDate() + nights);
-      const endMonth = end.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+      const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
       const endDay = end.getDate();
       
       if (startMonth === endMonth) {

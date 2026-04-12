@@ -448,14 +448,7 @@ export default function OfferDetailsScreen() {
           <View style={styles.headerLine3}>
             <View style={styles.headerDetailBlock}>
               <Text style={styles.headerDetailLabel}>Sail Date:</Text>
-              <Text style={styles.headerDetailValue}>
-                {sailDate.toLocaleDateString('en-US', {
-                  timeZone: 'UTC', 
-                  month: 'short', 
-                  day: 'numeric', 
-                  year: 'numeric' 
-                })}
-              </Text>
+              <Text style={styles.headerDetailValue}>{formatDate(sailDate, 'medium')}</Text>
             </View>
             <View style={styles.headerDetailBlock}>
               <Text style={styles.headerDetailLabel}>Departs:</Text>

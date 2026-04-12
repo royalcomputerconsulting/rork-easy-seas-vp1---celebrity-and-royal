@@ -305,22 +305,31 @@ export function getStateroomTypeName(typeCode: string): string {
 
 export function parseRCDate(dateStr: string): string {
   if (!dateStr) return '';
-  
-  if (dateStr.length === 8 && /^\d{8}$/.test(dateStr)) {
-    const year = dateStr.substring(0, 4);
-    const month = dateStr.substring(4, 6);
-    const day = dateStr.substring(6, 8);
+
+  const trimmed = dateStr.trim();
+
+  if (trimmed.length === 8 && /^\d{8}$/.test(trimmed)) {
+    const year = trimmed.substring(0, 4);
+    const month = trimmed.substring(4, 6);
+    const day = trimmed.substring(6, 8);
     return `${month}-${day}-${year}`;
   }
-  
-  if (dateStr.includes('T')) {
-    const isoDate = dateStr.split('T')[0];
-    const [year, month, day] = isoDate.split('-');
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
     return `${month}-${day}-${year}`;
   }
-  
+
+  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slashMatch) {
+    const [, month, day, yearValue] = slashMatch;
+    const year = yearValue.length === 2 ? `20${yearValue}` : yearValue;
+    return `${month.padStart(2, '0')}-${day.padStart(2, '0')}-${year}`;
+  }
+
   try {
-    const date = new Date(dateStr);
+    const date = new Date(trimmed);
     if (!isNaN(date.getTime())) {
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
@@ -330,7 +339,7 @@ export function parseRCDate(dateStr: string): string {
   } catch {
     console.warn('[parseRCDate] Failed to parse date:', dateStr);
   }
-  
+
   return dateStr;
 }
 
