@@ -19,6 +19,17 @@ const UserDataSchema = z.object({
   loyaltyData: z.any().optional(),
   bankrollData: z.any().optional(),
   celebrityData: z.any().optional(),
+  dismissedAlertIds: z.array(z.string()).optional(),
+  dismissedAlertEntities: z.array(z.string()).optional(),
+  bankrollLimits: z.array(z.any()).optional(),
+  bankrollAlerts: z.array(z.any()).optional(),
+  crewRecognitionEntries: z.array(z.any()).optional(),
+  crewRecognitionSailings: z.array(z.any()).optional(),
+  userSlotMachines: z.array(z.any()).optional(),
+  deckPlanLocations: z.array(z.any()).optional(),
+  favoriteStaterooms: z.array(z.any()).optional(),
+  sailingWeatherCache: z.record(z.string(), z.any()).optional(),
+  casinoOpenHours: z.record(z.string(), z.any()).optional(),
 });
 
 interface StoredUserData {
@@ -38,6 +49,17 @@ interface StoredUserData {
   loyaltyData?: any;
   bankrollData?: any;
   celebrityData?: any;
+  dismissedAlertIds?: string[];
+  dismissedAlertEntities?: string[];
+  bankrollLimits?: any[];
+  bankrollAlerts?: any[];
+  crewRecognitionEntries?: any[];
+  crewRecognitionSailings?: any[];
+  userSlotMachines?: any[];
+  deckPlanLocations?: any[];
+  favoriteStaterooms?: any[];
+  sailingWeatherCache?: Record<string, any>;
+  casinoOpenHours?: Record<string, any>;
   updatedAt: string;
   createdAt?: string;
   [key: string]: any;
@@ -135,6 +157,17 @@ export const dataRouter = createTRPCRouter({
         loyaltyData: input.loyaltyData ?? existingData?.loyaltyData,
         bankrollData: input.bankrollData ?? existingData?.bankrollData,
         celebrityData: input.celebrityData ?? existingData?.celebrityData,
+        dismissedAlertIds: input.dismissedAlertIds ?? existingData?.dismissedAlertIds ?? [],
+        dismissedAlertEntities: input.dismissedAlertEntities ?? existingData?.dismissedAlertEntities ?? [],
+        bankrollLimits: input.bankrollLimits ?? existingData?.bankrollLimits ?? [],
+        bankrollAlerts: input.bankrollAlerts ?? existingData?.bankrollAlerts ?? [],
+        crewRecognitionEntries: input.crewRecognitionEntries ?? existingData?.crewRecognitionEntries ?? [],
+        crewRecognitionSailings: input.crewRecognitionSailings ?? existingData?.crewRecognitionSailings ?? [],
+        userSlotMachines: input.userSlotMachines ?? existingData?.userSlotMachines ?? [],
+        deckPlanLocations: input.deckPlanLocations ?? existingData?.deckPlanLocations ?? [],
+        favoriteStaterooms: input.favoriteStaterooms ?? existingData?.favoriteStaterooms ?? [],
+        sailingWeatherCache: input.sailingWeatherCache ?? existingData?.sailingWeatherCache ?? {},
+        casinoOpenHours: input.casinoOpenHours ?? existingData?.casinoOpenHours ?? {},
         updatedAt: now,
         createdAt: existingData?.createdAt ?? now,
       };
@@ -157,6 +190,17 @@ export const dataRouter = createTRPCRouter({
             loyaltyData = $loyaltyData,
             bankrollData = $bankrollData,
             celebrityData = $celebrityData,
+            dismissedAlertIds = $dismissedAlertIds,
+            dismissedAlertEntities = $dismissedAlertEntities,
+            bankrollLimits = $bankrollLimits,
+            bankrollAlerts = $bankrollAlerts,
+            crewRecognitionEntries = $crewRecognitionEntries,
+            crewRecognitionSailings = $crewRecognitionSailings,
+            userSlotMachines = $userSlotMachines,
+            deckPlanLocations = $deckPlanLocations,
+            favoriteStaterooms = $favoriteStaterooms,
+            sailingWeatherCache = $sailingWeatherCache,
+            casinoOpenHours = $casinoOpenHours,
             updatedAt = $updatedAt
           WHERE email = $email`,
           dataToSave as Record<string, unknown>
@@ -224,6 +268,17 @@ export const dataRouter = createTRPCRouter({
             loyaltyData: data.loyaltyData,
             bankrollData: data.bankrollData,
             celebrityData: data.celebrityData,
+            dismissedAlertIds: data.dismissedAlertIds ?? [],
+            dismissedAlertEntities: data.dismissedAlertEntities ?? [],
+            bankrollLimits: data.bankrollLimits ?? [],
+            bankrollAlerts: data.bankrollAlerts ?? [],
+            crewRecognitionEntries: data.crewRecognitionEntries ?? [],
+            crewRecognitionSailings: data.crewRecognitionSailings ?? [],
+            userSlotMachines: data.userSlotMachines ?? [],
+            deckPlanLocations: data.deckPlanLocations ?? [],
+            favoriteStaterooms: data.favoriteStaterooms ?? [],
+            sailingWeatherCache: data.sailingWeatherCache ?? {},
+            casinoOpenHours: data.casinoOpenHours ?? {},
             updatedAt: data.updatedAt,
             createdAt: data.createdAt,
           },

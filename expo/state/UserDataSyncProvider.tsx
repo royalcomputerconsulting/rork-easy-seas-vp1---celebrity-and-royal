@@ -11,6 +11,227 @@ const MAX_RETRY_ATTEMPTS = 1;
 const MIN_SYNC_INTERVAL_MS = 60000;
 const PENDING_ACCOUNT_SWITCH_KEY = "easyseas_pending_account_switch";
 const ASYNC_OPERATION_TIMEOUT_MS = 8000;
+const ALERTS_STORAGE_BASE = '@easy_seas_alerts';
+const ALERT_RULES_STORAGE_BASE = '@easy_seas_alert_rules';
+const DISMISSED_ALERT_IDS_STORAGE_BASE = '@easy_seas_dismissed_alerts';
+const DISMISSED_ALERT_ENTITIES_STORAGE_BASE = '@easy_seas_dismissed_entities';
+const SAILING_WEATHER_CACHE_STORAGE_BASE = '@easy_seas_sailing_weather_cache_v1';
+const CASINO_OPEN_HOURS_STORAGE_PREFIX = `${ALL_STORAGE_KEYS.CASINO_OPEN_HOURS}_`;
+
+function parseStoredJson<T>(value: string | null, fallback: T, label: string): T {
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch (error) {
+    console.error(`[UserDataSync] Failed to parse ${label}:`, error);
+    return fallback;
+  }
+}
+
+async function loadStoredEntriesByPrefix(prefix: string): Promise<Record<string, string>> {
+  try {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const matchingKeys = allKeys.filter((key) => key.startsWith(prefix));
+
+    if (matchingKeys.length === 0) {
+      return {};
+    }
+
+    const entries = await Promise.all(
+      matchingKeys.map(async (key) => {
+        const value = await AsyncStorage.getItem(key);
+        return value === null ? null : [key, value] as const;
+      })
+    );
+
+    return Object.fromEntries(entries.filter((entry): entry is readonly [string, string] => entry !== null));
+  } catch (error) {
+    console.error('[UserDataSync] Failed to load storage entries by prefix:', { prefix, error });
+    return {};
+  }
+}
+
+function getRecordKeys(value: unknown): string[] {
+  return value && typeof value === 'object' ? Object.keys(value as Record<string, unknown>) : [];
+}
+
+function getArrayLength(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function getRecordSize(value: unknown): number {
+  return getRecordKeys(value).length;
+}
+
+function isMeaningfulValue(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.keys(value as Record<string, unknown>).length > 0;
+  }
+
+  return Boolean(value);
+}
+
+function parseStoredStringArray(value: string | null, label: string): string[] {
+  return parseStoredJson<string[]>(value, [], label);
+}
+
+function parseStoredRecord(value: string | null, label: string): Record<string, unknown> {
+  return parseStoredJson<Record<string, unknown>>(value, {}, label);
+}
+
+function parseStoredUnknownArray(value: string | null, label: string): unknown[] {
+  return parseStoredJson<unknown[]>(value, [], label);
+}
+
+function parseStoredUnknown(value: string | null, label: string): unknown {
+  return parseStoredJson<unknown>(value, null, label);
+}
+
+function normalizeStoredEmail(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalizedValue = value.trim();
+  return normalizedValue.length > 0 ? normalizedValue : null;
+}
+
+function parseStoredInteger(value: string | null, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function normalizeDynamicStorageEntries(entries: Record<string, string>, label: string): Record<string, unknown> {
+  return Object.entries(entries).reduce<Record<string, unknown>>((accumulator, [key, rawValue]) => {
+    accumulator[key] = parseStoredUnknown(rawValue, `${label}:${key}`);
+    return accumulator;
+  }, {});
+}
+
+function hasSyncableData(data: Record<string, unknown>): boolean {
+  return Object.values(data).some((value) => isMeaningfulValue(value));
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalizedValue = value.trim();
+  return normalizedValue.length > 0 ? normalizedValue : null;
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function asNullableRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
+function hasDefinedProperty(value: unknown, propertyName: string): boolean {
+  return Boolean(value) && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, propertyName);
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
+
+function appendPromise(target: Promise<void>[], promise: Promise<void> | undefined): void {
+  if (promise) {
+    target.push(promise);
+  }
+}
+
+function buildJsonSetPromise(key: string, value: unknown, options?: { removeWhenNull?: boolean }): Promise<void> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if ((value === null || value === '') && options?.removeWhenNull) {
+    return AsyncStorage.removeItem(key);
+  }
+
+  return AsyncStorage.setItem(key, JSON.stringify(value));
+}
+
+function buildStringSetPromise(key: string, value: string | null | undefined): Promise<void> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value.length === 0) {
+    return AsyncStorage.removeItem(key);
+  }
+
+  return AsyncStorage.setItem(key, value);
+}
+
+function buildNumberSetPromise(key: string, value: number | null | undefined): Promise<void> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || Number.isNaN(value)) {
+    return AsyncStorage.removeItem(key);
+  }
+
+  return AsyncStorage.setItem(key, value.toString());
+}
+
+function buildDualJsonSetPromises(primaryKey: string, secondaryKey: string, value: unknown): Promise<void>[] {
+  const primaryPromise = buildJsonSetPromise(primaryKey, value);
+  const secondaryPromise = buildJsonSetPromise(secondaryKey, value);
+  return [primaryPromise, secondaryPromise].filter(isDefined);
+}
+
+function resolveAlertStorageKey(email: string | null): string {
+  return getUserScopedKey(ALERTS_STORAGE_BASE, email);
+}
+
+function resolveAlertRulesStorageKey(email: string | null): string {
+  return getUserScopedKey(ALERT_RULES_STORAGE_BASE, email);
+}
+
+function resolveDismissedAlertIdsStorageKey(email: string | null): string {
+  return getUserScopedKey(DISMISSED_ALERT_IDS_STORAGE_BASE, email);
+}
+
+function resolveDismissedAlertEntitiesStorageKey(email: string | null): string {
+  return getUserScopedKey(DISMISSED_ALERT_ENTITIES_STORAGE_BASE, email);
+}
+
+function resolveSailingWeatherStorageKey(email: string | null): string {
+  return getUserScopedKey(SAILING_WEATHER_CACHE_STORAGE_BASE, email);
+}
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -130,8 +351,17 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
   const gatherAllLocalData = useCallback(async () => {
     console.log("[UserDataSync] Gathering all local data for sync...");
-    
+
     try {
+      const scopedAlertsKey = resolveAlertStorageKey(emailRef.current);
+      const scopedAlertRulesKey = resolveAlertRulesStorageKey(emailRef.current);
+      const scopedDismissedAlertIdsKey = resolveDismissedAlertIdsStorageKey(emailRef.current);
+      const scopedDismissedAlertEntitiesKey = resolveDismissedAlertEntitiesStorageKey(emailRef.current);
+      const scopedBankrollLimitsKey = sk(ALL_STORAGE_KEYS.BANKROLL_LIMITS);
+      const scopedBankrollAlertsKey = sk(ALL_STORAGE_KEYS.BANKROLL_ALERTS);
+      const scopedFavoriteStateroomsKey = sk(ALL_STORAGE_KEYS.FAVORITE_STATEROOMS);
+      const scopedSailingWeatherKey = resolveSailingWeatherStorageKey(emailRef.current);
+
       const [
         cruisesRaw,
         bookedCruisesRaw,
@@ -142,8 +372,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         settingsRaw,
         userPointsRaw,
         certificatesRaw,
-        alertsRaw,
-        alertRulesRaw,
+        legacyAlertsRaw,
+        legacyAlertRulesRaw,
         slotAtlasRaw,
         extendedLoyaltyDataRaw,
         manualClubRoyalePointsRaw,
@@ -156,6 +386,16 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         celebrityBlueChipRaw,
         crewEntriesRaw,
         crewSailingsRaw,
+        scopedAlertsRaw,
+        scopedAlertRulesRaw,
+        dismissedAlertIdsRaw,
+        dismissedAlertEntitiesRaw,
+        bankrollLimitsRaw,
+        bankrollAlertsRaw,
+        userSlotMachinesRaw,
+        deckPlanLocationsRaw,
+        favoriteStateroomsRaw,
+        sailingWeatherCacheRaw,
       ] = await Promise.all([
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CRUISES)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
@@ -180,17 +420,40 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CELEBRITY_BLUE_CHIP_POINTS)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS)),
+        AsyncStorage.getItem(scopedAlertsKey),
+        AsyncStorage.getItem(scopedAlertRulesKey),
+        AsyncStorage.getItem(scopedDismissedAlertIdsKey),
+        AsyncStorage.getItem(scopedDismissedAlertEntitiesKey),
+        AsyncStorage.getItem(scopedBankrollLimitsKey),
+        AsyncStorage.getItem(scopedBankrollAlertsKey),
+        AsyncStorage.getItem(ALL_STORAGE_KEYS.USER_SLOT_MACHINES),
+        AsyncStorage.getItem(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS),
+        AsyncStorage.getItem(scopedFavoriteStateroomsKey),
+        AsyncStorage.getItem(scopedSailingWeatherKey),
       ]);
 
-      const celebrityData = {
-        email: celebrityEmailRaw || null,
-        captainsClubNumber: celebrityCCNumberRaw || null,
-        captainsClubPoints: celebrityCCPointsRaw ? parseInt(celebrityCCPointsRaw, 10) : 0,
-        blueChipPoints: celebrityBlueChipRaw ? parseInt(celebrityBlueChipRaw, 10) : 0,
-      };
+      const casinoOpenHoursEntries = await loadStoredEntriesByPrefix(CASINO_OPEN_HOURS_STORAGE_PREFIX);
+      const alertsRaw = scopedAlertsRaw ?? legacyAlertsRaw;
+      const alertRulesRaw = scopedAlertRulesRaw ?? legacyAlertRulesRaw;
 
-      const parsedLegacyLoyaltyData = loyaltyDataRaw ? JSON.parse(loyaltyDataRaw) : null;
-      const parsedExtendedLoyaltyData = extendedLoyaltyDataRaw ? JSON.parse(extendedLoyaltyDataRaw) : null;
+      const celebrityEmail = normalizeStoredEmail(celebrityEmailRaw);
+      const celebrityCaptainsClubNumber = normalizeStoredEmail(celebrityCCNumberRaw);
+      const celebrityCaptainsClubPoints = parseStoredInteger(celebrityCCPointsRaw, 0);
+      const celebrityBlueChipPoints = parseStoredInteger(celebrityBlueChipRaw, 0);
+      const celebrityData = celebrityEmail
+        || celebrityCaptainsClubNumber
+        || celebrityCaptainsClubPoints > 0
+        || celebrityBlueChipPoints > 0
+        ? {
+            email: celebrityEmail,
+            captainsClubNumber: celebrityCaptainsClubNumber,
+            captainsClubPoints: celebrityCaptainsClubPoints,
+            blueChipPoints: celebrityBlueChipPoints,
+          }
+        : null;
+
+      const parsedLegacyLoyaltyData = parseStoredUnknown(loyaltyDataRaw, 'legacyLoyaltyData');
+      const parsedExtendedLoyaltyData = parseStoredUnknown(extendedLoyaltyDataRaw, 'extendedLoyaltyData');
       const manualClubRoyalePoints = parseStoredNumber(manualClubRoyalePointsRaw);
       const manualCrownAnchorPoints = parseStoredNumber(manualCrownAnchorPointsRaw);
       const normalizedLegacyLoyaltyData = normalizeSyncedLoyaltyPayload(parsedLegacyLoyaltyData);
@@ -205,35 +468,50 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         : normalizedLegacyLoyaltyData;
 
       const data = {
-        cruises: cruisesRaw ? JSON.parse(cruisesRaw) : [],
-        bookedCruises: bookedCruisesRaw ? JSON.parse(bookedCruisesRaw) : [],
-        casinoOffers: casinoOffersRaw ? JSON.parse(casinoOffersRaw) : [],
-        calendarEvents: calendarEventsRaw ? JSON.parse(calendarEventsRaw) : [],
-        casinoSessions: casinoSessionsRaw ? JSON.parse(casinoSessionsRaw) : [],
-        clubRoyaleProfile: clubProfileRaw ? JSON.parse(clubProfileRaw) : null,
-        settings: settingsRaw ? JSON.parse(settingsRaw) : null,
-        userPoints: userPointsRaw ? parseInt(userPointsRaw, 10) : 0,
-        certificates: certificatesRaw ? JSON.parse(certificatesRaw) : [],
-        alerts: alertsRaw ? JSON.parse(alertsRaw) : [],
-        alertRules: alertRulesRaw ? JSON.parse(alertRulesRaw) : [],
-        slotAtlas: slotAtlasRaw ? JSON.parse(slotAtlasRaw) : [],
+        cruises: parseStoredUnknownArray(cruisesRaw, 'cruises'),
+        bookedCruises: parseStoredUnknownArray(bookedCruisesRaw, 'bookedCruises'),
+        casinoOffers: parseStoredUnknownArray(casinoOffersRaw, 'casinoOffers'),
+        calendarEvents: parseStoredUnknownArray(calendarEventsRaw, 'calendarEvents'),
+        casinoSessions: parseStoredUnknownArray(casinoSessionsRaw, 'casinoSessions'),
+        clubRoyaleProfile: parseStoredUnknown(clubProfileRaw, 'clubRoyaleProfile'),
+        settings: parseStoredUnknown(settingsRaw, 'settings'),
+        userPoints: parseStoredInteger(userPointsRaw, 0),
+        certificates: parseStoredUnknownArray(certificatesRaw, 'certificates'),
+        alerts: parseStoredUnknownArray(alertsRaw, 'alerts'),
+        alertRules: parseStoredUnknownArray(alertRulesRaw, 'alertRules'),
+        dismissedAlertIds: parseStoredStringArray(dismissedAlertIdsRaw, 'dismissedAlertIds'),
+        dismissedAlertEntities: parseStoredStringArray(dismissedAlertEntitiesRaw, 'dismissedAlertEntities'),
+        slotAtlas: parseStoredUnknownArray(slotAtlasRaw, 'slotAtlas'),
         loyaltyData,
-        bankrollData: bankrollDataRaw ? JSON.parse(bankrollDataRaw) : null,
+        bankrollData: parseStoredUnknown(bankrollDataRaw, 'bankrollData'),
+        bankrollLimits: parseStoredUnknownArray(bankrollLimitsRaw, 'bankrollLimits'),
+        bankrollAlerts: parseStoredUnknownArray(bankrollAlertsRaw, 'bankrollAlerts'),
         celebrityData,
-        crewRecognitionEntries: crewEntriesRaw ? JSON.parse(crewEntriesRaw) : [],
-        crewRecognitionSailings: crewSailingsRaw ? JSON.parse(crewSailingsRaw) : [],
+        crewRecognitionEntries: parseStoredUnknownArray(crewEntriesRaw, 'crewRecognitionEntries'),
+        crewRecognitionSailings: parseStoredUnknownArray(crewSailingsRaw, 'crewRecognitionSailings'),
+        userSlotMachines: parseStoredUnknownArray(userSlotMachinesRaw, 'userSlotMachines'),
+        deckPlanLocations: parseStoredUnknownArray(deckPlanLocationsRaw, 'deckPlanLocations'),
+        favoriteStaterooms: parseStoredUnknownArray(favoriteStateroomsRaw, 'favoriteStaterooms'),
+        sailingWeatherCache: parseStoredRecord(sailingWeatherCacheRaw, 'sailingWeatherCache'),
+        casinoOpenHours: normalizeDynamicStorageEntries(casinoOpenHoursEntries, 'casinoOpenHours'),
       };
 
       console.log("[UserDataSync] Gathered data:", {
-        availableCruises: data.cruises.length,
-        cruises: data.bookedCruises.length,
-        offers: data.casinoOffers.length,
-        events: data.calendarEvents.length,
-        sessions: data.casinoSessions.length,
-        hasProfile: !!data.clubRoyaleProfile,
-        hasSettings: !!data.settings,
-        crewEntries: data.crewRecognitionEntries.length,
-        crewSailings: data.crewRecognitionSailings.length,
+        availableCruises: getArrayLength(data.cruises),
+        cruises: getArrayLength(data.bookedCruises),
+        offers: getArrayLength(data.casinoOffers),
+        events: getArrayLength(data.calendarEvents),
+        sessions: getArrayLength(data.casinoSessions),
+        alerts: getArrayLength(data.alerts),
+        dismissedAlertIds: getArrayLength(data.dismissedAlertIds),
+        bankrollLimits: getArrayLength(data.bankrollLimits),
+        userSlotMachines: getArrayLength(data.userSlotMachines),
+        deckPlanLocations: getArrayLength(data.deckPlanLocations),
+        favoriteStaterooms: getArrayLength(data.favoriteStaterooms),
+        weatherCacheEntries: getRecordSize(data.sailingWeatherCache),
+        casinoOpenHoursEntries: getRecordSize(data.casinoOpenHours),
+        crewEntries: getArrayLength(data.crewRecognitionEntries),
+        crewSailings: getArrayLength(data.crewRecognitionSailings),
       });
 
       return data;
@@ -248,154 +526,137 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
     try {
       const savePromises: Promise<void>[] = [];
+      const scopedAlertsKey = resolveAlertStorageKey(emailRef.current);
+      const scopedAlertRulesKey = resolveAlertRulesStorageKey(emailRef.current);
+      const scopedDismissedAlertIdsKey = resolveDismissedAlertIdsStorageKey(emailRef.current);
+      const scopedDismissedAlertEntitiesKey = resolveDismissedAlertEntitiesStorageKey(emailRef.current);
+      const scopedBankrollLimitsKey = sk(ALL_STORAGE_KEYS.BANKROLL_LIMITS);
+      const scopedBankrollAlertsKey = sk(ALL_STORAGE_KEYS.BANKROLL_ALERTS);
+      const scopedFavoriteStateroomsKey = sk(ALL_STORAGE_KEYS.FAVORITE_STATEROOMS);
+      const scopedSailingWeatherKey = resolveSailingWeatherStorageKey(emailRef.current);
 
-      if (cloudData.cruises !== undefined) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CRUISES), JSON.stringify(cloudData.cruises ?? []))
-        );
+      if (hasDefinedProperty(cloudData, 'cruises')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CRUISES), asArray(cloudData.cruises)));
       }
-      if (cloudData.bookedCruises !== undefined) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), JSON.stringify(cloudData.bookedCruises ?? []))
-        );
+      if (hasDefinedProperty(cloudData, 'bookedCruises')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), asArray(cloudData.bookedCruises)));
       }
-      if (cloudData.casinoOffers !== undefined) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS), JSON.stringify(cloudData.casinoOffers ?? []))
-        );
+      if (hasDefinedProperty(cloudData, 'casinoOffers')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CASINO_OFFERS), asArray(cloudData.casinoOffers)));
       }
-      if (cloudData.calendarEvents !== undefined) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), JSON.stringify(cloudData.calendarEvents ?? []))
-        );
+      if (hasDefinedProperty(cloudData, 'calendarEvents')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), asArray(cloudData.calendarEvents)));
       }
-      if (cloudData.casinoSessions !== undefined) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), JSON.stringify(cloudData.casinoSessions ?? []))
-        );
+      if (hasDefinedProperty(cloudData, 'casinoSessions')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), asArray(cloudData.casinoSessions)));
       }
-      if (cloudData.clubRoyaleProfile) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CLUB_PROFILE), JSON.stringify(cloudData.clubRoyaleProfile))
-        );
+      if (hasDefinedProperty(cloudData, 'clubRoyaleProfile')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CLUB_PROFILE), cloudData.clubRoyaleProfile ?? null, { removeWhenNull: true }));
       }
-      if (cloudData.settings) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.SETTINGS), JSON.stringify(cloudData.settings))
-        );
+      if (hasDefinedProperty(cloudData, 'settings')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.SETTINGS), cloudData.settings ?? null, { removeWhenNull: true }));
       }
-      if (cloudData.userPoints !== undefined && cloudData.userPoints > 0) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.USER_POINTS), cloudData.userPoints.toString())
-        );
+      if (hasDefinedProperty(cloudData, 'userPoints')) {
+        appendPromise(savePromises, buildNumberSetPromise(sk(ALL_STORAGE_KEYS.USER_POINTS), asNumber(cloudData.userPoints) ?? 0));
       }
-      if (cloudData.certificates?.length > 0) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CERTIFICATES), JSON.stringify(cloudData.certificates))
-        );
+      if (hasDefinedProperty(cloudData, 'certificates')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CERTIFICATES), asArray(cloudData.certificates)));
       }
-      if (cloudData.alerts?.length > 0) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.ALERTS), JSON.stringify(cloudData.alerts))
-        );
+      if (hasDefinedProperty(cloudData, 'alerts')) {
+        savePromises.push(...buildDualJsonSetPromises(scopedAlertsKey, sk(ALL_STORAGE_KEYS.ALERTS), asArray(cloudData.alerts)));
       }
-      if (cloudData.alertRules?.length > 0) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.ALERT_RULES), JSON.stringify(cloudData.alertRules))
-        );
+      if (hasDefinedProperty(cloudData, 'alertRules')) {
+        savePromises.push(...buildDualJsonSetPromises(scopedAlertRulesKey, sk(ALL_STORAGE_KEYS.ALERT_RULES), asArray(cloudData.alertRules)));
       }
-      if (cloudData.slotAtlas?.length > 0) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), JSON.stringify(cloudData.slotAtlas))
-        );
+      if (hasDefinedProperty(cloudData, 'dismissedAlertIds')) {
+        appendPromise(savePromises, buildJsonSetPromise(scopedDismissedAlertIdsKey, asArray(cloudData.dismissedAlertIds)));
       }
-      if (cloudData.loyaltyData !== undefined) {
+      if (hasDefinedProperty(cloudData, 'dismissedAlertEntities')) {
+        appendPromise(savePromises, buildJsonSetPromise(scopedDismissedAlertEntitiesKey, asArray(cloudData.dismissedAlertEntities)));
+      }
+      if (hasDefinedProperty(cloudData, 'slotAtlas')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), asArray(cloudData.slotAtlas)));
+      }
+      if (hasDefinedProperty(cloudData, 'loyaltyData')) {
         const normalizedLoyaltyData = normalizeSyncedLoyaltyPayload(cloudData.loyaltyData);
         const extendedLoyaltyData = normalizedLoyaltyData?.extendedLoyaltyData ?? null;
         const manualClubRoyalePoints = normalizedLoyaltyData?.manualClubRoyalePoints ?? null;
         const manualCrownAnchorPoints = normalizedLoyaltyData?.manualCrownAnchorPoints ?? null;
 
-        if (extendedLoyaltyData !== null) {
-          savePromises.push(
-            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA), JSON.stringify(extendedLoyaltyData))
-          );
-        } else {
-          savePromises.push(AsyncStorage.removeItem(sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA)));
-        }
-
-        if (manualClubRoyalePoints !== null) {
-          savePromises.push(
-            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS), manualClubRoyalePoints.toString())
-          );
-        } else {
-          savePromises.push(AsyncStorage.removeItem(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS)));
-        }
-
-        if (manualCrownAnchorPoints !== null) {
-          savePromises.push(
-            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS), manualCrownAnchorPoints.toString())
-          );
-        } else {
-          savePromises.push(AsyncStorage.removeItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS)));
-        }
-
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.LOYALTY_DATA), JSON.stringify(cloudData.loyaltyData))
-        );
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA), extendedLoyaltyData, { removeWhenNull: true }));
+        appendPromise(savePromises, buildNumberSetPromise(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS), manualClubRoyalePoints));
+        appendPromise(savePromises, buildNumberSetPromise(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS), manualCrownAnchorPoints));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.LOYALTY_DATA), cloudData.loyaltyData ?? null, { removeWhenNull: true }));
       }
-      if (cloudData.bankrollData) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BANKROLL_DATA), JSON.stringify(cloudData.bankrollData))
-        );
+      if (hasDefinedProperty(cloudData, 'bankrollData')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.BANKROLL_DATA), cloudData.bankrollData ?? null, { removeWhenNull: true }));
       }
-      if (cloudData.celebrityData) {
-        if (cloudData.celebrityData.email) {
-          savePromises.push(
-            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CELEBRITY_EMAIL), cloudData.celebrityData.email)
-          );
-        }
-        if (cloudData.celebrityData.captainsClubNumber) {
-          savePromises.push(
-            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_NUMBER), cloudData.celebrityData.captainsClubNumber)
-          );
-        }
-        if (cloudData.celebrityData.captainsClubPoints) {
-          savePromises.push(
-            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_POINTS), cloudData.celebrityData.captainsClubPoints.toString())
-          );
-        }
-        if (cloudData.celebrityData.blueChipPoints) {
-          savePromises.push(
-            AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CELEBRITY_BLUE_CHIP_POINTS), cloudData.celebrityData.blueChipPoints.toString())
-          );
-        }
+      if (hasDefinedProperty(cloudData, 'bankrollLimits')) {
+        appendPromise(savePromises, buildJsonSetPromise(scopedBankrollLimitsKey, asArray(cloudData.bankrollLimits)));
       }
+      if (hasDefinedProperty(cloudData, 'bankrollAlerts')) {
+        appendPromise(savePromises, buildJsonSetPromise(scopedBankrollAlertsKey, asArray(cloudData.bankrollAlerts)));
+      }
+      if (hasDefinedProperty(cloudData, 'celebrityData')) {
+        const celebrityDataRecord = asNullableRecord(cloudData.celebrityData);
+        appendPromise(savePromises, buildStringSetPromise(sk(ALL_STORAGE_KEYS.CELEBRITY_EMAIL), asString(celebrityDataRecord?.email ?? null)));
+        appendPromise(savePromises, buildStringSetPromise(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_NUMBER), asString(celebrityDataRecord?.captainsClubNumber ?? null)));
+        appendPromise(savePromises, buildNumberSetPromise(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_POINTS), asNumber(celebrityDataRecord?.captainsClubPoints ?? null)));
+        appendPromise(savePromises, buildNumberSetPromise(sk(ALL_STORAGE_KEYS.CELEBRITY_BLUE_CHIP_POINTS), asNumber(celebrityDataRecord?.blueChipPoints ?? null)));
+      }
+      if (hasDefinedProperty(cloudData, 'crewRecognitionEntries')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), asArray(cloudData.crewRecognitionEntries)));
+      }
+      if (hasDefinedProperty(cloudData, 'crewRecognitionSailings')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), asArray(cloudData.crewRecognitionSailings)));
+      }
+      if (hasDefinedProperty(cloudData, 'userSlotMachines')) {
+        appendPromise(savePromises, buildJsonSetPromise(ALL_STORAGE_KEYS.USER_SLOT_MACHINES, asArray(cloudData.userSlotMachines)));
+      }
+      if (hasDefinedProperty(cloudData, 'deckPlanLocations')) {
+        appendPromise(savePromises, buildJsonSetPromise(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS, asArray(cloudData.deckPlanLocations)));
+      }
+      if (hasDefinedProperty(cloudData, 'favoriteStaterooms')) {
+        appendPromise(savePromises, buildJsonSetPromise(scopedFavoriteStateroomsKey, asArray(cloudData.favoriteStaterooms)));
+      }
+      if (hasDefinedProperty(cloudData, 'sailingWeatherCache')) {
+        appendPromise(savePromises, buildJsonSetPromise(scopedSailingWeatherKey, asRecord(cloudData.sailingWeatherCache)));
+      }
+      if (hasDefinedProperty(cloudData, 'casinoOpenHours')) {
+        const existingCasinoOpenHoursEntries = await loadStoredEntriesByPrefix(CASINO_OPEN_HOURS_STORAGE_PREFIX);
+        const nextCasinoOpenHours = asRecord(cloudData.casinoOpenHours);
+        const nextCasinoOpenHoursKeys = new Set(getRecordKeys(nextCasinoOpenHours));
 
-      if (cloudData.crewRecognitionEntries?.length > 0) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), JSON.stringify(cloudData.crewRecognitionEntries))
-        );
-      }
-      if (cloudData.crewRecognitionSailings?.length > 0) {
-        savePromises.push(
-          AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), JSON.stringify(cloudData.crewRecognitionSailings))
-        );
+        Object.keys(existingCasinoOpenHoursEntries).forEach((key) => {
+          if (!nextCasinoOpenHoursKeys.has(key)) {
+            savePromises.push(AsyncStorage.removeItem(key));
+          }
+        });
+
+        Object.entries(nextCasinoOpenHours).forEach(([key, value]) => {
+          appendPromise(savePromises, buildJsonSetPromise(key, value));
+        });
       }
 
-      savePromises.push(
-        AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), "true")
-      );
+      appendPromise(savePromises, buildStringSetPromise(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), "true"));
 
       await Promise.all(savePromises);
 
       console.log("[UserDataSync] Cloud data restored to local storage:", {
-        availableCruises: cloudData.cruises?.length ?? 0,
-        cruises: cloudData.bookedCruises?.length ?? 0,
-        offers: cloudData.casinoOffers?.length ?? 0,
-        events: cloudData.calendarEvents?.length ?? 0,
-        sessions: cloudData.casinoSessions?.length ?? 0,
-        crewEntries: cloudData.crewRecognitionEntries?.length ?? 0,
-        crewSailings: cloudData.crewRecognitionSailings?.length ?? 0,
+        availableCruises: getArrayLength(cloudData.cruises),
+        cruises: getArrayLength(cloudData.bookedCruises),
+        offers: getArrayLength(cloudData.casinoOffers),
+        events: getArrayLength(cloudData.calendarEvents),
+        sessions: getArrayLength(cloudData.casinoSessions),
+        alerts: getArrayLength(cloudData.alerts),
+        bankrollLimits: getArrayLength(cloudData.bankrollLimits),
+        userSlotMachines: getArrayLength(cloudData.userSlotMachines),
+        deckPlanLocations: getArrayLength(cloudData.deckPlanLocations),
+        favoriteStaterooms: getArrayLength(cloudData.favoriteStaterooms),
+        weatherCacheEntries: getRecordSize(cloudData.sailingWeatherCache),
+        casinoOpenHoursEntries: getRecordSize(cloudData.casinoOpenHours),
+        crewEntries: getArrayLength(cloudData.crewRecognitionEntries),
+        crewSailings: getArrayLength(cloudData.crewRecognitionSailings),
       });
 
       return true;
@@ -591,14 +852,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         return;
       }
 
-      const hasData = 
-        localData.cruises.length > 0 ||
-        localData.bookedCruises.length > 0 ||
-        localData.casinoOffers.length > 0 ||
-        localData.calendarEvents.length > 0 ||
-        localData.casinoSessions.length > 0 ||
-        localData.clubRoyaleProfile ||
-        localData.loyaltyData;
+      const hasData = hasSyncableData(localData as Record<string, unknown>);
 
       if (!hasData) {
         console.log("[UserDataSync] No meaningful data to sync, skipping");
@@ -650,6 +904,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       clearTimeout(syncTimeoutRef.current);
       syncTimeoutRef.current = null;
     }
+    lastSyncAttemptRef.current = 0;
     await syncToCloud();
   }, [syncToCloud]);
 
@@ -725,15 +980,26 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         safetyTimeoutRef.current = null;
       }
       
-      if (!cloudLoaded && isMountedRef.current) {
-        console.log("[UserDataSync] No cloud data, will sync local data after delay");
-        const timeoutId = setTimeout(() => {
-          if (isMountedRef.current) {
-            void syncToCloud();
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+        syncTimeoutRef.current = null;
+      }
+
+      if (isMountedRef.current) {
+        const syncDelayMs = cloudLoaded ? 3000 : 5000;
+        console.log(cloudLoaded
+          ? "[UserDataSync] Cloud data restored, scheduling post-restore sync to backfill latest local-only data"
+          : "[UserDataSync] No cloud data, scheduling initial cloud backup");
+
+        syncTimeoutRef.current = setTimeout(() => {
+          if (!isMountedRef.current) {
+            return;
           }
-        }, 5000);
-        
-        return () => clearTimeout(timeoutId);
+
+          console.log('[UserDataSync] Running post-initialization cloud sync');
+          lastSyncAttemptRef.current = 0;
+          void syncToCloud();
+        }, syncDelayMs);
       }
     };
 
